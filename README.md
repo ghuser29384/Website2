@@ -82,6 +82,8 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 4. Apply the database schema from [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL editor.
 
+If your project was created before `public.profiles` existed, also apply [`supabase/profiles.sql`](supabase/profiles.sql) to add the profile table, RLS, and auth-to-profile sync trigger.
+
 5. Start the development server.
 
 ```bash
@@ -95,6 +97,7 @@ npm run dev
 [`supabase/schema.sql`](supabase/schema.sql) creates the core data model for:
 
 - `public.users`
+- `public.profiles`
 - `public.offers`
 - `public.interests`
 - `public.agreements`

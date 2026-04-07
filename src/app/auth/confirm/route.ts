@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { getViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -25,6 +26,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!error) {
+      await getViewer();
       return NextResponse.redirect(new URL(next, origin));
     }
   }

@@ -5,14 +5,14 @@ import { type Database } from "@/lib/supabase/database.types";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
-type UserRow = Database["public"]["Tables"]["users"]["Row"];
+type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type InterestRow = Database["public"]["Tables"]["interests"]["Row"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export interface Viewer {
   authUser: User;
-  profile: UserRow;
+  profile: ProfileRow;
   displayName: string;
   profileStatus: "loaded" | "created" | "fallback";
   profileError: string | null;
@@ -55,7 +55,7 @@ function logSupabaseError(
   });
 }
 
-function buildFallbackProfile(user: User, profile?: Partial<UserRow> | null) {
+function buildFallbackProfile(user: User, profile?: Partial<ProfileRow> | null) {
   const timestamp = new Date().toISOString();
 
   return {
@@ -67,35 +67,33 @@ function buildFallbackProfile(user: User, profile?: Partial<UserRow> | null) {
         user,
         profile ? { display_name: profile.display_name ?? null } : null,
       ),
-    bio: profile?.bio ?? null,
     created_at: profile?.created_at ?? timestamp,
-    updated_at: profile?.updated_at ?? timestamp,
-  } satisfies UserRow;
+  } satisfies ProfileRow;
 }
 
 async function ensureUserProfile(
   supabase: SupabaseServerClient,
   user: User,
 ): Promise<{
-  profile: UserRow | null;
+  profile: ProfileRow | null;
   profileStatus: Viewer["profileStatus"];
   profileError: string | null;
 }> {
   const { data: profile, error: profileError } = await supabase
-    .from("users")
+    .from("profiles")
     .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
   if (profileError) {
-    logSupabaseError("Failed to read public.users row", profileError, {
+    logSupabaseError("Failed to read public.profiles row", profileError, {
       userId: user.id,
     });
   }
 
   if (profile) {
     return {
-      profile: profile as UserRow,
+      profile: profile as ProfileRow,
       profileStatus: "loaded",
       profileError: null,
     };
@@ -103,13 +101,12 @@ async function ensureUserProfile(
 
   const seedProfile = buildFallbackProfile(user);
   const { data: insertedProfile, error: insertError } = await supabase
-    .from("users")
+    .from("profiles")
     .upsert(
       {
         id: seedProfile.id,
         email: seedProfile.email,
         display_name: seedProfile.display_name,
-        bio: seedProfile.bio,
       },
       {
         onConflict: "id",
@@ -119,7 +116,7 @@ async function ensureUserProfile(
     .maybeSingle();
 
   if (insertError) {
-    logSupabaseError("Failed to create missing public.users row", insertError, {
+    logSupabaseError("Failed to create missing public.profiles row", insertError, {
       userId: user.id,
     });
 
@@ -134,7 +131,7 @@ async function ensureUserProfile(
   }
 
   if (!insertedProfile) {
-    console.error("[supabase] public.users upsert returned no profile row", {
+    console.error("[supabase] public.profiles upsert returned no profile row", {
       userId: user.id,
     });
 
@@ -147,7 +144,7 @@ async function ensureUserProfile(
   }
 
   return {
-    profile: insertedProfile as UserRow,
+    profile: insertedProfile as ProfileRow,
     profileStatus: "created",
     profileError: null,
   };
@@ -349,7 +346,10 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
   };
 }
 
-export function deriveDisplayName(user: Pick<User, "email" | "user_metadata">, profile?: Pick<UserRow, "display_name"> | null) {
+export function deriveDisplayName(
+  user: Pick<User, "email" | "user_metadata">,
+  profile?: Pick<ProfileRow, "display_name"> | null,
+) {
   return (
     profile?.display_name?.trim() ||
     (typeof user.user_metadata?.display_name === "string" ? user.user_metadata.display_name : "") ||
