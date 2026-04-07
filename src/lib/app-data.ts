@@ -8,17 +8,149 @@ import { createClient } from "@/lib/supabase/server";
 type UserRow = Database["public"]["Tables"]["users"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type InterestRow = Database["public"]["Tables"]["interests"]["Row"];
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export interface Viewer {
   authUser: User;
   profile: UserRow;
   displayName: string;
+  profileStatus: "loaded" | "created" | "fallback";
+  profileError: string | null;
 }
 
 export interface OfferRecord extends OfferRow {}
 
 export interface InterestRecord extends InterestRow {
   offer?: OfferRow | null;
+}
+
+export interface DashboardDataResult {
+  offers: OfferRecord[];
+  interests: InterestRecord[];
+  errors: {
+    offers: string | null;
+    interests: string | null;
+    relatedOffers: string | null;
+  };
+}
+
+interface LoggedErrorLike {
+  code?: string | null;
+  details?: string | null;
+  hint?: string | null;
+  message: string;
+}
+
+function logSupabaseError(
+  context: string,
+  error: LoggedErrorLike,
+  metadata: Record<string, string | number | boolean | null | undefined> = {},
+) {
+  console.error(`[supabase] ${context}`, {
+    code: error.code ?? null,
+    details: error.details ?? null,
+    hint: error.hint ?? null,
+    message: error.message,
+    ...metadata,
+  });
+}
+
+function buildFallbackProfile(user: User, profile?: Partial<UserRow> | null) {
+  const timestamp = new Date().toISOString();
+
+  return {
+    id: user.id,
+    email: profile?.email ?? user.email ?? `${user.id}@members.moraltrade.local`,
+    display_name:
+      profile?.display_name ??
+      deriveDisplayName(
+        user,
+        profile ? { display_name: profile.display_name ?? null } : null,
+      ),
+    bio: profile?.bio ?? null,
+    created_at: profile?.created_at ?? timestamp,
+    updated_at: profile?.updated_at ?? timestamp,
+  } satisfies UserRow;
+}
+
+async function ensureUserProfile(
+  supabase: SupabaseServerClient,
+  user: User,
+): Promise<{
+  profile: UserRow | null;
+  profileStatus: Viewer["profileStatus"];
+  profileError: string | null;
+}> {
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    logSupabaseError("Failed to read public.users row", profileError, {
+      userId: user.id,
+    });
+  }
+
+  if (profile) {
+    return {
+      profile: profile as UserRow,
+      profileStatus: "loaded",
+      profileError: null,
+    };
+  }
+
+  const seedProfile = buildFallbackProfile(user);
+  const { data: insertedProfile, error: insertError } = await supabase
+    .from("users")
+    .upsert(
+      {
+        id: seedProfile.id,
+        email: seedProfile.email,
+        display_name: seedProfile.display_name,
+        bio: seedProfile.bio,
+      },
+      {
+        onConflict: "id",
+      },
+    )
+    .select("*")
+    .maybeSingle();
+
+  if (insertError) {
+    logSupabaseError("Failed to create missing public.users row", insertError, {
+      userId: user.id,
+    });
+
+    return {
+      profile: null,
+      profileStatus: "fallback",
+      profileError:
+        insertError.message ||
+        profileError?.message ||
+        "Unable to load your account profile from Supabase.",
+    };
+  }
+
+  if (!insertedProfile) {
+    console.error("[supabase] public.users upsert returned no profile row", {
+      userId: user.id,
+    });
+
+    return {
+      profile: null,
+      profileStatus: "fallback",
+      profileError:
+        profileError?.message ?? "Unable to confirm your account profile in Supabase.",
+    };
+  }
+
+  return {
+    profile: insertedProfile as UserRow,
+    profileStatus: "created",
+    profileError: null,
+  };
 }
 
 export async function getViewer() {
@@ -29,31 +161,29 @@ export async function getViewer() {
   const supabase = await createClient();
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
+
+  if (authError) {
+    logSupabaseError("Failed to resolve authenticated user", authError);
+    return null;
+  }
 
   if (!user) {
     return null;
   }
 
-  const { data: profile } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const fallbackDisplayName = deriveDisplayName(user, profile);
+  const profileResult = await ensureUserProfile(supabase, user);
+  const resolvedProfile =
+    profileResult.profile ?? buildFallbackProfile(user, null);
+  const fallbackDisplayName = deriveDisplayName(user, resolvedProfile);
 
   return {
     authUser: user,
-    profile: {
-      id: user.id,
-      email: user.email ?? "",
-      display_name: profile?.display_name ?? fallbackDisplayName,
-      bio: profile?.bio ?? null,
-      created_at: profile?.created_at ?? new Date().toISOString(),
-      updated_at: profile?.updated_at ?? new Date().toISOString(),
-    },
+    profile: resolvedProfile,
     displayName: fallbackDisplayName,
+    profileStatus: profileResult.profileStatus,
+    profileError: profileResult.profileError,
   } satisfies Viewer;
 }
 
@@ -145,15 +275,25 @@ export async function listOfferInterests(offerId: string) {
   return (data ?? []) as InterestRecord[];
 }
 
-export async function getDashboardData(userId: string) {
+export async function getDashboardData(userId: string): Promise<DashboardDataResult> {
   if (!hasSupabaseEnv()) {
     return {
       offers: [] as OfferRecord[],
       interests: [] as InterestRecord[],
+      errors: {
+        offers: null,
+        interests: null,
+        relatedOffers: null,
+      },
     };
   }
 
   const supabase = await createClient();
+  const errors: DashboardDataResult["errors"] = {
+    offers: null,
+    interests: null,
+    relatedOffers: null,
+  };
 
   const [{ data: offers, error: offersError }, { data: interests, error: interestsError }] =
     await Promise.all([
@@ -170,11 +310,13 @@ export async function getDashboardData(userId: string) {
     ]);
 
   if (offersError) {
-    throw new Error(offersError.message);
+    errors.offers = offersError.message;
+    logSupabaseError("Failed to load dashboard offers", offersError, { userId });
   }
 
   if (interestsError) {
-    throw new Error(interestsError.message);
+    errors.interests = interestsError.message;
+    logSupabaseError("Failed to load dashboard interests", interestsError, { userId });
   }
 
   const offerIds = [...new Set((interests ?? []).map((interest) => interest.offer_id))];
@@ -188,10 +330,13 @@ export async function getDashboardData(userId: string) {
       .in("id", offerIds);
 
     if (relatedOffersError) {
-      throw new Error(relatedOffersError.message);
+      errors.relatedOffers = relatedOffersError.message;
+      logSupabaseError("Failed to load related offers for dashboard interests", relatedOffersError, {
+        userId,
+      });
+    } else {
+      offersById = new Map((relatedOffers ?? []).map((offer) => [offer.id, offer as OfferRow]));
     }
-
-    offersById = new Map((relatedOffers ?? []).map((offer) => [offer.id, offer as OfferRow]));
   }
 
   return {
@@ -200,6 +345,7 @@ export async function getDashboardData(userId: string) {
       ...(interest as InterestRow),
       offer: offersById.get(interest.offer_id) ?? null,
     })) ?? []) as InterestRecord[],
+    errors,
   };
 }
 

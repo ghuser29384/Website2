@@ -22,9 +22,29 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const formMessage = getFormMessage(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
   const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
-  const { offers, interests } = viewer
-    ? await getDashboardData(viewer.authUser.id)
-    : { offers: [], interests: [] };
+  let offers = [] as Awaited<ReturnType<typeof getDashboardData>>["offers"];
+  let interests = [] as Awaited<ReturnType<typeof getDashboardData>>["interests"];
+  let dashboardErrors: Awaited<ReturnType<typeof getDashboardData>>["errors"] = {
+    offers: null,
+    interests: null,
+    relatedOffers: null,
+  };
+  let unexpectedDashboardError: string | null = null;
+
+  if (viewer) {
+    try {
+      const dashboardData = await getDashboardData(viewer.authUser.id);
+      offers = dashboardData.offers;
+      interests = dashboardData.interests;
+      dashboardErrors = dashboardData.errors;
+    } catch (error) {
+      unexpectedDashboardError = "The dashboard could not finish loading your account data.";
+      console.error("[dashboard] Unexpected dashboard route failure", {
+        error,
+        userId: viewer.authUser.id,
+      });
+    }
+  }
 
   return (
     <div className="page-shell">
@@ -120,6 +140,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         ) : null}
 
+        {viewer?.profileError ? (
+          <div className="status-banner status-banner-error">
+            We could not load your profile row from Supabase. The dashboard is using fallback
+            account details for now, and the underlying error was logged on the server.
+          </div>
+        ) : null}
+
+        {unexpectedDashboardError ? (
+          <div className="status-banner status-banner-error">{unexpectedDashboardError}</div>
+        ) : null}
+
+        {dashboardErrors.relatedOffers ? (
+          <div className="status-banner status-banner-error">
+            Some linked offer details could not be loaded for your interest history. The
+            underlying Supabase error was logged on the server.
+          </div>
+        ) : null}
+
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Your offers</p>
@@ -128,7 +166,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
 
           <div className="data-grid">
-            {offers.length ? (
+            {dashboardErrors.offers ? (
+              <div className="empty-state">
+                <div>
+                  <strong>We could not load your offers right now.</strong>
+                  <p>The dashboard stayed available, and the detailed Supabase error was logged on the server.</p>
+                </div>
+              </div>
+            ) : offers.length ? (
               offers.map((offer) => (
                 <article key={offer.id} className="panel data-card">
                   <p className="detail-kicker">{formatMode(offer.mode)}</p>
@@ -172,7 +217,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
 
           <div className="data-grid">
-            {interests.length ? (
+            {dashboardErrors.interests ? (
+              <div className="empty-state">
+                <div>
+                  <strong>We could not load your interests right now.</strong>
+                  <p>The dashboard stayed available, and the detailed Supabase error was logged on the server.</p>
+                </div>
+              </div>
+            ) : interests.length ? (
               interests.map((interest) => (
                 <article key={interest.id} className="panel data-card">
                   <p className="detail-kicker">Interest</p>
