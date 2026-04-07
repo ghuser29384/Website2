@@ -34,9 +34,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           links={[
             { href: "/", label: "Home" },
             { href: "/offers", label: "Offers" },
-            { href: "/offers/new", label: "New offer" },
           ]}
+          authLink={
+            viewer
+              ? { href: "/dashboard", label: "Dashboard" }
+              : { href: "/login", label: "Log in" }
+          }
           primaryAction={{ href: "/offers/new", label: "Create offer" }}
+          showLogout={Boolean(viewer)}
         />
 
         <div className="hero-grid">

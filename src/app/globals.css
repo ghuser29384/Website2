@@ -108,6 +108,11 @@ h3 {
   gap: 1rem;
 }
 
+.topbar-nav,
+.topbar-actions {
+  flex-wrap: wrap;
+}
+
 .brand {
   position: relative;
   display: inline-flex;
@@ -136,6 +141,11 @@ h3 {
 
 .topbar-links a {
   font-size: 0.96rem;
+}
+
+.topbar-auth-link {
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .topbar-links a:hover,

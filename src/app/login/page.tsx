@@ -4,6 +4,7 @@ import Link from "next/link";
 import { signInAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -23,6 +24,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       ? resolvedSearchParams.next[0]
       : resolvedSearchParams.next) || "/dashboard";
   const supabaseReady = hasSupabaseEnv();
+  const viewer = await getViewer();
 
   return (
     <div className="page-shell">
@@ -32,9 +34,18 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           links={[
             { href: "/", label: "Home" },
             { href: "/offers", label: "Offers" },
-            { href: "/signup", label: "Sign up" },
           ]}
-          primaryAction={{ href: "/offers", label: "Browse offers" }}
+          authLink={
+            viewer
+              ? { href: "/dashboard", label: "Dashboard" }
+              : { href: "/login", label: "Log in" }
+          }
+          primaryAction={
+            viewer
+              ? { href: "/offers", label: "Browse offers" }
+              : { href: "/signup", label: "Sign up" }
+          }
+          showLogout={Boolean(viewer)}
         />
 
         <div className="hero-grid">

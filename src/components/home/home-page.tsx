@@ -29,7 +29,11 @@ import {
   validateOfferDraft,
 } from "@/lib/offers";
 
-export function HomePage() {
+interface HomePageProps {
+  isAuthenticated: boolean;
+}
+
+export function HomePage({ isAuthenticated }: HomePageProps) {
   const [draft, setDraft] = useState<OfferDraft>(createDefaultOfferDraft());
   const [filters, setFilters] = useState<OfferFilters>(DEFAULT_FILTERS);
   const [localOffers, setLocalOffers] = useState<Offer[]>([]);
@@ -140,13 +144,24 @@ export function HomePage() {
     <div className="page-shell">
       <header className="hero">
         <SiteTopbar
-          brandHref="#top"
+          brandHref="/"
           links={[
+            { href: "/offers", label: "Offers" },
             { href: "#exchange", label: "Build a trade" },
             { href: "#trust", label: "Trust rails" },
             { href: "#safeguards", label: "Safeguards" },
           ]}
-          primaryAction={{ href: "#exchange", label: "Start a trade" }}
+          authLink={
+            isAuthenticated
+              ? { href: "/dashboard", label: "Dashboard" }
+              : { href: "/login", label: "Log in" }
+          }
+          primaryAction={
+            isAuthenticated
+              ? { href: "/offers/new", label: "Create offer" }
+              : { href: "/signup", label: "Sign up" }
+          }
+          showLogout={isAuthenticated}
         />
 
         <div className="hero-grid">
@@ -159,11 +174,14 @@ export function HomePage() {
               Pareto-improving matches across different causes.
             </p>
             <div className="hero-actions">
-              <a className="button button-primary" href="#exchange">
-                Create an offer
+              <a
+                className="button button-primary"
+                href={isAuthenticated ? "/dashboard" : "/signup"}
+              >
+                {isAuthenticated ? "Open dashboard" : "Sign up"}
               </a>
-              <a className="button button-secondary" href="#analysis">
-                See matching logic
+              <a className="button button-secondary" href="/offers">
+                Browse offers
               </a>
             </div>
 

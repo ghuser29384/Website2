@@ -37,9 +37,17 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
           links={[
             { href: "/", label: "Home" },
             { href: "/offers", label: "Offers" },
-            { href: "/dashboard", label: "Dashboard" },
           ]}
-          primaryAction={{ href: "/dashboard", label: "Dashboard" }}
+          authLink={
+            viewer
+              ? { href: "/dashboard", label: "Dashboard" }
+              : { href: "/login", label: "Log in" }
+          }
+          primaryAction={{
+            href: viewer ? "/offers" : "/signup",
+            label: viewer ? "Browse offers" : "Sign up",
+          }}
+          showLogout={Boolean(viewer)}
         />
 
         <div className="hero-grid">

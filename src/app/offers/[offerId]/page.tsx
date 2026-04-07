@@ -58,12 +58,17 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           links={[
             { href: "/", label: "Home" },
             { href: "/offers", label: "Offers" },
-            { href: viewer ? "/dashboard" : "/login", label: viewer ? "Dashboard" : "Login" },
           ]}
+          authLink={
+            viewer
+              ? { href: "/dashboard", label: "Dashboard" }
+              : { href: "/login", label: "Log in" }
+          }
           primaryAction={{
             href: viewer ? "/offers/new" : "/signup",
             label: viewer ? "Create offer" : "Sign up",
           }}
+          showLogout={Boolean(viewer)}
         />
 
         <div className="hero-grid">
