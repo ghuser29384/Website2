@@ -9,7 +9,11 @@ import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
 import { deriveDisplayName, requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
 
-function redirectWithMessage(path: string, key: "error" | "message", message: string) {
+function redirectWithMessage(
+  path: string,
+  key: "error" | "message",
+  message: string,
+): never {
   redirect(`${path}?${key}=${encodeURIComponent(message)}`);
 }
 

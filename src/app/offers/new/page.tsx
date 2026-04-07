@@ -98,14 +98,14 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 <p>Use the same structure as the homepage prototype, now with direct payment-for-action offers too.</p>
               </div>
 
-              {!supabaseReady ? (
+              {!supabaseReady && (
                 <div className="status-banner status-banner-error">
                   Supabase is not configured yet. Add environment variables before creating
                   live offers.
                 </div>
-              ) : null}
+              )}
 
-              {formMessage ? (
+              {formMessage && (
                 <div
                   className={`status-banner ${
                     formMessage.tone === "error"
@@ -115,7 +115,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 >
                   {formMessage.text}
                 </div>
-              ) : null}
+              )}
 
               <form action={createOfferAction} className="stack-form">
                 <label className="field">
@@ -262,7 +262,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                     <h3>Supabase setup required</h3>
                     <p>Add the environment variables and apply the SQL schema to enable live publishing.</p>
                   </div>
-                ) : null}
+                )}
                 <div>
                   <h3>Where this appears</h3>
                   <p>Your display name is saved as the visible alias on new offers across all three trade modes.</p>

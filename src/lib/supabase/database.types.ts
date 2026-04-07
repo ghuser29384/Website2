@@ -33,6 +33,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       offers: {
         Row: {
@@ -92,6 +93,7 @@ export interface Database {
           status?: "open" | "paused" | "matched" | "closed";
           updated_at?: string;
         };
+        Relationships: [];
       };
       interests: {
         Row: {
@@ -120,6 +122,7 @@ export interface Database {
           status?: "pending" | "accepted" | "declined" | "withdrawn";
           updated_at?: string;
         };
+        Relationships: [];
       };
       agreements: {
         Row: {
@@ -149,7 +152,17 @@ export interface Database {
           notes?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: {
+      offer_mode: "pledge" | "offset" | "payment";
+      offer_status: "open" | "paused" | "matched" | "closed";
+      interest_status: "pending" | "accepted" | "declined" | "withdrawn";
+      agreement_status: "proposed" | "active" | "completed" | "cancelled";
+    };
+    CompositeTypes: Record<string, never>;
   };
 }
