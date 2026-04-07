@@ -150,6 +150,14 @@ async function ensureUserProfile(
   };
 }
 
+export async function ensureProfileForUser(
+  user: User,
+  supabaseClient?: SupabaseServerClient,
+) {
+  const supabase = supabaseClient ?? (await createClient());
+  return ensureUserProfile(supabase, user);
+}
+
 export async function getViewer() {
   if (!hasSupabaseEnv()) {
     return null;
@@ -170,9 +178,8 @@ export async function getViewer() {
     return null;
   }
 
-  const profileResult = await ensureUserProfile(supabase, user);
-  const resolvedProfile =
-    profileResult.profile ?? buildFallbackProfile(user, null);
+  const profileResult = await ensureProfileForUser(user, supabase);
+  const resolvedProfile = profileResult.profile ?? buildFallbackProfile(user, null);
   const fallbackDisplayName = deriveDisplayName(user, resolvedProfile);
 
   return {

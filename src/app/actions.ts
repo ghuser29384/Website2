@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
-import { deriveDisplayName, requireViewer } from "@/lib/app-data";
+import { deriveDisplayName, ensureProfileForUser, requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
 
 function redirectWithMessage(
@@ -75,7 +75,7 @@ export async function signUpAction(formData: FormData) {
   const origin = headerStore.get("origin") ?? getSiteUrl();
   const confirmUrl = `${origin}/auth/confirm`;
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -88,6 +88,10 @@ export async function signUpAction(formData: FormData) {
 
   if (error) {
     redirectWithMessage("/signup", "error", error.message);
+  }
+
+  if (data.user && data.session) {
+    await ensureProfileForUser(data.user, supabase);
   }
 
   redirectWithMessage(
@@ -111,13 +115,17 @@ export async function signInAction(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
   if (error) {
     redirectWithMessage("/login", "error", error.message);
+  }
+
+  if (data.user) {
+    await ensureProfileForUser(data.user, supabase);
   }
 
   redirect(next);

@@ -147,8 +147,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           brandHref="/"
           links={[
             { href: "/offers", label: "Offers" },
-            { href: "#exchange", label: "Build a trade" },
-            { href: "#trust", label: "Trust rails" },
+            { href: "#exchange", label: "How it works" },
+            { href: "#trust", label: "Trust" },
             { href: "#safeguards", label: "Safeguards" },
           ]}
           authLink={
@@ -166,12 +166,12 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
         <div className="hero-grid">
           <section className="hero-copy" id="top">
-            <p className="eyebrow">Reciprocal ethics, not zero-sum conflict</p>
-            <h1>Turn moral disagreement into structured exchange.</h1>
+            <p className="eyebrow">Grounded in Toby Ord&apos;s moral trade paper</p>
+            <h1>Structure reciprocal moral trade with clearer terms.</h1>
             <p className="hero-text">
-              This prototype turns Toby Ord&apos;s idea of moral trade into a usable market:
-              people can publish reciprocal offers, set trust requirements, and find
-              Pareto-improving matches across different causes.
+              Moral Trade turns the paper&apos;s core idea into a practical workflow:
+              publish reciprocal offers, make verification and review terms explicit, and
+              identify exchanges that both sides can regard as morally worthwhile.
             </p>
             <div className="hero-actions">
               <a
@@ -188,21 +188,21 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <div className="hero-metrics">
               <article className="metric-card">
                 <span className="metric-value">3</span>
-                <span className="metric-label">exchange modes</span>
+                <span className="metric-label">core trade structures</span>
               </article>
               <article className="metric-card">
                 <span className="metric-value">4</span>
-                <span className="metric-label">trust rails</span>
+                <span className="metric-label">trust and review levers</span>
               </article>
               <article className="metric-card">
-                <span className="metric-value">Local</span>
-                <span className="metric-label">storage and matching</span>
+                <span className="metric-value">Member</span>
+                <span className="metric-label">accounts, offers, and dashboards</span>
               </article>
             </div>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">How the product maps to the paper</p>
+            <p className="eyebrow">Three exchange formats</p>
             <div className="flow-card">
               <div className="flow-step">
                 <span className="flow-number">01</span>
@@ -237,13 +237,35 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             </div>
 
             <div className="mini-board">
-              <div className="mini-chip">Animal welfare</div>
-              <div className="mini-arrow">for</div>
-              <div className="mini-chip">Global poverty</div>
-              <div className="mini-arrow">or</div>
-              <div className="mini-chip">Financial support</div>
+              <div className="mini-chip">Pledge swap</div>
+              <div className="mini-chip">Donation offset</div>
+              <div className="mini-chip">Paid action</div>
             </div>
           </aside>
+        </div>
+
+        <div className="hero-proof-strip" aria-label="Moral Trade principles">
+          <article className="proof-card">
+            <p className="proof-label">Paper-grounded model</p>
+            <p>
+              Built around reciprocal gain, factual trust, and counterfactual trust rather
+              than vague moral bargaining.
+            </p>
+          </article>
+          <article className="proof-card">
+            <p className="proof-label">Explicit scope</p>
+            <p>
+              Focused on habits, donations, volunteering, and other bounded commitments
+              rather than open-ended or coercive arrangements.
+            </p>
+          </article>
+          <article className="proof-card">
+            <p className="proof-label">Credible workflow</p>
+            <p>
+              Accounts, live offers, stated verification, and member dashboards make the
+              commitments legible and reviewable.
+            </p>
+          </article>
         </div>
       </header>
 
