@@ -3,10 +3,11 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { PostgrestError } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
-import { deriveDisplayName, ensureProfileForUser, requireViewer } from "@/lib/app-data";
+import { deriveDisplayName, ensureAccountRowsForUser, requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
 
 function redirectWithMessage(
@@ -19,6 +20,24 @@ function redirectWithMessage(
 
 function readRequired(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+function logSupabaseActionError(
+  context: string,
+  error: PostgrestError | Error | null | undefined,
+  metadata: Record<string, string | number | boolean | null | undefined> = {},
+) {
+  if (!error) {
+    return;
+  }
+
+  console.error(`[supabase] ${context}`, {
+    code: "code" in error ? error.code ?? null : null,
+    details: "details" in error ? error.details ?? null : null,
+    hint: "hint" in error ? error.hint ?? null : null,
+    message: error.message,
+    ...metadata,
+  });
 }
 
 function normalizeOfferMode(value: string) {
@@ -91,7 +110,7 @@ export async function signUpAction(formData: FormData) {
   }
 
   if (data.user && data.session) {
-    await ensureProfileForUser(data.user, supabase);
+    await ensureAccountRowsForUser(data.user, supabase);
   }
 
   redirectWithMessage(
@@ -125,7 +144,7 @@ export async function signInAction(formData: FormData) {
   }
 
   if (data.user) {
-    await ensureProfileForUser(data.user, supabase);
+    await ensureAccountRowsForUser(data.user, supabase);
   }
 
   redirect(next);
@@ -180,6 +199,7 @@ export async function createOfferAction(formData: FormData) {
   }
 
   const ownerAlias = deriveDisplayName(viewer.authUser, viewer.profile);
+  await ensureAccountRowsForUser(viewer.authUser, supabase);
 
   const { data, error } = await supabase
     .from("offers")
@@ -204,6 +224,10 @@ export async function createOfferAction(formData: FormData) {
     .single();
 
   if (error || !data) {
+    logSupabaseActionError("Failed to create offer", error, {
+      ownerId: viewer.authUser.id,
+      mode: normalizedMode,
+    });
     redirectWithMessage("/offers/new", "error", error?.message ?? "Unable to create offer.");
   }
 

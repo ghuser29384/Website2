@@ -84,6 +84,8 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 If your project was created before `public.profiles` existed, also apply [`supabase/profiles.sql`](supabase/profiles.sql) to add the profile table, RLS, and auth-to-profile sync trigger.
 
+Re-running the current schema also backfills both `public.users` and `public.profiles` from `auth.users`, which keeps offer ownership rows aligned for older accounts.
+
 5. Start the development server.
 
 ```bash

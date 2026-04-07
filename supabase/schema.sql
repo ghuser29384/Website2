@@ -156,6 +156,17 @@ begin
 end;
 $$;
 
+insert into public.users (id, email, display_name)
+select
+  users.id,
+  users.email,
+  coalesce(users.raw_user_meta_data ->> 'display_name', split_part(users.email, '@', 1))
+from auth.users as users
+on conflict (id) do update
+  set email = excluded.email,
+      display_name = coalesce(excluded.display_name, public.users.display_name),
+      updated_at = timezone('utc', now());
+
 insert into public.profiles (id, email, display_name)
 select
   users.id,
