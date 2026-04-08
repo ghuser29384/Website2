@@ -87,8 +87,8 @@ h3 {
   gap: 1rem;
   padding: 1rem 1.35rem;
   margin-bottom: 1.5rem;
-  background: rgba(255, 253, 249, 0.95);
-  border: 1px solid rgba(222, 207, 189, 0.85);
+  background: #fffdf9;
+  border: 1px solid var(--line);
   border-radius: 22px;
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(8px);
@@ -122,7 +122,7 @@ h3 {
   width: 0.75rem;
   height: 0.75rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--red), var(--orange));
+  background: var(--red);
   box-shadow: 0 0 0 4px rgba(209, 122, 70, 0.12);
 }
 
@@ -141,8 +141,8 @@ h3 {
 .topbar-auth-link {
   padding: 0.55rem 0.9rem;
   border-radius: 999px;
-  border: 1px solid rgba(222, 207, 189, 0.9);
-  background: rgba(250, 244, 235, 0.9);
+  border: 1px solid var(--line);
+  background: var(--paper-soft);
   color: var(--ink);
   font-weight: 700;
 }
@@ -214,10 +214,8 @@ h1 {
 
 .hero-stage {
   padding: 2.2rem;
-  background:
-    linear-gradient(180deg, rgba(255, 253, 249, 0.99), rgba(249, 242, 232, 0.98)),
-    var(--paper);
-  border: 1px solid rgba(222, 207, 189, 0.92);
+  background: var(--paper);
+  border: 1px solid var(--line);
   box-shadow: 0 22px 42px rgba(57, 29, 44, 0.06);
 }
 
@@ -232,7 +230,7 @@ h1 {
 .hero-intro-note {
   margin-top: 1rem;
   padding-left: 0.95rem;
-  border-left: 3px solid rgba(201, 75, 69, 0.4);
+  border-left: 3px solid var(--red);
   color: var(--ink-soft);
   font-size: 0.98rem;
   max-width: 52ch;
@@ -260,13 +258,13 @@ h1 {
 
 .button-primary,
 .button-nav {
-  background: linear-gradient(135deg, var(--red), #d86a46);
+  background: var(--red);
   color: #fff8f4;
   box-shadow: 0 12px 24px rgba(201, 75, 69, 0.18);
 }
 
 .button-secondary {
-  background: rgba(255, 253, 249, 0.94);
+  background: var(--paper);
   border-color: var(--line);
   color: var(--ink);
 }
@@ -291,8 +289,8 @@ h1 {
 .metric-card {
   padding: 1.1rem 1rem 1.15rem;
   border-radius: 20px;
-  border: 1px solid rgba(222, 207, 189, 0.95);
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--line);
+  background: #ffffff;
   box-shadow: 0 10px 20px rgba(57, 29, 44, 0.03);
 }
 
@@ -322,7 +320,7 @@ h1 {
 
 .panel {
   background: var(--paper);
-  border: 1px solid rgba(222, 207, 189, 0.95);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: 0 14px 30px rgba(57, 29, 44, 0.05);
 }
@@ -335,7 +333,7 @@ h1 {
 }
 
 .hero-panel {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 246, 239, 0.98));
+  background: var(--paper-soft);
   border-top: 3px solid var(--red);
 }
 
@@ -352,8 +350,8 @@ h1 {
   align-items: start;
   padding: 1rem;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(222, 207, 189, 0.92);
+  background: #ffffff;
+  border: 1px solid var(--line);
 }
 
 .flow-step:nth-child(1) {
@@ -382,7 +380,7 @@ h1 {
   border-radius: 50%;
   background: var(--paper-soft);
   color: var(--ink);
-  border: 1px solid rgba(222, 207, 189, 0.95);
+  border: 1px solid var(--line);
   font-weight: 700;
 }
 
@@ -394,8 +392,8 @@ h1 {
   margin-top: 1.25rem;
   padding: 1rem;
   border-radius: 18px;
-  background: rgba(248, 239, 229, 0.8);
-  border: 1px solid rgba(222, 207, 189, 0.9);
+  background: var(--cream);
+  border: 1px solid var(--line);
 }
 
 .mini-chip,
@@ -413,8 +411,8 @@ h1 {
 }
 
 .mini-chip {
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(222, 207, 189, 0.9);
+  background: #ffffff;
+  border: 1px solid var(--line);
 }
 
 .mini-arrow {
@@ -432,17 +430,17 @@ main {
 .section {
   padding: 2.5rem;
   border-radius: var(--radius-xl);
-  border: 1px solid rgba(222, 207, 189, 0.95);
+  border: 1px solid var(--line);
   box-shadow: 0 14px 28px rgba(57, 29, 44, 0.04);
   animation: rise 0.6s ease both;
 }
 
 .section-white {
-  background: rgba(255, 255, 255, 0.93);
+  background: #ffffff;
 }
 
 .section-cream {
-  background: rgba(249, 243, 234, 0.93);
+  background: #f9f3ea;
 }
 
 .section-head {
@@ -472,24 +470,24 @@ main {
 
 .concept-card:nth-child(1),
 .trust-card:nth-child(1) {
-  background: rgba(255, 255, 255, 0.96);
+  background: #ffffff;
   border-top: 4px solid var(--red);
 }
 
 .concept-card:nth-child(2),
 .trust-card:nth-child(2) {
-  background: rgba(255, 255, 255, 0.96);
+  background: #ffffff;
   border-top: 4px solid var(--orange);
 }
 
 .concept-card:nth-child(3),
 .trust-card:nth-child(3) {
-  background: rgba(255, 255, 255, 0.96);
+  background: #ffffff;
   border-top: 4px solid #7f8f9f;
 }
 
 .trust-card:nth-child(4) {
-  background: rgba(255, 255, 255, 0.96);
+  background: #ffffff;
   border-top: 4px solid #6f8d78;
 }
 
@@ -514,7 +512,7 @@ main {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--red), var(--orange));
+  background: var(--red);
 }
 
 .exchange-grid {
@@ -592,7 +590,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 0.88rem 0.95rem;
-  background: rgba(255, 253, 249, 0.98);
+  background: #ffffff;
   color: var(--ink);
   transition:
     border-color 160ms ease,
@@ -639,7 +637,7 @@ output {
   border-radius: 999px;
   text-align: center;
   font-weight: 700;
-  background: rgba(246, 226, 210, 0.95);
+  background: var(--orange-soft);
   color: var(--red-deep);
 }
 
@@ -650,7 +648,7 @@ output {
   padding: 0.9rem 0.95rem;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: rgba(250, 244, 235, 0.92);
+  background: var(--paper-soft);
 }
 
 .check-row input {
@@ -697,19 +695,19 @@ output {
   margin-bottom: 1rem;
   padding: 0.95rem 1rem;
   border-radius: 18px;
-  border: 1px solid rgba(222, 207, 189, 0.95);
+  border: 1px solid var(--line);
   font-weight: 600;
 }
 
 .status-banner-error {
-  background: rgba(218, 53, 58, 0.08);
-  border-color: rgba(218, 53, 58, 0.2);
+  background: #f9e7e5;
+  border-color: #e8bdb8;
   color: var(--red-deep);
 }
 
 .status-banner-success {
-  background: rgba(59, 120, 87, 0.08);
-  border-color: rgba(59, 120, 87, 0.2);
+  background: #e9f3ec;
+  border-color: #bcd7c5;
   color: #24553e;
 }
 
@@ -751,8 +749,8 @@ output {
 .detail-block {
   padding: 1rem;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(222, 207, 189, 0.95);
+  background: #ffffff;
+  border: 1px solid var(--line);
   box-shadow: 0 8px 18px rgba(57, 29, 44, 0.04);
   transition:
     transform 160ms ease,
@@ -775,7 +773,7 @@ output {
 .offer-card button,
 .match-card button {
   border: 0;
-  background: transparent;
+  background: inherit;
   padding: 0;
   color: inherit;
   text-align: left;
@@ -879,7 +877,7 @@ output {
 .offer-footer {
   margin-top: 0.9rem;
   padding-top: 0.85rem;
-  border-top: 1px solid rgba(222, 207, 189, 0.95);
+  border-top: 1px solid var(--line);
   color: var(--ink-soft);
   font-size: 0.92rem;
 }
@@ -891,7 +889,7 @@ output {
 }
 
 .detail-block {
-  background: rgba(255, 255, 255, 0.98);
+  background: #ffffff;
 }
 
 .detail-kicker {
@@ -939,7 +937,7 @@ output {
   border-radius: 999px;
   font-size: 0.8rem;
   background: var(--paper-soft);
-  border: 1px solid rgba(222, 207, 189, 0.95);
+  border: 1px solid var(--line);
   color: var(--ink-soft);
 }
 
@@ -955,10 +953,8 @@ output {
   width: 100%;
   margin-top: 0.45rem;
   border-radius: 22px;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(246, 226, 210, 0.52), transparent 18%),
-    linear-gradient(180deg, #fffefb, #faf4eb);
-  border: 1px solid rgba(222, 207, 189, 0.95);
+  background: #fffefb;
+  border: 1px solid var(--line);
 }
 
 .chart-caption {
@@ -972,7 +968,7 @@ output {
 .footer {
   margin-top: 2.6rem;
   padding-top: 1.3rem;
-  border-top: 1px solid rgba(222, 207, 189, 0.95);
+  border-top: 1px solid var(--line);
   text-align: left;
 }
 
@@ -991,8 +987,8 @@ output {
 .proof-card {
   padding: 1.2rem 1.25rem;
   border-radius: 20px;
-  border: 1px solid rgba(222, 207, 189, 0.95);
-  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--line);
+  background: #ffffff;
   box-shadow: 0 10px 18px rgba(57, 29, 44, 0.025);
 }
 
