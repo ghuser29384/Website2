@@ -36,22 +36,14 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: linear-gradient(180deg, #fbf8f3 0%, #f7f0e6 52%, #f2e8da 100%);
+  background: #f7f0e6;
   color: var(--ink);
   font-family: "Metropolis", "Avenir Next", "Segoe UI", sans-serif;
   line-height: 1.6;
 }
 
 body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 10% 9%, rgba(209, 122, 70, 0.06), transparent 22%),
-    radial-gradient(circle at 88% 16%, rgba(237, 243, 245, 0.55), transparent 18%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 36%);
-  z-index: -1;
+  content: none;
 }
 
 a {
