@@ -1,7 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getViewer } from "@/lib/app-data";
+import { ensureAccountRowsForUser, getViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -20,13 +20,17 @@ export async function GET(request: NextRequest) {
 
   if (tokenHash && type) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
       type,
     });
 
     if (!error) {
-      await getViewer();
+      if (data.user) {
+        await ensureAccountRowsForUser(data.user, supabase);
+      } else {
+        await getViewer();
+      }
       return NextResponse.redirect(new URL(next, origin));
     }
   }

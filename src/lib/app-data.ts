@@ -16,7 +16,8 @@ export interface Viewer {
   profile: ProfileRow;
   displayName: string;
   profileStatus: "loaded" | "created" | "fallback";
-  profileError: string | null;
+  profileSyncError: string | null;
+  legacyUserError: string | null;
 }
 
 export interface OfferRecord extends OfferRow {}
@@ -76,10 +77,11 @@ async function ensureUserProfile(
   supabase: SupabaseServerClient,
   user: User,
 ): Promise<{
-  profile: ProfileRow | null;
+  profile: ProfileRow;
   profileStatus: Viewer["profileStatus"];
-  profileError: string | null;
+  profileSyncError: string | null;
 }> {
+  const seedProfile = buildFallbackProfile(user);
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
@@ -96,11 +98,10 @@ async function ensureUserProfile(
     return {
       profile: profile as ProfileRow,
       profileStatus: "loaded",
-      profileError: null,
+      profileSyncError: null,
     };
   }
 
-  const seedProfile = buildFallbackProfile(user);
   const { data: insertedProfile, error: insertError } = await supabase
     .from("profiles")
     .upsert(
@@ -122,12 +123,12 @@ async function ensureUserProfile(
     });
 
     return {
-      profile: null,
+      profile: seedProfile,
       profileStatus: "fallback",
-      profileError:
+      profileSyncError:
         insertError.message ||
         profileError?.message ||
-        "Unable to load your account profile from Supabase.",
+        "Unable to synchronize your account profile to Supabase.",
     };
   }
 
@@ -137,9 +138,9 @@ async function ensureUserProfile(
     });
 
     return {
-      profile: null,
+      profile: seedProfile,
       profileStatus: "fallback",
-      profileError:
+      profileSyncError:
         profileError?.message ?? "Unable to confirm your account profile in Supabase.",
     };
   }
@@ -147,7 +148,7 @@ async function ensureUserProfile(
   return {
     profile: insertedProfile as ProfileRow,
     profileStatus: "created",
-    profileError: null,
+    profileSyncError: null,
   };
 }
 
@@ -262,7 +263,7 @@ export async function ensureAccountRowsForUser(
 ) {
   const supabase = supabaseClient ?? (await createClient());
   const profileResult = await ensureUserProfile(supabase, user);
-  const resolvedProfile = profileResult.profile ?? buildFallbackProfile(user, null);
+  const resolvedProfile = profileResult.profile;
   const legacyUserResult = await ensureLegacyUserRecord(supabase, user, resolvedProfile);
 
   return {
@@ -295,15 +296,14 @@ export async function getViewer() {
   const { profileResult, profile: resolvedProfile, legacyUserResult } =
     await ensureAccountRowsForUser(user, supabase);
   const fallbackDisplayName = deriveDisplayName(user, resolvedProfile);
-  const profileError =
-    profileResult.profileError ?? legacyUserResult.error ?? null;
 
   return {
     authUser: user,
     profile: resolvedProfile,
     displayName: fallbackDisplayName,
     profileStatus: profileResult.profileStatus,
-    profileError,
+    profileSyncError: profileResult.profileSyncError,
+    legacyUserError: legacyUserResult.error,
   } satisfies Viewer;
 }
 

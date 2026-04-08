@@ -138,13 +138,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         ) : null}
 
-        {viewer?.profileError ? (
-          <div className="status-banner status-banner-error">
-            We could not load your profile row from Supabase. The dashboard is using fallback
-            account details for now, and the underlying error was logged on the server.
-          </div>
-        ) : null}
-
         {unexpectedDashboardError ? (
           <div className="status-banner status-banner-error">{unexpectedDashboardError}</div>
         ) : null}
