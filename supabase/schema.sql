@@ -280,7 +280,22 @@ create policy "offers_public_read"
 on public.offers
 for select
 to anon, authenticated
-using (status = 'open' or owner_id = (select auth.uid()));
+using (
+  status = 'open'
+  or owner_id = (select auth.uid())
+  or exists (
+    select 1
+    from public.interests
+    where interests.offer_id = offers.id
+      and interests.user_id = (select auth.uid())
+  )
+  or exists (
+    select 1
+    from public.offer_carts
+    where offer_carts.offer_id = offers.id
+      and offer_carts.user_id = (select auth.uid())
+  )
+);
 
 drop policy if exists "offers_insert_own" on public.offers;
 create policy "offers_insert_own"
@@ -348,7 +363,15 @@ using (
       and offers.owner_id = (select auth.uid())
   )
 )
-with check (user_id = interests.user_id);
+with check (
+  user_id = (select auth.uid())
+  or exists (
+    select 1
+    from public.offers
+    where offers.id = interests.offer_id
+      and offers.owner_id = (select auth.uid())
+  )
+);
 
 drop policy if exists "agreements_select_participants" on public.agreements;
 create policy "agreements_select_participants"
@@ -380,8 +403,8 @@ using (
   or responder_id = (select auth.uid())
 )
 with check (
-  proposer_id = agreements.proposer_id
-  and responder_id = agreements.responder_id
+  proposer_id = (select auth.uid())
+  or responder_id = (select auth.uid())
 );
 
 drop policy if exists "agreement_ratings_public_read" on public.agreement_ratings;

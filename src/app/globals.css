@@ -714,6 +714,13 @@ output {
   gap: 0.85rem;
 }
 
+.directory-grid,
+.cart-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .detail-grid-wide {
   grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
 }
@@ -785,6 +792,11 @@ output {
   display: flex;
   flex-wrap: wrap;
   gap: 0.8rem;
+}
+
+.button-mini {
+  min-height: 2.45rem;
+  padding: 0.6rem 0.85rem;
 }
 
 .text-button.danger {
@@ -936,6 +948,170 @@ output {
   color: var(--ink-soft);
 }
 
+.sort-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.sort-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.6rem;
+  padding: 0.65rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.sort-tab.is-active,
+.sort-tab:hover,
+.sort-tab:focus-visible {
+  border-color: var(--line-strong);
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.profile-card,
+.cart-card {
+  padding: 1.35rem;
+}
+
+.profile-card-head,
+.comment-head,
+.owner-summary,
+.comment-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.profile-bio {
+  min-height: 4.6rem;
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.profile-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.profile-stats-hero {
+  margin-bottom: 1rem;
+}
+
+.profile-stats div {
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.profile-stats dt {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.profile-stats dd {
+  margin: 0.35rem 0 0;
+  color: var(--ink);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.profile-edit-form,
+.recommendation-form,
+.comment-compose-form {
+  max-width: 70rem;
+}
+
+.discount-banner {
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+}
+
+.discount-banner strong {
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.discount-banner p {
+  margin: 0;
+  color: var(--ink);
+}
+
+.compact-form .field {
+  margin-bottom: 0.75rem;
+}
+
+.comment-thread {
+  display: grid;
+  gap: 1rem;
+}
+
+.comment-card {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.comment-author,
+.comment-meta,
+.comment-body p {
+  margin: 0;
+}
+
+.comment-author {
+  font-weight: 700;
+}
+
+.comment-meta {
+  margin-top: 0.25rem;
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+}
+
+.comment-votes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.comment-body {
+  margin-top: 0.9rem;
+}
+
+.comment-body p {
+  color: var(--ink-soft);
+}
+
+.comment-reply-form {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.comment-replies {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
 .footer {
   margin-top: 2.8rem;
   padding-top: 2.2rem;
@@ -1010,6 +1186,8 @@ output {
   .editorial-grid,
   .proposition-grid,
   .data-grid,
+  .directory-grid,
+  .cart-grid,
   .footer-grid,
   .detail-grid-wide {
     grid-template-columns: 1fr;
@@ -1017,7 +1195,8 @@ output {
 
   .field-grid,
   .meter-grid,
-  .toolbar {
+  .toolbar,
+  .profile-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1058,6 +1237,9 @@ output {
   .meter-grid,
   .toolbar,
   .data-grid,
+  .directory-grid,
+  .cart-grid,
+  .profile-stats,
   .detail-grid {
     grid-template-columns: 1fr;
   }
@@ -1079,7 +1261,10 @@ output {
   .panel-head,
   .offer-header,
   .offer-footer,
-  .match-header {
+  .match-header,
+  .profile-card-head,
+  .comment-head,
+  .comment-score {
     flex-direction: column;
     align-items: flex-start;
   }

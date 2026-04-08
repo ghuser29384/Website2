@@ -1,9 +1,18 @@
-export const PRIMARY_NAV_LINKS = [
-  { href: "/#how-it-works", label: "How it works" },
-  { href: "/#standards", label: "Reasoning standards" },
-  { href: "/offers", label: "Public offers" },
-  { href: "/#faq", label: "FAQ" },
-] as const;
+export function getPrimaryNavLinks(isAuthenticated = false) {
+  const links = [
+    { href: "/#how-it-works", label: "How it works" },
+    { href: "/#standards", label: "Reasoning standards" },
+    { href: "/offers", label: "Public offers" },
+    { href: "/people", label: "People" },
+    { href: "/#faq", label: "FAQ" },
+  ];
+
+  if (isAuthenticated) {
+    links.push({ href: "/cart", label: "Cart" });
+  }
+
+  return links;
+}
 
 export const FOOTER_LINK_GROUPS = [
   {
@@ -26,6 +35,8 @@ export const FOOTER_LINK_GROUPS = [
     title: "Participation",
     links: [
       { href: "/offers", label: "Public offers" },
+      { href: "/people", label: "People" },
+      { href: "/cart", label: "Cart" },
       { href: "/signup", label: "Sign up" },
       { href: "/login", label: "Log in" },
     ],

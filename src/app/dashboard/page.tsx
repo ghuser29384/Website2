@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { signOutAction } from "@/app/actions";
+import { rateAgreementAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode } from "@/lib/offers";
-import { PRIMARY_NAV_LINKS } from "@/lib/site";
+import { getPrimaryNavLinks } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -23,39 +23,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const formMessage = getFormMessage(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
   const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
-  let offers = [] as Awaited<ReturnType<typeof getDashboardData>>["offers"];
-  let interests = [] as Awaited<ReturnType<typeof getDashboardData>>["interests"];
-  let dashboardErrors: Awaited<ReturnType<typeof getDashboardData>>["errors"] = {
-    offers: null,
-    interests: null,
-    relatedOffers: null,
-  };
-  let unexpectedDashboardError: string | null = null;
-
-  if (viewer) {
-    try {
-      const dashboardData = await getDashboardData(viewer.authUser.id);
-      offers = dashboardData.offers;
-      interests = dashboardData.interests;
-      dashboardErrors = dashboardData.errors;
-    } catch (error) {
-      unexpectedDashboardError = "The dashboard could not finish loading your account data.";
-      console.error("[dashboard] Unexpected dashboard route failure", {
-        error,
-        userId: viewer.authUser.id,
-      });
-    }
-  }
-
-  const likelySchemaMismatch =
-    Boolean(dashboardErrors.offers) && Boolean(dashboardErrors.interests);
+  const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
 
   return (
     <div className="page-shell">
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
+          links={getPrimaryNavLinks(Boolean(viewer))}
           authLink={
             viewer
               ? { href: "/dashboard", label: "Dashboard" }
@@ -67,55 +42,59 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Member record</p>
-            <h1>Review your published commitments and responses.</h1>
+            <p className="eyebrow">Member dashboard</p>
+            <h1>Review your public record and active commitments.</h1>
             <p className="hero-text">
               {viewer ? (
                 <>
-                  Signed in as <strong>{viewer.displayName}</strong>. This dashboard shows your
-                  own offers and the responses you lodged elsewhere, with the same emphasis on
-                  explicit terms and traceable activity.
+                  Signed in as <strong>{viewer.displayName}</strong>. This dashboard ties together
+                  your public profile, offers, interests, agreements, ratings, and cart items.
                 </>
               ) : (
-                <>Configure Supabase to enable the live dashboard and authenticated data.</>
+                <>Configure Supabase to enable the live dashboard and authenticated activity.</>
               )}
             </p>
             {viewer ? (
               <div className="hero-actions">
-                <Link className="button button-primary" href="/offers/new">
-                  Create another offer
+                <Link className="button button-primary" href={`/people/${viewer.authUser.id}`}>
+                  View public profile
                 </Link>
-                <form action={signOutAction}>
-                  <button className="button button-secondary" type="submit">
-                    Sign out
-                  </button>
-                </form>
+                <Link className="button button-secondary" href="/cart">
+                  Open cart
+                </Link>
               </div>
             ) : null}
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">What this record contains</p>
+            <p className="eyebrow">Account summary</p>
             <div className="flow-card">
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Offers you published</strong>
-                  <p>Review the public commitments attached to your account and inspect each dossier.</p>
+                  <strong>Public profile</strong>
+                  <p>
+                    {[viewer?.profile.city, viewer?.profile.region].filter(Boolean).join(", ") ||
+                      "Location not yet listed"}
+                  </p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Responses you sent</strong>
-                  <p>Track where you expressed interest and revisit the reasoning you provided.</p>
+                  <strong>Offers and interest</strong>
+                  <p>
+                    {dashboardData?.offers.length ?? 0} offer(s) | {dashboardData?.interests.length ?? 0} interest response(s)
+                  </p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Future agreement layer</strong>
-                  <p>The schema can later support agreement management without changing the public framing.</p>
+                  <strong>Agreements and cart</strong>
+                  <p>
+                    {dashboardData?.agreements.length ?? 0} agreement(s) | {dashboardData?.cartItems.length ?? 0} cart item(s)
+                  </p>
                 </div>
               </div>
             </div>
@@ -126,8 +105,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <main>
         {!supabaseReady ? (
           <div className="status-banner status-banner-error">
-            Supabase is not configured yet. Add environment variables and apply the SQL
-            schema before using the live dashboard.
+            Supabase is not configured yet. Add environment variables and apply the SQL schema
+            before using the live dashboard.
           </div>
         ) : null}
 
@@ -141,22 +120,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         ) : null}
 
-        {unexpectedDashboardError ? (
-          <div className="status-banner status-banner-error">{unexpectedDashboardError}</div>
-        ) : null}
-
-        {likelySchemaMismatch ? (
+        {dashboardData?.errors.relatedOffers ? (
           <div className="status-banner status-banner-error">
-            The live Supabase schema appears to be out of date for the current app. Re-apply the
-            latest <code>supabase/schema.sql</code> migration to align the dashboard tables and
-            policies.
-          </div>
-        ) : null}
-
-        {dashboardErrors.relatedOffers ? (
-          <div className="status-banner status-banner-error">
-            Some linked offer details could not be loaded for your interest history. The
-            underlying Supabase error was logged on the server.
+            Some linked offer details could not be loaded. The underlying Supabase error was
+            logged on the server.
           </div>
         ) : null}
 
@@ -164,28 +131,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <div className="section-head">
             <p className="eyebrow">Your offers</p>
             <h2>Published commitments</h2>
-            <p>These offers are stored in Supabase and visible in the public directory.</p>
+            <p>These offers are tied to your public profile and can be rated once agreements complete.</p>
           </div>
 
           <div className="data-grid">
-            {dashboardErrors.offers ? (
+            {dashboardData?.errors.offers ? (
               <div className="empty-state">
                 <div>
                   <strong>We could not load your offers right now.</strong>
                   <p>The dashboard stayed available, and the detailed Supabase error was logged on the server.</p>
                 </div>
               </div>
-            ) : offers.length ? (
-              offers.map((offer) => (
+            ) : dashboardData?.offers.length ? (
+              dashboardData.offers.map((offer) => (
                 <article key={offer.id} className="panel data-card">
                   <p className="detail-kicker">{formatMode(offer.mode)}</p>
                   <h3>{offer.offered_cause} for {offer.requested_cause}</h3>
                   <p className="route-text">{offer.offer_action}</p>
-                  <p className="route-text">Requests in return: {offer.request_action}</p>
                   <div className="tag-row">
                     <span className="badge">{offer.status}</span>
-                    <span className="impact-pill">{offer.offer_impact}/10 offered</span>
-                    <span className="impact-pill">{offer.min_counterparty_impact}+/10 needed</span>
+                    <span className="impact-pill">{offer.commentCount} comments</span>
+                    <span className="impact-pill">{offer.recommendationCount} recommendations</span>
                   </div>
                   <div className="offer-footer">
                     <div className="tag-row">
@@ -211,23 +177,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-cream">
+        <section className="section section-subtle">
           <div className="section-head">
             <p className="eyebrow">Your interests</p>
             <h2>Responses you lodged</h2>
-            <p>Each response is tied to a live offer and stored under your account.</p>
+            <p>Each response remains tied to a live offer and a public counterparty record.</p>
           </div>
 
           <div className="data-grid">
-            {dashboardErrors.interests ? (
+            {dashboardData?.errors.interests ? (
               <div className="empty-state">
                 <div>
                   <strong>We could not load your interests right now.</strong>
                   <p>The dashboard stayed available, and the detailed Supabase error was logged on the server.</p>
                 </div>
               </div>
-            ) : interests.length ? (
-              interests.map((interest) => (
+            ) : dashboardData?.interests.length ? (
+              dashboardData.interests.map((interest) => (
                 <article key={interest.id} className="panel data-card">
                   <p className="detail-kicker">Interest</p>
                   <h3>
@@ -238,7 +204,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <p className="route-text">{interest.message || "No message attached."}</p>
                   <div className="tag-row">
                     <span className="badge">{interest.status}</span>
-                    {interest.offer ? <span className="source-pill">{interest.offer.owner_alias}</span> : null}
+                    {interest.offer?.ownerProfile ? (
+                      <Link
+                        className="source-pill"
+                        href={`/people/${interest.offer.ownerProfile.id}`}
+                      >
+                        {interest.offer.ownerProfile.resolvedName}
+                      </Link>
+                    ) : null}
                   </div>
                   <div className="offer-footer">
                     <div className="tag-row">
@@ -259,6 +232,137 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div>
                   <strong>You have not responded to any offers yet.</strong>
                   <p>Browse the public directory and register interest in an offer.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="section section-white">
+          <div className="section-head">
+            <p className="eyebrow">Transactions</p>
+            <h2>Agreements and ratings</h2>
+            <p>Each completed transaction can be rated from 1 to 10 by each party.</p>
+          </div>
+
+          <div className="data-grid">
+            {dashboardData?.errors.agreements ? (
+              <div className="empty-state">
+                <div>
+                  <strong>We could not load your agreements right now.</strong>
+                  <p>The dashboard stayed available, and the detailed Supabase error was logged on the server.</p>
+                </div>
+              </div>
+            ) : dashboardData?.agreements.length ? (
+              dashboardData.agreements.map((agreement) => (
+                <article key={agreement.id} className="panel data-card">
+                  <p className="detail-kicker">Agreement</p>
+                  <h3>
+                    {agreement.counterparty ? (
+                      <Link className="inline-link" href={`/people/${agreement.counterparty.id}`}>
+                        {agreement.counterparty.resolvedName}
+                      </Link>
+                    ) : (
+                      "Counterparty"
+                    )}
+                  </h3>
+                  <p className="route-text">
+                    {agreement.offer
+                      ? `${agreement.offer.offered_cause} for ${agreement.offer.requested_cause}`
+                      : "Offer reference unavailable"}
+                  </p>
+                  <div className="tag-row">
+                    <span className="badge">{agreement.status}</span>
+                    {agreement.viewerRating ? (
+                      <span className="impact-pill">Your rating: {agreement.viewerRating.score}/10</span>
+                    ) : null}
+                  </div>
+                  {agreement.notes ? <p className="route-text">{agreement.notes}</p> : null}
+                  {agreement.counterparty ? (
+                    <form action={rateAgreementAction} className="stack-form compact-form">
+                      <input name="agreement_id" type="hidden" value={agreement.id} />
+                      <input name="rated_user_id" type="hidden" value={agreement.counterparty.id} />
+                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <label className="field">
+                        <span>Rate this transaction (1-10)</span>
+                        <input
+                          defaultValue={agreement.viewerRating?.score ?? 8}
+                          max={10}
+                          min={1}
+                          name="score"
+                          type="number"
+                        />
+                      </label>
+                      <div className="form-actions">
+                        <button className="button button-secondary button-mini" type="submit">
+                          {agreement.viewerRating ? "Update rating" : "Submit rating"}
+                        </button>
+                      </div>
+                    </form>
+                  ) : null}
+                </article>
+              ))
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No agreements yet.</strong>
+                  <p>Agreements appear here once one of your offers accepts an interest response.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="section section-subtle">
+          <div className="section-head">
+            <p className="eyebrow">Cart</p>
+            <h2>Offers you are tracking</h2>
+            <p>Discounts or reduced burdens published by offer owners will appear here and on the cart page.</p>
+          </div>
+
+          <div className="data-grid">
+            {dashboardData?.errors.cartItems ? (
+              <div className="empty-state">
+                <div>
+                  <strong>We could not load your cart right now.</strong>
+                  <p>The dashboard stayed available, and the detailed Supabase error was logged on the server.</p>
+                </div>
+              </div>
+            ) : dashboardData?.cartItems.length ? (
+              dashboardData.cartItems.map((item) =>
+                item.offer ? (
+                  <article key={item.offer.id} className="panel data-card">
+                    <p className="detail-kicker">{formatMode(item.offer.mode)}</p>
+                    <h3>{item.offer.offered_cause} for {item.offer.requested_cause}</h3>
+                    <p className="route-text">
+                      {item.offer.discount_note || "No discount is currently listed for this offer."}
+                    </p>
+                    <div className="tag-row">
+                      <span className="source-pill">
+                        {item.offer.ownerProfile?.resolvedName ?? item.offer.owner_alias}
+                      </span>
+                      <span className="impact-pill">
+                        Added {new Date(item.addedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="offer-footer">
+                      <div className="offer-actions">
+                        <Link className="text-button" href={`/offers/${item.offer.id}`}>
+                          View offer
+                        </Link>
+                        <Link className="text-button" href="/cart">
+                          Open cart
+                        </Link>
+                      </div>
+                    </div>
+                  </article>
+                ) : null,
+              )
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No cart items yet.</strong>
+                  <p>Add an offer to your cart when you want to track it closely.</p>
                 </div>
               </div>
             )}

@@ -29,7 +29,7 @@ import {
   SORT_OPTIONS,
   validateOfferDraft,
 } from "@/lib/offers";
-import { PRIMARY_NAV_LINKS } from "@/lib/site";
+import { getPrimaryNavLinks } from "@/lib/site";
 
 interface HomePageProps {
   isAuthenticated: boolean;
@@ -219,7 +219,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
+          links={getPrimaryNavLinks(isAuthenticated)}
           authLink={
             isAuthenticated
               ? { href: "/dashboard", label: "Dashboard" }

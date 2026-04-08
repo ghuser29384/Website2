@@ -6,7 +6,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffers } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
-import { PRIMARY_NAV_LINKS } from "@/lib/site";
+import { getPrimaryNavLinks } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -28,7 +28,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
+          links={getPrimaryNavLinks(Boolean(viewer))}
           authLink={
             viewer
               ? { href: "/dashboard", label: "Dashboard" }
@@ -124,7 +124,16 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   <p className="detail-kicker">{formatMode(offer.mode)}</p>
                   <h3>{offer.offered_cause} for {offer.requested_cause}</h3>
                   <p className="route-text">
-                    <strong>{offer.owner_alias}</strong> proposes: {offer.offer_action}
+                    <strong>
+                      {offer.ownerProfile ? (
+                        <Link href={`/people/${offer.ownerProfile.id}`}>
+                          {offer.ownerProfile.resolvedName}
+                        </Link>
+                      ) : (
+                        offer.owner_alias
+                      )}
+                    </strong>{" "}
+                    proposes: {offer.offer_action}
                   </p>
                   <p className="route-text">Requests in return: {offer.request_action}</p>
                   <div className="tag-row">
@@ -132,6 +141,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     <span className="badge badge-secondary">{offer.requested_cause}</span>
                     <span className="impact-pill">{offer.offer_impact}/10 offered</span>
                     <span className="impact-pill">{offer.min_counterparty_impact}+/10 needed</span>
+                    <span className="impact-pill">{offer.commentCount} comments</span>
+                    <span className="impact-pill">{offer.recommendationCount} recommendations</span>
                   </div>
                   <div className="offer-footer">
                     <div className="tag-row">

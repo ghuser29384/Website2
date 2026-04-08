@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
-import { PRIMARY_NAV_LINKS } from "@/lib/site";
+import { getPrimaryNavLinks } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -32,7 +32,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
+          links={getPrimaryNavLinks(Boolean(viewer))}
           authLink={
             viewer
               ? { href: "/dashboard", label: "Dashboard" }

@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
-import { PRIMARY_NAV_LINKS } from "@/lib/site";
+import { getPrimaryNavLinks } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -28,7 +28,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
+          links={getPrimaryNavLinks(Boolean(viewer))}
           authLink={
             viewer
               ? { href: "/dashboard", label: "Dashboard" }
@@ -125,6 +125,18 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
                   <span>Email</span>
                   <input name="email" placeholder="you@example.com" type="email" />
                 </label>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>City</span>
+                    <input name="city" placeholder="e.g. Boston" type="text" />
+                  </label>
+
+                  <label className="field">
+                    <span>Region</span>
+                    <input name="region" placeholder="e.g. Massachusetts" type="text" />
+                  </label>
+                </div>
 
                 <label className="field">
                   <span>Password</span>
