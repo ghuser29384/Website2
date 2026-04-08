@@ -6,6 +6,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffers } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
+import { PRIMARY_NAV_LINKS } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -27,10 +28,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={[
-            { href: "/", label: "Home" },
-            { href: "/offers", label: "Offers" },
-          ]}
+          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
           authLink={
             viewer
               ? { href: "/dashboard", label: "Dashboard" }
@@ -45,12 +43,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Live board</p>
-            <h1>Browse open moral trade offers.</h1>
+            <p className="eyebrow">Public offers</p>
+            <h1>Review published moral trade commitments.</h1>
             <p className="hero-text">
-              This is the shared offer directory backed by Supabase. It includes pledge
-              swaps, donation offsets, and paid action offers without replacing the
-              homepage prototype.
+              This directory is the public-facing record of live offers. Each listing states
+              a proposed action, a requested reciprocal action, and the trust terms under
+              which the commitment should be evaluated.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup"}>
@@ -63,27 +61,27 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">How this route differs from the homepage</p>
+            <p className="eyebrow">What this directory is for</p>
             <div className="flow-card">
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Stored offers</strong>
-                  <p>These offers come from Postgres rather than browser-only local storage.</p>
+                  <strong>Public commitments</strong>
+                  <p>These records are stored in Postgres, not just in local browser state.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Account-backed actions</strong>
-                  <p>Users can create any of the three trade types and express interest while signed in.</p>
+                  <strong>Structured evaluation</strong>
+                  <p>Each offer makes its action, reciprocity, and verification terms legible.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Dashboard continuity</strong>
-                  <p>Your own offers and interests roll into the dashboard automatically.</p>
+                  <strong>Account continuity</strong>
+                  <p>Your published offers and responses appear again in the dashboard.</p>
                 </div>
               </div>
             </div>
@@ -94,9 +92,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       <main>
         <section className="section section-white">
           <div className="section-head">
-            <p className="eyebrow">Open offers</p>
-            <h2>Shared listings</h2>
-            <p>Each card links to a detail page where signed-in users can express interest.</p>
+            <p className="eyebrow">Offer directory</p>
+            <h2>Published proposals</h2>
+            <p>
+              Each card links to a fuller dossier where visitors can inspect the terms and
+              signed-in users can register interest.
+            </p>
           </div>
 
           {!hasSupabaseEnv() ? (
@@ -123,9 +124,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   <p className="detail-kicker">{formatMode(offer.mode)}</p>
                   <h3>{offer.offered_cause} for {offer.requested_cause}</h3>
                   <p className="route-text">
-                    <strong>{offer.owner_alias}</strong> offers: {offer.offer_action}
+                    <strong>{offer.owner_alias}</strong> proposes: {offer.offer_action}
                   </p>
-                  <p className="route-text">Requests: {offer.request_action}</p>
+                  <p className="route-text">Requests in return: {offer.request_action}</p>
                   <div className="tag-row">
                     <span className="badge">{offer.offered_cause}</span>
                     <span className="badge badge-secondary">{offer.requested_cause}</span>
@@ -148,7 +149,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             ) : (
               <div className="empty-state">
                 <div>
-                  <strong>No live offers yet.</strong>
+                  <strong>No public offers have been published yet.</strong>
                   <p>Create the first offer once auth and the database are configured.</p>
                 </div>
               </div>

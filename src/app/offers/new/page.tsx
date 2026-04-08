@@ -13,6 +13,7 @@ import {
 } from "@/lib/offers";
 import { getFormMessage } from "@/lib/form-state";
 import { requireViewer } from "@/lib/app-data";
+import { PRIMARY_NAV_LINKS } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -34,10 +35,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={[
-            { href: "/", label: "Home" },
-            { href: "/offers", label: "Offers" },
-          ]}
+          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
           authLink={
             viewer
               ? { href: "/dashboard", label: "Dashboard" }
@@ -53,13 +51,13 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Offer creation</p>
-            <h1>Publish a live offer.</h1>
+            <h1>Publish a structured public commitment.</h1>
             <p className="hero-text">
               {viewer ? (
                 <>
                   Signed in as <strong>{viewer.displayName}</strong>. This route writes to
-                  Supabase instead of local browser storage, whether you are posting a
-                  pledge swap, a donation offset, or a paid action offer.
+                  Supabase instead of local browser storage and asks you to state the action,
+                  reciprocal terms, and trust conditions in a public-facing format.
                 </>
               ) : (
                 <>Configure Supabase to enable live offer creation.</>
@@ -87,8 +85,8 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Keep it actionable</strong>
-                  <p>Start with offers someone else can plausibly evaluate and accept.</p>
+                  <strong>Keep it bounded</strong>
+                  <p>Start with offers someone else can plausibly evaluate, verify, and accept.</p>
                 </div>
               </div>
             </div>
@@ -103,7 +101,10 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
               <div className="section-head auth-head">
                 <p className="eyebrow">Offer details</p>
                 <h2>Create offer</h2>
-                <p>Use the same structure as the homepage prototype, now with direct payment-for-action offers too.</p>
+                <p>
+                  Use the same structure as the homepage prototype, now in a public,
+                  account-backed record.
+                </p>
               </div>
 
               {!supabaseReady && (
@@ -273,11 +274,11 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 )}
                 <div>
                   <h3>Where this appears</h3>
-                  <p>Your display name is saved as the visible alias on new offers across all three trade modes.</p>
+                  <p>Your display name is saved as the visible alias on public offers across all three trade modes.</p>
                 </div>
                 <div>
                   <h3>Next step</h3>
-                  <p>Once published, the offer appears in the shared offer directory and dashboard.</p>
+                  <p>Once published, the offer appears in the public directory and on your dashboard.</p>
                 </div>
               </div>
             </article>

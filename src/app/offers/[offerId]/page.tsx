@@ -13,6 +13,7 @@ import {
 } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode } from "@/lib/offers";
+import { PRIMARY_NAV_LINKS } from "@/lib/site";
 
 interface OfferPageProps {
   params: Promise<{ offerId: string }>;
@@ -55,10 +56,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={[
-            { href: "/", label: "Home" },
-            { href: "/offers", label: "Offers" },
-          ]}
+          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
           authLink={
             viewer
               ? { href: "/dashboard", label: "Dashboard" }
@@ -78,12 +76,13 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               {offer.offered_cause} for {offer.requested_cause}.
             </h1>
             <p className="hero-text">
-              Posted by <strong>{offer.owner_alias}</strong>. This is the full offer view, with
-              a live interest flow for signed-in users.
+              Posted by <strong>{offer.owner_alias}</strong>. This dossier presents the offer as
+              a structured proposition with reciprocal terms, trust conditions, and a live
+              response flow for signed-in users.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/offers">
-                Back to offers
+                Back to public offers
               </Link>
               {!viewer ? (
                 <Link className="button button-primary" href={`/login?next=${encodeURIComponent(`/offers/${offerId}`)}`}>
@@ -94,28 +93,28 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Offer summary</p>
+            <p className="eyebrow">Structured summary</p>
             <div className="flow-card">
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Offer action</strong>
+                  <strong>Proposed action</strong>
                   <p>{offer.offer_action}</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Requested action</strong>
+                  <strong>Requested reciprocal action</strong>
                   <p>{offer.request_action}</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Trust frame</strong>
+                  <strong>Verification and review</strong>
                   <p>
-                    {offer.verification} · {offer.duration} · trust level {offer.trust_level}/5
+                    {offer.verification} | {offer.duration} | trust level {offer.trust_level}/5
                   </p>
                 </div>
               </div>
@@ -138,7 +137,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
         <section className="section section-white">
           <div className="detail-grid detail-grid-wide">
             <article className="panel detail-block">
-              <p className="detail-kicker">Core details</p>
+              <p className="detail-kicker">Offer dossier</p>
               <h3>{offer.owner_alias}</h3>
               <p>{offer.notes || "No additional notes were provided for this offer."}</p>
               <div className="tag-row">
@@ -153,16 +152,16 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                   <p>{offer.compromise_cause}</p>
                 </div>
                 <div>
-                  <h3>Status</h3>
+                  <h3>Current status</h3>
                   <p>{offer.status}</p>
                 </div>
               </div>
             </article>
 
             <article className="panel detail-block">
-              <p className="detail-kicker">Express interest</p>
+              <p className="detail-kicker">Respond to this offer</p>
               {isOwner ? (
-                <p>You own this offer, so the interest form is replaced with incoming interest below.</p>
+                <p>You own this offer, so the response form is replaced with incoming interest below.</p>
               ) : viewer ? (
                 <form action={expressInterestAction} className="stack-form">
                   <input name="offer_id" type="hidden" value={offer.id} />
@@ -171,15 +170,15 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                     <textarea
                       defaultValue={myInterest?.message ?? ""}
                       name="message"
-                      placeholder="Add a short note explaining why this trade interests you."
+                      placeholder="Add a short note explaining why the terms look mutually worthwhile to you."
                       rows={5}
                     />
                   </label>
 
                   <div className="form-actions">
-                    <button className="button button-primary" type="submit">
-                      {myInterest ? "Update interest" : "Express interest"}
-                    </button>
+                  <button className="button button-primary" type="submit">
+                      {myInterest ? "Update response" : "Express interest"}
+                  </button>
                     <Link className="button button-secondary" href="/dashboard">
                       Open dashboard
                     </Link>
@@ -187,7 +186,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                 </form>
               ) : (
                 <div className="clean-stack">
-                  <p>Log in or create an account before expressing interest in this offer.</p>
+                  <p>Log in or create an account before responding to this offer.</p>
                   <div className="hero-actions">
                     <Link
                       className="button button-primary"
@@ -204,7 +203,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
 
               {myInterest ? (
                 <div className="status-chip-row">
-                  <span className="badge">Your interest is {myInterest.status}</span>
+                  <span className="badge">Your response is {myInterest.status}</span>
                 </div>
               ) : null}
             </article>
@@ -215,7 +214,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           <section className="section section-cream">
             <div className="section-head">
               <p className="eyebrow">Incoming interest</p>
-              <h2>People who responded to your offer</h2>
+              <h2>Responses to this offer</h2>
             </div>
 
             <div className="data-grid">

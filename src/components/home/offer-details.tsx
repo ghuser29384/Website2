@@ -13,8 +13,8 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
       <article className="panel details-panel">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Selected offer</p>
-            <h3>Offer details</h3>
+            <p className="eyebrow">Selected proposal</p>
+            <h3>Structured terms</h3>
           </div>
         </div>
 
@@ -35,14 +35,14 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
 
               <div className="detail-grid">
                 <div className="detail-block">
-                  <p className="detail-kicker">Impact threshold</p>
+                  <p className="detail-kicker">Stated threshold</p>
                   <p>
                     Offers {selected.offerImpact}/10 on its own scale and requires at least{" "}
                     {selected.minCounterpartyImpact}/10 from the other side.
                   </p>
                 </div>
                 <div className="detail-block">
-                  <p className="detail-kicker">Trust stack</p>
+                  <p className="detail-kicker">Verification and review</p>
                   <p>
                     {selected.verification} with a {selected.duration} review period and trust
                     intensity {selected.trustLevel}/5.
@@ -63,7 +63,7 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
           ) : (
             <div className="empty-state">
               <div>
-                <strong>Select an offer to inspect it.</strong>
+                <strong>Select a proposal to inspect its terms.</strong>
               </div>
             </div>
           )}
@@ -73,8 +73,8 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
       <article className="panel matches-panel">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Reciprocal matches</p>
-            <h3>Compatibility queue</h3>
+            <p className="eyebrow">Reciprocal candidates</p>
+            <h3>Compatibility review</h3>
           </div>
         </div>
 
@@ -115,7 +115,7 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
                           type="button"
                           onClick={() => onFocusOffer(pair.offer.id)}
                         >
-                          Focus offer
+                          Focus proposal
                         </button>
                       </div>
                     </div>

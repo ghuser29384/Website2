@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import { PRIMARY_NAV_LINKS } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -31,10 +32,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={[
-            { href: "/", label: "Home" },
-            { href: "/offers", label: "Offers" },
-          ]}
+          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
           authLink={
             viewer
               ? { href: "/dashboard", label: "Dashboard" }
@@ -53,8 +51,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <p className="eyebrow">Account access</p>
             <h1>Log in to Moral Trade.</h1>
             <p className="hero-text">
-              Sign in with email and password to create offers, express interest, and review
-              your dashboard.
+              Sign in with email and password to publish public offers, respond to structured
+              commitments, and review your dashboard.
             </p>
           </section>
 
@@ -64,7 +62,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Publish new offers</strong>
+                  <strong>Publish public offers</strong>
                   <p>Move from browser-local experimentation into real stored offers.</p>
                 </div>
               </div>

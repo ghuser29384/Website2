@@ -32,10 +32,10 @@ export function OfferComposer({
     <form className="panel composer" onSubmit={onSubmit}>
       <div className="panel-head">
         <div>
-          <p className="eyebrow">Offer composer</p>
-          <h3>New moral trade</h3>
+          <p className="eyebrow">Prototype composer</p>
+          <h3>Draft a structured proposal</h3>
         </div>
-        <span className="panel-note">Client-side prototype</span>
+        <span className="panel-note">Browser-only workspace</span>
       </div>
 
       <label className="field">
@@ -266,10 +266,10 @@ export function OfferComposer({
 
       <div className="form-actions">
         <button className="button button-primary" type="submit">
-          Add offer
+          Add proposal
         </button>
         <button className="button button-secondary" type="button" onClick={onResetLocalOffers}>
-          Reset local offers
+          Reset local examples
         </button>
       </div>
     </form>

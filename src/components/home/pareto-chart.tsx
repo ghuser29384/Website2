@@ -56,7 +56,7 @@ export function ParetoChart({ selected, pairs }: ParetoChartProps) {
       <div className="panel-head">
         <div>
           <p className="eyebrow">Choiceworthiness view</p>
-          <h3>Pareto-style trade map</h3>
+          <h3>Illustrative reciprocity map</h3>
         </div>
       </div>
       <svg
@@ -172,8 +172,8 @@ export function ParetoChart({ selected, pairs }: ParetoChartProps) {
         ))}
       </svg>
       <p className="chart-caption">
-        Status quo is fixed in the lower-left. Better matches move up and right when both
-        sides clear each other&apos;s minimum impact threshold and align on trust.
+        Status quo is fixed in the lower-left. Better candidates move up and right when both
+        sides clear each other&apos;s stated minimum threshold and align on trust.
       </p>
     </article>
   );

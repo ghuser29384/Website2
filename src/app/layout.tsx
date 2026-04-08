@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     template: "%s | Moral Trade",
   },
   description:
-    "A minimal Next.js web app for structured moral trade, preserving the original homepage design and preparing for Supabase-backed accounts and offers.",
+    "A public-interest web app for structured moral commitments, grounded in careful reasoning, explicit terms, and transparent limitations.",
 };
 
 export default function RootLayout({

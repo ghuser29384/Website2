@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import { PRIMARY_NAV_LINKS } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -27,10 +28,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={[
-            { href: "/", label: "Home" },
-            { href: "/offers", label: "Offers" },
-          ]}
+          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
           authLink={
             viewer
               ? { href: "/dashboard", label: "Dashboard" }
@@ -49,8 +47,8 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
             <p className="eyebrow">Account setup</p>
             <h1>Create your Moral Trade account.</h1>
             <p className="hero-text">
-              Sign up with email and password so you can publish offers, express interest,
-              and manage your dashboard.
+              Sign up with email and password so you can publish structured offers, express
+              interest in public commitments, and manage your dashboard.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/login">

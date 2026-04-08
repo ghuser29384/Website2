@@ -7,6 +7,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode } from "@/lib/offers";
+import { PRIMARY_NAV_LINKS } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -51,10 +52,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={[
-            { href: "/", label: "Home" },
-            { href: "/offers", label: "Offers" },
-          ]}
+          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
           authLink={
             viewer
               ? { href: "/dashboard", label: "Dashboard" }
@@ -66,14 +64,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Member dashboard</p>
-            <h1>Manage your offers and interests.</h1>
+            <p className="eyebrow">Member record</p>
+            <h1>Review your published commitments and responses.</h1>
             <p className="hero-text">
               {viewer ? (
                 <>
                   Signed in as <strong>{viewer.displayName}</strong>. This dashboard shows your
-                  own live offers and the interest you expressed in other offers across all
-                  three trade types.
+                  own offers and the responses you lodged elsewhere, with the same emphasis on
+                  explicit terms and traceable activity.
                 </>
               ) : (
                 <>Configure Supabase to enable the live dashboard and authenticated data.</>
@@ -94,27 +92,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Dashboard scope</p>
+            <p className="eyebrow">What this record contains</p>
             <div className="flow-card">
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Your offers</strong>
-                  <p>See every offer you published and jump to its public detail page.</p>
+                  <strong>Offers you published</strong>
+                  <p>Review the public commitments attached to your account and inspect each dossier.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Your interests</strong>
-                  <p>Track which offers you expressed interest in and review the messages you sent.</p>
+                  <strong>Responses you sent</strong>
+                  <p>Track where you expressed interest and revisit the reasoning you provided.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Future agreements</strong>
-                  <p>The data model is ready for a later agreement-management workflow.</p>
+                  <strong>Future agreement layer</strong>
+                  <p>The schema can later support agreement management without changing the public framing.</p>
                 </div>
               </div>
             </div>
@@ -161,8 +159,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Your offers</p>
-            <h2>Published by you</h2>
-            <p>These offers are stored in Supabase and visible on the live board.</p>
+            <h2>Published commitments</h2>
+            <p>These offers are stored in Supabase and visible in the public directory.</p>
           </div>
 
           <div className="data-grid">
@@ -179,7 +177,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <p className="detail-kicker">{formatMode(offer.mode)}</p>
                   <h3>{offer.offered_cause} for {offer.requested_cause}</h3>
                   <p className="route-text">{offer.offer_action}</p>
-                  <p className="route-text">Requests: {offer.request_action}</p>
+                  <p className="route-text">Requests in return: {offer.request_action}</p>
                   <div className="tag-row">
                     <span className="badge">{offer.status}</span>
                     <span className="impact-pill">{offer.offer_impact}/10 offered</span>
@@ -201,7 +199,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ) : (
               <div className="empty-state">
                 <div>
-                  <strong>You have not published any offers yet.</strong>
+                  <strong>You have not published any commitments yet.</strong>
                   <p>Create your first offer to see it here.</p>
                 </div>
               </div>
@@ -212,8 +210,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <section className="section section-cream">
           <div className="section-head">
             <p className="eyebrow">Your interests</p>
-            <h2>Offers you engaged with</h2>
-            <p>Each interest is tied to a live offer and stored under your account.</p>
+            <h2>Responses you lodged</h2>
+            <p>Each response is tied to a live offer and stored under your account.</p>
           </div>
 
           <div className="data-grid">
@@ -255,8 +253,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ) : (
               <div className="empty-state">
                 <div>
-                  <strong>You have not expressed interest yet.</strong>
-                  <p>Browse the live board and register interest in an offer.</p>
+                  <strong>You have not responded to any offers yet.</strong>
+                  <p>Browse the public directory and register interest in an offer.</p>
                 </div>
               </div>
             )}

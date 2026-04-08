@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -28,10 +29,83 @@ import {
   SORT_OPTIONS,
   validateOfferDraft,
 } from "@/lib/offers";
+import { PRIMARY_NAV_LINKS } from "@/lib/site";
 
 interface HomePageProps {
   isAuthenticated: boolean;
 }
+
+const standards = [
+  {
+    title: "Bounded commitments",
+    text: "The platform focuses on specific actions, time horizons, and review periods rather than vague declarations of agreement.",
+  },
+  {
+    title: "Counterfactual honesty",
+    text: "Participants are asked to state whether the action really depends on the trade, reflecting one of the core trust problems in the paper.",
+  },
+  {
+    title: "Visible verification",
+    text: "Receipts, public pledges, witness checks, and escrow-style approaches are made explicit so outsiders can inspect what is and is not being verified.",
+  },
+  {
+    title: "Open limitations",
+    text: "The product states its own limits instead of pretending to settle all moral disagreement. It is a coordination tool, not a final arbiter.",
+  },
+] as const;
+
+const featuredDialogues = [
+  {
+    type: "Pledge swap",
+    title: "Vegetarianism in exchange for poverty giving",
+    proposition:
+      "Victoria offers a year of poverty-focused giving if another participant adopts a vegetarian diet for the same period.",
+    premise:
+      "Each side values the other action enough that the combined result looks better, from their own perspective, than acting alone.",
+    commitment: "Reviewable receipts, a defined term, and a public or witnessed record of compliance.",
+  },
+  {
+    type: "Donation offset",
+    title: "Redirecting opposed advocacy into a compromise destination",
+    proposition:
+      "Two people who would have funded opposed advocacy redirect the matched portion into a mutually acceptable cause instead.",
+    premise:
+      "If the original spending would largely cancel out, coordinated redirection can create more moral value than the status quo.",
+    commitment: "Matched amounts, a named destination, and clear rules for any unmatched surplus.",
+  },
+  {
+    type: "Paid action offer",
+    title: "Paying for a morally valued action",
+    proposition:
+      "A participant offers money for another person to take on a concrete action, such as a vegetarian commitment, when both regard the exchange as worthwhile.",
+    premise:
+      "Some actions are burdensome but not prohibitively so; a payment can make the trade prudentially attractive while still looking morally worthwhile to the payer.",
+    commitment: "Milestones, verification, and a stated burden threshold so the offer does not become coercive or undefined.",
+  },
+] as const;
+
+const faqItems = [
+  {
+    question: "Is Moral Trade a discussion forum or social feed?",
+    answer:
+      "No. The product is intentionally narrow. It is built around structured offers, explicit conditions, and reviewable commitments rather than open-ended debate or engagement loops.",
+  },
+  {
+    question: "Does Moral Trade claim to resolve deep moral disagreement?",
+    answer:
+      "No. It provides a disciplined way to coordinate when people with different priorities can still identify mutually worthwhile commitments.",
+  },
+  {
+    question: "What keeps the platform from becoming manipulative or shallow?",
+    answer:
+      "The interface avoids rankings, gamified incentives, and endless feeds. Instead it emphasizes bounded actions, evidence, review periods, and explicit limitations.",
+  },
+  {
+    question: "What is still missing?",
+    answer:
+      "A production version would still need moderation, identity checks, legal review, and more robust verification or escrow for higher-stakes commitments.",
+  },
+] as const;
 
 export function HomePage({ isAuthenticated }: HomePageProps) {
   const [draft, setDraft] = useState<OfferDraft>(createDefaultOfferDraft());
@@ -109,7 +183,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
     setLocalOffers((current) => [offer, ...current]);
     setSelectedOfferId(offer.id);
     setDraft(createDefaultOfferDraft());
-    setStatusMessage(`Added ${offer.alias}'s offer to the local market.`);
+    setStatusMessage(`Added ${offer.alias}'s offer to the local workspace.`);
   }
 
   function handleResetLocalOffers() {
@@ -124,7 +198,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
     setLocalOffers([]);
     setSelectedOfferId("seed-victoria");
-    setStatusMessage("Reset the market to seeded examples.");
+    setStatusMessage("Reset the workspace to the seeded examples.");
   }
 
   function handleRemoveOffer(offerId: string) {
@@ -145,12 +219,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
       <header className="hero">
         <SiteTopbar
           brandHref="/"
-          links={[
-            { href: "/offers", label: "Offers" },
-            { href: "#exchange", label: "How it works" },
-            { href: "#trust", label: "Trust" },
-            { href: "#safeguards", label: "Safeguards" },
-          ]}
+          links={PRIMARY_NAV_LINKS.map((link) => ({ ...link }))}
           authLink={
             isAuthenticated
               ? { href: "/dashboard", label: "Dashboard" }
@@ -158,134 +227,156 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           }
           primaryAction={
             isAuthenticated
-              ? { href: "/offers/new", label: "Create offer" }
+              ? { href: "/dashboard", label: "Open dashboard" }
               : { href: "/signup", label: "Sign up" }
           }
           showLogout={isAuthenticated}
         />
 
         <div className="hero-stage panel">
-          <div className="hero-grid">
+          <div className="hero-grid hero-grid-editorial">
             <section className="hero-copy" id="top">
-              <p className="eyebrow">Grounded in Toby Ord&apos;s moral trade paper</p>
-              <h1>Structure reciprocal moral trade with clearer terms.</h1>
+              <p className="eyebrow">Structured moral reflection and reciprocal commitment</p>
+              <h1>A disciplined public framework for moral trade.</h1>
               <p className="hero-text">
-                Moral Trade turns the paper&apos;s core idea into a practical workflow:
-                publish reciprocal offers, make verification and review terms explicit, and
-                identify exchanges that both sides can regard as morally worthwhile.
+                Moral Trade is a structured environment for people with different moral priorities
+                to make bounded, reviewable commitments when each judges the resulting world to be
+                better than the status quo. It is designed as a coordination mechanism, not a
+                casual discussion forum or engagement-driven marketplace.
               </p>
               <div className="hero-actions">
-                <a
+                <Link
                   className="button button-primary"
                   href={isAuthenticated ? "/dashboard" : "/signup"}
                 >
-                  {isAuthenticated ? "Open dashboard" : "Sign up"}
-                </a>
-                <a className="button button-secondary" href="/offers">
-                  Browse offers
-                </a>
+                  {isAuthenticated ? "Open dashboard" : "Create an account"}
+                </Link>
               </div>
-
-              <div className="hero-intro-note">
-                A practical, bounded interface for pledge swaps, donation offsets, and paid
-                action offers.
-              </div>
-
-              <div className="hero-metrics">
-                <article className="metric-card">
-                  <span className="metric-value">3</span>
-                  <span className="metric-label">core trade structures</span>
-                </article>
-                <article className="metric-card">
-                  <span className="metric-value">4</span>
-                  <span className="metric-label">trust and review levers</span>
-                </article>
-                <article className="metric-card">
-                  <span className="metric-value">Member</span>
-                  <span className="metric-label">accounts, offers, and dashboards</span>
-                </article>
-              </div>
+              <p className="hero-followup">
+                Or review the <Link href="/offers">public offers directory</Link> and the
+                methodology below before participating.
+              </p>
             </section>
 
             <aside className="hero-panel panel">
-              <p className="eyebrow">Three exchange formats</p>
+              <p className="eyebrow">What the platform makes explicit</p>
               <div className="flow-card">
                 <div className="flow-step">
                   <span className="flow-number">01</span>
                   <div>
-                    <strong>Pledge swap</strong>
+                    <strong>Proposed action</strong>
                     <p>
-                      Exchange recurring actions across causes, like vegetarianism for poverty
-                      giving.
+                      Each offer states a concrete commitment rather than an open-ended moral
+                      aspiration.
                     </p>
                   </div>
                 </div>
                 <div className="flow-step">
                   <span className="flow-number">02</span>
                   <div>
-                    <strong>Donation offset</strong>
+                    <strong>Reciprocal terms</strong>
                     <p>
-                      Cancel opposed spending and redirect matched funds to a compromise
-                      destination.
+                      The counterparty action, time horizon, verification method, and review period
+                      are visible from the start.
                     </p>
                   </div>
                 </div>
                 <div className="flow-step">
                   <span className="flow-number">03</span>
                   <div>
-                    <strong>Paid action offer</strong>
+                    <strong>Reasoning limits</strong>
                     <p>
-                      Pay someone to take a meaningful action when the world-improvement is
-                      worth more to you than the cash.
+                      The interface surfaces uncertainty and trust conditions instead of pretending
+                      moral disagreement has disappeared.
                     </p>
                   </div>
                 </div>
               </div>
-
-              <div className="mini-board">
-                <div className="mini-chip">Pledge swap</div>
-                <div className="mini-chip">Donation offset</div>
-                <div className="mini-chip">Paid action</div>
-              </div>
             </aside>
           </div>
 
-          <div className="hero-proof-strip" aria-label="Moral Trade principles">
+          <div className="hero-proof-strip" aria-label="Credibility signals">
             <article className="proof-card">
-              <p className="proof-label">Paper-grounded model</p>
+              <p className="proof-label">Paper-grounded structure</p>
               <p>
-                Built around reciprocal gain, factual trust, and counterfactual trust rather
-                than vague moral bargaining.
+                The core workflow is drawn from moral trade as reciprocal gain under moral
+                disagreement, not from social-feed or marketplace conventions.
               </p>
+              <a className="inline-link" href="#methodology">
+                Review the method
+              </a>
             </article>
             <article className="proof-card">
-              <p className="proof-label">Explicit scope</p>
+              <p className="proof-label">Reasoning standards</p>
               <p>
-                Focused on habits, donations, volunteering, and other bounded commitments
-                rather than open-ended or coercive arrangements.
+                Counterfactual honesty, verification, review cadence, and bounded scope are
+                treated as first-class constraints.
               </p>
+              <a className="inline-link" href="#standards">
+                See the standards
+              </a>
             </article>
             <article className="proof-card">
-              <p className="proof-label">Credible workflow</p>
+              <p className="proof-label">Transparency about limits</p>
               <p>
-                Accounts, live offers, stated verification, and member dashboards make the
-                commitments legible and reviewable.
+                No endorsements are claimed, and the current prototype openly states what it does
+                not yet solve.
               </p>
+              <a className="inline-link" href="#transparency">
+                Read the limitations
+              </a>
             </article>
           </div>
         </div>
       </header>
 
       <main>
-        <section className="section section-white">
+        <section className="section section-white" id="about">
           <div className="section-head">
-            <p className="eyebrow">Product structure</p>
-            <h2>A market for three main varieties of moral trade</h2>
+            <p className="eyebrow">What Moral Trade is</p>
+            <h2>A serious coordination mechanism for moral disagreement</h2>
             <p>
-              The paper highlights recurring personal arrangements, matched cancellation of
-              opposed donations, and direct incentive payments for action. This site
-              supports all three, then layers on trust, counterfactual honesty, and simple
-              matching rules.
+              Moral Trade is meant to support careful deliberation about mutually worthwhile
+              commitments. It does not assume shared moral beliefs. Instead, it asks whether
+              people with different values can still identify structured exchanges that each side
+              regards as morally better than acting alone.
+            </p>
+          </div>
+
+          <div className="editorial-grid">
+            <article className="panel editorial-card">
+              <h3>Not a general debate space</h3>
+              <p>
+                The product is intentionally narrow. It focuses on explicit proposals, shared
+                terms, and reviewable commitments rather than endless argument or reactive
+                engagement.
+              </p>
+            </article>
+            <article className="panel editorial-card">
+              <h3>Not a generic marketplace</h3>
+              <p>
+                The goal is not price discovery or transaction volume. The goal is principled
+                coordination under moral uncertainty, with visible safeguards and boundaries.
+              </p>
+            </article>
+            <article className="panel editorial-card">
+              <h3>Research-informed by design</h3>
+              <p>
+                The site is grounded in Toby Ord&apos;s paper on moral trade and related work on
+                moral public goods and coordination across worldviews.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" id="how-it-works">
+          <div className="section-head">
+            <p className="eyebrow">How Moral Trade works</p>
+            <h2>Three structured exchange formats, one disciplined workflow</h2>
+            <p>
+              The paper emphasizes several recurring forms of mutually beneficial moral exchange.
+              Moral Trade makes those forms legible by requiring explicit actions, reciprocal
+              terms, and trust conditions.
             </p>
           </div>
 
@@ -293,54 +384,191 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <article className="panel concept-card">
               <h3>Personal pledge swaps</h3>
               <p>
-                Use when each side is willing to take on a new habit, donation, or recurring
-                act only if the other side does something they deeply value.
+                Two people each take on a commitment they value less than the counterparty values
+                it, creating room for reciprocal gain.
               </p>
               <ul className="clean-list">
-                <li>Vegetarian or low-meat commitments</li>
-                <li>Recurring donations or volunteer hours</li>
-                <li>Climate, poverty, public health, and local community actions</li>
+                <li>Recurring donations, volunteering, or habit changes</li>
+                <li>Defined time horizon and verification method</li>
+                <li>Useful when each side can motivate the other more effectively than itself</li>
               </ul>
             </article>
 
             <article className="panel concept-card">
               <h3>Donation offsets</h3>
               <p>
-                Use when two sides would otherwise fund opposed advocacy. The site helps
-                them cancel out those transfers and redirect the matched portion to a
-                compromise cause.
+                Where opposed spending would largely cancel out, both sides can redirect the
+                matched amount into a compromise destination.
               </p>
               <ul className="clean-list">
-                <li>One-to-one or ratio-based matching</li>
-                <li>Shared compromise destination</li>
-                <li>Unmatched surplus stays visible instead of hidden</li>
+                <li>Matched redirection instead of zero-sum spending</li>
+                <li>Named compromise destination and visible unmatched surplus</li>
+                <li>Especially relevant for public-goods style conflicts</li>
               </ul>
             </article>
 
             <article className="panel concept-card">
               <h3>Paid action offers</h3>
               <p>
-                Use when one party is willing to spend money to induce an action they value,
-                and the other party would rationally accept because the payment outweighs
-                the burden.
+                One person offers money for another person to take on a morally valued action when
+                both see the exchange as worthwhile on their own terms.
               </p>
               <ul className="clean-list">
-                <li>Pay for vegetarian, giving, or volunteer commitments</li>
-                <li>Useful when the other side is already somewhat persuadable</li>
-                <li>Best with escrow, milestones, and visible completion rules</li>
+                <li>Appropriate for bounded actions with clear milestones</li>
+                <li>Requires extra care around burden, clarity, and verification</li>
+                <li>Most credible when the terms are highly specific</li>
               </ul>
             </article>
           </div>
         </section>
 
-        <section className="section section-cream exchange-section" id="exchange">
+        <section className="section section-white" id="standards">
           <div className="section-head">
-            <p className="eyebrow">Interactive market</p>
-            <h2>Publish an offer and see who can match it</h2>
+            <p className="eyebrow">Why this is epistemically serious</p>
+            <h2>Designed to make assumptions, uncertainty, and trust visible</h2>
             <p>
-              Offers are stored in your browser only. Seeded examples mirror the paper&apos;s
-              main use cases so the market has enough structure to explore immediately,
-              including direct payment-for-action trades.
+              Moral disagreement does not disappear just because people reach an exchange. The
+              platform therefore foregrounds the parts of the reasoning that most often stay
+              implicit.
+            </p>
+          </div>
+
+          <div className="trust-grid">
+            {standards.map((item) => (
+              <article key={item.title} className="panel trust-card">
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" id="examples">
+          <div className="section-head">
+            <p className="eyebrow">Example propositions</p>
+            <h2>Illustrative dialogues and commitments</h2>
+            <p>
+              These examples are not endorsements. They are structured examples of the kinds of
+              propositions the paper and related discussion suggest are possible.
+            </p>
+          </div>
+
+          <div className="proposition-grid">
+            {featuredDialogues.map((dialogue) => (
+              <article key={dialogue.title} className="panel proposition-card">
+                <p className="detail-kicker">{dialogue.type}</p>
+                <h3>{dialogue.title}</h3>
+                <dl className="proposition-structure">
+                  <div>
+                    <dt>Proposition</dt>
+                    <dd>{dialogue.proposition}</dd>
+                  </div>
+                  <div>
+                    <dt>Underlying premise</dt>
+                    <dd>{dialogue.premise}</dd>
+                  </div>
+                  <div>
+                    <dt>What makes it credible</dt>
+                    <dd>{dialogue.commitment}</dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" id="commitments">
+          <div className="section-head">
+            <p className="eyebrow">Public commitments and safeguards</p>
+            <h2>Commitments should be reviewable, narrow, and openly constrained</h2>
+            <p>
+              A trustworthy moral trade institution should make both the commitments and the
+              boundaries around them visible.
+            </p>
+          </div>
+
+          <div className="concept-grid">
+            <article className="panel concept-card">
+              <h3>What the platform is designed for</h3>
+              <ul className="clean-list">
+                <li>Specific habits, donations, volunteer time, and bounded lifestyle changes</li>
+                <li>Transparent reciprocal terms rather than vague moral promises</li>
+                <li>Structured review periods and legible verification expectations</li>
+              </ul>
+            </article>
+
+            <article className="panel concept-card">
+              <h3>What is deliberately excluded</h3>
+              <ul className="clean-list">
+                <li>No illegal, deceptive, or coercive arrangements</li>
+                <li>No election or vote trading</li>
+                <li>No harmful acts performed merely to extract side payments</li>
+              </ul>
+            </article>
+
+            <article className="panel concept-card" id="transparency">
+              <h3>What still requires institutional work</h3>
+              <ul className="clean-list">
+                <li>Robust moderation and dispute handling</li>
+                <li>Escrow, audit trails, and stronger identity checks</li>
+                <li>Legal review and clearer jurisdiction-specific policies</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" id="methodology">
+          <div className="section-head">
+            <p className="eyebrow">Methodology and sources</p>
+            <h2>Public reasoning standards, reference materials, and limitations</h2>
+            <p>
+              The site should be trusted, if at all, because its method is inspectable. The
+              references below are presented as sources of reasoning, not as endorsements.
+            </p>
+          </div>
+
+          <div className="editorial-grid editorial-grid-wide">
+            <article className="panel editorial-card">
+              <h3>How we reason</h3>
+              <ul className="clean-list">
+                <li>State the action, counterparty request, and review period in concrete terms</li>
+                <li>Keep counterfactual dependence explicit wherever possible</li>
+                <li>Distinguish moral benefit claims from verification claims</li>
+                <li>Be transparent when the interface is only illustrative</li>
+              </ul>
+            </article>
+
+            <article className="panel editorial-card">
+              <h3>Reference materials</h3>
+              <div className="reference-list">
+                <a href="https://www.amirrorclear.net/files/moral-trade.pdf" rel="noreferrer" target="_blank">
+                  Toby Ord, "Moral Trade"
+                </a>
+                <a
+                  href="https://www.forethought.org/research/moral-public-goods-are-a-big-deal-for-whether-we-get-a-good-future"
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Forethought, "Moral public goods are a big deal for whether we get a good future"
+                </a>
+              </div>
+              <p className="editorial-note">
+                The Forethought piece is relevant here because it highlights the importance of
+                institutions that help people cooperate on shared moral goods despite deep moral
+                uncertainty.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white exchange-section" id="workspace">
+          <div className="section-head">
+            <p className="eyebrow">Illustrative workspace</p>
+            <h2>Prototype the structure before moving into live offers</h2>
+            <p>
+              This section is intentionally labeled as a client-side prototype. It is useful for
+              understanding the shape of a trade, but it should not be confused with the
+              account-backed public offers directory.
             </p>
           </div>
 
@@ -356,18 +584,18 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <section className="panel market-panel">
               <div className="panel-head market-head">
                 <div>
-                  <p className="eyebrow">Live board</p>
-                  <h3>Offer book</h3>
+                  <p className="eyebrow">Illustrative offer book</p>
+                  <h3>Structured proposals</h3>
                 </div>
                 <div className="panel-note">
-                  {visibleOffers.length} visible · {allOffers.length} total · {localOffers.length}{" "}
-                  local · {exactMatches.length} reciprocal
+                  {visibleOffers.length} visible | {allOffers.length} total | {localOffers.length}{" "}
+                  local | {exactMatches.length} strong reciprocal fit
                 </div>
               </div>
 
               <div className="toolbar">
                 <label className="field compact-field">
-                  <span>Mode</span>
+                  <span>Trade type</span>
                   <select
                     value={filters.mode}
                     onChange={(event) => handleFilterChange("mode", event.currentTarget.value)}
@@ -381,7 +609,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 </label>
 
                 <label className="field compact-field">
-                  <span>Cause</span>
+                  <span>Cause area</span>
                   <select
                     value={filters.cause}
                     onChange={(event) => handleFilterChange("cause", event.currentTarget.value)}
@@ -396,7 +624,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 </label>
 
                 <label className="field compact-field">
-                  <span>Sort</span>
+                  <span>Ordering</span>
                   <select
                     value={filters.sortOrder}
                     onChange={(event) =>
@@ -422,14 +650,14 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           </div>
         </section>
 
-        <section className="section section-white" id="analysis">
+        <section className="section section-subtle" id="analysis">
           <div className="section-head">
-            <p className="eyebrow">Matching and frontier view</p>
-            <h2>Selected offers generate reciprocal matches and a simple Pareto map</h2>
+            <p className="eyebrow">Reciprocity analysis</p>
+            <h2>Inspect the structure of a candidate exchange</h2>
             <p>
-              The chart approximates the paper&apos;s idea of moving from a status quo point
-              toward outcomes that are better for both parties. It is illustrative, not a
-              moral calculus.
+              The matching view is illustrative. It does not claim to resolve all-value
+              comparisons. It helps participants inspect whether reciprocal terms, trust, and
+              minimum thresholds line up well enough to justify further discussion.
             </p>
           </div>
 
@@ -441,90 +669,29 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             />
           </div>
 
-          <ParetoChart selected={selectedOffer} pairs={exactMatches.length ? exactMatches : scoredPairs.slice(0, 4)} />
+          <ParetoChart
+            pairs={exactMatches.length ? exactMatches : scoredPairs.slice(0, 4)}
+            selected={selectedOffer}
+          />
         </section>
 
-        <section className="section section-cream" id="trust">
+        <section className="section section-white" id="faq">
           <div className="section-head">
-            <p className="eyebrow">Trust rails</p>
-            <h2>Built around the two trust problems Ord identifies</h2>
+            <p className="eyebrow">FAQ</p>
+            <h2>Transparency about scope and limitations</h2>
             <p>
-              Factual trust asks whether the other side is actually complying. Counterfactual
-              trust asks whether they would have done it anyway. The UI makes both visible.
+              A trustworthy institution should make it easy to see what it is for, what it is not
+              for, and what remains uncertain.
             </p>
           </div>
 
-          <div className="trust-grid">
-            <article className="panel trust-card">
-              <h3>Factual trust</h3>
-              <p>
-                Verification labels surface how the trade is checked: receipts, witnesses,
-                public pledges, or escrow.
-              </p>
-            </article>
-            <article className="panel trust-card">
-              <h3>Counterfactual trust</h3>
-              <p>
-                Every user must attest that their offer depends on a trade, preventing empty
-                signaling.
-              </p>
-            </article>
-            <article className="panel trust-card">
-              <h3>Review cadence</h3>
-              <p>
-                Shorter review periods make it easier to re-evaluate, which the paper
-                suggests helps manage uncertainty.
-              </p>
-            </article>
-            <article className="panel trust-card">
-              <h3>Compromise destinations</h3>
-              <p>
-                Offset trades redirect moral conflict into shared good rather than mere
-                cancellation.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        <section className="section section-white" id="safeguards">
-          <div className="section-head">
-            <p className="eyebrow">Safeguards</p>
-            <h2>This prototype narrows the market to reduce obvious failure modes</h2>
-            <p>
-              The paper discusses negative externalities and perverse incentives. A real
-              deployment would need identity, moderation, legal review, and abuse handling.
-              This prototype visibly constrains the domain.
-            </p>
-          </div>
-
-          <div className="concept-grid">
-            <article className="panel concept-card">
-              <h3>What is allowed</h3>
-              <ul className="clean-list">
-                <li>Habits, donations, volunteer time, and lifestyle commitments</li>
-                <li>Offsetting opposed donations into a compromise destination</li>
-                <li>Direct payments for verified actions or sustained behavior changes</li>
-                <li>Locally negotiated trust and review periods</li>
-              </ul>
-            </article>
-
-            <article className="panel concept-card">
-              <h3>What is excluded</h3>
-              <ul className="clean-list">
-                <li>No election or ballot-vote swapping</li>
-                <li>No illegal, deceptive, or coercive trades</li>
-                <li>No harmful behaviors performed just to extract side payments</li>
-              </ul>
-            </article>
-
-            <article className="panel concept-card">
-              <h3>What a production version needs</h3>
-              <ul className="clean-list">
-                <li>Authentication and audit trails</li>
-                <li>Escrow or bonded verification for larger trades</li>
-                <li>Moderation, legal review, and jurisdiction-aware rules</li>
-              </ul>
-            </article>
+          <div className="faq-list">
+            {faqItems.map((item) => (
+              <details key={item.question} className="panel faq-item">
+                <summary>{item.question}</summary>
+                <p>{item.answer}</p>
+              </details>
+            ))}
           </div>
         </section>
       </main>

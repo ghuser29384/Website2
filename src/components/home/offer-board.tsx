@@ -48,7 +48,7 @@ export function OfferBoard({
                   <span className="badge badge-secondary">{offer.requestedCause}</span>
                 </div>
                 <p className="route-text">{shorten(offer.offerAction, 104)}</p>
-                <p className="route-text">Wants: {shorten(offer.requestAction, 104)}</p>
+                <p className="route-text">Requests in return: {shorten(offer.requestAction, 104)}</p>
                 {offer.mode === "offset" ? (
                   <p className="route-text">Compromise destination: {offer.compromiseCause}</p>
                 ) : null}
@@ -67,7 +67,7 @@ export function OfferBoard({
                     type="button"
                     onClick={() => onSelectOffer(offer.id)}
                   >
-                    Inspect
+                    Inspect terms
                   </button>
                   {isLocal ? (
                     <button
