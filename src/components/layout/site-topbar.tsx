@@ -59,16 +59,15 @@ export function SiteTopbar({
 
   return (
     <nav className="topbar">
-      <Link className="brand" href={brandHref}>
+      <Link aria-label="Moral Trade" className="brand" href={brandHref}>
         <Image
           alt="Moral Trade logo"
           className="brand-logo"
-          height={34}
+          height={56}
           priority
-          src="/O(5).png"
-          width={34}
+          src="/O(7).png"
+          width={240}
         />
-        <span className="brand-label">Moral Trade</span>
       </Link>
       <div className="topbar-nav">
         <div className="topbar-links">
