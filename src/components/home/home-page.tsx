@@ -164,108 +164,115 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           showLogout={isAuthenticated}
         />
 
-        <div className="hero-grid">
-          <section className="hero-copy" id="top">
-            <p className="eyebrow">Grounded in Toby Ord&apos;s moral trade paper</p>
-            <h1>Structure reciprocal moral trade with clearer terms.</h1>
-            <p className="hero-text">
-              Moral Trade turns the paper&apos;s core idea into a practical workflow:
-              publish reciprocal offers, make verification and review terms explicit, and
-              identify exchanges that both sides can regard as morally worthwhile.
-            </p>
-            <div className="hero-actions">
-              <a
-                className="button button-primary"
-                href={isAuthenticated ? "/dashboard" : "/signup"}
-              >
-                {isAuthenticated ? "Open dashboard" : "Sign up"}
-              </a>
-              <a className="button button-secondary" href="/offers">
-                Browse offers
-              </a>
-            </div>
+        <div className="hero-stage panel">
+          <div className="hero-grid">
+            <section className="hero-copy" id="top">
+              <p className="eyebrow">Grounded in Toby Ord&apos;s moral trade paper</p>
+              <h1>Structure reciprocal moral trade with clearer terms.</h1>
+              <p className="hero-text">
+                Moral Trade turns the paper&apos;s core idea into a practical workflow:
+                publish reciprocal offers, make verification and review terms explicit, and
+                identify exchanges that both sides can regard as morally worthwhile.
+              </p>
+              <div className="hero-actions">
+                <a
+                  className="button button-primary"
+                  href={isAuthenticated ? "/dashboard" : "/signup"}
+                >
+                  {isAuthenticated ? "Open dashboard" : "Sign up"}
+                </a>
+                <a className="button button-secondary" href="/offers">
+                  Browse offers
+                </a>
+              </div>
 
-            <div className="hero-metrics">
-              <article className="metric-card">
-                <span className="metric-value">3</span>
-                <span className="metric-label">core trade structures</span>
-              </article>
-              <article className="metric-card">
-                <span className="metric-value">4</span>
-                <span className="metric-label">trust and review levers</span>
-              </article>
-              <article className="metric-card">
-                <span className="metric-value">Member</span>
-                <span className="metric-label">accounts, offers, and dashboards</span>
-              </article>
-            </div>
-          </section>
+              <div className="hero-intro-note">
+                A practical, bounded interface for pledge swaps, donation offsets, and paid
+                action offers.
+              </div>
 
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Three exchange formats</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Pledge swap</strong>
-                  <p>
-                    Exchange recurring actions across causes, like vegetarianism for poverty
-                    giving.
-                  </p>
+              <div className="hero-metrics">
+                <article className="metric-card">
+                  <span className="metric-value">3</span>
+                  <span className="metric-label">core trade structures</span>
+                </article>
+                <article className="metric-card">
+                  <span className="metric-value">4</span>
+                  <span className="metric-label">trust and review levers</span>
+                </article>
+                <article className="metric-card">
+                  <span className="metric-value">Member</span>
+                  <span className="metric-label">accounts, offers, and dashboards</span>
+                </article>
+              </div>
+            </section>
+
+            <aside className="hero-panel panel">
+              <p className="eyebrow">Three exchange formats</p>
+              <div className="flow-card">
+                <div className="flow-step">
+                  <span className="flow-number">01</span>
+                  <div>
+                    <strong>Pledge swap</strong>
+                    <p>
+                      Exchange recurring actions across causes, like vegetarianism for poverty
+                      giving.
+                    </p>
+                  </div>
+                </div>
+                <div className="flow-step">
+                  <span className="flow-number">02</span>
+                  <div>
+                    <strong>Donation offset</strong>
+                    <p>
+                      Cancel opposed spending and redirect matched funds to a compromise
+                      destination.
+                    </p>
+                  </div>
+                </div>
+                <div className="flow-step">
+                  <span className="flow-number">03</span>
+                  <div>
+                    <strong>Paid action offer</strong>
+                    <p>
+                      Pay someone to take a meaningful action when the world-improvement is
+                      worth more to you than the cash.
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Donation offset</strong>
-                  <p>
-                    Cancel opposed spending and redirect matched funds to a compromise
-                    destination.
-                  </p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  <strong>Paid action offer</strong>
-                  <p>
-                    Pay someone to take a meaningful action when the world-improvement is
-                    worth more to you than the cash.
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            <div className="mini-board">
-              <div className="mini-chip">Pledge swap</div>
-              <div className="mini-chip">Donation offset</div>
-              <div className="mini-chip">Paid action</div>
-            </div>
-          </aside>
-        </div>
+              <div className="mini-board">
+                <div className="mini-chip">Pledge swap</div>
+                <div className="mini-chip">Donation offset</div>
+                <div className="mini-chip">Paid action</div>
+              </div>
+            </aside>
+          </div>
 
-        <div className="hero-proof-strip" aria-label="Moral Trade principles">
-          <article className="proof-card">
-            <p className="proof-label">Paper-grounded model</p>
-            <p>
-              Built around reciprocal gain, factual trust, and counterfactual trust rather
-              than vague moral bargaining.
-            </p>
-          </article>
-          <article className="proof-card">
-            <p className="proof-label">Explicit scope</p>
-            <p>
-              Focused on habits, donations, volunteering, and other bounded commitments
-              rather than open-ended or coercive arrangements.
-            </p>
-          </article>
-          <article className="proof-card">
-            <p className="proof-label">Credible workflow</p>
-            <p>
-              Accounts, live offers, stated verification, and member dashboards make the
-              commitments legible and reviewable.
-            </p>
-          </article>
+          <div className="hero-proof-strip" aria-label="Moral Trade principles">
+            <article className="proof-card">
+              <p className="proof-label">Paper-grounded model</p>
+              <p>
+                Built around reciprocal gain, factual trust, and counterfactual trust rather
+                than vague moral bargaining.
+              </p>
+            </article>
+            <article className="proof-card">
+              <p className="proof-label">Explicit scope</p>
+              <p>
+                Focused on habits, donations, volunteering, and other bounded commitments
+                rather than open-ended or coercive arrangements.
+              </p>
+            </article>
+            <article className="proof-card">
+              <p className="proof-label">Credible workflow</p>
+              <p>
+                Accounts, live offers, stated verification, and member dashboards make the
+                commitments legible and reviewable.
+              </p>
+            </article>
+          </div>
         </div>
       </header>
 

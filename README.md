@@ -104,7 +104,12 @@ npm run dev
 - `public.interests`
 - `public.agreements`
 
-It also sets up enum types, indexes, update triggers, auth-to-profile sync, and row-level security policies.
+Important: the current app still requires both `public.users` and `public.profiles`.
+
+- `public.profiles` is the primary account profile table used by the viewer/dashboard code.
+- `public.users` is still required because `offers`, `interests`, and `agreements` currently foreign-key to it, and the auth bootstrap code ensures both rows exist.
+
+The full schema also sets up enum types, indexes, update triggers, auth-to-user/profile sync, backfills from `auth.users`, and row-level security policies.
 
 ## Supabase integration
 
