@@ -61,7 +61,8 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     notFound();
   }
 
-  const isOwnProfile = viewer?.authUser.id === data.profile.id;
+  const profile = data.profile;
+  const isOwnProfile = viewer?.authUser.id === profile.id;
   const recommendableOffers =
     viewer && isOwnProfile ? await listRecommendableOffers(viewer.authUser.id) : [];
 
@@ -86,9 +87,9 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Public member record</p>
-            <h1>{data.profile.resolvedName}</h1>
+            <h1>{profile.resolvedName}</h1>
             <p className="hero-text">
-              {[data.profile.city, data.profile.region].filter(Boolean).join(", ") || "Location not listed"}.
+              {[profile.city, profile.region].filter(Boolean).join(", ") || "Location not listed"}.
               {" "}
               This public profile aggregates open offers, transaction ratings, followers, karma, and
               public recommendations.
@@ -96,10 +97,10 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
             {!isOwnProfile && viewer ? (
               <div className="hero-actions">
                 <form action={toggleFollowAction}>
-                  <input name="profile_id" type="hidden" value={data.profile.id} />
-                  <input name="return_to" type="hidden" value={`/people/${data.profile.id}`} />
+                  <input name="profile_id" type="hidden" value={profile.id} />
+                  <input name="return_to" type="hidden" value={`/people/${profile.id}`} />
                   <button className="button button-primary" type="submit">
-                    {data.profile.isFollowedByViewer ? "Following" : "Follow member"}
+                    {profile.isFollowedByViewer ? "Following" : "Follow member"}
                   </button>
                 </form>
               </div>
@@ -111,15 +112,15 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
             <dl className="profile-stats profile-stats-hero">
               <div>
                 <dt>Rating</dt>
-                <dd>{data.profile.rating ? `${data.profile.rating.toFixed(1)}/10` : "None yet"}</dd>
+                <dd>{profile.rating ? `${profile.rating.toFixed(1)}/10` : "None yet"}</dd>
               </div>
               <div>
                 <dt>Followers</dt>
-                <dd>{data.profile.followerCount}</dd>
+                <dd>{profile.followerCount}</dd>
               </div>
               <div>
                 <dt>Karma</dt>
-                <dd>{data.profile.karma}</dd>
+                <dd>{profile.karma}</dd>
               </div>
               <div>
                 <dt>Comments</dt>
@@ -127,7 +128,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
               </div>
             </dl>
             <p className="route-text">
-              {data.profile.bio || "No public bio has been added yet."}
+              {profile.bio || "No public bio has been added yet."}
             </p>
           </aside>
         </div>
@@ -156,35 +157,35 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
             </div>
 
             <form action={updateProfileAction} className="stack-form profile-edit-form">
-              <input name="return_to" type="hidden" value={`/people/${data.profile.id}`} />
+              <input name="return_to" type="hidden" value={`/people/${profile.id}`} />
               <div className="field-grid">
                 <label className="field">
                   <span>Display name</span>
                   <input
-                    defaultValue={data.profile.display_name ?? ""}
+                    defaultValue={profile.display_name ?? ""}
                     name="display_name"
                     type="text"
                   />
                 </label>
                 <label className="field">
                   <span>City</span>
-                  <input defaultValue={data.profile.city ?? ""} name="city" type="text" />
+                  <input defaultValue={profile.city ?? ""} name="city" type="text" />
                 </label>
               </div>
               <div className="field-grid">
                 <label className="field">
                   <span>Region</span>
-                  <input defaultValue={data.profile.region ?? ""} name="region" type="text" />
+                  <input defaultValue={profile.region ?? ""} name="region" type="text" />
                 </label>
                 <label className="field">
                   <span>Email</span>
-                  <input defaultValue={data.profile.email} disabled type="email" />
+                  <input defaultValue={profile.email} disabled type="email" />
                 </label>
               </div>
               <label className="field">
                 <span>Bio</span>
                 <textarea
-                  defaultValue={data.profile.bio}
+                  defaultValue={profile.bio}
                   name="bio"
                   rows={4}
                   placeholder="Describe your priorities, verification norms, or typical offers."
@@ -253,8 +254,8 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
 
           {isOwnProfile ? (
             <form action={addOfferRecommendationAction} className="stack-form recommendation-form">
-              <input name="profile_page_id" type="hidden" value={data.profile.id} />
-              <input name="return_to" type="hidden" value={`/people/${data.profile.id}`} />
+              <input name="profile_page_id" type="hidden" value={profile.id} />
+              <input name="return_to" type="hidden" value={`/people/${profile.id}`} />
               <label className="field">
                 <span>Recommend another user&apos;s offer</span>
                 <select defaultValue="" name="recommended_offer_id">
@@ -311,7 +312,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
                             <input
                               name="return_to"
                               type="hidden"
-                              value={`/people/${data.profile.id}`}
+                              value={`/people/${profile.id}`}
                             />
                             <button className="button button-secondary button-mini" type="submit">
                               Remove
