@@ -100,6 +100,13 @@ create table if not exists public.agreement_ratings (
   unique (agreement_id, rater_id, rated_user_id)
 );
 
+-- Social and marketplace extensions used by the current app code.
+-- Exact table names matter here:
+-- - follows => public.user_follows
+-- - recommendations => public.offer_recommendations
+-- - comments => public.offer_comments
+-- - ratings => public.agreement_ratings
+-- - carts => public.offer_carts
 create table if not exists public.user_follows (
   follower_id uuid not null references public.profiles (id) on delete cascade,
   followed_id uuid not null references public.profiles (id) on delete cascade,
@@ -153,6 +160,7 @@ create index if not exists agreement_ratings_rated_user_id_idx on public.agreeme
 create index if not exists follows_followed_id_idx on public.user_follows (followed_id);
 create index if not exists recommendations_source_offer_id_idx on public.offer_recommendations (source_offer_id);
 create index if not exists recommendations_recommender_id_idx on public.offer_recommendations (recommender_id);
+create index if not exists recommendations_recommended_offer_id_idx on public.offer_recommendations (recommended_offer_id);
 create index if not exists offer_comments_offer_id_idx on public.offer_comments (offer_id, created_at asc);
 create index if not exists offer_comments_author_id_idx on public.offer_comments (author_id);
 create index if not exists comment_votes_user_id_idx on public.comment_votes (user_id);
