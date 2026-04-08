@@ -266,6 +266,7 @@ export async function expressInterestAction(formData: FormData) {
   }
 
   const interestedAlias = deriveDisplayName(viewer.authUser, viewer.profile);
+  await ensureAccountRowsForUser(viewer.authUser, supabase);
 
   const { error } = await supabase.from("interests").upsert(
     {

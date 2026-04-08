@@ -6,7 +6,6 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
-type UserRow = Database["public"]["Tables"]["users"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type InterestRow = Database["public"]["Tables"]["interests"]["Row"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -17,7 +16,6 @@ export interface Viewer {
   displayName: string;
   profileStatus: "loaded" | "created" | "fallback";
   profileSyncError: string | null;
-  legacyUserError: string | null;
 }
 
 export interface OfferRecord extends OfferRow {}
@@ -152,103 +150,6 @@ async function ensureUserProfile(
   };
 }
 
-function buildLegacyUserRow(
-  user: User,
-  profile?: Pick<ProfileRow, "email" | "display_name"> | null,
-  existingUser?: Partial<UserRow> | null,
-) {
-  const timestamp = new Date().toISOString();
-
-  return {
-    id: user.id,
-    email:
-      existingUser?.email ??
-      profile?.email ??
-      user.email ??
-      `${user.id}@members.moraltrade.local`,
-    display_name:
-      existingUser?.display_name ??
-      profile?.display_name ??
-      deriveDisplayName(user, profile ? { display_name: profile.display_name ?? null } : null),
-    bio: existingUser?.bio ?? null,
-    created_at: existingUser?.created_at ?? timestamp,
-    updated_at: existingUser?.updated_at ?? timestamp,
-  } satisfies UserRow;
-}
-
-async function ensureLegacyUserRecord(
-  supabase: SupabaseServerClient,
-  user: User,
-  profile?: Pick<ProfileRow, "email" | "display_name"> | null,
-) {
-  const { data: legacyUser, error: legacyUserError } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (legacyUserError) {
-    logSupabaseError("Failed to read public.users row", legacyUserError, {
-      userId: user.id,
-    });
-  }
-
-  if (legacyUser) {
-    return {
-      user: legacyUser as UserRow,
-      error: null,
-      status: "loaded" as const,
-    };
-  }
-
-  const seedUser = buildLegacyUserRow(user, profile, null);
-  const { data: insertedUser, error: insertError } = await supabase
-    .from("users")
-    .upsert(
-      {
-        id: seedUser.id,
-        email: seedUser.email,
-        display_name: seedUser.display_name,
-        bio: seedUser.bio,
-      },
-      {
-        onConflict: "id",
-      },
-    )
-    .select("*")
-    .maybeSingle();
-
-  if (insertError) {
-    logSupabaseError("Failed to create missing public.users row", insertError, {
-      userId: user.id,
-    });
-
-    return {
-      user: null,
-      error: insertError.message,
-      status: "fallback" as const,
-    };
-  }
-
-  if (!insertedUser) {
-    console.error("[supabase] public.users upsert returned no user row", {
-      userId: user.id,
-    });
-
-    return {
-      user: null,
-      error: legacyUserError?.message ?? "Unable to confirm your legacy user row in Supabase.",
-      status: "fallback" as const,
-    };
-  }
-
-  return {
-    user: insertedUser as UserRow,
-    error: null,
-    status: "created" as const,
-  };
-}
-
 export async function ensureProfileForUser(
   user: User,
   supabaseClient?: SupabaseServerClient,
@@ -263,13 +164,10 @@ export async function ensureAccountRowsForUser(
 ) {
   const supabase = supabaseClient ?? (await createClient());
   const profileResult = await ensureUserProfile(supabase, user);
-  const resolvedProfile = profileResult.profile;
-  const legacyUserResult = await ensureLegacyUserRecord(supabase, user, resolvedProfile);
 
   return {
     profileResult,
-    profile: resolvedProfile,
-    legacyUserResult,
+    profile: profileResult.profile,
   };
 }
 
@@ -293,8 +191,7 @@ export async function getViewer() {
     return null;
   }
 
-  const { profileResult, profile: resolvedProfile, legacyUserResult } =
-    await ensureAccountRowsForUser(user, supabase);
+  const { profileResult, profile: resolvedProfile } = await ensureAccountRowsForUser(user, supabase);
   const fallbackDisplayName = deriveDisplayName(user, resolvedProfile);
 
   return {
@@ -303,7 +200,6 @@ export async function getViewer() {
     displayName: fallbackDisplayName,
     profileStatus: profileResult.profileStatus,
     profileSyncError: profileResult.profileSyncError,
-    legacyUserError: legacyUserResult.error,
   } satisfies Viewer;
 }
 

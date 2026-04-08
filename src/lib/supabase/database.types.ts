@@ -29,32 +29,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      users: {
-        Row: {
-          id: string;
-          email: string;
-          display_name: string | null;
-          bio: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id: string;
-          email: string;
-          display_name?: string | null;
-          bio?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          email?: string;
-          display_name?: string | null;
-          bio?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
       offers: {
         Row: {
           id: string;

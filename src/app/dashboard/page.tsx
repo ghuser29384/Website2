@@ -47,6 +47,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     }
   }
 
+  const likelySchemaMismatch =
+    Boolean(dashboardErrors.offers) && Boolean(dashboardErrors.interests);
+
   return (
     <div className="page-shell">
       <header className="hero">
@@ -140,6 +143,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         {unexpectedDashboardError ? (
           <div className="status-banner status-banner-error">{unexpectedDashboardError}</div>
+        ) : null}
+
+        {likelySchemaMismatch ? (
+          <div className="status-banner status-banner-error">
+            The live Supabase schema appears to be out of date for the current app. Re-apply the
+            latest <code>supabase/schema.sql</code> migration to align the dashboard tables and
+            policies.
+          </div>
         ) : null}
 
         {dashboardErrors.relatedOffers ? (

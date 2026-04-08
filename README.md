@@ -82,9 +82,9 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 4. Apply the database schema from [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL editor.
 
-If your project was created before `public.profiles` existed, also apply [`supabase/profiles.sql`](supabase/profiles.sql) to add the profile table, RLS, and auth-to-profile sync trigger.
+If your project was created before `public.profiles` existed, you can still apply [`supabase/profiles.sql`](supabase/profiles.sql) first, but the current app expects the full updated [`supabase/schema.sql`](supabase/schema.sql) afterward.
 
-Re-running the current schema also backfills both `public.users` and `public.profiles` from `auth.users`, which keeps offer ownership rows aligned for older accounts.
+Re-running the current schema is the intended repair step for older deployments. It backfills `public.profiles`, recreates the current foreign keys, and aligns `offers`, `interests`, and `agreements` with the current app code.
 
 5. Start the development server.
 
@@ -98,18 +98,17 @@ npm run dev
 
 [`supabase/schema.sql`](supabase/schema.sql) creates the core data model for:
 
-- `public.users`
 - `public.profiles`
 - `public.offers`
 - `public.interests`
 - `public.agreements`
 
-Important: the current app still requires both `public.users` and `public.profiles`.
+Important: the current app is centered on `public.profiles`.
 
-- `public.profiles` is the primary account profile table used by the viewer/dashboard code.
-- `public.users` is still required because `offers`, `interests`, and `agreements` currently foreign-key to it, and the auth bootstrap code ensures both rows exist.
+- `public.profiles` is the account table used by the viewer/dashboard code.
+- `offers.owner_id`, `interests.user_id`, and `agreements.proposer_id` / `agreements.responder_id` are keyed directly to profile ids, which match `auth.users.id`.
 
-The full schema also sets up enum types, indexes, update triggers, auth-to-user/profile sync, backfills from `auth.users`, and row-level security policies.
+The full schema also sets up enum types, indexes, update triggers, auth-to-profile sync, backfills from `auth.users`, and row-level security policies.
 
 ## Supabase integration
 

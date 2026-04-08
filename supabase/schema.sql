@@ -34,15 +34,6 @@ exception
 end
 $$;
 
-create table if not exists public.users (
-  id uuid primary key references auth.users (id) on delete cascade,
-  email text not null unique,
-  display_name text,
-  bio text,
-  created_at timestamptz not null default timezone('utc', now()),
-  updated_at timestamptz not null default timezone('utc', now())
-);
-
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   email text not null unique,
@@ -52,7 +43,7 @@ create table if not exists public.profiles (
 
 create table if not exists public.offers (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references public.users (id) on delete cascade,
+  owner_id uuid not null references public.profiles (id) on delete cascade,
   owner_alias text not null,
   mode public.offer_mode not null,
   offered_cause text not null,
@@ -74,7 +65,7 @@ create table if not exists public.offers (
 create table if not exists public.interests (
   id uuid primary key default gen_random_uuid(),
   offer_id uuid not null references public.offers (id) on delete cascade,
-  user_id uuid not null references public.users (id) on delete cascade,
+  user_id uuid not null references public.profiles (id) on delete cascade,
   interested_alias text not null,
   message text not null default '',
   status public.interest_status not null default 'pending',
@@ -87,8 +78,8 @@ create table if not exists public.agreements (
   id uuid primary key default gen_random_uuid(),
   offer_id uuid not null references public.offers (id) on delete cascade,
   interest_id uuid unique references public.interests (id) on delete cascade,
-  proposer_id uuid not null references public.users (id) on delete cascade,
-  responder_id uuid not null references public.users (id) on delete cascade,
+  proposer_id uuid not null references public.profiles (id) on delete cascade,
+  responder_id uuid not null references public.profiles (id) on delete cascade,
   status public.agreement_status not null default 'proposed',
   notes text not null default '',
   created_at timestamptz not null default timezone('utc', now()),
@@ -109,28 +100,6 @@ language plpgsql
 as $$
 begin
   new.updated_at = timezone('utc', now());
-  return new;
-end;
-$$;
-
-create or replace function public.handle_auth_user_sync()
-returns trigger
-language plpgsql
-security definer
-set search_path = public, auth
-as $$
-begin
-  insert into public.users (id, email, display_name)
-  values (
-    new.id,
-    new.email,
-    coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1))
-  )
-  on conflict (id) do update
-    set email = excluded.email,
-        display_name = coalesce(excluded.display_name, public.users.display_name),
-        updated_at = timezone('utc', now());
-
   return new;
 end;
 $$;
@@ -156,17 +125,6 @@ begin
 end;
 $$;
 
-insert into public.users (id, email, display_name)
-select
-  users.id,
-  users.email,
-  coalesce(users.raw_user_meta_data ->> 'display_name', split_part(users.email, '@', 1))
-from auth.users as users
-on conflict (id) do update
-  set email = excluded.email,
-      display_name = coalesce(excluded.display_name, public.users.display_name),
-      updated_at = timezone('utc', now());
-
 insert into public.profiles (id, email, display_name)
 select
   users.id,
@@ -177,20 +135,30 @@ on conflict (id) do update
   set email = excluded.email,
       display_name = coalesce(excluded.display_name, public.profiles.display_name);
 
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-after insert or update of email, raw_user_meta_data on auth.users
-for each row execute procedure public.handle_auth_user_sync();
+alter table public.offers drop constraint if exists offers_owner_id_fkey;
+alter table public.offers
+  add constraint offers_owner_id_fkey
+  foreign key (owner_id) references public.profiles (id) on delete cascade;
+
+alter table public.interests drop constraint if exists interests_user_id_fkey;
+alter table public.interests
+  add constraint interests_user_id_fkey
+  foreign key (user_id) references public.profiles (id) on delete cascade;
+
+alter table public.agreements drop constraint if exists agreements_proposer_id_fkey;
+alter table public.agreements
+  add constraint agreements_proposer_id_fkey
+  foreign key (proposer_id) references public.profiles (id) on delete cascade;
+
+alter table public.agreements drop constraint if exists agreements_responder_id_fkey;
+alter table public.agreements
+  add constraint agreements_responder_id_fkey
+  foreign key (responder_id) references public.profiles (id) on delete cascade;
 
 drop trigger if exists on_auth_profile_created on auth.users;
 create trigger on_auth_profile_created
 after insert or update of email, raw_user_meta_data on auth.users
 for each row execute procedure public.handle_auth_profile_sync();
-
-drop trigger if exists users_set_updated_at on public.users;
-create trigger users_set_updated_at
-before update on public.users
-for each row execute procedure public.set_updated_at();
 
 drop trigger if exists offers_set_updated_at on public.offers;
 create trigger offers_set_updated_at
@@ -207,33 +175,10 @@ create trigger agreements_set_updated_at
 before update on public.agreements
 for each row execute procedure public.set_updated_at();
 
-alter table public.users enable row level security;
 alter table public.profiles enable row level security;
 alter table public.offers enable row level security;
 alter table public.interests enable row level security;
 alter table public.agreements enable row level security;
-
-drop policy if exists "users_select_own" on public.users;
-create policy "users_select_own"
-on public.users
-for select
-to authenticated
-using ((select auth.uid()) = id);
-
-drop policy if exists "users_insert_own" on public.users;
-create policy "users_insert_own"
-on public.users
-for insert
-to authenticated
-with check ((select auth.uid()) = id);
-
-drop policy if exists "users_update_own" on public.users;
-create policy "users_update_own"
-on public.users
-for update
-to authenticated
-using ((select auth.uid()) = id)
-with check ((select auth.uid()) = id);
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
