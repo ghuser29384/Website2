@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
@@ -58,7 +59,17 @@ export function SiteTopbar({
 
   return (
     <nav className="topbar">
-      <NavItem className="brand" href={brandHref} label="Moral Trade" />
+      <Link className="brand" href={brandHref}>
+        <Image
+          alt="Moral Trade logo"
+          className="brand-logo"
+          height={34}
+          priority
+          src="/moral-trade-logo.png"
+          width={34}
+        />
+        <span className="brand-label">Moral Trade</span>
+      </Link>
       <div className="topbar-nav">
         <div className="topbar-links">
           {links.map((link) => (

@@ -176,6 +176,43 @@ begin
 end;
 $$;
 
+create or replace function public.viewer_has_interest_for_offer(target_offer_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select
+    auth.uid() is not null
+    and exists (
+      select 1
+      from public.interests
+      where interests.offer_id = target_offer_id
+        and interests.user_id = auth.uid()
+    );
+$$;
+
+create or replace function public.viewer_has_offer_in_cart(target_offer_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select
+    auth.uid() is not null
+    and exists (
+      select 1
+      from public.offer_carts
+      where offer_carts.offer_id = target_offer_id
+        and offer_carts.user_id = auth.uid()
+    );
+$$;
+
+grant execute on function public.viewer_has_interest_for_offer(uuid) to anon, authenticated;
+grant execute on function public.viewer_has_offer_in_cart(uuid) to anon, authenticated;
+
 create or replace function public.handle_auth_profile_sync()
 returns trigger
 language plpgsql
@@ -291,18 +328,8 @@ to anon, authenticated
 using (
   status = 'open'
   or owner_id = (select auth.uid())
-  or exists (
-    select 1
-    from public.interests
-    where interests.offer_id = offers.id
-      and interests.user_id = (select auth.uid())
-  )
-  or exists (
-    select 1
-    from public.offer_carts
-    where offer_carts.offer_id = offers.id
-      and offer_carts.user_id = (select auth.uid())
-  )
+  or public.viewer_has_interest_for_offer(id)
+  or public.viewer_has_offer_in_cart(id)
 );
 
 drop policy if exists "offers_insert_own" on public.offers;

@@ -9,6 +9,11 @@ export const metadata: Metadata = {
   },
   description:
     "A public-interest web app for structured moral commitments, grounded in careful reasoning, explicit terms, and transparent limitations.",
+  icons: {
+    icon: "/moral-trade-logo.png",
+    shortcut: "/moral-trade-logo.png",
+    apple: "/moral-trade-logo.png",
+  },
 };
 
 export default function RootLayout({

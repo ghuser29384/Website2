@@ -108,7 +108,6 @@ h4 {
 }
 
 .brand {
-  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
@@ -117,13 +116,15 @@ h4 {
   letter-spacing: 0.01em;
 }
 
-.brand::before {
-  content: "";
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 5px var(--accent-soft);
+.brand-logo {
+  display: block;
+  width: 2.125rem;
+  height: 2.125rem;
+  object-fit: contain;
+}
+
+.brand-label {
+  display: inline-block;
 }
 
 .topbar-links a {
