@@ -84,7 +84,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div>
                   <strong>Offers and interest</strong>
                   <p>
-                    {dashboardData?.offers.length ?? 0} offer(s) | {dashboardData?.interests.length ?? 0} interest response(s)
+                    {dashboardData?.offers.length ?? 0} offer(s) |{" "}
+                    {dashboardData?.incomingInterests.length ?? 0} incoming response(s) |{" "}
+                    {dashboardData?.interests.length ?? 0} outgoing response(s)
                   </p>
                 </div>
               </div>
@@ -171,6 +173,72 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div>
                   <strong>You have not published any commitments yet.</strong>
                   <p>Create your first offer to see it here.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="section section-subtle">
+          <div className="section-head">
+            <p className="eyebrow">Incoming responses</p>
+            <h2>Responses to your offers</h2>
+            <p>These are the interest messages other members submitted on offers you published.</p>
+          </div>
+
+          <div className="data-grid">
+            {dashboardData?.errors.incomingInterests ? (
+              <div className="empty-state">
+                <div>
+                  <strong>We could not load incoming responses right now.</strong>
+                  <p>The dashboard stayed available, and the detailed Supabase error was logged on the server.</p>
+                </div>
+              </div>
+            ) : dashboardData?.incomingInterests.length ? (
+              dashboardData.incomingInterests.map((interest) => (
+                <article key={interest.id} className="panel data-card">
+                  <p className="detail-kicker">Incoming response</p>
+                  <h3>
+                    {interest.offer
+                      ? `${interest.offer.offered_cause} for ${interest.offer.requested_cause}`
+                      : "Offer unavailable"}
+                  </h3>
+                  <p className="route-text">
+                    From{" "}
+                    {interest.participantProfile ? (
+                      <Link
+                        className="inline-link"
+                        href={`/people/${interest.participantProfile.id}`}
+                      >
+                        {interest.participantProfile.resolvedName}
+                      </Link>
+                    ) : (
+                      interest.interested_alias || "Member"
+                    )}
+                  </p>
+                  <p className="route-text">{interest.message || "No message attached."}</p>
+                  <div className="tag-row">
+                    <span className="badge">{interest.status}</span>
+                    <span className="source-pill">
+                      Submitted {new Date(interest.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="offer-footer">
+                    <div className="offer-actions">
+                      {interest.offer ? (
+                        <Link className="text-button" href={`/offers/${interest.offer.id}`}>
+                          View offer
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No incoming responses yet.</strong>
+                  <p>When other users respond to one of your offers, those messages will appear here.</p>
                 </div>
               </div>
             )}

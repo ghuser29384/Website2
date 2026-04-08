@@ -91,11 +91,13 @@ export interface CartItemRecord {
 
 export interface DashboardDataResult {
   offers: OfferRecord[];
+  incomingInterests: InterestRecord[];
   interests: InterestRecord[];
   agreements: AgreementRecord[];
   cartItems: CartItemRecord[];
   errors: {
     offers: string | null;
+    incomingInterests: string | null;
     interests: string | null;
     relatedOffers: string | null;
     agreements: string | null;
@@ -1062,11 +1064,13 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
   if (!hasSupabaseEnv()) {
     return {
       offers: [],
+      incomingInterests: [],
       interests: [],
       agreements: [],
       cartItems: [],
       errors: {
         offers: null,
+        incomingInterests: null,
         interests: null,
         relatedOffers: null,
         agreements: null,
@@ -1078,6 +1082,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
   const supabase = await createClient();
   const errors: DashboardDataResult["errors"] = {
     offers: null,
+    incomingInterests: null,
     interests: null,
     relatedOffers: null,
     agreements: null,
@@ -1116,6 +1121,25 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       const message = error instanceof Error ? error.message : "Unable to load offers.";
       errors.offers = message;
       console.error("[supabase] Failed to hydrate dashboard offers", { message, userId });
+    }
+  }
+
+  const ownOfferIds = (ownOffers ?? []).map((offer) => offer.id);
+  let incomingInterestRows: InterestRow[] = [];
+  if (ownOfferIds.length) {
+    const { data: incomingInterests, error: incomingInterestsError } = await supabase
+      .from("interests")
+      .select("*")
+      .in("offer_id", ownOfferIds)
+      .order("created_at", { ascending: false });
+
+    if (incomingInterestsError) {
+      errors.incomingInterests = incomingInterestsError.message;
+      logSupabaseError("Failed to load incoming interests for owned offers", incomingInterestsError, {
+        userId,
+      });
+    } else {
+      incomingInterestRows = (incomingInterests ?? []) as InterestRow[];
     }
   }
 
@@ -1162,6 +1186,26 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     }
   }
 
+  let incomingParticipantMap = new Map<string, PublicProfileSummary>();
+  if (incomingInterestRows.length) {
+    try {
+      incomingParticipantMap = await getProfileSummaryMap(
+        userId,
+        incomingInterestRows.map((interest) => interest.user_id),
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to load incoming interest profiles.";
+      errors.incomingInterests = errors.incomingInterests ?? message;
+      console.error("[supabase] Failed to load incoming interest participant profiles", {
+        message,
+        userId,
+      });
+    }
+  }
+
+  const ownOffersById = new Map(hydratedOwnOffers.map((offer) => [offer.id, offer]));
+
   let agreements: AgreementRecord[] = [];
   try {
     agreements = await listAgreementsForUser(userId);
@@ -1182,6 +1226,11 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
 
   return {
     offers: hydratedOwnOffers,
+    incomingInterests: incomingInterestRows.map((interest) => ({
+      ...interest,
+      offer: ownOffersById.get(interest.offer_id) ?? null,
+      participantProfile: incomingParticipantMap.get(interest.user_id) ?? null,
+    })),
     interests: interestRows.map((interest) => ({
       ...interest,
       offer: relatedOffers.get(interest.offer_id) ?? null,
