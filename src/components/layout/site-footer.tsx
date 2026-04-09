@@ -8,11 +8,11 @@ export function SiteFooter() {
       <div className="footer-grid">
         <div className="footer-intro">
           <p className="eyebrow">Moral Trade</p>
-          <h2>Structured moral commitments, presented with explicit terms and visible limits.</h2>
+          <h2>A public-interest project for disciplined moral coordination under disagreement.</h2>
           <p>
-            Moral Trade is a public-interest prototype for reciprocal moral commitments. It is
-            designed to make reasoning, verification, and uncertainty easier to inspect than
-            they would be in an informal bargain.
+            Moral Trade is designed to make reasoning, verification, and institutional limits more
+            inspectable than they would be in an informal bargain. The ambition is seriousness,
+            not spectacle.
           </p>
         </div>
 
@@ -33,12 +33,13 @@ export function SiteFooter() {
       <div className="footer-meta">
         <p>
           Reference points include Toby Ord&apos;s paper on moral trade and Forethought&apos;s
-          discussion of moral public goods. No endorsements or institutional affiliations are
-          claimed here.
+          discussion of moral public goods. These references inform the reasoning standard; they
+          are not presented as endorsements.
         </p>
         <p>
-          Current limitations are stated openly: no escrow, no legal review, and no guarantee
-          that all morally relevant considerations have been captured by the interface.
+          Current limitations are stated openly: no escrow, no legal review, no guarantee that all
+          morally relevant considerations have been captured by the interface, and no claim that
+          the current product is yet a complete institution.
         </p>
       </div>
     </footer>

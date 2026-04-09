@@ -251,43 +251,51 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 >
                   {isAuthenticated ? "Open dashboard" : "Create an account"}
                 </Link>
+                <Link className="button button-secondary" href="/offers">
+                  Review public offers
+                </Link>
               </div>
+              <ul className="hero-signals" aria-label="Operating standards">
+                <li>Paper-based framework</li>
+                <li>Explicit verification terms</li>
+                <li>Public limitations stated upfront</li>
+              </ul>
               <p className="hero-followup">
-                Or review the <Link href="/offers">public offers directory</Link> and the
-                methodology below before participating.
+                Review the <Link href="/offers">public offers directory</Link> and the
+                methodology below before participating in a live exchange.
               </p>
             </section>
 
             <aside className="hero-panel panel">
-              <p className="eyebrow">What the platform makes explicit</p>
+              <p className="eyebrow">Operating discipline</p>
               <div className="flow-card">
                 <div className="flow-step">
                   <span className="flow-number">01</span>
                   <div>
-                    <strong>Proposed action</strong>
+                    <strong>Defined commitments</strong>
                     <p>
-                      Each offer states a concrete commitment rather than an open-ended moral
-                      aspiration.
+                      Every proposal names the action, term, review cadence, and verification
+                      approach instead of relying on vague moral aspiration.
                     </p>
                   </div>
                 </div>
                 <div className="flow-step">
                   <span className="flow-number">02</span>
                   <div>
-                    <strong>Reciprocal terms</strong>
+                    <strong>Reciprocal reasoning</strong>
                     <p>
-                      The counterparty action, time horizon, verification method, and review period
-                      are visible from the start.
+                      The counterparty request, burden, and trust assumptions are visible from the
+                      start so participants can inspect the structure of the exchange.
                     </p>
                   </div>
                 </div>
                 <div className="flow-step">
                   <span className="flow-number">03</span>
                   <div>
-                    <strong>Reasoning limits</strong>
+                    <strong>Transparent limits</strong>
                     <p>
-                      The interface surfaces uncertainty and trust conditions instead of pretending
-                      moral disagreement has disappeared.
+                      The interface keeps unresolved uncertainty in view and states plainly what
+                      this prototype does not yet verify or institutionalize.
                     </p>
                   </div>
                 </div>
@@ -297,30 +305,30 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
           <div className="hero-proof-strip" aria-label="Credibility signals">
             <article className="proof-card">
-              <p className="proof-label">Paper-grounded structure</p>
+              <p className="proof-label">Grounded in existing reasoning</p>
               <p>
                 The core workflow is drawn from moral trade as reciprocal gain under moral
-                disagreement, not from social-feed or marketplace conventions.
+                disagreement, not from social-feed habits or generic marketplace growth tactics.
               </p>
               <a className="inline-link" href="#methodology">
                 Review the method
               </a>
             </article>
             <article className="proof-card">
-              <p className="proof-label">Reasoning standards</p>
+              <p className="proof-label">Visible reasoning standards</p>
               <p>
                 Counterfactual honesty, verification, review cadence, and bounded scope are
-                treated as first-class constraints.
+                treated as first-class constraints rather than buried implementation details.
               </p>
               <a className="inline-link" href="#standards">
                 See the standards
               </a>
             </article>
             <article className="proof-card">
-              <p className="proof-label">Transparency about limits</p>
+              <p className="proof-label">Institutional transparency</p>
               <p>
                 No endorsements are claimed, and the current prototype openly states what it does
-                not yet solve.
+                not yet solve, verify, or govern.
               </p>
               <a className="inline-link" href="#transparency">
                 Read the limitations
@@ -345,7 +353,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
           <div className="editorial-grid">
             <article className="panel editorial-card">
-              <h3>Not a general debate space</h3>
+              <h3>Structured instead of open-ended</h3>
               <p>
                 The product is intentionally narrow. It focuses on explicit proposals, shared
                 terms, and reviewable commitments rather than endless argument or reactive
@@ -353,14 +361,14 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               </p>
             </article>
             <article className="panel editorial-card">
-              <h3>Not a generic marketplace</h3>
+              <h3>Institutional rather than transactional</h3>
               <p>
                 The goal is not price discovery or transaction volume. The goal is principled
                 coordination under moral uncertainty, with visible safeguards and boundaries.
               </p>
             </article>
             <article className="panel editorial-card">
-              <h3>Research-informed by design</h3>
+              <h3>Reasoning-led by design</h3>
               <p>
                 The site is grounded in Toby Ord&apos;s paper on moral trade and related work on
                 moral public goods and coordination across worldviews.
@@ -534,7 +542,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 <li>State the action, counterparty request, and review period in concrete terms</li>
                 <li>Keep counterfactual dependence explicit wherever possible</li>
                 <li>Distinguish moral benefit claims from verification claims</li>
-                <li>Be transparent when the interface is only illustrative</li>
+                <li>Be transparent when the interface is only illustrative or incomplete</li>
               </ul>
             </article>
 
