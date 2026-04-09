@@ -69,41 +69,31 @@ export function SiteTopbar({
           width={240}
         />
       </Link>
-      <div className="topbar-nav">
-        <div className="topbar-links">
-          {links.map((link) => (
-            <NavItem key={`${link.href}-${link.label}`} href={link.href} label={link.label} />
-          ))}
+      <div className="topbar-links">
+        {links.map((link) => (
+          <NavItem key={`${link.href}-${link.label}`} href={link.href} label={link.label} />
+        ))}
+      </div>
+      {showLogout || authLink || primaryAction ? (
+        <div className="topbar-actions">
           {authLink ? (
-            <NavItem
-              className="topbar-auth-link"
-              href={authLink.href}
-              label={authLink.label}
-            />
+            <NavItem className="button button-secondary button-nav" href={authLink.href} label={authLink.label} />
+          ) : null}
+          {primaryAction ? (
+            <NavItem className="button button-nav" href={primaryAction.href} label={primaryAction.label} />
+          ) : null}
+          {showLogout ? (
+            <button
+              className="topbar-utility"
+              disabled={isLoggingOut}
+              type="button"
+              onClick={handleLogout}
+            >
+              {isLoggingOut ? "Logging out..." : "Log out"}
+            </button>
           ) : null}
         </div>
-        {showLogout || primaryAction ? (
-          <div className="topbar-actions">
-            {showLogout ? (
-              <button
-                className="button button-secondary button-nav"
-                disabled={isLoggingOut}
-                type="button"
-                onClick={handleLogout}
-              >
-                {isLoggingOut ? "Logging out..." : "Log out"}
-              </button>
-            ) : null}
-            {primaryAction ? (
-              <NavItem
-                className="button button-nav"
-                href={primaryAction.href}
-                label={primaryAction.label}
-              />
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
     </nav>
   );
 }
