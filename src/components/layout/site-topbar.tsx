@@ -65,7 +65,7 @@ export function SiteTopbar({
           className="brand-logo"
           height={56}
           priority
-          src="/O(7).png"
+          src="/O%20(11).png"
           width={240}
         />
       </Link>

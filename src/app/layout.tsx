@@ -10,9 +10,9 @@ export const metadata: Metadata = {
   description:
     "A public-interest web app for structured moral commitments, grounded in careful reasoning, explicit terms, and transparent limitations.",
   icons: {
-    icon: "/O(8).png",
-    shortcut: "/O(8).png",
-    apple: "/O(8).png",
+    icon: "/O%20(8).png",
+    shortcut: "/O%20(8).png",
+    apple: "/O%20(8).png",
   },
 };
 
