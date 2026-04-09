@@ -1,8 +1,8 @@
 export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
     { href: "/#how-it-works", label: "How it works" },
-    { href: "/#standards", label: "Reasoning standards" },
-    { href: "/offers", label: "Public offers" },
+    { href: "/#standards", label: "Standards" },
+    { href: "/offers", label: "Offers" },
     { href: "/people", label: "People" },
     { href: "/#faq", label: "FAQ" },
   ];

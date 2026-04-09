@@ -227,7 +227,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           }
           primaryAction={
             isAuthenticated
-              ? { href: "/dashboard", label: "Open dashboard" }
+              ? { href: "/offers/new", label: "Create offer" }
               : { href: "/signup", label: "Sign up" }
           }
           showLogout={isAuthenticated}
