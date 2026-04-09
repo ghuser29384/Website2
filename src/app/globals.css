@@ -178,6 +178,18 @@ h4 {
   gap: 2.6rem;
 }
 
+.hero > .hero-grid {
+  padding: 2.25rem 2.35rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.hero > .hero-grid .hero-panel {
+  background: var(--surface-muted);
+}
+
 .hero-grid-editorial {
   margin-bottom: 2rem;
 }
@@ -429,6 +441,8 @@ main {
 .section-head {
   max-width: 72ch;
   margin-bottom: 1.9rem;
+  padding-bottom: 1.15rem;
+  border-bottom: 1px solid var(--line);
 }
 
 .section-head h2 {
@@ -437,6 +451,7 @@ main {
 
 .section-head p {
   margin: 0.5rem 0 0;
+  max-width: 62ch;
 }
 
 .editorial-grid {
@@ -745,6 +760,23 @@ output {
 .data-card {
   display: grid;
   gap: 0.85rem;
+  position: relative;
+  padding: 1.4rem;
+  border-color: var(--line-strong);
+  box-shadow: 0 14px 26px rgba(29, 37, 48, 0.035);
+}
+
+.data-card::before,
+.profile-card::before,
+.cart-card::before,
+.detail-block::before,
+.comment-card::before,
+.auth-card::before,
+.auth-side-card::before {
+  content: "";
+  display: block;
+  width: 2.6rem;
+  border-top: 2px solid var(--accent);
 }
 
 .directory-grid,
@@ -779,6 +811,11 @@ output {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface);
+}
+
+.detail-block {
+  padding: 1.35rem 1.4rem;
+  border-color: var(--line-strong);
 }
 
 .offer-card,
@@ -844,6 +881,12 @@ output {
 
 .offer-name {
   font-size: 1.18rem;
+}
+
+.route-text {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.7;
 }
 
 .offer-route {
@@ -1011,6 +1054,9 @@ output {
   background: var(--surface);
   color: var(--ink-soft);
   font-weight: 700;
+  font-size: 0.79rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .sort-tab.is-active,
@@ -1023,7 +1069,9 @@ output {
 
 .profile-card,
 .cart-card {
-  padding: 1.35rem;
+  padding: 1.4rem;
+  border-color: var(--line-strong);
+  box-shadow: 0 14px 26px rgba(29, 37, 48, 0.035);
 }
 
 .profile-card-head,
@@ -1041,6 +1089,7 @@ output {
   min-height: 4.6rem;
   margin: 0;
   color: var(--ink-soft);
+  line-height: 1.72;
 }
 
 .profile-stats {
@@ -1055,10 +1104,10 @@ output {
 }
 
 .profile-stats div {
-  padding: 0.85rem 0.9rem;
-  border: 1px solid var(--line);
+  padding: 0.95rem 0.95rem;
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
-  background: var(--surface);
+  background: var(--surface-muted);
 }
 
 .profile-stats dt {
@@ -1084,7 +1133,7 @@ output {
 
 .discount-banner {
   padding: 0.95rem 1rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
   background: var(--accent-soft);
 }
@@ -1109,10 +1158,11 @@ output {
 }
 
 .comment-card {
-  padding: 1rem;
-  border: 1px solid var(--line);
+  padding: 1.15rem 1.2rem;
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
   background: var(--surface);
+  box-shadow: 0 10px 20px rgba(29, 37, 48, 0.03);
 }
 
 .comment-author,
@@ -1258,6 +1308,10 @@ output {
   .hero-stage {
     padding: 2.2rem;
   }
+
+  .hero > .hero-grid {
+    padding: 1.8rem;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1298,6 +1352,10 @@ output {
   .hero-stage,
   .section {
     padding: 1.5rem;
+  }
+
+  .hero > .hero-grid {
+    padding: 1.4rem;
   }
 
   h1 {
