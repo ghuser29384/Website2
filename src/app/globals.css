@@ -112,15 +112,26 @@ h4 {
 .brand {
   display: inline-flex;
   align-items: center;
+  gap: 0.75rem;
   flex: 0 0 auto;
-  line-height: 0;
+  line-height: 1;
+  color: var(--accent-deep);
 }
 
 .brand-logo {
   display: block;
-  width: min(12.75rem, 32vw);
-  height: auto;
+  width: 2.55rem;
+  height: 2.55rem;
   object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.brand-name {
+  display: inline-block;
+  font-size: clamp(1.85rem, 2.3vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
 }
 
 .topbar-links a {
