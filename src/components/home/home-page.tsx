@@ -289,7 +289,10 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               <section key={item.id} className="opening-panel opening-panel-label">
                 <div className="opening-copy opening-copy-label">
                   <p>
-                    <OpeningTerm core={item.core} prefix={item.prefix} />
+                    <OpeningTerm
+                      core={item.core}
+                      prefix={"prefix" in item ? item.prefix : undefined}
+                    />
                   </p>
                 </div>
               </section>
@@ -297,7 +300,12 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               <section key={item.id} className="opening-panel opening-panel-definition">
                 <div className="opening-copy opening-copy-definition">
                   <p>
-                    <OpeningTerm accent core={item.core} prefix={item.prefix} /> {item.description}
+                    <OpeningTerm
+                      accent
+                      core={item.core}
+                      prefix={"prefix" in item ? item.prefix : undefined}
+                    />{" "}
+                    {item.description}
                   </p>
                 </div>
               </section>
