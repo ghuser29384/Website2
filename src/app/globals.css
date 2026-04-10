@@ -132,16 +132,16 @@ h4 {
 
 .opening-line {
   display: grid;
-  grid-template-columns: minmax(16rem, 29rem) minmax(0, 1fr);
+  grid-template-columns: minmax(13rem, 23rem) minmax(0, 1fr);
   align-items: flex-start;
-  column-gap: clamp(1rem, 2vw, 1.7rem);
+  column-gap: clamp(1rem, 2vw, 1.45rem);
 }
 
 .opening-line-anchor {
   display: flex;
   align-items: flex-start;
   font-family: var(--font-heading);
-  font-size: clamp(3.35rem, 6.6vw, 5.7rem);
+  font-size: clamp(2.75rem, 5.4vw, 4.7rem);
   font-weight: 500;
   line-height: 0.92;
   letter-spacing: -0.055em;
@@ -160,8 +160,8 @@ h4 {
   font-weight: 400;
   letter-spacing: 0;
   color: var(--ink);
-  font-size: clamp(0.88rem, 0.88vw, 1rem);
-  line-height: 1.4;
+  font-size: clamp(1.08rem, 1.15vw, 1.3rem);
+  line-height: 1.45;
   white-space: nowrap;
 }
 
@@ -1398,7 +1398,7 @@ output {
 
 @media (max-width: 1500px) {
   .opening-line {
-    grid-template-columns: minmax(15rem, 24rem) minmax(0, 1fr);
+    grid-template-columns: minmax(12rem, 20rem) minmax(0, 1fr);
   }
 
   .opening-line-definition p {
@@ -1533,7 +1533,7 @@ output {
   }
 
   .opening-line-anchor {
-    font-size: clamp(2.7rem, 13vw, 4.2rem);
+    font-size: clamp(2.3rem, 10vw, 3.45rem);
   }
 
   .opening-line-definition {
@@ -1542,8 +1542,8 @@ output {
 
   .opening-line-definition p {
     max-width: 100%;
-    font-size: clamp(1.2rem, 5vw, 1.6rem);
-    line-height: 1.4;
+    font-size: clamp(1.32rem, 5.6vw, 1.9rem);
+    line-height: 1.42;
     white-space: normal;
   }
 
