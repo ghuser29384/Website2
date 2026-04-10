@@ -3,9 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
+  acceptGuestInterestAction,
   acceptInterestAction,
   addOfferCommentAction,
   addOfferRecommendationAction,
+  expressGuestInterestAction,
   expressInterestAction,
   removeOfferRecommendationAction,
   toggleCartAction,
@@ -20,13 +22,13 @@ import {
   getOfferCartState,
   getViewer,
   listOfferComments,
-  listOfferInterests,
+  listOfferResponses,
   listOfferRecommendations,
   listRecommendableOffers,
 } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode } from "@/lib/offers";
-import { getPrimaryNavLinks } from "@/lib/site";
+import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 interface OfferPageProps {
   params: Promise<{ offerId: string }>;
@@ -60,10 +62,10 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const viewer = await getViewer();
   const isOwner = viewer?.authUser.id === offer.owner_id;
   const formMessage = getFormMessage(resolvedSearchParams);
-  const [myInterest, incomingInterests, recommendations, comments, cartState, recommendableOffers] =
+  const [myInterest, incomingResponses, recommendations, comments, cartState, recommendableOffers] =
     await Promise.all([
       viewer ? await getInterestForOffer(offerId, viewer.authUser.id) : null,
-      isOwner ? await listOfferInterests(offerId) : Promise.resolve([]),
+      isOwner ? await listOfferResponses(offerId, viewer?.authUser.id) : Promise.resolve([]),
       await listOfferRecommendations(offerId),
       await listOfferComments(offerId, viewer?.authUser.id),
       await getOfferCartState(offerId, viewer?.authUser.id, offer.owner_id),
@@ -78,15 +80,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
-          authLink={
-            viewer
-              ? { href: "/dashboard", label: "Dashboard" }
-              : { href: "/login", label: "Log in" }
-          }
-          primaryAction={{
-            href: viewer ? "/offers/new" : "/signup",
-            label: viewer ? "Create offer" : "Sign up",
-          }}
+          {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
 
@@ -122,12 +116,17 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                 </form>
               ) : null}
               {!viewer ? (
-                <Link
-                  className="button button-primary"
-                  href={`/login?next=${encodeURIComponent(`/offers/${offerId}`)}`}
-                >
-                  Log in to participate
-                </Link>
+                <>
+                  <a className="button button-primary" href="#respond">
+                    Respond without account
+                  </a>
+                  <Link
+                    className="button button-secondary"
+                    href={`/login?next=${encodeURIComponent(`/offers/${offerId}`)}`}
+                  >
+                    Log in
+                  </Link>
+                </>
               ) : null}
             </div>
           </section>
@@ -159,7 +158,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                   <strong>Interest and cart activity</strong>
                   <p>
                     {isOwner
-                      ? `${incomingInterests.length} interest response(s) | ${cartState.cartCount ?? 0} cart addition(s)`
+                      ? `${incomingResponses.length} response(s) | ${cartState.cartCount ?? 0} cart addition(s)`
                       : myInterest
                         ? `Your interest status: ${myInterest.status}`
                         : cartState.isInCart
@@ -243,7 +242,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               </div>
             </article>
 
-            <article className="panel detail-block">
+            <article className="panel detail-block" id="respond">
               <p className="detail-kicker">
                 {isOwner ? "Owner controls" : "Respond to this offer"}
               </p>
@@ -251,7 +250,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               {isOwner ? (
                 <div className="clean-stack">
                   <div className="owner-summary">
-                    <span className="badge">{incomingInterests.length} responses</span>
+                    <span className="badge">{incomingResponses.length} responses</span>
                     <span className="impact-pill">{cartState.cartCount ?? 0} carts</span>
                   </div>
 
@@ -298,18 +297,63 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                 </form>
               ) : (
                 <div className="clean-stack">
-                  <p>Log in or create an account before responding to this offer.</p>
-                  <div className="hero-actions">
-                    <Link
-                      className="button button-primary"
-                      href={`/login?next=${encodeURIComponent(`/offers/${offer.id}`)}`}
-                    >
-                      Log in
-                    </Link>
-                    <Link className="button button-secondary" href="/signup">
-                      Create account
-                    </Link>
-                  </div>
+                  <p className="route-text">
+                    You can respond without creating an account. Leave your email and a short
+                    note, and the offer owner can follow up directly. Create an account later if
+                    you want a public profile, comments, cart, and formal agreement tracking.
+                  </p>
+                  <form action={expressGuestInterestAction} className="stack-form">
+                    <input name="offer_id" type="hidden" value={offer.id} />
+                    <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
+                    <label className="field">
+                      <span>Your name</span>
+                      <input
+                        name="display_name"
+                        placeholder="Optional. How should the owner identify you?"
+                        type="text"
+                      />
+                    </label>
+                    <div className="field-grid">
+                      <label className="field compact-field">
+                        <span>Email</span>
+                        <input
+                          name="contact_email"
+                          placeholder="you@example.org"
+                          required
+                          type="email"
+                        />
+                      </label>
+                      <label className="field compact-field">
+                        <span>City</span>
+                        <input name="city" placeholder="Optional" type="text" />
+                      </label>
+                    </div>
+                    <label className="field">
+                      <span>Region</span>
+                      <input name="region" placeholder="State, province, or country" type="text" />
+                    </label>
+                    <label className="field">
+                      <span>Message</span>
+                      <textarea
+                        name="message"
+                        placeholder="Explain why the terms seem prudentially and morally worthwhile to you."
+                        required
+                        rows={5}
+                      />
+                    </label>
+
+                    <div className="form-actions">
+                      <button className="button button-primary" type="submit">
+                        Continue without account
+                      </button>
+                      <Link
+                        className="button button-secondary"
+                        href={`/login?next=${encodeURIComponent(`/offers/${offer.id}`)}`}
+                      >
+                        Log in instead
+                      </Link>
+                    </div>
+                  </form>
                 </div>
               )}
 
@@ -327,36 +371,49 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
             <div className="section-head">
               <p className="eyebrow">Incoming interest</p>
               <h2>Responses to this offer</h2>
-              <p>Accepting a response creates an agreement and enables transaction ratings later.</p>
+              <p>
+                Signed-in members and guest respondents appear together here. Member responses can
+                be accepted into formal agreements, while guest responses let owners begin by
+                email and invite account creation later.
+              </p>
             </div>
 
             <div className="data-grid">
-              {incomingInterests.length ? (
-                incomingInterests.map((interest) => (
-                  <article key={interest.id} className="panel data-card">
-                    <p className="detail-kicker">Interest</p>
+              {incomingResponses.length ? (
+                incomingResponses.map((interest) => (
+                  <article key={`${interest.kind}-${interest.id}`} className="panel data-card">
+                    <p className="detail-kicker">
+                      {interest.kind === "guest" ? "Guest response" : "Member response"}
+                    </p>
                     <h3>
                       {interest.participantProfile ? (
                         <Link
                           className="inline-link"
                           href={`/people/${interest.participantProfile.id}`}
                         >
-                          {interest.participantProfile.resolvedName}
+                          {interest.displayName}
                         </Link>
                       ) : (
-                        interest.interested_alias
+                        interest.displayName
                       )}
                     </h3>
                     <p className="route-text">{interest.message || "No message provided."}</p>
                     <div className="tag-row">
                       <span className="badge">{interest.status}</span>
+                      {interest.contactEmail ? (
+                        <span className="source-pill">{interest.contactEmail}</span>
+                      ) : null}
+                      {interest.location ? <span className="source-pill">{interest.location}</span> : null}
+                      {interest.kind === "guest" && interest.participantProfile ? (
+                        <span className="source-pill">Account linked</span>
+                      ) : null}
                       <span className="source-pill">
                         {new Date(interest.created_at).toLocaleDateString()}
                       </span>
                     </div>
-                    {interest.status !== "accepted" ? (
+                    {interest.kind === "member" && interest.canCreateAgreement && interest.status !== "accepted" ? (
                       <form action={acceptInterestAction} className="stack-form compact-form">
-                        <input name="interest_id" type="hidden" value={interest.id} />
+                        <input name="interest_id" type="hidden" value={interest.memberInterestId ?? ""} />
                         <input name="offer_id" type="hidden" value={offer.id} />
                         <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
                         <label className="field">
@@ -373,14 +430,50 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                           </button>
                         </div>
                       </form>
+                    ) : interest.kind === "guest" && interest.canCreateAgreement && interest.status !== "accepted" ? (
+                      <form action={acceptGuestInterestAction} className="stack-form compact-form">
+                        <input
+                          name="guest_interest_id"
+                          type="hidden"
+                          value={interest.guestInterestId ?? ""}
+                        />
+                        <input name="offer_id" type="hidden" value={offer.id} />
+                        <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
+                        <label className="field">
+                          <span>Agreement notes</span>
+                          <textarea
+                            name="notes"
+                            placeholder="Optional notes for the created agreement."
+                            rows={3}
+                          />
+                        </label>
+                        <div className="form-actions">
+                          <button className="button button-secondary button-mini" type="submit">
+                            Accept linked guest response
+                          </button>
+                        </div>
+                      </form>
+                    ) : interest.contactEmail ? (
+                      <div className="offer-footer">
+                        <div className="offer-actions">
+                          <a className="text-button" href={`mailto:${interest.contactEmail}`}>
+                            Email respondent
+                          </a>
+                          {interest.kind === "guest" && !interest.participantProfile ? (
+                            <span className="route-text">
+                              They can create an account later with this email to formalize the trade.
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
                     ) : null}
                   </article>
                 ))
               ) : (
                 <div className="empty-state">
                   <div>
-                    <strong>No interest yet.</strong>
-                    <p>When people respond to your offer, they will appear here.</p>
+                    <strong>No responses yet.</strong>
+                    <p>Member and guest responses will appear here when someone engages with your offer.</p>
                   </div>
                 </div>
               )}

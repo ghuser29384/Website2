@@ -130,6 +130,45 @@ export interface Database {
         };
         Relationships: [];
       };
+      guest_interests: {
+        Row: {
+          id: string;
+          offer_id: string;
+          contact_email: string;
+          display_name: string;
+          city: string | null;
+          region: string | null;
+          message: string;
+          status: "pending" | "accepted" | "declined" | "withdrawn";
+          claimed_by_profile_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          offer_id: string;
+          contact_email: string;
+          display_name?: string;
+          city?: string | null;
+          region?: string | null;
+          message?: string;
+          status?: "pending" | "accepted" | "declined" | "withdrawn";
+          claimed_by_profile_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          contact_email?: string;
+          display_name?: string;
+          city?: string | null;
+          region?: string | null;
+          message?: string;
+          status?: "pending" | "accepted" | "declined" | "withdrawn";
+          claimed_by_profile_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       agreements: {
         Row: {
           id: string;

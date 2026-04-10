@@ -77,11 +77,15 @@ export function SiteTopbar({
       </div>
       {showLogout || authLink || primaryAction ? (
         <div className="topbar-actions">
-          {authLink ? (
-            <NavItem className="button button-secondary button-nav" href={authLink.href} label={authLink.label} />
-          ) : null}
           {primaryAction ? (
             <NavItem className="button button-nav" href={primaryAction.href} label={primaryAction.label} />
+          ) : null}
+          {authLink ? (
+            <NavItem
+              className="button button-secondary button-nav"
+              href={authLink.href}
+              label={authLink.label}
+            />
           ) : null}
           {showLogout ? (
             <button

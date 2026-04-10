@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
-import { getPrimaryNavLinks } from "@/lib/site";
+import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -29,16 +29,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
-          authLink={
-            viewer
-              ? { href: "/dashboard", label: "Dashboard" }
-              : { href: "/login", label: "Log in" }
-          }
-          primaryAction={
-            viewer
-              ? { href: "/offers", label: "Browse offers" }
-              : { href: "/signup", label: "Sign up" }
-          }
+          {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
 

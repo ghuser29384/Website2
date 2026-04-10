@@ -1,3 +1,25 @@
+@font-face {
+  font-family: "Larken";
+  src:
+    local("Larken Medium"),
+    local("Larken-Medium"),
+    local("Larken");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Metropolis";
+  src:
+    local("Metropolis Regular"),
+    local("Metropolis-Regular"),
+    local("Metropolis");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   --bg: #faf8f4;
   --surface: #fffdfa;
@@ -23,6 +45,8 @@
   --radius-md: 8px;
   --radius-sm: 6px;
   --content-width: 1180px;
+  --font-heading: "Larken", "Iowan Old Style", "Baskerville", "Palatino Linotype", Georgia, serif;
+  --font-body: "Metropolis", "Avenir Next", "Frutiger", "Segoe UI", sans-serif;
 }
 
 * {
@@ -38,7 +62,8 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--ink);
-  font-family: "Avenir Next", "Frutiger", "Segoe UI", sans-serif;
+  font-family: var(--font-body);
+  font-weight: 400;
   line-height: 1.68;
   text-rendering: optimizeLegibility;
 }
@@ -70,11 +95,77 @@ h1,
 h2,
 h3,
 h4 {
-  font-family: "Iowan Old Style", "Baskerville", "Palatino Linotype", Georgia, serif;
+  font-family: var(--font-heading);
+  font-weight: 500;
 }
 
 .hero {
   padding: 0.15rem 0 2.9rem;
+}
+
+.opening-sequence {
+  display: grid;
+  margin-bottom: 2.8rem;
+}
+
+.opening-panel {
+  display: flex;
+  align-items: center;
+  min-height: 74vh;
+  padding: 1.2rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.opening-copy {
+  margin-left: clamp(0.5rem, 6vw, 5.25rem);
+}
+
+.opening-copy-label {
+  max-width: 10ch;
+}
+
+.opening-copy-label p,
+.opening-copy-definition p {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  letter-spacing: -0.05em;
+  color: var(--ink);
+}
+
+.opening-copy-label p {
+  font-size: clamp(4.2rem, 9vw, 7.25rem);
+  line-height: 0.92;
+}
+
+.opening-copy-definition {
+  max-width: 18ch;
+}
+
+.opening-copy-definition p {
+  font-size: clamp(2.7rem, 6vw, 4.8rem);
+  line-height: 1.02;
+}
+
+.opening-aligned-term {
+  position: relative;
+  display: inline-block;
+}
+
+.opening-prefix {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 0.12em);
+  white-space: nowrap;
+}
+
+.opening-core {
+  display: inline-block;
+}
+
+.opening-aligned-term-accent .opening-prefix,
+.opening-term {
+  color: var(--accent-deep);
 }
 
 .topbar {
@@ -129,7 +220,7 @@ h4 {
 .brand-name {
   display: inline-block;
   font-size: clamp(1.85rem, 2.3vw, 2.5rem);
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: -0.035em;
   white-space: nowrap;
 }
@@ -1326,6 +1417,14 @@ output {
     padding: 2.2rem;
   }
 
+  .opening-panel {
+    min-height: 66vh;
+  }
+
+  .opening-copy {
+    margin-left: clamp(0.35rem, 4vw, 2rem);
+  }
+
   .hero > .hero-grid {
     padding: 1.8rem;
   }
@@ -1382,6 +1481,27 @@ output {
 
   .brand {
     justify-content: center;
+  }
+
+  .opening-panel {
+    min-height: 54vh;
+  }
+
+  .opening-copy {
+    margin-left: 0;
+  }
+
+  .opening-copy-definition {
+    max-width: 100%;
+  }
+
+  .opening-copy-label p {
+    font-size: clamp(3rem, 14vw, 4.7rem);
+  }
+
+  .opening-copy-definition p {
+    font-size: clamp(2.1rem, 10vw, 3rem);
+    line-height: 1.08;
   }
 
   .hero-stage,

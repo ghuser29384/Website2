@@ -13,7 +13,7 @@ import {
 } from "@/lib/offers";
 import { getFormMessage } from "@/lib/form-state";
 import { requireViewer } from "@/lib/app-data";
-import { getPrimaryNavLinks } from "@/lib/site";
+import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -36,15 +36,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
-          authLink={
-            viewer
-              ? { href: "/dashboard", label: "Dashboard" }
-              : { href: "/login", label: "Log in" }
-          }
-          primaryAction={{
-            href: viewer ? "/offers" : "/signup",
-            label: viewer ? "Browse offers" : "Sign up",
-          }}
+          {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
 

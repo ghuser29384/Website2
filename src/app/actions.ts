@@ -7,7 +7,7 @@ import type { PostgrestError } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
-import { deriveDisplayName, ensureAccountRowsForUser, requireViewer } from "@/lib/app-data";
+import { deriveDisplayName, ensureAccountRowsForUser, getViewer, requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
 
 function redirectWithMessage(
@@ -296,6 +296,76 @@ export async function expressInterestAction(formData: FormData) {
   revalidatePath(`/offers/${offerId}`);
   revalidatePath("/dashboard");
   redirectWithMessage(`/offers/${offerId}`, "message", "Interest recorded.");
+}
+
+export async function expressGuestInterestAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/offers", "error", "Supabase is not configured yet.");
+  }
+
+  const offerId = readRequired(formData, "offer_id");
+  const contactEmail = readRequired(formData, "contact_email").toLowerCase();
+  const displayName = readOptional(formData, "display_name");
+  const city = readOptional(formData, "city");
+  const region = readOptional(formData, "region");
+  const message = readRequired(formData, "message");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), `/offers/${offerId}`);
+
+  if (!offerId || !contactEmail || !message) {
+    redirectWithMessage(returnTo, "error", "Email and message are required.");
+  }
+
+  const viewer = await getViewer();
+  if (viewer) {
+    redirectWithMessage(returnTo, "error", "You are already signed in. Use the member response form instead.");
+  }
+
+  const supabase = await createClient();
+  const { data: offer, error: offerError } = await supabase
+    .from("offers")
+    .select("*")
+    .eq("id", offerId)
+    .maybeSingle();
+
+  if (offerError || !offer) {
+    redirectWithMessage("/offers", "error", offerError?.message ?? "Offer not found.");
+  }
+
+  if (offer.status !== "open") {
+    redirectWithMessage(returnTo, "error", "This offer is not currently accepting new responses.");
+  }
+
+  const guestAlias = displayName || contactEmail.split("@")[0] || "Guest respondent";
+  const { error } = await supabase.from("guest_interests").upsert(
+    {
+      offer_id: offerId,
+      contact_email: contactEmail,
+      display_name: guestAlias,
+      city: city || null,
+      region: region || null,
+      message,
+      status: "pending",
+    },
+    {
+      onConflict: "offer_id,contact_email",
+    },
+  );
+
+  if (error) {
+    logSupabaseActionError("Failed to record guest interest", error, {
+      offerId,
+      contactEmail,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath(`/offers/${offerId}`);
+  revalidatePath("/dashboard");
+  redirectWithMessage(
+    returnTo,
+    "message",
+    "Response recorded without an account. The offer owner can follow up by email, and you can create an account later to manage exchanges publicly.",
+  );
 }
 
 export async function updateProfileAction(formData: FormData) {
@@ -925,6 +995,164 @@ export async function acceptInterestAction(formData: FormData) {
   revalidatePath("/dashboard");
   revalidatePath(`/offers/${offerId}`);
   redirectWithMessage(returnTo, "message", "Interest accepted and agreement created.");
+}
+
+export async function acceptGuestInterestAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/offers", "error", "Supabase is not configured yet.");
+  }
+
+  const guestInterestId = readRequired(formData, "guest_interest_id");
+  const offerId = readRequired(formData, "offer_id");
+  const notes = readOptional(formData, "notes");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), `/offers/${offerId}`);
+
+  if (!guestInterestId || !offerId) {
+    redirectWithMessage(returnTo, "error", "Guest response ID and offer ID are required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: offer, error: offerError } = await supabase
+    .from("offers")
+    .select("*")
+    .eq("id", offerId)
+    .maybeSingle();
+
+  if (offerError || !offer) {
+    redirectWithMessage(returnTo, "error", offerError?.message ?? "Offer not found.");
+  }
+
+  if (offer.owner_id !== viewer.authUser.id) {
+    redirectWithMessage(returnTo, "error", "Only the offer owner can accept responses.");
+  }
+
+  const { data: guestInterest, error: guestInterestError } = await supabase
+    .from("guest_interests")
+    .select("*")
+    .eq("id", guestInterestId)
+    .maybeSingle();
+
+  if (guestInterestError || !guestInterest) {
+    redirectWithMessage(returnTo, "error", guestInterestError?.message ?? "Guest response not found.");
+  }
+
+  if (guestInterest.offer_id !== offerId) {
+    redirectWithMessage(returnTo, "error", "That guest response is not attached to this offer.");
+  }
+
+  if (!guestInterest.claimed_by_profile_id) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "That guest respondent has not created an account yet. Ask them to sign up with the same email first.",
+    );
+  }
+
+  const { data: existingAgreement, error: existingAgreementError } = await supabase
+    .from("agreements")
+    .select("*")
+    .eq("offer_id", offerId)
+    .maybeSingle();
+
+  if (existingAgreementError) {
+    logSupabaseActionError("Failed to check existing agreement before accepting guest response", existingAgreementError, {
+      offerId,
+      guestInterestId,
+    });
+    redirectWithMessage(returnTo, "error", existingAgreementError.message);
+  }
+
+  if (existingAgreement) {
+    redirectWithMessage(returnTo, "message", "This offer already has an agreement.");
+  }
+
+  const { error: acceptError } = await supabase
+    .from("guest_interests")
+    .update({
+      status: "accepted",
+    })
+    .eq("id", guestInterestId);
+
+  if (acceptError) {
+    logSupabaseActionError("Failed to accept guest response", acceptError, {
+      guestInterestId,
+      offerId,
+      ownerId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", acceptError.message);
+  }
+
+  const { error: declineGuestError } = await supabase
+    .from("guest_interests")
+    .update({
+      status: "declined",
+    })
+    .eq("offer_id", offerId)
+    .neq("id", guestInterestId)
+    .eq("status", "pending");
+
+  if (declineGuestError) {
+    logSupabaseActionError("Failed to decline competing guest responses", declineGuestError, {
+      offerId,
+      acceptedGuestInterestId: guestInterestId,
+    });
+  }
+
+  const { error: declineMemberError } = await supabase
+    .from("interests")
+    .update({
+      status: "declined",
+    })
+    .eq("offer_id", offerId)
+    .eq("status", "pending");
+
+  if (declineMemberError) {
+    logSupabaseActionError("Failed to decline competing member interests after guest acceptance", declineMemberError, {
+      offerId,
+      acceptedGuestInterestId: guestInterestId,
+    });
+  }
+
+  const { error: agreementError } = await supabase.from("agreements").insert({
+    offer_id: offerId,
+    interest_id: null,
+    proposer_id: viewer.authUser.id,
+    responder_id: guestInterest.claimed_by_profile_id,
+    status: "active",
+    notes,
+  });
+
+  if (agreementError) {
+    logSupabaseActionError("Failed to create agreement after accepting guest response", agreementError, {
+      offerId,
+      guestInterestId,
+      proposerId: viewer.authUser.id,
+      responderId: guestInterest.claimed_by_profile_id,
+    });
+    redirectWithMessage(returnTo, "error", agreementError.message);
+  }
+
+  const { error: offerUpdateError } = await supabase
+    .from("offers")
+    .update({
+      status: "matched",
+    })
+    .eq("id", offerId);
+
+  if (offerUpdateError) {
+    logSupabaseActionError("Failed to mark offer as matched after guest response acceptance", offerUpdateError, {
+      offerId,
+    });
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/offers/${offerId}`);
+  redirectWithMessage(
+    returnTo,
+    "message",
+    "Guest response accepted. The linked account was used to create a formal agreement.",
+  );
 }
 
 export async function rateAgreementAction(formData: FormData) {

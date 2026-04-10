@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type InterestRow = Database["public"]["Tables"]["interests"]["Row"];
+type GuestInterestRow = Database["public"]["Tables"]["guest_interests"]["Row"];
 type AgreementRow = Database["public"]["Tables"]["agreements"]["Row"];
 type AgreementRatingRow = Database["public"]["Tables"]["agreement_ratings"]["Row"];
 type UserFollowRow = Database["public"]["Tables"]["user_follows"]["Row"];
@@ -15,6 +16,7 @@ type OfferRecommendationRow = Database["public"]["Tables"]["offer_recommendation
 type OfferCommentRow = Database["public"]["Tables"]["offer_comments"]["Row"];
 type CommentVoteRow = Database["public"]["Tables"]["comment_votes"]["Row"];
 type OfferCartRow = Database["public"]["Tables"]["offer_carts"]["Row"];
+type InterestStatus = Database["public"]["Enums"]["interest_status"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export type PeopleSort = "rating" | "followers" | "karma" | "comments";
@@ -58,6 +60,23 @@ export interface InterestRecord extends InterestRow {
   participantProfile: PublicProfileSummary | null;
 }
 
+export interface IncomingResponseRecord {
+  id: string;
+  kind: "member" | "guest";
+  offer_id: string;
+  offer: OfferRecord | null;
+  status: InterestStatus;
+  message: string;
+  created_at: string;
+  participantProfile: PublicProfileSummary | null;
+  displayName: string;
+  contactEmail: string | null;
+  location: string | null;
+  canCreateAgreement: boolean;
+  memberInterestId: string | null;
+  guestInterestId: string | null;
+}
+
 export interface AgreementRatingRecord extends AgreementRatingRow {
   rater: PublicProfileSummary | null;
   ratedUser: PublicProfileSummary | null;
@@ -91,7 +110,7 @@ export interface CartItemRecord {
 
 export interface DashboardDataResult {
   offers: OfferRecord[];
-  incomingInterests: InterestRecord[];
+  incomingInterests: IncomingResponseRecord[];
   interests: InterestRecord[];
   agreements: AgreementRecord[];
   cartItems: CartItemRecord[];
@@ -160,6 +179,25 @@ function buildFallbackProfile(user: User, profile?: Partial<ProfileRow> | null) 
     bio: profile?.bio ?? "",
     created_at: profile?.created_at ?? timestamp,
   } satisfies ProfileRow;
+}
+
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function formatLocation(city?: string | null, region?: string | null) {
+  const parts = [city?.trim(), region?.trim()].filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
+}
+
+function getGuestInterestDisplayName(guestInterest: Pick<GuestInterestRow, "display_name" | "contact_email">) {
+  const explicitName = guestInterest.display_name.trim();
+  if (explicitName) {
+    return explicitName;
+  }
+
+  const emailPrefix = normalizeEmail(guestInterest.contact_email).split("@")[0];
+  return emailPrefix || "Guest respondent";
 }
 
 function sortPublicProfiles(profiles: PublicProfileSummary[], sort: PeopleSort) {
@@ -464,6 +502,29 @@ async function hydrateOffers(
   }));
 }
 
+async function claimGuestInterestsForUser(user: User, supabase: SupabaseServerClient) {
+  const email = user.email ? normalizeEmail(user.email) : "";
+
+  if (!email) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from("guest_interests")
+    .update({
+      claimed_by_profile_id: user.id,
+    })
+    .is("claimed_by_profile_id", null)
+    .ilike("contact_email", email);
+
+  if (error) {
+    logSupabaseError("Failed to claim guest interests for authenticated user", error, {
+      userId: user.id,
+      email,
+    });
+  }
+}
+
 export async function ensureProfileForUser(
   user: User,
   supabaseClient?: SupabaseServerClient,
@@ -478,6 +539,7 @@ export async function ensureAccountRowsForUser(
 ) {
   const supabase = supabaseClient ?? (await createClient());
   const profileResult = await ensureUserProfile(supabase, user);
+  await claimGuestInterestsForUser(user, supabase);
 
   return {
     profileResult,
@@ -641,6 +703,119 @@ export async function listOfferInterests(offerId: string) {
     offer: null,
     participantProfile: profileMap.get(interest.user_id) ?? null,
   }));
+}
+
+async function hydrateIncomingResponses(
+  memberInterests: InterestRow[],
+  guestInterests: GuestInterestRow[],
+  offersById: Map<string, OfferRecord>,
+  viewerId?: string | null,
+) {
+  const profileIds = [
+    ...new Set([
+      ...memberInterests.map((interest) => interest.user_id),
+      ...guestInterests
+        .map((interest) => interest.claimed_by_profile_id)
+        .filter((profileId): profileId is string => Boolean(profileId)),
+    ]),
+  ];
+
+  const profileMap = profileIds.length
+    ? await getProfileSummaryMap(viewerId, profileIds)
+    : new Map<string, PublicProfileSummary>();
+
+  const combined: IncomingResponseRecord[] = [
+    ...memberInterests.map((interest) => {
+      const participantProfile = profileMap.get(interest.user_id) ?? null;
+
+      return {
+        id: interest.id,
+        kind: "member",
+        offer_id: interest.offer_id,
+        offer: offersById.get(interest.offer_id) ?? null,
+        status: interest.status,
+        message: interest.message,
+        created_at: interest.created_at,
+        participantProfile,
+        displayName: participantProfile?.resolvedName ?? interest.interested_alias,
+        contactEmail: participantProfile?.email ?? null,
+        location: participantProfile
+          ? formatLocation(participantProfile.city, participantProfile.region)
+          : null,
+        canCreateAgreement: true,
+        memberInterestId: interest.id,
+        guestInterestId: null,
+      } satisfies IncomingResponseRecord;
+    }),
+    ...guestInterests.map((interest) => {
+      const participantProfile = interest.claimed_by_profile_id
+        ? profileMap.get(interest.claimed_by_profile_id) ?? null
+        : null;
+
+      return {
+        id: interest.id,
+        kind: "guest",
+        offer_id: interest.offer_id,
+        offer: offersById.get(interest.offer_id) ?? null,
+        status: interest.status,
+        message: interest.message,
+        created_at: interest.created_at,
+        participantProfile,
+        displayName: participantProfile?.resolvedName ?? getGuestInterestDisplayName(interest),
+        contactEmail: interest.contact_email,
+        location: formatLocation(
+          participantProfile?.city ?? interest.city,
+          participantProfile?.region ?? interest.region,
+        ),
+        canCreateAgreement: Boolean(interest.claimed_by_profile_id),
+        memberInterestId: null,
+        guestInterestId: interest.id,
+      } satisfies IncomingResponseRecord;
+    }),
+  ];
+
+  return combined.sort(
+    (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+  );
+}
+
+export async function listOfferResponses(offerId: string, viewerId?: string | null) {
+  if (!hasSupabaseEnv()) {
+    return [] as IncomingResponseRecord[];
+  }
+
+  const supabase = await createClient();
+  const [{ data: memberInterests, error: memberInterestsError }, { data: guestInterests, error: guestInterestsError }] =
+    await Promise.all([
+      supabase
+        .from("interests")
+        .select("*")
+        .eq("offer_id", offerId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("guest_interests")
+        .select("*")
+        .eq("offer_id", offerId)
+        .order("created_at", { ascending: false }),
+    ]);
+
+  if (memberInterestsError) {
+    throw new Error(memberInterestsError.message);
+  }
+
+  if (guestInterestsError) {
+    throw new Error(guestInterestsError.message);
+  }
+
+  const offer = await getOfferById(offerId);
+  const offersById = new Map<string, OfferRecord>(offer ? [[offerId, offer]] : []);
+
+  return hydrateIncomingResponses(
+    (memberInterests ?? []) as InterestRow[],
+    (guestInterests ?? []) as GuestInterestRow[],
+    offersById,
+    viewerId,
+  );
 }
 
 export async function listOfferRecommendations(offerId: string) {
@@ -1123,23 +1298,46 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       console.error("[supabase] Failed to hydrate dashboard offers", { message, userId });
     }
   }
+  const ownOffersById = new Map(hydratedOwnOffers.map((offer) => [offer.id, offer]));
 
   const ownOfferIds = (ownOffers ?? []).map((offer) => offer.id);
   let incomingInterestRows: InterestRow[] = [];
+  let incomingGuestInterestRows: GuestInterestRow[] = [];
   if (ownOfferIds.length) {
-    const { data: incomingInterests, error: incomingInterestsError } = await supabase
-      .from("interests")
-      .select("*")
-      .in("offer_id", ownOfferIds)
-      .order("created_at", { ascending: false });
+    const [{ data: incomingInterests, error: incomingInterestsError }, { data: incomingGuestInterests, error: incomingGuestInterestsError }] =
+      await Promise.all([
+        supabase
+          .from("interests")
+          .select("*")
+          .in("offer_id", ownOfferIds)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("guest_interests")
+          .select("*")
+          .in("offer_id", ownOfferIds)
+          .order("created_at", { ascending: false }),
+      ]);
 
     if (incomingInterestsError) {
       errors.incomingInterests = incomingInterestsError.message;
-      logSupabaseError("Failed to load incoming interests for owned offers", incomingInterestsError, {
+      logSupabaseError("Failed to load incoming member interests for owned offers", incomingInterestsError, {
         userId,
       });
     } else {
       incomingInterestRows = (incomingInterests ?? []) as InterestRow[];
+    }
+
+    if (incomingGuestInterestsError) {
+      errors.incomingInterests = errors.incomingInterests ?? incomingGuestInterestsError.message;
+      logSupabaseError(
+        "Failed to load incoming guest interests for owned offers",
+        incomingGuestInterestsError,
+        {
+          userId,
+        },
+      );
+    } else {
+      incomingGuestInterestRows = (incomingGuestInterests ?? []) as GuestInterestRow[];
     }
   }
 
@@ -1186,25 +1384,25 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     }
   }
 
-  let incomingParticipantMap = new Map<string, PublicProfileSummary>();
-  if (incomingInterestRows.length) {
+  let incomingResponses: IncomingResponseRecord[] = [];
+  if (incomingInterestRows.length || incomingGuestInterestRows.length) {
     try {
-      incomingParticipantMap = await getProfileSummaryMap(
+      incomingResponses = await hydrateIncomingResponses(
+        incomingInterestRows,
+        incomingGuestInterestRows,
+        ownOffersById,
         userId,
-        incomingInterestRows.map((interest) => interest.user_id),
       );
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unable to load incoming interest profiles.";
+        error instanceof Error ? error.message : "Unable to load incoming response details.";
       errors.incomingInterests = errors.incomingInterests ?? message;
-      console.error("[supabase] Failed to load incoming interest participant profiles", {
+      console.error("[supabase] Failed to hydrate incoming responses", {
         message,
         userId,
       });
     }
   }
-
-  const ownOffersById = new Map(hydratedOwnOffers.map((offer) => [offer.id, offer]));
 
   let agreements: AgreementRecord[] = [];
   try {
@@ -1226,11 +1424,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
 
   return {
     offers: hydratedOwnOffers,
-    incomingInterests: incomingInterestRows.map((interest) => ({
-      ...interest,
-      offer: ownOffersById.get(interest.offer_id) ?? null,
-      participantProfile: incomingParticipantMap.get(interest.user_id) ?? null,
-    })),
+    incomingInterests: incomingResponses,
     interests: interestRows.map((interest) => ({
       ...interest,
       offer: relatedOffers.get(interest.offer_id) ?? null,

@@ -7,7 +7,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode } from "@/lib/offers";
-import { getPrimaryNavLinks } from "@/lib/site";
+import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -31,12 +31,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
-          authLink={
-            viewer
-              ? { href: "/dashboard", label: "Dashboard" }
-              : { href: "/login", label: "Log in" }
-          }
-          primaryAction={{ href: "/offers/new", label: "Create offer" }}
+          {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
 
@@ -183,7 +178,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <div className="section-head">
             <p className="eyebrow">Incoming responses</p>
             <h2>Responses to your offers</h2>
-            <p>These are the interest messages other members submitted on offers you published.</p>
+            <p>
+              These are the responses submitted on your offers, including signed-in members and
+              people who chose to participate without creating an account first.
+            </p>
           </div>
 
           <div className="data-grid">
@@ -196,8 +194,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             ) : dashboardData?.incomingInterests.length ? (
               dashboardData.incomingInterests.map((interest) => (
-                <article key={interest.id} className="panel data-card">
-                  <p className="detail-kicker">Incoming response</p>
+                <article key={`${interest.kind}-${interest.id}`} className="panel data-card">
+                  <p className="detail-kicker">
+                    {interest.kind === "guest" ? "Guest response" : "Incoming response"}
+                  </p>
                   <h3>
                     {interest.offer
                       ? `${interest.offer.offered_cause} for ${interest.offer.requested_cause}`
@@ -210,15 +210,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         className="inline-link"
                         href={`/people/${interest.participantProfile.id}`}
                       >
-                        {interest.participantProfile.resolvedName}
+                        {interest.displayName}
                       </Link>
                     ) : (
-                      interest.interested_alias || "Member"
+                      interest.displayName
                     )}
                   </p>
                   <p className="route-text">{interest.message || "No message attached."}</p>
                   <div className="tag-row">
                     <span className="badge">{interest.status}</span>
+                    {interest.contactEmail ? (
+                      <span className="source-pill">{interest.contactEmail}</span>
+                    ) : null}
+                    {interest.location ? <span className="source-pill">{interest.location}</span> : null}
+                    {interest.kind === "guest" && interest.participantProfile ? (
+                      <span className="source-pill">Account linked</span>
+                    ) : null}
                     <span className="source-pill">
                       Submitted {new Date(interest.created_at).toLocaleDateString()}
                     </span>
@@ -230,6 +237,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           View offer
                         </Link>
                       ) : null}
+                      {!interest.canCreateAgreement && interest.contactEmail ? (
+                        <a className="text-button" href={`mailto:${interest.contactEmail}`}>
+                          Email respondent
+                        </a>
+                      ) : null}
                     </div>
                   </div>
                 </article>
@@ -238,7 +250,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <div className="empty-state">
                 <div>
                   <strong>No incoming responses yet.</strong>
-                  <p>When other users respond to one of your offers, those messages will appear here.</p>
+                  <p>Member and guest responses will appear here when someone responds to one of your offers.</p>
                 </div>
               </div>
             )}

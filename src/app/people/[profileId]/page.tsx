@@ -19,7 +19,7 @@ import {
   listRecommendableOffers,
 } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
-import { getPrimaryNavLinks } from "@/lib/site";
+import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 interface ProfilePageProps {
@@ -72,15 +72,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
-          authLink={
-            viewer
-              ? { href: "/dashboard", label: "Dashboard" }
-              : { href: "/login", label: "Log in" }
-          }
-          primaryAction={{
-            href: viewer ? "/offers/new" : "/signup",
-            label: viewer ? "Create offer" : "Sign up",
-          }}
+          {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
 

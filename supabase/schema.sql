@@ -78,6 +78,21 @@ create table if not exists public.interests (
   unique (offer_id, user_id)
 );
 
+create table if not exists public.guest_interests (
+  id uuid primary key default gen_random_uuid(),
+  offer_id uuid not null references public.offers (id) on delete cascade,
+  contact_email text not null,
+  display_name text not null default '',
+  city text,
+  region text,
+  message text not null default '',
+  status public.interest_status not null default 'pending',
+  claimed_by_profile_id uuid references public.profiles (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (offer_id, contact_email)
+);
+
 create table if not exists public.agreements (
   id uuid primary key default gen_random_uuid(),
   offer_id uuid not null references public.offers (id) on delete cascade,
@@ -153,6 +168,8 @@ create index if not exists offers_owner_id_idx on public.offers (owner_id);
 create index if not exists offers_status_created_at_idx on public.offers (status, created_at desc);
 create index if not exists interests_offer_id_idx on public.interests (offer_id);
 create index if not exists interests_user_id_idx on public.interests (user_id);
+create index if not exists guest_interests_offer_id_idx on public.guest_interests (offer_id);
+create index if not exists guest_interests_claimed_by_profile_id_idx on public.guest_interests (claimed_by_profile_id);
 create index if not exists agreements_offer_id_idx on public.agreements (offer_id);
 create index if not exists agreements_proposer_id_idx on public.agreements (proposer_id);
 create index if not exists agreements_responder_id_idx on public.agreements (responder_id);
@@ -277,6 +294,11 @@ create trigger interests_set_updated_at
 before update on public.interests
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists guest_interests_set_updated_at on public.guest_interests;
+create trigger guest_interests_set_updated_at
+before update on public.guest_interests
+for each row execute procedure public.set_updated_at();
+
 drop trigger if exists agreements_set_updated_at on public.agreements;
 create trigger agreements_set_updated_at
 before update on public.agreements
@@ -290,6 +312,7 @@ for each row execute procedure public.set_updated_at();
 alter table public.profiles enable row level security;
 alter table public.offers enable row level security;
 alter table public.interests enable row level security;
+alter table public.guest_interests enable row level security;
 alter table public.agreements enable row level security;
 alter table public.agreement_ratings enable row level security;
 alter table public.user_follows enable row level security;
@@ -404,6 +427,80 @@ with check (
     select 1
     from public.offers
     where offers.id = interests.offer_id
+      and offers.owner_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "guest_interests_select_relevant" on public.guest_interests;
+create policy "guest_interests_select_relevant"
+on public.guest_interests
+for select
+to authenticated
+using (
+  claimed_by_profile_id = (select auth.uid())
+  or exists (
+    select 1
+    from public.offers
+    where offers.id = guest_interests.offer_id
+      and offers.owner_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "guest_interests_insert_public" on public.guest_interests;
+create policy "guest_interests_insert_public"
+on public.guest_interests
+for insert
+to anon, authenticated
+with check (
+  contact_email <> ''
+  and claimed_by_profile_id is null
+  and exists (
+    select 1
+    from public.offers
+    where offers.id = guest_interests.offer_id
+      and offers.status = 'open'
+      and (
+        (select auth.uid()) is null
+        or offers.owner_id <> (select auth.uid())
+      )
+  )
+);
+
+drop policy if exists "guest_interests_claim_own_email" on public.guest_interests;
+create policy "guest_interests_claim_own_email"
+on public.guest_interests
+for update
+to authenticated
+using (
+  claimed_by_profile_id = (select auth.uid())
+  or (
+    claimed_by_profile_id is null
+    and lower(contact_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+  )
+)
+with check (
+  claimed_by_profile_id = (select auth.uid())
+  and lower(contact_email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+);
+
+drop policy if exists "guest_interests_update_owner" on public.guest_interests;
+create policy "guest_interests_update_owner"
+on public.guest_interests
+for update
+to authenticated
+using (
+  exists (
+    select 1
+    from public.offers
+    where offers.id = guest_interests.offer_id
+      and offers.owner_id = (select auth.uid())
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.offers
+    where offers.id = guest_interests.offer_id
       and offers.owner_id = (select auth.uid())
   )
 );

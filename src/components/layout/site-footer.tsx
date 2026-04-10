@@ -36,11 +36,6 @@ export function SiteFooter() {
           discussion of moral public goods. These references inform the reasoning standard; they
           are not presented as endorsements.
         </p>
-        <p>
-          Current limitations are stated openly: no escrow, no legal review, no guarantee that all
-          morally relevant considerations have been captured by the interface, and no claim that
-          the current product is yet a complete institution.
-        </p>
       </div>
     </footer>
   );

@@ -14,6 +14,15 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
   return links;
 }
 
+export function getTopbarActions(isAuthenticated = false) {
+  return {
+    authLink: isAuthenticated
+      ? { href: "/dashboard", label: "Dashboard" }
+      : { href: "/login", label: "Sign in" },
+    primaryAction: { href: "/offers", label: "Trade" },
+  };
+}
+
 export const FOOTER_LINK_GROUPS = [
   {
     title: "Moral Trade",

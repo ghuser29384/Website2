@@ -29,7 +29,7 @@ import {
   SORT_OPTIONS,
   validateOfferDraft,
 } from "@/lib/offers";
-import { getPrimaryNavLinks } from "@/lib/site";
+import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 interface HomePageProps {
   isAuthenticated: boolean;
@@ -106,6 +106,65 @@ const faqItems = [
       "A production version would still need moderation, identity checks, legal review, and more robust verification or escrow for higher-stakes commitments.",
   },
 ] as const;
+
+const openingSequence = [
+  {
+    id: "trade-label",
+    kind: "label",
+    core: "trade:",
+  },
+  {
+    id: "trade-definition",
+    kind: "definition",
+    core: "trade:",
+    description:
+      "People with conflicting interests both satisfy their own interests at a higher cost-efficiency than they otherwise would have on their own.",
+  },
+  {
+    id: "moral-trade-label",
+    kind: "label",
+    prefix: "moral",
+    core: "trade:",
+  },
+  {
+    id: "moral-trade-definition",
+    kind: "definition",
+    prefix: "moral",
+    core: "trade:",
+    description:
+      "People with conflicting moral views make the world better, in both of their views, at a higher cost-efficiency than they otherwise would have on their own.",
+  },
+  {
+    id: "moral-trade-impact",
+    kind: "statement",
+    description:
+      "Moral trade allows interventions to receive more money and causes to have more participation.",
+  },
+] as const;
+
+function OpeningTerm({
+  prefix,
+  core,
+  accent = false,
+}: {
+  prefix?: string;
+  core: string;
+  accent?: boolean;
+}) {
+  const alignedClassName = accent ? "opening-aligned-term opening-aligned-term-accent" : "opening-aligned-term";
+  const coreClassName = accent ? "opening-core opening-term" : "opening-core";
+
+  if (!prefix) {
+    return <span className={coreClassName}>{core}</span>;
+  }
+
+  return (
+    <span className={alignedClassName}>
+      <span className="opening-prefix">{prefix}</span>
+      <span className={coreClassName}>{core}</span>
+    </span>
+  );
+}
 
 export function HomePage({ isAuthenticated }: HomePageProps) {
   const [draft, setDraft] = useState<OfferDraft>(createDefaultOfferDraft());
@@ -220,18 +279,37 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(isAuthenticated)}
-          authLink={
-            isAuthenticated
-              ? { href: "/dashboard", label: "Dashboard" }
-              : { href: "/login", label: "Log in" }
-          }
-          primaryAction={
-            isAuthenticated
-              ? { href: "/offers/new", label: "Create offer" }
-              : { href: "/signup", label: "Sign up" }
-          }
+          {...getTopbarActions(isAuthenticated)}
           showLogout={isAuthenticated}
         />
+
+        <div className="opening-sequence" aria-label="Opening explanation of trade and moral trade">
+          {openingSequence.map((item) =>
+            item.kind === "label" ? (
+              <section key={item.id} className="opening-panel opening-panel-label">
+                <div className="opening-copy opening-copy-label">
+                  <p>
+                    <OpeningTerm core={item.core} prefix={item.prefix} />
+                  </p>
+                </div>
+              </section>
+            ) : item.kind === "definition" ? (
+              <section key={item.id} className="opening-panel opening-panel-definition">
+                <div className="opening-copy opening-copy-definition">
+                  <p>
+                    <OpeningTerm accent core={item.core} prefix={item.prefix} /> {item.description}
+                  </p>
+                </div>
+              </section>
+            ) : (
+              <section key={item.id} className="opening-panel opening-panel-statement">
+                <div className="opening-copy opening-copy-definition opening-copy-statement">
+                  <p>{item.description}</p>
+                </div>
+              </section>
+            ),
+          )}
+        </div>
 
         <div className="hero-stage panel">
           <div className="hero-grid hero-grid-editorial">
