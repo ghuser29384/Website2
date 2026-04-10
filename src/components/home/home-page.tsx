@@ -159,15 +159,18 @@ function OpeningWord({
 }) {
   if (!prefix) {
     return (
-      <span className="opening-anchor-word" style={style}>
-        {core}
+      <span className="opening-anchor-frame" style={style}>
+        <span aria-hidden="true" className="opening-prefix-slot opening-prefix-slot-hidden">
+          moral
+        </span>
+        <span className="opening-anchor-word">{core}</span>
       </span>
     );
   }
 
   return (
-    <span className="opening-anchor-group" style={style}>
-      <span className="opening-prefix-word">{prefix}</span>
+    <span className="opening-anchor-frame" style={style}>
+      <span className="opening-prefix-slot">{prefix}</span>
       <span className="opening-anchor-word">{core}</span>
     </span>
   );

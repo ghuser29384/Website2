@@ -105,8 +105,11 @@ h4 {
 
 .opening-sequence {
   position: relative;
+  width: 100vw;
   height: 320vh;
+  margin-left: calc(50% - 50vw);
   margin-bottom: 2.8rem;
+  overflow: clip;
 }
 
 .opening-stage {
@@ -115,28 +118,30 @@ h4 {
   display: grid;
   align-items: center;
   min-height: 100vh;
-  padding: 2rem 0;
+  padding: 2rem clamp(1.75rem, 4vw, 4rem);
   border-bottom: 1px solid var(--line);
   background: var(--bg);
 }
 
 .opening-lines {
   display: grid;
+  width: min(100%, 1700px);
+  margin: 0 auto;
   gap: clamp(1.65rem, 3.4vw, 2.8rem);
 }
 
 .opening-line {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: minmax(16rem, 29rem) minmax(0, 1fr);
   align-items: flex-start;
   column-gap: clamp(1rem, 2vw, 1.7rem);
 }
 
 .opening-line-anchor {
-  position: relative;
-  padding-left: clamp(0.15rem, 2.4vw, 1.85rem);
+  display: flex;
+  align-items: flex-start;
   font-family: var(--font-heading);
-  font-size: clamp(3.6rem, 8vw, 6.5rem);
+  font-size: clamp(3.35rem, 6.6vw, 5.7rem);
   font-weight: 500;
   line-height: 0.92;
   letter-spacing: -0.055em;
@@ -155,27 +160,26 @@ h4 {
   font-weight: 400;
   letter-spacing: 0;
   color: var(--ink);
-  font-size: clamp(0.94rem, 1vw, 1.08rem);
+  font-size: clamp(0.88rem, 0.88vw, 1rem);
   line-height: 1.4;
   white-space: nowrap;
 }
 
-.opening-anchor-word,
-.opening-anchor-group {
-  display: inline-block;
+.opening-anchor-frame {
+  display: inline-grid;
+  grid-template-columns: max-content max-content;
+  align-items: baseline;
+  column-gap: 0.14em;
   color: inherit;
 }
 
-.opening-anchor-group {
-  position: relative;
-}
-
-.opening-prefix-word {
-  position: absolute;
-  top: 0;
-  right: calc(100% + 0.14em);
+.opening-prefix-slot {
   color: inherit;
   white-space: nowrap;
+}
+
+.opening-prefix-slot-hidden {
+  visibility: hidden;
 }
 
 .topbar {
@@ -1392,6 +1396,16 @@ output {
   border: 0;
 }
 
+@media (max-width: 1500px) {
+  .opening-line {
+    grid-template-columns: minmax(15rem, 24rem) minmax(0, 1fr);
+  }
+
+  .opening-line-definition p {
+    white-space: normal;
+  }
+}
+
 @media (max-width: 1120px) {
   .hero-grid,
   .hero-proof-strip,
@@ -1494,8 +1508,11 @@ output {
   }
 
   .opening-sequence {
+    width: auto;
     height: auto;
+    margin-left: 0;
     margin-bottom: 2.1rem;
+    overflow: visible;
   }
 
   .opening-stage {
@@ -1505,6 +1522,8 @@ output {
   }
 
   .opening-lines {
+    width: 100%;
+    margin: 0;
     gap: 1.3rem;
   }
 
@@ -1514,7 +1533,6 @@ output {
   }
 
   .opening-line-anchor {
-    padding-left: 0;
     font-size: clamp(2.7rem, 13vw, 4.2rem);
   }
 
@@ -1527,6 +1545,10 @@ output {
     font-size: clamp(1.2rem, 5vw, 1.6rem);
     line-height: 1.4;
     white-space: normal;
+  }
+
+  .opening-prefix-slot-hidden {
+    display: none;
   }
 
   .hero-stage,
