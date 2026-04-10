@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -107,72 +107,81 @@ const faqItems = [
   },
 ] as const;
 
-const openingSequence = [
-  {
-    id: "trade-label",
-    kind: "label",
-    core: "trade:",
-  },
-  {
-    id: "trade-definition",
-    kind: "definition",
-    core: "trade:",
-    description:
-      "People with conflicting interests both satisfy their own interests at a higher cost-efficiency than they otherwise would have on their own.",
-  },
-  {
-    id: "moral-trade-label",
-    kind: "label",
-    prefix: "moral",
-    core: "trade:",
-  },
-  {
-    id: "moral-trade-definition",
-    kind: "definition",
-    prefix: "moral",
-    core: "trade:",
-    description:
-      "People with conflicting moral views make the world better, in both of their views, at a higher cost-efficiency than they otherwise would have on their own.",
-  },
-  {
-    id: "moral-trade-impact",
-    kind: "statement",
-    description:
-      "Moral trade allows interventions to receive more money and causes to have more participation.",
-  },
-] as const;
+const OPENING_FIRST_DEFINITION =
+  ": People with conflicting interests both satisfy their own interests at a higher cost-efficiency than they otherwise would have on their own.";
 
-function OpeningTerm({
+const OPENING_SECOND_DEFINITION =
+  ": People with conflicting moral views make the world better, in both of their views, at a higher cost-efficiency than they otherwise would have on their own.";
+
+function clamp(value: number, min = 0, max = 1) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getSegmentProgress(progress: number, start: number, end: number) {
+  if (progress <= start) {
+    return 0;
+  }
+
+  if (progress >= end) {
+    return 1;
+  }
+
+  return (progress - start) / (end - start);
+}
+
+function getRevealStyle(progress: number): CSSProperties {
+  const safeProgress = clamp(progress);
+
+  return {
+    opacity: safeProgress,
+    transform: `translate3d(${(1 - safeProgress) * 34}px, 0, 0)`,
+    clipPath: `inset(0 ${100 - safeProgress * 100}% 0 0)`,
+  };
+}
+
+function getWordRevealStyle(progress: number): CSSProperties {
+  const safeProgress = clamp(progress);
+
+  return {
+    opacity: safeProgress,
+    transform: `translate3d(${(1 - safeProgress) * 24}px, 0, 0)`,
+  };
+}
+
+function OpeningWord({
   prefix,
   core,
-  accent = false,
+  style,
 }: {
   prefix?: string;
   core: string;
-  accent?: boolean;
+  style?: CSSProperties;
 }) {
-  const alignedClassName = accent ? "opening-aligned-term opening-aligned-term-accent" : "opening-aligned-term";
-  const coreClassName = accent ? "opening-core opening-term" : "opening-core";
-
   if (!prefix) {
-    return <span className={coreClassName}>{core}</span>;
+    return (
+      <span className="opening-anchor-word" style={style}>
+        {core}
+      </span>
+    );
   }
 
   return (
-    <span className={alignedClassName}>
-      <span className="opening-prefix">{prefix}</span>
-      <span className={coreClassName}>{core}</span>
+    <span className="opening-anchor-group" style={style}>
+      <span className="opening-prefix-word">{prefix}</span>
+      <span className="opening-anchor-word">{core}</span>
     </span>
   );
 }
 
 export function HomePage({ isAuthenticated }: HomePageProps) {
+  const openingSequenceRef = useRef<HTMLDivElement | null>(null);
   const [draft, setDraft] = useState<OfferDraft>(createDefaultOfferDraft());
   const [filters, setFilters] = useState<OfferFilters>(DEFAULT_FILTERS);
   const [localOffers, setLocalOffers] = useState<Offer[]>([]);
   const [selectedOfferId, setSelectedOfferId] = useState("seed-victoria");
   const [statusMessage, setStatusMessage] = useState("");
   const [hasLoadedLocalOffers, setHasLoadedLocalOffers] = useState(false);
+  const [openingProgress, setOpeningProgress] = useState(0);
 
   useEffect(() => {
     setLocalOffers(loadLocalOffers());
@@ -186,6 +195,45 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
     persistLocalOffers(localOffers);
   }, [hasLoadedLocalOffers, localOffers]);
+
+  useEffect(() => {
+    let animationFrame = 0;
+
+    function updateOpeningProgress() {
+      animationFrame = 0;
+
+      if (!openingSequenceRef.current) {
+        return;
+      }
+
+      const rect = openingSequenceRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || 1;
+      const totalScrollableDistance = Math.max(openingSequenceRef.current.offsetHeight - viewportHeight, 1);
+      const distanceScrolled = clamp(-rect.top / totalScrollableDistance);
+
+      setOpeningProgress((current) =>
+        Math.abs(current - distanceScrolled) > 0.004 ? distanceScrolled : current,
+      );
+    }
+
+    function requestUpdate() {
+      if (!animationFrame) {
+        animationFrame = window.requestAnimationFrame(updateOpeningProgress);
+      }
+    }
+
+    requestUpdate();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+
+    return () => {
+      if (animationFrame) {
+        window.cancelAnimationFrame(animationFrame);
+      }
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+    };
+  }, []);
 
   const allOffers = getAllOffers(localOffers);
   const selectedOffer = allOffers.find((offer) => offer.id === selectedOfferId) ?? allOffers[0] ?? null;
@@ -204,6 +252,9 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
   const exactMatches = scoredPairs.filter((pair) => pair.exact);
   const displayedMatches = exactMatches.length ? exactMatches : scoredPairs.slice(0, 3);
   const visibleOffers = sortOffers(filterOffers(allOffers, filters), selectedOffer, filters.sortOrder);
+  const firstDefinitionProgress = getSegmentProgress(openingProgress, 0.08, 0.34);
+  const secondWordProgress = getSegmentProgress(openingProgress, 0.46, 0.68);
+  const secondDefinitionProgress = getSegmentProgress(openingProgress, 0.74, 1);
 
   function handleDraftFieldChange(field: keyof OfferDraft, value: string | number | boolean) {
     setDraft(
@@ -283,40 +334,34 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           showLogout={isAuthenticated}
         />
 
-        <div className="opening-sequence" aria-label="Opening explanation of trade and moral trade">
-          {openingSequence.map((item) =>
-            item.kind === "label" ? (
-              <section key={item.id} className="opening-panel opening-panel-label">
-                <div className="opening-copy opening-copy-label">
-                  <p>
-                    <OpeningTerm
-                      core={item.core}
-                      prefix={"prefix" in item ? item.prefix : undefined}
-                    />
+        <div
+          ref={openingSequenceRef}
+          className="opening-sequence"
+          aria-label="Opening explanation of trade and moral trade"
+        >
+          <div className="opening-stage">
+            <div className="opening-lines">
+              <div className="opening-line">
+                <div className="opening-line-anchor">
+                  <OpeningWord core="trade" />
+                </div>
+                <div className="opening-line-definition">
+                  <p style={getRevealStyle(firstDefinitionProgress)}>{OPENING_FIRST_DEFINITION}</p>
+                </div>
+              </div>
+
+              <div className="opening-line">
+                <div className="opening-line-anchor">
+                  <OpeningWord core="trade" prefix="moral" style={getWordRevealStyle(secondWordProgress)} />
+                </div>
+                <div className="opening-line-definition">
+                  <p style={getRevealStyle(secondDefinitionProgress)}>
+                    {OPENING_SECOND_DEFINITION}
                   </p>
                 </div>
-              </section>
-            ) : item.kind === "definition" ? (
-              <section key={item.id} className="opening-panel opening-panel-definition">
-                <div className="opening-copy opening-copy-definition">
-                  <p>
-                    <OpeningTerm
-                      accent
-                      core={item.core}
-                      prefix={"prefix" in item ? item.prefix : undefined}
-                    />{" "}
-                    {item.description}
-                  </p>
-                </div>
-              </section>
-            ) : (
-              <section key={item.id} className="opening-panel opening-panel-statement">
-                <div className="opening-copy opening-copy-definition opening-copy-statement">
-                  <p>{item.description}</p>
-                </div>
-              </section>
-            ),
-          )}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="hero-stage panel">
