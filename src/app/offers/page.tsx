@@ -7,10 +7,23 @@ import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffers } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
   title: "Offers",
+  description:
+    "Browse public Moral Trade offers with explicit actions, reciprocal terms, verification methods, and bounded commitment structures.",
+  alternates: {
+    canonical: "/offers",
+  },
+  openGraph: {
+    title: "Public offers",
+    description:
+      "Browse public Moral Trade offers with explicit actions, reciprocal terms, verification methods, and bounded commitment structures.",
+    url: getAbsoluteUrl("/offers"),
+    type: "website",
+  },
 };
 
 interface OffersPageProps {
@@ -22,9 +35,36 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const viewer = await getViewer();
   const offers = hasSupabaseEnv() ? await listOpenOffers() : [];
   const formMessage = getFormMessage(resolvedSearchParams);
+  const offersStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Public Moral Trade offers",
+    url: getAbsoluteUrl("/offers"),
+    description:
+      "Public offers that state proposed actions, reciprocal requests, and verification terms.",
+    mainEntity: {
+      "@type": "ItemList",
+      itemListElement: offers.slice(0, 20).map((offer, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: getAbsoluteUrl(`/offers/${offer.id}`),
+        name: `${offer.offered_cause} for ${offer.requested_cause}`,
+        description: truncateDescription(
+          `${offer.offer_action} Requested in return: ${offer.request_action}`,
+          140,
+        ),
+      })),
+    },
+  };
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(offersStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <header className="hero">
         <SiteTopbar
           brandHref="/"

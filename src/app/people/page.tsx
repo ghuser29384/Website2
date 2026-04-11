@@ -7,10 +7,23 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listPublicProfiles, type PeopleSort } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
   title: "People",
+  description:
+    "Browse public Moral Trade member profiles, visible reputation signals, open offers, followers, comments, and karma.",
+  alternates: {
+    canonical: "/people",
+  },
+  openGraph: {
+    title: "People directory",
+    description:
+      "Browse public Moral Trade member profiles, visible reputation signals, open offers, followers, comments, and karma.",
+    url: getAbsoluteUrl("/people"),
+    type: "website",
+  },
 };
 
 const SORT_OPTIONS: Array<{ value: PeopleSort; label: string }> = [
@@ -44,9 +57,34 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
   const profiles = hasSupabaseEnv()
     ? await listPublicProfiles(sort, viewer?.authUser.id)
     : [];
+  const peopleStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Moral Trade people directory",
+    url: getAbsoluteUrl(`/people${sort === "rating" ? "" : `?sort=${sort}`}`),
+    mainEntity: {
+      "@type": "ItemList",
+      itemListElement: profiles.slice(0, 24).map((profile, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: getAbsoluteUrl(`/people/${profile.id}`),
+        name: profile.resolvedName,
+        description: truncateDescription(
+          `${formatLocation(profile.city, profile.region) || "Location not listed"}. ${profile.offerCount} open offers. ${profile.followerCount} followers. ${profile.commentCount} comments.`,
+          140,
+        ),
+      })),
+    },
+  };
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(peopleStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <header className="hero">
         <SiteTopbar
           brandHref="/"

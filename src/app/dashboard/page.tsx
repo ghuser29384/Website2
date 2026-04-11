@@ -12,6 +12,10 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
   title: "Dashboard",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 interface DashboardPageProps {

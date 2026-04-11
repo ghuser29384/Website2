@@ -18,6 +18,10 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
   title: "New offer",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 interface NewOfferPageProps {

@@ -29,6 +29,7 @@ import {
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 
 interface OfferPageProps {
   params: Promise<{ offerId: string }>;
@@ -47,6 +48,20 @@ export async function generateMetadata({ params }: OfferPageProps): Promise<Meta
 
   return {
     title: `${offer.offered_cause} for ${offer.requested_cause}`,
+    description: truncateDescription(
+      `${offer.ownerProfile?.resolvedName ?? offer.owner_alias} proposes ${offer.offer_action} in exchange for ${offer.request_action}. Verification: ${offer.verification}.`,
+    ),
+    alternates: {
+      canonical: `/offers/${offer.id}`,
+    },
+    openGraph: {
+      title: `${offer.offered_cause} for ${offer.requested_cause}`,
+      description: truncateDescription(
+        `${offer.ownerProfile?.resolvedName ?? offer.owner_alias} proposes ${offer.offer_action} in exchange for ${offer.request_action}. Verification: ${offer.verification}.`,
+      ),
+      url: getAbsoluteUrl(`/offers/${offer.id}`),
+      type: "article",
+    },
   };
 }
 
@@ -73,9 +88,30 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
         ? await listRecommendableOffers(viewer.authUser.id, offer.id)
         : Promise.resolve([]),
     ]);
+  const offerStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: `${offer.offered_cause} for ${offer.requested_cause}`,
+    url: getAbsoluteUrl(`/offers/${offer.id}`),
+    description: truncateDescription(
+      `${offer.offer_action} Requested in return: ${offer.request_action}. Verification: ${offer.verification}.`,
+    ),
+    author: {
+      "@type": "Person",
+      name: offer.ownerProfile?.resolvedName ?? offer.owner_alias,
+      url: offer.ownerProfile ? getAbsoluteUrl(`/people/${offer.ownerProfile.id}`) : undefined,
+    },
+    about: [offer.offered_cause, offer.requested_cause, offer.compromise_cause].filter(Boolean),
+  };
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(offerStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <header className="hero">
         <SiteTopbar
           brandHref="/"

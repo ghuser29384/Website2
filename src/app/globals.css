@@ -21,13 +21,13 @@
 }
 
 :root {
-  --bg: #faf8f4;
-  --surface: #fffdfa;
-  --surface-muted: #f7f4ee;
-  --surface-soft: #f1ece3;
-  --surface-strong: #e8e0d4;
-  --line: #d8cfbf;
-  --line-strong: #b7aa97;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #fbfaf7;
+  --surface-soft: #f6f3ee;
+  --surface-strong: #ece5da;
+  --line: #ddd5c9;
+  --line-strong: #c4b6a2;
   --ink: #1d2530;
   --ink-soft: #4d5968;
   --ink-muted: #6e7883;
@@ -191,6 +191,28 @@ h4 {
   margin-bottom: 2rem;
   background: transparent;
   border-bottom: 1px solid var(--line);
+}
+
+.topbar-floating-shell {
+  position: fixed;
+  top: 0.85rem;
+  left: 50%;
+  z-index: 60;
+  width: min(calc(100% - 2.75rem), var(--content-width));
+  pointer-events: none;
+}
+
+.topbar-floating-shell.is-visible {
+  pointer-events: auto;
+}
+
+.topbar-floating-shell .topbar {
+  margin-bottom: 0;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #ffffff;
+  box-shadow: var(--shadow-card);
 }
 
 .topbar-links,
@@ -1501,6 +1523,10 @@ output {
     grid-template-columns: 1fr;
     gap: 1rem;
     padding-bottom: 1.15rem;
+  }
+
+  .topbar-floating-shell {
+    width: min(calc(100% - 1rem), var(--content-width));
   }
 
   .brand {

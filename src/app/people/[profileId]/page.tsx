@@ -19,6 +19,7 @@ import {
   listRecommendableOffers,
 } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
+import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -40,6 +41,24 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
 
   return {
     title: data.profile ? data.profile.resolvedName : "Profile",
+    description: data.profile
+      ? truncateDescription(
+          `${data.profile.resolvedName}${formatLocation(data.profile.city, data.profile.region) ? ` from ${formatLocation(data.profile.city, data.profile.region)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers, ${data.profile.followerCount} followers, and ${data.authoredCommentCount} comments.`,
+        )
+      : "Public Moral Trade member profile.",
+    alternates: {
+      canonical: `/people/${profileId}`,
+    },
+    openGraph: {
+      title: data.profile ? data.profile.resolvedName : "Profile",
+      description: data.profile
+        ? truncateDescription(
+            `${data.profile.resolvedName}${formatLocation(data.profile.city, data.profile.region) ? ` from ${formatLocation(data.profile.city, data.profile.region)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers, ${data.profile.followerCount} followers, and ${data.authoredCommentCount} comments.`,
+          )
+        : "Public Moral Trade member profile.",
+      url: getAbsoluteUrl(`/people/${profileId}`),
+      type: "profile",
+    },
   };
 }
 
@@ -65,9 +84,23 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
   const isOwnProfile = viewer?.authUser.id === profile.id;
   const recommendableOffers =
     viewer && isOwnProfile ? await listRecommendableOffers(viewer.authUser.id) : [];
+  const profileStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    name: profile.resolvedName,
+    url: getAbsoluteUrl(`/people/${profile.id}`),
+    description: profile.bio || undefined,
+    homeLocation: formatLocation(profile.city, profile.region) || undefined,
+  };
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(profileStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <header className="hero">
         <SiteTopbar
           brandHref="/"

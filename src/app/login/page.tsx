@@ -11,6 +11,11 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
   title: "Login",
+  description: "Sign in to publish offers, respond to commitments, and manage your Moral Trade dashboard.",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 interface LoginPageProps {

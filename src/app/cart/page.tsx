@@ -12,6 +12,10 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
   title: "Cart",
+  robots: {
+    index: false,
+    follow: false,
+  },
 };
 
 interface CartPageProps {

@@ -185,6 +185,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
   const [statusMessage, setStatusMessage] = useState("");
   const [hasLoadedLocalOffers, setHasLoadedLocalOffers] = useState(false);
   const [openingProgress, setOpeningProgress] = useState(0);
+  const [openingRevealProgress, setOpeningRevealProgress] = useState(0);
 
   useEffect(() => {
     setLocalOffers(loadLocalOffers());
@@ -217,6 +218,11 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
       setOpeningProgress((current) =>
         Math.abs(current - distanceScrolled) > 0.004 ? distanceScrolled : current,
       );
+      setOpeningRevealProgress((current) => {
+        const nextProgress = Math.max(current, distanceScrolled);
+
+        return Math.abs(current - nextProgress) > 0.004 ? nextProgress : current;
+      });
     }
 
     function requestUpdate() {
@@ -255,9 +261,15 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
   const exactMatches = scoredPairs.filter((pair) => pair.exact);
   const displayedMatches = exactMatches.length ? exactMatches : scoredPairs.slice(0, 3);
   const visibleOffers = sortOffers(filterOffers(allOffers, filters), selectedOffer, filters.sortOrder);
-  const firstDefinitionProgress = getSegmentProgress(openingProgress, 0.08, 0.34);
-  const secondWordProgress = getSegmentProgress(openingProgress, 0.46, 0.68);
-  const secondDefinitionProgress = getSegmentProgress(openingProgress, 0.74, 1);
+  const firstDefinitionProgress = getSegmentProgress(openingRevealProgress, 0.08, 0.34);
+  const secondWordProgress = getSegmentProgress(openingRevealProgress, 0.46, 0.68);
+  const secondDefinitionProgress = getSegmentProgress(openingRevealProgress, 0.74, 1);
+  const floatingTopbarProgress = getSegmentProgress(openingProgress, 0.84, 0.97);
+  const showFloatingTopbar = floatingTopbarProgress > 0.01;
+  const floatingTopbarStyle: CSSProperties = {
+    opacity: floatingTopbarProgress,
+    transform: `translate3d(-50%, ${(1 - floatingTopbarProgress) * -18}px, 0)`,
+  };
 
   function handleDraftFieldChange(field: keyof OfferDraft, value: string | number | boolean) {
     setDraft(
@@ -330,6 +342,19 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
   return (
     <div className="page-shell">
       <header className="hero">
+        <div
+          aria-hidden={!showFloatingTopbar}
+          className={`topbar-floating-shell${showFloatingTopbar ? " is-visible" : ""}`}
+          style={floatingTopbarStyle}
+        >
+          <SiteTopbar
+            brandHref="/"
+            links={getPrimaryNavLinks(isAuthenticated)}
+            {...getTopbarActions(isAuthenticated)}
+            showLogout={isAuthenticated}
+          />
+        </div>
+
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(isAuthenticated)}
