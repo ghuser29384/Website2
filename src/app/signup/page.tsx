@@ -60,7 +60,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
                 <span className="flow-number">01</span>
                 <div>
                   <strong>Create durable offers</strong>
-                  <p>Offers can move beyond browser-local prototypes into a real shared board.</p>
+                  <p>An account lets you place offers on the shared board.</p>
                 </div>
               </div>
               <div className="flow-step">
@@ -161,7 +161,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
                 </div>
                 <div>
                   <h3>Create your first offer</h3>
-                  <p>Once signed in, head to the new offer route and publish a live offer.</p>
+                  <p>Once signed in, create an offer and state its terms plainly.</p>
                 </div>
                 <div>
                   <h3>Review interest on the dashboard</h3>

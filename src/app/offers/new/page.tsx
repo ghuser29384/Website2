@@ -51,9 +51,9 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
             <p className="hero-text">
               {viewer ? (
                 <>
-                  Signed in as <strong>{viewer.displayName}</strong>. This route writes to
-                  Supabase instead of local browser storage and asks you to state the action,
-                  reciprocal terms, and trust conditions in a public-facing format.
+                  Signed in as <strong>{viewer.displayName}</strong>. This page writes to the
+                  shared record rather than browser storage and asks you to state the act, the
+                  reciprocal terms, and the trust conditions plainly.
                 </>
               ) : (
                 <>Configure Supabase to enable live offer creation.</>
@@ -98,8 +98,8 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 <p className="eyebrow">Offer details</p>
                 <h2>Create offer</h2>
                 <p>
-                  Use the same structure as the homepage prototype, now in a public,
-                  account-backed record.
+                  State the two sides, the expected gain, and the verification terms in one
+                  public record.
                 </p>
               </div>
 

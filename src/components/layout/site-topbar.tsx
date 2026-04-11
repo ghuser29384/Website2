@@ -65,7 +65,7 @@ export function SiteTopbar({
           className="brand-logo"
           height={44}
           priority
-          src="/O%20(8).png"
+          src="/O%20(11).png"
           width={44}
         />
         <span className="brand-name">Moral Trade</span>

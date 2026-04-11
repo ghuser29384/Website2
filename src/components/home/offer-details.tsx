@@ -13,8 +13,8 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
       <article className="panel details-panel">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Selected proposal</p>
-            <h3>Structured terms</h3>
+            <p className="eyebrow">Selected trade</p>
+            <h3>Stated terms</h3>
           </div>
         </div>
 
@@ -35,10 +35,10 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
 
               <div className="detail-grid">
                 <div className="detail-block">
-                  <p className="detail-kicker">Stated threshold</p>
+                  <p className="detail-kicker">Stated moral gain</p>
                   <p>
-                    Offers {selected.offerImpact}/10 on its own scale and requires at least{" "}
-                    {selected.minCounterpartyImpact}/10 from the other side.
+                    Estimated as {selected.offerImpact}/10 on this party&apos;s own scale and
+                    requires at least {selected.minCounterpartyImpact}/10 from the other side.
                   </p>
                 </div>
                 <div className="detail-block">
@@ -73,8 +73,8 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
       <article className="panel matches-panel">
         <div className="panel-head">
           <div>
-            <p className="eyebrow">Reciprocal candidates</p>
-            <h3>Compatibility review</h3>
+            <p className="eyebrow">Gains from trade</p>
+            <h3>Possible counterparties</h3>
           </div>
         </div>
 
@@ -89,7 +89,7 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
                     <div className="match-header">
                       <div>
                         <p className="detail-kicker">
-                          {pair.exact ? "Reciprocal match" : "Near match"}
+                          {pair.exact ? "Mutual gain" : "Possible gain"}
                         </p>
                         <h4>{pair.offer.alias}</h4>
                       </div>
@@ -115,7 +115,7 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
                           type="button"
                           onClick={() => onFocusOffer(pair.offer.id)}
                         >
-                          Focus proposal
+                          Inspect trade
                         </button>
                       </div>
                     </div>
@@ -124,11 +124,11 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
               })
             ) : (
               <div className="empty-state">
-                <div>
-                  <strong>No candidates yet.</strong>
-                  <p>Add a reciprocal offer or relax filters and thresholds.</p>
-                </div>
+              <div>
+                <strong>No candidates yet.</strong>
+                  <p>Add another offer or relax the filters and thresholds.</p>
               </div>
+            </div>
             )
           ) : (
             <div className="empty-state">

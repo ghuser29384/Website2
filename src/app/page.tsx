@@ -5,7 +5,7 @@ import { getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, SITE_NAME, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
-  "Moral Trade is a public-interest platform for moral trade: structured public offers, reciprocal commitments, reasoning standards, and transparent methods for people with different moral priorities.",
+  "Moral Trade is about how people with different moral views may make exchanges that each regards as morally better.",
 );
 
 export const metadata: Metadata = {
@@ -36,7 +36,7 @@ const faqStructuredData = {
       name: "Is Moral Trade a discussion forum or social feed?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "No. Moral Trade focuses on structured public offers, reciprocal commitments, and explicit verification terms rather than engagement-driven discussion.",
+        text: "No. It is for offers, reciprocal terms, and reviewable commitments, not for open-ended discussion.",
       },
     },
     {
@@ -44,15 +44,23 @@ const faqStructuredData = {
       name: "Does Moral Trade claim to resolve deep moral disagreement?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "No. It provides a disciplined way to coordinate when people with different priorities can still identify mutually worthwhile commitments.",
+        text: "No. It asks whether people with different moral views can still find exchanges that each sees as morally better.",
       },
     },
     {
       "@type": "Question",
-      name: "What keeps the platform from becoming manipulative or shallow?",
+      name: "What keeps this from becoming shallow or manipulative?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "The interface emphasizes bounded actions, evidence, review periods, and explicit limitations instead of infinite feeds, gamification, or popularity mechanics.",
+        text: "The site stays with offers, terms, counterfactual dependence, and verification.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Why doesn't trade guarantee a mostly-great future?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Because trade can be blocked or undermined by threats, concentrated power, and collective procedures that seal off futures some views value highly.",
       },
     },
   ],

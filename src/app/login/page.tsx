@@ -59,7 +59,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 <span className="flow-number">01</span>
                 <div>
                   <strong>Publish public offers</strong>
-                  <p>Move from browser-local experimentation into real stored offers.</p>
+                  <p>Place offers on the shared board.</p>
                 </div>
               </div>
               <div className="flow-step">
@@ -139,7 +139,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <div className="clean-stack">
                 <div>
                   <h3>Create offers</h3>
-                  <p>Publish a real offer at `/offers/new` instead of keeping it only local.</p>
+                  <p>State an offer on the shared board rather than keeping it only local.</p>
                 </div>
                 <div>
                   <h3>Track interest</h3>
@@ -147,7 +147,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 </div>
                 <div>
                   <h3>Prepare for agreements</h3>
-                  <p>The data model already includes agreements, ready for a future workflow.</p>
+                  <p>The agreements record already exists, though the fuller process is unfinished.</p>
                 </div>
               </div>
             </article>

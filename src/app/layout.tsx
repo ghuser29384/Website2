@@ -1,8 +1,25 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 
 import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 import "./globals.css";
+
+const larken = localFont({
+  src: "../../Larken Serif/Larken-Medium.otf",
+  variable: "--font-heading-loaded",
+  weight: "500",
+  style: "normal",
+  display: "swap",
+});
+
+const metropolis = localFont({
+  src: "../../metropolis.regular.otf",
+  variable: "--font-body-loaded",
+  weight: "400",
+  style: "normal",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -64,7 +81,7 @@ const organizationStructuredData = {
   "@type": "Organization",
   name: SITE_NAME,
   url: SITE_URL,
-  logo: getAbsoluteUrl("/O%20(8).png"),
+  logo: getAbsoluteUrl("/O%20(11).png"),
 };
 
 export default function RootLayout({
@@ -74,7 +91,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className={`${larken.variable} ${metropolis.variable}`}>
         <script
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(websiteStructuredData),

@@ -8,11 +8,10 @@ export function SiteFooter() {
       <div className="footer-grid">
         <div className="footer-intro">
           <p className="eyebrow">Moral Trade</p>
-          <h2>A public-interest project for disciplined moral coordination under disagreement.</h2>
+          <h2>A project about gains from moral trade.</h2>
           <p>
-            Moral Trade is designed to make reasoning, verification, and institutional limits more
-            inspectable than they would be in an informal bargain. The ambition is seriousness,
-            not spectacle.
+            The central thought is simple: people with different moral views may be able to make
+            exchanges that each sees as morally better.
           </p>
         </div>
 
@@ -33,8 +32,8 @@ export function SiteFooter() {
       <div className="footer-meta">
         <p>
           Reference points include Toby Ord&apos;s paper on moral trade and Forethought&apos;s
-          discussion of moral public goods. These references inform the reasoning standard; they
-          are not presented as endorsements.
+          discussion of convergence, compromise, trade, and threats. These are sources, not
+          endorsements.
         </p>
       </div>
     </footer>

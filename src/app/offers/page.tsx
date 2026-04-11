@@ -13,14 +13,14 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "Offers",
   description:
-    "Browse public Moral Trade offers with explicit actions, reciprocal terms, verification methods, and bounded commitment structures.",
+    "Browse public offers for moral trade: what one side will do, what it asks in return, and how the trade is checked.",
   alternates: {
     canonical: "/offers",
   },
   openGraph: {
     title: "Public offers",
     description:
-      "Browse public Moral Trade offers with explicit actions, reciprocal terms, verification methods, and bounded commitment structures.",
+      "Browse public offers for moral trade: what one side will do, what it asks in return, and how the trade is checked.",
     url: getAbsoluteUrl("/offers"),
     type: "website",
   },
@@ -76,11 +76,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Public offers</p>
-            <h1>Review published moral trade commitments.</h1>
+            <h1>Review public offers for moral trade.</h1>
             <p className="hero-text">
-              This directory is the public-facing record of live offers. Each listing states
-              a proposed action, a requested reciprocal action, and the trust terms under
-              which the commitment should be evaluated.
+              Each listing states what one side will do, what it asks in return, and how the trade
+              is to be checked.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup"}>
@@ -93,27 +92,27 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">What this directory is for</p>
+            <p className="eyebrow">What an offer should show</p>
             <div className="flow-card">
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Public commitments</strong>
-                  <p>These records are stored in Postgres, not just in local browser state.</p>
+                  <strong>The act</strong>
+                  <p>What one side will do.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Structured evaluation</strong>
-                  <p>Each offer makes its action, reciprocity, and verification terms legible.</p>
+                  <strong>The reciprocal act</strong>
+                  <p>What is asked in return.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Account continuity</strong>
-                  <p>Your published offers and responses appear again in the dashboard.</p>
+                  <strong>The trust terms</strong>
+                  <p>How the trade is meant to be checked.</p>
                 </div>
               </div>
             </div>

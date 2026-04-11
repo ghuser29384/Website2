@@ -55,8 +55,8 @@ export function ParetoChart({ selected, pairs }: ParetoChartProps) {
     <article className="panel chart-panel">
       <div className="panel-head">
         <div>
-          <p className="eyebrow">Choiceworthiness view</p>
-          <h3>Illustrative reciprocity map</h3>
+          <p className="eyebrow">Gains from trade</p>
+          <h3>Illustrative choiceworthiness map</h3>
         </div>
       </div>
       <svg
@@ -67,8 +67,8 @@ export function ParetoChart({ selected, pairs }: ParetoChartProps) {
       >
         <title id="pareto-title">Moral trade choiceworthiness chart</title>
         <desc id="pareto-desc">
-          A chart showing a status quo point and possible matched outcomes that improve value
-          for both sides.
+          A chart showing a status quo point and possible outcomes that improve the world for both
+          sides by their own lights.
         </desc>
 
         <rect fill="transparent" height={height} rx="22" width={width} x="0" y="0" />
@@ -129,7 +129,7 @@ export function ParetoChart({ selected, pairs }: ParetoChartProps) {
         />
 
         <text fill="#173530" fontSize="13" textAnchor="middle" x={width / 2} y={height - 14}>
-          Counterparty moral improvement
+          Counterparty gain on its own view
         </text>
         <text
           fill="#173530"
@@ -139,7 +139,7 @@ export function ParetoChart({ selected, pairs }: ParetoChartProps) {
           x="18"
           y={height / 2}
         >
-          Your moral improvement
+          Your gain on your own view
         </text>
 
         <circle cx={statusX} cy={statusY} fill="#b98a2f" r="7" />
@@ -173,7 +173,7 @@ export function ParetoChart({ selected, pairs }: ParetoChartProps) {
       </svg>
       <p className="chart-caption">
         Status quo is fixed in the lower-left. Better candidates move up and right when both
-        sides clear each other&apos;s stated minimum threshold and align on trust.
+        sides clear each other&apos;s stated thresholds and the trust terms are good enough.
       </p>
     </article>
   );

@@ -32,10 +32,10 @@ export function OfferComposer({
     <form className="panel composer" onSubmit={onSubmit}>
       <div className="panel-head">
         <div>
-          <p className="eyebrow">Prototype composer</p>
-          <h3>Draft a structured proposal</h3>
+          <p className="eyebrow">Local example</p>
+          <h3>State a possible trade</h3>
         </div>
-        <span className="panel-note">Browser-only workspace</span>
+        <span className="panel-note">Browser-only draft</span>
       </div>
 
       <label className="field">
@@ -151,7 +151,7 @@ export function OfferComposer({
 
       <div className="meter-grid">
         <label className="field meter-field">
-          <span>Your impact estimate</span>
+          <span>Your estimate of the gain</span>
           <div className="range-row">
             <input
               max={10}
@@ -163,11 +163,11 @@ export function OfferComposer({
             />
             <output htmlFor="offerImpact">{draft.offerImpact}</output>
           </div>
-          <small>How strong this action feels on your own moral scale.</small>
+          <small>How worthwhile this act looks on your own moral view.</small>
         </label>
 
         <label className="field meter-field">
-          <span>Minimum counterparty impact</span>
+          <span>Minimum gain from the other side</span>
           <div className="range-row">
             <input
               max={10}
@@ -181,7 +181,7 @@ export function OfferComposer({
             />
             <output htmlFor="minCounterpartyImpact">{draft.minCounterpartyImpact}</output>
           </div>
-          <small>Your threshold for calling the trade worthwhile.</small>
+          <small>Your threshold for calling the trade worthwhile on your own view.</small>
         </label>
       </div>
 
@@ -218,7 +218,7 @@ export function OfferComposer({
       </div>
 
       <label className="field meter-field">
-        <span>Trust intensity</span>
+        <span>Verification burden</span>
         <div className="range-row">
           <input
             max={5}
@@ -230,14 +230,14 @@ export function OfferComposer({
           />
           <output htmlFor="trustLevel">{draft.trustLevel}</output>
         </div>
-        <small>Higher values indicate stronger verification and longer commitment requirements.</small>
+        <small>Higher values mean stronger checking, stronger guarantees, or longer commitments.</small>
       </label>
 
       <label className="field">
         <span>Why this trade matters to you</span>
         <textarea
           name="notes"
-          placeholder="Explain the moral reasoning or practical detail that would help a counterparty trust the offer."
+          placeholder="Explain why this trade improves the world on your view, and why it would not happen anyway."
           rows={3}
           value={draft.notes}
           onChange={(event) => onFieldChange("notes", event.currentTarget.value)}
