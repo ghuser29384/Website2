@@ -29,7 +29,7 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/#about", label: "About" },
       { href: "/#how-it-works", label: "How it works" },
-      { href: "/#commitments", label: "Commitments" },
+      { href: "/#commitments", label: "Blockers" },
     ],
   },
   {

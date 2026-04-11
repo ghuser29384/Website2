@@ -37,20 +37,20 @@ interface HomePageProps {
 
 const standards = [
   {
-    title: "Bounded commitments",
-    text: "A trade should say what each side does, for how long, and under what conditions it counts as completed.",
+    title: "Resource-compatible views",
+    text: "Some views can be jointly served with the same resources through hybrid goods or easily-satiable claims, so the gains from trade can be very large from each view's perspective.",
   },
   {
-    title: "Counterfactual honesty",
-    text: "The gains disappear if the act would have happened anyway, so the site asks whether the trade changes what the parties do.",
+    title: "Realised gains need institutions",
+    text: "What matters is not merely the hypothetical gains from frictionless trade, but which gains are actually realised, which depends on institutions, contracts, and whether parties take improving trades.",
   },
   {
-    title: "Resource-compatibility",
-    text: "Some moral views can be largely satisfied with the same resources. Those cases deserve special attention because the gains from trade can be especially large.",
+    title: "Threats are different from trade",
+    text: "A trade can leave both parties better off by their own lights. A threat can leave at least one side worse off whichever option it chooses.",
   },
   {
-    title: "Threats are not trades",
-    text: "Mutually beneficial exchange is one thing; coercive pressure is another. The site treats threats and destructive bargaining as a different problem from moral trade.",
+    title: "Blockers can seal off futures",
+    text: "Concentration of power, majority rule, and badly chosen collective procedures can exclude minority-valued goods or activities even when trade would otherwise have been possible.",
   },
 ] as const;
 
@@ -86,24 +86,24 @@ const featuredDialogues = [
 
 const faqItems = [
   {
-    question: "Is Moral Trade a discussion forum or social feed?",
+    question: "Why can moral trade matter even if only some people aim at the good?",
     answer:
-      "No. It is for offers, reciprocal terms, and reviewable commitments, not for open-ended discussion.",
+      "Because even partial convergence can leave room for bargaining and compromise. A minority with meaningful power can still trade with others if each side sees the result as better than acting alone.",
   },
   {
-    question: "Does Moral Trade claim to resolve deep moral disagreement?",
+    question: "What decides whether hypothetical gains from trade are actually realised?",
     answer:
-      "No. It asks whether people with different moral views can still find exchanges that each sees as morally better.",
+      "Institutions, contracts, transaction costs, and whether parties actually take improving trades. Possible gains are not enough on their own.",
   },
   {
-    question: "What keeps this from becoming shallow or manipulative?",
+    question: "Why are threats a separate problem from trade?",
     answer:
-      "The site stays with offers, terms, counterfactual dependence, and verification.",
+      "Because a threat can make at least one side worse off whichever option it chooses. That is different from a voluntary exchange that both sides regard as better.",
   },
   {
-    question: "Why doesn't trade guarantee a mostly-great future?",
+    question: "What can block a mostly-great future even if trade is possible?",
     answer:
-      "Because trade can be blocked or undermined by threats, concentrated power, and collective procedures that seal off futures some views value highly.",
+      "Value-destroying threats, concentration of power, majority procedures that ban minority-valued goods, and other collective decision rules can all block the gains from trade.",
   },
 ] as const;
 
@@ -392,12 +392,12 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         <div className="hero-stage panel">
           <div className="hero-grid hero-grid-editorial">
             <section className="hero-copy" id="top">
-              <p className="eyebrow">People with different moral views</p>
+              <p className="eyebrow">Trade and compromise under disagreement</p>
               <h1>There is another type of trade.</h1>
               <p className="hero-text">
-                People with different moral views need not only remain in antagonistic
-                relationships. They may be able to exchange goods or services so that each regards
-                the world as better than it otherwise would have been.
+                Even if only some people aim at the good, trade and compromise can still matter.
+                People with different moral views may be able to make voluntary arrangements that
+                each regards as morally better than acting alone.
               </p>
               <div className="hero-actions">
                 <Link
@@ -411,43 +411,43 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 </Link>
               </div>
               <ul className="hero-signals" aria-label="Operating standards">
-                <li>Different moral views</li>
-                <li>Mutual moral gain</li>
-                <li>Explicit terms</li>
+                <li>Partial convergence</li>
+                <li>Resource-compatible gains</li>
+                <li>Threats are different</li>
               </ul>
               <p className="hero-followup">
-                Review the <Link href="/offers">public offers</Link> and the method below before
-                taking part.
+                Review the <Link href="/offers">public offers</Link> and the safeguards below
+                before taking part.
               </p>
             </section>
 
             <aside className="hero-panel panel">
-              <p className="eyebrow">What has to be stated</p>
+              <p className="eyebrow">What has to be checked</p>
               <div className="flow-card">
                 <div className="flow-step">
                   <span className="flow-number">01</span>
                   <div>
-                    <strong>What is traded</strong>
+                    <strong>Where the gain comes from</strong>
                     <p>
-                      The offer should say what each side will do.
+                      State why each side regards the outcome as better than acting separately.
                     </p>
                   </div>
                 </div>
                 <div className="flow-step">
                   <span className="flow-number">02</span>
                   <div>
-                    <strong>Would it happen anyway?</strong>
+                    <strong>Whether the views are resource-compatible</strong>
                     <p>
-                      The trade matters only if it changes what the parties do.
+                      Some trades work because the same resources can satisfy both views unusually well.
                     </p>
                   </div>
                 </div>
                 <div className="flow-step">
                   <span className="flow-number">03</span>
                   <div>
-                    <strong>How is it checked?</strong>
+                    <strong>Why this is trade rather than threat</strong>
                     <p>
-                      Verification has to be stated rather than assumed.
+                      A bargain is not enough if one side would still see the world as worse either way.
                     </p>
                   </div>
                 </div>
@@ -459,8 +459,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <article className="proof-card">
               <p className="proof-label">Trade and compromise can matter</p>
               <p>
-                Forethought treats trade and compromise as &quot;the most likely way&quot; to a
-                mostly-great future under partial convergence, but only under the right conditions.
+                Even without full moral convergence, bargaining and compromise may let different
+                views reach futures that are much closer to what each values.
               </p>
               <a className="inline-link" href="#methodology">
                 Review the method
@@ -469,18 +469,18 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <article className="proof-card">
               <p className="proof-label">Resource-compatible views</p>
               <p>
-                Some values compete less than they first appear to. When views can share the same
-                resources, the gains from trade or compromise can be much larger.
+                Some views can share the same resources unusually well through hybrid goods or
+                easily-satiable claims, which can make the gains from trade very large.
               </p>
               <a className="inline-link" href="#standards">
                 See the standards
               </a>
             </article>
             <article className="proof-card">
-              <p className="proof-label">Threats can destroy value</p>
+              <p className="proof-label">Threats and blockers can destroy value</p>
               <p>
-                The gains from trade are not automatic. Threats, concentrated power, and badly
-                chosen collective procedures can wipe out much of the value at stake.
+                Even small risks of executed threats, concentrated power, or badly chosen
+                collective procedures can wipe out much of the value that trade would otherwise create.
               </p>
               <a className="inline-link" href="#transparency">
                 Read the limitations
@@ -494,34 +494,34 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         <section className="section section-white" id="about">
           <div className="section-head">
             <p className="eyebrow">What Moral Trade is</p>
-            <h2>People with different moral views need not only oppose one another</h2>
+            <h2>Partial convergence can still leave room for trade and compromise</h2>
             <p>
-              Moral trade begins from disagreement, not from consensus. The question is whether
-              people with different moral views can find exchanges from which both gain, morally,
-              in their own view.
+              The key question is not whether everyone shares one moral view. It is whether some
+              meaningful minority can still bargain and trade in ways that each side regards as
+              better than acting alone.
             </p>
           </div>
 
           <div className="editorial-grid">
             <article className="panel editorial-card">
-              <h3>A great diversity of moral views</h3>
+              <h3>Partial AM-convergence can still matter</h3>
               <p>
-                The starting point is moral pluralism. People care about different things and do
-                not rank them in the same way.
+                A mostly-great future need not require full agreement. A minority with meaningful
+                power can still matter if trade and compromise are available.
               </p>
             </article>
             <article className="panel editorial-card">
-              <h3>Antagonism is common, but not necessary</h3>
+              <h3>Trade does not depend on one single disagreement</h3>
               <p>
-                People with different moral views often end up in antagonistic relationships, but
-                that need not be the whole story.
+                Different groups can continue to value different natural resources, locations,
+                times of use, and risk profiles, even in a technologically mature society.
               </p>
             </article>
             <article className="panel editorial-card">
-              <h3>Moral barter and beyond</h3>
+              <h3>Compromise can approach near-best futures</h3>
               <p>
-                The paper begins with simple barter and then asks what currency, bargaining,
-                professionalization, and markets for moral trade might add.
+                When different views can divide resources or agree on hybrid goods, both can end up
+                much closer to what they each regard as best.
               </p>
             </article>
           </div>
@@ -530,11 +530,10 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         <section className="section section-subtle" id="how-it-works">
           <div className="section-head">
             <p className="eyebrow">How Moral Trade works</p>
-            <h2>From moral barter to more organized exchange</h2>
+            <h2>Trade remains possible when the reasons for exchange are moral</h2>
             <p>
-              The paper starts with direct exchange and then points toward richer forms of moral
-              trade. The related Forethought discussion asks when trade and compromise are
-              resource-compatible enough to preserve most of what different views care about.
+              The gains can be especially large when one side cares far more about an outcome than
+              the other, or when the same resources can satisfy both views unusually well.
             </p>
           </div>
 
@@ -543,7 +542,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               <h3>Personal pledge swaps</h3>
               <p>
                 Two people each do something the other cares about more, so both can gain from the
-                exchange.
+                exchange if each side values the trade more than the cost it bears.
               </p>
               <ul className="clean-list">
                 <li>Recurring donations, volunteering, or habit changes</li>
@@ -556,7 +555,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               <h3>Donation offsets</h3>
               <p>
                 If opposed spending would largely cancel out, both sides can redirect money to a
-                compromise destination instead.
+                compromise destination instead and each get a future closer to its own view.
               </p>
               <ul className="clean-list">
                 <li>Matched redirection instead of zero-sum spending</li>
@@ -568,7 +567,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <article className="panel concept-card">
               <h3>Paid action offers</h3>
               <p>
-                One person can pay another to take up an action that matters morally to the payer.
+                One person can pay another to take up an action that matters morally to the payer,
+                especially when the actor's cost is low and the payer's moral stake is high.
               </p>
               <ul className="clean-list">
                 <li>Appropriate for bounded actions with clear milestones</li>
@@ -582,10 +582,10 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         <section className="section section-white" id="standards">
           <div className="section-head">
             <p className="eyebrow">Reasoning standards</p>
-            <h2>Make the gains, the compatibility, and the threat problem visible</h2>
+            <h2>Make the gains, the compatibility, the threats, and the blockers visible</h2>
             <p>
-              A moral trade is not established just because both sides like the idea. The relevant
-              acts, gains, compatibility conditions, and threat assumptions have to be stated.
+              Sections 3.1 to 3.5 distinguish possible gains from realised gains, and trade from
+              threats. Those distinctions should be explicit on the site.
             </p>
           </div>
 
@@ -635,40 +635,39 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
         <section className="section section-white" id="commitments">
           <div className="section-head">
-            <p className="eyebrow">Public commitments and safeguards</p>
-            <h2>A trade should say what each side does and when it counts</h2>
+            <p className="eyebrow">Threats, limits, and safeguards</p>
+            <h2>Trade is not enough if threats, power, or procedures destroy value</h2>
             <p>
-              Ord&apos;s examples work because the acts are concrete enough to compare and, at
-              least in principle, to verify.
+              The optimistic case for trade is fragile. Threats, concentrated power, and collective
+              procedures that seal off minority-valued futures can undo much of the value at stake.
             </p>
           </div>
 
           <div className="concept-grid">
             <article className="panel concept-card">
-              <h3>Where direct trade is easiest</h3>
+              <h3>Threats are value-destroying</h3>
               <ul className="clean-list">
-                <li>Specific habits, donations, volunteer time, and bounded lifestyle changes</li>
-                <li>Transparent reciprocal terms rather than vague moral promises</li>
-                <li>Cases where the parties can still preserve most of what they care about</li>
+                <li>Extortion is not just a hard bargain; it can leave at least one side worse off whichever option it chooses</li>
+                <li>Even small risks of executed threats can eat into expected value</li>
+                <li>Preventing value-destroying threats is itself a central design goal</li>
               </ul>
             </article>
 
             <article className="panel concept-card">
-              <h3>What is deliberately excluded</h3>
+              <h3>Concentration of power</h3>
               <ul className="clean-list">
-                <li>No illegal, deceptive, coercive, or threatening arrangements</li>
-                <li>No election or vote trading</li>
-                <li>No harmful acts performed merely to extract side payments</li>
+                <li>If only a few people control decisions, the right moral views may not be represented at all</li>
+                <li>The bargaining outcome depends on who has power and what happens without agreement</li>
+                <li>The platform should not assume that negotiation power is morally benign</li>
               </ul>
             </article>
 
             <article className="panel concept-card" id="transparency">
-              <h3>What remains difficult</h3>
+              <h3>Sealed-off futures</h3>
               <ul className="clean-list">
-                <li>Preventing threats, hold-up, and other value-destroying bargaining</li>
-                <li>Avoiding concentrated power over collective choices</li>
-                <li>Robust moderation and dispute handling</li>
-                <li>Escrow, audit trails, legal review, and stronger identity checks</li>
+                <li>Majority rule can ban goods or activities that minorities value highly</li>
+                <li>Decision rules can reward signaling or coalition behavior rather than good reasons</li>
+                <li>The same procedure can produce very different outcomes depending on when bargaining happens</li>
               </ul>
             </article>
           </div>
@@ -677,12 +676,11 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         <section className="section section-subtle" id="methodology">
           <div className="section-head">
             <p className="eyebrow">Methodology and sources</p>
-            <h2>Reference materials and open questions</h2>
+            <h2>Trade and compromise are promising, but not self-executing</h2>
             <p>
-              The paper is the main reference point. It starts with moral barter and then asks
-              what more organized forms of moral trade might look like. The Forethought essay asks
-              when convergence, trade, and compromise are enough to keep society close to the best
-              futures.
+              Forethought sections 3.1 to 3.5 ask not only whether trade is possible, but whether
+              it is realised, whether it survives threats, and whether power and procedures leave
+              the best futures reachable at all.
             </p>
           </div>
 
@@ -690,11 +688,11 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <article className="panel editorial-card">
               <h3>How we reason</h3>
               <ul className="clean-list">
-                <li>Specify the act on each side</li>
-                <li>State why each side gains, in its own view</li>
-                <li>Ask whether the views are resource-compatible</li>
-                <li>Keep counterfactual dependence explicit</li>
-                <li>Distinguish trade from threats, and the moral claim from the verification claim</li>
+                <li>Ask which gains from frictionless trade are merely hypothetical</li>
+                <li>Ask which gains would actually be realised under existing institutions</li>
+                <li>Distinguish gains for many views from gains for the correct view</li>
+                <li>Separate voluntary trade from value-destroying threats</li>
+                <li>Check whether power distribution and decision rules block the best futures</li>
               </ul>
             </article>
 
@@ -713,9 +711,9 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 </a>
               </div>
               <p className="editorial-note">
-                Forethought calls trade and compromise &quot;the most likely way&quot; forward in
-                many cases, while warning about threats, concentrated power, and badly chosen
-                collective procedures.
+                These sections are optimistic about trade and compromise, but only under the right
+                conditions: realised gains, low threat risk, and procedures that do not seal off
+                minority-valued futures.
               </p>
             </article>
           </div>
@@ -814,8 +812,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <p className="eyebrow">Gains from trade</p>
             <h2>Inspect the structure of a possible exchange</h2>
             <p>
-              This view is only a heuristic. It helps compare reciprocal terms and minimum gains;
-              it does not settle moral disagreement.
+              This view is only a heuristic. It helps compare reciprocal terms and minimum gains,
+              but it cannot by itself tell you whether the gains will actually be realised.
             </p>
           </div>
 
@@ -838,8 +836,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <p className="eyebrow">FAQ</p>
             <h2>Open questions</h2>
             <p>
-              The paper argues that the gains from moral trade can be large, but major practical
-              questions remain about threats, compromise, and collective choice.
+              The optimistic case depends on realised trade, not just hypothetical gains, and it
+              remains vulnerable to threats, concentration of power, and poor collective procedures.
             </p>
           </div>
 

@@ -8,10 +8,11 @@ export function SiteFooter() {
       <div className="footer-grid">
         <div className="footer-intro">
           <p className="eyebrow">Moral Trade</p>
-          <h2>A project about gains from moral trade.</h2>
+          <h2>A project about trade, compromise, and blocked futures.</h2>
           <p>
             The central thought is simple: people with different moral views may be able to make
-            exchanges that each sees as morally better.
+            exchanges that each sees as morally better, but threats and decision procedures can
+            still destroy much of the value.
           </p>
         </div>
 
@@ -32,8 +33,8 @@ export function SiteFooter() {
       <div className="footer-meta">
         <p>
           Reference points include Toby Ord&apos;s paper on moral trade and Forethought&apos;s
-          discussion of convergence, compromise, trade, and threats. These are sources, not
-          endorsements.
+          discussion of trade, compromise, threats, and blockers in sections 3.1 to 3.5. These
+          are sources, not endorsements.
         </p>
       </div>
     </footer>
