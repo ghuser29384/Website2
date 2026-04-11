@@ -33,34 +33,34 @@ const faqStructuredData = {
   mainEntity: [
     {
       "@type": "Question",
-      name: "What is the main practical obstacle?",
+      name: "Is Moral Trade a discussion forum or social feed?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Insufficient trust. Ord divides this into factual trust and counterfactual trust, and treats the second as especially hard.",
+        text: "No. It is for offers, reciprocal terms, and reviewable commitments, not for open-ended discussion.",
       },
     },
     {
       "@type": "Question",
-      name: "Is moral trade only for consequentialists?",
+      name: "Does Moral Trade claim to resolve deep moral disagreement?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "No. The paper argues that deontological and virtue-ethical views can also have reasons to engage in moral trade, though the gains and constraints may look different.",
+        text: "No. It asks whether people with different moral views can still find exchanges that each sees as morally better.",
       },
     },
     {
       "@type": "Question",
-      name: "Can the gains be very large?",
+      name: "What keeps this from becoming shallow or manipulative?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Ord argues that the potential gains can be large, especially where opposed charities or costly habits create major inefficiencies, though they are much harder to aggregate than gains from ordinary trade.",
+        text: "The site stays with offers, terms, counterfactual dependence, and verification.",
       },
     },
     {
       "@type": "Question",
-      name: "Does moral trade guarantee a better world overall?",
+      name: "Why doesn't trade guarantee a mostly-great future?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "No. It guarantees only that the outcome is better according to the views of the parties to the trade. Externalities, objective moral truth, and perverse incentives can still make things worse overall.",
+        text: "Because trade can be blocked or undermined by threats, concentrated power, and collective procedures that seal off futures some views value highly.",
       },
     },
   ],
