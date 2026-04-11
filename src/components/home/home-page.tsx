@@ -154,20 +154,9 @@ function OpeningWord({
   core: string;
   style?: CSSProperties;
 }) {
-  if (!prefix) {
-    return (
-      <span className="opening-anchor-frame" style={style}>
-        <span aria-hidden="true" className="opening-prefix-slot opening-prefix-slot-hidden">
-          moral
-        </span>
-        <span className="opening-anchor-word">{core}</span>
-      </span>
-    );
-  }
-
   return (
     <span className="opening-anchor-frame" style={style}>
-      <span className="opening-prefix-slot">{prefix}</span>
+      {prefix ? <span className="opening-prefix-slot">{prefix}</span> : null}
       <span className="opening-anchor-word">{core}</span>
     </span>
   );

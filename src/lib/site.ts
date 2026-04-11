@@ -2,14 +2,11 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
     { href: "/#how-it-works", label: "How it works" },
     { href: "/#standards", label: "Standards" },
+    { href: "/offers#best-offers", label: "Best offers" },
     { href: "/offers", label: "Offers" },
     { href: "/people", label: "People" },
-    { href: "/#faq", label: "FAQ" },
+    { href: "/cart", label: "Cart" },
   ];
-
-  if (isAuthenticated) {
-    links.push({ href: "/cart", label: "Cart" });
-  }
 
   return links;
 }
