@@ -31,9 +31,8 @@ export function SiteFooter() {
 
       <div className="footer-meta">
         <p>
-          Reference points include Toby Ord&apos;s paper on moral trade and Forethought&apos;s
-          discussion of convergence, compromise, trade, and threats. These are sources, not
-          endorsements.
+          The site is organized around Toby Ord&apos;s paper on moral trade. It uses that paper as
+          a source, not as an endorsement claim.
         </p>
       </div>
     </footer>

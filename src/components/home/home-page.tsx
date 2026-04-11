@@ -35,75 +35,124 @@ interface HomePageProps {
   isAuthenticated: boolean;
 }
 
-const standards = [
+const theoryCards = [
   {
-    title: "Bounded commitments",
-    text: "A trade should say what each side does, for how long, and under what conditions it counts as completed.",
+    title: "A subcategory of trade",
+    text: "From the perspective of economics, moral trade is not an extra kind of trade standing outside ordinary theory. It is a subcategory of trade in which differences in moral views do the work.",
   },
   {
-    title: "Counterfactual honesty",
-    text: "The gains disappear if the act would have happened anyway, so the site asks whether the trade changes what the parties do.",
+    title: "Pure and mixed moral trade",
+    text: "Ord distinguishes pure moral trade, where both parties see the result as morally better, from mixed moral trade, where moral and prudential gains are combined.",
   },
   {
-    title: "Resource-compatibility",
-    text: "Some moral views can be largely satisfied with the same resources. Those cases deserve special attention because the gains from trade can be especially large.",
+    title: "Pareto improvement from a default option",
+    text: "The point is to move from what the parties would have done independently to an option that each regards as better by the lights of their own moral view.",
   },
   {
-    title: "Threats are not trades",
-    text: "Mutually beneficial exchange is one thing; coercive pressure is another. The site treats threats and destructive bargaining as a different problem from moral trade.",
+    title: "A very incomplete market",
+    text: "Ord notes that there is strikingly little trade based on variation in moral preferences and almost no mechanisms for facilitating it. Moral barter is only a beginning.",
   },
 ] as const;
 
-const featuredDialogues = [
+const vignettes = [
   {
-    type: "Pledge swap",
-    title: "A pledge swap",
+    type: "Compatible views",
+    title: "Animals and the Poor",
     proposition:
-      "Victoria gives to poverty-focused charities for a year if another person becomes vegetarian for the same period.",
+      "Victoria agrees to donate 1 percent of her income to effective poverty charities each year if Paul becomes vegetarian.",
     premise:
-      "Each side prefers the other action to its own and judges the resulting world better than acting alone.",
-    commitment: "A fixed term and a way of checking that the acts were done.",
+      "Paul cares deeply about poverty and is morally neutral about animals; Victoria cares about both, but much more about animal suffering. Each therefore prefers the traded outcome to acting alone.",
+    commitment: "They are close friends and simply ask each other, once each year, how they are keeping up.",
   },
   {
-    type: "Donation offset",
-    title: "A compromise destination",
+    type: "Opposed causes",
+    title: "Gun Rights and Gun Control",
     proposition:
-      "Two people who would have spent against one another redirect the matched amount to a compromise cause instead.",
+      "Rebecca and Christopher redirect opposed political donations to Oxfam instead of funding both sides of a zero-sum battle.",
     premise:
-      "If opposed efforts would largely cancel out, a compromise can leave both moral views better served.",
-    commitment: "Matched amounts, a named destination, and a rule for any unmatched funds.",
+      "Even near-opposites can trade if there is some area where they are not diametrically opposed and both see a compromise destination as better than canceling out.",
+    commitment: "Matched amounts, a named compromise destination, and a rule for any unmatched surplus.",
   },
   {
-    type: "Paid action offer",
+    type: "Another type of trade",
     title: "Paying for an action",
     proposition:
-      "One person offers money for another to take up an action, such as vegetarianism, that the payer regards as important.",
+      "Victoria can offer another person a sum of money to become vegetarian.",
     premise:
-      "If the burden is low enough, payment can make the act worth doing for the actor while still looking morally worthwhile to the payer.",
-    commitment: "Clear milestones and a way of checking performance.",
+      "For someone already on the fence, payment can make the act prudentially worthwhile while still looking like a moral improvement to the payer.",
+    commitment: "A fixed payment, a fixed term, and a check on whether the action was taken.",
+  },
+] as const;
+
+const varieties = [
+  {
+    title: "Pure moral trade",
+    text: "Pure cases are those in which both parties view the result as morally superior. The Victoria-Paul and Rebecca-Christopher examples are meant to show that this can happen even when the moral views differ sharply.",
+  },
+  {
+    title: "Mixed moral trade",
+    text: "Ord includes cases where one side&apos;s gain is partly prudential and partly moral. Paying for an action, such as becoming vegetarian, is the clearest example.",
+  },
+  {
+    title: "Edge cases",
+    text: "The paper also notes agent-relative and intrapersonal cases. Different duties, or an ad hoc mixture of prudential and moral motives within one person, can also create room for trade.",
+  },
+] as const;
+
+const trustIssues = [
+  {
+    title: "Insufficient trust",
+    text: "Ord calls insufficient trust the major practical obstacle to the gains from moral trade. The problem is not unique to moral trade, but it is often harder here in practice.",
+  },
+  {
+    title: "Factual trust",
+    text: "One party must trust that the other really does what was promised, especially when the acts continue over time and are not performed in the other person&apos;s presence.",
+  },
+  {
+    title: "Counterfactual trust",
+    text: "Each party must also trust that the other would not have done the act anyway. This is often the harder problem, and contract law helps much less here.",
+  },
+  {
+    title: "Ways to cope",
+    text: "The paper points to friends, occasional checks, escrow, custom, and shorter timescales as practical ways of reducing these trust problems.",
+  },
+] as const;
+
+const practicalCases = [
+  {
+    title: "Votes and legislation",
+    text: "The paper points to vote trading and legislative bargaining as familiar practical cases. These arrangements can allow Pareto superior combinations of policies to be agreed upon.",
+  },
+  {
+    title: "Cancelling opposed donations",
+    text: "Sites such as Nader Trader, VotePair, and Repledge are treated as simple markets for moral trade, matching people who would otherwise spend against one another.",
+  },
+  {
+    title: "Keep first efforts simple",
+    text: "Ord argues that a first effort would probably do better if it kept things simple and only offered one-to-one exchanges before moving toward more complete markets.",
   },
 ] as const;
 
 const faqItems = [
   {
-    question: "Is Moral Trade a discussion forum or social feed?",
+    question: "What is the main practical obstacle?",
     answer:
-      "No. It is for offers, reciprocal terms, and reviewable commitments, not for open-ended discussion.",
+      "Insufficient trust. Ord divides this into factual trust and counterfactual trust, and treats the second as especially hard.",
   },
   {
-    question: "Does Moral Trade claim to resolve deep moral disagreement?",
+    question: "Is moral trade only for consequentialists?",
     answer:
-      "No. It asks whether people with different moral views can still find exchanges that each sees as morally better.",
+      "No. The paper argues that deontological and virtue-ethical views can also have reasons to engage in moral trade, though the gains and constraints may look different.",
   },
   {
-    question: "What keeps this from becoming shallow or manipulative?",
+    question: "Can the gains be very large?",
     answer:
-      "The site stays with offers, terms, counterfactual dependence, and verification.",
+      "Ord argues that the potential gains can be large, especially where opposed charities or costly habits create major inefficiencies, though they are much harder to aggregate than gains from ordinary trade.",
   },
   {
-    question: "Why doesn't trade guarantee a mostly-great future?",
+    question: "Does moral trade guarantee a better world overall?",
     answer:
-      "Because trade can be blocked or undermined by threats, concentrated power, and collective procedures that seal off futures some views value highly.",
+      "No. It guarantees only that the outcome is better according to the views of the parties to the trade. Externalities, objective moral truth, and perverse incentives can still make things worse overall.",
   },
 ] as const;
 
@@ -392,12 +441,12 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         <div className="hero-stage panel">
           <div className="hero-grid hero-grid-editorial">
             <section className="hero-copy" id="top">
-              <p className="eyebrow">People with different moral views</p>
-              <h1>There is another type of trade.</h1>
+              <p className="eyebrow">Introduction</p>
+              <h1>A different way forward for moral disagreement.</h1>
               <p className="hero-text">
-                People with different moral views need not only remain in antagonistic
-                relationships. They may be able to exchange goods or services so that each regards
-                the world as better than it otherwise would have been.
+                Ord&apos;s starting point is that there is a great diversity of moral views.
+                People with different moral views often end up in antagonistic relationships, but
+                they need not only oppose one another. They may be able to trade.
               </p>
               <div className="hero-actions">
                 <Link
@@ -411,44 +460,38 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 </Link>
               </div>
               <ul className="hero-signals" aria-label="Operating standards">
-                <li>Different moral views</li>
-                <li>Mutual moral gain</li>
-                <li>Explicit terms</li>
+                <li>Moral barter</li>
+                <li>Trust problems</li>
+                <li>Incomplete market</li>
               </ul>
               <p className="hero-followup">
-                Review the <Link href="/offers">public offers</Link> and the method below before
-                taking part.
+                Read the examples, the theory, and the trust problems below before reviewing the{" "}
+                <Link href="/offers">public offers</Link>.
               </p>
             </section>
 
             <aside className="hero-panel panel">
-              <p className="eyebrow">What has to be stated</p>
+              <p className="eyebrow">Order of argument</p>
               <div className="flow-card">
                 <div className="flow-step">
                   <span className="flow-number">01</span>
                   <div>
-                    <strong>What is traded</strong>
-                    <p>
-                      The offer should say what each side will do.
-                    </p>
+                    <strong>Examples first</strong>
+                    <p>Start with concrete cases before moving to theory.</p>
                   </div>
                 </div>
                 <div className="flow-step">
                   <span className="flow-number">02</span>
                   <div>
-                    <strong>Would it happen anyway?</strong>
-                    <p>
-                      The trade matters only if it changes what the parties do.
-                    </p>
+                    <strong>Theory next</strong>
+                    <p>Then ask how moral trade fits inside ordinary economic ideas.</p>
                   </div>
                 </div>
                 <div className="flow-step">
                   <span className="flow-number">03</span>
                   <div>
-                    <strong>How is it checked?</strong>
-                    <p>
-                      Verification has to be stated rather than assumed.
-                    </p>
+                    <strong>Trust and practice</strong>
+                    <p>Only then turn to obstacles, applications, and what a market might require.</p>
                   </div>
                 </div>
               </div>
@@ -457,32 +500,32 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
           <div className="hero-proof-strip" aria-label="Credibility signals">
             <article className="proof-card">
-              <p className="proof-label">Trade and compromise can matter</p>
+              <p className="proof-label">A great diversity of moral views</p>
               <p>
-                Forethought treats trade and compromise as &quot;the most likely way&quot; to a
-                mostly-great future under partial convergence, but only under the right conditions.
+                The paper begins from pluralism rather than consensus. Disagreement is the starting
+                condition, not a defect to be removed first.
               </p>
-              <a className="inline-link" href="#methodology">
-                Review the method
+              <a className="inline-link" href="#introduction">
+                Read the introduction
               </a>
             </article>
             <article className="proof-card">
-              <p className="proof-label">Resource-compatible views</p>
+              <p className="proof-label">A different way forward</p>
               <p>
-                Some values compete less than they first appear to. When views can share the same
-                resources, the gains from trade or compromise can be much larger.
+                Instead of only remaining in antagonistic relationships, people with different
+                moral views may sometimes make the world better in both of their views.
               </p>
-              <a className="inline-link" href="#standards">
-                See the standards
+              <a className="inline-link" href="#examples">
+                Review the examples
               </a>
             </article>
             <article className="proof-card">
-              <p className="proof-label">Threats can destroy value</p>
+              <p className="proof-label">Potential gains can be large</p>
               <p>
-                The gains from trade are not automatic. Threats, concentrated power, and badly
-                chosen collective procedures can wipe out much of the value at stake.
+                The paper argues that the gains from moral trade may be very large, but practical
+                obstacles and externalities make the subject difficult.
               </p>
-              <a className="inline-link" href="#transparency">
+              <a className="inline-link" href="#gains">
                 Read the limitations
               </a>
             </article>
@@ -491,14 +534,14 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
       </header>
 
       <main>
-        <section className="section section-white" id="about">
+        <section className="section section-white" id="introduction">
           <div className="section-head">
-            <p className="eyebrow">What Moral Trade is</p>
-            <h2>People with different moral views need not only oppose one another</h2>
+            <p className="eyebrow">Introduction</p>
+            <h2>Moral trade begins from disagreement, not consensus</h2>
             <p>
-              Moral trade begins from disagreement, not from consensus. The question is whether
-              people with different moral views can find exchanges from which both gain, morally,
-              in their own view.
+              The basic question is whether people with different moral views can make exchanges
+              such that the resulting world is better according to both of their moral views than
+              the world that would have resulted if they had acted separately.
             </p>
           </div>
 
@@ -520,111 +563,39 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <article className="panel editorial-card">
               <h3>Moral barter and beyond</h3>
               <p>
-                The paper begins with simple barter and then asks what currency, bargaining,
-                professionalization, and markets for moral trade might add.
+                The paper starts with moral barter, but it does not stop there. It asks what
+                bargaining, currency, professionalization, and markets for moral trade might add.
               </p>
             </article>
-          </div>
-        </section>
-
-        <section className="section section-subtle" id="how-it-works">
-          <div className="section-head">
-            <p className="eyebrow">How Moral Trade works</p>
-            <h2>From moral barter to more organized exchange</h2>
-            <p>
-              The paper starts with direct exchange and then points toward richer forms of moral
-              trade. The related Forethought discussion asks when trade and compromise are
-              resource-compatible enough to preserve most of what different views care about.
-            </p>
-          </div>
-
-          <div className="concept-grid">
-            <article className="panel concept-card">
-              <h3>Personal pledge swaps</h3>
-              <p>
-                Two people each do something the other cares about more, so both can gain from the
-                exchange.
-              </p>
-              <ul className="clean-list">
-                <li>Recurring donations, volunteering, or habit changes</li>
-                <li>Defined time horizon and verification method</li>
-                <li>Useful when each side can motivate the other more effectively than itself</li>
-              </ul>
-            </article>
-
-            <article className="panel concept-card">
-              <h3>Donation offsets</h3>
-              <p>
-                If opposed spending would largely cancel out, both sides can redirect money to a
-                compromise destination instead.
-              </p>
-              <ul className="clean-list">
-                <li>Matched redirection instead of zero-sum spending</li>
-                <li>Named compromise destination and visible unmatched surplus</li>
-                <li>Especially relevant for public-goods style conflicts</li>
-              </ul>
-            </article>
-
-            <article className="panel concept-card">
-              <h3>Paid action offers</h3>
-              <p>
-                One person can pay another to take up an action that matters morally to the payer.
-              </p>
-              <ul className="clean-list">
-                <li>Appropriate for bounded actions with clear milestones</li>
-                <li>Requires extra care around burden, clarity, and verification</li>
-                <li>Most credible when the terms are highly specific</li>
-              </ul>
-            </article>
-          </div>
-        </section>
-
-        <section className="section section-white" id="standards">
-          <div className="section-head">
-            <p className="eyebrow">Reasoning standards</p>
-            <h2>Make the gains, the compatibility, and the threat problem visible</h2>
-            <p>
-              A moral trade is not established just because both sides like the idea. The relevant
-              acts, gains, compatibility conditions, and threat assumptions have to be stated.
-            </p>
-          </div>
-
-          <div className="trust-grid">
-            {standards.map((item) => (
-              <article key={item.title} className="panel trust-card">
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
-              </article>
-            ))}
           </div>
         </section>
 
         <section className="section section-subtle" id="examples">
           <div className="section-head">
-            <p className="eyebrow">Example propositions</p>
-            <h2>Illustrative dialogues and commitments</h2>
+            <p className="eyebrow">Examples</p>
+            <h2>Ord begins with examples before turning to theory</h2>
             <p>
-              These are examples of the kinds of trade the paper discusses. They are not
-              endorsements.
+              The paper&apos;s method is concrete. It first shows examples that look morally odd at
+              first glance, then argues that they are intelligible forms of trade.
             </p>
           </div>
 
           <div className="proposition-grid">
-            {featuredDialogues.map((dialogue) => (
+            {vignettes.map((dialogue) => (
               <article key={dialogue.title} className="panel proposition-card">
                 <p className="detail-kicker">{dialogue.type}</p>
                 <h3>{dialogue.title}</h3>
                 <dl className="proposition-structure">
                   <div>
-                    <dt>Proposition</dt>
+                    <dt>Case</dt>
                     <dd>{dialogue.proposition}</dd>
                   </div>
                   <div>
-                    <dt>Underlying premise</dt>
+                    <dt>Why it works</dt>
                     <dd>{dialogue.premise}</dd>
                   </div>
                   <div>
-                    <dt>What has to be checked</dt>
+                    <dt>Practical form</dt>
                     <dd>{dialogue.commitment}</dd>
                   </div>
                 </dl>
@@ -633,89 +604,155 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           </div>
         </section>
 
-        <section className="section section-white" id="commitments">
+        <section className="section section-white" id="varieties">
           <div className="section-head">
-            <p className="eyebrow">Public commitments and safeguards</p>
-            <h2>A trade should say what each side does and when it counts</h2>
+            <p className="eyebrow">Varieties</p>
+            <h2>The paper distinguishes pure, mixed, and edge cases</h2>
             <p>
-              Ord&apos;s examples work because the acts are concrete enough to compare and, at
-              least in principle, to verify.
+              Moral trade is not one single pattern. Ord distinguishes cleaner cases from mixed
+              ones and notes that some agent-relative or intrapersonal cases sit at the edge.
+            </p>
+          </div>
+
+          <div className="concept-grid">
+            {varieties.map((item) => (
+              <article key={item.title} className="panel concept-card">
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" id="theory">
+          <div className="section-head">
+            <p className="eyebrow">Some economic theory of moral trade</p>
+            <h2>Ord then places moral trade inside ordinary economic ideas</h2>
+            <p>
+              The paper uses familiar economic ideas, but with moral views taking the place that
+              differing preferences usually occupy.
+            </p>
+          </div>
+
+          <div className="trust-grid">
+            {theoryCards.map((item) => (
+              <article key={item.title} className="panel trust-card">
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" id="trust">
+          <div className="section-head">
+            <p className="eyebrow">Trust</p>
+            <h2>The major practical obstacle is insufficient trust</h2>
+            <p>
+              After the theory, the paper turns to the main practical difficulty. The gains may be
+              real, but they are often blocked by factual and counterfactual trust problems.
+            </p>
+          </div>
+
+          <div className="trust-grid">
+            {trustIssues.map((item) => (
+              <article key={item.title} className="panel trust-card">
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" id="cases">
+          <div className="section-head">
+            <p className="eyebrow">Practical cases</p>
+            <h2>Only after trust does the paper turn to applications and markets</h2>
+            <p>
+              Vote trading, redirected donations, and simple matching mechanisms are treated as the
+              nearest practical cases. More complete markets are presented as a later possibility.
+            </p>
+          </div>
+
+          <div className="concept-grid">
+            {practicalCases.map((item) => (
+              <article key={item.title} className="panel concept-card">
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" id="gains">
+          <div className="section-head">
+            <p className="eyebrow">Gains and limitations</p>
+            <h2>The gains may be large, but they are not simple</h2>
+            <p>
+              The paper argues that the potential gains can be large, yet also warns that moral
+              trade does not automatically align with what is best overall.
             </p>
           </div>
 
           <div className="concept-grid">
             <article className="panel concept-card">
-              <h3>Where direct trade is easiest</h3>
-              <ul className="clean-list">
-                <li>Specific habits, donations, volunteer time, and bounded lifestyle changes</li>
-                <li>Transparent reciprocal terms rather than vague moral promises</li>
-                <li>Cases where the parties can still preserve most of what they care about</li>
-              </ul>
+              <h3>Large gains are plausible</h3>
+              <p>
+                When opposed efforts cancel out, or when one person can cheaply motivate what the
+                other values greatly, the gains from trade may be substantial.
+              </p>
             </article>
 
             <article className="panel concept-card">
-              <h3>What is deliberately excluded</h3>
-              <ul className="clean-list">
-                <li>No illegal, deceptive, coercive, or threatening arrangements</li>
-                <li>No election or vote trading</li>
-                <li>No harmful acts performed merely to extract side payments</li>
-              </ul>
+              <h3>Aggregation is difficult</h3>
+              <p>
+                Unlike ordinary trade, the gains cannot be added up by a common currency in any
+                simple way. Much depends on which moral view is correct and on what is left out.
+              </p>
             </article>
 
             <article className="panel concept-card" id="transparency">
-              <h3>What remains difficult</h3>
-              <ul className="clean-list">
-                <li>Preventing threats, hold-up, and other value-destroying bargaining</li>
-                <li>Avoiding concentrated power over collective choices</li>
-                <li>Robust moderation and dispute handling</li>
-                <li>Escrow, audit trails, legal review, and stronger identity checks</li>
-              </ul>
+              <h3>Better for the parties is not always better overall</h3>
+              <p>
+                Externalities, objective morality, and perverse incentives can all drive a wedge
+                between what the parties to a trade prefer and what is best overall.
+              </p>
             </article>
           </div>
         </section>
 
-        <section className="section section-subtle" id="methodology">
+        <section className="section section-subtle" id="sources">
           <div className="section-head">
-            <p className="eyebrow">Methodology and sources</p>
-            <h2>Reference materials and open questions</h2>
+            <p className="eyebrow">Paper structure and sources</p>
+            <h2>The site now follows the paper&apos;s argumentative order</h2>
             <p>
-              The paper is the main reference point. It starts with moral barter and then asks
-              what more organized forms of moral trade might look like. The Forethought essay asks
-              when convergence, trade, and compromise are enough to keep society close to the best
-              futures.
+              The argument runs from examples, to varieties, to theory, to trust, to practical
+              cases, and finally to the size and difficulty of the gains.
             </p>
           </div>
 
           <div className="editorial-grid editorial-grid-wide">
             <article className="panel editorial-card">
-              <h3>How we reason</h3>
+              <h3>How the site is organized</h3>
               <ul className="clean-list">
-                <li>Specify the act on each side</li>
-                <li>State why each side gains, in its own view</li>
-                <li>Ask whether the views are resource-compatible</li>
-                <li>Keep counterfactual dependence explicit</li>
-                <li>Distinguish trade from threats, and the moral claim from the verification claim</li>
+                <li>Introduction and examples first</li>
+                <li>Varieties of moral trade second</li>
+                <li>Economic theory after that</li>
+                <li>Trust problems before applications</li>
+                <li>Practical cases, gains, and objections last</li>
               </ul>
             </article>
 
             <article className="panel editorial-card">
-              <h3>Reference materials</h3>
+              <h3>Primary source</h3>
               <div className="reference-list">
                 <a href="https://www.amirrorclear.net/files/moral-trade.pdf" rel="noreferrer" target="_blank">
                   Toby Ord, "Moral Trade"
                 </a>
-                <a
-                  href="https://www.forethought.org/research/convergence-and-compromise#3-what-if-some-people-aim-at-the-good"
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Forethought, "Convergence and Compromise", section 3
-                </a>
               </div>
               <p className="editorial-note">
-                Forethought calls trade and compromise &quot;the most likely way&quot; forward in
-                many cases, while warning about threats, concentrated power, and badly chosen
-                collective procedures.
+                This site uses the paper as the main structural guide: examples, theory, trust,
+                practical cases, and then the larger question of what fuller markets might add.
               </p>
             </article>
           </div>
@@ -723,11 +760,11 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
         <section className="section section-white exchange-section" id="workspace">
           <div className="section-head">
-            <p className="eyebrow">Worked example</p>
-            <h2>A local example for thinking through a trade</h2>
+            <p className="eyebrow">A first sketch</p>
+            <h2>A simple local sketch of a very incomplete market</h2>
             <p>
-              This local example lets you state the structure of a trade. It is not yet the wider
-              market discussed in the paper.
+              Ord suggests that first efforts would probably do better if they kept things simple.
+              This section does exactly that: one-to-one examples with explicit terms.
             </p>
           </div>
 
@@ -811,11 +848,11 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
         <section className="section section-subtle" id="analysis">
           <div className="section-head">
-            <p className="eyebrow">Gains from trade</p>
-            <h2>Inspect the structure of a possible exchange</h2>
+            <p className="eyebrow">Comparing trades</p>
+            <h2>Inspect a possible exchange from both points of view</h2>
             <p>
-              This view is only a heuristic. It helps compare reciprocal terms and minimum gains;
-              it does not settle moral disagreement.
+              This is still only a heuristic. It helps compare what each side says it would gain
+              relative to the default option.
             </p>
           </div>
 
@@ -835,11 +872,11 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
         <section className="section section-white" id="faq">
           <div className="section-head">
-            <p className="eyebrow">FAQ</p>
-            <h2>Open questions</h2>
+            <p className="eyebrow">Objections and open questions</p>
+            <h2>The paper ends with practical and moral difficulties still in view</h2>
             <p>
-              The paper argues that the gains from moral trade can be large, but major practical
-              questions remain about threats, compromise, and collective choice.
+              The gains may be large, but trust, incentives, and the relation between traded gains
+              and what is actually best remain unresolved.
             </p>
           </div>
 

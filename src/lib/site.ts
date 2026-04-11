@@ -1,10 +1,10 @@
 export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
-    { href: "/#how-it-works", label: "How it works" },
-    { href: "/#standards", label: "Standards" },
+    { href: "/#introduction", label: "Introduction" },
+    { href: "/#theory", label: "Theory" },
+    { href: "/#trust", label: "Trust" },
     { href: "/offers", label: "Offers" },
     { href: "/people", label: "People" },
-    { href: "/#faq", label: "FAQ" },
   ];
 
   if (isAuthenticated) {
@@ -25,19 +25,21 @@ export function getTopbarActions(isAuthenticated = false) {
 
 export const FOOTER_LINK_GROUPS = [
   {
-    title: "Moral Trade",
+    title: "The Paper",
     links: [
-      { href: "/#about", label: "About" },
-      { href: "/#how-it-works", label: "How it works" },
-      { href: "/#commitments", label: "Commitments" },
+      { href: "/#introduction", label: "Introduction" },
+      { href: "/#examples", label: "Examples" },
+      { href: "/#varieties", label: "Varieties" },
     ],
   },
   {
-    title: "Standards",
+    title: "Theory and Practice",
     links: [
-      { href: "/#methodology", label: "Methodology" },
-      { href: "/#standards", label: "Reasoning standards" },
-      { href: "/#transparency", label: "Transparency" },
+      { href: "/#theory", label: "Theory" },
+      { href: "/#trust", label: "Trust" },
+      { href: "/#cases", label: "Practical cases" },
+      { href: "/#gains", label: "Gains and limits" },
+      { href: "/#sources", label: "Sources" },
     ],
   },
   {

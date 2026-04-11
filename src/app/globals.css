@@ -242,9 +242,10 @@ h4 {
 .topbar-links a {
   color: var(--ink-soft);
   padding: 0.35rem 0;
+  font-family: var(--font-body);
   font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 400;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -451,6 +452,8 @@ h3 {
 .button-nav {
   min-height: 3rem;
   padding-inline: 1.05rem;
+  font-family: var(--font-body);
+  font-weight: 400;
 }
 
 .topbar-utility {
@@ -458,8 +461,9 @@ h3 {
   border: 0;
   background: transparent;
   color: var(--ink-soft);
+  font-family: var(--font-body);
   font-size: 0.8rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .topbar-utility:hover,
@@ -1383,6 +1387,43 @@ output {
   max-width: 74ch;
   margin: 0;
   color: var(--ink-muted);
+}
+
+.eyebrow,
+.topbar-links a,
+.topbar-utility,
+.hero-followup a,
+.inline-link,
+.text-button,
+.hero-signals li,
+.button,
+.flow-number,
+.proof-label,
+.proposition-structure dt,
+.reference-list a,
+.panel-note,
+.field > span,
+.check-row span,
+small,
+output,
+.status-banner,
+.route-arrow,
+.badge,
+.badge-secondary,
+.impact-pill,
+.source-pill,
+.score-pill,
+.match-reason,
+.detail-kicker,
+.faq-item summary,
+.sort-tab,
+.profile-stats dt,
+.profile-stats dd,
+.footer-links a,
+.comment-author,
+strong {
+  font-family: var(--font-body);
+  font-weight: 400;
 }
 
 .sr-only {
