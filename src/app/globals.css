@@ -110,7 +110,7 @@ h4 {
 
 .opening-line {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   gap: clamp(0.7rem, 1.2vw, 1.05rem);
 }
 
@@ -129,7 +129,7 @@ h4 {
 .opening-line-definition {
   flex: 1 1 auto;
   min-width: 0;
-  padding-top: clamp(0.65rem, 1.2vw, 1.1rem);
+  padding-top: 0;
 }
 
 .opening-line-definition p {
@@ -345,7 +345,23 @@ h3 {
 .chart-caption,
 .details-content p,
 .detail-block p,
-.match-card p {
+.match-card p,
+.hero-followup,
+.flow-step p,
+.proposition-structure dd,
+.clean-list li,
+.editorial-note,
+.offer-footer,
+.faq-item p,
+.profile-bio,
+.comment-meta,
+.comment-body p,
+.discount-banner p,
+.empty-state,
+label,
+input,
+select,
+textarea {
   font-family: var(--font-body);
   font-weight: 400;
   color: var(--ink-soft);
@@ -1447,10 +1463,6 @@ strong {
 }
 
 @media (max-width: 1280px) {
-  .opening-line {
-    align-items: baseline;
-  }
-
   .opening-line-definition p {
     white-space: normal;
   }
