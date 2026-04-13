@@ -1,5 +1,5 @@
 import type { EvaluatedPair, Offer } from "@/lib/offers";
-import { exactReasons, formatMode, gapReasons } from "@/lib/offers";
+import { exactReasons, formatMode, formatPaymentCadence, gapReasons } from "@/lib/offers";
 
 interface OfferDetailsProps {
   selected: Offer | null;
@@ -47,6 +47,9 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
                     {selected.verification} with a {selected.duration} review period and trust
                     intensity {selected.trustLevel}/5.
                   </p>
+                  {selected.mode === "payment" ? (
+                    <p>{formatPaymentCadence(selected)}</p>
+                  ) : null}
                 </div>
               </div>
 
@@ -108,6 +111,9 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
                       <div className="tag-row">
                         <span>{pair.offer.verification}</span>
                         <span>{pair.offer.duration}</span>
+                        {pair.offer.mode === "payment" ? (
+                          <span>{formatPaymentCadence(pair.offer)}</span>
+                        ) : null}
                       </div>
                       <div className="offer-actions">
                         <button

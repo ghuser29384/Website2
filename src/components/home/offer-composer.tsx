@@ -5,6 +5,7 @@ import {
   COMPROMISE_CAUSE_OPTIONS,
   DURATION_OPTIONS,
   OFFER_MODE_OPTIONS,
+  PAYMENT_INTERVAL_UNIT_OPTIONS,
   type OfferDraft,
   type OfferMode,
   VERIFICATION_OPTIONS,
@@ -216,6 +217,42 @@ export function OfferComposer({
           </select>
         </label>
       </div>
+
+      <div className="field-grid">
+        <label className="field">
+          <span>Payment cadence (payment offers only)</span>
+          <select
+            disabled={!isPayment}
+            name="paymentIntervalUnit"
+            value={draft.paymentIntervalUnit}
+            onChange={(event) => onFieldChange("paymentIntervalUnit", event.currentTarget.value)}
+          >
+            {PAYMENT_INTERVAL_UNIT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
+          <span>Repeat every</span>
+          <input
+            disabled={!isPayment || draft.paymentIntervalUnit === "none"}
+            min={1}
+            name="paymentIntervalValue"
+            type="number"
+            value={draft.paymentIntervalValue ?? 1}
+            onChange={(event) =>
+              onFieldChange("paymentIntervalValue", Number(event.currentTarget.value))
+            }
+          />
+        </label>
+      </div>
+      <small>
+        For paid action offers, use 1 day, 1 month, 1 year, or a custom interval such as 40
+        days.
+      </small>
 
       <label className="field meter-field">
         <span>Verification burden</span>

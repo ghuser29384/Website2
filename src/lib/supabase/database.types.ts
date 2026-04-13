@@ -53,6 +53,8 @@ export interface Database {
           min_counterparty_impact: number;
           verification: string;
           duration: string;
+          payment_interval_value: number | null;
+          payment_interval_unit: string | null;
           trust_level: number;
           notes: string;
           discount_note: string;
@@ -74,6 +76,8 @@ export interface Database {
           min_counterparty_impact: number;
           verification: string;
           duration: string;
+          payment_interval_value?: number | null;
+          payment_interval_unit?: string | null;
           trust_level: number;
           notes?: string;
           discount_note?: string;
@@ -93,6 +97,8 @@ export interface Database {
           min_counterparty_impact?: number;
           verification?: string;
           duration?: string;
+          payment_interval_value?: number | null;
+          payment_interval_unit?: string | null;
           trust_level?: number;
           notes?: string;
           discount_note?: string;

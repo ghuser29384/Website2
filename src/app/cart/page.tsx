@@ -6,7 +6,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
 import { listCartItems, requireViewer } from "@/lib/app-data";
-import { formatMode } from "@/lib/offers";
+import { formatMode, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -121,6 +121,10 @@ export default async function CartPage({ searchParams }: CartPageProps) {
                       <div className="tag-row">
                         <span>Added {new Date(item.addedAt).toLocaleDateString()}</span>
                         <span>{item.offer.verification}</span>
+                        <span>{item.offer.duration}</span>
+                        {item.offer.mode === "payment" ? (
+                          <span>{formatPaymentCadence(item.offer)}</span>
+                        ) : null}
                       </div>
                       <div className="offer-actions">
                         <Link className="text-button" href={`/offers/${item.offer.id}`}>

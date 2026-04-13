@@ -188,6 +188,13 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
   useEffect(() => {
     let animationFrame = 0;
+    const browserWindow = globalThis as unknown as {
+      innerHeight?: number;
+      requestAnimationFrame: (callback: () => void) => number;
+      cancelAnimationFrame: (handle: number) => void;
+      addEventListener: (type: string, listener: () => void, options?: { passive?: boolean }) => void;
+      removeEventListener: (type: string, listener: () => void) => void;
+    };
 
     function updateOpeningProgress() {
       animationFrame = 0;
@@ -196,9 +203,13 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         return;
       }
 
-      const rect = openingSequenceRef.current.getBoundingClientRect();
-      const viewportHeight = window.innerHeight || 1;
-      const totalScrollableDistance = Math.max(openingSequenceRef.current.offsetHeight - viewportHeight, 1);
+      const sequenceElement = openingSequenceRef.current as HTMLDivElement & {
+        getBoundingClientRect: () => { top: number };
+        offsetHeight: number;
+      };
+      const rect = sequenceElement.getBoundingClientRect();
+      const viewportHeight = browserWindow.innerHeight || 1;
+      const totalScrollableDistance = Math.max(sequenceElement.offsetHeight - viewportHeight, 1);
       const distanceScrolled = clamp(-rect.top / totalScrollableDistance);
 
       setOpeningProgress((current) =>
@@ -213,20 +224,20 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
     function requestUpdate() {
       if (!animationFrame) {
-        animationFrame = window.requestAnimationFrame(updateOpeningProgress);
+        animationFrame = browserWindow.requestAnimationFrame(updateOpeningProgress);
       }
     }
 
     requestUpdate();
-    window.addEventListener("scroll", requestUpdate, { passive: true });
-    window.addEventListener("resize", requestUpdate);
+    browserWindow.addEventListener("scroll", requestUpdate, { passive: true });
+    browserWindow.addEventListener("resize", requestUpdate);
 
     return () => {
       if (animationFrame) {
-        window.cancelAnimationFrame(animationFrame);
+        browserWindow.cancelAnimationFrame(animationFrame);
       }
-      window.removeEventListener("scroll", requestUpdate);
-      window.removeEventListener("resize", requestUpdate);
+      browserWindow.removeEventListener("scroll", requestUpdate);
+      browserWindow.removeEventListener("resize", requestUpdate);
     };
   }, []);
 
@@ -286,7 +297,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
     const validationError = validateOfferDraft(draft);
     if (validationError) {
-      window.alert(validationError);
+      setStatusMessage(validationError);
       return;
     }
 
@@ -303,7 +314,12 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
       return;
     }
 
-    if (!window.confirm("Remove all local offers and keep only the seeded examples?")) {
+    const shouldReset =
+      (globalThis as unknown as { confirm?: (message: string) => boolean }).confirm?.(
+        "Remove all local offers and keep only the seeded examples?",
+      ) ?? true;
+
+    if (!shouldReset) {
       return;
     }
 

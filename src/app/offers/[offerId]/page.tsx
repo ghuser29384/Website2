@@ -27,7 +27,7 @@ import {
   listRecommendableOffers,
 } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
-import { formatMode } from "@/lib/offers";
+import { formatMode, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 
@@ -266,6 +266,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                   <p>
                     {offer.verification} | {offer.duration} | trust level {offer.trust_level}/5
                   </p>
+                  {offer.mode === "payment" ? <p>{formatPaymentCadence(offer)}</p> : null}
                 </div>
                 <div>
                   <h3>Current status</h3>

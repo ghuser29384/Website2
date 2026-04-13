@@ -6,7 +6,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffers } from "@/lib/app-data";
 import type { OfferRecord } from "@/lib/app-data";
-import { formatMode } from "@/lib/offers";
+import { formatMode, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -269,6 +269,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     <div className="tag-row">
                       <span>{entry.offer.verification}</span>
                       <span>{entry.offer.duration}</span>
+                      {entry.offer.mode === "payment" ? (
+                        <span>{formatPaymentCadence(entry.offer)}</span>
+                      ) : null}
                     </div>
                     <div className="offer-actions">
                       <Link className="text-button" href={`/offers/${entry.offer.id}`}>
@@ -348,6 +351,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     <div className="tag-row">
                       <span>{offer.verification}</span>
                       <span>{offer.duration}</span>
+                      {offer.mode === "payment" ? (
+                        <span>{formatPaymentCadence(offer)}</span>
+                      ) : null}
                     </div>
                     <div className="offer-actions">
                       <Link className="text-button" href={`/offers/${offer.id}`}>

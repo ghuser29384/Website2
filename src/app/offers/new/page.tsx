@@ -9,6 +9,7 @@ import {
   COMPROMISE_CAUSE_OPTIONS,
   DURATION_OPTIONS,
   OFFER_MODE_OPTIONS,
+  PAYMENT_INTERVAL_UNIT_OPTIONS,
   VERIFICATION_OPTIONS,
 } from "@/lib/offers";
 import { getFormMessage } from "@/lib/form-state";
@@ -228,6 +229,33 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                     </select>
                   </label>
                 </div>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Payment cadence (payment offers only)</span>
+                    <select defaultValue="none" name="payment_interval_unit">
+                      {PAYMENT_INTERVAL_UNIT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="field">
+                    <span>Repeat every</span>
+                    <input
+                      defaultValue={1}
+                      min={1}
+                      name="payment_interval_value"
+                      type="number"
+                    />
+                  </label>
+                </div>
+                <p className="panel-note">
+                  For paid action offers, use 1 day, 1 month, 1 year, or a custom interval such
+                  as 40 days.
+                </p>
 
                 <label className="field">
                   <span>Trust intensity</span>

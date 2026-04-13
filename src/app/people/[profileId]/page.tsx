@@ -18,7 +18,7 @@ import {
   getViewer,
   listRecommendableOffers,
 } from "@/lib/app-data";
-import { formatMode } from "@/lib/offers";
+import { formatMode, formatPaymentCadence } from "@/lib/offers";
 import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -247,6 +247,9 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
                     <div className="tag-row">
                       <span>{offer.verification}</span>
                       <span>{offer.duration}</span>
+                      {offer.mode === "payment" ? (
+                        <span>{formatPaymentCadence(offer)}</span>
+                      ) : null}
                     </div>
                     <div className="offer-actions">
                       <Link className="text-button" href={`/offers/${offer.id}`}>

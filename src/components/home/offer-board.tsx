@@ -1,5 +1,5 @@
 import type { Offer } from "@/lib/offers";
-import { evaluatePair, formatMode, shorten } from "@/lib/offers";
+import { evaluatePair, formatMode, formatPaymentCadence, shorten } from "@/lib/offers";
 
 interface OfferBoardProps {
   offers: Offer[];
@@ -60,6 +60,7 @@ export function OfferBoard({
                   <span className="impact-pill">{offer.minCounterpartyImpact}+/10 needed</span>
                   <span>{offer.verification}</span>
                   <span>{offer.duration}</span>
+                  {offer.mode === "payment" ? <span>{formatPaymentCadence(offer)}</span> : null}
                 </div>
                 <div className="offer-actions">
                   <button

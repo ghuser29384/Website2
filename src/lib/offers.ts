@@ -1,4 +1,5 @@
 export type OfferMode = "pledge" | "offset" | "payment";
+export type PaymentIntervalUnit = "none" | "day" | "month" | "year";
 export type FilterMode = OfferMode | "all";
 export type SortOrder = "match" | "trust" | "recent";
 
@@ -15,6 +16,8 @@ export interface Offer {
   minCounterpartyImpact: number;
   verification: string;
   duration: string;
+  paymentIntervalValue: number | null;
+  paymentIntervalUnit: PaymentIntervalUnit;
   trustLevel: number;
   notes: string;
   source: string;
@@ -33,6 +36,8 @@ export interface OfferDraft {
   minCounterpartyImpact: number;
   verification: string;
   duration: string;
+  paymentIntervalValue: number | null;
+  paymentIntervalUnit: PaymentIntervalUnit;
   trustLevel: number;
   notes: string;
   counterfactualHonesty: boolean;
@@ -109,6 +114,16 @@ export const DURATION_OPTIONS = [
   "Open-ended",
 ] as const;
 
+export const PAYMENT_INTERVAL_UNIT_OPTIONS: Array<{
+  value: PaymentIntervalUnit;
+  label: string;
+}> = [
+  { value: "none", label: "One-time or unspecified" },
+  { value: "day", label: "Days" },
+  { value: "month", label: "Months" },
+  { value: "year", label: "Years" },
+] as const;
+
 export const SORT_OPTIONS: Array<{ value: SortOrder; label: string }> = [
   { value: "match", label: "Best match first" },
   { value: "trust", label: "Trust first" },
@@ -134,6 +149,8 @@ export function createDefaultOfferDraft(): OfferDraft {
     minCounterpartyImpact: 6,
     verification: "Annual receipts",
     duration: "3 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
     trustLevel: 3,
     notes: "",
     counterfactualHonesty: false,
@@ -155,6 +172,8 @@ export const SEED_OFFERS: Offer[] = [
     minCounterpartyImpact: 8,
     verification: "Annual receipts",
     duration: "12 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
     trustLevel: 3,
     notes: "I already care about poverty, but a reciprocal trade would let me buy much more animal welfare than I could create alone.",
     source: "Seeded example",
@@ -173,6 +192,8 @@ export const SEED_OFFERS: Offer[] = [
     minCounterpartyImpact: 7,
     verification: "Annual receipts",
     duration: "12 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
     trustLevel: 3,
     notes: "The diet shift is worth it if it reliably increases poverty giving that I would not otherwise cause.",
     source: "Seeded example",
@@ -191,6 +212,8 @@ export const SEED_OFFERS: Offer[] = [
     minCounterpartyImpact: 6,
     verification: "Public pledge",
     duration: "6 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
     trustLevel: 2,
     notes: "I want a mixed trade that links a climate habit to a public-health action with light verification.",
     source: "Seeded example",
@@ -209,6 +232,8 @@ export const SEED_OFFERS: Offer[] = [
     minCounterpartyImpact: 6,
     verification: "Public pledge",
     duration: "6 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
     trustLevel: 2,
     notes: "This is a reciprocal mixed trade, not a shared moral consensus.",
     source: "Seeded example",
@@ -227,6 +252,8 @@ export const SEED_OFFERS: Offer[] = [
     minCounterpartyImpact: 7,
     verification: "Escrow-backed",
     duration: "3 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
     trustLevel: 4,
     notes: "If matched, this beats spending money on a zero-sum advocacy fight.",
     source: "Seeded example",
@@ -245,6 +272,8 @@ export const SEED_OFFERS: Offer[] = [
     minCounterpartyImpact: 7,
     verification: "Escrow-backed",
     duration: "3 months",
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
     trustLevel: 4,
     notes: "I still care most about policy, but matched redirection dominates cancelling out.",
     source: "Seeded example",
@@ -263,6 +292,8 @@ export const SEED_OFFERS: Offer[] = [
     minCounterpartyImpact: 6,
     verification: "Escrow-backed",
     duration: "12 months",
+    paymentIntervalValue: 1,
+    paymentIntervalUnit: "month",
     trustLevel: 4,
     notes: "For me, paying for a real dietary shift is worth the money if it changes behavior that would not have happened otherwise.",
     source: "Seeded example",
@@ -281,6 +312,8 @@ export const SEED_OFFERS: Offer[] = [
     minCounterpartyImpact: 6,
     verification: "Escrow-backed",
     duration: "12 months",
+    paymentIntervalValue: 1,
+    paymentIntervalUnit: "month",
     trustLevel: 4,
     notes: "I am already somewhat open to the diet, so a credible payment offer makes the switch prudentially worthwhile.",
     source: "Seeded example",
@@ -301,6 +334,37 @@ export function formatMode(mode: OfferMode) {
     default:
       return "Personal pledge swap";
   }
+}
+
+function pluralizeInterval(unit: Exclude<PaymentIntervalUnit, "none">, value: number) {
+  const base = unit === "day" ? "day" : unit === "month" ? "month" : "year";
+  return value === 1 ? base : `${base}s`;
+}
+
+export function formatPaymentCadence(offer: {
+  mode: OfferMode | string;
+  paymentIntervalValue?: number | null;
+  paymentIntervalUnit?: PaymentIntervalUnit | string | null;
+  payment_interval_value?: number | null;
+  payment_interval_unit?: PaymentIntervalUnit | string | null;
+}) {
+  if (offer.mode !== "payment") {
+    return null;
+  }
+
+  const rawIntervalUnit = offer.paymentIntervalUnit ?? offer.payment_interval_unit ?? "none";
+  const intervalValue = offer.paymentIntervalValue ?? offer.payment_interval_value ?? null;
+
+  const intervalUnit =
+    rawIntervalUnit === "day" || rawIntervalUnit === "month" || rawIntervalUnit === "year"
+      ? rawIntervalUnit
+      : "none";
+
+  if (!intervalUnit || intervalUnit === "none" || !intervalValue) {
+    return "One-time or unspecified payment";
+  }
+
+  return `Paid every ${intervalValue} ${pluralizeInterval(intervalUnit, intervalValue)}`;
 }
 
 export function filterOffers(offers: Offer[], filters: OfferFilters) {
@@ -472,6 +536,11 @@ export function createOfferFromDraft(draft: OfferDraft): Offer {
     minCounterpartyImpact: draft.minCounterpartyImpact,
     verification: draft.verification,
     duration: draft.duration,
+    paymentIntervalValue:
+      draft.mode === "payment" && draft.paymentIntervalUnit !== "none"
+        ? draft.paymentIntervalValue
+        : null,
+    paymentIntervalUnit: draft.mode === "payment" ? draft.paymentIntervalUnit : "none",
     trustLevel: draft.trustLevel,
     notes: draft.notes.trim(),
     source: "Your local offer",
@@ -487,6 +556,8 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
       compromiseCause: draft.compromiseCause === "Not needed" ? "Global poverty" : draft.compromiseCause,
       verification: "Escrow-backed",
       duration: "3 months",
+      paymentIntervalValue: null,
+      paymentIntervalUnit: "none",
     };
   }
 
@@ -501,6 +572,9 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
       compromiseCause: "Not needed",
       verification: "Escrow-backed",
       duration: "12 months",
+      paymentIntervalValue: draft.paymentIntervalValue ?? 1,
+      paymentIntervalUnit:
+        draft.paymentIntervalUnit === "none" ? "month" : draft.paymentIntervalUnit,
     };
   }
 
@@ -509,23 +583,33 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
     mode,
     compromiseCause: "Not needed",
     verification: draft.verification === "Escrow-backed" ? "Annual receipts" : draft.verification,
+    paymentIntervalValue: null,
+    paymentIntervalUnit: "none",
   };
 }
 
 export function loadLocalOffers() {
-  if (typeof window === "undefined") {
+  const browserStorage = (globalThis as unknown as {
+    localStorage?: {
+      getItem: (key: string) => string | null;
+      setItem: (key: string, value: string) => void;
+      removeItem: (key: string) => void;
+    };
+  }).localStorage;
+
+  if (!browserStorage) {
     return [];
   }
 
   try {
-    let raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+    let raw = browserStorage.getItem(LOCAL_STORAGE_KEY);
 
     if (!raw) {
-      raw = window.localStorage.getItem(LEGACY_LOCAL_STORAGE_KEY);
+      raw = browserStorage.getItem(LEGACY_LOCAL_STORAGE_KEY);
 
       if (raw) {
-        window.localStorage.setItem(LOCAL_STORAGE_KEY, raw);
-        window.localStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);
+        browserStorage.setItem(LOCAL_STORAGE_KEY, raw);
+        browserStorage.removeItem(LEGACY_LOCAL_STORAGE_KEY);
       }
     }
 
@@ -541,11 +625,17 @@ export function loadLocalOffers() {
 }
 
 export function persistLocalOffers(offers: Offer[]) {
-  if (typeof window === "undefined") {
+  const browserStorage = (globalThis as unknown as {
+    localStorage?: {
+      setItem: (key: string, value: string) => void;
+    };
+  }).localStorage;
+
+  if (!browserStorage) {
     return;
   }
 
-  window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(offers));
+  browserStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(offers));
 }
 
 export function clamp(value: number, min: number, max: number) {

@@ -58,6 +58,8 @@ create table if not exists public.offers (
   min_counterparty_impact smallint not null check (min_counterparty_impact between 1 and 10),
   verification text not null,
   duration text not null,
+  payment_interval_value integer,
+  payment_interval_unit text,
   trust_level smallint not null check (trust_level between 1 and 5),
   notes text not null default '',
   discount_note text not null default '',
@@ -65,6 +67,57 @@ create table if not exists public.offers (
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.offers add column if not exists payment_interval_value integer;
+alter table public.offers add column if not exists payment_interval_unit text;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'offers_payment_interval_value_check'
+  ) then
+    alter table public.offers
+      add constraint offers_payment_interval_value_check
+      check (payment_interval_value is null or payment_interval_value > 0);
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'offers_payment_interval_unit_check'
+  ) then
+    alter table public.offers
+      add constraint offers_payment_interval_unit_check
+      check (
+        payment_interval_unit is null
+        or payment_interval_unit in ('day', 'month', 'year')
+      );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'offers_payment_interval_pair_check'
+  ) then
+    alter table public.offers
+      add constraint offers_payment_interval_pair_check
+      check (
+        (payment_interval_value is null and payment_interval_unit is null)
+        or (payment_interval_value is not null and payment_interval_unit is not null)
+      );
+  end if;
+end
+$$;
 
 create table if not exists public.interests (
   id uuid primary key default gen_random_uuid(),

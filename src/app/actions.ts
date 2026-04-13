@@ -52,6 +52,14 @@ function normalizeOfferMode(value: string) {
   return "pledge";
 }
 
+function normalizePaymentIntervalUnit(value: string) {
+  if (value === "day" || value === "month" || value === "year") {
+    return value;
+  }
+
+  return null;
+}
+
 function readBoundedInt(
   formData: FormData,
   key: string,
@@ -185,6 +193,17 @@ export async function createOfferAction(formData: FormData) {
   const compromiseCause = readRequired(formData, "compromise_cause") || "Not needed";
   const verification = readRequired(formData, "verification");
   const duration = readRequired(formData, "duration");
+  const paymentIntervalUnit = normalizePaymentIntervalUnit(
+    readOptional(formData, "payment_interval_unit"),
+  );
+  const paymentIntervalValue =
+    normalizedMode === "payment" && paymentIntervalUnit
+      ? readBoundedInt(formData, "payment_interval_value", {
+          fallback: 1,
+          min: 1,
+          max: 3650,
+        })
+      : null;
   const notes = readRequired(formData, "notes");
   const offerImpact = readBoundedInt(formData, "offer_impact", {
     fallback: 7,
@@ -224,6 +243,8 @@ export async function createOfferAction(formData: FormData) {
       min_counterparty_impact: minCounterpartyImpact,
       verification,
       duration,
+      payment_interval_unit: normalizedMode === "payment" ? paymentIntervalUnit : null,
+      payment_interval_value: paymentIntervalValue,
       trust_level: trustLevel,
       notes,
       status: "open",
