@@ -110,7 +110,7 @@ h4 {
 
 .opening-line {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: clamp(0.7rem, 1.2vw, 1.05rem);
 }
 
