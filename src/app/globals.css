@@ -23,8 +23,6 @@
   --radius-md: 8px;
   --radius-sm: 6px;
   --content-width: 1180px;
-  --font-heading: var(--font-heading-loaded);
-  --font-body: var(--font-body-loaded);
 }
 
 * {
@@ -40,7 +38,7 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-body);
+  font-family: var(--font-body-loaded);
   font-weight: 400;
   line-height: 1.68;
   text-rendering: optimizeLegibility;
@@ -73,7 +71,7 @@ h1,
 h2,
 h3,
 h4 {
-  font-family: var(--font-heading);
+  font-family: var(--font-heading-loaded);
   font-weight: 500;
 }
 
@@ -118,7 +116,7 @@ h4 {
   display: flex;
   align-items: flex-start;
   flex: 0 0 auto;
-  font-family: var(--font-heading);
+  font-family: var(--font-heading-loaded);
   font-size: clamp(1.7rem, 3.6vw, 2.95rem);
   font-weight: 500;
   line-height: 0.92;
@@ -135,7 +133,7 @@ h4 {
 .opening-line-definition p {
   margin: 0;
   max-width: none;
-  font-family: var(--font-body);
+  font-family: var(--font-body-loaded);
   font-weight: 400;
   letter-spacing: 0;
   color: var(--ink);
@@ -239,7 +237,7 @@ h4 {
 .topbar-links a {
   color: var(--ink-soft);
   padding: 0.35rem 0;
-  font-family: var(--font-body);
+  font-family: var(--font-body-loaded);
   font-size: 0.74rem;
   font-weight: 400;
   letter-spacing: 0.05em;
@@ -308,7 +306,7 @@ h4 {
   margin: 0 0 0.8rem;
   color: var(--accent-deep);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
@@ -362,7 +360,7 @@ label,
 input,
 select,
 textarea {
-  font-family: var(--font-body);
+  font-family: var(--font-body-loaded);
   font-weight: 400;
   color: var(--ink-soft);
 }
@@ -391,7 +389,7 @@ textarea {
 .inline-link,
 .text-button {
   color: var(--accent-deep);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .hero-signals {
@@ -413,7 +411,7 @@ textarea {
   background: var(--surface-muted);
   color: var(--ink-soft);
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .hero-followup a:hover,
@@ -430,7 +428,7 @@ textarea {
   padding: 0.82rem 1.28rem;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.01em;
   transition:
     background-color 140ms ease,
@@ -467,7 +465,7 @@ textarea {
 .button-nav {
   min-height: 3rem;
   padding-inline: 1.05rem;
-  font-family: var(--font-body);
+  font-family: var(--font-body-loaded);
   font-weight: 400;
 }
 
@@ -476,7 +474,7 @@ textarea {
   border: 0;
   background: transparent;
   color: var(--ink-soft);
-  font-family: var(--font-body);
+  font-family: var(--font-body-loaded);
   font-size: 0.8rem;
   font-weight: 400;
 }
@@ -534,7 +532,7 @@ textarea {
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent-deep);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .hero-proof-strip {
@@ -554,7 +552,7 @@ textarea {
   margin: 0;
   color: var(--ink);
   font-size: 0.95rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 main {
@@ -646,7 +644,7 @@ main {
 .proposition-structure dt {
   color: var(--ink-muted);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -691,7 +689,7 @@ main {
   align-items: center;
   gap: 0.5rem;
   color: var(--accent-deep);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .editorial-note {
@@ -749,7 +747,7 @@ main {
 
 .field > span,
 .check-row span {
-  font-weight: 700;
+  font-weight: 400;
   color: var(--ink);
 }
 
@@ -830,7 +828,7 @@ output {
   background: var(--accent-soft);
   color: var(--accent-deep);
   text-align: center;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .check-row {
@@ -881,7 +879,7 @@ output {
   padding: 0.95rem 1rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-md);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .status-banner-error {
@@ -1046,7 +1044,7 @@ output {
 .route-arrow {
   color: var(--accent-deep);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -1066,7 +1064,7 @@ output {
   background: var(--surface-muted);
   color: var(--ink-soft);
   font-size: 0.77rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.03em;
 }
 
@@ -1093,7 +1091,7 @@ output {
   margin: 0 0 0.45rem;
   color: var(--accent-deep);
   font-size: 0.74rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -1149,7 +1147,7 @@ output {
 .faq-item summary {
   cursor: pointer;
   list-style: none;
-  font-weight: 700;
+  font-weight: 400;
   color: var(--ink);
 }
 
@@ -1194,7 +1192,7 @@ output {
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--ink-soft);
-  font-weight: 700;
+  font-weight: 400;
   font-size: 0.79rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1254,7 +1252,7 @@ output {
 .profile-stats dt {
   color: var(--ink-muted);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1263,7 +1261,7 @@ output {
   margin: 0.35rem 0 0;
   color: var(--ink);
   font-size: 1.15rem;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .profile-edit-form,
@@ -1313,7 +1311,7 @@ output {
 }
 
 .comment-author {
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .comment-meta {
@@ -1382,7 +1380,7 @@ output {
 
 .footer-links a {
   color: var(--ink-soft);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .footer-links a:hover,
@@ -1437,7 +1435,7 @@ output,
 .footer-links a,
 .comment-author,
 strong {
-  font-family: var(--font-body);
+  font-family: var(--font-body-loaded);
   font-weight: 400;
 }
 
