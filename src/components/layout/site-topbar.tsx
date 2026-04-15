@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTransition } from "react";
 
 import { createClient } from "@/lib/supabase/browser";
@@ -22,16 +22,20 @@ interface SiteTopbarProps {
 }
 
 function NavItem({ href, label, className }: NavLinkItem & { className?: string }) {
+  const pathname = usePathname();
+  const isHashLink = href.startsWith("#");
+  const isActive = !isHashLink && (pathname === href || (href !== "/" && pathname?.startsWith(`${href}/`)));
+
   if (href.startsWith("#")) {
     return (
-      <a className={className} href={href}>
+      <a className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
         {label}
       </a>
     );
   }
 
   return (
-    <Link className={className} href={href}>
+    <Link className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
       {label}
     </Link>
   );

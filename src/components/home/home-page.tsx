@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { MoralTradeAnimations } from "@/components/home/moral-trade-animations";
 import { OfferComposer } from "@/components/home/offer-composer";
 import { OfferBoard } from "@/components/home/offer-board";
 import { OfferDetails } from "@/components/home/offer-details";
@@ -532,6 +533,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           </div>
         </section>
 
+        <MoralTradeAnimations />
+
         <section className="section section-subtle" id="how-it-works">
           <div className="section-head">
             <p className="eyebrow">How Moral Trade works</p>
@@ -760,7 +763,9 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                   <span>Trade type</span>
                   <select
                     value={filters.mode}
-                    onChange={(event) => handleFilterChange("mode", event.currentTarget.value)}
+                    onChange={(event) =>
+                      handleFilterChange("mode", (event.target as HTMLSelectElement).value)
+                    }
                   >
                     {FILTER_MODE_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -774,7 +779,9 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                   <span>Cause area</span>
                   <select
                     value={filters.cause}
-                    onChange={(event) => handleFilterChange("cause", event.currentTarget.value)}
+                    onChange={(event) =>
+                      handleFilterChange("cause", (event.target as HTMLSelectElement).value)
+                    }
                   >
                     <option value="all">All causes</option>
                     {CAUSE_OPTIONS.map((cause) => (
@@ -790,7 +797,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                   <select
                     value={filters.sortOrder}
                     onChange={(event) =>
-                      handleFilterChange("sortOrder", event.currentTarget.value)
+                      handleFilterChange("sortOrder", (event.target as HTMLSelectElement).value)
                     }
                   >
                     {SORT_OPTIONS.map((option) => (
