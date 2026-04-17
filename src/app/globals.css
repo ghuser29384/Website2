@@ -108,7 +108,7 @@ h4 {
 
 .opening-line {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: clamp(0.7rem, 1.2vw, 1.05rem);
 }
 
@@ -125,6 +125,8 @@ h4 {
 }
 
 .opening-line-definition {
+  display: flex;
+  align-items: center;
   flex: 1 1 auto;
   min-width: 0;
   padding-top: 0;
