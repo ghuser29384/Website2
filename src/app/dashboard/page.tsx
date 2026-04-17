@@ -42,7 +42,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Member dashboard</p>
-            <h1>Review your public record and active commitments.</h1>
+            <h1>Review your recent public record and active commitments.</h1>
             <p className="hero-text">
               {viewer ? (
                 <>
@@ -83,7 +83,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div>
                   <strong>Offers and interest</strong>
                   <p>
-                    {dashboardData?.offers.length ?? 0} offer(s) |{" "}
+                    Showing recent items: {dashboardData?.offers.length ?? 0} offer(s) |{" "}
                     {dashboardData?.incomingInterests.length ?? 0} incoming response(s) |{" "}
                     {dashboardData?.interests.length ?? 0} outgoing response(s)
                   </p>
@@ -94,7 +94,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div>
                   <strong>Agreements and cart</strong>
                   <p>
-                    {dashboardData?.agreements.length ?? 0} agreement(s) | {dashboardData?.cartItems.length ?? 0} cart item(s)
+                    Showing recent items: {dashboardData?.agreements.length ?? 0} agreement(s) |{" "}
+                    {dashboardData?.cartItems.length ?? 0} cart item(s)
                   </p>
                 </div>
               </div>
@@ -131,8 +132,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Your offers</p>
-            <h2>Published commitments</h2>
-            <p>These offers are tied to your public profile and can be rated once agreements complete.</p>
+            <h2>Recent published commitments</h2>
+            <p>These recent offers are tied to your public profile and can be rated once agreements complete.</p>
           </div>
 
           <div className="data-grid">
@@ -184,7 +185,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <section className="section section-subtle">
           <div className="section-head">
             <p className="eyebrow">Incoming responses</p>
-            <h2>Responses to your offers</h2>
+            <h2>Recent responses to your offers</h2>
             <p>
               These are the responses submitted on your offers, including signed-in members and
               people who chose to participate without creating an account first.
@@ -267,8 +268,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <section className="section section-subtle">
           <div className="section-head">
             <p className="eyebrow">Your interests</p>
-            <h2>Responses you lodged</h2>
-            <p>Each response remains tied to a live offer and a public counterparty record.</p>
+            <h2>Recent responses you lodged</h2>
+            <p>Each recent response remains tied to a live offer and a public counterparty record.</p>
           </div>
 
           <div className="data-grid">

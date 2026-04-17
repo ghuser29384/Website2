@@ -5,7 +5,7 @@ import { toggleFollowAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
-import { getViewer, listPublicProfiles, type PeopleSort } from "@/lib/app-data";
+import { getViewer, listPublicProfilesPage, PEOPLE_PAGE_SIZE, type PeopleSort } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -45,6 +45,21 @@ function normalizeSort(value: string | undefined): PeopleSort {
   return "rating";
 }
 
+function parsePage(value: string | string[] | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const page = Number.parseInt(rawValue ?? "1", 10);
+
+  return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
+function buildPeopleHref(sort: PeopleSort, page: number) {
+  if (sort === "rating" && page === 1) {
+    return "/people";
+  }
+
+  return page === 1 ? `/people?sort=${sort}` : `/people?sort=${sort}&page=${page}`;
+}
+
 export default async function PeoplePage({ searchParams }: PeoplePageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
@@ -54,14 +69,22 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
       ? resolvedSearchParams.sort[0]
       : resolvedSearchParams.sort,
   );
-  const profiles = hasSupabaseEnv()
-    ? await listPublicProfiles(sort, viewer?.authUser.id)
-    : [];
+  const page = parsePage(resolvedSearchParams.page);
+  const profilesPage = hasSupabaseEnv()
+    ? await listPublicProfilesPage(sort, page, PEOPLE_PAGE_SIZE, viewer?.authUser.id)
+    : { items: [], page, pageSize: PEOPLE_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
+  const profiles = profilesPage.items;
   const peopleStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: "Moral Trade people directory",
-    url: getAbsoluteUrl(`/people${sort === "rating" ? "" : `?sort=${sort}`}`),
+    url: getAbsoluteUrl(
+      `/people${
+        sort === "rating" && page === 1
+          ? ""
+          : `?sort=${sort}${page === 1 ? "" : `&page=${page}`}`
+      }`,
+    ),
     mainEntity: {
       "@type": "ItemList",
       itemListElement: profiles.slice(0, 24).map((profile, index) => ({
@@ -149,7 +172,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             <h2>Browse all visible members</h2>
             <p>
               Sorting emphasizes public record signals rather than trending or activity-ranking
-              mechanics.
+              mechanics, and the directory is paged so it remains usable at much larger scale.
             </p>
           </div>
 
@@ -158,7 +181,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               <Link
                 key={option.value}
                 className={`sort-tab ${sort === option.value ? "is-active" : ""}`}
-                href={`/people?sort=${option.value}`}
+                href={buildPeopleHref(option.value, 1)}
               >
                 {option.label}
               </Link>
@@ -235,6 +258,24 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               </div>
             )}
           </div>
+
+          {profilesPage.hasPreviousPage || profilesPage.hasNextPage ? (
+            <div className="offer-actions">
+              {profilesPage.hasPreviousPage ? (
+                <Link className="button button-secondary" href={buildPeopleHref(sort, profilesPage.page - 1)}>
+                  Previous page
+                </Link>
+              ) : (
+                <span />
+              )}
+
+              {profilesPage.hasNextPage ? (
+                <Link className="button button-secondary" href={buildPeopleHref(sort, profilesPage.page + 1)}>
+                  Next page
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
         </section>
       </main>
 

@@ -20,6 +20,9 @@ type InterestStatus = Database["public"]["Enums"]["interest_status"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export type PeopleSort = "rating" | "followers" | "karma" | "comments";
+export const OFFERS_PAGE_SIZE = 24;
+export const PEOPLE_PAGE_SIZE = 24;
+export const DASHBOARD_PAGE_SIZE = 50;
 
 interface LoggedErrorLike {
   code?: string | null;
@@ -108,6 +111,14 @@ export interface CartItemRecord {
   offer: OfferRecord | null;
 }
 
+export interface PaginatedResult<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
 export interface DashboardDataResult {
   offers: OfferRecord[];
   incomingInterests: IncomingResponseRecord[];
@@ -150,18 +161,6 @@ function logSupabaseError(
   });
 }
 
-function incrementCount(map: Map<string, number>, key: string, by = 1) {
-  map.set(key, (map.get(key) ?? 0) + by);
-}
-
-function average(values: number[]) {
-  if (!values.length) {
-    return null;
-  }
-
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
 function buildFallbackProfile(user: User, profile?: Partial<ProfileRow> | null) {
   const timestamp = new Date().toISOString();
 
@@ -177,6 +176,13 @@ function buildFallbackProfile(user: User, profile?: Partial<ProfileRow> | null) 
     city: profile?.city ?? null,
     region: profile?.region ?? null,
     bio: profile?.bio ?? "",
+    follower_count: profile?.follower_count ?? 0,
+    following_count: profile?.following_count ?? 0,
+    karma: profile?.karma ?? 0,
+    comment_count: profile?.comment_count ?? 0,
+    rating_avg: profile?.rating_avg ?? null,
+    rating_count: profile?.rating_count ?? 0,
+    offer_count: profile?.offer_count ?? 0,
     created_at: profile?.created_at ?? timestamp,
   } satisfies ProfileRow;
 }
@@ -200,39 +206,26 @@ function getGuestInterestDisplayName(guestInterest: Pick<GuestInterestRow, "disp
   return emailPrefix || "Guest respondent";
 }
 
-function sortPublicProfiles(profiles: PublicProfileSummary[], sort: PeopleSort) {
-  return [...profiles].sort((left, right) => {
-    if (sort === "followers") {
-      if (right.followerCount !== left.followerCount) {
-        return right.followerCount - left.followerCount;
-      }
-    } else if (sort === "karma") {
-      if (right.karma !== left.karma) {
-        return right.karma - left.karma;
-      }
-    } else if (sort === "comments") {
-      if (right.commentCount !== left.commentCount) {
-        return right.commentCount - left.commentCount;
-      }
-    } else {
-      const leftRating = left.rating ?? -1;
-      const rightRating = right.rating ?? -1;
+function normalizePage(page?: number) {
+  if (!page || !Number.isFinite(page) || page < 1) {
+    return 1;
+  }
 
-      if (rightRating !== leftRating) {
-        return rightRating - leftRating;
-      }
+  return Math.floor(page);
+}
 
-      if (right.ratingCount !== left.ratingCount) {
-        return right.ratingCount - left.ratingCount;
-      }
-    }
+function buildPaginatedResult<T>(items: T[], page: number, pageSize: number): PaginatedResult<T> {
+  return {
+    items: items.slice(0, pageSize),
+    page,
+    pageSize,
+    hasNextPage: items.length > pageSize,
+    hasPreviousPage: page > 1,
+  };
+}
 
-    if (right.offerCount !== left.offerCount) {
-      return right.offerCount - left.offerCount;
-    }
-
-    return left.resolvedName.localeCompare(right.resolvedName);
-  });
+function incrementCount(map: Map<string, number>, key: string, by = 1) {
+  map.set(key, (map.get(key) ?? 0) + by);
 }
 
 async function ensureUserProfile(
@@ -318,133 +311,58 @@ async function ensureUserProfile(
 }
 
 async function getProfileSummaryMap(
-  viewerId?: string | null,
-  profileIds?: string[],
+  viewerId: string | null | undefined,
+  profileIds: string[],
 ): Promise<Map<string, PublicProfileSummary>> {
   if (!hasSupabaseEnv()) {
     return new Map();
   }
 
-  const uniqueProfileIds = profileIds ? [...new Set(profileIds)] : null;
-  if (uniqueProfileIds && !uniqueProfileIds.length) {
+  const uniqueProfileIds = [...new Set(profileIds)];
+  if (!uniqueProfileIds.length) {
     return new Map();
   }
 
   const supabase = await createClient();
-  const profilesQuery = uniqueProfileIds?.length
-    ? supabase.from("profiles").select("*").in("id", uniqueProfileIds)
-    : supabase.from("profiles").select("*");
-
-  const [{ data: profiles, error: profilesError }, { data: follows, error: followsError }, { data: comments, error: commentsError }, { data: votes, error: votesError }, { data: ratings, error: ratingsError }, { data: offers, error: offersError }] =
-    await Promise.all([
-      profilesQuery,
-      supabase.from("user_follows").select("*"),
-      supabase.from("offer_comments").select("*"),
-      supabase.from("comment_votes").select("*"),
-      supabase.from("agreement_ratings").select("*"),
-      supabase.from("offers").select("*").eq("status", "open"),
-    ]);
+  const [{ data: profiles, error: profilesError }, followsResult] = await Promise.all([
+    supabase.from("profiles").select("*").in("id", uniqueProfileIds),
+    viewerId
+      ? supabase
+          .from("user_follows")
+          .select("followed_id")
+          .eq("follower_id", viewerId)
+          .in("followed_id", uniqueProfileIds)
+      : Promise.resolve({ data: [] as Pick<UserFollowRow, "followed_id">[], error: null }),
+  ]);
 
   if (profilesError) {
     throw new Error(profilesError.message);
   }
-  if (followsError) {
-    throw new Error(followsError.message);
-  }
-  if (commentsError) {
-    throw new Error(commentsError.message);
-  }
-  if (votesError) {
-    throw new Error(votesError.message);
-  }
-  if (ratingsError) {
-    throw new Error(ratingsError.message);
-  }
-  if (offersError) {
-    throw new Error(offersError.message);
+  if (followsResult.error) {
+    throw new Error(followsResult.error.message);
   }
 
-  const visibleProfiles = (profiles ?? []) as ProfileRow[];
-  const profileSet = new Set(visibleProfiles.map((profile) => profile.id));
-  const filteredFollows = ((follows ?? []) as UserFollowRow[]).filter(
-    (row) => profileSet.has(row.follower_id) || profileSet.has(row.followed_id),
-  );
-  const filteredComments = ((comments ?? []) as OfferCommentRow[]).filter((row) =>
-    profileSet.has(row.author_id),
-  );
-  const commentAuthors = new Map(filteredComments.map((comment) => [comment.id, comment.author_id]));
-  const filteredVotes = ((votes ?? []) as CommentVoteRow[]).filter((row) =>
-    commentAuthors.has(row.comment_id),
-  );
-  const filteredRatings = ((ratings ?? []) as AgreementRatingRow[]).filter((row) =>
-    profileSet.has(row.rated_user_id),
-  );
-  const filteredOffers = ((offers ?? []) as OfferRow[]).filter((row) => profileSet.has(row.owner_id));
-
-  const followerCounts = new Map<string, number>();
-  const followingCounts = new Map<string, number>();
-  const commentCounts = new Map<string, number>();
-  const voteScores = new Map<string, number>();
-  const ratingBuckets = new Map<string, number[]>();
-  const offerCounts = new Map<string, number>();
-  const viewerFollowing = new Set<string>();
-
-  for (const follow of filteredFollows) {
-    if (profileSet.has(follow.followed_id)) {
-      incrementCount(followerCounts, follow.followed_id);
-    }
-    if (profileSet.has(follow.follower_id)) {
-      incrementCount(followingCounts, follow.follower_id);
-    }
-    if (viewerId && follow.follower_id === viewerId) {
-      viewerFollowing.add(follow.followed_id);
-    }
-  }
-
-  for (const comment of filteredComments) {
-    incrementCount(commentCounts, comment.author_id);
-  }
-
-  for (const vote of filteredVotes) {
-    const authorId = commentAuthors.get(vote.comment_id);
-    if (authorId) {
-      incrementCount(voteScores, authorId, vote.value);
-    }
-  }
-
-  for (const rating of filteredRatings) {
-    const bucket = ratingBuckets.get(rating.rated_user_id) ?? [];
-    bucket.push(rating.score);
-    ratingBuckets.set(rating.rated_user_id, bucket);
-  }
-
-  for (const offer of filteredOffers) {
-    incrementCount(offerCounts, offer.owner_id);
-  }
+  const viewerFollowing = new Set((followsResult.data ?? []).map((row) => row.followed_id));
 
   return new Map(
-    visibleProfiles.map((profile) => {
-      const ratingValues = ratingBuckets.get(profile.id) ?? [];
-      const commentCount = commentCounts.get(profile.id) ?? 0;
-      const netVotes = voteScores.get(profile.id) ?? 0;
-      const summary = {
+    ((profiles ?? []) as ProfileRow[]).map((profile) => [
+      profile.id,
+      {
         ...profile,
         resolvedName: deriveDisplayName(
           { email: profile.email, user_metadata: { display_name: profile.display_name ?? undefined } },
           profile,
         ),
-        followerCount: followerCounts.get(profile.id) ?? 0,
-        followingCount: followingCounts.get(profile.id) ?? 0,
-        karma: commentCount + netVotes,
-        commentCount,
-        rating: average(ratingValues),
-        ratingCount: ratingValues.length,
-        offerCount: offerCounts.get(profile.id) ?? 0,
-        isFollowedByViewer: viewerId ? viewerFollowing.has(profile.id) : false,
-      } satisfies PublicProfileSummary;
-
-      return [profile.id, summary];
-    }),
+        followerCount: profile.follower_count,
+        followingCount: profile.following_count,
+        karma: profile.karma,
+        commentCount: profile.comment_count,
+        rating: profile.rating_count ? profile.rating_avg : null,
+        ratingCount: profile.rating_count,
+        offerCount: profile.offer_count,
+        isFollowedByViewer: viewerFollowing.has(profile.id),
+      } satisfies PublicProfileSummary,
+    ]),
   );
 }
 
@@ -592,6 +510,39 @@ export async function getViewer() {
   } satisfies Viewer;
 }
 
+function applyPublicProfileSort(query: any, sort: PeopleSort) {
+  if (sort === "followers") {
+    return query
+      .order("follower_count", { ascending: false })
+      .order("offer_count", { ascending: false })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+  }
+
+  if (sort === "karma") {
+    return query
+      .order("karma", { ascending: false })
+      .order("offer_count", { ascending: false })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+  }
+
+  if (sort === "comments") {
+    return query
+      .order("comment_count", { ascending: false })
+      .order("offer_count", { ascending: false })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+  }
+
+  return query
+    .order("rating_avg", { ascending: false, nullsFirst: false })
+    .order("rating_count", { ascending: false })
+    .order("offer_count", { ascending: false })
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
+}
+
 export async function requireViewer(nextPath?: string) {
   const viewer = await getViewer();
 
@@ -603,7 +554,35 @@ export async function requireViewer(nextPath?: string) {
   return viewer;
 }
 
-export async function listOpenOffers() {
+export async function listOpenOffersPage(
+  page = 1,
+  pageSize = OFFERS_PAGE_SIZE,
+): Promise<PaginatedResult<OfferRecord>> {
+  if (!hasSupabaseEnv()) {
+    return buildPaginatedResult([], normalizePage(page), pageSize);
+  }
+
+  const normalizedPage = normalizePage(page);
+  const offset = (normalizedPage - 1) * pageSize;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("offers")
+    .select("*")
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
+    .range(offset, offset + pageSize);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const viewer = await getViewer();
+  const hydrated = await hydrateOffers((data ?? []) as OfferRow[], viewer?.authUser.id);
+  return buildPaginatedResult(hydrated, normalizedPage, pageSize);
+}
+
+export async function listOpenOffersPreview(limit = 120) {
   if (!hasSupabaseEnv()) {
     return [] as OfferRecord[];
   }
@@ -613,7 +592,9 @@ export async function listOpenOffers() {
     .from("offers")
     .select("*")
     .eq("status", "open")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
+    .limit(limit);
 
   if (error) {
     throw new Error(error.message);
@@ -988,7 +969,7 @@ export async function getOfferCartState(
   } satisfies OfferCartState;
 }
 
-export async function listCartItems(userId: string) {
+export async function listCartItems(userId: string, limit?: number) {
   if (!hasSupabaseEnv()) {
     return [] as CartItemRecord[];
   }
@@ -998,7 +979,8 @@ export async function listCartItems(userId: string) {
     .from("offer_carts")
     .select("*")
     .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(limit ?? 1000);
 
   if (error) {
     throw new Error(error.message);
@@ -1105,9 +1087,42 @@ export async function listOfferComments(offerId: string, viewerId?: string | nul
   return roots;
 }
 
-export async function listPublicProfiles(sort: PeopleSort, viewerId?: string | null) {
-  const profileMap = await getProfileSummaryMap(viewerId);
-  return sortPublicProfiles([...profileMap.values()], sort);
+export async function listPublicProfilesPage(
+  sort: PeopleSort,
+  page = 1,
+  pageSize = PEOPLE_PAGE_SIZE,
+  viewerId?: string | null,
+): Promise<PaginatedResult<PublicProfileSummary>> {
+  if (!hasSupabaseEnv()) {
+    return buildPaginatedResult([], normalizePage(page), pageSize);
+  }
+
+  const normalizedPage = normalizePage(page);
+  const offset = (normalizedPage - 1) * pageSize;
+  const supabase = await createClient();
+  const query = applyPublicProfileSort(supabase.from("profiles").select("*"), sort).range(
+    offset,
+    offset + pageSize,
+  );
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const profiles = (data ?? []) as ProfileRow[];
+  const profileMap = await getProfileSummaryMap(
+    viewerId,
+    profiles.map((profile) => profile.id),
+  );
+
+  return buildPaginatedResult(
+    profiles
+      .map((profile) => profileMap.get(profile.id))
+      .filter((profile): profile is PublicProfileSummary => Boolean(profile)),
+    normalizedPage,
+    pageSize,
+  );
 }
 
 export async function listProfileOffers(profileId: string, viewerId?: string | null) {
@@ -1171,7 +1186,8 @@ export async function listAgreementsForUser(userId: string) {
     .from("agreements")
     .select("*")
     .or(`proposer_id.eq.${userId},responder_id.eq.${userId}`)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
 
   if (error) {
     throw new Error(error.message);
@@ -1270,12 +1286,14 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         .from("offers")
         .select("*")
         .eq("owner_id", userId)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(DASHBOARD_PAGE_SIZE),
       supabase
         .from("interests")
         .select("*")
         .eq("user_id", userId)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(DASHBOARD_PAGE_SIZE),
     ]);
 
   if (ownOffersError) {
@@ -1310,12 +1328,14 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
           .from("interests")
           .select("*")
           .in("offer_id", ownOfferIds)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(DASHBOARD_PAGE_SIZE),
         supabase
           .from("guest_interests")
           .select("*")
           .in("offer_id", ownOfferIds)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(DASHBOARD_PAGE_SIZE),
       ]);
 
     if (incomingInterestsError) {
@@ -1415,7 +1435,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
 
   let cartItems: CartItemRecord[] = [];
   try {
-    cartItems = await listCartItems(userId);
+    cartItems = await listCartItems(userId, DASHBOARD_PAGE_SIZE);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to load cart items.";
     errors.cartItems = message;

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
-import { getViewer, listOpenOffers } from "@/lib/app-data";
+import { getViewer, listOpenOffersPage, listOpenOffersPreview, OFFERS_PAGE_SIZE } from "@/lib/app-data";
 import type { OfferRecord } from "@/lib/app-data";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -59,6 +59,13 @@ function normalizeCause(cause: string) {
   return cause.trim().toLowerCase();
 }
 
+function parsePage(value: string | string[] | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const page = Number.parseInt(rawValue ?? "1", 10);
+
+  return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
 function getCostEfficiencyScore(offer: OfferRecord) {
   if (offer.min_counterparty_impact <= 0) {
     return offer.offer_impact;
@@ -90,7 +97,7 @@ function buildBestOffersByCause(offers: OfferRecord[]) {
     normalizedCause: normalizeCause(offer.offered_cause),
   }));
 
-  const spotlightEntries = SPOTLIGHT_CAUSES.map((cause) => {
+  return SPOTLIGHT_CAUSES.map((cause) => {
     const matching = normalizedOffers
       .filter((entry) => cause.matches(entry.normalizedCause))
       .map((entry) => entry.offer)
@@ -101,40 +108,24 @@ function buildBestOffersByCause(offers: OfferRecord[]) {
       offer: matching[0] ?? null,
     };
   });
-
-  const coveredCauses = new Set(
-    SPOTLIGHT_CAUSES.flatMap((cause) =>
-      normalizedOffers
-        .filter((entry) => cause.matches(entry.normalizedCause))
-        .map((entry) => entry.normalizedCause),
-    ),
-  );
-
-  const additionalCauses = [...new Set(normalizedOffers.map((entry) => entry.offer.offered_cause))]
-    .filter((cause) => !coveredCauses.has(normalizeCause(cause)))
-    .sort((left, right) => left.localeCompare(right))
-    .map((cause) => ({
-      label: cause,
-      offer: normalizedOffers
-        .filter((entry) => entry.normalizedCause === normalizeCause(cause))
-        .map((entry) => entry.offer)
-        .sort(compareByCostEfficiency)[0] ?? null,
-    }));
-
-  return [...spotlightEntries, ...additionalCauses];
 }
 
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
-  const offers = hasSupabaseEnv() ? await listOpenOffers() : [];
-  const bestOffersByCause = buildBestOffersByCause(offers);
+  const page = parsePage(resolvedSearchParams.page);
+  const offersPage = hasSupabaseEnv()
+    ? await listOpenOffersPage(page, OFFERS_PAGE_SIZE)
+    : { items: [], page, pageSize: OFFERS_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
+  const bestOfferCandidates = hasSupabaseEnv() ? await listOpenOffersPreview(120) : [];
+  const offers = offersPage.items;
+  const bestOffersByCause = buildBestOffersByCause(bestOfferCandidates);
   const formMessage = getFormMessage(resolvedSearchParams);
   const offersStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: "Public Moral Trade offers",
-    url: getAbsoluteUrl("/offers"),
+    url: getAbsoluteUrl(page === 1 ? "/offers" : `/offers?page=${page}`),
     description:
       "Public offers that state proposed actions, reciprocal requests, and verification terms.",
     mainEntity: {
@@ -221,9 +212,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <p className="eyebrow">Best Offers</p>
             <h2>Most cost-efficient published offers by cause area</h2>
             <p>
-              This ranking uses the fields already stored in each offer dossier: offered impact
-              divided by minimum reciprocal impact requested. It is a proxy for cost-efficiency,
-              not a claim of moral truth.
+              This spotlight uses the fields already stored in each offer dossier: offered impact
+              divided by minimum reciprocal impact requested. It is a bounded proxy for
+              cost-efficiency, not a claim of moral truth.
             </p>
           </div>
 
@@ -372,6 +363,24 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </div>
             )}
           </div>
+
+          {offersPage.hasPreviousPage || offersPage.hasNextPage ? (
+            <div className="offer-actions">
+              {offersPage.hasPreviousPage ? (
+                <Link className="button button-secondary" href={`/offers?page=${offersPage.page - 1}`}>
+                  Previous page
+                </Link>
+              ) : (
+                <span />
+              )}
+
+              {offersPage.hasNextPage ? (
+                <Link className="button button-secondary" href={`/offers?page=${offersPage.page + 1}`}>
+                  Next page
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
         </section>
       </main>
 

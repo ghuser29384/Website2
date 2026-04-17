@@ -1,11 +1,11 @@
 :root {
   --bg: #ffffff;
   --surface: #ffffff;
-  --surface-muted: #fbfaf7;
-  --surface-soft: #f6f3ee;
+  --surface-muted: #fcfbf9;
+  --surface-soft: #f8f6f2;
   --surface-strong: #ece5da;
-  --line: #ddd5c9;
-  --line-strong: #c4b6a2;
+  --line: #e6e0d7;
+  --line-strong: #d5cbbe;
   --ink: #1d2530;
   --ink-soft: #4d5968;
   --ink-muted: #6e7883;
@@ -16,8 +16,8 @@
   --danger-ink: #8d463a;
   --success-soft: #edf2ec;
   --success-ink: #365244;
-  --shadow-soft: 0 1px 2px rgba(29, 37, 48, 0.05);
-  --shadow-card: 0 10px 22px rgba(29, 37, 48, 0.035);
+  --shadow-soft: 0 1px 2px rgba(29, 37, 48, 0.03);
+  --shadow-card: 0 3px 8px rgba(29, 37, 48, 0.025);
   --radius-xl: 12px;
   --radius-lg: 10px;
   --radius-md: 8px;
@@ -187,7 +187,7 @@ h4 {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: #ffffff;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-soft);
 }
 
 .topbar-links,
@@ -265,12 +265,12 @@ h4 {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 .hero-stage {
   padding: 3rem;
-  border-color: var(--line-strong);
+  border-color: var(--line);
 }
 
 .hero-grid,
@@ -293,10 +293,10 @@ h4 {
 
 .hero > .hero-grid {
   padding: 2.25rem 2.35rem;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   background: var(--surface);
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 .hero > .hero-grid .hero-panel {
@@ -417,7 +417,7 @@ textarea {
   padding: 0.45rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--surface-muted);
+  background: var(--surface);
   color: var(--ink-soft);
   font-size: 0.82rem;
   font-weight: 400;
@@ -465,7 +465,7 @@ textarea {
 
 .button-secondary {
   background: var(--surface);
-  border-color: var(--line-strong);
+  border-color: var(--line);
   color: var(--ink);
 }
 
@@ -515,7 +515,7 @@ textarea {
 
 .hero-panel {
   background: var(--surface-soft);
-  border-color: var(--line-strong);
+  border-color: var(--line);
 }
 
 .flow-card {
@@ -563,7 +563,7 @@ textarea {
   gap: 0.6rem;
   min-height: 100%;
   padding: 1.25rem 1.3rem;
-  border-top: 3px solid var(--accent);
+  border-top: 1px solid var(--line);
 }
 
 .proof-label {
@@ -583,7 +583,7 @@ main {
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   background: var(--surface);
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 .section-white {
@@ -638,7 +638,7 @@ main {
   min-height: 15.5rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, #ffffff 0%, var(--surface-muted) 100%);
+  background: var(--surface);
   overflow: hidden;
 }
 
@@ -711,7 +711,7 @@ main {
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--surface);
   color: var(--ink);
   font-size: 0.8rem;
   line-height: 1.35;
@@ -1559,7 +1559,7 @@ output {
 .status-banner {
   margin-bottom: 1rem;
   padding: 0.95rem 1rem;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   font-weight: 400;
 }
@@ -1583,8 +1583,8 @@ output {
   gap: 0.85rem;
   position: relative;
   padding: 1.4rem;
-  border-color: var(--line-strong);
-  box-shadow: 0 14px 26px rgba(29, 37, 48, 0.035);
+  border-color: var(--line);
+  box-shadow: none;
 }
 
 .data-card::before,
@@ -1594,10 +1594,7 @@ output {
 .comment-card::before,
 .auth-card::before,
 .auth-side-card::before {
-  content: "";
-  display: block;
-  width: 2.6rem;
-  border-top: 2px solid var(--accent);
+  content: none;
 }
 
 .directory-grid,
@@ -1636,7 +1633,7 @@ output {
 
 .detail-block {
   padding: 1.35rem 1.4rem;
-  border-color: var(--line-strong);
+  border-color: var(--line);
 }
 
 .offer-card,
@@ -1647,7 +1644,7 @@ output {
 .offer-card:hover,
 .match-card:hover {
   border-color: var(--line-strong);
-  box-shadow: 0 12px 22px rgba(29, 37, 48, 0.04);
+  box-shadow: none;
 }
 
 .offer-card.is-selected {
@@ -1845,7 +1842,7 @@ output {
 }
 
 .faq-item[open] {
-  border-color: var(--line-strong);
+  border-color: var(--line);
 }
 
 .faq-item[open] summary::after {
@@ -1891,8 +1888,8 @@ output {
 .profile-card,
 .cart-card {
   padding: 1.4rem;
-  border-color: var(--line-strong);
-  box-shadow: 0 14px 26px rgba(29, 37, 48, 0.035);
+  border-color: var(--line);
+  box-shadow: none;
 }
 
 .profile-card-head,
@@ -1926,7 +1923,7 @@ output {
 
 .profile-stats div {
   padding: 0.95rem 0.95rem;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface-muted);
 }
@@ -1954,7 +1951,7 @@ output {
 
 .discount-banner {
   padding: 0.95rem 1rem;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--accent-soft);
 }
@@ -1980,10 +1977,10 @@ output {
 
 .comment-card {
   padding: 1.15rem 1.2rem;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: var(--surface);
-  box-shadow: 0 10px 20px rgba(29, 37, 48, 0.03);
+  box-shadow: none;
 }
 
 .comment-author,

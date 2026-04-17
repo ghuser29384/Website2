@@ -41,8 +41,23 @@ create table if not exists public.profiles (
   city text,
   region text,
   bio text not null default '',
+  follower_count integer not null default 0,
+  following_count integer not null default 0,
+  karma integer not null default 0,
+  comment_count integer not null default 0,
+  rating_avg double precision,
+  rating_count integer not null default 0,
+  offer_count integer not null default 0,
   created_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.profiles add column if not exists follower_count integer not null default 0;
+alter table public.profiles add column if not exists following_count integer not null default 0;
+alter table public.profiles add column if not exists karma integer not null default 0;
+alter table public.profiles add column if not exists comment_count integer not null default 0;
+alter table public.profiles add column if not exists rating_avg double precision;
+alter table public.profiles add column if not exists rating_count integer not null default 0;
+alter table public.profiles add column if not exists offer_count integer not null default 0;
 
 create table if not exists public.offers (
   id uuid primary key default gen_random_uuid(),
@@ -219,6 +234,7 @@ create table if not exists public.offer_carts (
 
 create index if not exists offers_owner_id_idx on public.offers (owner_id);
 create index if not exists offers_status_created_at_idx on public.offers (status, created_at desc);
+create index if not exists offers_owner_id_status_created_at_idx on public.offers (owner_id, status, created_at desc);
 create index if not exists interests_offer_id_idx on public.interests (offer_id);
 create index if not exists interests_user_id_idx on public.interests (user_id);
 create index if not exists guest_interests_offer_id_idx on public.guest_interests (offer_id);
@@ -234,7 +250,12 @@ create index if not exists recommendations_recommended_offer_id_idx on public.of
 create index if not exists offer_comments_offer_id_idx on public.offer_comments (offer_id, created_at asc);
 create index if not exists offer_comments_author_id_idx on public.offer_comments (author_id);
 create index if not exists comment_votes_user_id_idx on public.comment_votes (user_id);
+create index if not exists comment_votes_comment_id_idx on public.comment_votes (comment_id);
 create index if not exists offer_carts_user_id_idx on public.offer_carts (user_id);
+create index if not exists profiles_rating_sort_idx on public.profiles (rating_avg desc nulls last, rating_count desc, offer_count desc, id);
+create index if not exists profiles_follower_sort_idx on public.profiles (follower_count desc, offer_count desc, id);
+create index if not exists profiles_karma_sort_idx on public.profiles (karma desc, offer_count desc, id);
+create index if not exists profiles_comment_sort_idx on public.profiles (comment_count desc, offer_count desc, id);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -242,6 +263,200 @@ language plpgsql
 as $$
 begin
   new.updated_at = timezone('utc', now());
+  return new;
+end;
+$$;
+
+create or replace function public.refresh_profile_rating_summary(target_profile_id uuid)
+returns void
+language plpgsql
+as $$
+begin
+  update public.profiles
+  set
+    rating_count = (
+      select count(*)
+      from public.agreement_ratings
+      where rated_user_id = target_profile_id
+    ),
+    rating_avg = (
+      select avg(score)::double precision
+      from public.agreement_ratings
+      where rated_user_id = target_profile_id
+    )
+  where id = target_profile_id;
+end;
+$$;
+
+create or replace function public.handle_user_follow_stats()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.profiles
+    set following_count = following_count + 1
+    where id = new.follower_id;
+
+    update public.profiles
+    set follower_count = follower_count + 1
+    where id = new.followed_id;
+
+    return new;
+  end if;
+
+  update public.profiles
+  set following_count = greatest(following_count - 1, 0)
+  where id = old.follower_id;
+
+  update public.profiles
+  set follower_count = greatest(follower_count - 1, 0)
+  where id = old.followed_id;
+
+  return old;
+end;
+$$;
+
+create or replace function public.handle_offer_comment_stats()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    update public.profiles
+    set
+      comment_count = comment_count + 1,
+      karma = karma + 1
+    where id = new.author_id;
+
+    return new;
+  end if;
+
+  update public.profiles
+  set
+    comment_count = greatest(comment_count - 1, 0),
+    karma = greatest(karma - 1, 0)
+  where id = old.author_id;
+
+  return old;
+end;
+$$;
+
+create or replace function public.handle_comment_vote_stats()
+returns trigger
+language plpgsql
+as $$
+declare
+  target_author_id uuid;
+  karma_delta integer;
+begin
+  if tg_op = 'INSERT' then
+    select author_id into target_author_id
+    from public.offer_comments
+    where id = new.comment_id;
+
+    karma_delta := new.value;
+  elsif tg_op = 'UPDATE' then
+    select author_id into target_author_id
+    from public.offer_comments
+    where id = new.comment_id;
+
+    karma_delta := new.value - old.value;
+  else
+    select author_id into target_author_id
+    from public.offer_comments
+    where id = old.comment_id;
+
+    karma_delta := -old.value;
+  end if;
+
+  if target_author_id is not null and karma_delta <> 0 then
+    update public.profiles
+    set karma = greatest(karma + karma_delta, 0)
+    where id = target_author_id;
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.handle_offer_stats()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.status = 'open' then
+      update public.profiles
+      set offer_count = offer_count + 1
+      where id = new.owner_id;
+    end if;
+
+    return new;
+  end if;
+
+  if tg_op = 'DELETE' then
+    if old.status = 'open' then
+      update public.profiles
+      set offer_count = greatest(offer_count - 1, 0)
+      where id = old.owner_id;
+    end if;
+
+    return old;
+  end if;
+
+  if old.owner_id = new.owner_id then
+    if old.status <> 'open' and new.status = 'open' then
+      update public.profiles
+      set offer_count = offer_count + 1
+      where id = new.owner_id;
+    elsif old.status = 'open' and new.status <> 'open' then
+      update public.profiles
+      set offer_count = greatest(offer_count - 1, 0)
+      where id = new.owner_id;
+    end if;
+  else
+    if old.status = 'open' then
+      update public.profiles
+      set offer_count = greatest(offer_count - 1, 0)
+      where id = old.owner_id;
+    end if;
+
+    if new.status = 'open' then
+      update public.profiles
+      set offer_count = offer_count + 1
+      where id = new.owner_id;
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.handle_agreement_rating_stats()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    perform public.refresh_profile_rating_summary(new.rated_user_id);
+    return new;
+  end if;
+
+  if tg_op = 'DELETE' then
+    perform public.refresh_profile_rating_summary(old.rated_user_id);
+    return old;
+  end if;
+
+  if old.rated_user_id is distinct from new.rated_user_id then
+    perform public.refresh_profile_rating_summary(old.rated_user_id);
+  end if;
+
+  perform public.refresh_profile_rating_summary(new.rated_user_id);
   return new;
 end;
 $$;
@@ -342,6 +557,11 @@ create trigger offers_set_updated_at
 before update on public.offers
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists offers_profile_stats on public.offers;
+create trigger offers_profile_stats
+after insert or delete or update of owner_id, status on public.offers
+for each row execute procedure public.handle_offer_stats();
+
 drop trigger if exists interests_set_updated_at on public.interests;
 create trigger interests_set_updated_at
 before update on public.interests
@@ -361,6 +581,75 @@ drop trigger if exists offer_comments_set_updated_at on public.offer_comments;
 create trigger offer_comments_set_updated_at
 before update on public.offer_comments
 for each row execute procedure public.set_updated_at();
+
+drop trigger if exists user_follows_profile_stats on public.user_follows;
+create trigger user_follows_profile_stats
+after insert or delete on public.user_follows
+for each row execute procedure public.handle_user_follow_stats();
+
+drop trigger if exists offer_comments_profile_stats on public.offer_comments;
+create trigger offer_comments_profile_stats
+after insert or delete on public.offer_comments
+for each row execute procedure public.handle_offer_comment_stats();
+
+drop trigger if exists comment_votes_profile_stats on public.comment_votes;
+create trigger comment_votes_profile_stats
+after insert or delete or update of value on public.comment_votes
+for each row execute procedure public.handle_comment_vote_stats();
+
+drop trigger if exists agreement_ratings_profile_stats on public.agreement_ratings;
+create trigger agreement_ratings_profile_stats
+after insert or delete or update of score, rated_user_id on public.agreement_ratings
+for each row execute procedure public.handle_agreement_rating_stats();
+
+update public.profiles p
+set
+  follower_count = (
+    select count(*)
+    from public.user_follows
+    where followed_id = p.id
+  ),
+  following_count = (
+    select count(*)
+    from public.user_follows
+    where follower_id = p.id
+  ),
+  comment_count = (
+    select count(*)
+    from public.offer_comments
+    where author_id = p.id
+  ),
+  karma = (
+    (
+      select count(*)
+      from public.offer_comments
+      where author_id = p.id
+    ) + coalesce(
+      (
+        select sum(comment_votes.value)
+        from public.comment_votes
+        join public.offer_comments on offer_comments.id = comment_votes.comment_id
+        where offer_comments.author_id = p.id
+      ),
+      0
+    )
+  ),
+  rating_count = (
+    select count(*)
+    from public.agreement_ratings
+    where rated_user_id = p.id
+  ),
+  rating_avg = (
+    select avg(score)::double precision
+    from public.agreement_ratings
+    where rated_user_id = p.id
+  ),
+  offer_count = (
+    select count(*)
+    from public.offers
+    where owner_id = p.id
+      and status = 'open'
+  );
 
 alter table public.profiles enable row level security;
 alter table public.offers enable row level security;

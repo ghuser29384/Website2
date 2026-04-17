@@ -17,6 +17,13 @@ export interface Database {
           city: string | null;
           region: string | null;
           bio: string;
+          follower_count: number;
+          following_count: number;
+          karma: number;
+          comment_count: number;
+          rating_avg: number | null;
+          rating_count: number;
+          offer_count: number;
           created_at: string;
         };
         Insert: {
@@ -26,6 +33,13 @@ export interface Database {
           city?: string | null;
           region?: string | null;
           bio?: string;
+          follower_count?: number;
+          following_count?: number;
+          karma?: number;
+          comment_count?: number;
+          rating_avg?: number | null;
+          rating_count?: number;
+          offer_count?: number;
           created_at?: string;
         };
         Update: {
@@ -34,6 +48,13 @@ export interface Database {
           city?: string | null;
           region?: string | null;
           bio?: string;
+          follower_count?: number;
+          following_count?: number;
+          karma?: number;
+          comment_count?: number;
+          rating_avg?: number | null;
+          rating_count?: number;
+          offer_count?: number;
           created_at?: string;
         };
         Relationships: [];
