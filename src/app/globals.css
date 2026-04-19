@@ -114,12 +114,12 @@ h4 {
 
 .opening-line-anchor {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   flex: 0 0 auto;
   font-family: var(--font-heading-loaded);
   font-size: clamp(1.7rem, 3.6vw, 2.95rem);
   font-weight: 500;
-  line-height: 0.92;
+  line-height: 1;
   letter-spacing: -0.055em;
   color: var(--accent);
 }
@@ -140,7 +140,7 @@ h4 {
   letter-spacing: 0;
   color: var(--ink);
   font-size: clamp(1.08rem, 1.15vw, 1.3rem);
-  line-height: 1.45;
+  line-height: 1.08;
   white-space: nowrap;
 }
 
