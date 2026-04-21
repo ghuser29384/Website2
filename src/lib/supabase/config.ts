@@ -6,7 +6,29 @@ export function hasSupabaseEnv() {
 }
 
 export function getSiteUrl() {
-  return process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const explicitSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (
+    explicitSiteUrl &&
+    (!isProduction || !/^https?:\/\/localhost(?::\d+)?\/?$/i.test(explicitSiteUrl))
+  ) {
+    return explicitSiteUrl;
+  }
+
+  if (isProduction && process.env.VERCEL_ENV === "production") {
+    return "https://www.moraltrade.org";
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+
+  return isProduction ? "https://www.moraltrade.org" : "http://localhost:3000";
 }
 
 export function getSupabaseEnv() {

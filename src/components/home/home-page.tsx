@@ -175,8 +175,20 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
   const [openingRevealProgress, setOpeningRevealProgress] = useState(0);
 
   useEffect(() => {
-    setLocalOffers(loadLocalOffers());
-    setHasLoadedLocalOffers(true);
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) {
+        return;
+      }
+
+      setLocalOffers(loadLocalOffers());
+      setHasLoadedLocalOffers(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -576,7 +588,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               <h3>Paid action offers</h3>
               <p>
                 One person can pay another to take up an action that matters morally to the payer,
-                especially when the actor's cost is low and the payer's moral stake is high.
+                especially when the actor&apos;s cost is low and the payer&apos;s moral stake is high.
               </p>
               <ul className="clean-list">
                 <li>Appropriate for bounded actions with clear milestones</li>
@@ -708,14 +720,14 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               <h3>Reference materials</h3>
               <div className="reference-list">
                 <a href="https://www.amirrorclear.net/files/moral-trade.pdf" rel="noreferrer" target="_blank">
-                  Toby Ord, "Moral Trade"
+                  Toby Ord, &quot;Moral Trade&quot;
                 </a>
                 <a
                   href="https://www.forethought.org/research/convergence-and-compromise#3-what-if-some-people-aim-at-the-good"
                   rel="noreferrer"
                   target="_blank"
                 >
-                  Forethought, "Convergence and Compromise", section 3
+                  Forethought, &quot;Convergence and Compromise&quot;, section 3
                 </a>
               </div>
               <p className="editorial-note">
