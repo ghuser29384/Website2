@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { rateAgreementAction } from "@/app/actions";
+import {
+  consentToMatchSuggestionAction,
+  dismissMatchSuggestionAction,
+  markWishNotificationReadAction,
+  rateAgreementAction,
+} from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
@@ -128,6 +133,237 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             logged on the server.
           </div>
         ) : null}
+
+        <section className="section section-white">
+          <div className="section-head">
+            <p className="eyebrow">Private wish profile</p>
+            <h2>Values, wishes, asks, and constraints</h2>
+            <p>
+              This registry is separate from your public profile. Exact wishes stay private; broad
+              previews are used only for safe match suggestions and consent-gated introductions.
+            </p>
+          </div>
+
+          {dashboardData?.errors.wishProfile ? (
+            <div className="empty-state">
+              <div>
+                <strong>We could not load your private wish profile.</strong>
+                <p>The detailed Supabase error was logged on the server.</p>
+              </div>
+            </div>
+          ) : dashboardData?.wishProfile ? (
+            <div className="panel data-card data-card-wide">
+              <div className="tag-row">
+                <span className="badge">
+                  {dashboardData.wishProfile.is_discoverable
+                    ? "Safe matching enabled"
+                    : "Private only"}
+                </span>
+                <span className="source-pill">
+                  Updated {new Date(dashboardData.wishProfile.updated_at).toLocaleDateString()}
+                </span>
+              </div>
+              <dl className="values-summary">
+                <div>
+                  <dt>Causes</dt>
+                  <dd>
+                    {dashboardData.wishProfile.causes.length
+                      ? dashboardData.wishProfile.causes.join(", ")
+                      : "No causes listed."}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Wishes</dt>
+                  <dd>
+                    {dashboardData.wishProfile.wishes
+                      .map((entry) => entry.body)
+                      .join(" / ") || "No wish entered."}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Offers</dt>
+                  <dd>
+                    {dashboardData.wishProfile.offers
+                      .map((entry) => entry.body)
+                      .join(" / ") || "No offer entered."}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Asks</dt>
+                  <dd>
+                    {dashboardData.wishProfile.asks
+                      .map((entry) => entry.body)
+                      .join(" / ") || "No ask entered."}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Constraints</dt>
+                  <dd>{dashboardData.wishProfile.constraints || "No constraints listed."}</dd>
+                </div>
+                <div>
+                  <dt>Verification</dt>
+                  <dd>
+                    {dashboardData.wishProfile.verification_preferences ||
+                      "No verification preferences listed."}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div>
+                <strong>No private wish profile yet.</strong>
+                <p>
+                  Use the first-visit interview button to save causes, wishes, offers, asks,
+                  constraints, verification preferences, and openness to payment or pledges.
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="section section-subtle">
+          <div className="section-head">
+            <p className="eyebrow">Background networking</p>
+            <h2>Possible counterparties</h2>
+            <p>
+              Suggestions show only enough information to decide whether an introduction is worth
+              exploring. Identity details remain gated until both sides opt in.
+            </p>
+          </div>
+
+          <div className="data-grid">
+            {dashboardData?.errors.matchSuggestions ? (
+              <div className="empty-state">
+                <div>
+                  <strong>We could not load possible counterparties.</strong>
+                  <p>The detailed Supabase error was logged on the server.</p>
+                </div>
+              </div>
+            ) : dashboardData?.matchSuggestions.length ? (
+              dashboardData.matchSuggestions.map((match) => (
+                <article key={match.id} className="panel data-card">
+                  <p className="detail-kicker">Possible counterparty</p>
+                  <h3>
+                    {match.canRevealIdentity && match.counterparty ? (
+                      <Link className="inline-link" href={`/people/${match.counterparty.id}`}>
+                        {match.counterparty.resolvedName}
+                      </Link>
+                    ) : (
+                      "Identity hidden until mutual consent"
+                    )}
+                  </h3>
+                  <p className="route-text">{match.viewerReason}</p>
+                  {match.counterpartyPreview ? (
+                    <p className="route-text">
+                      Preview: {match.counterpartyPreview.public_preview || "Broad interests only."}
+                    </p>
+                  ) : null}
+                  <div className="tag-row">
+                    <span className="badge">{match.status}</span>
+                    <span className="impact-pill">Fit score {match.score}/100</span>
+                    {match.counterpartyPreview?.causes?.slice(0, 3).map((cause) => (
+                      <span className="source-pill" key={`${match.id}-${cause}`}>
+                        {cause}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="offer-footer">
+                    <div className="tag-row">
+                      <span>{match.viewerConsented ? "You opted in" : "Awaiting your consent"}</span>
+                      <span>
+                        {match.counterpartyConsented
+                          ? "Counterparty opted in"
+                          : "Counterparty not yet opted in"}
+                      </span>
+                    </div>
+                    <div className="offer-actions">
+                      {!match.viewerConsented ? (
+                        <form action={consentToMatchSuggestionAction}>
+                          <input name="match_id" type="hidden" value={match.id} />
+                          <input name="return_to" type="hidden" value="/dashboard" />
+                          <button className="button button-primary button-mini" type="submit">
+                            Opt in to introduction
+                          </button>
+                        </form>
+                      ) : null}
+                      <form action={dismissMatchSuggestionAction}>
+                        <input name="match_id" type="hidden" value={match.id} />
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <button className="button button-secondary button-mini" type="submit">
+                          Dismiss
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No possible counterparties yet.</strong>
+                  <p>
+                    Save a discoverable private wish profile. Matches are generated only when the
+                    safety filter clears the profile and broad previews suggest compatibility.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="section section-white">
+          <div className="section-head">
+            <p className="eyebrow">Notifications</p>
+            <h2>Private match alerts</h2>
+            <p>Alerts say that a possible moral trade was found without exposing raw wish data.</p>
+          </div>
+
+          <div className="data-grid">
+            {dashboardData?.errors.wishNotifications ? (
+              <div className="empty-state">
+                <div>
+                  <strong>We could not load match notifications.</strong>
+                  <p>The detailed Supabase error was logged on the server.</p>
+                </div>
+              </div>
+            ) : dashboardData?.wishNotifications.length ? (
+              dashboardData.wishNotifications.map((notification) => (
+                <article key={notification.id} className="panel data-card">
+                  <p className="detail-kicker">{notification.kind}</p>
+                  <h3>{notification.title}</h3>
+                  <p className="route-text">{notification.body}</p>
+                  <div className="tag-row">
+                    <span className="source-pill">
+                      {new Date(notification.created_at).toLocaleDateString()}
+                    </span>
+                    <span className={notification.read_at ? "source-pill" : "badge"}>
+                      {notification.read_at ? "Read" : "Unread"}
+                    </span>
+                  </div>
+                  {!notification.read_at ? (
+                    <div className="offer-footer">
+                      <form action={markWishNotificationReadAction}>
+                        <input name="notification_id" type="hidden" value={notification.id} />
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <button className="button button-secondary button-mini" type="submit">
+                          Mark read
+                        </button>
+                      </form>
+                    </div>
+                  ) : null}
+                </article>
+              ))
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No private match alerts yet.</strong>
+                  <p>When a safe potential moral trade is found, it will appear here first.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
 
         <section className="section section-white">
           <div className="section-head">

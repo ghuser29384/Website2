@@ -346,14 +346,216 @@ export interface Database {
         };
         Relationships: [];
       };
+      wish_profiles: {
+        Row: {
+          profile_id: string;
+          causes: string[];
+          location_city: string | null;
+          location_region: string | null;
+          constraints: string;
+          verification_preferences: string;
+          openness_to_payment: boolean;
+          openness_to_pledges: boolean;
+          is_discoverable: boolean;
+          share_public_preview: boolean;
+          share_location: boolean;
+          public_preview: string;
+          safety_status: "clear" | "flagged" | "blocked";
+          safety_notes: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          causes?: string[];
+          location_city?: string | null;
+          location_region?: string | null;
+          constraints?: string;
+          verification_preferences?: string;
+          openness_to_payment?: boolean;
+          openness_to_pledges?: boolean;
+          is_discoverable?: boolean;
+          share_public_preview?: boolean;
+          share_location?: boolean;
+          public_preview?: string;
+          safety_status?: "clear" | "flagged" | "blocked";
+          safety_notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          causes?: string[];
+          location_city?: string | null;
+          location_region?: string | null;
+          constraints?: string;
+          verification_preferences?: string;
+          openness_to_payment?: boolean;
+          openness_to_pledges?: boolean;
+          is_discoverable?: boolean;
+          share_public_preview?: boolean;
+          share_location?: boolean;
+          public_preview?: string;
+          safety_status?: "clear" | "flagged" | "blocked";
+          safety_notes?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      wish_entries: {
+        Row: {
+          id: string;
+          profile_id: string;
+          entry_type: "wish" | "offer" | "ask";
+          cause_area: string;
+          title: string;
+          body: string;
+          trade_mode: string;
+          visibility: "private" | "preview";
+          safety_status: "clear" | "flagged" | "blocked";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          entry_type: "wish" | "offer" | "ask";
+          cause_area?: string;
+          title?: string;
+          body: string;
+          trade_mode?: string;
+          visibility?: "private" | "preview";
+          safety_status?: "clear" | "flagged" | "blocked";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          entry_type?: "wish" | "offer" | "ask";
+          cause_area?: string;
+          title?: string;
+          body?: string;
+          trade_mode?: string;
+          visibility?: "private" | "preview";
+          safety_status?: "clear" | "flagged" | "blocked";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      match_suggestions: {
+        Row: {
+          id: string;
+          profile_a_id: string;
+          profile_b_id: string;
+          profile_a_entry_id: string | null;
+          profile_b_entry_id: string | null;
+          reason_for_a: string;
+          reason_for_b: string;
+          score: number;
+          status: "suggested" | "dismissed" | "introduced" | "archived";
+          dedupe_key: string;
+          identity_revealed: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_a_id: string;
+          profile_b_id: string;
+          profile_a_entry_id?: string | null;
+          profile_b_entry_id?: string | null;
+          reason_for_a: string;
+          reason_for_b: string;
+          score?: number;
+          status?: "suggested" | "dismissed" | "introduced" | "archived";
+          dedupe_key?: string;
+          identity_revealed?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          reason_for_a?: string;
+          reason_for_b?: string;
+          score?: number;
+          status?: "suggested" | "dismissed" | "introduced" | "archived";
+          dedupe_key?: string;
+          identity_revealed?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      match_consents: {
+        Row: {
+          match_id: string;
+          profile_id: string;
+          note: string;
+          consented_at: string;
+        };
+        Insert: {
+          match_id: string;
+          profile_id: string;
+          note?: string;
+          consented_at?: string;
+        };
+        Update: {
+          note?: string;
+          consented_at?: string;
+        };
+        Relationships: [];
+      };
+      wish_notifications: {
+        Row: {
+          id: string;
+          profile_id: string;
+          match_id: string | null;
+          kind: "match" | "consent" | "safety" | "system";
+          title: string;
+          body: string;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          match_id?: string | null;
+          kind?: "match" | "consent" | "safety" | "system";
+          title: string;
+          body?: string;
+          read_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          kind?: "match" | "consent" | "safety" | "system";
+          title?: string;
+          body?: string;
+          read_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
-    Views: Record<string, never>;
+    Views: {
+      wish_profile_previews: {
+        Row: {
+          profile_id: string;
+          causes: string[];
+          public_preview: string;
+          location_city: string | null;
+          location_region: string | null;
+          openness_to_payment: boolean;
+          openness_to_pledges: boolean;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+    };
     Functions: Record<string, never>;
     Enums: {
       offer_mode: "pledge" | "offset" | "payment";
       offer_status: "open" | "paused" | "matched" | "closed";
       interest_status: "pending" | "accepted" | "declined" | "withdrawn";
       agreement_status: "proposed" | "active" | "completed" | "cancelled";
+      wish_entry_type: "wish" | "offer" | "ask";
+      match_suggestion_status: "suggested" | "dismissed" | "introduced" | "archived";
     };
     CompositeTypes: Record<string, never>;
   };

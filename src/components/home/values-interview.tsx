@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState } from "react";
+
+import { saveWishProfileAction } from "@/app/actions";
 
 const INTERVIEW_STORAGE_KEY = "moralTradeValuesInterview";
 const INTERVIEW_DISMISSED_KEY = "moralTradeValuesInterviewDismissed";
@@ -33,7 +35,7 @@ const TRADE_SHAPES = [
   "Open to proposals",
 ] as const;
 
-type InterviewStep = "values" | "wishes" | "offers" | "asks" | "summary";
+type InterviewStep = "values" | "wishes" | "offers" | "asks" | "conditions" | "summary";
 
 type InterviewAnswers = {
   causes: string[];
@@ -41,6 +43,15 @@ type InterviewAnswers = {
   offers: string[];
   ask: string;
   tradeShape: string;
+  constraints: string;
+  locationCity: string;
+  locationRegion: string;
+  verificationPreferences: string;
+  openToPayment: boolean;
+  openToPledges: boolean;
+  isDiscoverable: boolean;
+  sharePublicPreview: boolean;
+  shareLocation: boolean;
 };
 
 const EMPTY_ANSWERS: InterviewAnswers = {
@@ -49,9 +60,18 @@ const EMPTY_ANSWERS: InterviewAnswers = {
   offers: [],
   ask: "",
   tradeShape: "Open to proposals",
+  constraints: "",
+  locationCity: "",
+  locationRegion: "",
+  verificationPreferences: "",
+  openToPayment: false,
+  openToPledges: true,
+  isDiscoverable: true,
+  sharePublicPreview: true,
+  shareLocation: false,
 };
 
-const STEPS: InterviewStep[] = ["values", "wishes", "offers", "asks", "summary"];
+const STEPS: InterviewStep[] = ["values", "wishes", "offers", "asks", "conditions", "summary"];
 
 function getNextStep(step: InterviewStep) {
   return STEPS[Math.min(STEPS.indexOf(step) + 1, STEPS.length - 1)];
@@ -69,6 +89,14 @@ function toggleValue(values: string[], value: string) {
 
 function summarizeList(values: string[], fallback: string) {
   return values.length ? values.join(", ") : fallback;
+}
+
+function readControlValue(target: unknown) {
+  return (target as { value: string }).value;
+}
+
+function readControlChecked(target: unknown) {
+  return (target as { checked: boolean }).checked;
 }
 
 function readStoredInterview(): InterviewAnswers | null {
@@ -97,6 +125,17 @@ function readStoredInterview(): InterviewAnswers | null {
       offers: Array.isArray(parsed.offers) ? parsed.offers : [],
       ask: typeof parsed.ask === "string" ? parsed.ask : "",
       tradeShape: typeof parsed.tradeShape === "string" ? parsed.tradeShape : "Open to proposals",
+      constraints: typeof parsed.constraints === "string" ? parsed.constraints : "",
+      locationCity: typeof parsed.locationCity === "string" ? parsed.locationCity : "",
+      locationRegion: typeof parsed.locationRegion === "string" ? parsed.locationRegion : "",
+      verificationPreferences:
+        typeof parsed.verificationPreferences === "string" ? parsed.verificationPreferences : "",
+      openToPayment: typeof parsed.openToPayment === "boolean" ? parsed.openToPayment : false,
+      openToPledges: typeof parsed.openToPledges === "boolean" ? parsed.openToPledges : true,
+      isDiscoverable: typeof parsed.isDiscoverable === "boolean" ? parsed.isDiscoverable : true,
+      sharePublicPreview:
+        typeof parsed.sharePublicPreview === "boolean" ? parsed.sharePublicPreview : true,
+      shareLocation: typeof parsed.shareLocation === "boolean" ? parsed.shareLocation : false,
     };
   } catch {
     return null;
@@ -145,7 +184,11 @@ function getWasDismissed() {
   return Boolean(storage?.getItem(INTERVIEW_DISMISSED_KEY));
 }
 
-export function ValuesInterview() {
+interface ValuesInterviewProps {
+  isAuthenticated: boolean;
+}
+
+export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
   const [answers, setAnswers] = useState<InterviewAnswers>(EMPTY_ANSWERS);
   const [step, setStep] = useState<InterviewStep>("values");
   const [isOpen, setIsOpen] = useState(false);
@@ -189,10 +232,23 @@ export function ValuesInterview() {
   }
 
   function handleTextChange(
-    field: "wish" | "ask",
-    event: ChangeEvent<HTMLTextAreaElement>,
+    field:
+      | "wish"
+      | "ask"
+      | "constraints"
+      | "locationCity"
+      | "locationRegion"
+      | "verificationPreferences",
+    value: string,
   ) {
-    updateAnswer(field, event.target.value);
+    updateAnswer(field, value);
+  }
+
+  function handleInputChange(
+    field: "locationCity" | "locationRegion",
+    value: string,
+  ) {
+    updateAnswer(field, value);
   }
 
   function closeInterview() {
@@ -284,7 +340,7 @@ export function ValuesInterview() {
                   moral trades.
                 </p>
                 <textarea
-                  onChange={(event) => handleTextChange("wish", event)}
+                  onChange={(event) => handleTextChange("wish", readControlValue(event.target))}
                   placeholder="For example: more people trying a vegetarian diet for a fixed period; more money to a global health charity; fewer resources spent on mutually cancelling campaigns."
                   value={answers.wish}
                 />
@@ -321,7 +377,7 @@ export function ValuesInterview() {
                   to stop wasting resources on opposed efforts.
                 </p>
                 <textarea
-                  onChange={(event) => handleTextChange("ask", event)}
+                  onChange={(event) => handleTextChange("ask", readControlValue(event.target))}
                   placeholder="For example: become vegetarian for 40 days; redirect a donation; fund a cause I value; verify a pledge publicly."
                   value={answers.ask}
                 />
@@ -341,12 +397,123 @@ export function ValuesInterview() {
               </div>
             ) : null}
 
+            {step === "conditions" ? (
+              <div className="values-interview-step">
+                <h2 id="values-interview-title">What are the boundaries?</h2>
+                <p>
+                  Private matching needs constraints, verification preferences, and consent norms
+                  before anyone is introduced.
+                </p>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>City</span>
+                    <input
+                      name="locationCityPreview"
+                      onChange={(event) =>
+                        handleInputChange("locationCity", readControlValue(event.target))
+                      }
+                      placeholder="Optional"
+                      type="text"
+                      value={answers.locationCity}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Region</span>
+                    <input
+                      name="locationRegionPreview"
+                      onChange={(event) =>
+                        handleInputChange("locationRegion", readControlValue(event.target))
+                      }
+                      placeholder="State, province, or country"
+                      type="text"
+                      value={answers.locationRegion}
+                    />
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Constraints</span>
+                  <textarea
+                    onChange={(event) =>
+                      handleTextChange("constraints", readControlValue(event.target))
+                    }
+                    placeholder="For example: no legal commitments without review; no public disclosure unless both parties agree; only reversible trials."
+                    value={answers.constraints}
+                  />
+                </label>
+                <label className="field">
+                  <span>Verification preferences</span>
+                  <textarea
+                    onChange={(event) =>
+                      handleTextChange(
+                        "verificationPreferences",
+                        readControlValue(event.target),
+                      )
+                    }
+                    placeholder="For example: private check-ins, receipts, public pledges, third-party verification, or no verification for low-stakes trials."
+                    value={answers.verificationPreferences}
+                  />
+                </label>
+                <div className="values-radio-grid values-consent-grid">
+                  <label>
+                    <input
+                      checked={answers.openToPayment}
+                      onChange={(event) =>
+                        updateAnswer("openToPayment", readControlChecked(event.target))
+                      }
+                      type="checkbox"
+                    />
+                    <span>Open to payment-mediated trades</span>
+                  </label>
+                  <label>
+                    <input
+                      checked={answers.openToPledges}
+                      onChange={(event) =>
+                        updateAnswer("openToPledges", readControlChecked(event.target))
+                      }
+                      type="checkbox"
+                    />
+                    <span>Open to pledge-based trades</span>
+                  </label>
+                  <label>
+                    <input
+                      checked={answers.isDiscoverable}
+                      onChange={(event) =>
+                        updateAnswer("isDiscoverable", readControlChecked(event.target))
+                      }
+                      type="checkbox"
+                    />
+                    <span>Allow safe match suggestions</span>
+                  </label>
+                  <label>
+                    <input
+                      checked={answers.sharePublicPreview}
+                      onChange={(event) =>
+                        updateAnswer("sharePublicPreview", readControlChecked(event.target))
+                      }
+                      type="checkbox"
+                    />
+                    <span>Show only a broad public preview</span>
+                  </label>
+                  <label>
+                    <input
+                      checked={answers.shareLocation}
+                      onChange={(event) =>
+                        updateAnswer("shareLocation", readControlChecked(event.target))
+                      }
+                      type="checkbox"
+                    />
+                    <span>Include city/region in the public preview</span>
+                  </label>
+                </div>
+              </div>
+            ) : null}
+
             {step === "summary" ? (
               <div className="values-interview-step">
                 <h2 id="values-interview-title">A first trade profile</h2>
                 <p>
-                  This is stored only in this browser for now. It helps you enter the site with a
-                  clearer view of what you value and what you might ask.
+                  Exact wishes and asks stay private. If you save this profile, Moral Trade stores
+                  it in the wish registry and only uses broad previews for safe matching.
                 </p>
                 <dl className="values-summary">
                   <div>
@@ -369,6 +536,25 @@ export function ValuesInterview() {
                     <dt>Likely form</dt>
                     <dd>{answers.tradeShape}</dd>
                   </div>
+                  <div>
+                    <dt>Constraints</dt>
+                    <dd>{answers.constraints.trim() || "No constraints entered yet."}</dd>
+                  </div>
+                  <div>
+                    <dt>Verification</dt>
+                    <dd>
+                      {answers.verificationPreferences.trim() ||
+                        "No verification preferences entered yet."}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Discovery</dt>
+                    <dd>
+                      {answers.isDiscoverable
+                        ? "Safe match suggestions enabled; exact wishes remain private."
+                        : "Private only; no match suggestions."}
+                    </dd>
+                  </div>
                 </dl>
                 <div className="values-next-actions">
                   <Link className="button button-primary" href="/offers">
@@ -378,6 +564,66 @@ export function ValuesInterview() {
                     Draft an offer
                   </Link>
                 </div>
+                {isAuthenticated ? (
+                  <form action={saveWishProfileAction} className="values-save-form">
+                    <input name="return_to" type="hidden" value="/dashboard" />
+                    <input name="causes_json" type="hidden" value={JSON.stringify(answers.causes)} />
+                    <input name="offers_json" type="hidden" value={JSON.stringify(answers.offers)} />
+                    <input name="wish" type="hidden" value={answers.wish} />
+                    <input name="ask" type="hidden" value={answers.ask} />
+                    <input name="trade_shape" type="hidden" value={answers.tradeShape} />
+                    <input name="constraints" type="hidden" value={answers.constraints} />
+                    <input name="location_city" type="hidden" value={answers.locationCity} />
+                    <input name="location_region" type="hidden" value={answers.locationRegion} />
+                    <input
+                      name="verification_preferences"
+                      type="hidden"
+                      value={answers.verificationPreferences}
+                    />
+                    <input
+                      name="open_to_payment"
+                      type="hidden"
+                      value={answers.openToPayment ? "true" : "false"}
+                    />
+                    <input
+                      name="open_to_pledges"
+                      type="hidden"
+                      value={answers.openToPledges ? "true" : "false"}
+                    />
+                    <input
+                      name="is_discoverable"
+                      type="hidden"
+                      value={answers.isDiscoverable ? "true" : "false"}
+                    />
+                    <input
+                      name="share_public_preview"
+                      type="hidden"
+                      value={answers.sharePublicPreview ? "true" : "false"}
+                    />
+                    <input
+                      name="share_location"
+                      type="hidden"
+                      value={answers.shareLocation ? "true" : "false"}
+                    />
+                    <button className="button button-primary" type="submit">
+                      Save private wish profile
+                    </button>
+                    <p>
+                      Consent gates remain in place: possible counterparties see a broad preview,
+                      not your identity-specific wish details.
+                    </p>
+                  </form>
+                ) : (
+                  <div className="values-save-form">
+                    <p>
+                      Create an account to save this as a private wish profile and receive safe
+                      match suggestions.
+                    </p>
+                    <Link className="button button-primary" href="/signup">
+                      Create account
+                    </Link>
+                  </div>
+                )}
               </div>
             ) : null}
 

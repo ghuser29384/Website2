@@ -16,6 +16,12 @@ type OfferRecommendationRow = Database["public"]["Tables"]["offer_recommendation
 type OfferCommentRow = Database["public"]["Tables"]["offer_comments"]["Row"];
 type CommentVoteRow = Database["public"]["Tables"]["comment_votes"]["Row"];
 type OfferCartRow = Database["public"]["Tables"]["offer_carts"]["Row"];
+type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
+type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
+type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"]["Row"];
+type MatchSuggestionRow = Database["public"]["Tables"]["match_suggestions"]["Row"];
+type MatchConsentRow = Database["public"]["Tables"]["match_consents"]["Row"];
+type WishNotificationRow = Database["public"]["Tables"]["wish_notifications"]["Row"];
 type InterestStatus = Database["public"]["Enums"]["interest_status"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -49,6 +55,11 @@ export interface PublicProfileSummary extends ProfileRow {
   ratingCount: number;
   offerCount: number;
   isFollowedByViewer: boolean;
+  wishPreview: string | null;
+  wishCauses: string[];
+  wishLocation: string | null;
+  wishOpenToPayment: boolean;
+  wishOpenToPledges: boolean;
 }
 
 export interface OfferRecord extends OfferRow {
@@ -111,6 +122,29 @@ export interface CartItemRecord {
   offer: OfferRecord | null;
 }
 
+export interface WishProfileRecord extends WishProfileRow {
+  wishes: WishEntryRow[];
+  offers: WishEntryRow[];
+  asks: WishEntryRow[];
+}
+
+export interface MatchSuggestionRecord extends MatchSuggestionRow {
+  counterpartyId: string;
+  counterparty: PublicProfileSummary | null;
+  counterpartyPreview: WishProfilePreviewRow | null;
+  viewerReason: string;
+  counterpartyReason: string;
+  viewerConsented: boolean;
+  counterpartyConsented: boolean;
+  canRevealIdentity: boolean;
+  viewerEntry: WishEntryRow | null;
+  counterpartyEntry: WishEntryRow | null;
+}
+
+export interface WishNotificationRecord extends WishNotificationRow {
+  match: MatchSuggestionRecord | null;
+}
+
 export interface PaginatedResult<T> {
   items: T[];
   page: number;
@@ -125,6 +159,9 @@ export interface DashboardDataResult {
   interests: InterestRecord[];
   agreements: AgreementRecord[];
   cartItems: CartItemRecord[];
+  wishProfile: WishProfileRecord | null;
+  matchSuggestions: MatchSuggestionRecord[];
+  wishNotifications: WishNotificationRecord[];
   errors: {
     offers: string | null;
     incomingInterests: string | null;
@@ -132,6 +169,9 @@ export interface DashboardDataResult {
     relatedOffers: string | null;
     agreements: string | null;
     cartItems: string | null;
+    wishProfile: string | null;
+    matchSuggestions: string | null;
+    wishNotifications: string | null;
   };
 }
 
@@ -324,7 +364,7 @@ async function getProfileSummaryMap(
   }
 
   const supabase = await createClient();
-  const [{ data: profiles, error: profilesError }, followsResult] = await Promise.all([
+  const [{ data: profiles, error: profilesError }, followsResult, previewResult] = await Promise.all([
     supabase.from("profiles").select("*").in("id", uniqueProfileIds),
     viewerId
       ? supabase
@@ -333,6 +373,7 @@ async function getProfileSummaryMap(
           .eq("follower_id", viewerId)
           .in("followed_id", uniqueProfileIds)
       : Promise.resolve({ data: [] as Pick<UserFollowRow, "followed_id">[], error: null }),
+    supabase.from("wish_profile_previews").select("*").in("profile_id", uniqueProfileIds),
   ]);
 
   if (profilesError) {
@@ -343,26 +384,46 @@ async function getProfileSummaryMap(
   }
 
   const viewerFollowing = new Set((followsResult.data ?? []).map((row) => row.followed_id));
+  const previewMap = new Map<string, WishProfilePreviewRow>();
+
+  if (previewResult.error) {
+    logSupabaseError("Failed to load public wish profile previews", previewResult.error);
+  } else {
+    for (const preview of (previewResult.data ?? []) as WishProfilePreviewRow[]) {
+      previewMap.set(preview.profile_id, preview);
+    }
+  }
 
   return new Map(
-    ((profiles ?? []) as ProfileRow[]).map((profile) => [
-      profile.id,
-      {
-        ...profile,
-        resolvedName: deriveDisplayName(
-          { email: profile.email, user_metadata: { display_name: profile.display_name ?? undefined } },
-          profile,
-        ),
-        followerCount: profile.follower_count,
-        followingCount: profile.following_count,
-        karma: profile.karma,
-        commentCount: profile.comment_count,
-        rating: profile.rating_count ? profile.rating_avg : null,
-        ratingCount: profile.rating_count,
-        offerCount: profile.offer_count,
-        isFollowedByViewer: viewerFollowing.has(profile.id),
-      } satisfies PublicProfileSummary,
-    ]),
+    ((profiles ?? []) as ProfileRow[]).map((profile) => {
+      const preview = previewMap.get(profile.id);
+
+      return [
+        profile.id,
+        {
+          ...profile,
+          resolvedName: deriveDisplayName(
+            { email: profile.email, user_metadata: { display_name: profile.display_name ?? undefined } },
+            profile,
+          ),
+          followerCount: profile.follower_count,
+          followingCount: profile.following_count,
+          karma: profile.karma,
+          commentCount: profile.comment_count,
+          rating: profile.rating_count ? profile.rating_avg : null,
+          ratingCount: profile.rating_count,
+          offerCount: profile.offer_count,
+          isFollowedByViewer: viewerFollowing.has(profile.id),
+          wishPreview: preview?.public_preview || null,
+          wishCauses: preview?.causes ?? [],
+          wishLocation: preview
+            ? formatLocation(preview.location_city, preview.location_region)
+            : null,
+          wishOpenToPayment: preview?.openness_to_payment ?? false,
+          wishOpenToPledges: preview?.openness_to_pledges ?? false,
+        } satisfies PublicProfileSummary,
+      ];
+    }),
   );
 }
 
@@ -1251,6 +1312,184 @@ export async function listAgreementsForUser(userId: string) {
   });
 }
 
+export async function getWishProfileForUser(userId: string): Promise<WishProfileRecord | null> {
+  if (!hasSupabaseEnv()) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const [{ data: profile, error: profileError }, { data: entries, error: entriesError }] =
+    await Promise.all([
+      supabase.from("wish_profiles").select("*").eq("profile_id", userId).maybeSingle(),
+      supabase
+        .from("wish_entries")
+        .select("*")
+        .eq("profile_id", userId)
+        .order("created_at", { ascending: true }),
+    ]);
+
+  if (profileError) {
+    throw new Error(profileError.message);
+  }
+
+  if (entriesError) {
+    throw new Error(entriesError.message);
+  }
+
+  if (!profile) {
+    return null;
+  }
+
+  const rows = (entries ?? []) as WishEntryRow[];
+
+  return {
+    ...(profile as WishProfileRow),
+    wishes: rows.filter((entry) => entry.entry_type === "wish"),
+    offers: rows.filter((entry) => entry.entry_type === "offer"),
+    asks: rows.filter((entry) => entry.entry_type === "ask"),
+  };
+}
+
+async function listMatchSuggestionsForUser(
+  userId: string,
+  limit = DASHBOARD_PAGE_SIZE,
+): Promise<MatchSuggestionRecord[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("match_suggestions")
+    .select("*")
+    .or(`profile_a_id.eq.${userId},profile_b_id.eq.${userId}`)
+    .neq("status", "dismissed")
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const rows = (data ?? []) as MatchSuggestionRow[];
+  if (!rows.length) {
+    return [];
+  }
+
+  const matchIds = rows.map((row) => row.id);
+  const entryIds = [
+    ...new Set(
+      rows
+        .flatMap((row) => [row.profile_a_entry_id, row.profile_b_entry_id])
+        .filter((entryId): entryId is string => Boolean(entryId)),
+    ),
+  ];
+  const counterpartyIds = [
+    ...new Set(
+      rows.map((row) => (row.profile_a_id === userId ? row.profile_b_id : row.profile_a_id)),
+    ),
+  ];
+
+  const [{ data: consents, error: consentsError }, { data: entries, error: entriesError }, { data: previews, error: previewsError }] =
+    await Promise.all([
+      supabase.from("match_consents").select("*").in("match_id", matchIds),
+      entryIds.length
+        ? supabase.from("wish_entries").select("*").in("id", entryIds)
+        : Promise.resolve({ data: [] as WishEntryRow[], error: null }),
+      counterpartyIds.length
+        ? supabase.from("wish_profile_previews").select("*").in("profile_id", counterpartyIds)
+        : Promise.resolve({ data: [] as WishProfilePreviewRow[], error: null }),
+    ]);
+
+  if (consentsError) {
+    throw new Error(consentsError.message);
+  }
+
+  if (entriesError) {
+    throw new Error(entriesError.message);
+  }
+
+  if (previewsError) {
+    logSupabaseError("Failed to load match counterparty previews", previewsError, { userId });
+  }
+
+  const consentsByMatch = new Map<string, Set<string>>();
+  for (const consent of (consents ?? []) as MatchConsentRow[]) {
+    const bucket = consentsByMatch.get(consent.match_id) ?? new Set<string>();
+    bucket.add(consent.profile_id);
+    consentsByMatch.set(consent.match_id, bucket);
+  }
+
+  const entriesById = new Map(((entries ?? []) as WishEntryRow[]).map((entry) => [entry.id, entry]));
+  const previewsByProfile = new Map(
+    ((previews ?? []) as WishProfilePreviewRow[]).map((preview) => [preview.profile_id, preview]),
+  );
+
+  const revealableCounterpartyIds = rows
+    .filter((row) => {
+      const counterpartyId = row.profile_a_id === userId ? row.profile_b_id : row.profile_a_id;
+      const consentedProfiles = consentsByMatch.get(row.id) ?? new Set<string>();
+      return row.identity_revealed || (consentedProfiles.has(userId) && consentedProfiles.has(counterpartyId));
+    })
+    .map((row) => (row.profile_a_id === userId ? row.profile_b_id : row.profile_a_id));
+  const counterpartyMap = revealableCounterpartyIds.length
+    ? await getProfileSummaryMap(userId, revealableCounterpartyIds)
+    : new Map<string, PublicProfileSummary>();
+
+  return rows.map((row) => {
+    const isProfileA = row.profile_a_id === userId;
+    const counterpartyId = isProfileA ? row.profile_b_id : row.profile_a_id;
+    const consentedProfiles = consentsByMatch.get(row.id) ?? new Set<string>();
+    const viewerConsented = consentedProfiles.has(userId);
+    const counterpartyConsented = consentedProfiles.has(counterpartyId);
+    const canRevealIdentity = row.identity_revealed || (viewerConsented && counterpartyConsented);
+    const viewerEntryId = isProfileA ? row.profile_a_entry_id : row.profile_b_entry_id;
+    const counterpartyEntryId = isProfileA ? row.profile_b_entry_id : row.profile_a_entry_id;
+
+    return {
+      ...row,
+      counterpartyId,
+      counterparty: canRevealIdentity ? counterpartyMap.get(counterpartyId) ?? null : null,
+      counterpartyPreview: previewsByProfile.get(counterpartyId) ?? null,
+      viewerReason: isProfileA ? row.reason_for_a : row.reason_for_b,
+      counterpartyReason: isProfileA ? row.reason_for_b : row.reason_for_a,
+      viewerConsented,
+      counterpartyConsented,
+      canRevealIdentity,
+      viewerEntry: viewerEntryId ? entriesById.get(viewerEntryId) ?? null : null,
+      counterpartyEntry: counterpartyEntryId ? entriesById.get(counterpartyEntryId) ?? null : null,
+    } satisfies MatchSuggestionRecord;
+  });
+}
+
+async function listWishNotificationsForUser(
+  userId: string,
+  matches: MatchSuggestionRecord[],
+): Promise<WishNotificationRecord[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("wish_notifications")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const matchesById = new Map(matches.map((match) => [match.id, match]));
+
+  return ((data ?? []) as WishNotificationRow[]).map((notification) => ({
+    ...notification,
+    match: notification.match_id ? matchesById.get(notification.match_id) ?? null : null,
+  }));
+}
+
 export async function getDashboardData(userId: string): Promise<DashboardDataResult> {
   if (!hasSupabaseEnv()) {
     return {
@@ -1259,6 +1498,9 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       interests: [],
       agreements: [],
       cartItems: [],
+      wishProfile: null,
+      matchSuggestions: [],
+      wishNotifications: [],
       errors: {
         offers: null,
         incomingInterests: null,
@@ -1266,6 +1508,9 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         relatedOffers: null,
         agreements: null,
         cartItems: null,
+        wishProfile: null,
+        matchSuggestions: null,
+        wishNotifications: null,
       },
     };
   }
@@ -1278,6 +1523,9 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     relatedOffers: null,
     agreements: null,
     cartItems: null,
+    wishProfile: null,
+    matchSuggestions: null,
+    wishNotifications: null,
   };
 
   const [{ data: ownOffers, error: ownOffersError }, { data: interests, error: interestsError }] =
@@ -1442,6 +1690,33 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load dashboard cart items", { message, userId });
   }
 
+  let wishProfile: WishProfileRecord | null = null;
+  try {
+    wishProfile = await getWishProfileForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load wish profile.";
+    errors.wishProfile = message;
+    console.error("[supabase] Failed to load dashboard wish profile", { message, userId });
+  }
+
+  let matchSuggestions: MatchSuggestionRecord[] = [];
+  try {
+    matchSuggestions = await listMatchSuggestionsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load match suggestions.";
+    errors.matchSuggestions = message;
+    console.error("[supabase] Failed to load dashboard match suggestions", { message, userId });
+  }
+
+  let wishNotifications: WishNotificationRecord[] = [];
+  try {
+    wishNotifications = await listWishNotificationsForUser(userId, matchSuggestions);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load wish notifications.";
+    errors.wishNotifications = message;
+    console.error("[supabase] Failed to load dashboard wish notifications", { message, userId });
+  }
+
   return {
     offers: hydratedOwnOffers,
     incomingInterests: incomingResponses,
@@ -1452,6 +1727,9 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     })),
     agreements,
     cartItems,
+    wishProfile,
+    matchSuggestions,
+    wishNotifications,
     errors,
   };
 }

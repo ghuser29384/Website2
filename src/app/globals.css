@@ -585,7 +585,7 @@ textarea {
 
 .values-interview-progress {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.35rem;
   margin-bottom: 1.65rem;
 }
@@ -703,6 +703,27 @@ textarea {
 .values-next-actions {
   justify-content: flex-start;
   flex-wrap: wrap;
+}
+
+.values-consent-grid {
+  align-items: stretch;
+}
+
+.values-save-form {
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.values-save-form p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
 }
 
 .hero-panel,
@@ -1788,6 +1809,18 @@ output {
   padding: 1.4rem;
   border-color: var(--line);
   box-shadow: none;
+}
+
+.data-card-wide {
+  grid-column: 1 / -1;
+}
+
+.profile-preview-block {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .data-card::before,

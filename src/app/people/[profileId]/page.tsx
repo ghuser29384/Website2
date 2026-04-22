@@ -225,6 +225,48 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
           </section>
         ) : null}
 
+        <section className="section section-white">
+          <div className="section-head">
+            <p className="eyebrow">Semi-private preview</p>
+            <h2>Broad interests this member has chosen to show</h2>
+            <p>
+              Exact wishes, asks, constraints, and contact details are not shown here. Any
+              introduction requires consent from both sides.
+            </p>
+          </div>
+
+          {profile.wishPreview || profile.wishCauses.length ? (
+            <article className="panel data-card data-card-wide">
+              <p className="route-text">
+                {profile.wishPreview || "This member has shared broad interests only."}
+              </p>
+              <div className="tag-row">
+                {profile.wishCauses.map((cause) => (
+                  <span className="source-pill" key={`${profile.id}-${cause}`}>
+                    {cause}
+                  </span>
+                ))}
+                {profile.wishLocation ? (
+                  <span className="source-pill">{profile.wishLocation}</span>
+                ) : null}
+                {profile.wishOpenToPayment ? (
+                  <span className="impact-pill">Open to payment-mediated trades</span>
+                ) : null}
+                {profile.wishOpenToPledges ? (
+                  <span className="impact-pill">Open to pledge-based trades</span>
+                ) : null}
+              </div>
+            </article>
+          ) : (
+            <div className="empty-state">
+              <div>
+                <strong>No wish preview is public.</strong>
+                <p>This member has not shared a broad wish profile preview.</p>
+              </div>
+            </div>
+          )}
+        </section>
+
         <section className="section section-subtle">
           <div className="section-head">
             <p className="eyebrow">Open offers</p>

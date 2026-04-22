@@ -34,6 +34,22 @@ exception
 end
 $$;
 
+do $$
+begin
+  create type public.wish_entry_type as enum ('wish', 'offer', 'ask');
+exception
+  when duplicate_object then null;
+end
+$$;
+
+do $$
+begin
+  create type public.match_suggestion_status as enum ('suggested', 'dismissed', 'introduced', 'archived');
+exception
+  when duplicate_object then null;
+end
+$$;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   email text not null unique,
@@ -232,6 +248,108 @@ create table if not exists public.offer_carts (
   primary key (offer_id, user_id)
 );
 
+create table if not exists public.wish_profiles (
+  profile_id uuid primary key references public.profiles (id) on delete cascade,
+  causes text[] not null default '{}',
+  location_city text,
+  location_region text,
+  constraints text not null default '',
+  verification_preferences text not null default '',
+  openness_to_payment boolean not null default false,
+  openness_to_pledges boolean not null default true,
+  is_discoverable boolean not null default true,
+  share_public_preview boolean not null default true,
+  share_location boolean not null default false,
+  public_preview text not null default '',
+  safety_status text not null default 'clear' check (safety_status in ('clear', 'flagged', 'blocked')),
+  safety_notes text not null default '',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.wish_entries (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  entry_type public.wish_entry_type not null,
+  cause_area text not null default '',
+  title text not null default '',
+  body text not null,
+  trade_mode text not null default 'open',
+  visibility text not null default 'private' check (visibility in ('private', 'preview')),
+  safety_status text not null default 'clear' check (safety_status in ('clear', 'flagged', 'blocked')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.match_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  profile_a_id uuid not null references public.profiles (id) on delete cascade,
+  profile_b_id uuid not null references public.profiles (id) on delete cascade,
+  profile_a_entry_id uuid references public.wish_entries (id) on delete set null,
+  profile_b_entry_id uuid references public.wish_entries (id) on delete set null,
+  reason_for_a text not null,
+  reason_for_b text not null,
+  score smallint not null default 50 check (score between 0 and 100),
+  status public.match_suggestion_status not null default 'suggested',
+  dedupe_key text not null default gen_random_uuid()::text,
+  identity_revealed boolean not null default false,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (profile_a_id <> profile_b_id),
+  unique (dedupe_key),
+  unique (profile_a_id, profile_b_id, profile_a_entry_id, profile_b_entry_id)
+);
+
+alter table public.match_suggestions add column if not exists dedupe_key text not null default gen_random_uuid()::text;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'match_suggestions_dedupe_key_key'
+  ) then
+    alter table public.match_suggestions
+      add constraint match_suggestions_dedupe_key_key
+      unique (dedupe_key);
+  end if;
+end
+$$;
+
+create table if not exists public.match_consents (
+  match_id uuid not null references public.match_suggestions (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  note text not null default '',
+  consented_at timestamptz not null default timezone('utc', now()),
+  primary key (match_id, profile_id)
+);
+
+create table if not exists public.wish_notifications (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  match_id uuid references public.match_suggestions (id) on delete cascade,
+  kind text not null default 'match' check (kind in ('match', 'consent', 'safety', 'system')),
+  title text not null,
+  body text not null default '',
+  read_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create or replace view public.wish_profile_previews as
+select
+  profile_id,
+  causes,
+  public_preview,
+  case when share_location then location_city else null end as location_city,
+  case when share_location then location_region else null end as location_region,
+  openness_to_payment,
+  openness_to_pledges,
+  updated_at
+from public.wish_profiles
+where is_discoverable = true
+  and share_public_preview = true
+  and safety_status = 'clear';
+
 create index if not exists offers_owner_id_idx on public.offers (owner_id);
 create index if not exists offers_status_created_at_idx on public.offers (status, created_at desc);
 create index if not exists offers_owner_id_status_created_at_idx on public.offers (owner_id, status, created_at desc);
@@ -256,6 +374,13 @@ create index if not exists profiles_rating_sort_idx on public.profiles (rating_a
 create index if not exists profiles_follower_sort_idx on public.profiles (follower_count desc, offer_count desc, id);
 create index if not exists profiles_karma_sort_idx on public.profiles (karma desc, offer_count desc, id);
 create index if not exists profiles_comment_sort_idx on public.profiles (comment_count desc, offer_count desc, id);
+create index if not exists wish_profiles_discoverable_idx on public.wish_profiles (is_discoverable, share_public_preview, safety_status, updated_at desc);
+create index if not exists wish_entries_profile_type_idx on public.wish_entries (profile_id, entry_type, updated_at desc);
+create index if not exists wish_entries_preview_idx on public.wish_entries (visibility, safety_status, entry_type, updated_at desc);
+create index if not exists match_suggestions_profile_a_idx on public.match_suggestions (profile_a_id, status, updated_at desc);
+create index if not exists match_suggestions_profile_b_idx on public.match_suggestions (profile_b_id, status, updated_at desc);
+create index if not exists match_consents_profile_id_idx on public.match_consents (profile_id);
+create index if not exists wish_notifications_profile_unread_idx on public.wish_notifications (profile_id, read_at, created_at desc);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -495,8 +620,26 @@ as $$
     );
 $$;
 
+create or replace function public.wish_profile_is_previewable(target_profile_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select exists (
+    select 1
+    from public.wish_profiles
+    where profile_id = target_profile_id
+      and is_discoverable = true
+      and share_public_preview = true
+      and safety_status = 'clear'
+  );
+$$;
+
 grant execute on function public.viewer_has_interest_for_offer(uuid) to anon, authenticated;
 grant execute on function public.viewer_has_offer_in_cart(uuid) to anon, authenticated;
+grant execute on function public.wish_profile_is_previewable(uuid) to anon, authenticated;
 
 create or replace function public.handle_auth_profile_sync()
 returns trigger
@@ -602,6 +745,21 @@ create trigger agreement_ratings_profile_stats
 after insert or delete or update of score, rated_user_id on public.agreement_ratings
 for each row execute procedure public.handle_agreement_rating_stats();
 
+drop trigger if exists wish_profiles_set_updated_at on public.wish_profiles;
+create trigger wish_profiles_set_updated_at
+before update on public.wish_profiles
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists wish_entries_set_updated_at on public.wish_entries;
+create trigger wish_entries_set_updated_at
+before update on public.wish_entries
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists match_suggestions_set_updated_at on public.match_suggestions;
+create trigger match_suggestions_set_updated_at
+before update on public.match_suggestions
+for each row execute procedure public.set_updated_at();
+
 update public.profiles p
 set
   follower_count = (
@@ -662,6 +820,13 @@ alter table public.offer_recommendations enable row level security;
 alter table public.offer_comments enable row level security;
 alter table public.comment_votes enable row level security;
 alter table public.offer_carts enable row level security;
+alter table public.wish_profiles enable row level security;
+alter table public.wish_entries enable row level security;
+alter table public.match_suggestions enable row level security;
+alter table public.match_consents enable row level security;
+alter table public.wish_notifications enable row level security;
+
+grant select on public.wish_profile_previews to anon, authenticated;
 
 drop policy if exists "profiles_public_read" on public.profiles;
 create policy "profiles_public_read"
@@ -1075,3 +1240,179 @@ on public.offer_carts
 for delete
 to authenticated
 using (user_id = (select auth.uid()));
+
+drop policy if exists "wish_profiles_select_own" on public.wish_profiles;
+create policy "wish_profiles_select_own"
+on public.wish_profiles
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "wish_profiles_insert_own" on public.wish_profiles;
+create policy "wish_profiles_insert_own"
+on public.wish_profiles
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "wish_profiles_update_own" on public.wish_profiles;
+create policy "wish_profiles_update_own"
+on public.wish_profiles
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "wish_entries_select_own_or_preview" on public.wish_entries;
+create policy "wish_entries_select_own_or_preview"
+on public.wish_entries
+for select
+to authenticated
+using (
+  profile_id = (select auth.uid())
+  or (
+    visibility = 'preview'
+    and safety_status = 'clear'
+    and public.wish_profile_is_previewable(profile_id)
+  )
+);
+
+drop policy if exists "wish_entries_insert_own" on public.wish_entries;
+create policy "wish_entries_insert_own"
+on public.wish_entries
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "wish_entries_update_own" on public.wish_entries;
+create policy "wish_entries_update_own"
+on public.wish_entries
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "wish_entries_delete_own" on public.wish_entries;
+create policy "wish_entries_delete_own"
+on public.wish_entries
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "match_suggestions_select_participants" on public.match_suggestions;
+create policy "match_suggestions_select_participants"
+on public.match_suggestions
+for select
+to authenticated
+using (
+  profile_a_id = (select auth.uid())
+  or profile_b_id = (select auth.uid())
+);
+
+drop policy if exists "match_suggestions_insert_participants" on public.match_suggestions;
+create policy "match_suggestions_insert_participants"
+on public.match_suggestions
+for insert
+to authenticated
+with check (
+  profile_a_id = (select auth.uid())
+  or profile_b_id = (select auth.uid())
+);
+
+drop policy if exists "match_suggestions_update_participants" on public.match_suggestions;
+create policy "match_suggestions_update_participants"
+on public.match_suggestions
+for update
+to authenticated
+using (
+  profile_a_id = (select auth.uid())
+  or profile_b_id = (select auth.uid())
+)
+with check (
+  profile_a_id = (select auth.uid())
+  or profile_b_id = (select auth.uid())
+);
+
+drop policy if exists "match_consents_select_match_participants" on public.match_consents;
+create policy "match_consents_select_match_participants"
+on public.match_consents
+for select
+to authenticated
+using (
+  profile_id = (select auth.uid())
+  or exists (
+    select 1
+    from public.match_suggestions
+    where match_suggestions.id = match_consents.match_id
+      and (
+        match_suggestions.profile_a_id = (select auth.uid())
+        or match_suggestions.profile_b_id = (select auth.uid())
+      )
+  )
+);
+
+drop policy if exists "match_consents_insert_own" on public.match_consents;
+create policy "match_consents_insert_own"
+on public.match_consents
+for insert
+to authenticated
+with check (
+  profile_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.match_suggestions
+    where match_suggestions.id = match_consents.match_id
+      and (
+        match_suggestions.profile_a_id = (select auth.uid())
+        or match_suggestions.profile_b_id = (select auth.uid())
+      )
+  )
+);
+
+drop policy if exists "match_consents_update_own" on public.match_consents;
+create policy "match_consents_update_own"
+on public.match_consents
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "wish_notifications_select_own" on public.wish_notifications;
+create policy "wish_notifications_select_own"
+on public.wish_notifications
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "wish_notifications_insert_relevant" on public.wish_notifications;
+create policy "wish_notifications_insert_relevant"
+on public.wish_notifications
+for insert
+to authenticated
+with check (
+  profile_id = (select auth.uid())
+  or (
+    match_id is not null
+    and exists (
+      select 1
+      from public.match_suggestions
+      where match_suggestions.id = wish_notifications.match_id
+        and (
+          match_suggestions.profile_a_id = (select auth.uid())
+          or match_suggestions.profile_b_id = (select auth.uid())
+        )
+        and (
+          match_suggestions.profile_a_id = wish_notifications.profile_id
+          or match_suggestions.profile_b_id = wish_notifications.profile_id
+        )
+    )
+  )
+);
+
+drop policy if exists "wish_notifications_update_own" on public.wish_notifications;
+create policy "wish_notifications_update_own"
+on public.wish_notifications
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));

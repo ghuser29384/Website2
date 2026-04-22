@@ -7,8 +7,12 @@ import type { PostgrestError } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
+import type { Database } from "@/lib/supabase/database.types";
 import { deriveDisplayName, ensureAccountRowsForUser, getViewer, requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
+
+type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
+type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"]["Row"];
 
 function redirectWithMessage(
   path: string,
@@ -24,6 +28,38 @@ function readRequired(formData: FormData, key: string) {
 
 function readOptional(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+function readBoolean(formData: FormData, key: string) {
+  const value = String(formData.get(key) ?? "").trim().toLowerCase();
+  return value === "on" || value === "true" || value === "1" || value === "yes";
+}
+
+function readStringList(formData: FormData, key: string) {
+  const rawValue = readOptional(formData, key);
+
+  if (!rawValue) {
+    return [] as string[];
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((entry) => String(entry ?? "").trim())
+      .filter(Boolean)
+      .slice(0, 12);
+  } catch {
+    return rawValue
+      .split(/[,;\n]/)
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .slice(0, 12);
+  }
 }
 
 function logSupabaseActionError(
@@ -86,6 +122,247 @@ function readBoundedInt(
   }
 
   return Math.min(max, Math.max(min, Math.round(parsedValue)));
+}
+
+const blockedWishPatterns: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\b(kill|murder|assault|poison|bomb|terror|weaponize)\b/i, label: "violence" },
+  { pattern: /\b(harass|stalk|dox|doxx|blackmail|extort|threaten)\b/i, label: "coercion or harassment" },
+  { pattern: /\b(fraud|scam|bribe|hack|steal|illegal|launder)\b/i, label: "illegal or deceptive action" },
+  { pattern: /\b(exploit|traffick|groom|abuse)\b/i, label: "exploitative ask" },
+];
+
+function detectBlockedWishText(values: string[]) {
+  const combined = values.join("\n");
+
+  for (const { pattern, label } of blockedWishPatterns) {
+    if (pattern.test(combined)) {
+      return label;
+    }
+  }
+
+  return null;
+}
+
+function truncateText(value: string, maxLength: number) {
+  const compact = value.replace(/\s+/g, " ").trim();
+
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+
+  return `${compact.slice(0, maxLength - 1).trim()}...`;
+}
+
+function normalizeMatchToken(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function formatCauseList(causes: string[]) {
+  if (!causes.length) {
+    return "open moral priorities";
+  }
+
+  if (causes.length === 1) {
+    return causes[0];
+  }
+
+  return `${causes.slice(0, -1).join(", ")} and ${causes[causes.length - 1]}`;
+}
+
+function buildBroadWishPreview({
+  causes,
+  openToPayment,
+  openToPledges,
+}: {
+  causes: string[];
+  openToPayment: boolean;
+  openToPledges: boolean;
+}) {
+  const tradeForms = [
+    openToPayment ? "payment-mediated trades" : "",
+    openToPledges ? "pledge-based trades" : "",
+  ].filter(Boolean);
+
+  return truncateText(
+    `Interested in moral trades around ${formatCauseList(causes)}${
+      tradeForms.length ? `; open to ${tradeForms.join(" and ")}` : ""
+    }.`,
+    220,
+  );
+}
+
+function inferTradeMode({
+  openToPayment,
+  openToPledges,
+  tradeShape,
+}: {
+  openToPayment: boolean;
+  openToPledges: boolean;
+  tradeShape: string;
+}) {
+  const normalizedShape = tradeShape.toLowerCase();
+
+  if (openToPayment || normalizedShape.includes("paid")) {
+    return "payment";
+  }
+
+  if (openToPledges || normalizedShape.includes("pledge")) {
+    return "pledge";
+  }
+
+  if (normalizedShape.includes("donation")) {
+    return "donation";
+  }
+
+  return "open";
+}
+
+function getOrderedProfilePair(profileId: string, counterpartyId: string) {
+  return profileId < counterpartyId
+    ? { profileAId: profileId, profileBId: counterpartyId, viewerIsProfileA: true }
+    : { profileAId: counterpartyId, profileBId: profileId, viewerIsProfileA: false };
+}
+
+function getSharedCause(left: string[], right: string[]) {
+  const rightSet = new Set(right.map(normalizeMatchToken));
+  return left.find((cause) => rightSet.has(normalizeMatchToken(cause))) ?? null;
+}
+
+async function generateWishMatchSuggestions({
+  profileId,
+  causes,
+  wishText,
+  askText,
+  offerText,
+  openToPayment,
+  openToPledges,
+  viewerEntry,
+}: {
+  profileId: string;
+  causes: string[];
+  wishText: string;
+  askText: string;
+  offerText: string;
+  openToPayment: boolean;
+  openToPledges: boolean;
+  viewerEntry: WishEntryRow | null;
+}) {
+  const supabase = await createClient();
+  const { data: previews, error } = await supabase
+    .from("wish_profile_previews")
+    .select("*")
+    .neq("profile_id", profileId)
+    .limit(40);
+
+  if (error) {
+    logSupabaseActionError("Failed to load wish previews for match generation", error, {
+      profileId,
+    });
+    return;
+  }
+
+  const currentProfileText = `${wishText} ${askText} ${offerText}`.toLowerCase();
+  const generatedNotifications: Database["public"]["Tables"]["wish_notifications"]["Insert"][] = [];
+
+  for (const preview of (previews ?? []) as WishProfilePreviewRow[]) {
+    const sharedCause = getSharedCause(causes, preview.causes ?? []);
+    const previewText = `${preview.public_preview} ${(preview.causes ?? []).join(" ")}`.toLowerCase();
+    const paymentCompatible = openToPayment && preview.openness_to_payment;
+    const pledgeCompatible = openToPledges && preview.openness_to_pledges;
+    const vegetarianCue =
+      causes.some((cause) => normalizeMatchToken(cause).includes("animal")) &&
+      /\b(vegetarian|vegan|meat|diet)\b/i.test(previewText);
+    const textCompatible =
+      currentProfileText
+        .split(/\W+/)
+        .filter((token) => token.length > 5)
+        .some((token) => previewText.includes(token)) || vegetarianCue;
+
+    if (!sharedCause && !paymentCompatible && !pledgeCompatible && !textCompatible) {
+      continue;
+    }
+
+    const { profileAId, profileBId, viewerIsProfileA } = getOrderedProfilePair(
+      profileId,
+      preview.profile_id,
+    );
+    const score =
+      (sharedCause ? 45 : 0) +
+      (textCompatible ? 25 : 0) +
+      (paymentCompatible ? 15 : 0) +
+      (pledgeCompatible ? 15 : 0);
+    const viewerReason = sharedCause
+      ? `You named ${sharedCause}; this profile has a compatible public preview and may be worth exploring without revealing exact wishes first.`
+      : `This profile appears compatible with your stated wishes and trade constraints, but exact asks remain private until both sides consent.`;
+    const counterpartyReason = sharedCause
+      ? `A potential counterparty also named ${sharedCause}; exact wishes remain private until both sides consent.`
+      : `A potential counterparty has a compatible private wish profile; exact wishes remain private until both sides consent.`;
+    const dedupeKey = [profileAId, profileBId, normalizeMatchToken(sharedCause ?? "general")].join(":");
+    const { data: existingMatch } = await supabase
+      .from("match_suggestions")
+      .select("id")
+      .eq("dedupe_key", dedupeKey)
+      .maybeSingle();
+    const { data: match, error: matchError } = await supabase
+      .from("match_suggestions")
+      .upsert(
+        {
+          profile_a_id: profileAId,
+          profile_b_id: profileBId,
+          profile_a_entry_id: viewerIsProfileA ? viewerEntry?.id ?? null : null,
+          profile_b_entry_id: viewerIsProfileA ? null : viewerEntry?.id ?? null,
+          reason_for_a: viewerIsProfileA ? viewerReason : counterpartyReason,
+          reason_for_b: viewerIsProfileA ? counterpartyReason : viewerReason,
+          score: Math.min(100, Math.max(0, score || 45)),
+          status: "suggested",
+          dedupe_key: dedupeKey,
+        },
+        {
+          onConflict: "dedupe_key",
+        },
+      )
+      .select("*")
+      .maybeSingle();
+
+    if (matchError || !match) {
+      logSupabaseActionError("Failed to generate wish match suggestion", matchError, {
+        profileId,
+        counterpartyId: preview.profile_id,
+      });
+      continue;
+    }
+
+    if (!existingMatch) {
+      generatedNotifications.push(
+        {
+          profile_id: profileId,
+          match_id: match.id,
+          kind: "match",
+          title: "A potential moral trade was found",
+          body: viewerReason,
+        },
+        {
+          profile_id: preview.profile_id,
+          match_id: match.id,
+          kind: "match",
+          title: "A potential moral trade was found",
+          body: counterpartyReason,
+        },
+      );
+    }
+  }
+
+  if (generatedNotifications.length) {
+    const { error: notificationError } = await supabase
+      .from("wish_notifications")
+      .insert(generatedNotifications);
+
+    if (notificationError) {
+      logSupabaseActionError("Failed to create wish match notifications", notificationError, {
+        profileId,
+      });
+    }
+  }
 }
 
 export async function signUpAction(formData: FormData) {
@@ -423,6 +700,386 @@ export async function updateProfileAction(formData: FormData) {
   revalidatePath("/people");
   revalidatePath(`/people/${viewer.authUser.id}`);
   redirectWithMessage(returnTo, "message", "Profile updated.");
+}
+
+export async function saveWishProfileAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  await ensureAccountRowsForUser(viewer.authUser, supabase);
+
+  const causes = readStringList(formData, "causes_json");
+  const offers = readStringList(formData, "offers_json");
+  const wishText = readOptional(formData, "wish");
+  const askText = readOptional(formData, "ask");
+  const constraints = readOptional(formData, "constraints");
+  const locationCity = readOptional(formData, "location_city");
+  const locationRegion = readOptional(formData, "location_region");
+  const verificationPreferences = readOptional(formData, "verification_preferences");
+  const tradeShape = readOptional(formData, "trade_shape") || "Open to proposals";
+  const openToPayment = readBoolean(formData, "open_to_payment");
+  const openToPledges = readBoolean(formData, "open_to_pledges");
+  const isDiscoverable = readBoolean(formData, "is_discoverable");
+  const shareLocation = readBoolean(formData, "share_location");
+  const sharePublicPreview = readBoolean(formData, "share_public_preview");
+
+  const safetyBlock = detectBlockedWishText([
+    ...causes,
+    ...offers,
+    wishText,
+    askText,
+    constraints,
+    verificationPreferences,
+    locationCity,
+    locationRegion,
+  ]);
+
+  if (safetyBlock) {
+    const { error: profileError } = await supabase.from("wish_profiles").upsert(
+      {
+        profile_id: viewer.authUser.id,
+        causes,
+        location_city: locationCity || null,
+        location_region: locationRegion || null,
+        constraints: "",
+        verification_preferences: "",
+        openness_to_payment: false,
+        openness_to_pledges: false,
+        is_discoverable: false,
+        share_public_preview: false,
+        share_location: false,
+        public_preview: "",
+        safety_status: "blocked",
+        safety_notes: `Blocked by safety filter: ${safetyBlock}.`,
+      },
+      {
+        onConflict: "profile_id",
+      },
+    );
+
+    if (profileError) {
+      logSupabaseActionError("Failed to record blocked wish profile attempt", profileError, {
+        userId: viewer.authUser.id,
+      });
+    }
+
+    redirectWithMessage(
+      returnTo,
+      "error",
+      `This wish profile was not saved because it appears to involve ${safetyBlock}. Moral Trade does not support coercive, illegal, harassing, or exploitative asks.`,
+    );
+  }
+
+  const publicPreview = buildBroadWishPreview({ causes, openToPayment, openToPledges });
+  const tradeMode = inferTradeMode({ openToPayment, openToPledges, tradeShape });
+
+  const { error: profileError } = await supabase.from("wish_profiles").upsert(
+    {
+      profile_id: viewer.authUser.id,
+      causes,
+      location_city: locationCity || null,
+      location_region: locationRegion || null,
+      constraints,
+      verification_preferences: verificationPreferences,
+      openness_to_payment: openToPayment,
+      openness_to_pledges: openToPledges,
+      is_discoverable: isDiscoverable,
+      share_public_preview: sharePublicPreview,
+      share_location: shareLocation,
+      public_preview: sharePublicPreview ? publicPreview : "",
+      safety_status: "clear",
+      safety_notes: "",
+    },
+    {
+      onConflict: "profile_id",
+    },
+  );
+
+  if (profileError) {
+    logSupabaseActionError("Failed to save wish profile", profileError, {
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", profileError.message);
+  }
+
+  const { error: deleteError } = await supabase
+    .from("wish_entries")
+    .delete()
+    .eq("profile_id", viewer.authUser.id);
+
+  if (deleteError) {
+    logSupabaseActionError("Failed to replace wish entries", deleteError, {
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", deleteError.message);
+  }
+
+  const entryPayloads: Database["public"]["Tables"]["wish_entries"]["Insert"][] = [];
+  const primaryCause = causes[0] ?? "";
+
+  if (wishText) {
+    entryPayloads.push({
+      profile_id: viewer.authUser.id,
+      entry_type: "wish",
+      cause_area: primaryCause,
+      title: "Concrete wish",
+      body: wishText,
+      trade_mode: tradeMode,
+      visibility: "private",
+      safety_status: "clear",
+    });
+  }
+
+  if (offers.length) {
+    entryPayloads.push({
+      profile_id: viewer.authUser.id,
+      entry_type: "offer",
+      cause_area: primaryCause,
+      title: "What this person can offer",
+      body: offers.join(", "),
+      trade_mode: tradeMode,
+      visibility: "private",
+      safety_status: "clear",
+    });
+  }
+
+  if (askText) {
+    entryPayloads.push({
+      profile_id: viewer.authUser.id,
+      entry_type: "ask",
+      cause_area: primaryCause,
+      title: "Ask from counterparties",
+      body: askText,
+      trade_mode: tradeMode,
+      visibility: "private",
+      safety_status: "clear",
+    });
+  }
+
+  const { data: insertedEntries, error: entriesError } = entryPayloads.length
+    ? await supabase.from("wish_entries").insert(entryPayloads).select("*")
+    : { data: [] as WishEntryRow[], error: null };
+
+  if (entriesError) {
+    logSupabaseActionError("Failed to save wish registry entries", entriesError, {
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", entriesError.message);
+  }
+
+  if (isDiscoverable && sharePublicPreview) {
+    const viewerEntry =
+      ((insertedEntries ?? []) as WishEntryRow[]).find((entry) => entry.entry_type === "ask") ??
+      ((insertedEntries ?? []) as WishEntryRow[])[0] ??
+      null;
+
+    await generateWishMatchSuggestions({
+      profileId: viewer.authUser.id,
+      causes,
+      wishText,
+      askText,
+      offerText: offers.join(", "),
+      openToPayment,
+      openToPledges,
+      viewerEntry,
+    });
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/people");
+  revalidatePath(`/people/${viewer.authUser.id}`);
+  redirectWithMessage(returnTo, "message", "Private wish profile saved and safe match suggestions refreshed.");
+}
+
+export async function consentToMatchSuggestionAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const matchId = readRequired(formData, "match_id");
+  const note = readOptional(formData, "note");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+
+  if (!matchId) {
+    redirectWithMessage(returnTo, "error", "Match ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: match, error: matchError } = await supabase
+    .from("match_suggestions")
+    .select("*")
+    .eq("id", matchId)
+    .maybeSingle();
+
+  if (matchError || !match) {
+    redirectWithMessage(returnTo, "error", matchError?.message ?? "Match suggestion not found.");
+  }
+
+  const viewerIsParticipant =
+    match.profile_a_id === viewer.authUser.id || match.profile_b_id === viewer.authUser.id;
+
+  if (!viewerIsParticipant) {
+    redirectWithMessage(returnTo, "error", "You can only consent to your own match suggestions.");
+  }
+
+  const counterpartyId =
+    match.profile_a_id === viewer.authUser.id ? match.profile_b_id : match.profile_a_id;
+
+  const { error: consentError } = await supabase.from("match_consents").upsert(
+    {
+      match_id: matchId,
+      profile_id: viewer.authUser.id,
+      note,
+      consented_at: new Date().toISOString(),
+    },
+    {
+      onConflict: "match_id,profile_id",
+    },
+  );
+
+  if (consentError) {
+    logSupabaseActionError("Failed to record match consent", consentError, {
+      matchId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", consentError.message);
+  }
+
+  const { data: consents, error: consentsError } = await supabase
+    .from("match_consents")
+    .select("*")
+    .eq("match_id", matchId);
+
+  if (consentsError) {
+    logSupabaseActionError("Failed to check match consent state", consentsError, {
+      matchId,
+    });
+  }
+
+  const consentedProfiles = new Set((consents ?? []).map((consent) => consent.profile_id));
+  const bothConsented =
+    consentedProfiles.has(viewer.authUser.id) && consentedProfiles.has(counterpartyId);
+
+  if (bothConsented) {
+    const { error: revealError } = await supabase
+      .from("match_suggestions")
+      .update({
+        identity_revealed: true,
+        status: "introduced",
+      })
+      .eq("id", matchId);
+
+    if (revealError) {
+      logSupabaseActionError("Failed to reveal consented match", revealError, {
+        matchId,
+      });
+    }
+
+    const { error: notificationError } = await supabase.from("wish_notifications").insert([
+      {
+        profile_id: viewer.authUser.id,
+        match_id: matchId,
+        kind: "consent",
+        title: "Both sides opted in",
+        body: "Identity details can now be shown for this possible moral trade.",
+      },
+      {
+        profile_id: counterpartyId,
+        match_id: matchId,
+        kind: "consent",
+        title: "Both sides opted in",
+        body: "Identity details can now be shown for this possible moral trade.",
+      },
+    ]);
+
+    if (notificationError) {
+      logSupabaseActionError("Failed to create match consent notifications", notificationError, {
+        matchId,
+      });
+    }
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(
+    returnTo,
+    "message",
+    bothConsented
+      ? "Both sides have consented. The counterparty can now be shown."
+      : "Consent recorded. The counterparty remains hidden until both sides opt in.",
+  );
+}
+
+export async function dismissMatchSuggestionAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const matchId = readRequired(formData, "match_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+
+  if (!matchId) {
+    redirectWithMessage(returnTo, "error", "Match ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("match_suggestions")
+    .update({
+      status: "dismissed",
+    })
+    .eq("id", matchId)
+    .or(`profile_a_id.eq.${viewer.authUser.id},profile_b_id.eq.${viewer.authUser.id}`);
+
+  if (error) {
+    logSupabaseActionError("Failed to dismiss match suggestion", error, {
+      matchId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Match suggestion dismissed.");
+}
+
+export async function markWishNotificationReadAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const notificationId = readRequired(formData, "notification_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+
+  if (!notificationId) {
+    redirectWithMessage(returnTo, "error", "Notification ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("wish_notifications")
+    .update({
+      read_at: new Date().toISOString(),
+    })
+    .eq("id", notificationId)
+    .eq("profile_id", viewer.authUser.id);
+
+  if (error) {
+    logSupabaseActionError("Failed to mark wish notification as read", error, {
+      notificationId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Notification marked as read.");
 }
 
 export async function toggleFollowAction(formData: FormData) {

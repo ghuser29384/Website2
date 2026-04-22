@@ -209,6 +209,28 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                     {profile.bio || "No public bio has been added yet."}
                   </p>
 
+                  {profile.wishPreview || profile.wishCauses.length ? (
+                    <div className="profile-preview-block">
+                      <p className="detail-kicker">Wish preview</p>
+                      <p className="route-text">
+                        {profile.wishPreview || "Broad interests shared; exact wishes remain private."}
+                      </p>
+                      <div className="tag-row">
+                        {profile.wishCauses.slice(0, 3).map((cause) => (
+                          <span className="source-pill" key={`${profile.id}-${cause}`}>
+                            {cause}
+                          </span>
+                        ))}
+                        {profile.wishOpenToPayment ? (
+                          <span className="impact-pill">Open to payment</span>
+                        ) : null}
+                        {profile.wishOpenToPledges ? (
+                          <span className="impact-pill">Open to pledges</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
                   <dl className="profile-stats">
                     <div>
                       <dt>Followers</dt>

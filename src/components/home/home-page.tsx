@@ -357,7 +357,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
   return (
     <div className="page-shell">
-      <ValuesInterview />
+      <ValuesInterview isAuthenticated={isAuthenticated} />
       <header className="hero">
         <div
           aria-hidden={!showFloatingTopbar}
@@ -778,7 +778,10 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                   <select
                     value={filters.mode}
                     onChange={(event) =>
-                      handleFilterChange("mode", (event.target as HTMLSelectElement).value)
+                      handleFilterChange(
+                        "mode",
+                        (event.target as unknown as { value: string }).value,
+                      )
                     }
                   >
                     {FILTER_MODE_OPTIONS.map((option) => (
@@ -794,7 +797,10 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                   <select
                     value={filters.cause}
                     onChange={(event) =>
-                      handleFilterChange("cause", (event.target as HTMLSelectElement).value)
+                      handleFilterChange(
+                        "cause",
+                        (event.target as unknown as { value: string }).value,
+                      )
                     }
                   >
                     <option value="all">All causes</option>
@@ -811,7 +817,10 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                   <select
                     value={filters.sortOrder}
                     onChange={(event) =>
-                      handleFilterChange("sortOrder", (event.target as HTMLSelectElement).value)
+                      handleFilterChange(
+                        "sortOrder",
+                        (event.target as unknown as { value: string }).value,
+                      )
                     }
                   >
                     {SORT_OPTIONS.map((option) => (

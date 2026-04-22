@@ -19,6 +19,14 @@ interface OfferComposerProps {
   onResetLocalOffers: () => void;
 }
 
+function readControlValue(target: unknown) {
+  return (target as { value: string }).value;
+}
+
+function readControlChecked(target: unknown) {
+  return (target as { checked: boolean }).checked;
+}
+
 export function OfferComposer({
   draft,
   onFieldChange,
@@ -47,7 +55,7 @@ export function OfferComposer({
           placeholder="e.g. Victoria"
           type="text"
           value={draft.alias}
-          onChange={(event) => onFieldChange("alias", (event.target as HTMLInputElement).value)}
+          onChange={(event) => onFieldChange("alias", readControlValue(event.target))}
         />
       </label>
 
@@ -56,7 +64,9 @@ export function OfferComposer({
         <select
           name="mode"
           value={draft.mode}
-          onChange={(event) => onModeChange((event.target as HTMLSelectElement).value as OfferMode)}
+          onChange={(event) =>
+            onModeChange(readControlValue(event.target) as OfferMode)
+          }
         >
           {OFFER_MODE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -73,7 +83,10 @@ export function OfferComposer({
             name="offeredCause"
             value={draft.offeredCause}
             onChange={(event) =>
-              onFieldChange("offeredCause", (event.target as HTMLSelectElement).value)
+              onFieldChange(
+                "offeredCause",
+                readControlValue(event.target),
+              )
             }
           >
             {CAUSE_OPTIONS.map((cause) => (
@@ -90,7 +103,10 @@ export function OfferComposer({
             name="requestedCause"
             value={draft.requestedCause}
             onChange={(event) =>
-              onFieldChange("requestedCause", (event.target as HTMLSelectElement).value)
+              onFieldChange(
+                "requestedCause",
+                readControlValue(event.target),
+              )
             }
           >
             {CAUSE_OPTIONS.slice()
@@ -118,7 +134,7 @@ export function OfferComposer({
           rows={3}
           value={draft.offerAction}
           onChange={(event) =>
-            onFieldChange("offerAction", (event.target as HTMLTextAreaElement).value)
+            onFieldChange("offerAction", readControlValue(event.target))
           }
         />
       </label>
@@ -137,7 +153,7 @@ export function OfferComposer({
           rows={3}
           value={draft.requestAction}
           onChange={(event) =>
-            onFieldChange("requestAction", (event.target as HTMLTextAreaElement).value)
+            onFieldChange("requestAction", readControlValue(event.target))
           }
         />
       </label>
@@ -149,7 +165,10 @@ export function OfferComposer({
           name="compromiseCause"
           value={draft.compromiseCause}
           onChange={(event) =>
-            onFieldChange("compromiseCause", (event.target as HTMLSelectElement).value)
+            onFieldChange(
+              "compromiseCause",
+              readControlValue(event.target),
+            )
           }
         >
           {COMPROMISE_CAUSE_OPTIONS.map((cause) => (
@@ -171,7 +190,7 @@ export function OfferComposer({
               type="range"
               value={draft.offerImpact}
               onChange={(event) =>
-                onFieldChange("offerImpact", Number((event.target as HTMLInputElement).value))
+                onFieldChange("offerImpact", Number(readControlValue(event.target)))
               }
             />
             <output htmlFor="offerImpact">{draft.offerImpact}</output>
@@ -191,7 +210,7 @@ export function OfferComposer({
               onChange={(event) =>
                 onFieldChange(
                   "minCounterpartyImpact",
-                  Number((event.target as HTMLInputElement).value),
+                  Number(readControlValue(event.target)),
                 )
               }
             />
@@ -208,7 +227,10 @@ export function OfferComposer({
             name="verification"
             value={draft.verification}
             onChange={(event) =>
-              onFieldChange("verification", (event.target as HTMLSelectElement).value)
+              onFieldChange(
+                "verification",
+                readControlValue(event.target),
+              )
             }
           >
             {VERIFICATION_OPTIONS.map((option) => (
@@ -225,7 +247,10 @@ export function OfferComposer({
             name="duration"
             value={draft.duration}
             onChange={(event) =>
-              onFieldChange("duration", (event.target as HTMLSelectElement).value)
+              onFieldChange(
+                "duration",
+                readControlValue(event.target),
+              )
             }
           >
             {DURATION_OPTIONS.map((option) => (
@@ -245,7 +270,10 @@ export function OfferComposer({
             name="paymentIntervalUnit"
             value={draft.paymentIntervalUnit}
             onChange={(event) =>
-              onFieldChange("paymentIntervalUnit", (event.target as HTMLSelectElement).value)
+              onFieldChange(
+                "paymentIntervalUnit",
+                readControlValue(event.target),
+              )
             }
           >
             {PAYMENT_INTERVAL_UNIT_OPTIONS.map((option) => (
@@ -267,7 +295,7 @@ export function OfferComposer({
             onChange={(event) =>
               onFieldChange(
                 "paymentIntervalValue",
-                Number((event.target as HTMLInputElement).value),
+                Number(readControlValue(event.target)),
               )
             }
           />
@@ -288,7 +316,7 @@ export function OfferComposer({
             type="range"
             value={draft.trustLevel}
             onChange={(event) =>
-              onFieldChange("trustLevel", Number((event.target as HTMLInputElement).value))
+              onFieldChange("trustLevel", Number(readControlValue(event.target)))
             }
           />
           <output htmlFor="trustLevel">{draft.trustLevel}</output>
@@ -304,7 +332,7 @@ export function OfferComposer({
           rows={3}
           value={draft.notes}
           onChange={(event) =>
-            onFieldChange("notes", (event.target as HTMLTextAreaElement).value)
+            onFieldChange("notes", readControlValue(event.target))
           }
         />
       </label>
@@ -315,7 +343,7 @@ export function OfferComposer({
           name="counterfactualHonesty"
           type="checkbox"
           onChange={(event) =>
-            onFieldChange("counterfactualHonesty", (event.target as HTMLInputElement).checked)
+            onFieldChange("counterfactualHonesty", readControlChecked(event.target))
           }
         />
         <span>I am honestly stating a trade-dependent action, not something I would do anyway.</span>
@@ -327,7 +355,7 @@ export function OfferComposer({
           name="policyPledge"
           type="checkbox"
           onChange={(event) =>
-            onFieldChange("policyPledge", (event.target as HTMLInputElement).checked)
+            onFieldChange("policyPledge", readControlChecked(event.target))
           }
         />
         <span>I am not asking for anything illegal, deceptive, or electorally sensitive.</span>
