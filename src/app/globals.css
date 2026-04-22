@@ -487,6 +487,11 @@ textarea {
   font-weight: 400;
 }
 
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .topbar-utility {
   padding: 0.3rem 0;
   border: 0;
@@ -500,6 +505,204 @@ textarea {
 .topbar-utility:hover,
 .topbar-utility:focus-visible {
   color: var(--accent-deep);
+}
+
+.values-interview-launch {
+  position: fixed;
+  right: clamp(1rem, 3vw, 2rem);
+  bottom: clamp(1rem, 3vw, 2rem);
+  z-index: 55;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.6rem;
+  padding: 0.68rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--accent-deep);
+  box-shadow: var(--shadow-soft);
+  font-family: var(--font-body-loaded);
+  font-size: 0.84rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.values-interview-launch:hover,
+.values-interview-launch:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.values-interview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 3vw, 2rem);
+  background: rgba(29, 37, 48, 0.34);
+}
+
+.values-interview-panel {
+  width: min(100%, 760px);
+  max-height: min(90vh, 820px);
+  overflow: auto;
+  padding: clamp(1.4rem, 3vw, 2rem);
+  background: var(--surface);
+}
+
+.values-interview-head,
+.values-interview-actions,
+.values-next-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.values-interview-head {
+  margin-bottom: 1rem;
+}
+
+.values-interview-head .eyebrow {
+  margin-bottom: 0;
+}
+
+.values-interview-close {
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: var(--font-body-loaded);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.values-interview-close:hover,
+.values-interview-close:focus-visible {
+  color: var(--accent-deep);
+  outline: none;
+}
+
+.values-interview-progress {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-bottom: 1.65rem;
+}
+
+.values-interview-progress span {
+  display: block;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: var(--surface-strong);
+}
+
+.values-interview-progress span.is-active {
+  background: var(--accent);
+}
+
+.values-interview-step {
+  display: grid;
+  gap: 1rem;
+}
+
+.values-interview-step h2 {
+  max-width: 13ch;
+}
+
+.values-interview-step p {
+  max-width: 66ch;
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.values-chip-grid,
+.values-radio-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.values-chip-grid button,
+.values-radio-grid label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.65rem;
+  padding: 0.62rem 0.82rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-body-loaded);
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.values-chip-grid button:hover,
+.values-chip-grid button:focus-visible,
+.values-radio-grid label:hover,
+.values-radio-grid label:focus-within {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.values-chip-grid button.is-selected,
+.values-radio-grid label:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.values-radio-grid input {
+  margin: 0 0.45rem 0 0;
+  accent-color: var(--accent);
+}
+
+.values-summary {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.values-summary div {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 0.28fr) minmax(0, 1fr);
+  gap: 1rem;
+  padding: 0.86rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.values-summary div:last-child {
+  border-bottom: 0;
+}
+
+.values-summary dt,
+.values-summary dd {
+  margin: 0;
+  font-family: var(--font-body-loaded);
+  font-weight: 400;
+}
+
+.values-summary dt {
+  color: var(--accent-deep);
+}
+
+.values-summary dd {
+  color: var(--ink-soft);
+}
+
+.values-interview-actions {
+  margin-top: 1.6rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.values-next-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
 }
 
 .hero-panel,

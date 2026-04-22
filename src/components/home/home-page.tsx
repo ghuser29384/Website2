@@ -10,6 +10,7 @@ import { OfferComposer } from "@/components/home/offer-composer";
 import { OfferBoard } from "@/components/home/offer-board";
 import { OfferDetails } from "@/components/home/offer-details";
 import { ParetoChart } from "@/components/home/pareto-chart";
+import { ValuesInterview } from "@/components/home/values-interview";
 import {
   adjustDraftForMode,
   CAUSE_OPTIONS,
@@ -356,6 +357,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
 
   return (
     <div className="page-shell">
+      <ValuesInterview />
       <header className="hero">
         <div
           aria-hidden={!showFloatingTopbar}
