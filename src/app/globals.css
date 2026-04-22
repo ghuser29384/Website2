@@ -79,6 +79,22 @@ h4 {
   padding: 0.15rem 0 2.9rem;
 }
 
+.legal-page {
+  display: grid;
+  gap: 1rem;
+  max-width: 860px;
+  margin: 3rem auto 4rem;
+}
+
+.legal-page h1 {
+  max-width: 12ch;
+}
+
+.legal-page > p {
+  max-width: 68ch;
+  color: var(--ink-soft);
+}
+
 .opening-sequence {
   position: relative;
   width: 100vw;
@@ -625,6 +641,123 @@ textarea {
   gap: 0.6rem;
 }
 
+.cause-ranking-builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.55fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.cause-ranking-slots {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.cause-rank-slot {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+  min-height: 3.1rem;
+  padding: 0.52rem 0.62rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.cause-rank-slot.is-filled {
+  border-color: var(--accent-muted);
+}
+
+.cause-rank-number {
+  color: var(--accent-deep);
+  font-family: var(--font-body-loaded);
+  font-size: 0.86rem;
+  font-weight: 400;
+}
+
+.cause-rank-placeholder {
+  color: var(--ink-muted);
+  font-family: var(--font-body-loaded);
+  font-size: 0.82rem;
+}
+
+.cause-rank-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.56rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  color: var(--ink);
+  cursor: grab;
+  font-family: var(--font-body-loaded);
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.cause-rank-card:active {
+  cursor: grabbing;
+}
+
+.cause-rank-controls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.cause-rank-controls button {
+  min-height: 1.8rem;
+  padding: 0.28rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: var(--font-body-loaded);
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.cause-rank-controls button:hover,
+.cause-rank-controls button:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-deep);
+  outline: none;
+}
+
+.cause-rank-controls button:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+.cause-ranking-pool {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.cause-ranking-label {
+  color: var(--ink-muted);
+  font-family: var(--font-body-loaded);
+  font-size: 0.76rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cause-other-box {
+  display: grid;
+  gap: 0.55rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--line);
+}
+
 .values-chip-grid button,
 .values-radio-grid label {
   display: inline-flex;
@@ -658,6 +791,25 @@ textarea {
 .values-radio-grid input {
   margin: 0 0.45rem 0 0;
   accent-color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .cause-ranking-builder {
+    grid-template-columns: 1fr;
+  }
+
+  .cause-rank-slot {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .cause-rank-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cause-rank-controls {
+    justify-content: flex-start;
+  }
 }
 
 .values-summary {
@@ -2091,6 +2243,34 @@ output {
 .clean-stack h3,
 .data-card h3 {
   margin-bottom: 0.3rem;
+}
+
+.data-card h4 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-body-loaded);
+  font-size: 0.9rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.mini-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.mini-list-item {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.mini-list-item span {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
 }
 
 .status-banner {

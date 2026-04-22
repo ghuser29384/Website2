@@ -34,9 +34,11 @@ export const FOOTER_LINK_GROUPS = [
   {
     title: "Standards",
     links: [
-      { href: "/#methodology", label: "Methodology" },
+      { href: "/methodology", label: "Methodology" },
       { href: "/#standards", label: "Reasoning standards" },
-      { href: "/#transparency", label: "Transparency" },
+      { href: "/safety", label: "Safety" },
+      { href: "/privacy", label: "Privacy" },
+      { href: "/terms", label: "Terms" },
     ],
   },
   {

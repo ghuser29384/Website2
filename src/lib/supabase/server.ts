@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
-import { getSupabaseEnv } from "@/lib/supabase/config";
+import { getSupabaseEnv, getSupabaseServiceEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 
 export async function createClient() {
@@ -22,6 +23,16 @@ export async function createClient() {
           // Server Components cannot always mutate cookies directly.
         }
       },
+    },
+  });
+}
+
+export function createServiceClient() {
+  const { url, serviceRoleKey } = getSupabaseServiceEnv();
+
+  return createSupabaseClient<Database>(url, serviceRoleKey, {
+    auth: {
+      persistSession: false,
     },
   });
 }

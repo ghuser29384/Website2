@@ -248,6 +248,263 @@ export interface Database {
         };
         Relationships: [];
       };
+      profile_payment_accounts: {
+        Row: {
+          profile_id: string;
+          stripe_account_id: string;
+          charges_enabled: boolean;
+          payouts_enabled: boolean;
+          details_submitted: boolean;
+          onboarding_completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          stripe_account_id: string;
+          charges_enabled?: boolean;
+          payouts_enabled?: boolean;
+          details_submitted?: boolean;
+          onboarding_completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          stripe_account_id?: string;
+          charges_enabled?: boolean;
+          payouts_enabled?: boolean;
+          details_submitted?: boolean;
+          onboarding_completed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agreement_payments: {
+        Row: {
+          id: string;
+          agreement_id: string;
+          payer_id: string;
+          payee_id: string;
+          amount_cents: number;
+          currency: string;
+          cadence_interval_value: number;
+          cadence_interval_unit: "one_time" | "day" | "month" | "year" | "custom_days";
+          platform_fee_cents: number;
+          status: "draft" | "checkout_created" | "paid" | "failed" | "refund_requested" | "refunded" | "disputed" | "cancelled";
+          stripe_checkout_session_id: string | null;
+          stripe_payment_intent_id: string | null;
+          stripe_charge_id: string | null;
+          receipt_url: string | null;
+          notes: string;
+          created_at: string;
+          updated_at: string;
+          paid_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          agreement_id: string;
+          payer_id: string;
+          payee_id: string;
+          amount_cents: number;
+          currency?: string;
+          cadence_interval_value?: number;
+          cadence_interval_unit?: "one_time" | "day" | "month" | "year" | "custom_days";
+          platform_fee_cents?: number;
+          status?: "draft" | "checkout_created" | "paid" | "failed" | "refund_requested" | "refunded" | "disputed" | "cancelled";
+          stripe_checkout_session_id?: string | null;
+          stripe_payment_intent_id?: string | null;
+          stripe_charge_id?: string | null;
+          receipt_url?: string | null;
+          notes?: string;
+          created_at?: string;
+          updated_at?: string;
+          paid_at?: string | null;
+        };
+        Update: {
+          amount_cents?: number;
+          currency?: string;
+          cadence_interval_value?: number;
+          cadence_interval_unit?: "one_time" | "day" | "month" | "year" | "custom_days";
+          platform_fee_cents?: number;
+          status?: "draft" | "checkout_created" | "paid" | "failed" | "refund_requested" | "refunded" | "disputed" | "cancelled";
+          stripe_checkout_session_id?: string | null;
+          stripe_payment_intent_id?: string | null;
+          stripe_charge_id?: string | null;
+          receipt_url?: string | null;
+          notes?: string;
+          updated_at?: string;
+          paid_at?: string | null;
+        };
+        Relationships: [];
+      };
+      agreement_payment_schedules: {
+        Row: {
+          id: string;
+          agreement_id: string;
+          payer_id: string;
+          payee_id: string;
+          amount_cents: number;
+          currency: string;
+          cadence_interval_value: number;
+          cadence_interval_unit: "day" | "month" | "year" | "custom_days";
+          next_due_at: string;
+          status: "active" | "paused" | "cancelled";
+          last_reminded_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agreement_id: string;
+          payer_id: string;
+          payee_id: string;
+          amount_cents: number;
+          currency?: string;
+          cadence_interval_value?: number;
+          cadence_interval_unit: "day" | "month" | "year" | "custom_days";
+          next_due_at: string;
+          status?: "active" | "paused" | "cancelled";
+          last_reminded_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          amount_cents?: number;
+          currency?: string;
+          cadence_interval_value?: number;
+          cadence_interval_unit?: "day" | "month" | "year" | "custom_days";
+          next_due_at?: string;
+          status?: "active" | "paused" | "cancelled";
+          last_reminded_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agreement_events: {
+        Row: {
+          id: string;
+          agreement_id: string;
+          actor_id: string;
+          event_type:
+            | "note"
+            | "counterproposal"
+            | "verification_submitted"
+            | "cancellation_requested"
+            | "dispute_opened"
+            | "status_change"
+            | "payment_update";
+          summary: string;
+          details: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agreement_id: string;
+          actor_id: string;
+          event_type?:
+            | "note"
+            | "counterproposal"
+            | "verification_submitted"
+            | "cancellation_requested"
+            | "dispute_opened"
+            | "status_change"
+            | "payment_update";
+          summary: string;
+          details?: string;
+          created_at?: string;
+        };
+        Update: {
+          event_type?:
+            | "note"
+            | "counterproposal"
+            | "verification_submitted"
+            | "cancellation_requested"
+            | "dispute_opened"
+            | "status_change"
+            | "payment_update";
+          summary?: string;
+          details?: string;
+        };
+        Relationships: [];
+      };
+      email_outbox: {
+        Row: {
+          id: string;
+          profile_id: string | null;
+          recipient_email: string;
+          subject: string;
+          body: string;
+          status: "queued" | "sent" | "failed" | "suppressed";
+          provider: string;
+          attempt_count: number;
+          last_error: string;
+          created_at: string;
+          sent_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          profile_id?: string | null;
+          recipient_email: string;
+          subject: string;
+          body: string;
+          status?: "queued" | "sent" | "failed" | "suppressed";
+          provider?: string;
+          attempt_count?: number;
+          last_error?: string;
+          created_at?: string;
+          sent_at?: string | null;
+        };
+        Update: {
+          recipient_email?: string;
+          subject?: string;
+          body?: string;
+          status?: "queued" | "sent" | "failed" | "suppressed";
+          provider?: string;
+          attempt_count?: number;
+          last_error?: string;
+          sent_at?: string | null;
+        };
+        Relationships: [];
+      };
+      saved_searches: {
+        Row: {
+          id: string;
+          profile_id: string;
+          label: string;
+          causes: string[];
+          query: string;
+          min_score: number;
+          cadence: "manual" | "daily" | "weekly" | "monthly";
+          status: "active" | "paused";
+          last_scanned_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          label: string;
+          causes?: string[];
+          query?: string;
+          min_score?: number;
+          cadence?: "manual" | "daily" | "weekly" | "monthly";
+          status?: "active" | "paused";
+          last_scanned_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          label?: string;
+          causes?: string[];
+          query?: string;
+          min_score?: number;
+          cadence?: "manual" | "daily" | "weekly" | "monthly";
+          status?: "active" | "paused";
+          last_scanned_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       user_follows: {
         Row: {
           follower_id: string;

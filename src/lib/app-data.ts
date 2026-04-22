@@ -11,6 +11,11 @@ type InterestRow = Database["public"]["Tables"]["interests"]["Row"];
 type GuestInterestRow = Database["public"]["Tables"]["guest_interests"]["Row"];
 type AgreementRow = Database["public"]["Tables"]["agreements"]["Row"];
 type AgreementRatingRow = Database["public"]["Tables"]["agreement_ratings"]["Row"];
+type ProfilePaymentAccountRow = Database["public"]["Tables"]["profile_payment_accounts"]["Row"];
+type AgreementPaymentRow = Database["public"]["Tables"]["agreement_payments"]["Row"];
+type AgreementPaymentScheduleRow = Database["public"]["Tables"]["agreement_payment_schedules"]["Row"];
+type AgreementEventRow = Database["public"]["Tables"]["agreement_events"]["Row"];
+type SavedSearchRow = Database["public"]["Tables"]["saved_searches"]["Row"];
 type UserFollowRow = Database["public"]["Tables"]["user_follows"]["Row"];
 type OfferRecommendationRow = Database["public"]["Tables"]["offer_recommendations"]["Row"];
 type OfferCommentRow = Database["public"]["Tables"]["offer_comments"]["Row"];
@@ -109,6 +114,9 @@ export interface AgreementRecord extends AgreementRow {
   responder: PublicProfileSummary | null;
   counterparty: PublicProfileSummary | null;
   viewerRating: AgreementRatingRecord | null;
+  payments: AgreementPaymentRow[];
+  paymentSchedules: AgreementPaymentScheduleRow[];
+  events: AgreementEventRow[];
 }
 
 export interface OfferRecommendationRecord extends OfferRecommendationRow {
@@ -184,6 +192,8 @@ export interface DashboardDataResult {
   backgroundRuns: BackgroundMatchRunRow[];
   matchReports: MatchReportRow[];
   networkInvites: NetworkInviteRow[];
+  paymentAccount: ProfilePaymentAccountRow | null;
+  savedSearches: SavedSearchRow[];
   errors: {
     offers: string | null;
     incomingInterests: string | null;
@@ -199,6 +209,8 @@ export interface DashboardDataResult {
     backgroundRuns: string | null;
     matchReports: string | null;
     networkInvites: string | null;
+    paymentAccount: string | null;
+    savedSearches: string | null;
   };
 }
 
@@ -1284,11 +1296,43 @@ export async function listAgreementsForUser(userId: string) {
     throw new Error(error.message);
   }
 
-  const agreements = (data ?? []) as AgreementRow[];
+  return hydrateAgreementRows((data ?? []) as AgreementRow[], userId);
+}
+
+export async function getAgreementForUser(agreementId: string, userId: string) {
+  if (!hasSupabaseEnv()) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("agreements")
+    .select("*")
+    .eq("id", agreementId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const agreement = data as AgreementRow | null;
+  if (
+    !agreement ||
+    (agreement.proposer_id !== userId && agreement.responder_id !== userId)
+  ) {
+    return null;
+  }
+
+  const [hydratedAgreement] = await hydrateAgreementRows([agreement], userId);
+  return hydratedAgreement ?? null;
+}
+
+async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) {
   if (!agreements.length) {
     return [];
   }
 
+  const supabase = await createClient();
   const offerIds = [...new Set(agreements.map((agreement) => agreement.offer_id))];
   const profileIds = [
     ...new Set(
@@ -1296,10 +1340,32 @@ export async function listAgreementsForUser(userId: string) {
     ),
   ];
   const agreementIds = agreements.map((agreement) => agreement.id);
-  const [{ data: offers, error: offersError }, { data: ratings, error: ratingsError }, profileMap] =
+  const [
+    { data: offers, error: offersError },
+    { data: ratings, error: ratingsError },
+    { data: payments, error: paymentsError },
+    { data: paymentSchedules, error: paymentSchedulesError },
+    { data: events, error: eventsError },
+    profileMap,
+  ] =
     await Promise.all([
       supabase.from("offers").select("*").in("id", offerIds),
       supabase.from("agreement_ratings").select("*").in("agreement_id", agreementIds),
+      supabase
+        .from("agreement_payments")
+        .select("*")
+        .in("agreement_id", agreementIds)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("agreement_payment_schedules")
+        .select("*")
+        .in("agreement_id", agreementIds)
+        .order("next_due_at", { ascending: true }),
+      supabase
+        .from("agreement_events")
+        .select("*")
+        .in("agreement_id", agreementIds)
+        .order("created_at", { ascending: false }),
       getProfileSummaryMap(userId, profileIds),
     ]);
 
@@ -1309,10 +1375,22 @@ export async function listAgreementsForUser(userId: string) {
   if (ratingsError) {
     throw new Error(ratingsError.message);
   }
+  if (paymentsError) {
+    throw new Error(paymentsError.message);
+  }
+  if (paymentSchedulesError) {
+    throw new Error(paymentSchedulesError.message);
+  }
+  if (eventsError) {
+    throw new Error(eventsError.message);
+  }
 
   const hydratedOffers = await hydrateOffers((offers ?? []) as OfferRow[], userId);
   const offersById = new Map(hydratedOffers.map((offer) => [offer.id, offer]));
   const ratingsByAgreement = new Map<string, AgreementRatingRecord[]>();
+  const paymentsByAgreement = new Map<string, AgreementPaymentRow[]>();
+  const paymentSchedulesByAgreement = new Map<string, AgreementPaymentScheduleRow[]>();
+  const eventsByAgreement = new Map<string, AgreementEventRow[]>();
 
   for (const rating of (ratings ?? []) as AgreementRatingRow[]) {
     const bucket = ratingsByAgreement.get(rating.agreement_id) ?? [];
@@ -1322,6 +1400,24 @@ export async function listAgreementsForUser(userId: string) {
       ratedUser: profileMap.get(rating.rated_user_id) ?? null,
     });
     ratingsByAgreement.set(rating.agreement_id, bucket);
+  }
+
+  for (const payment of (payments ?? []) as AgreementPaymentRow[]) {
+    const bucket = paymentsByAgreement.get(payment.agreement_id) ?? [];
+    bucket.push(payment);
+    paymentsByAgreement.set(payment.agreement_id, bucket);
+  }
+
+  for (const schedule of (paymentSchedules ?? []) as AgreementPaymentScheduleRow[]) {
+    const bucket = paymentSchedulesByAgreement.get(schedule.agreement_id) ?? [];
+    bucket.push(schedule);
+    paymentSchedulesByAgreement.set(schedule.agreement_id, bucket);
+  }
+
+  for (const event of (events ?? []) as AgreementEventRow[]) {
+    const bucket = eventsByAgreement.get(event.agreement_id) ?? [];
+    bucket.push(event);
+    eventsByAgreement.set(event.agreement_id, bucket);
   }
 
   return agreements.map((agreement) => {
@@ -1338,6 +1434,9 @@ export async function listAgreementsForUser(userId: string) {
       responder: profileMap.get(agreement.responder_id) ?? null,
       counterparty: profileMap.get(counterpartyId) ?? null,
       viewerRating,
+      payments: paymentsByAgreement.get(agreement.id) ?? [],
+      paymentSchedules: paymentSchedulesByAgreement.get(agreement.id) ?? [],
+      events: eventsByAgreement.get(agreement.id) ?? [],
     } satisfies AgreementRecord;
   });
 }
@@ -1584,6 +1683,45 @@ async function listNetworkInvitesForUser(userId: string): Promise<NetworkInviteR
   return (data ?? []) as NetworkInviteRow[];
 }
 
+async function getPaymentAccountForUser(userId: string): Promise<ProfilePaymentAccountRow | null> {
+  if (!hasSupabaseEnv()) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profile_payment_accounts")
+    .select("*")
+    .eq("profile_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? null) as ProfilePaymentAccountRow | null;
+}
+
+async function listSavedSearchesForUser(userId: string): Promise<SavedSearchRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("saved_searches")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as SavedSearchRow[];
+}
+
 export async function getDashboardData(userId: string): Promise<DashboardDataResult> {
   if (!hasSupabaseEnv()) {
     return {
@@ -1600,6 +1738,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       backgroundRuns: [],
       matchReports: [],
       networkInvites: [],
+      paymentAccount: null,
+      savedSearches: [],
       errors: {
         offers: null,
         incomingInterests: null,
@@ -1615,6 +1755,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         backgroundRuns: null,
         matchReports: null,
         networkInvites: null,
+        paymentAccount: null,
+        savedSearches: null,
       },
     };
   }
@@ -1635,6 +1777,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     backgroundRuns: null,
     matchReports: null,
     networkInvites: null,
+    paymentAccount: null,
+    savedSearches: null,
   };
 
   const [{ data: ownOffers, error: ownOffersError }, { data: interests, error: interestsError }] =
@@ -1872,6 +2016,24 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load network invites", { message, userId });
   }
 
+  let paymentAccount: ProfilePaymentAccountRow | null = null;
+  try {
+    paymentAccount = await getPaymentAccountForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load payment account.";
+    errors.paymentAccount = message;
+    console.error("[supabase] Failed to load payment account", { message, userId });
+  }
+
+  let savedSearches: SavedSearchRow[] = [];
+  try {
+    savedSearches = await listSavedSearchesForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load saved searches.";
+    errors.savedSearches = message;
+    console.error("[supabase] Failed to load saved searches", { message, userId });
+  }
+
   return {
     offers: hydratedOwnOffers,
     incomingInterests: incomingResponses,
@@ -1890,6 +2052,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     backgroundRuns,
     matchReports,
     networkInvites,
+    paymentAccount,
+    savedSearches,
     errors,
   };
 }

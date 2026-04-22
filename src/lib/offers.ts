@@ -67,6 +67,11 @@ const LEGACY_LOCAL_STORAGE_KEY = "moralTradeMarketLocalOffers";
 
 export const CAUSE_OPTIONS = [
   "Animal welfare",
+  "Existential risk",
+  "Future flourishing",
+  "Moral status of digital minds",
+  "Extreme power concentration",
+  "S-risks",
   "Global poverty",
   "Climate",
   "Public health",
@@ -93,6 +98,7 @@ export const FILTER_MODE_OPTIONS: Array<{ value: FilterMode; label: string }> = 
 export const COMPROMISE_CAUSE_OPTIONS = [
   "Not needed",
   "Disaster relief",
+  "Future flourishing",
   "Global poverty",
   "Climate resilience",
   "Public health",

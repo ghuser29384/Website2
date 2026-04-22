@@ -199,6 +199,140 @@ create table if not exists public.agreement_ratings (
   unique (agreement_id, rater_id, rated_user_id)
 );
 
+create table if not exists public.profile_payment_accounts (
+  profile_id uuid primary key references public.profiles (id) on delete cascade,
+  stripe_account_id text not null unique,
+  charges_enabled boolean not null default false,
+  payouts_enabled boolean not null default false,
+  details_submitted boolean not null default false,
+  onboarding_completed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.agreement_payments (
+  id uuid primary key default gen_random_uuid(),
+  agreement_id uuid not null references public.agreements (id) on delete cascade,
+  payer_id uuid not null references public.profiles (id) on delete cascade,
+  payee_id uuid not null references public.profiles (id) on delete cascade,
+  amount_cents integer not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  cadence_interval_value integer not null default 1 check (cadence_interval_value > 0),
+  cadence_interval_unit text not null default 'one_time' check (
+    cadence_interval_unit in ('one_time', 'day', 'month', 'year', 'custom_days')
+  ),
+  platform_fee_cents integer not null default 0 check (platform_fee_cents >= 0),
+  status text not null default 'draft' check (
+    status in (
+      'draft',
+      'checkout_created',
+      'paid',
+      'failed',
+      'refund_requested',
+      'refunded',
+      'disputed',
+      'cancelled'
+    )
+  ),
+  stripe_checkout_session_id text unique,
+  stripe_payment_intent_id text,
+  stripe_charge_id text,
+  receipt_url text,
+  notes text not null default '',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  paid_at timestamptz,
+  check (payer_id <> payee_id),
+  check (platform_fee_cents <= amount_cents)
+);
+
+alter table public.agreement_payments drop constraint if exists agreement_payments_status_check;
+alter table public.agreement_payments
+add constraint agreement_payments_status_check check (
+  status in (
+    'draft',
+    'checkout_created',
+    'paid',
+    'failed',
+    'refund_requested',
+    'refunded',
+    'disputed',
+    'cancelled'
+  )
+);
+
+create table if not exists public.agreement_payment_schedules (
+  id uuid primary key default gen_random_uuid(),
+  agreement_id uuid not null references public.agreements (id) on delete cascade,
+  payer_id uuid not null references public.profiles (id) on delete cascade,
+  payee_id uuid not null references public.profiles (id) on delete cascade,
+  amount_cents integer not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  cadence_interval_value integer not null default 1 check (cadence_interval_value > 0),
+  cadence_interval_unit text not null check (
+    cadence_interval_unit in ('day', 'month', 'year', 'custom_days')
+  ),
+  next_due_at timestamptz not null,
+  status text not null default 'active' check (status in ('active', 'paused', 'cancelled')),
+  last_reminded_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (payer_id <> payee_id)
+);
+
+create table if not exists public.agreement_events (
+  id uuid primary key default gen_random_uuid(),
+  agreement_id uuid not null references public.agreements (id) on delete cascade,
+  actor_id uuid not null references public.profiles (id) on delete cascade,
+  event_type text not null default 'note' check (
+    event_type in (
+      'note',
+      'counterproposal',
+      'verification_submitted',
+      'cancellation_requested',
+      'dispute_opened',
+      'status_change',
+      'payment_update'
+    )
+  ),
+  summary text not null,
+  details text not null default '',
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.email_outbox (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete set null,
+  recipient_email text not null,
+  subject text not null,
+  body text not null,
+  status text not null default 'queued' check (status in ('queued', 'sent', 'failed', 'suppressed')),
+  provider text not null default 'manual',
+  attempt_count integer not null default 0 check (attempt_count >= 0),
+  last_error text not null default '',
+  created_at timestamptz not null default timezone('utc', now()),
+  sent_at timestamptz
+);
+
+alter table public.email_outbox add column if not exists attempt_count integer not null default 0;
+alter table public.email_outbox add column if not exists last_error text not null default '';
+
+create table if not exists public.saved_searches (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  label text not null,
+  causes text[] not null default '{}',
+  query text not null default '',
+  min_score smallint not null default 50 check (min_score between 0 and 100),
+  cadence text not null default 'weekly' check (cadence in ('manual', 'daily', 'weekly', 'monthly')),
+  status text not null default 'active' check (status in ('active', 'paused')),
+  last_scanned_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.saved_searches add column if not exists last_scanned_at timestamptz;
+
 -- Social and marketplace extensions used by the current app code.
 -- Exact table names matter here:
 -- - follows => public.user_follows
@@ -468,6 +602,35 @@ create index if not exists agreements_offer_id_idx on public.agreements (offer_i
 create index if not exists agreements_proposer_id_idx on public.agreements (proposer_id);
 create index if not exists agreements_responder_id_idx on public.agreements (responder_id);
 create index if not exists agreement_ratings_rated_user_id_idx on public.agreement_ratings (rated_user_id);
+create index if not exists profile_payment_accounts_stripe_id_idx on public.profile_payment_accounts (stripe_account_id);
+create index if not exists agreement_payments_agreement_id_idx on public.agreement_payments (agreement_id, created_at desc);
+create index if not exists agreement_payments_payer_id_idx on public.agreement_payments (payer_id, created_at desc);
+create index if not exists agreement_payments_payee_id_idx on public.agreement_payments (payee_id, created_at desc);
+create index if not exists agreement_payments_session_idx on public.agreement_payments (stripe_checkout_session_id);
+create index if not exists agreement_payment_schedules_agreement_id_idx on public.agreement_payment_schedules (agreement_id, next_due_at asc);
+create index if not exists agreement_payment_schedules_due_idx on public.agreement_payment_schedules (status, next_due_at asc);
+create index if not exists agreement_events_agreement_id_idx on public.agreement_events (agreement_id, created_at desc);
+create index if not exists email_outbox_status_created_idx on public.email_outbox (status, created_at asc);
+create index if not exists saved_searches_profile_status_idx on public.saved_searches (profile_id, status, updated_at desc);
+create index if not exists saved_searches_scan_idx on public.saved_searches (status, cadence, last_scanned_at asc nulls first);
+create index if not exists offers_text_search_idx on public.offers using gin (
+  to_tsvector(
+    'english',
+    coalesce(offered_cause, '') || ' ' ||
+    coalesce(requested_cause, '') || ' ' ||
+    coalesce(offer_action, '') || ' ' ||
+    coalesce(request_action, '') || ' ' ||
+    coalesce(notes, '')
+  )
+);
+create index if not exists wish_entries_text_search_idx on public.wish_entries using gin (
+  to_tsvector(
+    'english',
+    coalesce(cause_area, '') || ' ' ||
+    coalesce(title, '') || ' ' ||
+    coalesce(body, '')
+  )
+);
 create index if not exists follows_followed_id_idx on public.user_follows (followed_id);
 create index if not exists recommendations_source_offer_id_idx on public.offer_recommendations (source_offer_id);
 create index if not exists recommendations_recommender_id_idx on public.offer_recommendations (recommender_id);
@@ -1161,6 +1324,26 @@ create trigger offer_comments_set_updated_at
 before update on public.offer_comments
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists profile_payment_accounts_set_updated_at on public.profile_payment_accounts;
+create trigger profile_payment_accounts_set_updated_at
+before update on public.profile_payment_accounts
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists agreement_payments_set_updated_at on public.agreement_payments;
+create trigger agreement_payments_set_updated_at
+before update on public.agreement_payments
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists agreement_payment_schedules_set_updated_at on public.agreement_payment_schedules;
+create trigger agreement_payment_schedules_set_updated_at
+before update on public.agreement_payment_schedules
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists saved_searches_set_updated_at on public.saved_searches;
+create trigger saved_searches_set_updated_at
+before update on public.saved_searches
+for each row execute procedure public.set_updated_at();
+
 drop trigger if exists user_follows_profile_stats on public.user_follows;
 create trigger user_follows_profile_stats
 after insert or delete on public.user_follows
@@ -1261,6 +1444,12 @@ alter table public.interests enable row level security;
 alter table public.guest_interests enable row level security;
 alter table public.agreements enable row level security;
 alter table public.agreement_ratings enable row level security;
+alter table public.profile_payment_accounts enable row level security;
+alter table public.agreement_payments enable row level security;
+alter table public.agreement_payment_schedules enable row level security;
+alter table public.agreement_events enable row level security;
+alter table public.email_outbox enable row level security;
+alter table public.saved_searches enable row level security;
 alter table public.user_follows enable row level security;
 alter table public.offer_recommendations enable row level security;
 alter table public.offer_comments enable row level security;
@@ -1535,6 +1724,174 @@ for update
 to authenticated
 using (rater_id = (select auth.uid()))
 with check (rater_id = (select auth.uid()));
+
+drop policy if exists "profile_payment_accounts_select_own" on public.profile_payment_accounts;
+create policy "profile_payment_accounts_select_own"
+on public.profile_payment_accounts
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "profile_payment_accounts_insert_own" on public.profile_payment_accounts;
+create policy "profile_payment_accounts_insert_own"
+on public.profile_payment_accounts
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "profile_payment_accounts_update_own" on public.profile_payment_accounts;
+create policy "profile_payment_accounts_update_own"
+on public.profile_payment_accounts
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "agreement_payments_select_participants" on public.agreement_payments;
+create policy "agreement_payments_select_participants"
+on public.agreement_payments
+for select
+to authenticated
+using (
+  payer_id = (select auth.uid())
+  or payee_id = (select auth.uid())
+);
+
+drop policy if exists "agreement_payments_insert_participants" on public.agreement_payments;
+create policy "agreement_payments_insert_participants"
+on public.agreement_payments
+for insert
+to authenticated
+with check (
+  payer_id = (select auth.uid())
+  or payee_id = (select auth.uid())
+);
+
+drop policy if exists "agreement_payments_update_participants" on public.agreement_payments;
+create policy "agreement_payments_update_participants"
+on public.agreement_payments
+for update
+to authenticated
+using (
+  payer_id = (select auth.uid())
+  or payee_id = (select auth.uid())
+)
+with check (
+  payer_id = (select auth.uid())
+  or payee_id = (select auth.uid())
+);
+
+drop policy if exists "agreement_payment_schedules_select_participants" on public.agreement_payment_schedules;
+create policy "agreement_payment_schedules_select_participants"
+on public.agreement_payment_schedules
+for select
+to authenticated
+using (
+  payer_id = (select auth.uid())
+  or payee_id = (select auth.uid())
+);
+
+drop policy if exists "agreement_payment_schedules_insert_participants" on public.agreement_payment_schedules;
+create policy "agreement_payment_schedules_insert_participants"
+on public.agreement_payment_schedules
+for insert
+to authenticated
+with check (
+  payer_id = (select auth.uid())
+  or payee_id = (select auth.uid())
+);
+
+drop policy if exists "agreement_payment_schedules_update_participants" on public.agreement_payment_schedules;
+create policy "agreement_payment_schedules_update_participants"
+on public.agreement_payment_schedules
+for update
+to authenticated
+using (
+  payer_id = (select auth.uid())
+  or payee_id = (select auth.uid())
+)
+with check (
+  payer_id = (select auth.uid())
+  or payee_id = (select auth.uid())
+);
+
+drop policy if exists "agreement_events_select_participants" on public.agreement_events;
+create policy "agreement_events_select_participants"
+on public.agreement_events
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.agreements
+    where agreements.id = agreement_events.agreement_id
+      and (
+        agreements.proposer_id = (select auth.uid())
+        or agreements.responder_id = (select auth.uid())
+      )
+  )
+);
+
+drop policy if exists "agreement_events_insert_participants" on public.agreement_events;
+create policy "agreement_events_insert_participants"
+on public.agreement_events
+for insert
+to authenticated
+with check (
+  actor_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.agreements
+    where agreements.id = agreement_events.agreement_id
+      and (
+        agreements.proposer_id = (select auth.uid())
+        or agreements.responder_id = (select auth.uid())
+      )
+  )
+);
+
+drop policy if exists "email_outbox_select_own" on public.email_outbox;
+create policy "email_outbox_select_own"
+on public.email_outbox
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "email_outbox_insert_own" on public.email_outbox;
+create policy "email_outbox_insert_own"
+on public.email_outbox
+for insert
+to authenticated
+with check (profile_id is null or profile_id = (select auth.uid()));
+
+drop policy if exists "saved_searches_select_own" on public.saved_searches;
+create policy "saved_searches_select_own"
+on public.saved_searches
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "saved_searches_insert_own" on public.saved_searches;
+create policy "saved_searches_insert_own"
+on public.saved_searches
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "saved_searches_update_own" on public.saved_searches;
+create policy "saved_searches_update_own"
+on public.saved_searches
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "saved_searches_delete_own" on public.saved_searches;
+create policy "saved_searches_delete_own"
+on public.saved_searches
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
 
 drop policy if exists "follows_public_read" on public.user_follows;
 create policy "follows_public_read"

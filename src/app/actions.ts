@@ -5,17 +5,28 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
 
-import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { deriveDisplayName, ensureAccountRowsForUser, getViewer, requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
+import {
+  calculatePlatformFeeCents,
+  getStripe,
+  hasStripeEnv,
+} from "@/lib/stripe";
 
 type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
 type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"]["Row"];
 type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Insert"];
 type ClarificationQuestionInsert = Database["public"]["Tables"]["clarification_questions"]["Insert"];
+type AgreementEventInsert = Database["public"]["Tables"]["agreement_events"]["Insert"];
+type AgreementPaymentScheduleInsert = Database["public"]["Tables"]["agreement_payment_schedules"]["Insert"];
+type AgreementPaymentStatus = NonNullable<
+  Database["public"]["Tables"]["agreement_payments"]["Update"]["status"]
+>;
 
 function redirectWithMessage(
   path: string,
@@ -81,6 +92,47 @@ function logSupabaseActionError(
     message: error.message,
     ...metadata,
   });
+}
+
+async function queueEmailOutbox({
+  profileId,
+  recipientEmail,
+  subject,
+  body,
+}: {
+  profileId: string;
+  recipientEmail: string | null | undefined;
+  subject: string;
+  body: string;
+}) {
+  if (!recipientEmail) {
+    return;
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("email_outbox").insert({
+    profile_id: profileId,
+    recipient_email: recipientEmail,
+    subject,
+    body,
+  });
+
+  if (error) {
+    logSupabaseActionError("Failed to queue email notification", error, {
+      profileId,
+      recipientEmail,
+    });
+  }
+}
+
+async function requireAdminViewer(returnTo: string) {
+  const viewer = await requireViewer(returnTo);
+
+  if (!isAdminEmail(viewer.authUser.email)) {
+    redirectWithMessage(returnTo, "error", "Admin access is required.");
+  }
+
+  return viewer;
 }
 
 function normalizeOfferMode(value: string) {
@@ -257,6 +309,96 @@ function normalizeSourceType(value: string) {
   }
 
   return "manual";
+}
+
+function normalizeCurrency(value: string) {
+  const normalized = value.trim().toLowerCase();
+
+  return /^[a-z]{3}$/.test(normalized) ? normalized : "usd";
+}
+
+function normalizePaymentCadenceUnit(value: string) {
+  if (
+    value === "one_time" ||
+    value === "day" ||
+    value === "month" ||
+    value === "year" ||
+    value === "custom_days"
+  ) {
+    return value;
+  }
+
+  return "one_time";
+}
+
+function normalizePaymentScheduleUnit(
+  value: string,
+): AgreementPaymentScheduleInsert["cadence_interval_unit"] {
+  if (value === "month" || value === "year" || value === "custom_days") {
+    return value;
+  }
+
+  return "day";
+}
+
+function computeNextDueAt({
+  cadenceValue,
+  cadenceUnit,
+  startDate,
+}: {
+  cadenceValue: number;
+  cadenceUnit: AgreementPaymentScheduleInsert["cadence_interval_unit"];
+  startDate?: string;
+}) {
+  const baseDate = startDate ? new Date(startDate) : new Date();
+
+  if (Number.isNaN(baseDate.getTime())) {
+    return new Date().toISOString();
+  }
+
+  if (cadenceUnit === "month") {
+    baseDate.setMonth(baseDate.getMonth() + cadenceValue);
+  } else if (cadenceUnit === "year") {
+    baseDate.setFullYear(baseDate.getFullYear() + cadenceValue);
+  } else {
+    baseDate.setDate(baseDate.getDate() + cadenceValue);
+  }
+
+  return baseDate.toISOString();
+}
+
+function normalizeAgreementEventType(value: string): AgreementEventInsert["event_type"] {
+  if (
+    value === "counterproposal" ||
+    value === "verification_submitted" ||
+    value === "cancellation_requested" ||
+    value === "dispute_opened" ||
+    value === "status_change" ||
+    value === "payment_update"
+  ) {
+    return value;
+  }
+
+  return "note";
+}
+
+function normalizeAgreementStatus(value: string): Database["public"]["Enums"]["agreement_status"] {
+  if (value === "proposed" || value === "completed" || value === "cancelled") {
+    return value;
+  }
+
+  return "active";
+}
+
+function readMoneyCents(formData: FormData, key: string) {
+  const rawValue = readRequired(formData, key).replace(/[$,\s]/g, "");
+  const parsed = Number(rawValue);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0;
+  }
+
+  return Math.round(parsed * 100);
 }
 
 function normalizeAccessLevel(value: string) {
@@ -815,6 +957,19 @@ export async function expressInterestAction(formData: FormData) {
   if (error) {
     redirectWithMessage(`/offers/${offerId}`, "error", error.message);
   }
+
+  const { data: ownerProfile } = await supabase
+    .from("profiles")
+    .select("email, display_name")
+    .eq("id", offer.owner_id)
+    .maybeSingle();
+
+  await queueEmailOutbox({
+    profileId: viewer.authUser.id,
+    recipientEmail: ownerProfile?.email,
+    subject: "New response to your Moral Trade offer",
+    body: `${interestedAlias} responded to ${offer.offered_cause} for ${offer.requested_cause}. Sign in to review the message and decide whether to form an agreement.`,
+  });
 
   revalidatePath(`/offers/${offerId}`);
   revalidatePath("/dashboard");
@@ -1662,6 +1817,724 @@ export async function createNetworkInviteAction(formData: FormData) {
   redirectWithMessage(returnTo, "message", "Network expansion draft saved.");
 }
 
+export async function createStripeConnectAccountAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  if (!hasStripeEnv()) {
+    redirectWithMessage("/dashboard", "error", "Stripe is not configured yet. Add STRIPE_SECRET_KEY.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const stripe = getStripe();
+  const siteUrl = getSiteUrl();
+
+  const { data: existingAccount, error: accountReadError } = await supabase
+    .from("profile_payment_accounts")
+    .select("*")
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+
+  if (accountReadError) {
+    logSupabaseActionError("Failed to read Stripe payment account", accountReadError, {
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", accountReadError.message);
+  }
+
+  const stripeAccountId =
+    existingAccount?.stripe_account_id ??
+    (
+      await stripe.accounts.create({
+        type: "express",
+        email: viewer.authUser.email ?? undefined,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        metadata: {
+          profile_id: viewer.authUser.id,
+        },
+      })
+    ).id;
+
+  const stripeAccount = await stripe.accounts.retrieve(stripeAccountId);
+  const { error: upsertError } = await supabase.from("profile_payment_accounts").upsert(
+    {
+      profile_id: viewer.authUser.id,
+      stripe_account_id: stripeAccount.id,
+      charges_enabled: stripeAccount.charges_enabled,
+      payouts_enabled: stripeAccount.payouts_enabled,
+      details_submitted: stripeAccount.details_submitted,
+      onboarding_completed_at:
+        stripeAccount.charges_enabled && stripeAccount.payouts_enabled
+          ? new Date().toISOString()
+          : existingAccount?.onboarding_completed_at ?? null,
+    },
+    {
+      onConflict: "profile_id",
+    },
+  );
+
+  if (upsertError) {
+    logSupabaseActionError("Failed to save Stripe payment account", upsertError, {
+      userId: viewer.authUser.id,
+      stripeAccountId: stripeAccount.id,
+    });
+    redirectWithMessage(returnTo, "error", upsertError.message);
+  }
+
+  const accountLink = await stripe.accountLinks.create({
+    account: stripeAccount.id,
+    refresh_url: `${siteUrl}/dashboard?message=${encodeURIComponent("Stripe onboarding can be resumed.")}`,
+    return_url: `${siteUrl}/dashboard?message=${encodeURIComponent("Stripe payment account connected.")}`,
+    type: "account_onboarding",
+  });
+
+  redirect(accountLink.url);
+}
+
+export async function refreshStripeConnectAccountAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  if (!hasStripeEnv()) {
+    redirectWithMessage("/dashboard", "error", "Stripe is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: paymentAccount, error: accountError } = await supabase
+    .from("profile_payment_accounts")
+    .select("*")
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+
+  if (accountError || !paymentAccount) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      accountError?.message ?? "Connect Stripe before refreshing payment status.",
+    );
+  }
+
+  const stripeAccount = await getStripe().accounts.retrieve(paymentAccount.stripe_account_id);
+  const { error } = await supabase
+    .from("profile_payment_accounts")
+    .update({
+      charges_enabled: stripeAccount.charges_enabled,
+      payouts_enabled: stripeAccount.payouts_enabled,
+      details_submitted: stripeAccount.details_submitted,
+      onboarding_completed_at:
+        stripeAccount.charges_enabled && stripeAccount.payouts_enabled
+          ? new Date().toISOString()
+          : paymentAccount.onboarding_completed_at,
+    })
+    .eq("profile_id", viewer.authUser.id);
+
+  if (error) {
+    logSupabaseActionError("Failed to refresh Stripe payment account", error, {
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Stripe payment account status refreshed.");
+}
+
+export async function createAgreementPaymentCheckoutAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  if (!hasStripeEnv()) {
+    redirectWithMessage("/dashboard", "error", "Stripe is not configured yet. Add STRIPE_SECRET_KEY.");
+  }
+
+  const agreementId = readRequired(formData, "agreement_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const amountCents = readMoneyCents(formData, "amount");
+  const currency = normalizeCurrency(readOptional(formData, "currency") || "usd");
+  const cadenceUnit = normalizePaymentCadenceUnit(readOptional(formData, "cadence_unit"));
+  const cadenceValue = readBoundedInt(formData, "cadence_value", {
+    fallback: 1,
+    min: 1,
+    max: 3650,
+  });
+  const notes = readOptional(formData, "notes");
+
+  if (!agreementId || amountCents <= 0) {
+    redirectWithMessage(returnTo, "error", "Payment amount and agreement are required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: agreement, error: agreementError } = await supabase
+    .from("agreements")
+    .select("*")
+    .eq("id", agreementId)
+    .maybeSingle();
+
+  if (agreementError || !agreement) {
+    redirectWithMessage(returnTo, "error", agreementError?.message ?? "Agreement not found.");
+  }
+
+  const viewerIsParticipant =
+    agreement.proposer_id === viewer.authUser.id || agreement.responder_id === viewer.authUser.id;
+
+  if (!viewerIsParticipant) {
+    redirectWithMessage(returnTo, "error", "You can only pay inside your own agreements.");
+  }
+
+  const payeeId =
+    agreement.proposer_id === viewer.authUser.id ? agreement.responder_id : agreement.proposer_id;
+  const { data: payeePaymentAccount, error: accountError } = await supabase
+    .from("profile_payment_accounts")
+    .select("*")
+    .eq("profile_id", payeeId)
+    .maybeSingle();
+
+  if (accountError || !payeePaymentAccount) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      accountError?.message ??
+        "The counterparty has not connected a Stripe account yet, so payment cannot be routed to them.",
+    );
+  }
+
+  if (!payeePaymentAccount.charges_enabled || !payeePaymentAccount.payouts_enabled) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "The counterparty must finish Stripe onboarding before receiving payments.",
+    );
+  }
+
+  const platformFeeCents = calculatePlatformFeeCents(amountCents);
+  const { data: payment, error: paymentError } = await supabase
+    .from("agreement_payments")
+    .insert({
+      agreement_id: agreementId,
+      payer_id: viewer.authUser.id,
+      payee_id: payeeId,
+      amount_cents: amountCents,
+      currency,
+      cadence_interval_unit: cadenceUnit,
+      cadence_interval_value: cadenceValue,
+      platform_fee_cents: platformFeeCents,
+      notes,
+      status: "draft",
+    })
+    .select("*")
+    .single();
+
+  if (paymentError || !payment) {
+    logSupabaseActionError("Failed to create agreement payment record", paymentError, {
+      agreementId,
+      payerId: viewer.authUser.id,
+      payeeId,
+    });
+    redirectWithMessage(returnTo, "error", paymentError?.message ?? "Unable to create payment record.");
+  }
+
+  const stripe = getStripe();
+  const siteUrl = getSiteUrl();
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency,
+          unit_amount: amountCents,
+          product_data: {
+            name: "Moral Trade agreement payment",
+            description:
+              cadenceUnit === "one_time"
+                ? "One-time payment connected to a Moral Trade agreement."
+                : `Installment for a negotiated ${cadenceValue} ${cadenceUnit.replace("_", " ")} cadence.`,
+          },
+        },
+      },
+    ],
+    payment_intent_data: {
+      application_fee_amount: platformFeeCents || undefined,
+      transfer_data: {
+        destination: payeePaymentAccount.stripe_account_id,
+      },
+      metadata: {
+        agreement_id: agreementId,
+        agreement_payment_id: payment.id,
+        payer_id: viewer.authUser.id,
+        payee_id: payeeId,
+      },
+    },
+    metadata: {
+      agreement_id: agreementId,
+      agreement_payment_id: payment.id,
+      payer_id: viewer.authUser.id,
+      payee_id: payeeId,
+    },
+    success_url: `${siteUrl}${returnTo}?message=${encodeURIComponent("Payment completed. Stripe will confirm it by webhook.")}`,
+    cancel_url: `${siteUrl}${returnTo}?message=${encodeURIComponent("Payment checkout cancelled.")}`,
+  });
+
+  const { error: updateError } = await supabase
+    .from("agreement_payments")
+    .update({
+      status: "checkout_created",
+      stripe_checkout_session_id: session.id,
+    })
+    .eq("id", payment.id);
+
+  if (updateError) {
+    logSupabaseActionError("Failed to attach Stripe checkout session to payment record", updateError, {
+      agreementId,
+      paymentId: payment.id,
+      sessionId: session.id,
+    });
+  }
+
+  await supabase.from("agreement_events").insert({
+    agreement_id: agreementId,
+    actor_id: viewer.authUser.id,
+    event_type: "payment_update",
+    summary: `Payment checkout created for ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()}.`,
+    details: notes,
+  });
+
+  if (!session.url) {
+    redirectWithMessage(returnTo, "error", "Stripe did not return a checkout URL.");
+  }
+
+  redirect(session.url);
+}
+
+export async function createAgreementPaymentScheduleAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const agreementId = readRequired(formData, "agreement_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const amountCents = readMoneyCents(formData, "amount");
+  const currency = normalizeCurrency(readOptional(formData, "currency") || "usd");
+  const cadenceUnit = normalizePaymentScheduleUnit(readOptional(formData, "cadence_unit"));
+  const cadenceValue = readBoundedInt(formData, "cadence_value", {
+    fallback: 1,
+    min: 1,
+    max: 3650,
+  });
+  const firstDueAt = readOptional(formData, "next_due_at");
+  const notes = readOptional(formData, "notes");
+
+  if (!agreementId || amountCents <= 0) {
+    redirectWithMessage(returnTo, "error", "Schedule amount and agreement are required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: agreement, error: agreementError } = await supabase
+    .from("agreements")
+    .select("*")
+    .eq("id", agreementId)
+    .maybeSingle();
+
+  if (agreementError || !agreement) {
+    redirectWithMessage(returnTo, "error", agreementError?.message ?? "Agreement not found.");
+  }
+
+  if (agreement.proposer_id !== viewer.authUser.id && agreement.responder_id !== viewer.authUser.id) {
+    redirectWithMessage(returnTo, "error", "You can only schedule payments inside your own agreements.");
+  }
+
+  const payeeId =
+    agreement.proposer_id === viewer.authUser.id ? agreement.responder_id : agreement.proposer_id;
+  const requestedDueDate = firstDueAt ? new Date(`${firstDueAt}T09:00:00.000Z`) : null;
+  const nextDueAt =
+    requestedDueDate && !Number.isNaN(requestedDueDate.getTime())
+      ? requestedDueDate.toISOString()
+      : computeNextDueAt({ cadenceValue, cadenceUnit });
+
+  const { error: scheduleError } = await supabase.from("agreement_payment_schedules").insert({
+    agreement_id: agreementId,
+    payer_id: viewer.authUser.id,
+    payee_id: payeeId,
+    amount_cents: amountCents,
+    currency,
+    cadence_interval_unit: cadenceUnit,
+    cadence_interval_value: cadenceValue,
+    next_due_at: nextDueAt,
+    status: "active",
+  });
+
+  if (scheduleError) {
+    logSupabaseActionError("Failed to create payment schedule", scheduleError, {
+      agreementId,
+      payerId: viewer.authUser.id,
+      payeeId,
+    });
+    redirectWithMessage(returnTo, "error", scheduleError.message);
+  }
+
+  await supabase.from("agreement_events").insert({
+    agreement_id: agreementId,
+    actor_id: viewer.authUser.id,
+    event_type: "payment_update",
+    summary: `Payment reminder schedule created for ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()}.`,
+    details: notes || `Cadence: every ${cadenceValue} ${cadenceUnit.replace("_", " ")}.`,
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/agreements/${agreementId}`);
+  redirectWithMessage(returnTo, "message", "Payment reminder schedule created.");
+}
+
+export async function requestPaymentReviewAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const paymentId = readRequired(formData, "payment_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const requestType = readRequired(formData, "request_type");
+  const details = readOptional(formData, "details");
+
+  if (!paymentId) {
+    redirectWithMessage(returnTo, "error", "Payment ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: payment, error: paymentError } = await supabase
+    .from("agreement_payments")
+    .select("*")
+    .eq("id", paymentId)
+    .maybeSingle();
+
+  if (paymentError || !payment) {
+    redirectWithMessage(returnTo, "error", paymentError?.message ?? "Payment record not found.");
+  }
+
+  if (payment.payer_id !== viewer.authUser.id && payment.payee_id !== viewer.authUser.id) {
+    redirectWithMessage(returnTo, "error", "You can only review payments from your own agreements.");
+  }
+
+  const eventType = requestType === "dispute" ? "dispute_opened" : "payment_update";
+  const status: AgreementPaymentStatus =
+    requestType === "dispute" ? "disputed" : "refund_requested";
+  const summary =
+    requestType === "dispute"
+      ? "A participant opened a payment dispute."
+      : "A participant requested refund review.";
+
+  const { error: updateError } = await supabase
+    .from("agreement_payments")
+    .update({ status })
+    .eq("id", paymentId);
+
+  if (updateError) {
+    logSupabaseActionError("Failed to update payment review status", updateError, {
+      paymentId,
+      userId: viewer.authUser.id,
+      status,
+    });
+    redirectWithMessage(returnTo, "error", updateError.message);
+  }
+
+  const { error: eventError } = await supabase.from("agreement_events").insert({
+    agreement_id: payment.agreement_id,
+    actor_id: viewer.authUser.id,
+    event_type: eventType,
+    summary,
+    details,
+  });
+
+  if (eventError) {
+    logSupabaseActionError("Failed to record payment review event", eventError, {
+      paymentId,
+      agreementId: payment.agreement_id,
+    });
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/agreements/${payment.agreement_id}`);
+  redirectWithMessage(returnTo, "message", "Payment review request recorded.");
+}
+
+export async function addAgreementEventAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const agreementId = readRequired(formData, "agreement_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const eventType = normalizeAgreementEventType(readOptional(formData, "event_type"));
+  const summary = readRequired(formData, "summary");
+  const details = readOptional(formData, "details");
+
+  if (!agreementId || !summary) {
+    redirectWithMessage(returnTo, "error", "Agreement event and summary are required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: agreement, error: agreementError } = await supabase
+    .from("agreements")
+    .select("*")
+    .eq("id", agreementId)
+    .maybeSingle();
+
+  if (agreementError || !agreement) {
+    redirectWithMessage(returnTo, "error", agreementError?.message ?? "Agreement not found.");
+  }
+
+  if (agreement.proposer_id !== viewer.authUser.id && agreement.responder_id !== viewer.authUser.id) {
+    redirectWithMessage(returnTo, "error", "You can only update your own agreements.");
+  }
+
+  const { error } = await supabase.from("agreement_events").insert({
+    agreement_id: agreementId,
+    actor_id: viewer.authUser.id,
+    event_type: eventType,
+    summary,
+    details,
+  });
+
+  if (error) {
+    logSupabaseActionError("Failed to add agreement event", error, {
+      agreementId,
+      userId: viewer.authUser.id,
+      eventType,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Agreement update recorded.");
+}
+
+export async function updateAgreementStatusAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const agreementId = readRequired(formData, "agreement_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const status = normalizeAgreementStatus(readRequired(formData, "status"));
+  const summary = readOptional(formData, "summary") || `Agreement marked ${status}.`;
+
+  if (!agreementId) {
+    redirectWithMessage(returnTo, "error", "Agreement ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: agreement, error: agreementError } = await supabase
+    .from("agreements")
+    .select("*")
+    .eq("id", agreementId)
+    .maybeSingle();
+
+  if (agreementError || !agreement) {
+    redirectWithMessage(returnTo, "error", agreementError?.message ?? "Agreement not found.");
+  }
+
+  if (agreement.proposer_id !== viewer.authUser.id && agreement.responder_id !== viewer.authUser.id) {
+    redirectWithMessage(returnTo, "error", "You can only update your own agreements.");
+  }
+
+  const { error } = await supabase
+    .from("agreements")
+    .update({ status })
+    .eq("id", agreementId);
+
+  if (error) {
+    logSupabaseActionError("Failed to update agreement status", error, {
+      agreementId,
+      userId: viewer.authUser.id,
+      status,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  const { error: eventError } = await supabase.from("agreement_events").insert({
+    agreement_id: agreementId,
+    actor_id: viewer.authUser.id,
+    event_type: "status_change",
+    summary,
+  });
+
+  if (eventError) {
+    logSupabaseActionError("Failed to record agreement status event", eventError, {
+      agreementId,
+      userId: viewer.authUser.id,
+    });
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Agreement status updated.");
+}
+
+export async function saveSearchAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const label = readRequired(formData, "label");
+  const query = readOptional(formData, "query");
+  const causes = readStringList(formData, "causes_json");
+  const cadence = normalizeMatchFrequency(readOptional(formData, "cadence"));
+  const minScore = readBoundedInt(formData, "min_score", {
+    fallback: 50,
+    min: 0,
+    max: 100,
+  });
+
+  if (!label) {
+    redirectWithMessage(returnTo, "error", "Saved search label is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { error } = await supabase.from("saved_searches").insert({
+    profile_id: viewer.authUser.id,
+    label,
+    query,
+    causes,
+    cadence,
+    min_score: minScore,
+    status: "active",
+  });
+
+  if (error) {
+    logSupabaseActionError("Failed to save match search", error, {
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Saved search created.");
+}
+
+export async function updateMatchReportStatusAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const reportId = readRequired(formData, "report_id");
+  const rawStatus = readRequired(formData, "status");
+  const status =
+    rawStatus === "reviewed" || rawStatus === "dismissed" ? rawStatus : "open";
+
+  if (!reportId) {
+    redirectWithMessage(returnTo, "error", "Report ID is required.");
+  }
+
+  await requireAdminViewer(returnTo);
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("match_reports")
+    .update({
+      status,
+      reviewed_at: status === "open" ? null : new Date().toISOString(),
+    })
+    .eq("id", reportId);
+
+  if (error) {
+    logSupabaseActionError("Failed to update match report status", error, {
+      reportId,
+      status,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/admin");
+  redirectWithMessage(returnTo, "message", "Report status updated.");
+}
+
+export async function updatePaymentReviewStatusAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const paymentId = readRequired(formData, "payment_id");
+  const rawStatus = readRequired(formData, "status");
+  const status: AgreementPaymentStatus =
+    rawStatus === "refunded" ||
+    rawStatus === "disputed" ||
+    rawStatus === "cancelled" ||
+    rawStatus === "paid"
+      ? rawStatus
+      : "refund_requested";
+
+  if (!paymentId) {
+    redirectWithMessage(returnTo, "error", "Payment ID is required.");
+  }
+
+  const admin = await requireAdminViewer(returnTo);
+  const supabase = createServiceClient();
+  const { data: payment, error: paymentError } = await supabase
+    .from("agreement_payments")
+    .update({ status })
+    .eq("id", paymentId)
+    .select("*")
+    .maybeSingle();
+
+  if (paymentError || !payment) {
+    logSupabaseActionError("Failed to update payment review status as admin", paymentError, {
+      paymentId,
+      status,
+    });
+    redirectWithMessage(returnTo, "error", paymentError?.message ?? "Payment not found.");
+  }
+
+  await supabase.from("agreement_events").insert({
+    agreement_id: payment.agreement_id,
+    actor_id: admin.authUser.id,
+    event_type: "payment_update",
+    summary: `Admin marked payment ${status.replace("_", " ")}.`,
+    details: "Administrative payment review action. This records platform state only; Stripe disputes or refunds still need Stripe-side handling when applicable.",
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  revalidatePath(`/agreements/${payment.agreement_id}`);
+  redirectWithMessage(returnTo, "message", "Payment review status updated.");
+}
+
+export async function suppressEmailOutboxAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const emailId = readRequired(formData, "email_id");
+
+  if (!emailId) {
+    redirectWithMessage(returnTo, "error", "Email ID is required.");
+  }
+
+  await requireAdminViewer(returnTo);
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("email_outbox")
+    .update({
+      status: "suppressed",
+      last_error: "Suppressed by administrator.",
+    })
+    .eq("id", emailId);
+
+  if (error) {
+    logSupabaseActionError("Failed to suppress queued email", error, {
+      emailId,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/admin");
+  redirectWithMessage(returnTo, "message", "Email suppressed.");
+}
+
 export async function toggleFollowAction(formData: FormData) {
   if (!hasSupabaseEnv()) {
     redirectWithMessage("/", "error", "Supabase is not configured yet.");
@@ -2237,6 +3110,19 @@ export async function acceptInterestAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", agreementError.message);
   }
 
+  const { data: responderProfile } = await supabase
+    .from("profiles")
+    .select("email, display_name")
+    .eq("id", interest.user_id)
+    .maybeSingle();
+
+  await queueEmailOutbox({
+    profileId: viewer.authUser.id,
+    recipientEmail: responderProfile?.email,
+    subject: "Your Moral Trade response was accepted",
+    body: `An agreement was created for ${offer.offered_cause} for ${offer.requested_cause}. Sign in to review payment, evidence, verification, and status options.`,
+  });
+
   const { error: offerUpdateError } = await supabase
     .from("offers")
     .update({
@@ -2390,6 +3276,13 @@ export async function acceptGuestInterestAction(formData: FormData) {
     });
     redirectWithMessage(returnTo, "error", agreementError.message);
   }
+
+  await queueEmailOutbox({
+    profileId: viewer.authUser.id,
+    recipientEmail: guestInterest.contact_email,
+    subject: "Your Moral Trade response was accepted",
+    body: `An agreement was created for ${offer.offered_cause} for ${offer.requested_cause}. Sign in with the same email to manage the agreement.`,
+  });
 
   const { error: offerUpdateError } = await supabase
     .from("offers")

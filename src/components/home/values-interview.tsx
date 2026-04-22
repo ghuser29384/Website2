@@ -11,6 +11,10 @@ const INTERVIEW_DISMISSED_KEY = "moralTradeValuesInterviewDismissed";
 const CAUSE_PROMPTS = [
   "Animal welfare",
   "Existential risk",
+  "Future flourishing",
+  "Moral status of digital minds",
+  "Extreme power concentration",
+  "S-risks",
   "Global poverty",
   "Climate",
   "Public health",
@@ -113,6 +117,12 @@ function toggleValue(values: string[], value: string) {
   return values.includes(value)
     ? values.filter((entry) => entry !== value)
     : [...values, value];
+}
+
+function getRankedCauses(causes: string[]) {
+  return causes
+    .map((cause) => cause.trim())
+    .filter((cause, index, ranking) => cause && ranking.indexOf(cause) === index);
 }
 
 function summarizeList(values: string[], fallback: string) {
@@ -261,6 +271,8 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasCompleted, setHasCompleted] = useState(false);
+  const [draggedCause, setDraggedCause] = useState<string | null>(null);
+  const [customCause, setCustomCause] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -325,6 +337,60 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
     updateAnswer(field, value);
   }
 
+  function addCauseToRanking(cause: string) {
+    const normalizedCause = cause.trim();
+
+    if (!normalizedCause) {
+      return;
+    }
+
+    setAnswers((current) => ({
+      ...current,
+      causes: getRankedCauses(current.causes).includes(normalizedCause)
+        ? getRankedCauses(current.causes)
+        : [...getRankedCauses(current.causes), normalizedCause],
+    }));
+  }
+
+  function addCustomCauseToRanking() {
+    addCauseToRanking(customCause);
+    setCustomCause("");
+  }
+
+  function moveCauseToRank(cause: string, rankIndex: number) {
+    setAnswers((current) => {
+      const currentRanking = getRankedCauses(current.causes).filter((entry) => entry !== cause);
+      const nextRanking = [...currentRanking];
+
+      nextRanking.splice(Math.min(rankIndex, nextRanking.length), 0, cause);
+
+      return {
+        ...current,
+        causes: nextRanking,
+      };
+    });
+  }
+
+  function moveCauseByOffset(cause: string, offset: number) {
+    const rankedCauses = getRankedCauses(answers.causes);
+    const currentIndex = rankedCauses.indexOf(cause);
+
+    if (currentIndex < 0) {
+      return;
+    }
+
+    const nextIndex = Math.max(0, Math.min(rankedCauses.length - 1, currentIndex + offset));
+
+    moveCauseToRank(cause, nextIndex);
+  }
+
+  function removeCauseFromRanking(cause: string) {
+    updateAnswer(
+      "causes",
+      getRankedCauses(answers.causes).filter((entry) => entry !== cause),
+    );
+  }
+
   function closeInterview() {
     writeDismissedInterview();
     setIsOpen(false);
@@ -344,6 +410,10 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
   if (!isLoaded) {
     return null;
   }
+
+  const rankedCauses = getRankedCauses(answers.causes);
+  const availableCauses = CAUSE_PROMPTS.filter((cause) => !rankedCauses.includes(cause));
+  const causeSlotCount = Math.max(CAUSE_PROMPTS.length, rankedCauses.length + 1);
 
   return (
     <>
@@ -386,22 +456,114 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
 
             {step === "values" ? (
               <div className="values-interview-step">
-                <h2 id="values-interview-title">What matters most to you?</h2>
+                <h2 id="values-interview-title">Rank the cause areas by importance to you.</h2>
                 <p>
-                  Choose the areas where you would most want another person&apos;s action to
-                  change the world.
+                  Drag each cause area into the numbered slots, starting with the area where
+                  you would most want another person&apos;s action to change the world.
                 </p>
-                <div className="values-chip-grid">
-                  {CAUSE_PROMPTS.map((cause) => (
-                    <button
-                      className={answers.causes.includes(cause) ? "is-selected" : ""}
-                      key={cause}
-                      onClick={() => updateAnswer("causes", toggleValue(answers.causes, cause))}
-                      type="button"
-                    >
-                      {cause}
-                    </button>
-                  ))}
+                <div className="cause-ranking-builder">
+                  <div className="cause-ranking-slots">
+                    {Array.from({ length: causeSlotCount }).map((_, index) => {
+                      const cause = rankedCauses[index];
+
+                      return (
+                        <div
+                          className={`cause-rank-slot${cause ? " is-filled" : ""}`}
+                          key={`cause-rank-${index}`}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={(event) => {
+                            event.preventDefault();
+
+                            if (draggedCause) {
+                              moveCauseToRank(draggedCause, index);
+                              setDraggedCause(null);
+                            }
+                          }}
+                        >
+                          <span className="cause-rank-number">{index + 1}.</span>
+                          {cause ? (
+                            <div
+                              className="cause-rank-card"
+                              draggable
+                              onDragEnd={() => setDraggedCause(null)}
+                              onDragStart={() => setDraggedCause(cause)}
+                            >
+                              <span>{cause}</span>
+                              <span className="cause-rank-controls">
+                                <button
+                                  aria-label={`Move ${cause} up`}
+                                  disabled={index === 0}
+                                  onClick={() => moveCauseByOffset(cause, -1)}
+                                  type="button"
+                                >
+                                  Up
+                                </button>
+                                <button
+                                  aria-label={`Move ${cause} down`}
+                                  disabled={index === rankedCauses.length - 1}
+                                  onClick={() => moveCauseByOffset(cause, 1)}
+                                  type="button"
+                                >
+                                  Down
+                                </button>
+                                <button
+                                  aria-label={`Remove ${cause} from ranking`}
+                                  onClick={() => removeCauseFromRanking(cause)}
+                                  type="button"
+                                >
+                                  Remove
+                                </button>
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="cause-rank-placeholder">Drop a cause area here</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="cause-ranking-pool">
+                    <p className="cause-ranking-label">Cause areas</p>
+                    <div className="values-chip-grid">
+                      {availableCauses.map((cause) => (
+                        <button
+                          draggable
+                          key={cause}
+                          onClick={() => addCauseToRanking(cause)}
+                          onDragEnd={() => setDraggedCause(null)}
+                          onDragStart={() => setDraggedCause(cause)}
+                          type="button"
+                        >
+                          {cause}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="cause-other-box">
+                      <label className="field compact-field">
+                        <span>Other cause area</span>
+                        <input
+                          onChange={(event) => setCustomCause(readControlValue(event.target))}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              addCustomCauseToRanking();
+                            }
+                          }}
+                          placeholder="Type another cause area"
+                          value={customCause}
+                        />
+                      </label>
+                      <button
+                        className="button button-secondary button-mini"
+                        disabled={!customCause.trim()}
+                        onClick={addCustomCauseToRanking}
+                        type="button"
+                      >
+                        Add other
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : null}

@@ -11,6 +11,7 @@ The product currently supports three offer modes: personal pledge swaps, donatio
 - TypeScript
 - Supabase SSR helpers via `@supabase/ssr`
 - Supabase Auth and Postgres
+- Stripe Checkout and Connect for payment-mediated agreements
 
 ## Routes
 
@@ -21,6 +22,13 @@ The product currently supports three offer modes: personal pledge swaps, donatio
 - `/offers/new` authenticated offer creation page
 - `/offers/[offerId]` live offer detail page with interest form
 - `/dashboard` authenticated dashboard showing your offers and interests
+- `/agreements/[agreementId]` authenticated agreement record with payments, schedules, evidence, disputes, and ratings
+- `/admin` operator review console gated by `ADMIN_EMAILS`
+- `/terms`, `/privacy`, `/safety`, and `/methodology` public institutional pages
+- `/api/stripe/webhook` Stripe webhook endpoint for payment status updates
+- `/api/jobs/email` cron endpoint for queued email delivery through Resend
+- `/api/jobs/payment-reminders` cron endpoint for scheduled payment reminders
+- `/api/jobs/saved-searches` cron endpoint for non-AI saved-search matching
 
 ## Project structure
 
@@ -77,7 +85,15 @@ cp .env.example .env.local
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=your-project-url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PLATFORM_FEE_BPS=0
+RESEND_API_KEY=re_...
+EMAIL_FROM="Moral Trade <notifications@moraltrade.org>"
+CRON_SECRET=long-random-secret
+ADMIN_EMAILS=operator@example.com
 ```
 
 4. Apply the database schema from [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL editor.
@@ -102,6 +118,12 @@ npm run dev
 - `public.offers`
 - `public.interests`
 - `public.agreements`
+- `public.profile_payment_accounts`
+- `public.agreement_payments`
+- `public.agreement_payment_schedules`
+- `public.agreement_events`
+- `public.email_outbox`
+- `public.saved_searches`
 
 Important: the current app is centered on `public.profiles`.
 
@@ -139,9 +161,23 @@ The homepage still works without Supabase so the original prototype remains usab
 - express interest
 - dashboard showing your own offers and interests
 - three offer modes: pledge swap, donation offset, and paid action offer
+- Stripe Connect onboarding for users who want to receive payments
+- Stripe Checkout for agreement-linked payments
+- agreement-level payment reminder schedules for daily, monthly, yearly, and custom-day cadences
+- agreement event logs for counterproposals, evidence, cancellations, and disputes
+- queued notification records delivered by `/api/jobs/email` when Resend is configured
+- `/admin` review queues for match reports, payment review, lifecycle problems, email, and safety-flagged wish profiles
+- non-AI saved-search background scans through `/api/jobs/saved-searches`
+
+## Operations
+
+The operational checklist is in [`docs/production-readiness.md`](docs/production-readiness.md). Apply schema changes before deploying, configure Vercel env vars, and verify Vercel Cron can call the job endpoints.
+
+The accessibility and mobile test checklist is in [`docs/accessibility-checklist.md`](docs/accessibility-checklist.md). Use it for the first-visit interview, dashboard, agreements, payments, and admin flows.
 
 ## Notes
 
 - The homepage offer board remains client-side so the original demo stays intact.
 - The authenticated routes use the same visual system as the homepage rather than default framework scaffolding.
-- The next logical extension is turning `agreements` into a real user-facing workflow.
+- Stripe payments are not legal escrow. They are payment records and payout routing through Stripe Connect.
+- Recurring payments are reminder schedules, not automatic card charges or legally binding invoices.

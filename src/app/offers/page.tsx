@@ -42,6 +42,24 @@ const SPOTLIGHT_CAUSES = [
       cause.includes("existential") || cause.includes("x-risk") || cause.includes("xrisk"),
   },
   {
+    label: "Future flourishing",
+    matches: (cause: string) => cause.includes("future flourishing") || cause.includes("future"),
+  },
+  {
+    label: "Moral status of digital minds",
+    matches: (cause: string) =>
+      cause.includes("digital mind") || cause.includes("digital minds") || cause.includes("moral status"),
+  },
+  {
+    label: "Extreme power concentration",
+    matches: (cause: string) => cause.includes("power concentration") || cause.includes("concentrated power"),
+  },
+  {
+    label: "S-risks",
+    matches: (cause: string) =>
+      cause.includes("s-risk") || cause.includes("s-risks") || cause.includes("suffering risk"),
+  },
+  {
     label: "Global poverty",
     matches: (cause: string) => cause.includes("global poverty") || cause.includes("poverty"),
   },

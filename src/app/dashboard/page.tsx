@@ -2,16 +2,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
+  addAgreementEventAction,
   answerClarificationQuestionAction,
+  createAgreementPaymentCheckoutAction,
   createNetworkInviteAction,
+  createStripeConnectAccountAction,
   consentToMatchSuggestionAction,
   dismissMatchSuggestionAction,
   dismissClarificationQuestionAction,
   markWishNotificationReadAction,
   rateAgreementAction,
   refreshBackgroundMatchesAction,
+  refreshStripeConnectAccountAction,
   reportMatchSuggestionAction,
+  saveSearchAction,
   saveProfileSourceAction,
+  updateAgreementStatusAction,
 } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -20,6 +26,7 @@ import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import { hasStripeEnv } from "@/lib/stripe";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -33,10 +40,30 @@ interface DashboardPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+function formatPaymentAmount(amountCents: number, currency: string) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(amountCents / 100);
+}
+
+function formatCadence(value: number, unit: string) {
+  if (unit === "one_time") {
+    return "one-time";
+  }
+
+  if (unit === "custom_days") {
+    return `every ${value} day${value === 1 ? "" : "s"}`;
+  }
+
+  return value === 1 ? `every ${unit}` : `every ${value} ${unit}s`;
+}
+
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
+  const stripeReady = hasStripeEnv();
   const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
   const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
 
@@ -139,6 +166,82 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             logged on the server.
           </div>
         ) : null}
+
+        <section className="section section-white">
+          <div className="section-head">
+            <p className="eyebrow">Payments</p>
+            <h2>Stripe Connect setup</h2>
+            <p>
+              Payment-mediated trades use Stripe Checkout and Connect destination charges. This is
+              not legal escrow; the platform records payment state and supports refunds/disputes
+              through Stripe workflows.
+            </p>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            {!stripeReady ? (
+              <div className="empty-state">
+                <div>
+                  <strong>Stripe is not configured yet.</strong>
+                  <p>Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and SUPABASE_SERVICE_ROLE_KEY in Vercel before live payments.</p>
+                </div>
+              </div>
+            ) : dashboardData?.errors.paymentAccount ? (
+              <div className="empty-state">
+                <div>
+                  <strong>We could not load your payment account.</strong>
+                  <p>The detailed Supabase error was logged on the server.</p>
+                </div>
+              </div>
+            ) : dashboardData?.paymentAccount ? (
+              <>
+                <div className="tag-row">
+                  <span className="badge">
+                    {dashboardData.paymentAccount.charges_enabled &&
+                    dashboardData.paymentAccount.payouts_enabled
+                      ? "Ready to receive payments"
+                      : "Onboarding incomplete"}
+                  </span>
+                  <span className="source-pill">
+                    {dashboardData.paymentAccount.details_submitted
+                      ? "Details submitted"
+                      : "Details needed"}
+                  </span>
+                </div>
+                <p className="route-text">
+                  Stripe account {dashboardData.paymentAccount.stripe_account_id}. Refresh this
+                  status after completing onboarding.
+                </p>
+                <div className="form-actions">
+                  <form action={createStripeConnectAccountAction}>
+                    <input name="return_to" type="hidden" value="/dashboard" />
+                    <button className="button button-primary button-mini" type="submit">
+                      Continue onboarding
+                    </button>
+                  </form>
+                  <form action={refreshStripeConnectAccountAction}>
+                    <input name="return_to" type="hidden" value="/dashboard" />
+                    <button className="button button-secondary button-mini" type="submit">
+                      Refresh status
+                    </button>
+                  </form>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="route-text">
+                  Connect a Stripe Express account before another party can route payment to you.
+                </p>
+                <form action={createStripeConnectAccountAction}>
+                  <input name="return_to" type="hidden" value="/dashboard" />
+                  <button className="button button-primary" type="submit">
+                    Connect Stripe
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </section>
 
         <section className="section section-white">
           <div className="section-head">
@@ -346,6 +449,61 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <li key={source.id}>
                       {source.label}
                       {source.url ? ` (${source.url})` : ""}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Saved searches</p>
+              <h3>Run durable match searches</h3>
+              <p className="route-text">
+                Save recurring search intent now; background workers can later use these records
+                for scheduled, rate-limited matching.
+              </p>
+              <form action={saveSearchAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Label</span>
+                  <input name="label" placeholder="Animal welfare payment trades" />
+                </label>
+                <label className="field">
+                  <span>Causes</span>
+                  <input name="causes_json" placeholder="Animal welfare, S-risks" />
+                </label>
+                <label className="field">
+                  <span>Search description</span>
+                  <textarea name="query" placeholder="What kind of counterparty or offer should this search look for?" />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Minimum score</span>
+                    <input defaultValue={50} max={100} min={0} name="min_score" type="number" />
+                  </label>
+                  <label className="field">
+                    <span>Cadence</span>
+                    <select defaultValue="weekly" name="cadence">
+                      <option value="manual">Manual</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </label>
+                </div>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save search
+                </button>
+              </form>
+              {dashboardData?.errors.savedSearches ? (
+                <p className="route-text">Could not load saved searches.</p>
+              ) : dashboardData?.savedSearches.length ? (
+                <ul className="clean-list">
+                  {dashboardData.savedSearches.slice(0, 4).map((search) => (
+                    <li key={search.id}>
+                      {search.label} ({search.cadence}, score {search.min_score}+)
+                      {search.last_scanned_at
+                        ? `; last scanned ${new Date(search.last_scanned_at).toLocaleDateString()}`
+                        : ""}
                     </li>
                   ))}
                 </ul>
@@ -828,7 +986,138 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <span className="impact-pill">Your rating: {agreement.viewerRating.score}/10</span>
                     ) : null}
                   </div>
+                  <div className="offer-actions">
+                    <Link className="text-button" href={`/agreements/${agreement.id}`}>
+                      Open agreement record
+                    </Link>
+                  </div>
                   {agreement.notes ? <p className="route-text">{agreement.notes}</p> : null}
+                  <div className="stack-form compact-form">
+                    <h4>Payment and lifecycle</h4>
+                    <form action={createAgreementPaymentCheckoutAction} className="stack-form compact-form">
+                      <input name="agreement_id" type="hidden" value={agreement.id} />
+                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <div className="field-grid">
+                        <label className="field">
+                          <span>Amount</span>
+                          <input name="amount" placeholder="25.00" type="number" min="1" step="0.01" />
+                        </label>
+                        <label className="field">
+                          <span>Currency</span>
+                          <input defaultValue="usd" name="currency" />
+                        </label>
+                      </div>
+                      <div className="field-grid">
+                        <label className="field">
+                          <span>Cadence</span>
+                          <select name="cadence_unit" defaultValue="one_time">
+                            <option value="one_time">One-time</option>
+                            <option value="day">Daily</option>
+                            <option value="month">Monthly</option>
+                            <option value="year">Yearly</option>
+                            <option value="custom_days">Custom day range</option>
+                          </select>
+                        </label>
+                        <label className="field">
+                          <span>Every</span>
+                          <input defaultValue={1} min={1} name="cadence_value" type="number" />
+                        </label>
+                      </div>
+                      <label className="field">
+                        <span>Payment note</span>
+                        <input name="notes" placeholder="What this installment covers" />
+                      </label>
+                      <button className="button button-primary button-mini" type="submit">
+                        Pay with Stripe
+                      </button>
+                    </form>
+
+                    {agreement.payments.length ? (
+                      <div className="mini-list">
+                        {agreement.payments.slice(0, 3).map((payment) => (
+                          <div key={payment.id} className="mini-list-item">
+                            <strong>{formatPaymentAmount(payment.amount_cents, payment.currency)}</strong>
+                            <span>
+                              {payment.status} | {formatCadence(payment.cadence_interval_value, payment.cadence_interval_unit)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="route-text">No payment records yet.</p>
+                    )}
+
+                    {agreement.paymentSchedules.length ? (
+                      <div className="mini-list">
+                        {agreement.paymentSchedules.slice(0, 2).map((schedule) => (
+                          <div key={schedule.id} className="mini-list-item">
+                            <strong>{formatPaymentAmount(schedule.amount_cents, schedule.currency)}</strong>
+                            <span>
+                              reminder {formatCadence(schedule.cadence_interval_value, schedule.cadence_interval_unit)} | next due{" "}
+                              {new Date(schedule.next_due_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <form action={addAgreementEventAction} className="stack-form compact-form">
+                      <input name="agreement_id" type="hidden" value={agreement.id} />
+                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <label className="field">
+                        <span>Agreement update</span>
+                        <select name="event_type" defaultValue="verification_submitted">
+                          <option value="note">Note</option>
+                          <option value="counterproposal">Counterproposal</option>
+                          <option value="verification_submitted">Verification evidence</option>
+                          <option value="cancellation_requested">Cancellation request</option>
+                          <option value="dispute_opened">Dispute opened</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Summary</span>
+                        <input name="summary" placeholder="e.g. Uploaded receipt; proposes monthly payment instead" />
+                      </label>
+                      <label className="field">
+                        <span>Details</span>
+                        <textarea name="details" placeholder="Evidence, counterproposal terms, or dispute details" />
+                      </label>
+                      <button className="button button-secondary button-mini" type="submit">
+                        Record update
+                      </button>
+                    </form>
+
+                    <div className="form-actions">
+                      <form action={updateAgreementStatusAction}>
+                        <input name="agreement_id" type="hidden" value={agreement.id} />
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="status" type="hidden" value="completed" />
+                        <input name="summary" type="hidden" value="Agreement marked completed by one party." />
+                        <button className="text-button" type="submit">Mark complete</button>
+                      </form>
+                      <form action={updateAgreementStatusAction}>
+                        <input name="agreement_id" type="hidden" value={agreement.id} />
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="status" type="hidden" value="cancelled" />
+                        <input name="summary" type="hidden" value="Agreement cancellation recorded by one party." />
+                        <button className="text-button" type="submit">Cancel</button>
+                      </form>
+                    </div>
+
+                    {agreement.events.length ? (
+                      <div className="mini-list">
+                        {agreement.events.slice(0, 4).map((event) => (
+                          <div key={event.id} className="mini-list-item">
+                            <strong>{event.summary}</strong>
+                            <span>
+                              {event.event_type.replaceAll("_", " ")} |{" "}
+                              {new Date(event.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   {agreement.counterparty ? (
                     <form action={rateAgreementAction} className="stack-form compact-form">
                       <input name="agreement_id" type="hidden" value={agreement.id} />
