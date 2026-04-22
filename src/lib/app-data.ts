@@ -19,8 +19,7 @@ type OfferCartRow = Database["public"]["Tables"]["offer_carts"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
 type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
 type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"]["Row"];
-type MatchSuggestionRow = Database["public"]["Tables"]["match_suggestions"]["Row"];
-type MatchConsentRow = Database["public"]["Tables"]["match_consents"]["Row"];
+type MatchSuggestionPreviewRow = Database["public"]["Views"]["match_suggestion_previews"]["Row"];
 type WishNotificationRow = Database["public"]["Tables"]["wish_notifications"]["Row"];
 type InterestStatus = Database["public"]["Enums"]["interest_status"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -128,17 +127,21 @@ export interface WishProfileRecord extends WishProfileRow {
   asks: WishEntryRow[];
 }
 
-export interface MatchSuggestionRecord extends MatchSuggestionRow {
-  counterpartyId: string;
+export interface MatchSuggestionRecord {
+  id: string;
+  counterpartyId: string | null;
   counterparty: PublicProfileSummary | null;
   counterpartyPreview: WishProfilePreviewRow | null;
   viewerReason: string;
   counterpartyReason: string;
+  score: number;
+  status: "suggested" | "dismissed" | "introduced" | "archived";
+  identityRevealed: boolean;
   viewerConsented: boolean;
   counterpartyConsented: boolean;
   canRevealIdentity: boolean;
-  viewerEntry: WishEntryRow | null;
-  counterpartyEntry: WishEntryRow | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WishNotificationRecord extends WishNotificationRow {
@@ -1360,10 +1363,8 @@ async function listMatchSuggestionsForUser(
 
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("match_suggestions")
+    .from("match_suggestion_previews")
     .select("*")
-    .or(`profile_a_id.eq.${userId},profile_b_id.eq.${userId}`)
-    .neq("status", "dismissed")
     .order("updated_at", { ascending: false })
     .limit(limit);
 
@@ -1371,95 +1372,49 @@ async function listMatchSuggestionsForUser(
     throw new Error(error.message);
   }
 
-  const rows = (data ?? []) as MatchSuggestionRow[];
+  const rows = (data ?? []) as MatchSuggestionPreviewRow[];
   if (!rows.length) {
     return [];
   }
 
-  const matchIds = rows.map((row) => row.id);
-  const entryIds = [
-    ...new Set(
-      rows
-        .flatMap((row) => [row.profile_a_entry_id, row.profile_b_entry_id])
-        .filter((entryId): entryId is string => Boolean(entryId)),
-    ),
-  ];
   const counterpartyIds = [
     ...new Set(
-      rows.map((row) => (row.profile_a_id === userId ? row.profile_b_id : row.profile_a_id)),
+      rows
+        .map((row) => row.counterparty_profile_id)
+        .filter((profileId): profileId is string => Boolean(profileId)),
     ),
   ];
-
-  const [{ data: consents, error: consentsError }, { data: entries, error: entriesError }, { data: previews, error: previewsError }] =
-    await Promise.all([
-      supabase.from("match_consents").select("*").in("match_id", matchIds),
-      entryIds.length
-        ? supabase.from("wish_entries").select("*").in("id", entryIds)
-        : Promise.resolve({ data: [] as WishEntryRow[], error: null }),
-      counterpartyIds.length
-        ? supabase.from("wish_profile_previews").select("*").in("profile_id", counterpartyIds)
-        : Promise.resolve({ data: [] as WishProfilePreviewRow[], error: null }),
-    ]);
-
-  if (consentsError) {
-    throw new Error(consentsError.message);
-  }
-
-  if (entriesError) {
-    throw new Error(entriesError.message);
-  }
-
-  if (previewsError) {
-    logSupabaseError("Failed to load match counterparty previews", previewsError, { userId });
-  }
-
-  const consentsByMatch = new Map<string, Set<string>>();
-  for (const consent of (consents ?? []) as MatchConsentRow[]) {
-    const bucket = consentsByMatch.get(consent.match_id) ?? new Set<string>();
-    bucket.add(consent.profile_id);
-    consentsByMatch.set(consent.match_id, bucket);
-  }
-
-  const entriesById = new Map(((entries ?? []) as WishEntryRow[]).map((entry) => [entry.id, entry]));
-  const previewsByProfile = new Map(
-    ((previews ?? []) as WishProfilePreviewRow[]).map((preview) => [preview.profile_id, preview]),
-  );
-
-  const revealableCounterpartyIds = rows
-    .filter((row) => {
-      const counterpartyId = row.profile_a_id === userId ? row.profile_b_id : row.profile_a_id;
-      const consentedProfiles = consentsByMatch.get(row.id) ?? new Set<string>();
-      return row.identity_revealed || (consentedProfiles.has(userId) && consentedProfiles.has(counterpartyId));
-    })
-    .map((row) => (row.profile_a_id === userId ? row.profile_b_id : row.profile_a_id));
-  const counterpartyMap = revealableCounterpartyIds.length
-    ? await getProfileSummaryMap(userId, revealableCounterpartyIds)
+  const counterpartyMap = counterpartyIds.length
+    ? await getProfileSummaryMap(userId, counterpartyIds)
     : new Map<string, PublicProfileSummary>();
 
-  return rows.map((row) => {
-    const isProfileA = row.profile_a_id === userId;
-    const counterpartyId = isProfileA ? row.profile_b_id : row.profile_a_id;
-    const consentedProfiles = consentsByMatch.get(row.id) ?? new Set<string>();
-    const viewerConsented = consentedProfiles.has(userId);
-    const counterpartyConsented = consentedProfiles.has(counterpartyId);
-    const canRevealIdentity = row.identity_revealed || (viewerConsented && counterpartyConsented);
-    const viewerEntryId = isProfileA ? row.profile_a_entry_id : row.profile_b_entry_id;
-    const counterpartyEntryId = isProfileA ? row.profile_b_entry_id : row.profile_a_entry_id;
-
-    return {
-      ...row,
-      counterpartyId,
-      counterparty: canRevealIdentity ? counterpartyMap.get(counterpartyId) ?? null : null,
-      counterpartyPreview: previewsByProfile.get(counterpartyId) ?? null,
-      viewerReason: isProfileA ? row.reason_for_a : row.reason_for_b,
-      counterpartyReason: isProfileA ? row.reason_for_b : row.reason_for_a,
-      viewerConsented,
-      counterpartyConsented,
-      canRevealIdentity,
-      viewerEntry: viewerEntryId ? entriesById.get(viewerEntryId) ?? null : null,
-      counterpartyEntry: counterpartyEntryId ? entriesById.get(counterpartyEntryId) ?? null : null,
-    } satisfies MatchSuggestionRecord;
-  });
+  return rows.map((row) => ({
+    id: row.id,
+    counterpartyId: row.counterparty_profile_id,
+    counterparty: row.counterparty_profile_id
+      ? counterpartyMap.get(row.counterparty_profile_id) ?? null
+      : null,
+    counterpartyPreview: {
+      profile_id: row.counterparty_profile_id ?? "",
+      causes: row.counterparty_causes,
+      public_preview: row.counterparty_public_preview,
+      location_city: row.counterparty_location_city,
+      location_region: row.counterparty_location_region,
+      openness_to_payment: row.counterparty_openness_to_payment,
+      openness_to_pledges: row.counterparty_openness_to_pledges,
+      updated_at: row.updated_at,
+    },
+    viewerReason: row.viewer_reason,
+    counterpartyReason: row.counterparty_reason,
+    score: row.score,
+    status: row.status,
+    identityRevealed: row.identity_revealed,
+    viewerConsented: row.viewer_consented,
+    counterpartyConsented: row.counterparty_consented,
+    canRevealIdentity: row.can_reveal_identity,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
 }
 
 async function listWishNotificationsForUser(

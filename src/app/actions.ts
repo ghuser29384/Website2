@@ -298,31 +298,20 @@ async function generateWishMatchSuggestions({
       ? `A potential counterparty also named ${sharedCause}; exact wishes remain private until both sides consent.`
       : `A potential counterparty has a compatible private wish profile; exact wishes remain private until both sides consent.`;
     const dedupeKey = [profileAId, profileBId, normalizeMatchToken(sharedCause ?? "general")].join(":");
-    const { data: existingMatch } = await supabase
-      .from("match_suggestions")
-      .select("id")
-      .eq("dedupe_key", dedupeKey)
-      .maybeSingle();
-    const { data: match, error: matchError } = await supabase
-      .from("match_suggestions")
-      .upsert(
-        {
-          profile_a_id: profileAId,
-          profile_b_id: profileBId,
-          profile_a_entry_id: viewerIsProfileA ? viewerEntry?.id ?? null : null,
-          profile_b_entry_id: viewerIsProfileA ? null : viewerEntry?.id ?? null,
-          reason_for_a: viewerIsProfileA ? viewerReason : counterpartyReason,
-          reason_for_b: viewerIsProfileA ? counterpartyReason : viewerReason,
-          score: Math.min(100, Math.max(0, score || 45)),
-          status: "suggested",
-          dedupe_key: dedupeKey,
-        },
-        {
-          onConflict: "dedupe_key",
-        },
-      )
-      .select("*")
-      .maybeSingle();
+    const { data: matchResult, error: matchError } = await supabase.rpc(
+      "upsert_match_suggestion",
+      {
+        target_profile_a_id: profileAId,
+        target_profile_b_id: profileBId,
+        target_profile_a_entry_id: viewerIsProfileA ? viewerEntry?.id ?? null : null,
+        target_profile_b_entry_id: viewerIsProfileA ? null : viewerEntry?.id ?? null,
+        target_reason_for_a: viewerIsProfileA ? viewerReason : counterpartyReason,
+        target_reason_for_b: viewerIsProfileA ? counterpartyReason : viewerReason,
+        target_score: Math.min(100, Math.max(0, score || 45)),
+        target_dedupe_key: dedupeKey,
+      },
+    );
+    const match = matchResult?.[0] ?? null;
 
     if (matchError || !match) {
       logSupabaseActionError("Failed to generate wish match suggestion", matchError, {
@@ -332,18 +321,18 @@ async function generateWishMatchSuggestions({
       continue;
     }
 
-    if (!existingMatch) {
+    if (match.was_created) {
       generatedNotifications.push(
         {
           profile_id: profileId,
-          match_id: match.id,
+          match_id: match.match_id,
           kind: "match",
           title: "A potential moral trade was found",
           body: viewerReason,
         },
         {
           profile_id: preview.profile_id,
-          match_id: match.id,
+          match_id: match.match_id,
           kind: "match",
           title: "A potential moral trade was found",
           body: counterpartyReason,
@@ -910,35 +899,11 @@ export async function consentToMatchSuggestionAction(formData: FormData) {
 
   const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
-  const { data: match, error: matchError } = await supabase
-    .from("match_suggestions")
-    .select("*")
-    .eq("id", matchId)
-    .maybeSingle();
-
-  if (matchError || !match) {
-    redirectWithMessage(returnTo, "error", matchError?.message ?? "Match suggestion not found.");
-  }
-
-  const viewerIsParticipant =
-    match.profile_a_id === viewer.authUser.id || match.profile_b_id === viewer.authUser.id;
-
-  if (!viewerIsParticipant) {
-    redirectWithMessage(returnTo, "error", "You can only consent to your own match suggestions.");
-  }
-
-  const counterpartyId =
-    match.profile_a_id === viewer.authUser.id ? match.profile_b_id : match.profile_a_id;
-
-  const { error: consentError } = await supabase.from("match_consents").upsert(
+  const { data: consentResult, error: consentError } = await supabase.rpc(
+    "viewer_consent_to_match",
     {
-      match_id: matchId,
-      profile_id: viewer.authUser.id,
-      note,
-      consented_at: new Date().toISOString(),
-    },
-    {
-      onConflict: "match_id,profile_id",
+      target_match_id: matchId,
+      consent_note: note,
     },
   );
 
@@ -950,36 +915,10 @@ export async function consentToMatchSuggestionAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", consentError.message);
   }
 
-  const { data: consents, error: consentsError } = await supabase
-    .from("match_consents")
-    .select("*")
-    .eq("match_id", matchId);
+  const consentState = consentResult?.[0] ?? null;
+  const bothConsented = Boolean(consentState?.both_consented);
 
-  if (consentsError) {
-    logSupabaseActionError("Failed to check match consent state", consentsError, {
-      matchId,
-    });
-  }
-
-  const consentedProfiles = new Set((consents ?? []).map((consent) => consent.profile_id));
-  const bothConsented =
-    consentedProfiles.has(viewer.authUser.id) && consentedProfiles.has(counterpartyId);
-
-  if (bothConsented) {
-    const { error: revealError } = await supabase
-      .from("match_suggestions")
-      .update({
-        identity_revealed: true,
-        status: "introduced",
-      })
-      .eq("id", matchId);
-
-    if (revealError) {
-      logSupabaseActionError("Failed to reveal consented match", revealError, {
-        matchId,
-      });
-    }
-
+  if (bothConsented && consentState) {
     const { error: notificationError } = await supabase.from("wish_notifications").insert([
       {
         profile_id: viewer.authUser.id,
@@ -989,7 +928,7 @@ export async function consentToMatchSuggestionAction(formData: FormData) {
         body: "Identity details can now be shown for this possible moral trade.",
       },
       {
-        profile_id: counterpartyId,
+        profile_id: consentState.counterparty_id,
         match_id: matchId,
         kind: "consent",
         title: "Both sides opted in",

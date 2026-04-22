@@ -547,8 +547,60 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
+      match_suggestion_previews: {
+        Row: {
+          id: string;
+          counterparty_profile_id: string | null;
+          counterparty_public_preview: string;
+          counterparty_causes: string[];
+          counterparty_location_city: string | null;
+          counterparty_location_region: string | null;
+          counterparty_openness_to_payment: boolean;
+          counterparty_openness_to_pledges: boolean;
+          viewer_reason: string;
+          counterparty_reason: string;
+          score: number;
+          status: "suggested" | "dismissed" | "introduced" | "archived";
+          identity_revealed: boolean;
+          viewer_consented: boolean;
+          counterparty_consented: boolean;
+          can_reveal_identity: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      upsert_match_suggestion: {
+        Args: {
+          target_profile_a_id: string;
+          target_profile_b_id: string;
+          target_profile_a_entry_id: string | null;
+          target_profile_b_entry_id: string | null;
+          target_reason_for_a: string;
+          target_reason_for_b: string;
+          target_score: number;
+          target_dedupe_key: string;
+        };
+        Returns: {
+          match_id: string;
+          was_created: boolean;
+        }[];
+      };
+      viewer_consent_to_match: {
+        Args: {
+          target_match_id: string;
+          consent_note?: string;
+        };
+        Returns: {
+          counterparty_id: string;
+          both_consented: boolean;
+        }[];
+      };
+    };
     Enums: {
       offer_mode: "pledge" | "offset" | "payment";
       offer_status: "open" | "paused" | "matched" | "closed";

@@ -637,9 +637,299 @@ as $$
   );
 $$;
 
+create or replace function public.viewer_participates_in_match(target_match_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select
+    auth.uid() is not null
+    and exists (
+      select 1
+      from public.match_suggestions
+      where id = target_match_id
+        and (
+          profile_a_id = auth.uid()
+          or profile_b_id = auth.uid()
+        )
+    );
+$$;
+
+create or replace function public.profile_participates_in_match(
+  target_match_id uuid,
+  target_profile_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select
+    target_profile_id is not null
+    and exists (
+      select 1
+      from public.match_suggestions
+      where id = target_match_id
+        and (
+          profile_a_id = target_profile_id
+          or profile_b_id = target_profile_id
+        )
+    );
+$$;
+
+create or replace function public.viewer_can_see_match_identity(target_match_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select
+    public.viewer_participates_in_match(target_match_id)
+    and exists (
+      select 1
+      from public.match_suggestions
+      where id = target_match_id
+        and (
+          identity_revealed = true
+          or (
+            exists (
+              select 1
+              from public.match_consents
+              where match_id = target_match_id
+                and profile_id = profile_a_id
+            )
+            and exists (
+              select 1
+              from public.match_consents
+              where match_id = target_match_id
+                and profile_id = profile_b_id
+            )
+          )
+        )
+    );
+$$;
+
+create or replace function public.upsert_match_suggestion(
+  target_profile_a_id uuid,
+  target_profile_b_id uuid,
+  target_profile_a_entry_id uuid,
+  target_profile_b_entry_id uuid,
+  target_reason_for_a text,
+  target_reason_for_b text,
+  target_score smallint,
+  target_dedupe_key text
+)
+returns table(match_id uuid, was_created boolean)
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  existing_match_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required.';
+  end if;
+
+  if auth.uid() <> target_profile_a_id and auth.uid() <> target_profile_b_id then
+    raise exception 'You can only create match suggestions involving your own profile.';
+  end if;
+
+  if target_profile_a_id = target_profile_b_id then
+    raise exception 'A match suggestion requires two different profiles.';
+  end if;
+
+  if (
+    select count(*)
+    from public.wish_profiles
+    where profile_id in (target_profile_a_id, target_profile_b_id)
+      and is_discoverable = true
+      and safety_status = 'clear'
+  ) <> 2 then
+    raise exception 'Both profiles must be discoverable and clear safety review.';
+  end if;
+
+  select id into existing_match_id
+  from public.match_suggestions
+  where dedupe_key = target_dedupe_key;
+
+  insert into public.match_suggestions (
+    profile_a_id,
+    profile_b_id,
+    profile_a_entry_id,
+    profile_b_entry_id,
+    reason_for_a,
+    reason_for_b,
+    score,
+    status,
+    dedupe_key
+  )
+  values (
+    target_profile_a_id,
+    target_profile_b_id,
+    target_profile_a_entry_id,
+    target_profile_b_entry_id,
+    target_reason_for_a,
+    target_reason_for_b,
+    least(100, greatest(0, target_score)),
+    'suggested',
+    target_dedupe_key
+  )
+  on conflict (dedupe_key) do update
+    set reason_for_a = excluded.reason_for_a,
+        reason_for_b = excluded.reason_for_b,
+        score = excluded.score,
+        status = case
+          when public.match_suggestions.status = 'dismissed' then public.match_suggestions.status
+          else excluded.status
+        end
+  returning id into match_id;
+
+  was_created := existing_match_id is null;
+  return next;
+end;
+$$;
+
+create or replace function public.viewer_consent_to_match(
+  target_match_id uuid,
+  consent_note text default ''
+)
+returns table(counterparty_id uuid, both_consented boolean)
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare
+  viewer_id uuid := auth.uid();
+  profile_a uuid;
+  profile_b uuid;
+begin
+  if viewer_id is null then
+    raise exception 'Authentication required.';
+  end if;
+
+  select profile_a_id, profile_b_id
+  into profile_a, profile_b
+  from public.match_suggestions
+  where id = target_match_id
+    and status <> 'dismissed';
+
+  if profile_a is null or profile_b is null then
+    raise exception 'Match suggestion not found.';
+  end if;
+
+  if viewer_id <> profile_a and viewer_id <> profile_b then
+    raise exception 'You can only consent to your own match suggestions.';
+  end if;
+
+  counterparty_id := case when viewer_id = profile_a then profile_b else profile_a end;
+
+  insert into public.match_consents (match_id, profile_id, note, consented_at)
+  values (target_match_id, viewer_id, coalesce(consent_note, ''), timezone('utc', now()))
+  on conflict (match_id, profile_id) do update
+    set note = excluded.note,
+        consented_at = excluded.consented_at;
+
+  both_consented := exists (
+    select 1
+    from public.match_consents
+    where match_id = target_match_id
+      and profile_id = profile_a
+  ) and exists (
+    select 1
+    from public.match_consents
+    where match_id = target_match_id
+      and profile_id = profile_b
+  );
+
+  if both_consented then
+    update public.match_suggestions
+    set identity_revealed = true,
+        status = 'introduced'
+    where id = target_match_id;
+  end if;
+
+  return next;
+end;
+$$;
+
 grant execute on function public.viewer_has_interest_for_offer(uuid) to anon, authenticated;
 grant execute on function public.viewer_has_offer_in_cart(uuid) to anon, authenticated;
 grant execute on function public.wish_profile_is_previewable(uuid) to anon, authenticated;
+grant execute on function public.viewer_participates_in_match(uuid) to authenticated;
+grant execute on function public.profile_participates_in_match(uuid, uuid) to authenticated;
+grant execute on function public.viewer_can_see_match_identity(uuid) to authenticated;
+grant execute on function public.upsert_match_suggestion(uuid, uuid, uuid, uuid, text, text, smallint, text) to authenticated;
+grant execute on function public.viewer_consent_to_match(uuid, text) to authenticated;
+
+create or replace view public.match_suggestion_previews as
+select
+  match_suggestions.id,
+  case
+    when public.viewer_can_see_match_identity(match_suggestions.id) then
+      case
+        when match_suggestions.profile_a_id = auth.uid() then match_suggestions.profile_b_id
+        else match_suggestions.profile_a_id
+      end
+    else null
+  end as counterparty_profile_id,
+  coalesce(counterparty_preview.public_preview, '') as counterparty_public_preview,
+  coalesce(counterparty_preview.causes, '{}'::text[]) as counterparty_causes,
+  counterparty_preview.location_city as counterparty_location_city,
+  counterparty_preview.location_region as counterparty_location_region,
+  coalesce(counterparty_preview.openness_to_payment, false) as counterparty_openness_to_payment,
+  coalesce(counterparty_preview.openness_to_pledges, false) as counterparty_openness_to_pledges,
+  case
+    when match_suggestions.profile_a_id = auth.uid() then match_suggestions.reason_for_a
+    else match_suggestions.reason_for_b
+  end as viewer_reason,
+  case
+    when public.viewer_can_see_match_identity(match_suggestions.id) then
+      case
+        when match_suggestions.profile_a_id = auth.uid() then match_suggestions.reason_for_b
+        else match_suggestions.reason_for_a
+      end
+    else ''
+  end as counterparty_reason,
+  match_suggestions.score,
+  match_suggestions.status,
+  match_suggestions.identity_revealed,
+  exists (
+    select 1
+    from public.match_consents
+    where match_consents.match_id = match_suggestions.id
+      and match_consents.profile_id = auth.uid()
+  ) as viewer_consented,
+  exists (
+    select 1
+    from public.match_consents
+    where match_consents.match_id = match_suggestions.id
+      and match_consents.profile_id = case
+        when match_suggestions.profile_a_id = auth.uid() then match_suggestions.profile_b_id
+        else match_suggestions.profile_a_id
+      end
+  ) as counterparty_consented,
+  public.viewer_can_see_match_identity(match_suggestions.id) as can_reveal_identity,
+  match_suggestions.created_at,
+  match_suggestions.updated_at
+from public.match_suggestions
+left join public.wish_profile_previews as counterparty_preview
+  on counterparty_preview.profile_id = case
+    when match_suggestions.profile_a_id = auth.uid() then match_suggestions.profile_b_id
+    else match_suggestions.profile_a_id
+  end
+where auth.uid() is not null
+  and (
+    match_suggestions.profile_a_id = auth.uid()
+    or match_suggestions.profile_b_id = auth.uid()
+  )
+  and match_suggestions.status <> 'dismissed';
+
+grant select on public.match_suggestion_previews to authenticated;
 
 create or replace function public.handle_auth_profile_sync()
 returns trigger
@@ -1305,8 +1595,7 @@ on public.match_suggestions
 for select
 to authenticated
 using (
-  profile_a_id = (select auth.uid())
-  or profile_b_id = (select auth.uid())
+  public.viewer_can_see_match_identity(id)
 );
 
 drop policy if exists "match_suggestions_insert_participants" on public.match_suggestions;
@@ -1325,12 +1614,12 @@ on public.match_suggestions
 for update
 to authenticated
 using (
-  profile_a_id = (select auth.uid())
-  or profile_b_id = (select auth.uid())
+  public.viewer_participates_in_match(id)
 )
 with check (
-  profile_a_id = (select auth.uid())
-  or profile_b_id = (select auth.uid())
+  public.viewer_participates_in_match(id)
+  and status = 'dismissed'
+  and identity_revealed = false
 );
 
 drop policy if exists "match_consents_select_match_participants" on public.match_consents;
@@ -1340,15 +1629,7 @@ for select
 to authenticated
 using (
   profile_id = (select auth.uid())
-  or exists (
-    select 1
-    from public.match_suggestions
-    where match_suggestions.id = match_consents.match_id
-      and (
-        match_suggestions.profile_a_id = (select auth.uid())
-        or match_suggestions.profile_b_id = (select auth.uid())
-      )
-  )
+  or public.viewer_can_see_match_identity(match_id)
 );
 
 drop policy if exists "match_consents_insert_own" on public.match_consents;
@@ -1358,15 +1639,7 @@ for insert
 to authenticated
 with check (
   profile_id = (select auth.uid())
-  and exists (
-    select 1
-    from public.match_suggestions
-    where match_suggestions.id = match_consents.match_id
-      and (
-        match_suggestions.profile_a_id = (select auth.uid())
-        or match_suggestions.profile_b_id = (select auth.uid())
-      )
-  )
+  and public.viewer_participates_in_match(match_id)
 );
 
 drop policy if exists "match_consents_update_own" on public.match_consents;
@@ -1393,19 +1666,8 @@ with check (
   profile_id = (select auth.uid())
   or (
     match_id is not null
-    and exists (
-      select 1
-      from public.match_suggestions
-      where match_suggestions.id = wish_notifications.match_id
-        and (
-          match_suggestions.profile_a_id = (select auth.uid())
-          or match_suggestions.profile_b_id = (select auth.uid())
-        )
-        and (
-          match_suggestions.profile_a_id = wish_notifications.profile_id
-          or match_suggestions.profile_b_id = wish_notifications.profile_id
-        )
-    )
+    and public.viewer_participates_in_match(match_id)
+    and public.profile_participates_in_match(match_id, profile_id)
   )
 );
 
