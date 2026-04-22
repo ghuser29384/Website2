@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { BackgroundNetworkingSketch } from "@/components/home/background-networking-sketch";
 import { MoralTradeAnimations } from "@/components/home/moral-trade-animations";
 import { OfferComposer } from "@/components/home/offer-composer";
 import { OfferBoard } from "@/components/home/offer-board";
@@ -567,6 +568,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         </section>
 
         <MoralTradeAnimations />
+
+        <BackgroundNetworkingSketch isAuthenticated={isAuthenticated} />
 
         <section className="section section-subtle" id="how-it-works">
           <div className="section-head">

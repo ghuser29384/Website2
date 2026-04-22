@@ -5,7 +5,7 @@ import { getSiteUrl, getSupabaseEnv, hasSupabaseEnv } from "@/lib/supabase/confi
 
 export const SITE_NAME = "Moral Trade";
 export const SITE_DESCRIPTION =
-  "A site about moral trade: how people with different moral views may make exchanges that each regards as morally better.";
+  "A site about moral trade, wish profiles, and privacy-first background networking for finding possible counterparties.";
 export const SITE_URL = getSiteUrl().replace(/\/$/, "");
 export const SITE_LOCALE = "en_US";
 

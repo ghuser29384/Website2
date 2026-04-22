@@ -5,7 +5,7 @@ import { getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, SITE_NAME, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
-  "Moral Trade explores how trade and compromise between differing moral views can create gains, while remaining vulnerable to threats, power concentration, and blocked futures.",
+  "Moral Trade explores compromise between differing moral views and a privacy-first, non-AI background networking prototype for finding possible counterparties.",
 );
 
 export const metadata: Metadata = {

@@ -1,8 +1,8 @@
 # Moral Trade
 
-Minimal Next.js web app for Moral Trade. The homepage keeps the existing prototype design and local demo behavior, while the app now includes Supabase-backed auth, offer creation, offer browsing, interest capture, and a simple member dashboard.
+Minimal Next.js web app for Moral Trade. The homepage keeps the existing prototype design and local demo behavior, while the app now includes Supabase-backed auth, offer creation, offer browsing, interest capture, a member dashboard, and a non-AI background networking prototype.
 
-The product currently supports three offer modes: personal pledge swaps, donation offsets, and paid action offers.
+The product currently supports three offer modes: personal pledge swaps, donation offsets, and paid action offers. It also supports explicit wish profiles, broad public previews, consent-gated match suggestions, manual source notes, and rule-based background scans without automatic social, email, chatbot, or AI ingestion.
 
 ## Stack
 
@@ -109,6 +109,13 @@ Important: the current app is centered on `public.profiles`.
 - `offers.owner_id`, `interests.user_id`, and `agreements.proposer_id` / `agreements.responder_id` are keyed directly to profile ids, which match `auth.users.id`.
 
 The full schema also sets up enum types, indexes, update triggers, auth-to-profile sync, backfills from `auth.users`, and row-level security policies.
+
+The background networking model is intentionally narrow for now:
+
+- participants manually state wishes, asks, capabilities, and constraints
+- broad previews can be searched while exact wishes stay private
+- scans are rule-based, not AI-generated
+- identities and sensitive details are revealed only through mutual consent
 
 ## Supabase integration
 

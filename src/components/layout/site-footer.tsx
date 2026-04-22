@@ -12,7 +12,8 @@ export function SiteFooter() {
           <p>
             The central thought is simple: people with different moral views may be able to make
             exchanges that each sees as morally better, but threats and decision procedures can
-            still destroy much of the value.
+            still destroy much of the value. The current prototype also tests privacy-first
+            background networking through explicit wish profiles and rule-based scans.
           </p>
         </div>
 
@@ -33,7 +34,7 @@ export function SiteFooter() {
       <div className="footer-meta">
         <p>
           Reference points include Toby Ord&apos;s paper on moral trade and Forethought&apos;s
-          discussion of trade, compromise, threats, and blockers in sections 3.1 to 3.5.
+          discussion of trade, compromise, threats, blockers, and background networking.
         </p>
       </div>
     </footer>

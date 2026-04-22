@@ -1,6 +1,7 @@
 export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
     { href: "/#how-it-works", label: "How it works" },
+    { href: "/#background-networking", label: "Networking" },
     { href: "/#standards", label: "Standards" },
     { href: "/offers#best-offers", label: "Best offers" },
     { href: "/offers", label: "Offers" },
@@ -26,6 +27,7 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/#about", label: "About" },
       { href: "/#how-it-works", label: "How it works" },
+      { href: "/#background-networking", label: "Background networking" },
       { href: "/#commitments", label: "Blockers" },
     ],
   },
