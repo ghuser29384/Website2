@@ -86,6 +86,25 @@ const featuredDialogues = [
   },
 ] as const;
 
+const ordHowItWorksExamples = [
+  {
+    title: "Victoria and Paul",
+    text: "Victoria cares especially about animal suffering; Paul cares especially about global poverty. She donates more to poverty relief if he becomes vegetarian, and each regards the resulting world as better.",
+  },
+  {
+    title: "Opposed campaign donations",
+    text: "Rebecca and Christopher would otherwise fund opposite sides of a gun-policy fight. They can instead redirect matched donations to a shared charity, avoiding a costly cancellation.",
+  },
+  {
+    title: "Paying for a bounded action",
+    text: "Someone who cares strongly about vegetarianism can pay another person to try it for a defined period, when the actor's burden is low and the payer judges the moral gain worth the cost.",
+  },
+  {
+    title: "Offsetting an internal conflict",
+    text: "A person who wants to fly but worries about emissions can pair the trip with more than compensating climate action, improving the choice by both prudential and moral lights.",
+  },
+] as const;
+
 const faqItems = [
   {
     question: "Why can moral trade matter even if only some people aim at the good?",
@@ -598,6 +617,22 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 <li>Most credible when the terms are highly specific</li>
               </ul>
             </article>
+          </div>
+
+          <div className="ord-example-block">
+            <div>
+              <p className="eyebrow">Examples from Toby Ord&apos;s paper</p>
+              <h3>Concrete cases make the structure easier to inspect</h3>
+            </div>
+
+            <div className="ord-example-grid">
+              {ordHowItWorksExamples.map((example) => (
+                <article className="panel ord-example-card" key={example.title}>
+                  <h4>{example.title}</h4>
+                  <p>{example.text}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
 

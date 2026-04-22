@@ -349,13 +349,24 @@ export interface Database {
       wish_profiles: {
         Row: {
           profile_id: string;
+          participant_kind: "individual" | "collective" | "institution";
+          collective_name: string;
           causes: string[];
           location_city: string | null;
           location_region: string | null;
+          capabilities: string;
           constraints: string;
           verification_preferences: string;
+          uncertainty_notes: string;
           openness_to_payment: boolean;
           openness_to_pledges: boolean;
+          background_search_enabled: boolean;
+          manual_source_review_enabled: boolean;
+          notification_email_enabled: boolean;
+          notification_dashboard_enabled: boolean;
+          privacy_stage: "strict" | "broad" | "limited";
+          brokerage_preference: string;
+          match_frequency: "manual" | "weekly" | "monthly";
           is_discoverable: boolean;
           share_public_preview: boolean;
           share_location: boolean;
@@ -367,13 +378,24 @@ export interface Database {
         };
         Insert: {
           profile_id: string;
+          participant_kind?: "individual" | "collective" | "institution";
+          collective_name?: string;
           causes?: string[];
           location_city?: string | null;
           location_region?: string | null;
+          capabilities?: string;
           constraints?: string;
           verification_preferences?: string;
+          uncertainty_notes?: string;
           openness_to_payment?: boolean;
           openness_to_pledges?: boolean;
+          background_search_enabled?: boolean;
+          manual_source_review_enabled?: boolean;
+          notification_email_enabled?: boolean;
+          notification_dashboard_enabled?: boolean;
+          privacy_stage?: "strict" | "broad" | "limited";
+          brokerage_preference?: string;
+          match_frequency?: "manual" | "weekly" | "monthly";
           is_discoverable?: boolean;
           share_public_preview?: boolean;
           share_location?: boolean;
@@ -384,13 +406,24 @@ export interface Database {
           updated_at?: string;
         };
         Update: {
+          participant_kind?: "individual" | "collective" | "institution";
+          collective_name?: string;
           causes?: string[];
           location_city?: string | null;
           location_region?: string | null;
+          capabilities?: string;
           constraints?: string;
           verification_preferences?: string;
+          uncertainty_notes?: string;
           openness_to_payment?: boolean;
           openness_to_pledges?: boolean;
+          background_search_enabled?: boolean;
+          manual_source_review_enabled?: boolean;
+          notification_email_enabled?: boolean;
+          notification_dashboard_enabled?: boolean;
+          privacy_stage?: "strict" | "broad" | "limited";
+          brokerage_preference?: string;
+          match_frequency?: "manual" | "weekly" | "monthly";
           is_discoverable?: boolean;
           share_public_preview?: boolean;
           share_location?: boolean;
@@ -450,9 +483,15 @@ export interface Database {
           reason_for_a: string;
           reason_for_b: string;
           score: number;
+          match_basis: string[];
+          shared_causes: string[];
+          suggested_first_step: string;
+          risk_notes: string;
+          generated_by: string;
           status: "suggested" | "dismissed" | "introduced" | "archived";
           dedupe_key: string;
           identity_revealed: boolean;
+          last_scored_at: string;
           created_at: string;
           updated_at: string;
         };
@@ -465,9 +504,15 @@ export interface Database {
           reason_for_a: string;
           reason_for_b: string;
           score?: number;
+          match_basis?: string[];
+          shared_causes?: string[];
+          suggested_first_step?: string;
+          risk_notes?: string;
+          generated_by?: string;
           status?: "suggested" | "dismissed" | "introduced" | "archived";
           dedupe_key?: string;
           identity_revealed?: boolean;
+          last_scored_at?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -475,9 +520,15 @@ export interface Database {
           reason_for_a?: string;
           reason_for_b?: string;
           score?: number;
+          match_basis?: string[];
+          shared_causes?: string[];
+          suggested_first_step?: string;
+          risk_notes?: string;
+          generated_by?: string;
           status?: "suggested" | "dismissed" | "introduced" | "archived";
           dedupe_key?: string;
           identity_revealed?: boolean;
+          last_scored_at?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -530,17 +581,208 @@ export interface Database {
         };
         Relationships: [];
       };
+      profile_sources: {
+        Row: {
+          id: string;
+          profile_id: string;
+          source_type: "manual" | "social" | "blog" | "chat_history" | "email" | "calendar" | "other";
+          label: string;
+          url: string;
+          access_level: "none" | "manual_summary" | "metadata_only";
+          notes: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          source_type?: "manual" | "social" | "blog" | "chat_history" | "email" | "calendar" | "other";
+          label: string;
+          url?: string;
+          access_level?: "none" | "manual_summary" | "metadata_only";
+          notes?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          source_type?: "manual" | "social" | "blog" | "chat_history" | "email" | "calendar" | "other";
+          label?: string;
+          url?: string;
+          access_level?: "none" | "manual_summary" | "metadata_only";
+          notes?: string;
+          is_active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      clarification_questions: {
+        Row: {
+          id: string;
+          profile_id: string;
+          question: string;
+          reason: string;
+          status: "open" | "answered" | "dismissed";
+          answer: string;
+          created_at: string;
+          answered_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          question: string;
+          reason?: string;
+          status?: "open" | "answered" | "dismissed";
+          answer?: string;
+          created_at?: string;
+          answered_at?: string | null;
+        };
+        Update: {
+          question?: string;
+          reason?: string;
+          status?: "open" | "answered" | "dismissed";
+          answer?: string;
+          answered_at?: string | null;
+        };
+        Relationships: [];
+      };
+      background_match_runs: {
+        Row: {
+          id: string;
+          profile_id: string;
+          status: "queued" | "running" | "completed" | "failed";
+          run_reason: string;
+          candidates_scanned: number;
+          matches_created: number;
+          matches_refreshed: number;
+          error_message: string;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          status?: "queued" | "running" | "completed" | "failed";
+          run_reason?: string;
+          candidates_scanned?: number;
+          matches_created?: number;
+          matches_refreshed?: number;
+          error_message?: string;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          status?: "queued" | "running" | "completed" | "failed";
+          run_reason?: string;
+          candidates_scanned?: number;
+          matches_created?: number;
+          matches_refreshed?: number;
+          error_message?: string;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      match_audit_events: {
+        Row: {
+          id: string;
+          match_id: string | null;
+          actor_profile_id: string | null;
+          event_type: string;
+          summary: string;
+          metadata: Record<string, unknown>;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          match_id?: string | null;
+          actor_profile_id?: string | null;
+          event_type: string;
+          summary?: string;
+          metadata?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Update: {
+          event_type?: string;
+          summary?: string;
+          metadata?: Record<string, unknown>;
+        };
+        Relationships: [];
+      };
+      match_reports: {
+        Row: {
+          id: string;
+          match_id: string;
+          reporter_profile_id: string;
+          reason: "unsafe" | "spam" | "privacy" | "coercion" | "illegal" | "other";
+          details: string;
+          status: "open" | "reviewed" | "dismissed";
+          created_at: string;
+          reviewed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          match_id: string;
+          reporter_profile_id: string;
+          reason?: "unsafe" | "spam" | "privacy" | "coercion" | "illegal" | "other";
+          details?: string;
+          status?: "open" | "reviewed" | "dismissed";
+          created_at?: string;
+          reviewed_at?: string | null;
+        };
+        Update: {
+          reason?: "unsafe" | "spam" | "privacy" | "coercion" | "illegal" | "other";
+          details?: string;
+          status?: "open" | "reviewed" | "dismissed";
+          reviewed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      network_invites: {
+        Row: {
+          id: string;
+          profile_id: string;
+          target_label: string;
+          target_context: string;
+          reason: string;
+          status: "draft" | "sent" | "dismissed";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          target_label: string;
+          target_context?: string;
+          reason?: string;
+          status?: "draft" | "sent" | "dismissed";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          target_label?: string;
+          target_context?: string;
+          reason?: string;
+          status?: "draft" | "sent" | "dismissed";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       wish_profile_previews: {
         Row: {
           profile_id: string;
+          participant_kind: "individual" | "collective" | "institution";
+          collective_name: string;
           causes: string[];
           public_preview: string;
           location_city: string | null;
           location_region: string | null;
           openness_to_payment: boolean;
           openness_to_pledges: boolean;
+          background_search_enabled: boolean;
+          privacy_stage: "strict" | "broad" | "limited";
           updated_at: string;
         };
         Insert: never;
@@ -560,11 +802,17 @@ export interface Database {
           viewer_reason: string;
           counterparty_reason: string;
           score: number;
+          match_basis: string[];
+          shared_causes: string[];
+          suggested_first_step: string;
+          risk_notes: string;
+          generated_by: string;
           status: "suggested" | "dismissed" | "introduced" | "archived";
           identity_revealed: boolean;
           viewer_consented: boolean;
           counterparty_consented: boolean;
           can_reveal_identity: boolean;
+          last_scored_at: string;
           created_at: string;
           updated_at: string;
         };
@@ -584,6 +832,11 @@ export interface Database {
           target_reason_for_b: string;
           target_score: number;
           target_dedupe_key: string;
+          target_match_basis?: string[];
+          target_shared_causes?: string[];
+          target_suggested_first_step?: string;
+          target_risk_notes?: string;
+          target_generated_by?: string;
         };
         Returns: {
           match_id: string;

@@ -101,13 +101,14 @@ h4 {
 
 .opening-lines {
   display: grid;
-  width: min(100%, 1840px);
+  width: min(calc(100vw - clamp(2rem, 6vw, 7rem)), 2360px);
   margin: 0 auto;
   gap: clamp(1.65rem, 3.4vw, 2.8rem);
 }
 
 .opening-line {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
   gap: clamp(0.7rem, 1.2vw, 1.05rem);
 }
@@ -117,7 +118,7 @@ h4 {
   align-items: center;
   flex: 0 0 auto;
   font-family: var(--font-heading-loaded);
-  font-size: clamp(1.7rem, 3.6vw, 2.95rem);
+  font-size: clamp(1.45rem, 2.65vw, 2.35rem);
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.055em;
@@ -139,7 +140,7 @@ h4 {
   font-weight: 400;
   letter-spacing: 0;
   color: var(--ink);
-  font-size: clamp(1.08rem, 1.15vw, 1.3rem);
+  font-size: clamp(0.92rem, 0.9vw, 1.12rem);
   line-height: 1.08;
   white-space: nowrap;
 }
@@ -277,6 +278,7 @@ h4 {
 .exchange-grid,
 .analysis-grid,
 .concept-grid,
+.ord-example-grid,
 .trust-grid,
 .editorial-grid,
 .proposition-grid,
@@ -1526,6 +1528,42 @@ main {
   gap: 1.35rem;
 }
 
+.ord-example-block {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.35rem;
+  padding-top: 1.35rem;
+  border-top: 1px solid var(--line);
+}
+
+.ord-example-block h3 {
+  max-width: 32ch;
+}
+
+.ord-example-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.ord-example-card {
+  padding: 1.05rem;
+  background: var(--surface);
+}
+
+.ord-example-card h4 {
+  margin: 0;
+  color: var(--accent-deep);
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.ord-example-card p {
+  margin: 0.55rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
 .trust-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1.15rem;
@@ -1670,6 +1708,10 @@ main {
 .field-grid,
 .meter-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field-wide {
+  grid-column: 1 / -1;
 }
 
 .compact-field {
@@ -2371,7 +2413,7 @@ strong {
   }
 
   .opening-line-anchor {
-    font-size: clamp(1.5rem, 3vw, 2.45rem);
+    font-size: clamp(1.35rem, 2.3vw, 2rem);
   }
 }
 
@@ -2386,6 +2428,7 @@ strong {
   .hero-proof-strip,
   .exchange-grid,
   .concept-grid,
+  .ord-example-grid,
   .trust-grid,
   .editorial-grid,
   .animation-grid,

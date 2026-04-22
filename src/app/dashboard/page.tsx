@@ -2,10 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
+  answerClarificationQuestionAction,
+  createNetworkInviteAction,
   consentToMatchSuggestionAction,
   dismissMatchSuggestionAction,
+  dismissClarificationQuestionAction,
   markWishNotificationReadAction,
   rateAgreementAction,
+  refreshBackgroundMatchesAction,
+  reportMatchSuggestionAction,
+  saveProfileSourceAction,
 } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -165,6 +171,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
               <dl className="values-summary">
                 <div>
+                  <dt>Participant</dt>
+                  <dd>
+                    {dashboardData.wishProfile.participant_kind}
+                    {dashboardData.wishProfile.collective_name
+                      ? `: ${dashboardData.wishProfile.collective_name}`
+                      : ""}
+                  </dd>
+                </div>
+                <div>
                   <dt>Causes</dt>
                   <dd>
                     {dashboardData.wishProfile.causes.length
@@ -189,6 +204,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </dd>
                 </div>
                 <div>
+                  <dt>Capabilities</dt>
+                  <dd>{dashboardData.wishProfile.capabilities || "No capabilities listed."}</dd>
+                </div>
+                <div>
                   <dt>Asks</dt>
                   <dd>
                     {dashboardData.wishProfile.asks
@@ -205,6 +224,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <dd>
                     {dashboardData.wishProfile.verification_preferences ||
                       "No verification preferences listed."}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Uncertainty</dt>
+                  <dd>{dashboardData.wishProfile.uncertainty_notes || "No uncertainty notes listed."}</dd>
+                </div>
+                <div>
+                  <dt>Privacy</dt>
+                  <dd>
+                    {dashboardData.wishProfile.privacy_stage} previews;{" "}
+                    {dashboardData.wishProfile.match_frequency} scans;{" "}
+                    {dashboardData.wishProfile.notification_dashboard_enabled
+                      ? "dashboard alerts"
+                      : "no dashboard alerts"}
+                    {dashboardData.wishProfile.notification_email_enabled
+                      ? "; future email alerts allowed"
+                      : ""}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Brokerage</dt>
+                  <dd>
+                    {dashboardData.wishProfile.brokerage_preference ||
+                      "No brokerage or payment preference listed."}
                   </dd>
                 </div>
               </dl>
@@ -230,6 +273,156 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               Suggestions show only enough information to decide whether an introduction is worth
               exploring. Identity details remain gated until both sides opt in.
             </p>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Non-AI scan controls</p>
+            <h3>Rule-based matching, manual sources, and clarification prompts</h3>
+            <p className="route-text">
+              This does not connect to social media, email, or chatbot logs. It only uses the
+              private registry fields you save, broad public previews, and manual source notes you
+              explicitly add.
+            </p>
+            <div className="offer-footer">
+              <div className="tag-row">
+                <span className="source-pill">
+                  Sources: {dashboardData?.profileSources.length ?? 0}
+                </span>
+                <span className="source-pill">
+                  Open questions:{" "}
+                  {dashboardData?.clarificationQuestions.filter(
+                    (question) => question.status === "open",
+                  ).length ?? 0}
+                </span>
+                <span className="source-pill">
+                  Runs logged: {dashboardData?.backgroundRuns.length ?? 0}
+                </span>
+              </div>
+              <form action={refreshBackgroundMatchesAction}>
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <button className="button button-primary button-mini" type="submit">
+                  Run background scan now
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <div className="data-grid">
+            <article className="panel data-card">
+              <p className="detail-kicker">Manual sources</p>
+              <h3>Source consent without automatic ingestion</h3>
+              <p className="route-text">
+                Add a public page, profile summary, or note that could later be reviewed. The app
+                stores your note; it does not scrape or analyze the source.
+              </p>
+              <form action={saveProfileSourceAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Label</span>
+                  <input name="source_label" placeholder="Public essay, profile, project page" />
+                </label>
+                <label className="field">
+                  <span>URL</span>
+                  <input name="source_url" placeholder="Optional" type="url" />
+                </label>
+                <label className="field">
+                  <span>Notes</span>
+                  <textarea
+                    name="source_notes"
+                    placeholder="Manual summary of why this source is relevant."
+                  />
+                </label>
+                <input name="source_type" type="hidden" value="manual" />
+                <input name="source_access_level" type="hidden" value="manual_summary" />
+                <button className="button button-secondary button-mini" type="submit">
+                  Save source
+                </button>
+              </form>
+              {dashboardData?.errors.profileSources ? (
+                <p className="route-text">Could not load source records.</p>
+              ) : dashboardData?.profileSources.length ? (
+                <ul className="clean-list">
+                  {dashboardData.profileSources.slice(0, 4).map((source) => (
+                    <li key={source.id}>
+                      {source.label}
+                      {source.url ? ` (${source.url})` : ""}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Clarifying interview</p>
+              <h3>Rule-based follow-up questions</h3>
+              {dashboardData?.errors.clarificationQuestions ? (
+                <p className="route-text">Could not load clarification questions.</p>
+              ) : dashboardData?.clarificationQuestions.filter(
+                  (question) => question.status === "open",
+                ).length ? (
+                dashboardData.clarificationQuestions
+                  .filter((question) => question.status === "open")
+                  .slice(0, 3)
+                  .map((question) => (
+                    <form action={answerClarificationQuestionAction} className="compact-form" key={question.id}>
+                      <input name="question_id" type="hidden" value={question.id} />
+                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <p className="route-text">
+                        <strong>{question.question}</strong>
+                      </p>
+                      <p className="route-text">{question.reason}</p>
+                      <textarea name="answer" placeholder="Answer privately for your own profile." />
+                      <div className="offer-actions">
+                        <button className="button button-primary button-mini" type="submit">
+                          Save answer
+                        </button>
+                        <button
+                          className="button button-secondary button-mini"
+                          formAction={dismissClarificationQuestionAction}
+                          type="submit"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </form>
+                  ))
+              ) : (
+                <p className="route-text">No open clarification questions.</p>
+              )}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Network expansion</p>
+              <h3>Draft people or groups to invite</h3>
+              <p className="route-text">
+                Use this for early-stage adoption: note specific people, collectives, or communities
+                that might be valuable counterparties.
+              </p>
+              <form action={createNetworkInviteAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Person or group</span>
+                  <input name="target_label" placeholder="Name or short label" />
+                </label>
+                <label className="field">
+                  <span>Context</span>
+                  <input name="target_context" placeholder="Community, cause, or relationship" />
+                </label>
+                <label className="field">
+                  <span>Reason</span>
+                  <textarea name="reason" placeholder="Why they might be a useful counterparty." />
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save draft
+                </button>
+              </form>
+              {dashboardData?.networkInvites.length ? (
+                <p className="route-text">
+                  Drafts saved: {dashboardData.networkInvites.length}. These are not sent
+                  automatically.
+                </p>
+              ) : null}
+            </article>
           </div>
 
           <div className="data-grid">
@@ -262,12 +455,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <div className="tag-row">
                     <span className="badge">{match.status}</span>
                     <span className="impact-pill">Fit score {match.score}/100</span>
+                    <span className="source-pill">{match.generatedBy}</span>
                     {match.counterpartyPreview?.causes?.slice(0, 3).map((cause) => (
                       <span className="source-pill" key={`${match.id}-${cause}`}>
                         {cause}
                       </span>
                     ))}
                   </div>
+                  {match.matchBasis.length ? (
+                    <ul className="clean-list">
+                      {match.matchBasis.slice(0, 4).map((basis) => (
+                        <li key={`${match.id}-${basis}`}>{basis}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {match.suggestedFirstStep ? (
+                    <p className="route-text">
+                      <strong>Suggested first step:</strong> {match.suggestedFirstStep}
+                    </p>
+                  ) : null}
+                  {match.riskNotes ? <p className="route-text">{match.riskNotes}</p> : null}
                   <div className="offer-footer">
                     <div className="tag-row">
                       <span>{match.viewerConsented ? "You opted in" : "Awaiting your consent"}</span>
@@ -282,6 +489,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <form action={consentToMatchSuggestionAction}>
                           <input name="match_id" type="hidden" value={match.id} />
                           <input name="return_to" type="hidden" value="/dashboard" />
+                          <label className="field compact-field">
+                            <span>Optional introduction note</span>
+                            <textarea
+                              name="note"
+                              placeholder="Boundaries, preferred first step, or contact constraints."
+                            />
+                          </label>
                           <button className="button button-primary button-mini" type="submit">
                             Opt in to introduction
                           </button>
@@ -292,6 +506,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <input name="return_to" type="hidden" value="/dashboard" />
                         <button className="button button-secondary button-mini" type="submit">
                           Dismiss
+                        </button>
+                      </form>
+                      <form action={reportMatchSuggestionAction} className="compact-form">
+                        <input name="match_id" type="hidden" value={match.id} />
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="reason" type="hidden" value="other" />
+                        <input
+                          name="details"
+                          type="hidden"
+                          value="Participant asked for review from the dashboard."
+                        />
+                        <button className="button button-secondary button-mini" type="submit">
+                          Report
                         </button>
                       </form>
                     </div>

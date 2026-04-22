@@ -250,13 +250,24 @@ create table if not exists public.offer_carts (
 
 create table if not exists public.wish_profiles (
   profile_id uuid primary key references public.profiles (id) on delete cascade,
+  participant_kind text not null default 'individual' check (participant_kind in ('individual', 'collective', 'institution')),
+  collective_name text not null default '',
   causes text[] not null default '{}',
   location_city text,
   location_region text,
+  capabilities text not null default '',
   constraints text not null default '',
   verification_preferences text not null default '',
+  uncertainty_notes text not null default '',
   openness_to_payment boolean not null default false,
   openness_to_pledges boolean not null default true,
+  background_search_enabled boolean not null default true,
+  manual_source_review_enabled boolean not null default false,
+  notification_email_enabled boolean not null default false,
+  notification_dashboard_enabled boolean not null default true,
+  privacy_stage text not null default 'broad' check (privacy_stage in ('strict', 'broad', 'limited')),
+  brokerage_preference text not null default '',
+  match_frequency text not null default 'weekly' check (match_frequency in ('manual', 'weekly', 'monthly')),
   is_discoverable boolean not null default true,
   share_public_preview boolean not null default true,
   share_location boolean not null default false,
@@ -290,9 +301,15 @@ create table if not exists public.match_suggestions (
   reason_for_a text not null,
   reason_for_b text not null,
   score smallint not null default 50 check (score between 0 and 100),
+  match_basis text[] not null default '{}',
+  shared_causes text[] not null default '{}',
+  suggested_first_step text not null default '',
+  risk_notes text not null default '',
+  generated_by text not null default 'rule-based',
   status public.match_suggestion_status not null default 'suggested',
   dedupe_key text not null default gen_random_uuid()::text,
   identity_revealed boolean not null default false,
+  last_scored_at timestamptz not null default timezone('utc', now()),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   check (profile_a_id <> profile_b_id),
@@ -301,6 +318,23 @@ create table if not exists public.match_suggestions (
 );
 
 alter table public.match_suggestions add column if not exists dedupe_key text not null default gen_random_uuid()::text;
+alter table public.wish_profiles add column if not exists participant_kind text not null default 'individual';
+alter table public.wish_profiles add column if not exists collective_name text not null default '';
+alter table public.wish_profiles add column if not exists capabilities text not null default '';
+alter table public.wish_profiles add column if not exists uncertainty_notes text not null default '';
+alter table public.wish_profiles add column if not exists background_search_enabled boolean not null default true;
+alter table public.wish_profiles add column if not exists manual_source_review_enabled boolean not null default false;
+alter table public.wish_profiles add column if not exists notification_email_enabled boolean not null default false;
+alter table public.wish_profiles add column if not exists notification_dashboard_enabled boolean not null default true;
+alter table public.wish_profiles add column if not exists privacy_stage text not null default 'broad';
+alter table public.wish_profiles add column if not exists brokerage_preference text not null default '';
+alter table public.wish_profiles add column if not exists match_frequency text not null default 'weekly';
+alter table public.match_suggestions add column if not exists match_basis text[] not null default '{}';
+alter table public.match_suggestions add column if not exists shared_causes text[] not null default '{}';
+alter table public.match_suggestions add column if not exists suggested_first_step text not null default '';
+alter table public.match_suggestions add column if not exists risk_notes text not null default '';
+alter table public.match_suggestions add column if not exists generated_by text not null default 'rule-based';
+alter table public.match_suggestions add column if not exists last_scored_at timestamptz not null default timezone('utc', now());
 
 do $$
 begin
@@ -335,15 +369,88 @@ create table if not exists public.wish_notifications (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.profile_sources (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  source_type text not null default 'manual' check (source_type in ('manual', 'social', 'blog', 'chat_history', 'email', 'calendar', 'other')),
+  label text not null,
+  url text not null default '',
+  access_level text not null default 'manual_summary' check (access_level in ('none', 'manual_summary', 'metadata_only')),
+  notes text not null default '',
+  is_active boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.clarification_questions (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  question text not null,
+  reason text not null default '',
+  status text not null default 'open' check (status in ('open', 'answered', 'dismissed')),
+  answer text not null default '',
+  created_at timestamptz not null default timezone('utc', now()),
+  answered_at timestamptz
+);
+
+create table if not exists public.background_match_runs (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  status text not null default 'completed' check (status in ('queued', 'running', 'completed', 'failed')),
+  run_reason text not null default 'manual',
+  candidates_scanned integer not null default 0,
+  matches_created integer not null default 0,
+  matches_refreshed integer not null default 0,
+  error_message text not null default '',
+  created_at timestamptz not null default timezone('utc', now()),
+  completed_at timestamptz
+);
+
+create table if not exists public.match_audit_events (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid references public.match_suggestions (id) on delete cascade,
+  actor_profile_id uuid references public.profiles (id) on delete set null,
+  event_type text not null,
+  summary text not null default '',
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.match_reports (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.match_suggestions (id) on delete cascade,
+  reporter_profile_id uuid not null references public.profiles (id) on delete cascade,
+  reason text not null default 'other' check (reason in ('unsafe', 'spam', 'privacy', 'coercion', 'illegal', 'other')),
+  details text not null default '',
+  status text not null default 'open' check (status in ('open', 'reviewed', 'dismissed')),
+  created_at timestamptz not null default timezone('utc', now()),
+  reviewed_at timestamptz
+);
+
+create table if not exists public.network_invites (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  target_label text not null,
+  target_context text not null default '',
+  reason text not null default '',
+  status text not null default 'draft' check (status in ('draft', 'sent', 'dismissed')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 create or replace view public.wish_profile_previews as
 select
   profile_id,
+  participant_kind,
+  collective_name,
   causes,
   public_preview,
   case when share_location then location_city else null end as location_city,
   case when share_location then location_region else null end as location_region,
   openness_to_payment,
   openness_to_pledges,
+  background_search_enabled,
+  privacy_stage,
   updated_at
 from public.wish_profiles
 where is_discoverable = true
@@ -379,8 +486,15 @@ create index if not exists wish_entries_profile_type_idx on public.wish_entries 
 create index if not exists wish_entries_preview_idx on public.wish_entries (visibility, safety_status, entry_type, updated_at desc);
 create index if not exists match_suggestions_profile_a_idx on public.match_suggestions (profile_a_id, status, updated_at desc);
 create index if not exists match_suggestions_profile_b_idx on public.match_suggestions (profile_b_id, status, updated_at desc);
+create index if not exists match_suggestions_score_idx on public.match_suggestions (status, score desc, updated_at desc);
 create index if not exists match_consents_profile_id_idx on public.match_consents (profile_id);
 create index if not exists wish_notifications_profile_unread_idx on public.wish_notifications (profile_id, read_at, created_at desc);
+create index if not exists profile_sources_profile_active_idx on public.profile_sources (profile_id, is_active, updated_at desc);
+create index if not exists clarification_questions_profile_status_idx on public.clarification_questions (profile_id, status, created_at desc);
+create index if not exists background_match_runs_profile_created_idx on public.background_match_runs (profile_id, created_at desc);
+create index if not exists match_audit_events_match_created_idx on public.match_audit_events (match_id, created_at desc);
+create index if not exists match_reports_match_status_idx on public.match_reports (match_id, status, created_at desc);
+create index if not exists network_invites_profile_status_idx on public.network_invites (profile_id, status, created_at desc);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -713,6 +827,9 @@ as $$
     );
 $$;
 
+drop function if exists public.upsert_match_suggestion(uuid, uuid, uuid, uuid, text, text, smallint, text);
+drop function if exists public.upsert_match_suggestion(uuid, uuid, uuid, uuid, text, text, smallint, text, text[], text[], text, text, text);
+
 create or replace function public.upsert_match_suggestion(
   target_profile_a_id uuid,
   target_profile_b_id uuid,
@@ -721,7 +838,12 @@ create or replace function public.upsert_match_suggestion(
   target_reason_for_a text,
   target_reason_for_b text,
   target_score smallint,
-  target_dedupe_key text
+  target_dedupe_key text,
+  target_match_basis text[] default '{}',
+  target_shared_causes text[] default '{}',
+  target_suggested_first_step text default '',
+  target_risk_notes text default '',
+  target_generated_by text default 'rule-based'
 )
 returns table(match_id uuid, was_created boolean)
 language plpgsql
@@ -765,8 +887,14 @@ begin
     reason_for_a,
     reason_for_b,
     score,
+    match_basis,
+    shared_causes,
+    suggested_first_step,
+    risk_notes,
+    generated_by,
     status,
-    dedupe_key
+    dedupe_key,
+    last_scored_at
   )
   values (
     target_profile_a_id,
@@ -776,13 +904,25 @@ begin
     target_reason_for_a,
     target_reason_for_b,
     least(100, greatest(0, target_score)),
+    coalesce(target_match_basis, '{}'),
+    coalesce(target_shared_causes, '{}'),
+    coalesce(target_suggested_first_step, ''),
+    coalesce(target_risk_notes, ''),
+    coalesce(nullif(target_generated_by, ''), 'rule-based'),
     'suggested',
-    target_dedupe_key
+    target_dedupe_key,
+    timezone('utc', now())
   )
   on conflict (dedupe_key) do update
     set reason_for_a = excluded.reason_for_a,
         reason_for_b = excluded.reason_for_b,
         score = excluded.score,
+        match_basis = excluded.match_basis,
+        shared_causes = excluded.shared_causes,
+        suggested_first_step = excluded.suggested_first_step,
+        risk_notes = excluded.risk_notes,
+        generated_by = excluded.generated_by,
+        last_scored_at = excluded.last_scored_at,
         status = case
           when public.match_suggestions.status = 'dismissed' then public.match_suggestions.status
           else excluded.status
@@ -863,7 +1003,7 @@ grant execute on function public.wish_profile_is_previewable(uuid) to anon, auth
 grant execute on function public.viewer_participates_in_match(uuid) to authenticated;
 grant execute on function public.profile_participates_in_match(uuid, uuid) to authenticated;
 grant execute on function public.viewer_can_see_match_identity(uuid) to authenticated;
-grant execute on function public.upsert_match_suggestion(uuid, uuid, uuid, uuid, text, text, smallint, text) to authenticated;
+grant execute on function public.upsert_match_suggestion(uuid, uuid, uuid, uuid, text, text, smallint, text, text[], text[], text, text, text) to authenticated;
 grant execute on function public.viewer_consent_to_match(uuid, text) to authenticated;
 
 create or replace view public.match_suggestion_previews as
@@ -896,6 +1036,11 @@ select
     else ''
   end as counterparty_reason,
   match_suggestions.score,
+  match_suggestions.match_basis,
+  match_suggestions.shared_causes,
+  match_suggestions.suggested_first_step,
+  match_suggestions.risk_notes,
+  match_suggestions.generated_by,
   match_suggestions.status,
   match_suggestions.identity_revealed,
   exists (
@@ -914,6 +1059,7 @@ select
       end
   ) as counterparty_consented,
   public.viewer_can_see_match_identity(match_suggestions.id) as can_reveal_identity,
+  match_suggestions.last_scored_at,
   match_suggestions.created_at,
   match_suggestions.updated_at
 from public.match_suggestions
@@ -1050,6 +1196,16 @@ create trigger match_suggestions_set_updated_at
 before update on public.match_suggestions
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists profile_sources_set_updated_at on public.profile_sources;
+create trigger profile_sources_set_updated_at
+before update on public.profile_sources
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists network_invites_set_updated_at on public.network_invites;
+create trigger network_invites_set_updated_at
+before update on public.network_invites
+for each row execute procedure public.set_updated_at();
+
 update public.profiles p
 set
   follower_count = (
@@ -1115,6 +1271,12 @@ alter table public.wish_entries enable row level security;
 alter table public.match_suggestions enable row level security;
 alter table public.match_consents enable row level security;
 alter table public.wish_notifications enable row level security;
+alter table public.profile_sources enable row level security;
+alter table public.clarification_questions enable row level security;
+alter table public.background_match_runs enable row level security;
+alter table public.match_audit_events enable row level security;
+alter table public.match_reports enable row level security;
+alter table public.network_invites enable row level security;
 
 grant select on public.wish_profile_previews to anon, authenticated;
 
@@ -1678,3 +1840,155 @@ for update
 to authenticated
 using (profile_id = (select auth.uid()))
 with check (profile_id = (select auth.uid()));
+
+drop policy if exists "profile_sources_select_own" on public.profile_sources;
+create policy "profile_sources_select_own"
+on public.profile_sources
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "profile_sources_insert_own" on public.profile_sources;
+create policy "profile_sources_insert_own"
+on public.profile_sources
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "profile_sources_update_own" on public.profile_sources;
+create policy "profile_sources_update_own"
+on public.profile_sources
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "profile_sources_delete_own" on public.profile_sources;
+create policy "profile_sources_delete_own"
+on public.profile_sources
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "clarification_questions_select_own" on public.clarification_questions;
+create policy "clarification_questions_select_own"
+on public.clarification_questions
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "clarification_questions_insert_own" on public.clarification_questions;
+create policy "clarification_questions_insert_own"
+on public.clarification_questions
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "clarification_questions_update_own" on public.clarification_questions;
+create policy "clarification_questions_update_own"
+on public.clarification_questions
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "clarification_questions_delete_own" on public.clarification_questions;
+create policy "clarification_questions_delete_own"
+on public.clarification_questions
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_match_runs_select_own" on public.background_match_runs;
+create policy "background_match_runs_select_own"
+on public.background_match_runs
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_match_runs_insert_own" on public.background_match_runs;
+create policy "background_match_runs_insert_own"
+on public.background_match_runs
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_match_runs_update_own" on public.background_match_runs;
+create policy "background_match_runs_update_own"
+on public.background_match_runs
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "match_audit_events_select_participants" on public.match_audit_events;
+create policy "match_audit_events_select_participants"
+on public.match_audit_events
+for select
+to authenticated
+using (
+  actor_profile_id = (select auth.uid())
+  or (
+    match_id is not null
+    and public.viewer_participates_in_match(match_id)
+  )
+);
+
+drop policy if exists "match_audit_events_insert_participants" on public.match_audit_events;
+create policy "match_audit_events_insert_participants"
+on public.match_audit_events
+for insert
+to authenticated
+with check (
+  actor_profile_id = (select auth.uid())
+  and (
+    match_id is null
+    or public.viewer_participates_in_match(match_id)
+  )
+);
+
+drop policy if exists "match_reports_select_own" on public.match_reports;
+create policy "match_reports_select_own"
+on public.match_reports
+for select
+to authenticated
+using (reporter_profile_id = (select auth.uid()));
+
+drop policy if exists "match_reports_insert_own_participant" on public.match_reports;
+create policy "match_reports_insert_own_participant"
+on public.match_reports
+for insert
+to authenticated
+with check (
+  reporter_profile_id = (select auth.uid())
+  and public.viewer_participates_in_match(match_id)
+);
+
+drop policy if exists "network_invites_select_own" on public.network_invites;
+create policy "network_invites_select_own"
+on public.network_invites
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "network_invites_insert_own" on public.network_invites;
+create policy "network_invites_insert_own"
+on public.network_invites
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "network_invites_update_own" on public.network_invites;
+create policy "network_invites_update_own"
+on public.network_invites
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "network_invites_delete_own" on public.network_invites;
+create policy "network_invites_delete_own"
+on public.network_invites
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));

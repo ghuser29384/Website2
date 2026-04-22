@@ -81,7 +81,7 @@ const organizationStructuredData = {
   "@type": "Organization",
   name: SITE_NAME,
   url: SITE_URL,
-  logo: getAbsoluteUrl("/O%20(11).png"),
+  logo: getAbsoluteUrl("/O%20(8).png"),
 };
 
 export default function RootLayout({

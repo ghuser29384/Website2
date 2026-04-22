@@ -21,6 +21,11 @@ type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
 type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"]["Row"];
 type MatchSuggestionPreviewRow = Database["public"]["Views"]["match_suggestion_previews"]["Row"];
 type WishNotificationRow = Database["public"]["Tables"]["wish_notifications"]["Row"];
+type ProfileSourceRow = Database["public"]["Tables"]["profile_sources"]["Row"];
+type ClarificationQuestionRow = Database["public"]["Tables"]["clarification_questions"]["Row"];
+type BackgroundMatchRunRow = Database["public"]["Tables"]["background_match_runs"]["Row"];
+type MatchReportRow = Database["public"]["Tables"]["match_reports"]["Row"];
+type NetworkInviteRow = Database["public"]["Tables"]["network_invites"]["Row"];
 type InterestStatus = Database["public"]["Enums"]["interest_status"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -59,6 +64,9 @@ export interface PublicProfileSummary extends ProfileRow {
   wishLocation: string | null;
   wishOpenToPayment: boolean;
   wishOpenToPledges: boolean;
+  wishParticipantKind: "individual" | "collective" | "institution" | null;
+  wishCollectiveName: string | null;
+  wishPrivacyStage: "strict" | "broad" | "limited" | null;
 }
 
 export interface OfferRecord extends OfferRow {
@@ -135,11 +143,17 @@ export interface MatchSuggestionRecord {
   viewerReason: string;
   counterpartyReason: string;
   score: number;
+  matchBasis: string[];
+  sharedCauses: string[];
+  suggestedFirstStep: string;
+  riskNotes: string;
+  generatedBy: string;
   status: "suggested" | "dismissed" | "introduced" | "archived";
   identityRevealed: boolean;
   viewerConsented: boolean;
   counterpartyConsented: boolean;
   canRevealIdentity: boolean;
+  lastScoredAt: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -163,8 +177,13 @@ export interface DashboardDataResult {
   agreements: AgreementRecord[];
   cartItems: CartItemRecord[];
   wishProfile: WishProfileRecord | null;
+  profileSources: ProfileSourceRow[];
+  clarificationQuestions: ClarificationQuestionRow[];
   matchSuggestions: MatchSuggestionRecord[];
   wishNotifications: WishNotificationRecord[];
+  backgroundRuns: BackgroundMatchRunRow[];
+  matchReports: MatchReportRow[];
+  networkInvites: NetworkInviteRow[];
   errors: {
     offers: string | null;
     incomingInterests: string | null;
@@ -173,8 +192,13 @@ export interface DashboardDataResult {
     agreements: string | null;
     cartItems: string | null;
     wishProfile: string | null;
+    profileSources: string | null;
+    clarificationQuestions: string | null;
     matchSuggestions: string | null;
     wishNotifications: string | null;
+    backgroundRuns: string | null;
+    matchReports: string | null;
+    networkInvites: string | null;
   };
 }
 
@@ -424,6 +448,9 @@ async function getProfileSummaryMap(
             : null,
           wishOpenToPayment: preview?.openness_to_payment ?? false,
           wishOpenToPledges: preview?.openness_to_pledges ?? false,
+          wishParticipantKind: preview?.participant_kind ?? null,
+          wishCollectiveName: preview?.collective_name || null,
+          wishPrivacyStage: preview?.privacy_stage ?? null,
         } satisfies PublicProfileSummary,
       ];
     }),
@@ -1402,16 +1429,26 @@ async function listMatchSuggestionsForUser(
       location_region: row.counterparty_location_region,
       openness_to_payment: row.counterparty_openness_to_payment,
       openness_to_pledges: row.counterparty_openness_to_pledges,
+      participant_kind: "individual",
+      collective_name: "",
+      background_search_enabled: true,
+      privacy_stage: "broad",
       updated_at: row.updated_at,
     },
     viewerReason: row.viewer_reason,
     counterpartyReason: row.counterparty_reason,
     score: row.score,
+    matchBasis: row.match_basis ?? [],
+    sharedCauses: row.shared_causes ?? [],
+    suggestedFirstStep: row.suggested_first_step,
+    riskNotes: row.risk_notes,
+    generatedBy: row.generated_by,
     status: row.status,
     identityRevealed: row.identity_revealed,
     viewerConsented: row.viewer_consented,
     counterpartyConsented: row.counterparty_consented,
     canRevealIdentity: row.can_reveal_identity,
+    lastScoredAt: row.last_scored_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }));
@@ -1445,6 +1482,108 @@ async function listWishNotificationsForUser(
   }));
 }
 
+async function listProfileSourcesForUser(userId: string): Promise<ProfileSourceRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profile_sources")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as ProfileSourceRow[];
+}
+
+async function listClarificationQuestionsForUser(
+  userId: string,
+): Promise<ClarificationQuestionRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("clarification_questions")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as ClarificationQuestionRow[];
+}
+
+async function listBackgroundMatchRunsForUser(userId: string): Promise<BackgroundMatchRunRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_match_runs")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundMatchRunRow[];
+}
+
+async function listMatchReportsForUser(userId: string): Promise<MatchReportRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("match_reports")
+    .select("*")
+    .eq("reporter_profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as MatchReportRow[];
+}
+
+async function listNetworkInvitesForUser(userId: string): Promise<NetworkInviteRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("network_invites")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as NetworkInviteRow[];
+}
+
 export async function getDashboardData(userId: string): Promise<DashboardDataResult> {
   if (!hasSupabaseEnv()) {
     return {
@@ -1454,8 +1593,13 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       agreements: [],
       cartItems: [],
       wishProfile: null,
+      profileSources: [],
+      clarificationQuestions: [],
       matchSuggestions: [],
       wishNotifications: [],
+      backgroundRuns: [],
+      matchReports: [],
+      networkInvites: [],
       errors: {
         offers: null,
         incomingInterests: null,
@@ -1464,8 +1608,13 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         agreements: null,
         cartItems: null,
         wishProfile: null,
+        profileSources: null,
+        clarificationQuestions: null,
         matchSuggestions: null,
         wishNotifications: null,
+        backgroundRuns: null,
+        matchReports: null,
+        networkInvites: null,
       },
     };
   }
@@ -1479,8 +1628,13 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     agreements: null,
     cartItems: null,
     wishProfile: null,
+    profileSources: null,
+    clarificationQuestions: null,
     matchSuggestions: null,
     wishNotifications: null,
+    backgroundRuns: null,
+    matchReports: null,
+    networkInvites: null,
   };
 
   const [{ data: ownOffers, error: ownOffersError }, { data: interests, error: interestsError }] =
@@ -1654,6 +1808,25 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load dashboard wish profile", { message, userId });
   }
 
+  let profileSources: ProfileSourceRow[] = [];
+  try {
+    profileSources = await listProfileSourcesForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load profile sources.";
+    errors.profileSources = message;
+    console.error("[supabase] Failed to load profile sources", { message, userId });
+  }
+
+  let clarificationQuestions: ClarificationQuestionRow[] = [];
+  try {
+    clarificationQuestions = await listClarificationQuestionsForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load clarification questions.";
+    errors.clarificationQuestions = message;
+    console.error("[supabase] Failed to load clarification questions", { message, userId });
+  }
+
   let matchSuggestions: MatchSuggestionRecord[] = [];
   try {
     matchSuggestions = await listMatchSuggestionsForUser(userId);
@@ -1672,6 +1845,33 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load dashboard wish notifications", { message, userId });
   }
 
+  let backgroundRuns: BackgroundMatchRunRow[] = [];
+  try {
+    backgroundRuns = await listBackgroundMatchRunsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load background runs.";
+    errors.backgroundRuns = message;
+    console.error("[supabase] Failed to load background match runs", { message, userId });
+  }
+
+  let matchReports: MatchReportRow[] = [];
+  try {
+    matchReports = await listMatchReportsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load match reports.";
+    errors.matchReports = message;
+    console.error("[supabase] Failed to load match reports", { message, userId });
+  }
+
+  let networkInvites: NetworkInviteRow[] = [];
+  try {
+    networkInvites = await listNetworkInvitesForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load network invites.";
+    errors.networkInvites = message;
+    console.error("[supabase] Failed to load network invites", { message, userId });
+  }
+
   return {
     offers: hydratedOwnOffers,
     incomingInterests: incomingResponses,
@@ -1683,8 +1883,13 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     agreements,
     cartItems,
     wishProfile,
+    profileSources,
+    clarificationQuestions,
     matchSuggestions,
     wishNotifications,
+    backgroundRuns,
+    matchReports,
+    networkInvites,
     errors,
   };
 }

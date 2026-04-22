@@ -38,37 +38,65 @@ const TRADE_SHAPES = [
 type InterviewStep = "values" | "wishes" | "offers" | "asks" | "conditions" | "summary";
 
 type InterviewAnswers = {
+  participantKind: "individual" | "collective" | "institution";
+  collectiveName: string;
   causes: string[];
   wish: string;
   offers: string[];
   ask: string;
   tradeShape: string;
+  capabilities: string;
   constraints: string;
   locationCity: string;
   locationRegion: string;
   verificationPreferences: string;
+  uncertaintyNotes: string;
+  privacyStage: "strict" | "broad" | "limited";
+  brokeragePreference: string;
+  matchFrequency: "manual" | "weekly" | "monthly";
   openToPayment: boolean;
   openToPledges: boolean;
+  backgroundSearchEnabled: boolean;
+  manualSourceReviewEnabled: boolean;
+  notificationEmailEnabled: boolean;
+  notificationDashboardEnabled: boolean;
   isDiscoverable: boolean;
   sharePublicPreview: boolean;
   shareLocation: boolean;
+  sourceLabel: string;
+  sourceUrl: string;
+  sourceNotes: string;
 };
 
 const EMPTY_ANSWERS: InterviewAnswers = {
+  participantKind: "individual",
+  collectiveName: "",
   causes: [],
   wish: "",
   offers: [],
   ask: "",
   tradeShape: "Open to proposals",
+  capabilities: "",
   constraints: "",
   locationCity: "",
   locationRegion: "",
   verificationPreferences: "",
+  uncertaintyNotes: "",
+  privacyStage: "broad",
+  brokeragePreference: "",
+  matchFrequency: "weekly",
   openToPayment: false,
   openToPledges: true,
+  backgroundSearchEnabled: true,
+  manualSourceReviewEnabled: false,
+  notificationEmailEnabled: false,
+  notificationDashboardEnabled: true,
   isDiscoverable: true,
   sharePublicPreview: true,
   shareLocation: false,
+  sourceLabel: "",
+  sourceUrl: "",
+  sourceNotes: "",
 };
 
 const STEPS: InterviewStep[] = ["values", "wishes", "offers", "asks", "conditions", "summary"];
@@ -118,24 +146,63 @@ function readStoredInterview(): InterviewAnswers | null {
 
   try {
     const parsed = JSON.parse(raw) as Partial<InterviewAnswers>;
+    const participantKind =
+      parsed.participantKind === "collective" || parsed.participantKind === "institution"
+        ? parsed.participantKind
+        : "individual";
+    const privacyStage =
+      parsed.privacyStage === "strict" || parsed.privacyStage === "limited"
+        ? parsed.privacyStage
+        : "broad";
+    const matchFrequency =
+      parsed.matchFrequency === "manual" || parsed.matchFrequency === "monthly"
+        ? parsed.matchFrequency
+        : "weekly";
 
     return {
+      participantKind,
+      collectiveName: typeof parsed.collectiveName === "string" ? parsed.collectiveName : "",
       causes: Array.isArray(parsed.causes) ? parsed.causes : [],
       wish: typeof parsed.wish === "string" ? parsed.wish : "",
       offers: Array.isArray(parsed.offers) ? parsed.offers : [],
       ask: typeof parsed.ask === "string" ? parsed.ask : "",
       tradeShape: typeof parsed.tradeShape === "string" ? parsed.tradeShape : "Open to proposals",
+      capabilities: typeof parsed.capabilities === "string" ? parsed.capabilities : "",
       constraints: typeof parsed.constraints === "string" ? parsed.constraints : "",
       locationCity: typeof parsed.locationCity === "string" ? parsed.locationCity : "",
       locationRegion: typeof parsed.locationRegion === "string" ? parsed.locationRegion : "",
       verificationPreferences:
         typeof parsed.verificationPreferences === "string" ? parsed.verificationPreferences : "",
+      uncertaintyNotes: typeof parsed.uncertaintyNotes === "string" ? parsed.uncertaintyNotes : "",
+      privacyStage,
+      brokeragePreference:
+        typeof parsed.brokeragePreference === "string" ? parsed.brokeragePreference : "",
+      matchFrequency,
       openToPayment: typeof parsed.openToPayment === "boolean" ? parsed.openToPayment : false,
       openToPledges: typeof parsed.openToPledges === "boolean" ? parsed.openToPledges : true,
+      backgroundSearchEnabled:
+        typeof parsed.backgroundSearchEnabled === "boolean"
+          ? parsed.backgroundSearchEnabled
+          : true,
+      manualSourceReviewEnabled:
+        typeof parsed.manualSourceReviewEnabled === "boolean"
+          ? parsed.manualSourceReviewEnabled
+          : false,
+      notificationEmailEnabled:
+        typeof parsed.notificationEmailEnabled === "boolean"
+          ? parsed.notificationEmailEnabled
+          : false,
+      notificationDashboardEnabled:
+        typeof parsed.notificationDashboardEnabled === "boolean"
+          ? parsed.notificationDashboardEnabled
+          : true,
       isDiscoverable: typeof parsed.isDiscoverable === "boolean" ? parsed.isDiscoverable : true,
       sharePublicPreview:
         typeof parsed.sharePublicPreview === "boolean" ? parsed.sharePublicPreview : true,
       shareLocation: typeof parsed.shareLocation === "boolean" ? parsed.shareLocation : false,
+      sourceLabel: typeof parsed.sourceLabel === "string" ? parsed.sourceLabel : "",
+      sourceUrl: typeof parsed.sourceUrl === "string" ? parsed.sourceUrl : "",
+      sourceNotes: typeof parsed.sourceNotes === "string" ? parsed.sourceNotes : "",
     };
   } catch {
     return null;
@@ -235,10 +302,17 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
     field:
       | "wish"
       | "ask"
+      | "collectiveName"
+      | "capabilities"
       | "constraints"
       | "locationCity"
       | "locationRegion"
-      | "verificationPreferences",
+      | "verificationPreferences"
+      | "uncertaintyNotes"
+      | "brokeragePreference"
+      | "sourceLabel"
+      | "sourceUrl"
+      | "sourceNotes",
     value: string,
   ) {
     updateAnswer(field, value);
@@ -400,11 +474,34 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
             {step === "conditions" ? (
               <div className="values-interview-step">
                 <h2 id="values-interview-title">What are the boundaries?</h2>
-                <p>
-                  Private matching needs constraints, verification preferences, and consent norms
-                  before anyone is introduced.
-                </p>
                 <div className="field-grid">
+                  <label className="field">
+                    <span>Participant type</span>
+                    <select
+                      onChange={(event) =>
+                        updateAnswer(
+                          "participantKind",
+                          readControlValue(event.target) as InterviewAnswers["participantKind"],
+                        )
+                      }
+                      value={answers.participantKind}
+                    >
+                      <option value="individual">Individual</option>
+                      <option value="collective">Collective</option>
+                      <option value="institution">Institution</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Collective or institution name</span>
+                    <input
+                      onChange={(event) =>
+                        handleTextChange("collectiveName", readControlValue(event.target))
+                      }
+                      placeholder="Optional"
+                      type="text"
+                      value={answers.collectiveName}
+                    />
+                  </label>
                   <label className="field">
                     <span>City</span>
                     <input
@@ -431,6 +528,16 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                   </label>
                 </div>
                 <label className="field">
+                  <span>Capabilities</span>
+                  <textarea
+                    onChange={(event) =>
+                      handleTextChange("capabilities", readControlValue(event.target))
+                    }
+                    placeholder="For example: can fund small trials; can make public pledges; can introduce donors; can verify a commitment."
+                    value={answers.capabilities}
+                  />
+                </label>
+                <label className="field">
                   <span>Constraints</span>
                   <textarea
                     onChange={(event) =>
@@ -453,6 +560,60 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                     value={answers.verificationPreferences}
                   />
                 </label>
+                <label className="field">
+                  <span>Uncertainty notes</span>
+                  <textarea
+                    onChange={(event) =>
+                      handleTextChange("uncertaintyNotes", readControlValue(event.target))
+                    }
+                    placeholder="For example: unsure which verification standard is enough; open to either money or pledge terms; not sure how long the commitment should last."
+                    value={answers.uncertaintyNotes}
+                  />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Privacy stage</span>
+                    <select
+                      onChange={(event) =>
+                        updateAnswer(
+                          "privacyStage",
+                          readControlValue(event.target) as InterviewAnswers["privacyStage"],
+                        )
+                      }
+                      value={answers.privacyStage}
+                    >
+                      <option value="strict">Strict: reveal the minimum</option>
+                      <option value="broad">Broad: show cause-level previews</option>
+                      <option value="limited">Limited: allow more context after opt-in</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Match frequency</span>
+                    <select
+                      onChange={(event) =>
+                        updateAnswer(
+                          "matchFrequency",
+                          readControlValue(event.target) as InterviewAnswers["matchFrequency"],
+                        )
+                      }
+                      value={answers.matchFrequency}
+                    >
+                      <option value="manual">Manual scans only</option>
+                      <option value="weekly">Weekly background scans</option>
+                      <option value="monthly">Monthly background scans</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Brokerage or payment preference</span>
+                  <textarea
+                    onChange={(event) =>
+                      handleTextChange("brokeragePreference", readControlValue(event.target))
+                    }
+                    placeholder="Optional: whether you would consider brokerage fees, payment-mediated trades, or only non-payment commitments."
+                    value={answers.brokeragePreference}
+                  />
+                </label>
                 <div className="values-radio-grid values-consent-grid">
                   <label>
                     <input
@@ -473,6 +634,52 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                       type="checkbox"
                     />
                     <span>Open to pledge-based trades</span>
+                  </label>
+                  <label>
+                    <input
+                      checked={answers.backgroundSearchEnabled}
+                      onChange={(event) =>
+                        updateAnswer("backgroundSearchEnabled", readControlChecked(event.target))
+                      }
+                      type="checkbox"
+                    />
+                    <span>Run non-AI background scans</span>
+                  </label>
+                  <label>
+                    <input
+                      checked={answers.manualSourceReviewEnabled}
+                      onChange={(event) =>
+                        updateAnswer(
+                          "manualSourceReviewEnabled",
+                          readControlChecked(event.target),
+                        )
+                      }
+                      type="checkbox"
+                    />
+                    <span>Save manual source notes</span>
+                  </label>
+                  <label>
+                    <input
+                      checked={answers.notificationDashboardEnabled}
+                      onChange={(event) =>
+                        updateAnswer(
+                          "notificationDashboardEnabled",
+                          readControlChecked(event.target),
+                        )
+                      }
+                      type="checkbox"
+                    />
+                    <span>Notify me in the dashboard</span>
+                  </label>
+                  <label>
+                    <input
+                      checked={answers.notificationEmailEnabled}
+                      onChange={(event) =>
+                        updateAnswer("notificationEmailEnabled", readControlChecked(event.target))
+                      }
+                      type="checkbox"
+                    />
+                    <span>Allow future email alerts</span>
                   </label>
                   <label>
                     <input
@@ -505,6 +712,42 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                     <span>Include city/region in the public preview</span>
                   </label>
                 </div>
+                {answers.manualSourceReviewEnabled ? (
+                  <div className="field-grid">
+                    <label className="field">
+                      <span>Manual source label</span>
+                      <input
+                        onChange={(event) =>
+                          handleTextChange("sourceLabel", readControlValue(event.target))
+                        }
+                        placeholder="For example: public essay, profile summary, project page"
+                        type="text"
+                        value={answers.sourceLabel}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Source URL</span>
+                      <input
+                        onChange={(event) =>
+                          handleTextChange("sourceUrl", readControlValue(event.target))
+                        }
+                        placeholder="Optional"
+                        type="url"
+                        value={answers.sourceUrl}
+                      />
+                    </label>
+                    <label className="field field-wide">
+                      <span>Source notes</span>
+                      <textarea
+                        onChange={(event) =>
+                          handleTextChange("sourceNotes", readControlValue(event.target))
+                        }
+                        placeholder="Summarize the source manually. It will not be automatically ingested."
+                        value={answers.sourceNotes}
+                      />
+                    </label>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -517,6 +760,13 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                 </p>
                 <dl className="values-summary">
                   <div>
+                    <dt>Participant</dt>
+                    <dd>
+                      {answers.participantKind}
+                      {answers.collectiveName.trim() ? `: ${answers.collectiveName.trim()}` : ""}
+                    </dd>
+                  </div>
+                  <div>
                     <dt>Values</dt>
                     <dd>{summarizeList(answers.causes, "No cause areas selected yet.")}</dd>
                   </div>
@@ -526,7 +776,11 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                   </div>
                   <div>
                     <dt>Could offer</dt>
-                    <dd>{summarizeList(answers.offers, "No offers selected yet.")}</dd>
+                    <dd>
+                      {[summarizeList(answers.offers, ""), answers.capabilities.trim()]
+                        .filter(Boolean)
+                        .join(" / ") || "No offers selected yet."}
+                    </dd>
                   </div>
                   <div>
                     <dt>Ask</dt>
@@ -545,6 +799,19 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                     <dd>
                       {answers.verificationPreferences.trim() ||
                         "No verification preferences entered yet."}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Uncertainty</dt>
+                    <dd>{answers.uncertaintyNotes.trim() || "No uncertainty notes entered yet."}</dd>
+                  </div>
+                  <div>
+                    <dt>Privacy</dt>
+                    <dd>
+                      {answers.privacyStage}; {answers.matchFrequency} scans;{" "}
+                      {answers.manualSourceReviewEnabled
+                        ? "manual sources may be saved"
+                        : "no manual sources"}
                     </dd>
                   </div>
                   <div>
@@ -567,11 +834,14 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                 {isAuthenticated ? (
                   <form action={saveWishProfileAction} className="values-save-form">
                     <input name="return_to" type="hidden" value="/dashboard" />
+                    <input name="participant_kind" type="hidden" value={answers.participantKind} />
+                    <input name="collective_name" type="hidden" value={answers.collectiveName} />
                     <input name="causes_json" type="hidden" value={JSON.stringify(answers.causes)} />
                     <input name="offers_json" type="hidden" value={JSON.stringify(answers.offers)} />
                     <input name="wish" type="hidden" value={answers.wish} />
                     <input name="ask" type="hidden" value={answers.ask} />
                     <input name="trade_shape" type="hidden" value={answers.tradeShape} />
+                    <input name="capabilities" type="hidden" value={answers.capabilities} />
                     <input name="constraints" type="hidden" value={answers.constraints} />
                     <input name="location_city" type="hidden" value={answers.locationCity} />
                     <input name="location_region" type="hidden" value={answers.locationRegion} />
@@ -581,6 +851,18 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                       value={answers.verificationPreferences}
                     />
                     <input
+                      name="uncertainty_notes"
+                      type="hidden"
+                      value={answers.uncertaintyNotes}
+                    />
+                    <input name="privacy_stage" type="hidden" value={answers.privacyStage} />
+                    <input
+                      name="brokerage_preference"
+                      type="hidden"
+                      value={answers.brokeragePreference}
+                    />
+                    <input name="match_frequency" type="hidden" value={answers.matchFrequency} />
+                    <input
                       name="open_to_payment"
                       type="hidden"
                       value={answers.openToPayment ? "true" : "false"}
@@ -589,6 +871,26 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                       name="open_to_pledges"
                       type="hidden"
                       value={answers.openToPledges ? "true" : "false"}
+                    />
+                    <input
+                      name="background_search_enabled"
+                      type="hidden"
+                      value={answers.backgroundSearchEnabled ? "true" : "false"}
+                    />
+                    <input
+                      name="manual_source_review_enabled"
+                      type="hidden"
+                      value={answers.manualSourceReviewEnabled ? "true" : "false"}
+                    />
+                    <input
+                      name="notification_email_enabled"
+                      type="hidden"
+                      value={answers.notificationEmailEnabled ? "true" : "false"}
+                    />
+                    <input
+                      name="notification_dashboard_enabled"
+                      type="hidden"
+                      value={answers.notificationDashboardEnabled ? "true" : "false"}
                     />
                     <input
                       name="is_discoverable"
@@ -605,6 +907,11 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                       type="hidden"
                       value={answers.shareLocation ? "true" : "false"}
                     />
+                    <input name="source_label" type="hidden" value={answers.sourceLabel} />
+                    <input name="source_url" type="hidden" value={answers.sourceUrl} />
+                    <input name="source_notes" type="hidden" value={answers.sourceNotes} />
+                    <input name="source_type" type="hidden" value="manual" />
+                    <input name="source_access_level" type="hidden" value="manual_summary" />
                     <button className="button button-primary" type="submit">
                       Save private wish profile
                     </button>
