@@ -5,6 +5,8 @@ import {
   addAgreementEventAction,
   answerClarificationQuestionAction,
   createAgreementPaymentCheckoutAction,
+  createBrokerageBountyAction,
+  createCollectiveAction,
   createNetworkInviteAction,
   createStripeConnectAccountAction,
   consentToMatchSuggestionAction,
@@ -13,9 +15,14 @@ import {
   markWishNotificationReadAction,
   rateAgreementAction,
   refreshBackgroundMatchesAction,
+  refreshProfileSynthesisAction,
   refreshStripeConnectAccountAction,
   reportMatchSuggestionAction,
+  saveHelperStrategyAction,
+  savePersonalDelegateAction,
+  savePrivacyGrantAction,
   saveSearchAction,
+  saveSourceConnectionAction,
   saveProfileSourceAction,
   updateAgreementStatusAction,
 } from "@/app/actions";
@@ -407,7 +414,437 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   Run background scan now
                 </button>
               </form>
+              <a className="button button-secondary button-mini" href="/api/profile/export">
+                Export profile
+              </a>
+              <a className="button button-secondary button-mini" href="/api/wish-registry/search">
+                Search broad registry
+              </a>
             </div>
+          </div>
+
+          <div className="data-grid">
+            <article className="panel data-card">
+              <p className="detail-kicker">Personal delegate</p>
+              <h3>Durable instructions for background search</h3>
+              <p className="route-text">
+                This is not an AI agent yet. It records stable goals and operating limits that
+                scheduled non-AI helper runs can obey.
+              </p>
+              <form action={savePersonalDelegateAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Label</span>
+                  <input
+                    defaultValue={dashboardData?.personalDelegate?.label ?? "Personal delegate"}
+                    name="label"
+                  />
+                </label>
+                <label className="field">
+                  <span>Goals</span>
+                  <textarea
+                    defaultValue={dashboardData?.personalDelegate?.goals.join(", ") ?? ""}
+                    name="goals_json"
+                    placeholder="Find vegetarianism-for-funding trades; locate animal welfare counterparties"
+                  />
+                </label>
+                <label className="field">
+                  <span>Search scope</span>
+                  <textarea
+                    defaultValue={dashboardData?.personalDelegate?.search_scope ?? ""}
+                    name="search_scope"
+                    placeholder="Boundaries, communities, locations, or cause areas to search first."
+                  />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Mode</span>
+                    <select
+                      defaultValue={dashboardData?.personalDelegate?.operating_mode ?? "passive"}
+                      name="operating_mode"
+                    >
+                      <option value="passive">Passive</option>
+                      <option value="active">Active</option>
+                      <option value="paused">Paused</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Risk tolerance</span>
+                    <select
+                      defaultValue={dashboardData?.personalDelegate?.risk_tolerance ?? "conservative"}
+                      name="risk_tolerance"
+                    >
+                      <option value="conservative">Conservative</option>
+                      <option value="moderate">Moderate</option>
+                      <option value="exploratory">Exploratory</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Introductions</span>
+                    <select
+                      defaultValue={
+                        dashboardData?.personalDelegate?.introduction_policy ?? "ask_each_time"
+                      }
+                      name="introduction_policy"
+                    >
+                      <option value="ask_each_time">Ask each time</option>
+                      <option value="auto_draft_only">Draft only</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Weekly cap</span>
+                    <input
+                      defaultValue={dashboardData?.personalDelegate?.max_weekly_suggestions ?? 5}
+                      max={50}
+                      min={0}
+                      name="max_weekly_suggestions"
+                      type="number"
+                    />
+                  </label>
+                </div>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save delegate
+                </button>
+              </form>
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Consent ledger</p>
+              <h3>External source connections</h3>
+              <p className="route-text">
+                Record what could be connected later. This stores consent and scope only; no
+                social, email, calendar, or chatbot data is imported.
+              </p>
+              <form action={saveSourceConnectionAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Provider</span>
+                  <select name="provider" defaultValue="manual">
+                    <option value="manual">Manual</option>
+                    <option value="social">Social media</option>
+                    <option value="blog">Blog or website</option>
+                    <option value="email">Email</option>
+                    <option value="calendar">Calendar</option>
+                    <option value="chat_history">Chat history</option>
+                    <option value="search_profile">Search profile</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Label</span>
+                  <input name="label" placeholder="Public blog, calendar, chatbot archive" />
+                </label>
+                <label className="field">
+                  <span>URL or reference</span>
+                  <input name="url" placeholder="Optional" />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Status</span>
+                    <select name="access_status" defaultValue="not_connected">
+                      <option value="not_connected">Not connected</option>
+                      <option value="needs_review">Needs review</option>
+                      <option value="connected">Connected</option>
+                      <option value="revoked">Revoked</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Scope</span>
+                    <input name="access_scope" placeholder="Metadata only, manual summary, etc." />
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Consent notes</span>
+                  <textarea name="consent_notes" placeholder="What may be used, what must stay private." />
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Record connection
+                </button>
+              </form>
+              {dashboardData?.sourceConnections.length ? (
+                <ul className="clean-list">
+                  {dashboardData.sourceConnections.slice(0, 4).map((connection) => (
+                    <li key={connection.id}>
+                      {connection.label} ({connection.provider}, {connection.access_status})
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Synthesis layer</p>
+              <h3>Deterministic profile summary</h3>
+              <p className="route-text">
+                A structured summary of hopes, intent, capabilities, constraints, and uncertainty
+                built from fields you entered, not generated by AI.
+              </p>
+              {dashboardData?.profileSynthesis ? (
+                <dl className="values-summary compact-summary">
+                  <div>
+                    <dt>Hopes</dt>
+                    <dd>{dashboardData.profileSynthesis.hopes}</dd>
+                  </div>
+                  <div>
+                    <dt>Intent</dt>
+                    <dd>{dashboardData.profileSynthesis.intent}</dd>
+                  </div>
+                  <div>
+                    <dt>Capabilities</dt>
+                    <dd>{dashboardData.profileSynthesis.capabilities}</dd>
+                  </div>
+                  <div>
+                    <dt>Confidence</dt>
+                    <dd>{dashboardData.profileSynthesis.confidence_score}/100</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="route-text">No synthesis record yet.</p>
+              )}
+              <form action={refreshProfileSynthesisAction}>
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <button className="button button-secondary button-mini" type="submit">
+                  Refresh synthesis
+                </button>
+              </form>
+            </article>
+          </div>
+
+          <div className="data-grid">
+            <article className="panel data-card">
+              <p className="detail-kicker">Helper marketplace</p>
+              <h3>Multiple non-AI search strategies</h3>
+              <p className="route-text">
+                Strategies let background jobs behave like specialized helpers without using AI:
+                cause overlap, payments, geography, outreach, saved searches, and risk filtering.
+              </p>
+              <form action={saveHelperStrategyAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Strategy</span>
+                  <select name="helper_kind" defaultValue="cause_overlap">
+                    <option value="cause_overlap">Cause overlap</option>
+                    <option value="payment_compatibility">Payment compatibility</option>
+                    <option value="geographic">Geographic</option>
+                    <option value="network_expansion">Network expansion</option>
+                    <option value="saved_search">Saved search</option>
+                    <option value="risk_filter">Risk filter</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Label</span>
+                  <input name="label" placeholder="Find animal welfare payment trades" />
+                </label>
+                <label className="field">
+                  <span>Priority</span>
+                  <input defaultValue={3} max={5} min={1} name="priority" type="number" />
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Add strategy
+                </button>
+              </form>
+              {dashboardData?.helperStrategies.length ? (
+                <ul className="clean-list">
+                  {dashboardData.helperStrategies.slice(0, 5).map((strategy) => (
+                    <li key={strategy.id}>
+                      {strategy.label} ({strategy.helper_kind}, priority {strategy.priority})
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {dashboardData?.helperRuns.length ? (
+                <p className="route-text">
+                  Recent helper runs: {dashboardData.helperRuns.length}. Latest:{" "}
+                  {dashboardData.helperRuns[0]?.status ?? "none"}.
+                </p>
+              ) : null}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Consent-gated next steps</p>
+              <h3>Introduction plans after mutual opt-in</h3>
+              <p className="route-text">
+                When both sides consent, the app drafts a concrete intro, agenda, verification
+                plan, and privacy note. It still does not send introductions automatically.
+              </p>
+              {dashboardData?.introductionPlans.length ? (
+                <div className="mini-list">
+                  {dashboardData.introductionPlans.slice(0, 4).map((plan) => (
+                    <div className="mini-list-item" key={plan.id}>
+                      <strong>{plan.status}: {plan.intro_message}</strong>
+                      <span>{plan.agenda}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="route-text">No introduction plans yet.</p>
+              )}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Field-level privacy</p>
+              <h3>Grant specific facts in stages</h3>
+              <p className="route-text">
+                Use grants to decide which facts can move from hidden to broad, specific, or
+                contact-level visibility for a match or counterparty.
+              </p>
+              <form action={savePrivacyGrantAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Field</span>
+                  <input name="field_key" placeholder="location, exact_wish, email, constraints" />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Access</span>
+                    <select name="access_level" defaultValue="broad">
+                      <option value="hidden">Hidden</option>
+                      <option value="broad">Broad</option>
+                      <option value="specific">Specific</option>
+                      <option value="contact">Contact</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Status</span>
+                    <select name="status" defaultValue="draft">
+                      <option value="draft">Draft</option>
+                      <option value="granted">Granted</option>
+                      <option value="revoked">Revoked</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Match ID</span>
+                  <input name="match_id" placeholder="Optional" />
+                </label>
+                <label className="field">
+                  <span>Counterparty ID</span>
+                  <input name="counterparty_id" placeholder="Optional" />
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save grant
+                </button>
+              </form>
+              {dashboardData?.privacyGrants.length ? (
+                <ul className="clean-list">
+                  {dashboardData.privacyGrants.slice(0, 5).map((grant) => (
+                    <li key={grant.id}>
+                      {grant.field_key}: {grant.access_level} ({grant.status})
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </article>
+          </div>
+
+          <div className="data-grid">
+            <article className="panel data-card">
+              <p className="detail-kicker">Brokerage incentives</p>
+              <h3>Match bounties and speculative coordination</h3>
+              <p className="route-text">
+                Record willingness to pay for finding a useful counterparty or group. This is a
+                pledge-like signal, not an automatic charge.
+              </p>
+              <form action={createBrokerageBountyAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Label</span>
+                  <input name="label" placeholder="Find a serious digital minds counterparty" />
+                </label>
+                <label className="field">
+                  <span>Cause area</span>
+                  <input name="cause_area" placeholder="Digital minds, animal welfare, S-risks" />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Max amount</span>
+                    <input name="max_amount" placeholder="100.00" type="number" min="0" step="0.01" />
+                  </label>
+                  <label className="field">
+                    <span>Currency</span>
+                    <input defaultValue="usd" name="currency" />
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Success condition</span>
+                  <textarea name="success_condition" placeholder="What would count as a successful match?" />
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save bounty
+                </button>
+              </form>
+              {dashboardData?.brokerageBounties.length ? (
+                <ul className="clean-list">
+                  {dashboardData.brokerageBounties.slice(0, 4).map((bounty) => (
+                    <li key={bounty.id}>
+                      {bounty.label}:{" "}
+                      {formatPaymentAmount(bounty.max_amount_cents, bounty.currency)} ({bounty.status})
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Collectives</p>
+              <h3>Groups, institutions, and delegated authority</h3>
+              <p className="route-text">
+                Create a collective record so future workflows can distinguish individual wishes
+                from group-level authority and verification.
+              </p>
+              <form action={createCollectiveAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Name</span>
+                  <input name="name" placeholder="Research group, community, institution" />
+                </label>
+                <label className="field">
+                  <span>Description</span>
+                  <textarea name="description" placeholder="Purpose, scope, and who can speak for it." />
+                </label>
+                <label className="field">
+                  <span>Verification</span>
+                  <select name="verification_status" defaultValue="unverified">
+                    <option value="unverified">Unverified</option>
+                    <option value="review_pending">Review pending</option>
+                  </select>
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Create collective
+                </button>
+              </form>
+              {dashboardData?.collectives.length ? (
+                <ul className="clean-list">
+                  {dashboardData.collectives.slice(0, 4).map((collective) => (
+                    <li key={collective.id}>
+                      {collective.name} ({collective.verification_status})
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Risk and audit</p>
+              <h3>Safety signals from non-AI checks</h3>
+              <p className="route-text">
+                Signals are review prompts for underspecified profiles, suspicious patterns, or
+                unsafe matching context. They do not block users automatically.
+              </p>
+              {dashboardData?.riskSignals.length ? (
+                <ul className="clean-list">
+                  {dashboardData.riskSignals.slice(0, 5).map((signal) => (
+                    <li key={signal.id}>
+                      {signal.severity}: {signal.signal_type} ({signal.status})
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="route-text">No risk signals recorded for your profile.</p>
+              )}
+            </article>
           </div>
 
           <div className="data-grid">

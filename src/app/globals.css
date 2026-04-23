@@ -1929,6 +1929,62 @@ main {
   margin-top: 0;
 }
 
+.networking-feasibility-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 1.35rem;
+}
+
+.networking-feasibility-card {
+  min-height: 100%;
+  padding: 1.05rem;
+}
+
+.networking-feasibility-card h3,
+.networking-roadmap h3 {
+  margin: 0;
+}
+
+.networking-feasibility-card p,
+.networking-roadmap p {
+  margin: 0.45rem 0 0;
+  color: var(--ink-soft);
+}
+
+.networking-roadmap {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: 1.35rem;
+  margin-top: 1.35rem;
+  padding: 1.35rem;
+  border-color: rgba(107, 151, 200, 0.32);
+  background: var(--accent-soft);
+}
+
+.networking-roadmap-rows {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.networking-roadmap-row {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  padding: 0.9rem 0;
+  border-top: 1px solid rgba(79, 117, 159, 0.18);
+}
+
+.networking-roadmap-row:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.networking-roadmap-row .clean-list {
+  margin-top: 0;
+}
+
 .editorial-grid-wide {
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
 }
@@ -2885,6 +2941,8 @@ strong {
   .animation-grid,
   .background-networking-grid,
   .privacy-callout,
+  .networking-feasibility-grid,
+  .networking-roadmap,
   .proposition-grid,
   .data-grid,
   .directory-grid,
@@ -3061,6 +3119,7 @@ strong {
   }
 
   .networking-layer-card,
+  .networking-roadmap-row,
   .values-summary div {
     grid-template-columns: 1fr;
   }

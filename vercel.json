@@ -11,6 +11,10 @@
     {
       "path": "/api/jobs/saved-searches",
       "schedule": "17 */6 * * *"
+    },
+    {
+      "path": "/api/jobs/delegates",
+      "schedule": "37 */6 * * *"
     }
   ]
 }

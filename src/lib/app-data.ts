@@ -31,6 +31,18 @@ type ClarificationQuestionRow = Database["public"]["Tables"]["clarification_ques
 type BackgroundMatchRunRow = Database["public"]["Tables"]["background_match_runs"]["Row"];
 type MatchReportRow = Database["public"]["Tables"]["match_reports"]["Row"];
 type NetworkInviteRow = Database["public"]["Tables"]["network_invites"]["Row"];
+type PersonalDelegateRow = Database["public"]["Tables"]["personal_delegates"]["Row"];
+type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
+type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Row"];
+type HelperStrategyRow = Database["public"]["Tables"]["helper_strategies"]["Row"];
+type HelperRunRow = Database["public"]["Tables"]["helper_runs"]["Row"];
+type MatchIntroductionPlanRow =
+  Database["public"]["Tables"]["match_introduction_plans"]["Row"];
+type PrivacyGrantRow = Database["public"]["Tables"]["privacy_grants"]["Row"];
+type RiskSignalRow = Database["public"]["Tables"]["risk_signals"]["Row"];
+type BrokerageBountyRow = Database["public"]["Tables"]["brokerage_bounties"]["Row"];
+type CollectiveRow = Database["public"]["Tables"]["collectives"]["Row"];
+type CollectiveMemberRow = Database["public"]["Tables"]["collective_members"]["Row"];
 type InterestStatus = Database["public"]["Enums"]["interest_status"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -192,6 +204,17 @@ export interface DashboardDataResult {
   backgroundRuns: BackgroundMatchRunRow[];
   matchReports: MatchReportRow[];
   networkInvites: NetworkInviteRow[];
+  personalDelegate: PersonalDelegateRow | null;
+  sourceConnections: SourceConnectionRow[];
+  profileSynthesis: ProfileSynthesisRow | null;
+  helperStrategies: HelperStrategyRow[];
+  helperRuns: HelperRunRow[];
+  introductionPlans: MatchIntroductionPlanRow[];
+  privacyGrants: PrivacyGrantRow[];
+  riskSignals: RiskSignalRow[];
+  brokerageBounties: BrokerageBountyRow[];
+  collectives: CollectiveRow[];
+  collectiveMemberships: CollectiveMemberRow[];
   paymentAccount: ProfilePaymentAccountRow | null;
   savedSearches: SavedSearchRow[];
   errors: {
@@ -209,6 +232,17 @@ export interface DashboardDataResult {
     backgroundRuns: string | null;
     matchReports: string | null;
     networkInvites: string | null;
+    personalDelegate: string | null;
+    sourceConnections: string | null;
+    profileSynthesis: string | null;
+    helperStrategies: string | null;
+    helperRuns: string | null;
+    introductionPlans: string | null;
+    privacyGrants: string | null;
+    riskSignals: string | null;
+    brokerageBounties: string | null;
+    collectives: string | null;
+    collectiveMemberships: string | null;
     paymentAccount: string | null;
     savedSearches: string | null;
   };
@@ -1683,6 +1717,225 @@ async function listNetworkInvitesForUser(userId: string): Promise<NetworkInviteR
   return (data ?? []) as NetworkInviteRow[];
 }
 
+async function getPersonalDelegateForUser(userId: string): Promise<PersonalDelegateRow | null> {
+  if (!hasSupabaseEnv()) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("personal_delegates")
+    .select("*")
+    .eq("profile_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? null) as PersonalDelegateRow | null;
+}
+
+async function listSourceConnectionsForUser(userId: string): Promise<SourceConnectionRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("source_connections")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as SourceConnectionRow[];
+}
+
+async function getProfileSynthesisForUser(userId: string): Promise<ProfileSynthesisRow | null> {
+  if (!hasSupabaseEnv()) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profile_syntheses")
+    .select("*")
+    .eq("profile_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? null) as ProfileSynthesisRow | null;
+}
+
+async function listHelperStrategiesForUser(userId: string): Promise<HelperStrategyRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("helper_strategies")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("priority", { ascending: true })
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as HelperStrategyRow[];
+}
+
+async function listHelperRunsForUser(userId: string): Promise<HelperRunRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("helper_runs")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as HelperRunRow[];
+}
+
+async function listIntroductionPlansForUser(userId: string): Promise<MatchIntroductionPlanRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("match_introduction_plans")
+    .select("*")
+    .or(`profile_id.eq.${userId},counterparty_id.eq.${userId}`)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as MatchIntroductionPlanRow[];
+}
+
+async function listPrivacyGrantsForUser(userId: string): Promise<PrivacyGrantRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("privacy_grants")
+    .select("*")
+    .or(`profile_id.eq.${userId},counterparty_id.eq.${userId}`)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as PrivacyGrantRow[];
+}
+
+async function listRiskSignalsForUser(userId: string): Promise<RiskSignalRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("risk_signals")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as RiskSignalRow[];
+}
+
+async function listBrokerageBountiesForUser(userId: string): Promise<BrokerageBountyRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("brokerage_bounties")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BrokerageBountyRow[];
+}
+
+async function listCollectivesForUser(userId: string): Promise<CollectiveRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("collectives")
+    .select("*")
+    .eq("owner_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as CollectiveRow[];
+}
+
+async function listCollectiveMembershipsForUser(userId: string): Promise<CollectiveMemberRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("collective_members")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as CollectiveMemberRow[];
+}
+
 async function getPaymentAccountForUser(userId: string): Promise<ProfilePaymentAccountRow | null> {
   if (!hasSupabaseEnv()) {
     return null;
@@ -1738,6 +1991,17 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       backgroundRuns: [],
       matchReports: [],
       networkInvites: [],
+      personalDelegate: null,
+      sourceConnections: [],
+      profileSynthesis: null,
+      helperStrategies: [],
+      helperRuns: [],
+      introductionPlans: [],
+      privacyGrants: [],
+      riskSignals: [],
+      brokerageBounties: [],
+      collectives: [],
+      collectiveMemberships: [],
       paymentAccount: null,
       savedSearches: [],
       errors: {
@@ -1755,6 +2019,17 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         backgroundRuns: null,
         matchReports: null,
         networkInvites: null,
+        personalDelegate: null,
+        sourceConnections: null,
+        profileSynthesis: null,
+        helperStrategies: null,
+        helperRuns: null,
+        introductionPlans: null,
+        privacyGrants: null,
+        riskSignals: null,
+        brokerageBounties: null,
+        collectives: null,
+        collectiveMemberships: null,
         paymentAccount: null,
         savedSearches: null,
       },
@@ -1777,6 +2052,17 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     backgroundRuns: null,
     matchReports: null,
     networkInvites: null,
+    personalDelegate: null,
+    sourceConnections: null,
+    profileSynthesis: null,
+    helperStrategies: null,
+    helperRuns: null,
+    introductionPlans: null,
+    privacyGrants: null,
+    riskSignals: null,
+    brokerageBounties: null,
+    collectives: null,
+    collectiveMemberships: null,
     paymentAccount: null,
     savedSearches: null,
   };
@@ -2016,6 +2302,107 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load network invites", { message, userId });
   }
 
+  let personalDelegate: PersonalDelegateRow | null = null;
+  try {
+    personalDelegate = await getPersonalDelegateForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load personal delegate.";
+    errors.personalDelegate = message;
+    console.error("[supabase] Failed to load personal delegate", { message, userId });
+  }
+
+  let sourceConnections: SourceConnectionRow[] = [];
+  try {
+    sourceConnections = await listSourceConnectionsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load source connections.";
+    errors.sourceConnections = message;
+    console.error("[supabase] Failed to load source connections", { message, userId });
+  }
+
+  let profileSynthesis: ProfileSynthesisRow | null = null;
+  try {
+    profileSynthesis = await getProfileSynthesisForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load profile synthesis.";
+    errors.profileSynthesis = message;
+    console.error("[supabase] Failed to load profile synthesis", { message, userId });
+  }
+
+  let helperStrategies: HelperStrategyRow[] = [];
+  try {
+    helperStrategies = await listHelperStrategiesForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load helper strategies.";
+    errors.helperStrategies = message;
+    console.error("[supabase] Failed to load helper strategies", { message, userId });
+  }
+
+  let helperRuns: HelperRunRow[] = [];
+  try {
+    helperRuns = await listHelperRunsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load helper runs.";
+    errors.helperRuns = message;
+    console.error("[supabase] Failed to load helper runs", { message, userId });
+  }
+
+  let introductionPlans: MatchIntroductionPlanRow[] = [];
+  try {
+    introductionPlans = await listIntroductionPlansForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load introduction plans.";
+    errors.introductionPlans = message;
+    console.error("[supabase] Failed to load introduction plans", { message, userId });
+  }
+
+  let privacyGrants: PrivacyGrantRow[] = [];
+  try {
+    privacyGrants = await listPrivacyGrantsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load privacy grants.";
+    errors.privacyGrants = message;
+    console.error("[supabase] Failed to load privacy grants", { message, userId });
+  }
+
+  let riskSignals: RiskSignalRow[] = [];
+  try {
+    riskSignals = await listRiskSignalsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load risk signals.";
+    errors.riskSignals = message;
+    console.error("[supabase] Failed to load risk signals", { message, userId });
+  }
+
+  let brokerageBounties: BrokerageBountyRow[] = [];
+  try {
+    brokerageBounties = await listBrokerageBountiesForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load brokerage bounties.";
+    errors.brokerageBounties = message;
+    console.error("[supabase] Failed to load brokerage bounties", { message, userId });
+  }
+
+  let collectives: CollectiveRow[] = [];
+  try {
+    collectives = await listCollectivesForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load collectives.";
+    errors.collectives = message;
+    console.error("[supabase] Failed to load collectives", { message, userId });
+  }
+
+  let collectiveMemberships: CollectiveMemberRow[] = [];
+  try {
+    collectiveMemberships = await listCollectiveMembershipsForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load collective memberships.";
+    errors.collectiveMemberships = message;
+    console.error("[supabase] Failed to load collective memberships", { message, userId });
+  }
+
   let paymentAccount: ProfilePaymentAccountRow | null = null;
   try {
     paymentAccount = await getPaymentAccountForUser(userId);
@@ -2052,6 +2439,17 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     backgroundRuns,
     matchReports,
     networkInvites,
+    personalDelegate,
+    sourceConnections,
+    profileSynthesis,
+    helperStrategies,
+    helperRuns,
+    introductionPlans,
+    privacyGrants,
+    riskSignals,
+    brokerageBounties,
+    collectives,
+    collectiveMemberships,
     paymentAccount,
     savedSearches,
     errors,

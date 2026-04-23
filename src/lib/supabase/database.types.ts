@@ -1025,6 +1025,425 @@ export interface Database {
         };
         Relationships: [];
       };
+      personal_delegates: {
+        Row: {
+          profile_id: string;
+          label: string;
+          goals: string[];
+          operating_mode: "passive" | "active" | "paused";
+          search_scope: string;
+          risk_tolerance: "conservative" | "moderate" | "exploratory";
+          introduction_policy: "ask_each_time" | "auto_draft_only";
+          max_weekly_suggestions: number;
+          status: "active" | "paused";
+          last_run_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          label?: string;
+          goals?: string[];
+          operating_mode?: "passive" | "active" | "paused";
+          search_scope?: string;
+          risk_tolerance?: "conservative" | "moderate" | "exploratory";
+          introduction_policy?: "ask_each_time" | "auto_draft_only";
+          max_weekly_suggestions?: number;
+          status?: "active" | "paused";
+          last_run_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          label?: string;
+          goals?: string[];
+          operating_mode?: "passive" | "active" | "paused";
+          search_scope?: string;
+          risk_tolerance?: "conservative" | "moderate" | "exploratory";
+          introduction_policy?: "ask_each_time" | "auto_draft_only";
+          max_weekly_suggestions?: number;
+          status?: "active" | "paused";
+          last_run_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      source_connections: {
+        Row: {
+          id: string;
+          profile_id: string;
+          provider:
+            | "manual"
+            | "social"
+            | "blog"
+            | "email"
+            | "calendar"
+            | "chat_history"
+            | "search_profile"
+            | "other";
+          label: string;
+          url: string;
+          access_status: "not_connected" | "connected" | "revoked" | "needs_review";
+          access_scope: string;
+          consent_notes: string;
+          last_imported_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          provider?:
+            | "manual"
+            | "social"
+            | "blog"
+            | "email"
+            | "calendar"
+            | "chat_history"
+            | "search_profile"
+            | "other";
+          label: string;
+          url?: string;
+          access_status?: "not_connected" | "connected" | "revoked" | "needs_review";
+          access_scope?: string;
+          consent_notes?: string;
+          last_imported_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          provider?:
+            | "manual"
+            | "social"
+            | "blog"
+            | "email"
+            | "calendar"
+            | "chat_history"
+            | "search_profile"
+            | "other";
+          label?: string;
+          url?: string;
+          access_status?: "not_connected" | "connected" | "revoked" | "needs_review";
+          access_scope?: string;
+          consent_notes?: string;
+          last_imported_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      profile_syntheses: {
+        Row: {
+          profile_id: string;
+          hopes: string;
+          intent: string;
+          capabilities: string;
+          constraints: string;
+          uncertainty: string;
+          confidence_score: number;
+          source_count: number;
+          synthesis_version: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          hopes?: string;
+          intent?: string;
+          capabilities?: string;
+          constraints?: string;
+          uncertainty?: string;
+          confidence_score?: number;
+          source_count?: number;
+          synthesis_version?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          hopes?: string;
+          intent?: string;
+          capabilities?: string;
+          constraints?: string;
+          uncertainty?: string;
+          confidence_score?: number;
+          source_count?: number;
+          synthesis_version?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      helper_strategies: {
+        Row: {
+          id: string;
+          profile_id: string;
+          helper_kind:
+            | "cause_overlap"
+            | "payment_compatibility"
+            | "geographic"
+            | "network_expansion"
+            | "saved_search"
+            | "risk_filter";
+          label: string;
+          priority: number;
+          status: "active" | "paused";
+          last_run_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          helper_kind?:
+            | "cause_overlap"
+            | "payment_compatibility"
+            | "geographic"
+            | "network_expansion"
+            | "saved_search"
+            | "risk_filter";
+          label: string;
+          priority?: number;
+          status?: "active" | "paused";
+          last_run_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          helper_kind?:
+            | "cause_overlap"
+            | "payment_compatibility"
+            | "geographic"
+            | "network_expansion"
+            | "saved_search"
+            | "risk_filter";
+          label?: string;
+          priority?: number;
+          status?: "active" | "paused";
+          last_run_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      helper_runs: {
+        Row: {
+          id: string;
+          strategy_id: string | null;
+          profile_id: string;
+          status: "queued" | "running" | "completed" | "failed";
+          candidates_scanned: number;
+          suggestions_created: number;
+          notes: string;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          strategy_id?: string | null;
+          profile_id: string;
+          status?: "queued" | "running" | "completed" | "failed";
+          candidates_scanned?: number;
+          suggestions_created?: number;
+          notes?: string;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          strategy_id?: string | null;
+          status?: "queued" | "running" | "completed" | "failed";
+          candidates_scanned?: number;
+          suggestions_created?: number;
+          notes?: string;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      match_introduction_plans: {
+        Row: {
+          id: string;
+          match_id: string;
+          profile_id: string;
+          counterparty_id: string;
+          status: "draft" | "shared" | "archived";
+          intro_message: string;
+          proposal_outline: string;
+          agenda: string;
+          verification_plan: string;
+          privacy_notes: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          match_id: string;
+          profile_id: string;
+          counterparty_id: string;
+          status?: "draft" | "shared" | "archived";
+          intro_message?: string;
+          proposal_outline?: string;
+          agenda?: string;
+          verification_plan?: string;
+          privacy_notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: "draft" | "shared" | "archived";
+          intro_message?: string;
+          proposal_outline?: string;
+          agenda?: string;
+          verification_plan?: string;
+          privacy_notes?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      privacy_grants: {
+        Row: {
+          id: string;
+          profile_id: string;
+          counterparty_id: string | null;
+          match_id: string | null;
+          field_key: string;
+          access_level: "hidden" | "broad" | "specific" | "contact";
+          status: "draft" | "granted" | "revoked";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          counterparty_id?: string | null;
+          match_id?: string | null;
+          field_key: string;
+          access_level?: "hidden" | "broad" | "specific" | "contact";
+          status?: "draft" | "granted" | "revoked";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          counterparty_id?: string | null;
+          match_id?: string | null;
+          field_key?: string;
+          access_level?: "hidden" | "broad" | "specific" | "contact";
+          status?: "draft" | "granted" | "revoked";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      risk_signals: {
+        Row: {
+          id: string;
+          profile_id: string | null;
+          match_id: string | null;
+          signal_type: string;
+          severity: "low" | "medium" | "high" | "critical";
+          summary: string;
+          status: "open" | "reviewed" | "dismissed";
+          created_at: string;
+          reviewed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          profile_id?: string | null;
+          match_id?: string | null;
+          signal_type: string;
+          severity?: "low" | "medium" | "high" | "critical";
+          summary?: string;
+          status?: "open" | "reviewed" | "dismissed";
+          created_at?: string;
+          reviewed_at?: string | null;
+        };
+        Update: {
+          signal_type?: string;
+          severity?: "low" | "medium" | "high" | "critical";
+          summary?: string;
+          status?: "open" | "reviewed" | "dismissed";
+          reviewed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      brokerage_bounties: {
+        Row: {
+          id: string;
+          profile_id: string;
+          label: string;
+          cause_area: string;
+          max_amount_cents: number;
+          currency: string;
+          success_condition: string;
+          status: "active" | "paused" | "awarded" | "cancelled";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          label: string;
+          cause_area?: string;
+          max_amount_cents?: number;
+          currency?: string;
+          success_condition?: string;
+          status?: "active" | "paused" | "awarded" | "cancelled";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          label?: string;
+          cause_area?: string;
+          max_amount_cents?: number;
+          currency?: string;
+          success_condition?: string;
+          status?: "active" | "paused" | "awarded" | "cancelled";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      collectives: {
+        Row: {
+          id: string;
+          owner_id: string;
+          name: string;
+          description: string;
+          verification_status: "unverified" | "review_pending" | "verified";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_id: string;
+          name: string;
+          description?: string;
+          verification_status?: "unverified" | "review_pending" | "verified";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          description?: string;
+          verification_status?: "unverified" | "review_pending" | "verified";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      collective_members: {
+        Row: {
+          collective_id: string;
+          profile_id: string;
+          role: "owner" | "admin" | "member" | "viewer";
+          status: "invited" | "active" | "removed";
+          created_at: string;
+        };
+        Insert: {
+          collective_id: string;
+          profile_id: string;
+          role?: "owner" | "admin" | "member" | "viewer";
+          status?: "invited" | "active" | "removed";
+          created_at?: string;
+        };
+        Update: {
+          role?: "owner" | "admin" | "member" | "viewer";
+          status?: "invited" | "active" | "removed";
+        };
+        Relationships: [];
+      };
     };
     Views: {
       wish_profile_previews: {
@@ -1079,6 +1498,18 @@ export interface Database {
       };
     };
     Functions: {
+      viewer_can_access_collective: {
+        Args: {
+          target_collective_id: string;
+        };
+        Returns: boolean;
+      };
+      viewer_participates_in_match: {
+        Args: {
+          target_match_id: string;
+        };
+        Returns: boolean;
+      };
       upsert_match_suggestion: {
         Args: {
           target_profile_a_id: string;

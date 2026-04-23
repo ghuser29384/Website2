@@ -29,6 +29,9 @@ The product currently supports three offer modes: personal pledge swaps, donatio
 - `/api/jobs/email` cron endpoint for queued email delivery through Resend
 - `/api/jobs/payment-reminders` cron endpoint for scheduled payment reminders
 - `/api/jobs/saved-searches` cron endpoint for non-AI saved-search matching
+- `/api/jobs/delegates` cron endpoint for non-AI personal delegate heartbeats
+- `/api/profile/export` authenticated portable wish-profile export
+- `/api/wish-registry/search` broad semi-private wish registry search endpoint
 
 ## Project structure
 
@@ -124,6 +127,17 @@ npm run dev
 - `public.agreement_events`
 - `public.email_outbox`
 - `public.saved_searches`
+- `public.personal_delegates`
+- `public.source_connections`
+- `public.profile_syntheses`
+- `public.helper_strategies`
+- `public.helper_runs`
+- `public.match_introduction_plans`
+- `public.privacy_grants`
+- `public.risk_signals`
+- `public.brokerage_bounties`
+- `public.collectives`
+- `public.collective_members`
 
 Important: the current app is centered on `public.profiles`.
 
@@ -138,6 +152,10 @@ The background networking model is intentionally narrow for now:
 - broad previews can be searched while exact wishes stay private
 - scans are rule-based, not AI-generated
 - identities and sensitive details are revealed only through mutual consent
+- source connections are consent records only; the app does not ingest external accounts
+- deterministic synthesis summarizes user-entered data without LLM processing
+- personal delegates run scheduled readiness checks and helper strategies, not autonomous AI
+- privacy grants record field-level sharing decisions for staged introductions
 
 ## Supabase integration
 
@@ -168,10 +186,11 @@ The homepage still works without Supabase so the original prototype remains usab
 - queued notification records delivered by `/api/jobs/email` when Resend is configured
 - `/admin` review queues for match reports, payment review, lifecycle problems, email, and safety-flagged wish profiles
 - non-AI saved-search background scans through `/api/jobs/saved-searches`
+- non-AI personal delegates with durable goals, helper strategies, source consent records, deterministic synthesis, staged privacy grants, introduction plans, risk signals, brokerage bounties, and collective records
 
 ## Operations
 
-The operational checklist is in [`docs/production-readiness.md`](docs/production-readiness.md). Apply schema changes before deploying, configure Vercel env vars, and verify Vercel Cron can call the job endpoints.
+The operational checklist is in [`docs/production-readiness.md`](docs/production-readiness.md). Apply schema changes before deploying, configure Vercel env vars, and verify Vercel Cron can call the job endpoints. For existing deployments, apply [`supabase/migrations/20260422_background_networking_non_ai.sql`](supabase/migrations/20260422_background_networking_non_ai.sql) after the earlier app schema migrations.
 
 The accessibility and mobile test checklist is in [`docs/accessibility-checklist.md`](docs/accessibility-checklist.md). Use it for the first-visit interview, dashboard, agreements, payments, and admin flows.
 

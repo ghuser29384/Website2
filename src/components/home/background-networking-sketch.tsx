@@ -26,6 +26,48 @@ const privacyControls = [
   "Safety filters for coercion, harassment, illegal asks, and exploitation",
 ] as const;
 
+const feasibilityTracks = [
+  {
+    title: "Privacy without total opacity",
+    text: "Broad previews, field-level grants, and match-scoped consent keep exact wishes hidden while still leaving enough surface area for review and abuse prevention.",
+  },
+  {
+    title: "Portable before decentralised",
+    text: "Profile export and explicit source records make the registry easier to move later, even while the first prototype stays centralised and simple.",
+  },
+  {
+    title: "Cold-start niches",
+    text: "Saved searches, network invite drafts, and collectives let early users focus on smaller communities before a general-purpose market has density.",
+  },
+  {
+    title: "Speculative incentives",
+    text: "Brokerage bounties record willingness to pay for useful matches without charging automatically or pretending speculative coordination is already priced.",
+  },
+] as const;
+
+const milestoneRows = [
+  {
+    label: "Built now",
+    items: [
+      "explicit wish profile",
+      "manual source consent ledger",
+      "broad registry search",
+      "non-AI delegate heartbeats",
+      "consent-gated first-step plans",
+    ],
+  },
+  {
+    label: "Kept out for now",
+    items: [
+      "automatic account ingestion",
+      "LLM wish synthesis",
+      "chatbot interviewing",
+      "auto-sent introductions",
+      "unbounded private data search",
+    ],
+  },
+] as const;
+
 export function BackgroundNetworkingSketch({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
     <section className="section section-white background-networking-section" id="background-networking">
@@ -111,6 +153,39 @@ export function BackgroundNetworkingSketch({ isAuthenticated }: { isAuthenticate
             <li key={control}>{control}</li>
           ))}
         </ul>
+      </div>
+
+      <div className="networking-feasibility-grid" aria-label="Background networking feasibility plan">
+        {feasibilityTracks.map((track) => (
+          <article className="panel networking-feasibility-card" key={track.title}>
+            <h3>{track.title}</h3>
+            <p>{track.text}</p>
+          </article>
+        ))}
+      </div>
+
+      <div className="networking-roadmap panel">
+        <div>
+          <p className="detail-kicker">Implementation boundary</p>
+          <h3>Move toward background networking without pretending the AI layer is ready</h3>
+          <p>
+            The article points toward personalised helpers, synthesis, and interviews. This
+            prototype first makes the institutional surface visible: what can be searched, what can
+            be revealed, who can consent, and what counts as a serious first step.
+          </p>
+        </div>
+        <div className="networking-roadmap-rows">
+          {milestoneRows.map((row) => (
+            <div className="networking-roadmap-row" key={row.label}>
+              <strong>{row.label}</strong>
+              <ul className="clean-list">
+                {row.items.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
