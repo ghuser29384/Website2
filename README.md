@@ -21,6 +21,7 @@ The product currently supports three offer modes: personal pledge swaps, donatio
 - `/offers` live offer directory
 - `/offers/new` authenticated offer creation page
 - `/offers/[offerId]` live offer detail page with interest form
+- `/wish-registry` broad wish-profile preview search page
 - `/dashboard` authenticated dashboard showing your offers and interests
 - `/agreements/[agreementId]` authenticated agreement record with payments, schedules, evidence, disputes, and ratings
 - `/admin` operator review console gated by `ADMIN_EMAILS`
@@ -31,7 +32,7 @@ The product currently supports three offer modes: personal pledge swaps, donatio
 - `/api/jobs/saved-searches` cron endpoint for non-AI saved-search matching
 - `/api/jobs/delegates` cron endpoint for non-AI personal delegate heartbeats
 - `/api/profile/export` authenticated portable wish-profile export
-- `/api/wish-registry/search` broad semi-private wish registry search endpoint
+- `/api/wish-registry/search` broad semi-private wish registry search endpoint for integrations
 
 ## Project structure
 
@@ -187,6 +188,7 @@ The homepage still works without Supabase so the original prototype remains usab
 - `/admin` review queues for match reports, payment review, lifecycle problems, email, and safety-flagged wish profiles
 - non-AI saved-search background scans through `/api/jobs/saved-searches`
 - non-AI personal delegates with durable goals, helper strategies, source consent records, deterministic synthesis, staged privacy grants, introduction plans, risk signals, brokerage bounties, and collective records
+- browsable wish registry search for broad previews without exposing exact wishes, asks, private sources, or contact details
 
 ## Operations
 

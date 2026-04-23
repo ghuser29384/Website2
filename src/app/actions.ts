@@ -11,6 +11,7 @@ import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { deriveDisplayName, ensureAccountRowsForUser, getViewer, requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
+import { takeRateLimitSlot } from "@/lib/rate-limit";
 import {
   calculatePlatformFeeCents,
   getStripe,
@@ -98,6 +99,26 @@ function logSupabaseActionError(
     message: error.message,
     ...metadata,
   });
+}
+
+function enforceActionRateLimit({
+  key,
+  limit,
+  message,
+  returnTo,
+  windowMs,
+}: {
+  key: string;
+  limit: number;
+  message: string;
+  returnTo: string;
+  windowMs: number;
+}) {
+  const result = takeRateLimitSlot(key, { limit, windowMs });
+
+  if (result.limited) {
+    redirectWithMessage(returnTo, "error", message);
+  }
 }
 
 async function queueEmailOutbox({
@@ -937,7 +958,7 @@ export async function signUpAction(formData: FormData) {
     redirectWithMessage("/signup", "error", "Supabase is not configured yet.");
   }
 
-  const email = readRequired(formData, "email");
+  const email = readRequired(formData, "email").toLowerCase();
   const password = readRequired(formData, "password");
   const displayName = readRequired(formData, "display_name");
   const city = readOptional(formData, "city");
@@ -946,6 +967,14 @@ export async function signUpAction(formData: FormData) {
   if (!email || !password) {
     redirectWithMessage("/signup", "error", "Email and password are required.");
   }
+
+  enforceActionRateLimit({
+    key: `signup:${email}`,
+    limit: 5,
+    message: "Too many signup attempts. Wait a few minutes before trying again.",
+    returnTo: "/signup",
+    windowMs: 15 * 60 * 1000,
+  });
 
   const supabase = await createClient();
   const headerStore = await headers();
@@ -985,13 +1014,21 @@ export async function signInAction(formData: FormData) {
     redirectWithMessage("/login", "error", "Supabase is not configured yet.");
   }
 
-  const email = readRequired(formData, "email");
+  const email = readRequired(formData, "email").toLowerCase();
   const password = readRequired(formData, "password");
   const next = getSafeInternalPath(readRequired(formData, "next"), "/dashboard");
 
   if (!email || !password) {
     redirectWithMessage("/login", "error", "Email and password are required.");
   }
+
+  enforceActionRateLimit({
+    key: `login:${email}`,
+    limit: 8,
+    message: "Too many login attempts. Wait a few minutes before trying again.",
+    returnTo: "/login",
+    windowMs: 10 * 60 * 1000,
+  });
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -1027,6 +1064,14 @@ export async function createOfferAction(formData: FormData) {
 
   const viewer = await requireViewer("/offers/new");
   const supabase = await createClient();
+
+  enforceActionRateLimit({
+    key: `offer-create:${viewer.authUser.id}`,
+    limit: 8,
+    message: "You are creating offers too quickly. Wait a bit before publishing another one.",
+    returnTo: "/offers/new",
+    windowMs: 60 * 60 * 1000,
+  });
 
   const mode = readRequired(formData, "mode");
   const normalizedMode = normalizeOfferMode(mode);
@@ -1192,6 +1237,14 @@ export async function expressGuestInterestAction(formData: FormData) {
   if (!offerId || !contactEmail || !message) {
     redirectWithMessage(returnTo, "error", "Email and message are required.");
   }
+
+  enforceActionRateLimit({
+    key: `guest-interest:${offerId}:${contactEmail}`,
+    limit: 4,
+    message: "Too many guest responses for this offer. Wait a few minutes before trying again.",
+    returnTo,
+    windowMs: 10 * 60 * 1000,
+  });
 
   const viewer = await getViewer();
   if (viewer) {
@@ -3483,6 +3536,14 @@ export async function addOfferCommentAction(formData: FormData) {
   const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
   let depth = 0;
+
+  enforceActionRateLimit({
+    key: `offer-comment:${viewer.authUser.id}`,
+    limit: 12,
+    message: "You are posting comments too quickly. Wait a few minutes before trying again.",
+    returnTo,
+    windowMs: 5 * 60 * 1000,
+  });
 
   if (parentId) {
     const { data: parentComment, error: parentError } = await supabase

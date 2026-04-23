@@ -417,7 +417,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <a className="button button-secondary button-mini" href="/api/profile/export">
                 Export profile
               </a>
-              <a className="button button-secondary button-mini" href="/api/wish-registry/search">
+              <a className="button button-secondary button-mini" href="/wish-registry">
                 Search broad registry
               </a>
             </div>

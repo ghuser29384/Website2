@@ -10,6 +10,8 @@ pnpm-debug.log*
 .DS_Store
 *.tsbuildinfo
 ~
+~$*
+**/~$*
 Larken Serif/Larken-Black.otf
 Larken Serif/Larken-BlackItalic.otf
 Larken Serif/Larken-Bold.otf

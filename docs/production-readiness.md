@@ -35,6 +35,6 @@ This app now has scaffolding for payments, email, admin review, and scheduled jo
 - Personal delegates are durable non-AI preference/search configurations. The delegate cron records helper-run coverage, low-confidence synthesis signals, and missing-strategy signals; it does not import external data or introduce users automatically.
 - Source connections are consent and scope records only. Social, email, calendar, chatbot, and search-profile ingestion still require separate provider integrations and privacy review.
 - `/api/profile/export` provides a portable authenticated export of the signed-in user's profile, wishes, delegate settings, grants, bounties, collectives, and helper records.
-- `/api/wish-registry/search` exposes only broad wish-profile previews. Exact wishes, asks, constraints, contact details, and source records remain behind profile ownership, grants, and RLS.
+- `/wish-registry` is the human-facing broad preview search page. `/api/wish-registry/search` exposes the same broad preview records for integrations, with a small in-process request throttle. Exact wishes, asks, constraints, contact details, and source records remain behind profile ownership, grants, and RLS.
 - Brokerage bounties are pledge-like willingness-to-pay records. They are not automatic brokerage fees, escrow, invoices, or Stripe charges.
 - Collective records support basic group identity and owner/member rows, but institutional verification and delegated authority review remain operator processes.

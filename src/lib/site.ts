@@ -6,6 +6,7 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
     { href: "/offers#best-offers", label: "Best offers" },
     { href: "/offers", label: "Offers" },
     { href: "/people", label: "People" },
+    { href: "/wish-registry", label: "Registry" },
     { href: "/cart", label: "Cart" },
   ];
 
@@ -46,6 +47,7 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/offers", label: "Public offers" },
       { href: "/people", label: "People" },
+      { href: "/wish-registry", label: "Wish registry" },
       { href: "/cart", label: "Cart" },
       { href: "/signup", label: "Sign up" },
       { href: "/login", label: "Log in" },
