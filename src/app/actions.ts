@@ -40,7 +40,10 @@ function redirectWithMessage(
   key: "error" | "message",
   message: string,
 ): never {
-  redirect(`${path}?${key}=${encodeURIComponent(message)}`);
+  const target = new URL(path, "https://www.moraltrade.org");
+  target.searchParams.set(key, message);
+
+  redirect(`${target.pathname}${target.search}${target.hash}`);
 }
 
 function readRequired(formData: FormData, key: string) {
