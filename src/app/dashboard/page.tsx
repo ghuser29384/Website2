@@ -3,27 +3,33 @@ import Link from "next/link";
 
 import {
   addAgreementEventAction,
+  addCollectiveMemberAction,
   answerClarificationQuestionAction,
   createAgreementPaymentCheckoutAction,
   createBrokerageBountyAction,
   createCollectiveAction,
+  createCollectiveDecisionAction,
   createNetworkInviteAction,
   createStripeConnectAccountAction,
   consentToMatchSuggestionAction,
   dismissMatchSuggestionAction,
   dismissClarificationQuestionAction,
+  createPrivacyAccessRequestAction,
   markWishNotificationReadAction,
   rateAgreementAction,
   refreshBackgroundMatchesAction,
   refreshProfileSynthesisAction,
   refreshStripeConnectAccountAction,
   reportMatchSuggestionAction,
+  respondPrivacyAccessRequestAction,
   saveHelperStrategyAction,
   savePersonalDelegateAction,
   savePrivacyGrantAction,
   saveSearchAction,
   saveSourceConnectionAction,
   saveProfileSourceAction,
+  respondCollectiveDecisionAction,
+  updateIntroductionTaskAction,
   updateAgreementStatusAction,
 } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -73,6 +79,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const stripeReady = hasStripeEnv();
   const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
   const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
+  const collectiveNameById = new Map(
+    (dashboardData?.collectives ?? []).map((collective) => [collective.id, collective.name]),
+  );
+  const introductionTasksByPlanId = new Map(
+    (dashboardData?.introductionPlans ?? []).map((plan) => [
+      plan.id,
+      (dashboardData?.introductionTasks ?? [])
+        .filter((task) => task.plan_id === plan.id)
+        .sort((left, right) => left.sort_order - right.sort_order),
+    ]),
+  );
+  const incomingPrivacyAccessRequests = (dashboardData?.privacyAccessRequests ?? []).filter(
+    (request) => request.owner_profile_id === viewer?.authUser.id,
+  );
+  const outgoingPrivacyAccessRequests = (dashboardData?.privacyAccessRequests ?? []).filter(
+    (request) => request.requester_profile_id === viewer?.authUser.id,
+  );
 
   return (
     <div className="page-shell">
@@ -555,9 +578,35 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <input name="access_scope" placeholder="Metadata only, manual summary, etc." />
                   </label>
                 </div>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Import mode</span>
+                    <select name="import_mode" defaultValue="manual_review">
+                      <option value="manual_review">Manual review</option>
+                      <option value="manual_paste">Manual paste</option>
+                      <option value="rss_pull">RSS or feed pull</option>
+                      <option value="forwarded_note">Forwarded note</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Sync frequency</span>
+                    <select name="sync_frequency" defaultValue="manual">
+                      <option value="manual">Manual</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </label>
+                </div>
                 <label className="field">
                   <span>Consent notes</span>
                   <textarea name="consent_notes" placeholder="What may be used, what must stay private." />
+                </label>
+                <label className="field">
+                  <span>Latest import summary</span>
+                  <textarea
+                    name="last_sync_summary"
+                    placeholder="What would a manual import contain, and what still needs review?"
+                  />
                 </label>
                 <button className="button button-secondary button-mini" type="submit">
                   Record connection
@@ -567,7 +616,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ul className="clean-list">
                   {dashboardData.sourceConnections.slice(0, 4).map((connection) => (
                     <li key={connection.id}>
-                      {connection.label} ({connection.provider}, {connection.access_status})
+                      {connection.label} ({connection.provider}, {connection.access_status}, {connection.import_mode})
                     </li>
                   ))}
                 </ul>
@@ -641,6 +690,57 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <span>Priority</span>
                   <input defaultValue={3} max={5} min={1} name="priority" type="number" />
                 </label>
+                <label className="field">
+                  <span>Minimum score</span>
+                  <input defaultValue={55} max={100} min={0} name="min_score" type="number" />
+                </label>
+                <label className="field">
+                  <span>Focus causes</span>
+                  <input name="focus_causes_json" placeholder="Animal welfare, S-risks" />
+                </label>
+                <label className="field">
+                  <span>Required terms</span>
+                  <input name="required_terms_json" placeholder="vegetarian, offsets, receipts" />
+                </label>
+                <label className="field">
+                  <span>Preferred regions</span>
+                  <input name="preferred_regions_json" placeholder="London, Bay Area, Remote" />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Max missing fields</span>
+                    <input
+                      defaultValue={9}
+                      max={12}
+                      min={0}
+                      name="max_missing_fields"
+                      type="number"
+                    />
+                  </label>
+                </div>
+                <label className="field checkbox-field">
+                  <input name="require_verification" type="checkbox" />
+                  <span>Require both sides to record verification preferences</span>
+                </label>
+                <label className="field checkbox-field">
+                  <input name="prefer_existing_sources" type="checkbox" />
+                  <span>Prefer profiles with attached source material or connection records</span>
+                </label>
+                <label className="field checkbox-field">
+                  <input name="respect_strict_privacy" type="checkbox" />
+                  <span>Respect strict-privacy profiles and skip early-stage outreach</span>
+                </label>
+                <label className="field checkbox-field">
+                  <input name="require_collective_approval" type="checkbox" />
+                  <span>Require collective or institutional counterparts to look governance-ready</span>
+                </label>
+                <label className="field">
+                  <span>Strategy notes</span>
+                  <textarea
+                    name="strategy_notes"
+                    placeholder="What kind of counterparty should this deterministic helper prioritize?"
+                  />
+                </label>
                 <button className="button button-secondary button-mini" type="submit">
                   Add strategy
                 </button>
@@ -674,7 +774,67 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dashboardData.introductionPlans.slice(0, 4).map((plan) => (
                     <div className="mini-list-item" key={plan.id}>
                       <strong>{plan.status}: {plan.intro_message}</strong>
-                      <span>{plan.agenda}</span>
+                      <span>
+                        <strong>Proposal outline:</strong> {plan.proposal_outline}
+                      </span>
+                      <span>
+                        <strong>Agenda:</strong> {plan.agenda}
+                      </span>
+                      <span>
+                        <strong>Terms:</strong> {plan.proposal_terms}
+                      </span>
+                      <span>
+                        <strong>Timeline:</strong> {plan.timeline}
+                      </span>
+                      <span>
+                        <strong>Next actions:</strong> {plan.next_actions}
+                      </span>
+                      <span>
+                        <strong>Verification:</strong> {plan.verification_plan}
+                      </span>
+                      <span>
+                        <strong>Privacy:</strong> {plan.privacy_notes}
+                      </span>
+                      {introductionTasksByPlanId.get(plan.id)?.length ? (
+                        <div className="mini-list">
+                          {introductionTasksByPlanId.get(plan.id)?.map((task) => (
+                            <div className="mini-list-item" key={task.id}>
+                              <strong>
+                                Step {task.sort_order}: {task.title}
+                              </strong>
+                              <span>{task.detail}</span>
+                              <span>Status: {task.status}</span>
+                              {task.note ? <span>Note: {task.note}</span> : null}
+                              <form action={updateIntroductionTaskAction} className="compact-form">
+                                <input name="task_id" type="hidden" value={task.id} />
+                                <input name="return_to" type="hidden" value="/dashboard" />
+                                <div className="field-grid">
+                                  <label className="field">
+                                    <span>Task status</span>
+                                    <select name="status" defaultValue={task.status}>
+                                      <option value="pending">Pending</option>
+                                      <option value="in_progress">In progress</option>
+                                      <option value="done">Done</option>
+                                      <option value="skipped">Skipped</option>
+                                    </select>
+                                  </label>
+                                  <label className="field">
+                                    <span>Task note</span>
+                                    <input
+                                      defaultValue={task.note}
+                                      name="note"
+                                      placeholder="What changed, or what is still blocked?"
+                                    />
+                                  </label>
+                                </div>
+                                <button className="button button-secondary button-mini" type="submit">
+                                  Update task
+                                </button>
+                              </form>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -715,6 +875,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </select>
                   </label>
                 </div>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Stage</span>
+                    <select name="audience_stage" defaultValue="registry">
+                      <option value="registry">Registry</option>
+                      <option value="consent">After consent</option>
+                      <option value="introduced">After introduction</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Expires in days</span>
+                    <input name="expires_in_days" placeholder="0" type="number" min="0" max="3650" />
+                  </label>
+                </div>
                 <label className="field">
                   <span>Match ID</span>
                   <input name="match_id" placeholder="Optional" />
@@ -722,6 +896,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <label className="field">
                   <span>Counterparty ID</span>
                   <input name="counterparty_id" placeholder="Optional" />
+                </label>
+                <label className="field">
+                  <span>Notes</span>
+                  <textarea name="notes" placeholder="What becomes visible at this stage, and why?" />
                 </label>
                 <button className="button button-secondary button-mini" type="submit">
                   Save grant
@@ -731,10 +909,129 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ul className="clean-list">
                   {dashboardData.privacyGrants.slice(0, 5).map((grant) => (
                     <li key={grant.id}>
-                      {grant.field_key}: {grant.access_level} ({grant.status})
+                      {grant.field_key}: {grant.access_level} at {grant.audience_stage} ({grant.status})
                     </li>
                   ))}
                 </ul>
+              ) : null}
+              <p className="route-text">
+                Access requests keep disclosures narrow: ask for specific fields, get an explicit
+                answer, and only then create a matching grant.
+              </p>
+              <form action={createPrivacyAccessRequestAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Owner profile ID</span>
+                  <input
+                    name="owner_profile_id"
+                    placeholder="Which counterparty controls the private fields you want?"
+                  />
+                </label>
+                <label className="field">
+                  <span>Requested fields</span>
+                  <input
+                    name="requested_fields_json"
+                    placeholder="exact_wish, contact_email, constraints, verification_notes"
+                  />
+                </label>
+                <label className="field">
+                  <span>Stage</span>
+                  <select name="requested_stage" defaultValue="consent">
+                    <option value="registry">Registry</option>
+                    <option value="consent">After consent</option>
+                    <option value="introduced">After introduction</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Match ID</span>
+                  <input name="match_id" placeholder="Optional, if tied to a specific match" />
+                </label>
+                <label className="field">
+                  <span>Purpose</span>
+                  <input
+                    name="purpose"
+                    placeholder="What bounded decision would this disclosure help you make?"
+                  />
+                </label>
+                <label className="field">
+                  <span>Justification</span>
+                  <textarea
+                    name="justification"
+                    placeholder="Why these fields matter, and why broader disclosure is not needed."
+                  />
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Request access
+                </button>
+              </form>
+              {incomingPrivacyAccessRequests.length ? (
+                <div className="mini-list">
+                  {incomingPrivacyAccessRequests.slice(0, 4).map((request) => (
+                    <div className="mini-list-item" key={request.id}>
+                      <strong>Incoming request: {request.requested_fields.join(", ")}</strong>
+                      <span>
+                        Stage {request.requested_stage} · {request.status}
+                      </span>
+                      {request.purpose ? <span>Purpose: {request.purpose}</span> : null}
+                      {request.justification ? <span>Why requested: {request.justification}</span> : null}
+                      <form action={respondPrivacyAccessRequestAction} className="compact-form">
+                        <input name="request_id" type="hidden" value={request.id} />
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <div className="field-grid">
+                          <label className="field">
+                            <span>Decision</span>
+                            <select name="status" defaultValue="approved">
+                              <option value="approved">Approve</option>
+                              <option value="denied">Deny</option>
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>Grant level</span>
+                            <select name="access_level" defaultValue="specific">
+                              <option value="broad">Broad</option>
+                              <option value="specific">Specific</option>
+                              <option value="contact">Contact</option>
+                            </select>
+                          </label>
+                        </div>
+                        <label className="field">
+                          <span>Owner note</span>
+                          <input
+                            defaultValue={request.owner_note}
+                            name="owner_note"
+                            placeholder="Conditions or limits on what this disclosure means."
+                          />
+                        </label>
+                        <button className="button button-secondary button-mini" type="submit">
+                          Save response
+                        </button>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {outgoingPrivacyAccessRequests.length ? (
+                <div className="mini-list">
+                  {outgoingPrivacyAccessRequests.slice(0, 4).map((request) => (
+                    <div className="mini-list-item" key={request.id}>
+                      <strong>Outgoing request: {request.requested_fields.join(", ")}</strong>
+                      <span>
+                        Stage {request.requested_stage} · {request.status}
+                      </span>
+                      {request.owner_note ? <span>Owner note: {request.owner_note}</span> : null}
+                      {request.status === "pending" ? (
+                        <form action={respondPrivacyAccessRequestAction} className="compact-form">
+                          <input name="request_id" type="hidden" value={request.id} />
+                          <input name="return_to" type="hidden" value="/dashboard" />
+                          <input name="status" type="hidden" value="withdrawn" />
+                          <button className="button button-secondary button-mini" type="submit">
+                            Withdraw request
+                          </button>
+                        </form>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
               ) : null}
             </article>
           </div>
@@ -753,6 +1050,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <span>Label</span>
                   <input name="label" placeholder="Find a serious digital minds counterparty" />
                 </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Target kind</span>
+                    <select name="target_kind" defaultValue="counterparty">
+                      <option value="counterparty">Counterparty</option>
+                      <option value="group">Group</option>
+                      <option value="institution">Institution</option>
+                      <option value="public_call">Public call</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Reward type</span>
+                    <select name="reward_type" defaultValue="introduction">
+                      <option value="introduction">Introduction</option>
+                      <option value="verified_trade">Verified trade</option>
+                      <option value="group_formation">Group formation</option>
+                      <option value="research_lead">Research lead</option>
+                    </select>
+                  </label>
+                </div>
                 <label className="field">
                   <span>Cause area</span>
                   <input name="cause_area" placeholder="Digital minds, animal welfare, S-risks" />
@@ -771,6 +1088,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <span>Success condition</span>
                   <textarea name="success_condition" placeholder="What would count as a successful match?" />
                 </label>
+                <label className="field">
+                  <span>Preferred regions</span>
+                  <input name="preferred_regions_json" placeholder="Remote, London, Bay Area" />
+                </label>
+                <label className="field">
+                  <span>Target note</span>
+                  <textarea name="target_note" placeholder="Any special requirements for the counterparties or groups you want found." />
+                </label>
                 <button className="button button-secondary button-mini" type="submit">
                   Save bounty
                 </button>
@@ -780,7 +1105,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dashboardData.brokerageBounties.slice(0, 4).map((bounty) => (
                     <li key={bounty.id}>
                       {bounty.label}:{" "}
-                      {formatPaymentAmount(bounty.max_amount_cents, bounty.currency)} ({bounty.status})
+                      {formatPaymentAmount(bounty.max_amount_cents, bounty.currency)} for{" "}
+                      {bounty.reward_type} ({bounty.status})
                     </li>
                   ))}
                 </ul>
@@ -805,6 +1131,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <textarea name="description" placeholder="Purpose, scope, and who can speak for it." />
                 </label>
                 <label className="field">
+                  <span>Homepage</span>
+                  <input name="homepage_url" placeholder="https://example.org" type="url" />
+                </label>
+                <label className="field">
+                  <span>Contact policy</span>
+                  <textarea name="contact_policy" placeholder="Who may contact the group, through which channel, and with what screening?" />
+                </label>
+                <label className="field">
+                  <span>Decision rule</span>
+                  <input name="decision_rule" placeholder="Single owner, 2 approvals, board review, etc." />
+                </label>
+                <label className="field">
+                  <span>Verification notes</span>
+                  <textarea name="verification_notes" placeholder="What would make this collective credible to counterparties?" />
+                </label>
+                <label className="field">
                   <span>Verification</span>
                   <select name="verification_status" defaultValue="unverified">
                     <option value="unverified">Unverified</option>
@@ -819,11 +1161,179 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ul className="clean-list">
                   {dashboardData.collectives.slice(0, 4).map((collective) => (
                     <li key={collective.id}>
-                      {collective.name} ({collective.verification_status})
+                      {collective.name} ({collective.verification_status}) · ID: {collective.id}
                     </li>
                   ))}
                 </ul>
               ) : null}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Collective memberships</p>
+              <h3>Delegated roles and permissions</h3>
+              <p className="route-text">
+                Add an existing profile to a collective with scoped authority for matches,
+                privacy grants, and bounties. This helps collectives behave like real teams
+                before any AI-assisted workflow exists.
+              </p>
+              <form action={addCollectiveMemberAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Collective ID</span>
+                  <input name="collective_id" placeholder="Paste a collective ID from your list above" />
+                </label>
+                <label className="field">
+                  <span>Member profile ID</span>
+                  <input name="member_profile_id" placeholder="Profile UUID for the delegated member" />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Role</span>
+                    <select name="role" defaultValue="member">
+                      <option value="member">Member</option>
+                      <option value="admin">Admin</option>
+                      <option value="viewer">Viewer</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Status</span>
+                    <select name="status" defaultValue="invited">
+                      <option value="invited">Invited</option>
+                      <option value="active">Active</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Delegation scope</span>
+                  <textarea name="delegation_scope" placeholder="What this member is allowed to decide or execute on behalf of the collective." />
+                </label>
+                <label className="field checkbox-field">
+                  <input name="can_approve_matches" type="checkbox" />
+                  <span>Can approve introductions and matches</span>
+                </label>
+                <label className="field checkbox-field">
+                  <input name="can_grant_privacy" type="checkbox" />
+                  <span>Can grant privacy disclosures</span>
+                </label>
+                <label className="field checkbox-field">
+                  <input name="can_manage_bounties" type="checkbox" />
+                  <span>Can manage brokerage bounties</span>
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save member
+                </button>
+              </form>
+              {dashboardData?.collectiveMemberships.length ? (
+                <div className="mini-list">
+                  {dashboardData.collectiveMemberships.slice(0, 6).map((membership) => (
+                    <div className="mini-list-item" key={`${membership.collective_id}:${membership.profile_id}`}>
+                      <strong>
+                        {collectiveNameById.get(membership.collective_id) ?? membership.collective_id}
+                      </strong>
+                      <span>
+                        {membership.role} · {membership.status}
+                      </span>
+                      <span>
+                        <strong>Member profile:</strong> {membership.profile_id}
+                      </span>
+                      <span>
+                        <strong>Delegation scope:</strong>{" "}
+                        {membership.delegation_scope || "No explicit scope recorded."}
+                      </span>
+                      <span>
+                        Match approvals: {membership.can_approve_matches ? "yes" : "no"} · Privacy:{" "}
+                        {membership.can_grant_privacy ? "yes" : "no"} · Bounties:{" "}
+                        {membership.can_manage_bounties ? "yes" : "no"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="route-text">No delegated collective memberships yet.</p>
+              )}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Collective decisions</p>
+              <h3>Open approvals and delegated responses</h3>
+              <p className="route-text">
+                Record lightweight group approvals for matches, privacy grants, bounties, and verification requests.
+              </p>
+              <form action={createCollectiveDecisionAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Collective ID</span>
+                  <input name="collective_id" placeholder="Paste a collective ID from your list above" />
+                </label>
+                <label className="field">
+                  <span>Title</span>
+                  <input name="title" placeholder="Approve a counterpart introduction" />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Decision type</span>
+                    <select name="decision_type" defaultValue="general">
+                      <option value="general">General</option>
+                      <option value="match_review">Match review</option>
+                      <option value="privacy_grant">Privacy grant</option>
+                      <option value="bounty_award">Bounty award</option>
+                      <option value="verification_request">Verification request</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Target kind</span>
+                    <select name="target_kind" defaultValue="internal">
+                      <option value="internal">Internal</option>
+                      <option value="match">Match</option>
+                      <option value="collective">Collective</option>
+                      <option value="bounty">Bounty</option>
+                      <option value="privacy_grant">Privacy grant</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Summary</span>
+                  <textarea name="summary" placeholder="What exactly is being approved, rejected, or reviewed?" />
+                </label>
+                <label className="field">
+                  <span>Required approvals</span>
+                  <input defaultValue={1} min={1} max={25} name="required_approvals" type="number" />
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Open decision
+                </button>
+              </form>
+              {dashboardData?.collectiveDecisions.length ? (
+                <div className="mini-list">
+                  {dashboardData.collectiveDecisions.slice(0, 4).map((decision) => (
+                    <div className="mini-list-item" key={decision.id}>
+                      <strong>{decision.title}</strong>
+                      <span>
+                        {decision.decision_type} · {decision.status} · requires {decision.required_approvals}
+                      </span>
+                      <form action={respondCollectiveDecisionAction} className="compact-form">
+                        <input name="decision_id" type="hidden" value={decision.id} />
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <div className="field-grid">
+                          <label className="field">
+                            <span>Your response</span>
+                            <select name="response" defaultValue="approve">
+                              <option value="approve">Approve</option>
+                              <option value="reject">Reject</option>
+                              <option value="abstain">Abstain</option>
+                            </select>
+                          </label>
+                          <button className="button button-secondary button-mini" type="submit">
+                            Save
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="route-text">No collective decisions yet.</p>
+              )}
             </article>
 
             <article className="panel data-card">
@@ -866,11 +1376,37 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <input name="source_url" placeholder="Optional" type="url" />
                 </label>
                 <label className="field">
+                  <span>Content kind</span>
+                  <select name="source_content_kind" defaultValue="manual_summary">
+                    <option value="manual_summary">Manual summary</option>
+                    <option value="pasted_excerpt">Pasted excerpt</option>
+                    <option value="public_post">Public post</option>
+                    <option value="email_note">Email note</option>
+                    <option value="chat_note">Chat note</option>
+                    <option value="calendar_note">Calendar note</option>
+                  </select>
+                </label>
+                <label className="field">
                   <span>Notes</span>
                   <textarea
                     name="source_notes"
                     placeholder="Manual summary of why this source is relevant."
                   />
+                </label>
+                <label className="field">
+                  <span>Snapshot excerpt</span>
+                  <textarea
+                    name="snapshot_excerpt"
+                    placeholder="Optional excerpt or condensed snapshot to feed deterministic synthesis."
+                  />
+                </label>
+                <label className="field">
+                  <span>Captured tags</span>
+                  <input name="captured_tags" placeholder="animal welfare, receipts, local, vegetarian" />
+                </label>
+                <label className="field checkbox-field">
+                  <input defaultChecked name="needs_review" type="checkbox" />
+                  <span>Needs manual review before relying on it</span>
                 </label>
                 <input name="source_type" type="hidden" value="manual" />
                 <input name="source_access_level" type="hidden" value="manual_summary" />
@@ -886,6 +1422,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <li key={source.id}>
                       {source.label}
                       {source.url ? ` (${source.url})` : ""}
+                      {source.snapshot_excerpt ? ` — ${source.snapshot_excerpt}` : ""}
                     </li>
                   ))}
                 </ul>
@@ -996,16 +1533,42 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <form action={createNetworkInviteAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
                 <label className="field">
+                  <span>Target kind</span>
+                  <select name="target_kind" defaultValue="person">
+                    <option value="person">Person</option>
+                    <option value="collective">Collective</option>
+                    <option value="institution">Institution</option>
+                    <option value="community">Community</option>
+                    <option value="public_call">Public call</option>
+                  </select>
+                </label>
+                <label className="field">
                   <span>Person or group</span>
                   <input name="target_label" placeholder="Name or short label" />
+                </label>
+                <label className="field">
+                  <span>URL or reference</span>
+                  <input name="target_url" placeholder="Optional" type="url" />
                 </label>
                 <label className="field">
                   <span>Context</span>
                   <input name="target_context" placeholder="Community, cause, or relationship" />
                 </label>
                 <label className="field">
+                  <span>Desired capability</span>
+                  <input name="desired_capability" placeholder="Donor, organizer, institution, local coordinator" />
+                </label>
+                <label className="field">
                   <span>Reason</span>
                   <textarea name="reason" placeholder="Why they might be a useful counterparty." />
+                </label>
+                <label className="field">
+                  <span>Suggested outreach message</span>
+                  <textarea name="suggested_message" placeholder="Short message you could send if you decide to reach out." />
+                </label>
+                <label className="field">
+                  <span>Priority</span>
+                  <input defaultValue={3} max={5} min={1} name="priority" type="number" />
                 </label>
                 <button className="button button-secondary button-mini" type="submit">
                   Save draft
@@ -1070,6 +1633,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </p>
                   ) : null}
                   {match.riskNotes ? <p className="route-text">{match.riskNotes}</p> : null}
+                  {match.viewerConsented && match.counterpartyId ? (
+                    <form action={createPrivacyAccessRequestAction} className="compact-form">
+                      <input name="owner_profile_id" type="hidden" value={match.counterpartyId} />
+                      <input name="match_id" type="hidden" value={match.id} />
+                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <input name="requested_stage" type="hidden" value="consent" />
+                      <label className="field">
+                        <span>Ask for a specific private field</span>
+                        <input
+                          name="requested_fields_json"
+                          placeholder="exact_wish, contact_email, verification_notes"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Why this helps</span>
+                        <input
+                          name="purpose"
+                          placeholder="What narrow decision would this disclosure enable?"
+                        />
+                      </label>
+                      <input
+                        name="justification"
+                        type="hidden"
+                        value="Requested from the match card to move the introduction forward without broad disclosure."
+                      />
+                      <button className="button button-secondary button-mini" type="submit">
+                        Request narrower disclosure
+                      </button>
+                    </form>
+                  ) : null}
                   <div className="offer-footer">
                     <div className="tag-row">
                       <span>{match.viewerConsented ? "You opted in" : "Awaiting your consent"}</span>

@@ -10,6 +10,14 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { deriveDisplayName, ensureAccountRowsForUser, getViewer, requireViewer } from "@/lib/app-data";
+import {
+  buildDeterministicClarificationQuestions,
+  buildDeterministicSynthesis,
+  evaluateDeterministicMatch,
+  getBackgroundTokens,
+  getDeterministicSignalsFromSynthesis,
+  normalizeBackgroundToken,
+} from "@/lib/background-networking";
 import { getSafeInternalPath } from "@/lib/paths";
 import { takeRateLimitSlot } from "@/lib/rate-limit";
 import {
@@ -21,6 +29,9 @@ import {
 type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
 type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"]["Row"];
+type ProfileSourceRow = Database["public"]["Tables"]["profile_sources"]["Row"];
+type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
+type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Row"];
 type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Insert"];
 type ClarificationQuestionInsert = Database["public"]["Tables"]["clarification_questions"]["Insert"];
 type AgreementEventInsert = Database["public"]["Tables"]["agreement_events"]["Insert"];
@@ -30,7 +41,16 @@ type SourceConnectionInsert = Database["public"]["Tables"]["source_connections"]
 type HelperStrategyInsert = Database["public"]["Tables"]["helper_strategies"]["Insert"];
 type MatchIntroductionPlanInsert =
   Database["public"]["Tables"]["match_introduction_plans"]["Insert"];
+type MatchIntroductionTaskInsert =
+  Database["public"]["Tables"]["match_introduction_tasks"]["Insert"];
 type PrivacyGrantInsert = Database["public"]["Tables"]["privacy_grants"]["Insert"];
+type PrivacyGrantUpdate = Database["public"]["Tables"]["privacy_grants"]["Update"];
+type PrivacyAccessRequestInsert =
+  Database["public"]["Tables"]["privacy_access_requests"]["Insert"];
+type CollectiveMemberInsert = Database["public"]["Tables"]["collective_members"]["Insert"];
+type CollectiveDecisionInsert = Database["public"]["Tables"]["collective_decisions"]["Insert"];
+type CollectiveDecisionResponseInsert =
+  Database["public"]["Tables"]["collective_decision_responses"]["Insert"];
 type AgreementPaymentStatus = NonNullable<
   Database["public"]["Tables"]["agreement_payments"]["Update"]["status"]
 >;
@@ -366,6 +386,26 @@ function normalizeSourceConnectionProvider(value: string): SourceConnectionInser
   return "manual";
 }
 
+function normalizeSourceImportMode(
+  value: string,
+): SourceConnectionInsert["import_mode"] {
+  if (value === "manual_paste" || value === "rss_pull" || value === "forwarded_note") {
+    return value;
+  }
+
+  return "manual_review";
+}
+
+function normalizeSourceSyncFrequency(
+  value: string,
+): SourceConnectionInsert["sync_frequency"] {
+  if (value === "weekly" || value === "monthly") {
+    return value;
+  }
+
+  return "manual";
+}
+
 function normalizeSourceAccessStatus(value: string): SourceConnectionInsert["access_status"] {
   if (value === "connected" || value === "revoked" || value === "needs_review") {
     return value;
@@ -388,6 +428,16 @@ function normalizeHelperKind(value: string): HelperStrategyInsert["helper_kind"]
   return "cause_overlap";
 }
 
+function normalizePrivacyAudienceStage(
+  value: string,
+): PrivacyGrantInsert["audience_stage"] {
+  if (value === "consent" || value === "introduced") {
+    return value;
+  }
+
+  return "registry";
+}
+
 function normalizePrivacyAccessLevel(value: string): PrivacyGrantInsert["access_level"] {
   if (value === "hidden" || value === "specific" || value === "contact") {
     return value;
@@ -404,6 +454,30 @@ function normalizePrivacyGrantStatus(value: string): PrivacyGrantInsert["status"
   return "draft";
 }
 
+function normalizeBrokerageTargetKind(
+  value: string,
+): Database["public"]["Tables"]["brokerage_bounties"]["Insert"]["target_kind"] {
+  if (value === "group" || value === "institution" || value === "public_call") {
+    return value;
+  }
+
+  return "counterparty";
+}
+
+function normalizeBrokerageRewardType(
+  value: string,
+): Database["public"]["Tables"]["brokerage_bounties"]["Insert"]["reward_type"] {
+  if (
+    value === "verified_trade" ||
+    value === "group_formation" ||
+    value === "research_lead"
+  ) {
+    return value;
+  }
+
+  return "introduction";
+}
+
 function normalizeCollectiveVerificationStatus(
   value: string,
 ): Database["public"]["Tables"]["collectives"]["Insert"]["verification_status"] {
@@ -412,6 +486,21 @@ function normalizeCollectiveVerificationStatus(
   }
 
   return "unverified";
+}
+
+function normalizeNetworkInviteTargetKind(
+  value: string,
+): Database["public"]["Tables"]["network_invites"]["Insert"]["target_kind"] {
+  if (
+    value === "collective" ||
+    value === "institution" ||
+    value === "community" ||
+    value === "public_call"
+  ) {
+    return value;
+  }
+
+  return "person";
 }
 
 function normalizeSourceType(value: string) {
@@ -427,6 +516,111 @@ function normalizeSourceType(value: string) {
   }
 
   return "manual";
+}
+
+function normalizeSourceContentKind(
+  value: string,
+): ProfileSourceInsert["content_kind"] {
+  if (
+    value === "pasted_excerpt" ||
+    value === "public_post" ||
+    value === "email_note" ||
+    value === "chat_note" ||
+    value === "calendar_note"
+  ) {
+    return value;
+  }
+
+  return "manual_summary";
+}
+
+function normalizeCollectiveDecisionType(
+  value: string,
+): CollectiveDecisionInsert["decision_type"] {
+  if (
+    value === "match_review" ||
+    value === "privacy_grant" ||
+    value === "bounty_award" ||
+    value === "verification_request"
+  ) {
+    return value;
+  }
+
+  return "general";
+}
+
+function normalizeCollectiveDecisionTargetKind(
+  value: string,
+): CollectiveDecisionInsert["target_kind"] {
+  if (value === "collective" || value === "bounty" || value === "privacy_grant" || value === "internal") {
+    return value;
+  }
+
+  return "match";
+}
+
+function normalizeCollectiveDecisionResponse(
+  value: string,
+): CollectiveDecisionResponseInsert["response"] {
+  if (value === "reject" || value === "abstain") {
+    return value;
+  }
+
+  return "approve";
+}
+
+function normalizeCollectiveMemberRole(
+  value: string,
+): CollectiveMemberInsert["role"] {
+  if (value === "owner" || value === "admin" || value === "viewer") {
+    return value;
+  }
+
+  return "member";
+}
+
+function normalizeCollectiveMemberStatus(
+  value: string,
+): CollectiveMemberInsert["status"] {
+  if (value === "active" || value === "removed") {
+    return value;
+  }
+
+  return "invited";
+}
+
+function parseOptionalTimestamp(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function buildHelperStrategyConfig(formData: FormData) {
+  const focusCauses = readStringList(formData, "focus_causes_json");
+  const requiredTerms = readStringList(formData, "required_terms_json");
+  const preferredRegions = readStringList(formData, "preferred_regions_json");
+
+  return {
+    focusCauses,
+    maxMissingFields: readBoundedInt(formData, "max_missing_fields", {
+      fallback: 9,
+      min: 0,
+      max: 12,
+    }),
+    notes: readOptional(formData, "strategy_notes"),
+    preferredRegions,
+    preferExistingSources: readBoolean(formData, "prefer_existing_sources"),
+    requireCollectiveApproval: readBoolean(formData, "require_collective_approval"),
+    requiredTerms,
+    requireCollective: readBoolean(formData, "require_collective"),
+    requirePayment: readBoolean(formData, "require_payment"),
+    requirePledges: readBoolean(formData, "require_pledges"),
+    requireVerification: readBoolean(formData, "require_verification"),
+    respectStrictPrivacy: readBoolean(formData, "respect_strict_privacy"),
+  };
 }
 
 function normalizeCurrency(value: string) {
@@ -527,6 +721,16 @@ function normalizeAccessLevel(value: string) {
   return "manual_summary";
 }
 
+function normalizeAudienceStage(
+  value: string,
+): PrivacyGrantInsert["audience_stage"] | PrivacyAccessRequestInsert["requested_stage"] {
+  if (value === "registry" || value === "introduced") {
+    return value;
+  }
+
+  return "consent";
+}
+
 function normalizeReportReason(value: string) {
   if (
     value === "unsafe" ||
@@ -539,176 +743,6 @@ function normalizeReportReason(value: string) {
   }
 
   return "other";
-}
-
-function getMeaningfulTokens(value: string) {
-  const stopWords = new Set([
-    "about",
-    "after",
-    "again",
-    "could",
-    "their",
-    "there",
-    "these",
-    "those",
-    "would",
-    "should",
-    "which",
-    "while",
-    "where",
-    "people",
-    "person",
-    "trade",
-    "moral",
-  ]);
-
-  return [
-    ...new Set(
-      value
-        .toLowerCase()
-        .split(/\W+/)
-        .map((token) => token.trim())
-        .filter((token) => token.length > 4 && !stopWords.has(token)),
-    ),
-  ].slice(0, 24);
-}
-
-function buildClarificationQuestions({
-  profileId,
-  causes,
-  offers,
-  wishText,
-  askText,
-  constraints,
-  verificationPreferences,
-  capabilities,
-  uncertaintyNotes,
-}: {
-  profileId: string;
-  causes: string[];
-  offers: string[];
-  wishText: string;
-  askText: string;
-  constraints: string;
-  verificationPreferences: string;
-  capabilities: string;
-  uncertaintyNotes: string;
-}) {
-  const questions: ClarificationQuestionInsert[] = [];
-
-  if (!causes.length) {
-    questions.push({
-      profile_id: profileId,
-      question: "Which cause areas matter most for possible moral trades?",
-      reason: "Cause areas are the strongest non-AI filter for finding plausible counterparties.",
-    });
-  }
-
-  if (!wishText) {
-    questions.push({
-      profile_id: profileId,
-      question: "What concrete change would you most like another person or group to help bring about?",
-      reason: "Specific wishes make rule-based matching less noisy.",
-    });
-  }
-
-  if (!offers.length && !capabilities) {
-    questions.push({
-      profile_id: profileId,
-      question: "What resources, actions, or commitments could you realistically offer?",
-      reason: "The registry needs capabilities, not only values.",
-    });
-  }
-
-  if (!askText) {
-    questions.push({
-      profile_id: profileId,
-      question: "What would you ask a counterparty to do if a match looked promising?",
-      reason: "Asks let possible counterparties decide whether exploration is worth their time.",
-    });
-  }
-
-  if (!constraints) {
-    questions.push({
-      profile_id: profileId,
-      question: "What proposals should be ruled out before any introduction is made?",
-      reason: "Constraints are a safety filter and a privacy filter.",
-    });
-  }
-
-  if (!verificationPreferences) {
-    questions.push({
-      profile_id: profileId,
-      question: "What evidence, check-in, or verification would make a trade credible enough?",
-      reason: "Verification preferences reduce factual-trust failures.",
-    });
-  }
-
-  if (!uncertaintyNotes) {
-    questions.push({
-      profile_id: profileId,
-      question: "Where are you uncertain enough that a clarifying conversation would help?",
-      reason: "Uncertainty notes help distinguish serious opportunities from speculative noise.",
-    });
-  }
-
-  return questions.slice(0, 6);
-}
-
-function summarizeLines(values: string[], fallback: string, maxLength = 420) {
-  const compactValues = values
-    .map((value) => truncateText(value, 180))
-    .filter(Boolean);
-
-  if (!compactValues.length) {
-    return fallback;
-  }
-
-  return truncateText(compactValues.join(" / "), maxLength);
-}
-
-function calculateSynthesisConfidence({
-  causes,
-  wishes,
-  offers,
-  asks,
-  constraints,
-  verification,
-  sourceCount,
-}: {
-  causes: string[];
-  wishes: string[];
-  offers: string[];
-  asks: string[];
-  constraints: string;
-  verification: string;
-  sourceCount: number;
-}) {
-  let score = 10;
-
-  if (causes.length) {
-    score += 20;
-  }
-  if (wishes.length) {
-    score += 20;
-  }
-  if (offers.length) {
-    score += 15;
-  }
-  if (asks.length) {
-    score += 15;
-  }
-  if (constraints) {
-    score += 10;
-  }
-  if (verification) {
-    score += 5;
-  }
-  if (sourceCount) {
-    score += Math.min(5, sourceCount);
-  }
-
-  return Math.min(100, score);
 }
 
 function buildIntroductionPlanPayloads({
@@ -729,7 +763,13 @@ function buildIntroductionPlanPayloads({
   riskNotes: string;
 }): MatchIntroductionPlanInsert[] {
   const sharedAgenda =
-    "1. Restate the proposed trade in plain language.\n2. Name the burden, duration, and payment or pledge cadence.\n3. List non-negotiable constraints and exit conditions.\n4. Agree on evidence, check-ins, and who can see which facts.";
+    "1. Restate the proposed trade in plain language.\n2. Name the requested action, burden, and time horizon.\n3. Name any payment or pledge cadence.\n4. List non-negotiable constraints, privacy boundaries, and exit conditions.\n5. Agree on evidence, check-ins, and who can see which facts.";
+  const proposalTerms =
+    "Requested action; offered consideration; cadence or duration; verification evidence; off-ramp; what remains private unless expressly granted.";
+  const timeline =
+    "Within 48 hours: confirm interest and missing facts. Within 7 days: exchange a bounded proposal. After agreement: schedule the first verification checkpoint.";
+  const nextActions =
+    "Decide whether to continue. If yes, convert the proposal into an agreement with verification, payment cadence, and cancellation terms. If no, archive the intro without revealing unnecessary details.";
   const verificationPlan =
     "Use lightweight evidence first: receipts, dated commitments, check-in notes, or mutually acceptable attestations. Escalate to admin review only when both parties think the record is unclear.";
   const privacyNotes =
@@ -743,7 +783,10 @@ function buildIntroductionPlanPayloads({
       status: "draft",
       intro_message: truncateText(`Both sides opted in. Start from this reason: ${reasonForA}`, 520),
       proposal_outline: truncateText(suggestedFirstStep || reasonForA, 520),
+      proposal_terms: proposalTerms,
       agenda: sharedAgenda,
+      timeline,
+      next_actions: nextActions,
       verification_plan: verificationPlan,
       privacy_notes: riskNotes ? `${privacyNotes}\nRisk note: ${riskNotes}` : privacyNotes,
     },
@@ -754,9 +797,83 @@ function buildIntroductionPlanPayloads({
       status: "draft",
       intro_message: truncateText(`Both sides opted in. Start from this reason: ${reasonForB}`, 520),
       proposal_outline: truncateText(suggestedFirstStep || reasonForB, 520),
+      proposal_terms: proposalTerms,
       agenda: sharedAgenda,
+      timeline,
+      next_actions: nextActions,
       verification_plan: verificationPlan,
       privacy_notes: riskNotes ? `${privacyNotes}\nRisk note: ${riskNotes}` : privacyNotes,
+    },
+  ];
+}
+
+function buildIntroductionTaskPayloads({
+  planId,
+  profileId,
+}: {
+  planId: string;
+  profileId: string;
+}): MatchIntroductionTaskInsert[] {
+  return [
+    {
+      plan_id: planId,
+      profile_id: profileId,
+      step_key: "confirm_scope",
+      title: "Confirm the scope of the proposed trade",
+      detail:
+        "Restate what each side wants, what each side is offering, and what remains outside scope before sharing more detail.",
+      sort_order: 1,
+      status: "pending",
+    },
+    {
+      plan_id: planId,
+      profile_id: profileId,
+      step_key: "set_action",
+      title: "Name the requested action in bounded terms",
+      detail:
+        "Specify the action, burden, duration, and any material conditions so the proposal is concrete rather than aspirational.",
+      sort_order: 2,
+      status: "pending",
+    },
+    {
+      plan_id: planId,
+      profile_id: profileId,
+      step_key: "set_cadence",
+      title: "Set cadence, duration, and off-ramp",
+      detail:
+        "If money or pledges are involved, state the cadence, total duration, pauses, and what ends the arrangement.",
+      sort_order: 3,
+      status: "pending",
+    },
+    {
+      plan_id: planId,
+      profile_id: profileId,
+      step_key: "set_verification",
+      title: "Agree on lightweight verification",
+      detail:
+        "Decide what evidence, receipts, check-ins, or attestations will count, and how often they are expected.",
+      sort_order: 4,
+      status: "pending",
+    },
+    {
+      plan_id: planId,
+      profile_id: profileId,
+      step_key: "set_privacy",
+      title: "Set privacy boundaries for the introduction",
+      detail:
+        "Decide what can be shown to the counterparty, what stays hidden, and which disclosures require an explicit privacy grant.",
+      sort_order: 5,
+      status: "pending",
+    },
+    {
+      plan_id: planId,
+      profile_id: profileId,
+      step_key: "decide_next_step",
+      title: "Choose the next concrete step",
+      detail:
+        "Either convert the proposal into an agreement, request narrower information, or archive the introduction without oversharing.",
+      sort_order: 6,
+      status: "pending",
     },
   ];
 }
@@ -768,8 +885,8 @@ function getOrderedProfilePair(profileId: string, counterpartyId: string) {
 }
 
 function getSharedCause(left: string[], right: string[]) {
-  const rightSet = new Set(right.map(normalizeMatchToken));
-  return left.find((cause) => rightSet.has(normalizeMatchToken(cause))) ?? null;
+  const rightSet = new Set(right.map(normalizeBackgroundToken));
+  return left.find((cause) => rightSet.has(normalizeBackgroundToken(cause))) ?? null;
 }
 
 async function generateWishMatchSuggestions({
@@ -794,79 +911,109 @@ async function generateWishMatchSuggestions({
   runReason?: string;
 }) {
   const supabase = await createClient();
-  const { data: previews, error } = await supabase
-    .from("wish_profile_previews")
-    .select("*")
-    .neq("profile_id", profileId)
-    .eq("background_search_enabled", true)
-    .limit(40);
+  const serviceSupabase = createServiceClient();
+  const [{ data: previews, error }, { data: viewerProfile }, { data: viewerSynthesis }] =
+    await Promise.all([
+      supabase
+        .from("wish_profile_previews")
+        .select("*")
+        .neq("profile_id", profileId)
+        .eq("background_search_enabled", true)
+        .limit(40),
+      supabase.from("wish_profiles").select("*").eq("profile_id", profileId).maybeSingle(),
+      serviceSupabase.from("profile_syntheses").select("*").eq("profile_id", profileId).maybeSingle(),
+    ]);
 
-  if (error) {
+  if (error || !viewerProfile) {
     logSupabaseActionError("Failed to load wish previews for match generation", error, {
       profileId,
     });
     return { candidatesScanned: 0, matchesCreated: 0, matchesRefreshed: 0 };
   }
 
+  const previewRows = (previews ?? []) as WishProfilePreviewRow[];
+  const previewIds = previewRows.map((preview) => preview.profile_id);
+  const { data: counterpartySyntheses, error: synthesisError } = previewIds.length
+    ? await serviceSupabase.from("profile_syntheses").select("*").in("profile_id", previewIds)
+    : { data: [] as ProfileSynthesisRow[], error: null };
+
+  if (synthesisError) {
+    logSupabaseActionError("Failed to load counterparty syntheses for match generation", synthesisError, {
+      profileId,
+    });
+  }
+
+  const synthesisByProfileId = new Map(
+    ((counterpartySyntheses ?? []) as ProfileSynthesisRow[]).map((synthesis) => [
+      synthesis.profile_id,
+      synthesis,
+    ]),
+  );
+  const viewerSignals = getDeterministicSignalsFromSynthesis(
+    (viewerSynthesis ?? null) as ProfileSynthesisRow | null,
+  );
+
   let matchesCreated = 0;
   let matchesRefreshed = 0;
-  const currentProfileText = `${causes.join(" ")} ${wishText} ${askText} ${offerText}`.toLowerCase();
-  const currentTokens = getMeaningfulTokens(currentProfileText);
   const generatedNotifications: Database["public"]["Tables"]["wish_notifications"]["Insert"][] = [];
 
-  for (const preview of (previews ?? []) as WishProfilePreviewRow[]) {
-    const sharedCauses = causes.filter((cause) =>
-      (preview.causes ?? []).map(normalizeMatchToken).includes(normalizeMatchToken(cause)),
-    );
-    const sharedCause = getSharedCause(causes, preview.causes ?? []);
-    const previewText = `${preview.public_preview} ${(preview.causes ?? []).join(" ")}`.toLowerCase();
-    const previewTokens = new Set(getMeaningfulTokens(previewText));
-    const sharedTokens = currentTokens.filter((token) => previewTokens.has(token)).slice(0, 5);
-    const paymentCompatible = openToPayment && preview.openness_to_payment;
-    const pledgeCompatible = openToPledges && preview.openness_to_pledges;
-    const vegetarianCue =
-      causes.some((cause) => normalizeMatchToken(cause).includes("animal")) &&
-      /\b(vegetarian|vegan|meat|diet)\b/i.test(previewText);
-    const textCompatible = sharedTokens.length > 0 || vegetarianCue;
+  for (const preview of previewRows) {
+    const evaluation = evaluateDeterministicMatch({
+      counterparty: preview,
+      counterpartySignals: getDeterministicSignalsFromSynthesis(
+        synthesisByProfileId.get(preview.profile_id) ?? null,
+      ),
+      runLabel: runReason,
+      viewer: {
+        askText,
+        askTerms: viewerSignals?.askTerms,
+        brokeragePreference: viewerProfile.brokerage_preference,
+        capabilityTags: viewerSignals?.capabilityTags,
+        causes,
+        collectiveName: viewerProfile.collective_name,
+        locationCity: viewerProfile.location_city,
+        locationRegion: viewerProfile.location_region,
+        offerTerms: viewerSignals?.offerTerms,
+        openToPayment,
+        openToPledges,
+        participantKind: viewerProfile.participant_kind,
+        privacyStage: viewerProfile.privacy_stage,
+        publicPreview: viewerProfile.public_preview,
+        signals: viewerSignals,
+        sourceCount: viewerSignals?.sourceCount,
+        wishText,
+      },
+    });
 
-    if (!sharedCause && !paymentCompatible && !pledgeCompatible && !textCompatible) {
+    if (evaluation.score < 52) {
       continue;
     }
 
+    const sharedCause = getSharedCause(causes, preview.causes ?? []);
     const { profileAId, profileBId, viewerIsProfileA } = getOrderedProfilePair(
       profileId,
       preview.profile_id,
     );
-    const score =
-      (sharedCause ? 45 : 0) +
-      (Math.min(sharedTokens.length, 4) * 7) +
-      (vegetarianCue ? 18 : 0) +
-      (paymentCompatible ? 15 : 0) +
-      (pledgeCompatible ? 15 : 0);
-    const matchBasis = [
-      sharedCause ? `Shared cause area: ${sharedCause}` : "",
-      sharedTokens.length ? `Shared terms: ${sharedTokens.join(", ")}` : "",
-      paymentCompatible ? "Both profiles are open to payment-mediated trades" : "",
-      pledgeCompatible ? "Both profiles are open to pledge-based trades" : "",
-      vegetarianCue ? "Animal-welfare profile with vegetarianism-related language" : "",
-      `Generated by non-AI rule scan: ${runReason}`,
-    ].filter(Boolean);
-    const viewerReason = sharedCause
-      ? `You named ${sharedCause}; this profile has a compatible public preview and may be worth exploring without revealing exact wishes first.`
-      : `This profile appears compatible with your stated wishes and trade constraints, but exact asks remain private until both sides consent.`;
-    const counterpartyReason = sharedCause
-      ? `A potential counterparty also named ${sharedCause}; exact wishes remain private until both sides consent.`
-      : `A potential counterparty has a compatible private wish profile; exact wishes remain private until both sides consent.`;
-    const suggestedFirstStep = sharedCause
-      ? `If both sides opt in, start with a bounded proposal around ${sharedCause}: define the action, duration, cost, verification method, and exit condition.`
-      : "If both sides opt in, exchange a short proposal before revealing any more sensitive details: action, burden, evidence, and non-negotiable constraints.";
-    const riskNotes =
-      "Rule-based suggestion only. Do not treat this as endorsement; review legality, coercion risk, privacy, and verification before acting.";
     const dedupeKey = [
       profileAId,
       profileBId,
-      normalizeMatchToken(sharedCause ?? sharedTokens[0] ?? "general"),
+      normalizeBackgroundToken(
+        sharedCause ??
+          evaluation.sharedTokens[0] ??
+          evaluation.compatibilityTags[0] ??
+          "general",
+      ),
     ].join(":");
+    const matchBasis = [
+      ...evaluation.compatibilityTags.map((tag) => `Compatibility tag: ${tag}`),
+      ...(evaluation.sharedCauses.length
+        ? [`Shared causes: ${evaluation.sharedCauses.join(", ")}`]
+        : []),
+      ...(evaluation.sharedTokens.length
+        ? [`Shared terms: ${evaluation.sharedTokens.join(", ")}`]
+        : []),
+      `Generated by deterministic scan: ${runReason}`,
+    ];
     const { data: matchResult, error: matchError } = await supabase.rpc(
       "upsert_match_suggestion",
       {
@@ -874,14 +1021,14 @@ async function generateWishMatchSuggestions({
         target_profile_b_id: profileBId,
         target_profile_a_entry_id: viewerIsProfileA ? viewerEntry?.id ?? null : null,
         target_profile_b_entry_id: viewerIsProfileA ? null : viewerEntry?.id ?? null,
-        target_reason_for_a: viewerIsProfileA ? viewerReason : counterpartyReason,
-        target_reason_for_b: viewerIsProfileA ? counterpartyReason : viewerReason,
-        target_score: Math.min(100, Math.max(0, score || 45)),
+        target_reason_for_a: viewerIsProfileA ? evaluation.viewerReason : evaluation.counterpartyReason,
+        target_reason_for_b: viewerIsProfileA ? evaluation.counterpartyReason : evaluation.viewerReason,
+        target_score: evaluation.score,
         target_dedupe_key: dedupeKey,
         target_match_basis: matchBasis,
-        target_shared_causes: sharedCauses,
-        target_suggested_first_step: suggestedFirstStep,
-        target_risk_notes: riskNotes,
+        target_shared_causes: evaluation.sharedCauses,
+        target_suggested_first_step: evaluation.suggestedFirstStep,
+        target_risk_notes: evaluation.riskNotes,
         target_generated_by: "rule-based",
       },
     );
@@ -903,14 +1050,14 @@ async function generateWishMatchSuggestions({
           match_id: match.match_id,
           kind: "match",
           title: "A potential moral trade was found",
-          body: viewerReason,
+          body: evaluation.viewerReason,
         },
         {
           profile_id: preview.profile_id,
           match_id: match.match_id,
           kind: "match",
           title: "A potential moral trade was found",
-          body: counterpartyReason,
+          body: evaluation.counterpartyReason,
         },
       );
     } else {
@@ -921,11 +1068,12 @@ async function generateWishMatchSuggestions({
       match_id: match.match_id,
       actor_profile_id: profileId,
       event_type: match.was_created ? "match_created" : "match_refreshed",
-      summary: `Rule-based scan found compatibility with score ${Math.min(100, Math.max(0, score || 45))}.`,
+      summary: `Deterministic scan found compatibility with score ${evaluation.score}.`,
       metadata: {
-        basis: matchBasis,
-        sharedCauses,
+        compatibilityTags: evaluation.compatibilityTags,
         runReason,
+        sharedCauses: evaluation.sharedCauses,
+        sharedTokens: evaluation.sharedTokens,
       },
     });
 
@@ -950,7 +1098,7 @@ async function generateWishMatchSuggestions({
   }
 
   return {
-    candidatesScanned: (previews ?? []).length,
+    candidatesScanned: previewRows.length,
     matchesCreated,
     matchesRefreshed,
   };
@@ -1566,6 +1714,65 @@ export async function saveWishProfileAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", entriesError.message);
   }
 
+  if (manualSourceReviewEnabled && sourceLabel) {
+    const sourcePayload: ProfileSourceInsert = {
+      profile_id: viewer.authUser.id,
+      source_type: sourceType,
+      label: sourceLabel,
+      url: sourceUrl,
+      access_level: sourceAccessLevel,
+      notes: sourceNotes,
+      content_kind: normalizeSourceContentKind(readOptional(formData, "source_content_kind")),
+      snapshot_excerpt: truncateText(sourceNotes || sourceLabel, 420),
+      captured_tags: getBackgroundTokens(`${sourceLabel} ${sourceNotes}`, 12),
+      needs_review: manualSourceReviewEnabled,
+      imported_at: new Date().toISOString(),
+      is_active: true,
+    };
+    const { error: sourceError } = await supabase.from("profile_sources").insert(sourcePayload);
+
+    if (sourceError) {
+      logSupabaseActionError("Failed to save manual profile source", sourceError, {
+        userId: viewer.authUser.id,
+      });
+    }
+  }
+
+  const [
+    { data: currentWishProfile, error: currentWishProfileError },
+    { data: currentProfileSources, error: currentProfileSourcesError },
+    { data: currentSourceConnections, error: currentSourceConnectionsError },
+  ] = await Promise.all([
+    supabase.from("wish_profiles").select("*").eq("profile_id", viewer.authUser.id).maybeSingle(),
+    supabase.from("profile_sources").select("*").eq("profile_id", viewer.authUser.id),
+    supabase.from("source_connections").select("*").eq("profile_id", viewer.authUser.id),
+  ]);
+
+  if (currentWishProfileError) {
+    logSupabaseActionError("Failed to reload wish profile after save", currentWishProfileError, {
+      userId: viewer.authUser.id,
+    });
+  }
+
+  if (currentProfileSourcesError) {
+    logSupabaseActionError("Failed to reload profile sources after save", currentProfileSourcesError, {
+      userId: viewer.authUser.id,
+    });
+  }
+
+  if (currentSourceConnectionsError) {
+    logSupabaseActionError(
+      "Failed to reload source connections after save",
+      currentSourceConnectionsError,
+      {
+        userId: viewer.authUser.id,
+      },
+    );
+  }
+
+  const profileSourcesRows = (currentProfileSources ?? []) as ProfileSourceRow[];
+  const sourceConnectionRows = (currentSourceConnections ?? []) as SourceConnectionRow[];
+
   const { error: clarificationDeleteError } = await supabase
     .from("clarification_questions")
     .delete()
@@ -1578,16 +1785,26 @@ export async function saveWishProfileAction(formData: FormData) {
     });
   }
 
-  const clarificationQuestions = buildClarificationQuestions({
-    profileId: viewer.authUser.id,
-    causes,
-    offers,
-    wishText,
+  const clarificationQuestions = buildDeterministicClarificationQuestions({
     askText,
-    constraints,
-    verificationPreferences,
+    backgroundSearchEnabled,
     capabilities,
+    causes,
+    collectiveName,
+    constraints,
+    locationCity,
+    locationRegion,
+    manualSourceReviewEnabled,
+    offers,
+    openToPayment,
+    openToPledges,
+    participantKind,
+    profileId: viewer.authUser.id,
+    publicPreview: sharePublicPreview ? publicPreview : "",
+    sourceCount: profileSourcesRows.length + sourceConnectionRows.length,
     uncertaintyNotes,
+    verificationPreferences,
+    wishText,
   });
 
   if (clarificationQuestions.length) {
@@ -1602,20 +1819,25 @@ export async function saveWishProfileAction(formData: FormData) {
     }
   }
 
-  if (manualSourceReviewEnabled && sourceLabel) {
-    const sourcePayload: ProfileSourceInsert = {
-      profile_id: viewer.authUser.id,
-      source_type: sourceType,
-      label: sourceLabel,
-      url: sourceUrl,
-      access_level: sourceAccessLevel,
-      notes: sourceNotes,
-      is_active: true,
-    };
-    const { error: sourceError } = await supabase.from("profile_sources").insert(sourcePayload);
+  if (currentWishProfile) {
+    const synthesisPayload = buildDeterministicSynthesis({
+      connections: sourceConnectionRows,
+      entries: (insertedEntries ?? []) as WishEntryRow[],
+      profile: currentWishProfile as WishProfileRow,
+      profileSources: profileSourcesRows,
+    });
+    const { error: synthesisError } = await supabase
+      .from("profile_syntheses")
+      .upsert(
+        {
+          profile_id: viewer.authUser.id,
+          ...synthesisPayload,
+        },
+        { onConflict: "profile_id" },
+      );
 
-    if (sourceError) {
-      logSupabaseActionError("Failed to save manual profile source", sourceError, {
+    if (synthesisError) {
+      logSupabaseActionError("Failed to refresh synthesis during wish profile save", synthesisError, {
         userId: viewer.authUser.id,
       });
     }
@@ -1751,12 +1973,39 @@ export async function consentToMatchSuggestionAction(formData: FormData) {
         throw new Error(planError.message);
       }
 
+      const { data: selectedPlans, error: selectPlansError } = await serviceClient
+        .from("match_introduction_plans")
+        .select("id, profile_id, counterparty_id")
+        .eq("match_id", matchId);
+
+      if (selectPlansError) {
+        throw new Error(selectPlansError.message);
+      }
+
+      const taskPayloads = (selectedPlans ?? []).flatMap((plan) =>
+        buildIntroductionTaskPayloads({
+          planId: plan.id,
+          profileId: plan.profile_id,
+        }),
+      );
+
+      if (taskPayloads.length) {
+        const { error: taskError } = await serviceClient
+          .from("match_introduction_tasks")
+          .upsert(taskPayloads, { onConflict: "plan_id,step_key" });
+
+        if (taskError) {
+          throw new Error(taskError.message);
+        }
+      }
+
       await serviceClient.from("match_audit_events").insert({
         match_id: matchId,
         actor_profile_id: viewer.authUser.id,
         event_type: "introduction_plan_created",
-        summary: "Both sides consented; non-AI first-step plans were generated for each participant.",
-        metadata: { generatedBy: "deterministic-template-v1" },
+        summary:
+          "Both sides consented; non-AI first-step plans and introduction tasks were generated for each participant.",
+        metadata: { generatedBy: "deterministic-template-v2", taskCount: taskPayloads.length },
       });
     } catch (error) {
       const message =
@@ -1845,6 +2094,103 @@ export async function markWishNotificationReadAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Notification marked as read.");
+}
+
+export async function updateIntroductionTaskAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const taskId = readRequired(formData, "task_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+
+  if (!taskId) {
+    redirectWithMessage(returnTo, "error", "Introduction task ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const nextStatus = (() => {
+    const value = readOptional(formData, "status");
+
+    if (value === "in_progress" || value === "done" || value === "skipped") {
+      return value;
+    }
+
+    return "pending";
+  })();
+  const note = readOptional(formData, "note");
+  const completedAt = nextStatus === "done" ? new Date().toISOString() : null;
+
+  const { data: task, error: taskError } = await supabase
+    .from("match_introduction_tasks")
+    .select("id, plan_id, profile_id")
+    .eq("id", taskId)
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+
+  if (taskError || !task) {
+    logSupabaseActionError("Failed to load introduction task before update", taskError, {
+      taskId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", taskError?.message ?? "Introduction task not found.");
+  }
+
+  const { error: updateError } = await supabase
+    .from("match_introduction_tasks")
+    .update({
+      status: nextStatus,
+      note,
+      completed_at: completedAt,
+    })
+    .eq("id", taskId)
+    .eq("profile_id", viewer.authUser.id);
+
+  if (updateError) {
+    logSupabaseActionError("Failed to update introduction task", updateError, {
+      taskId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", updateError.message);
+  }
+
+  const { data: siblingTasks, error: siblingTasksError } = await supabase
+    .from("match_introduction_tasks")
+    .select("status")
+    .eq("plan_id", task.plan_id)
+    .eq("profile_id", viewer.authUser.id);
+
+  if (siblingTasksError) {
+    logSupabaseActionError("Failed to load sibling introduction tasks", siblingTasksError, {
+      planId: task.plan_id,
+      userId: viewer.authUser.id,
+    });
+  } else {
+    const allClosed = (siblingTasks ?? []).every(
+      (entry) => entry.status === "done" || entry.status === "skipped",
+    );
+    const anyProgress = (siblingTasks ?? []).some(
+      (entry) => entry.status === "in_progress" || entry.status === "done",
+    );
+    const nextPlanStatus = allClosed || anyProgress ? "shared" : "draft";
+
+    const { error: planError } = await supabase
+      .from("match_introduction_plans")
+      .update({ status: nextPlanStatus })
+      .eq("id", task.plan_id)
+      .eq("profile_id", viewer.authUser.id);
+
+    if (planError) {
+      logSupabaseActionError("Failed to update introduction plan after task update", planError, {
+        planId: task.plan_id,
+        userId: viewer.authUser.id,
+      });
+    }
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Introduction task updated.");
 }
 
 export async function refreshBackgroundMatchesAction(formData: FormData) {
@@ -2003,6 +2349,108 @@ export async function dismissClarificationQuestionAction(formData: FormData) {
   redirectWithMessage(returnTo, "message", "Clarification dismissed.");
 }
 
+export async function createPrivacyAccessRequestAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const ownerProfileId = readRequired(formData, "owner_profile_id");
+  const requestedFields = readStringList(formData, "requested_fields_json");
+
+  if (!ownerProfileId || !requestedFields.length) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "An owner profile and at least one requested field are required.",
+    );
+  }
+
+  const viewer = await requireViewer(returnTo);
+
+  enforceActionRateLimit({
+    key: `privacy-access-request:${viewer.authUser.id}`,
+    limit: 12,
+    message: "Too many privacy access requests were sent today. Try again later.",
+    returnTo,
+    windowMs: 24 * 60 * 60 * 1000,
+  });
+
+  if (ownerProfileId === viewer.authUser.id) {
+    redirectWithMessage(returnTo, "error", "You cannot request private access from yourself.");
+  }
+
+  const payload: PrivacyAccessRequestInsert = {
+    owner_profile_id: ownerProfileId,
+    requester_profile_id: viewer.authUser.id,
+    match_id: readOptional(formData, "match_id") || null,
+    requested_fields: requestedFields,
+    requested_stage: normalizeAudienceStage(readOptional(formData, "requested_stage")),
+    purpose: readOptional(formData, "purpose"),
+    justification: readOptional(formData, "justification"),
+    status: "pending",
+  };
+
+  const supabase = await createClient();
+  const { data: requestRow, error } = await supabase
+    .from("privacy_access_requests")
+    .insert(payload)
+    .select("id, match_id")
+    .maybeSingle();
+
+  if (error || !requestRow) {
+    logSupabaseActionError("Failed to create privacy access request", error, {
+      ownerProfileId,
+      requesterProfileId: viewer.authUser.id,
+    });
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error?.message ?? "Unable to create privacy access request.",
+    );
+  }
+
+  const serviceClient = createServiceClient();
+  const { error: notificationError } = await serviceClient.from("wish_notifications").insert({
+    profile_id: ownerProfileId,
+    kind: "consent",
+    title: "Privacy access request",
+    body: `${viewer.displayName} requested access to ${requestedFields.join(", ")} for ${payload.requested_stage}-stage discussion.`,
+    match_id: payload.match_id,
+  });
+
+  if (notificationError) {
+    logSupabaseActionError("Failed to create privacy access request notification", notificationError, {
+      ownerProfileId,
+      requesterProfileId: viewer.authUser.id,
+      requestId: requestRow.id,
+    });
+  }
+
+  if (payload.match_id) {
+    const { error: auditError } = await serviceClient.from("match_audit_events").insert({
+      match_id: payload.match_id,
+      actor_profile_id: viewer.authUser.id,
+      event_type: "privacy_access_requested",
+      summary: `Requested access to: ${requestedFields.join(", ")}.`,
+      metadata: {
+        requestId: requestRow.id,
+        requestedStage: payload.requested_stage,
+      },
+    });
+
+    if (auditError) {
+      logSupabaseActionError("Failed to record privacy access audit event", auditError, {
+        matchId: payload.match_id,
+        requestId: requestRow.id,
+      });
+    }
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Privacy access request recorded.");
+}
+
 export async function reportMatchSuggestionAction(formData: FormData) {
   if (!hasSupabaseEnv()) {
     redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
@@ -2066,14 +2514,28 @@ export async function saveProfileSourceAction(formData: FormData) {
   }
 
   const viewer = await requireViewer(returnTo);
+  const sourceNotes = readOptional(formData, "source_notes");
+  const sourceLabel = label;
   const supabase = await createClient();
   const payload: ProfileSourceInsert = {
     profile_id: viewer.authUser.id,
     source_type: normalizeSourceType(readOptional(formData, "source_type")),
-    label,
+    label: sourceLabel,
     url: readOptional(formData, "source_url"),
     access_level: normalizeAccessLevel(readOptional(formData, "source_access_level")),
-    notes: readOptional(formData, "source_notes"),
+    content_kind: normalizeSourceContentKind(readOptional(formData, "source_content_kind")),
+    notes: sourceNotes,
+    snapshot_excerpt: truncateText(
+      readOptional(formData, "snapshot_excerpt") || sourceNotes || sourceLabel,
+      420,
+    ),
+    captured_tags: getBackgroundTokens(
+      `${sourceLabel} ${sourceNotes} ${readOptional(formData, "captured_tags")}`,
+      12,
+    ),
+    needs_review: readBoolean(formData, "needs_review"),
+    imported_at:
+      parseOptionalTimestamp(readOptional(formData, "imported_at")) ?? new Date().toISOString(),
     is_active: true,
   };
   const { error } = await supabase.from("profile_sources").insert(payload);
@@ -2105,8 +2567,17 @@ export async function createNetworkInviteAction(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.from("network_invites").insert({
     profile_id: viewer.authUser.id,
+    target_kind: normalizeNetworkInviteTargetKind(readOptional(formData, "target_kind")),
     target_label: targetLabel,
+    target_url: readOptional(formData, "target_url"),
     target_context: readOptional(formData, "target_context"),
+    desired_capability: readOptional(formData, "desired_capability"),
+    suggested_message: readOptional(formData, "suggested_message"),
+    priority: readBoundedInt(formData, "priority", {
+      fallback: 3,
+      min: 1,
+      max: 5,
+    }),
     reason: readOptional(formData, "reason"),
   });
 
@@ -2185,6 +2656,15 @@ export async function saveSourceConnectionAction(formData: FormData) {
     access_status: normalizeSourceAccessStatus(readOptional(formData, "access_status")),
     access_scope: readOptional(formData, "access_scope"),
     consent_notes: readOptional(formData, "consent_notes"),
+    import_mode: normalizeSourceImportMode(readOptional(formData, "import_mode")),
+    sync_frequency: normalizeSourceSyncFrequency(readOptional(formData, "sync_frequency")),
+    last_sync_summary: readOptional(formData, "last_sync_summary"),
+    last_import_item_count: readBoundedInt(formData, "last_import_item_count", {
+      fallback: 0,
+      min: 0,
+      max: 10000,
+    }),
+    last_imported_at: parseOptionalTimestamp(readOptional(formData, "last_imported_at")),
   };
 
   const supabase = await createClient();
@@ -2229,61 +2709,25 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", "Save a private wish profile before refreshing synthesis.");
   }
 
-  const rows = ((entries ?? []) as WishEntryRow[]);
-  const wishes = rows.filter((entry) => entry.entry_type === "wish").map((entry) => entry.body);
-  const offers = rows.filter((entry) => entry.entry_type === "offer").map((entry) => entry.body);
-  const asks = rows.filter((entry) => entry.entry_type === "ask").map((entry) => entry.body);
-  const sourceCount = (sources ?? []).length + (connections ?? []).length;
-  const causes = profile.causes ?? [];
-  const confidenceScore = calculateSynthesisConfidence({
-    causes,
-    wishes,
-    offers,
-    asks,
-    constraints: profile.constraints,
-    verification: profile.verification_preferences,
-    sourceCount,
+  const rows = (entries ?? []) as WishEntryRow[];
+  const profileSourceRows = (sources ?? []) as ProfileSourceRow[];
+  const sourceConnectionRows = (connections ?? []) as SourceConnectionRow[];
+  const synthesisPayload = buildDeterministicSynthesis({
+    connections: sourceConnectionRows,
+    entries: rows,
+    profile: profile as WishProfileRow,
+    profileSources: profileSourceRows,
   });
 
-  const { error } = await supabase.from("profile_syntheses").upsert(
-    {
-      profile_id: viewer.authUser.id,
-      hopes: summarizeLines(
-        [
-          causes.length ? `Cause priorities: ${causes.join(", ")}` : "",
-          ...wishes,
-        ],
-        "No concrete hopes have been stated yet.",
-      ),
-      intent: summarizeLines(
-        [
-          asks.length ? `Asks: ${asks.join(" / ")}` : "",
-          profile.openness_to_payment ? "Open to payment-mediated trades." : "",
-          profile.openness_to_pledges ? "Open to pledge-based trades." : "",
-        ],
-        "Intent is underspecified.",
-      ),
-      capabilities: summarizeLines(
-        [profile.capabilities, ...offers],
-        "No capabilities or offers have been stated yet.",
-      ),
-      constraints: summarizeLines(
-        [profile.constraints, profile.verification_preferences],
-        "No constraints or verification preferences have been stated yet.",
-      ),
-      uncertainty: summarizeLines(
-        [
-          profile.uncertainty_notes,
-          confidenceScore < 70 ? "The profile is still sparse enough to require follow-up questions." : "",
-        ],
-        "No uncertainty notes have been stated yet.",
-      ),
-      confidence_score: confidenceScore,
-      source_count: sourceCount,
-      synthesis_version: "deterministic-v1",
-    },
-    { onConflict: "profile_id" },
-  );
+  const { error } = await supabase
+    .from("profile_syntheses")
+    .upsert(
+      {
+        profile_id: viewer.authUser.id,
+        ...synthesisPayload,
+      },
+      { onConflict: "profile_id" },
+    );
 
   if (error) {
     logSupabaseActionError("Failed to refresh profile synthesis", error, {
@@ -2292,13 +2736,65 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", error.message);
   }
 
-  if (confidenceScore < 70) {
+  const { error: clarificationDeleteError } = await supabase
+    .from("clarification_questions")
+    .delete()
+    .eq("profile_id", viewer.authUser.id)
+    .eq("status", "open");
+
+  if (clarificationDeleteError) {
+    logSupabaseActionError("Failed to refresh open clarification questions", clarificationDeleteError, {
+      userId: viewer.authUser.id,
+    });
+  }
+
+  const clarificationQuestions = buildDeterministicClarificationQuestions({
+    askText: rows.filter((entry) => entry.entry_type === "ask").map((entry) => entry.body).join(" "),
+    backgroundSearchEnabled: profile.background_search_enabled,
+    capabilities: profile.capabilities,
+    causes: profile.causes ?? [],
+    collectiveName: profile.collective_name,
+    constraints: profile.constraints,
+    locationCity: profile.location_city,
+    locationRegion: profile.location_region,
+    manualSourceReviewEnabled: profile.manual_source_review_enabled,
+    offers: rows.filter((entry) => entry.entry_type === "offer").map((entry) => entry.body),
+    openToPayment: profile.openness_to_payment,
+    openToPledges: profile.openness_to_pledges,
+    participantKind: profile.participant_kind,
+    profileId: viewer.authUser.id,
+    publicPreview: profile.public_preview,
+    sourceCount: synthesisPayload.source_count,
+    uncertaintyNotes: profile.uncertainty_notes,
+    verificationPreferences: profile.verification_preferences,
+    wishText: rows.filter((entry) => entry.entry_type === "wish").map((entry) => entry.body).join(" "),
+  });
+
+  if (clarificationQuestions.length) {
+    const { error: clarificationError } = await supabase
+      .from("clarification_questions")
+      .insert(clarificationQuestions);
+
+    if (clarificationError) {
+      logSupabaseActionError("Failed to refresh clarification questions from synthesis", clarificationError, {
+        userId: viewer.authUser.id,
+      });
+    }
+  }
+
+  if (synthesisPayload.confidence_score < 70 || synthesisPayload.missing_fields.length >= 3) {
     const { error: riskError } = await supabase.from("risk_signals").insert({
       profile_id: viewer.authUser.id,
       signal_type: "underspecified_profile",
       severity: "low",
       summary:
         "The deterministic synthesis is low confidence; ask follow-up questions before relying on matches.",
+      metadata: {
+        confidenceBreakdown: synthesisPayload.confidence_breakdown,
+        missingFields: synthesisPayload.missing_fields,
+        sourceCount: synthesisPayload.source_count,
+        synthesisVersion: synthesisPayload.synthesis_version,
+      },
     });
 
     if (riskError) {
@@ -2334,6 +2830,12 @@ export async function saveHelperStrategyAction(formData: FormData) {
       min: 1,
       max: 5,
     }),
+    min_score: readBoundedInt(formData, "min_score", {
+      fallback: 55,
+      min: 0,
+      max: 100,
+    }),
+    strategy_config: buildHelperStrategyConfig(formData),
     status: readBoolean(formData, "is_paused") ? "paused" : "active",
   };
 
@@ -2370,7 +2872,24 @@ export async function savePrivacyGrantAction(formData: FormData) {
     match_id: readOptional(formData, "match_id") || null,
     field_key: fieldKey,
     access_level: normalizePrivacyAccessLevel(readOptional(formData, "access_level")),
+    audience_stage: normalizePrivacyAudienceStage(readOptional(formData, "audience_stage")),
     status: normalizePrivacyGrantStatus(readOptional(formData, "status")),
+    notes: readOptional(formData, "notes"),
+    expires_at:
+      parseOptionalTimestamp(readOptional(formData, "expires_at")) ??
+      (() => {
+        const expiresInDays = readBoundedInt(formData, "expires_in_days", {
+          fallback: 0,
+          min: 0,
+          max: 3650,
+        });
+
+        if (!expiresInDays) {
+          return null;
+        }
+
+        return new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+      })(),
   };
 
   const supabase = await createClient();
@@ -2387,6 +2906,192 @@ export async function savePrivacyGrantAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Privacy grant saved.");
+}
+
+export async function respondPrivacyAccessRequestAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const requestId = readRequired(formData, "request_id");
+
+  if (!requestId) {
+    redirectWithMessage(returnTo, "error", "Privacy access request ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: requestRow, error: requestError } = await supabase
+    .from("privacy_access_requests")
+    .select("*")
+    .eq("id", requestId)
+    .maybeSingle();
+
+  if (requestError || !requestRow) {
+    logSupabaseActionError("Failed to load privacy access request", requestError, {
+      requestId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(
+      returnTo,
+      "error",
+      requestError?.message ?? "Privacy access request not found.",
+    );
+  }
+
+  const action = readOptional(formData, "status");
+  const ownerNote = readOptional(formData, "owner_note");
+  const accessLevel = normalizePrivacyAccessLevel(readOptional(formData, "access_level"));
+  const isOwner = requestRow.owner_profile_id === viewer.authUser.id;
+  const isRequester = requestRow.requester_profile_id === viewer.authUser.id;
+
+  if (!isOwner && !isRequester) {
+    redirectWithMessage(returnTo, "error", "You cannot modify this privacy access request.");
+  }
+
+  const nextStatus =
+    isRequester && action === "withdrawn"
+      ? "withdrawn"
+      : isOwner && action === "approved"
+        ? "approved"
+        : isOwner && action === "denied"
+          ? "denied"
+          : null;
+
+  if (!nextStatus) {
+    redirectWithMessage(returnTo, "error", "Unsupported privacy access request update.");
+  }
+
+  const resolvedAt =
+    nextStatus === "approved" || nextStatus === "denied" || nextStatus === "withdrawn"
+      ? new Date().toISOString()
+      : null;
+
+  const { error: updateError } = await supabase
+    .from("privacy_access_requests")
+    .update({
+      owner_note: isOwner ? ownerNote : requestRow.owner_note,
+      status: nextStatus,
+      resolved_at: resolvedAt,
+    })
+    .eq("id", requestId);
+
+  if (updateError) {
+    logSupabaseActionError("Failed to update privacy access request", updateError, {
+      requestId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", updateError.message);
+  }
+
+  if (nextStatus === "approved" && isOwner) {
+    for (const fieldKey of requestRow.requested_fields ?? []) {
+      let grantQuery = supabase
+        .from("privacy_grants")
+        .select("id")
+        .eq("profile_id", requestRow.owner_profile_id)
+        .eq("counterparty_id", requestRow.requester_profile_id)
+        .eq("field_key", fieldKey)
+        .eq("audience_stage", requestRow.requested_stage);
+
+      grantQuery = requestRow.match_id
+        ? grantQuery.eq("match_id", requestRow.match_id)
+        : grantQuery.is("match_id", null);
+
+      const { data: existingGrant, error: existingGrantError } = await grantQuery.maybeSingle();
+
+      if (existingGrantError) {
+        logSupabaseActionError("Failed to check existing privacy grant", existingGrantError, {
+          requestId,
+          fieldKey,
+          userId: viewer.authUser.id,
+        });
+        continue;
+      }
+
+      const grantInsertPayload: PrivacyGrantInsert = {
+        profile_id: requestRow.owner_profile_id,
+        counterparty_id: requestRow.requester_profile_id,
+        match_id: requestRow.match_id,
+        field_key: fieldKey,
+        access_level: accessLevel,
+        audience_stage: requestRow.requested_stage,
+        status: "granted" as const,
+        notes: ownerNote || requestRow.purpose || requestRow.justification,
+      };
+
+      const grantUpdatePayload: PrivacyGrantUpdate = {
+        counterparty_id: grantInsertPayload.counterparty_id,
+        match_id: grantInsertPayload.match_id,
+        field_key: grantInsertPayload.field_key,
+        access_level: grantInsertPayload.access_level,
+        audience_stage: grantInsertPayload.audience_stage,
+        status: grantInsertPayload.status,
+        notes: grantInsertPayload.notes,
+      };
+
+      const { error: grantError } = existingGrant
+        ? await supabase.from("privacy_grants").update(grantUpdatePayload).eq("id", existingGrant.id)
+        : await supabase.from("privacy_grants").insert(grantInsertPayload);
+
+      if (grantError) {
+        logSupabaseActionError("Failed to upsert approved privacy grant", grantError, {
+          requestId,
+          fieldKey,
+          userId: viewer.authUser.id,
+        });
+      }
+    }
+  }
+
+  const serviceClient = createServiceClient();
+  const notificationTarget =
+    nextStatus === "withdrawn" ? requestRow.owner_profile_id : requestRow.requester_profile_id;
+  const actorLabel = isOwner ? "The owner" : viewer.displayName;
+  const statusLabel =
+    nextStatus === "approved"
+      ? "approved"
+      : nextStatus === "denied"
+        ? "declined"
+        : "withdrew";
+  const { error: notificationError } = await serviceClient.from("wish_notifications").insert({
+    profile_id: notificationTarget,
+    kind: "consent",
+    title: "Privacy access request updated",
+    body: `${actorLabel} ${statusLabel} a request covering ${requestRow.requested_fields.join(", ")}.`,
+    match_id: requestRow.match_id,
+  });
+
+  if (notificationError) {
+    logSupabaseActionError("Failed to notify about privacy access request update", notificationError, {
+      requestId,
+      userId: viewer.authUser.id,
+    });
+  }
+
+  if (requestRow.match_id) {
+    const { error: auditError } = await serviceClient.from("match_audit_events").insert({
+      match_id: requestRow.match_id,
+      actor_profile_id: viewer.authUser.id,
+      event_type: "privacy_access_updated",
+      summary: `Privacy access request ${nextStatus} for ${requestRow.requested_fields.join(", ")}.`,
+      metadata: {
+        requestId,
+        accessLevel: nextStatus === "approved" ? accessLevel : null,
+      },
+    });
+
+    if (auditError) {
+      logSupabaseActionError("Failed to record privacy access request update audit", auditError, {
+        requestId,
+        matchId: requestRow.match_id,
+      });
+    }
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Privacy access request updated.");
 }
 
 export async function createBrokerageBountyAction(formData: FormData) {
@@ -2406,10 +3111,14 @@ export async function createBrokerageBountyAction(formData: FormData) {
   const { error } = await supabase.from("brokerage_bounties").insert({
     profile_id: viewer.authUser.id,
     label,
+    target_kind: normalizeBrokerageTargetKind(readOptional(formData, "target_kind")),
     cause_area: readOptional(formData, "cause_area"),
     max_amount_cents: readMoneyCents(formData, "max_amount"),
     currency: normalizeCurrency(readOptional(formData, "currency") || "usd"),
+    reward_type: normalizeBrokerageRewardType(readOptional(formData, "reward_type")),
+    preferred_regions: readStringList(formData, "preferred_regions_json"),
     success_condition: readOptional(formData, "success_condition"),
+    target_note: readOptional(formData, "target_note"),
     status: "active",
   });
 
@@ -2444,6 +3153,10 @@ export async function createCollectiveAction(formData: FormData) {
       owner_id: viewer.authUser.id,
       name,
       description: readOptional(formData, "description"),
+      homepage_url: readOptional(formData, "homepage_url"),
+      contact_policy: readOptional(formData, "contact_policy"),
+      decision_rule: readOptional(formData, "decision_rule"),
+      verification_notes: readOptional(formData, "verification_notes"),
       verification_status: normalizeCollectiveVerificationStatus(
         readOptional(formData, "verification_status"),
       ),
@@ -2463,6 +3176,10 @@ export async function createCollectiveAction(formData: FormData) {
     profile_id: viewer.authUser.id,
     role: "owner",
     status: "active",
+    delegation_scope: "Full authority for initial setup.",
+    can_approve_matches: true,
+    can_grant_privacy: true,
+    can_manage_bounties: true,
   });
 
   if (memberError) {
@@ -2474,6 +3191,225 @@ export async function createCollectiveAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Collective workspace created.");
+}
+
+export async function addCollectiveMemberAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const collectiveId = readRequired(formData, "collective_id");
+  const memberProfileId = readRequired(formData, "member_profile_id");
+
+  if (!collectiveId || !memberProfileId) {
+    redirectWithMessage(returnTo, "error", "Collective ID and member profile ID are required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: viewerMembership, error: membershipError } = await supabase
+    .from("collective_members")
+    .select("role, can_approve_matches, can_grant_privacy, can_manage_bounties, status")
+    .eq("collective_id", collectiveId)
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+
+  if (membershipError) {
+    logSupabaseActionError("Failed to check collective membership before adding member", membershipError, {
+      collectiveId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", membershipError.message);
+  }
+
+  const canManageMembers =
+    viewerMembership?.status === "active" &&
+    (viewerMembership.role === "owner" || viewerMembership.role === "admin");
+
+  if (!canManageMembers) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Only active collective owners or admins can add delegated members.",
+    );
+  }
+
+  const payload: CollectiveMemberInsert = {
+    collective_id: collectiveId,
+    profile_id: memberProfileId,
+    role: normalizeCollectiveMemberRole(readOptional(formData, "role")),
+    status: normalizeCollectiveMemberStatus(readOptional(formData, "status")),
+    delegation_scope: readOptional(formData, "delegation_scope"),
+    can_approve_matches: readBoolean(formData, "can_approve_matches"),
+    can_grant_privacy: readBoolean(formData, "can_grant_privacy"),
+    can_manage_bounties: readBoolean(formData, "can_manage_bounties"),
+  };
+
+  const { error } = await supabase
+    .from("collective_members")
+    .upsert(payload, { onConflict: "collective_id,profile_id" });
+
+  if (error) {
+    logSupabaseActionError("Failed to add collective member", error, {
+      collectiveId,
+      memberProfileId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Collective member permissions saved.");
+}
+
+export async function createCollectiveDecisionAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const collectiveId = readRequired(formData, "collective_id");
+  const title = readRequired(formData, "title");
+
+  if (!collectiveId || !title) {
+    redirectWithMessage(returnTo, "error", "Collective and title are required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const requiredApprovals = readBoundedInt(formData, "required_approvals", {
+    fallback: 1,
+    min: 1,
+    max: 25,
+  });
+  const payload: CollectiveDecisionInsert = {
+    collective_id: collectiveId,
+    created_by: viewer.authUser.id,
+    title,
+    decision_type: normalizeCollectiveDecisionType(readOptional(formData, "decision_type")),
+    target_kind: normalizeCollectiveDecisionTargetKind(readOptional(formData, "target_kind")),
+    target_id: readOptional(formData, "target_id") || null,
+    target_label: readOptional(formData, "target_label"),
+    summary: readOptional(formData, "summary"),
+    required_approvals: requiredApprovals,
+    status: "open",
+  };
+
+  const { data: decision, error } = await supabase
+    .from("collective_decisions")
+    .insert(payload)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !decision) {
+    logSupabaseActionError("Failed to create collective decision", error, {
+      collectiveId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error?.message ?? "Unable to create collective decision.");
+  }
+
+  const initialResponse: CollectiveDecisionResponseInsert = {
+    decision_id: decision.id,
+    profile_id: viewer.authUser.id,
+    response: normalizeCollectiveDecisionResponse(readOptional(formData, "initial_response")),
+    note: readOptional(formData, "initial_note"),
+    responded_at: new Date().toISOString(),
+  };
+
+  const { error: responseError } = await supabase
+    .from("collective_decision_responses")
+    .upsert(initialResponse, { onConflict: "decision_id,profile_id" });
+
+  if (responseError) {
+    logSupabaseActionError("Failed to record initial collective decision response", responseError, {
+      collectiveId,
+      decisionId: decision.id,
+      userId: viewer.authUser.id,
+    });
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Collective decision opened.");
+}
+
+export async function respondCollectiveDecisionAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const decisionId = readRequired(formData, "decision_id");
+
+  if (!decisionId) {
+    redirectWithMessage(returnTo, "error", "Decision ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const responseValue = normalizeCollectiveDecisionResponse(readOptional(formData, "response"));
+  const note = readOptional(formData, "note");
+
+  const { error: responseError } = await supabase
+    .from("collective_decision_responses")
+    .upsert(
+      {
+        decision_id: decisionId,
+        profile_id: viewer.authUser.id,
+        response: responseValue,
+        note,
+        responded_at: new Date().toISOString(),
+      },
+      { onConflict: "decision_id,profile_id" },
+    );
+
+  if (responseError) {
+    logSupabaseActionError("Failed to save collective decision response", responseError, {
+      decisionId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", responseError.message);
+  }
+
+  const { data: decision, error: decisionError } = await supabase
+    .from("collective_decisions")
+    .select("required_approvals")
+    .eq("id", decisionId)
+    .maybeSingle();
+
+  if (!decisionError && decision) {
+    const { data: responses, error: responsesError } = await supabase
+      .from("collective_decision_responses")
+      .select("response")
+      .eq("decision_id", decisionId);
+
+    if (!responsesError) {
+      const approvals = (responses ?? []).filter((entry) => entry.response === "approve").length;
+      const rejections = (responses ?? []).filter((entry) => entry.response === "reject").length;
+      const nextStatus =
+        approvals >= decision.required_approvals
+          ? "approved"
+          : rejections >= decision.required_approvals
+            ? "rejected"
+            : "open";
+
+      const { error: statusError } = await supabase
+        .from("collective_decisions")
+        .update({ status: nextStatus })
+        .eq("id", decisionId);
+
+      if (statusError) {
+        logSupabaseActionError("Failed to update collective decision status", statusError, {
+          decisionId,
+          userId: viewer.authUser.id,
+        });
+      }
+    }
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Collective decision response saved.");
 }
 
 export async function createStripeConnectAccountAction(formData: FormData) {

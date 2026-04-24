@@ -129,6 +129,17 @@ function summarizeList(values: string[], fallback: string) {
   return values.length ? values.join(", ") : fallback;
 }
 
+function CauseAreaLabel({ cause }: { cause: string }) {
+  return (
+    <span className="cause-area-label">
+      <span className="cause-area-label-text">{cause}</span>
+      <span aria-hidden="true" className="cause-area-info-icon">
+        i
+      </span>
+    </span>
+  );
+}
+
 function readControlValue(target: unknown) {
   return (target as { value: string }).value;
 }
@@ -488,7 +499,7 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                               onDragEnd={() => setDraggedCause(null)}
                               onDragStart={() => setDraggedCause(cause)}
                             >
-                              <span>{cause}</span>
+                              <CauseAreaLabel cause={cause} />
                               <span className="cause-rank-controls">
                                 <button
                                   aria-label={`Move ${cause} up`}
@@ -528,6 +539,7 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                     <div className="values-chip-grid">
                       {availableCauses.map((cause) => (
                         <button
+                          className="cause-option-button"
                           draggable
                           key={cause}
                           onClick={() => addCauseToRanking(cause)}
@@ -535,7 +547,7 @@ export function ValuesInterview({ isAuthenticated }: ValuesInterviewProps) {
                           onDragStart={() => setDraggedCause(cause)}
                           type="button"
                         >
-                          {cause}
+                          <CauseAreaLabel cause={cause} />
                         </button>
                       ))}
                     </div>

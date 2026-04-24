@@ -11,7 +11,8 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
   title: "Sign up",
-  description: "Create a Moral Trade account to publish offers, express interest, and manage your public profile.",
+  description:
+    "Create a Moral Trade account to publish offers, build a private wish profile, and use non-AI background networking tools.",
   robots: {
     index: false,
     follow: false,
@@ -44,7 +45,8 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
             <h1>Create your Moral Trade account.</h1>
             <p className="hero-text">
               Sign up with email and password so you can publish structured offers, express
-              interest in public commitments, and manage your dashboard.
+              interest in public commitments, and set up a private wish profile for background
+              networking.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/login">
@@ -66,15 +68,15 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Track interest</strong>
-                  <p>People can express interest in your offer and keep the exchange visible.</p>
+                  <strong>Set up your wish profile</strong>
+                  <p>Choose whether you are acting as an individual, collective, or institution.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Manage commitments</strong>
-                  <p>Your dashboard becomes the home for offers, interests, and future agreements.</p>
+                  <strong>Configure background search</strong>
+                  <p>Your dashboard becomes the home for delegates, source permissions, and match alerts.</p>
                 </div>
               </div>
             </div>
@@ -164,8 +166,12 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
                   <p>Once signed in, create an offer and state its terms plainly.</p>
                 </div>
                 <div>
-                  <h3>Review interest on the dashboard</h3>
-                  <p>Your dashboard will show your offers plus the interest you expressed.</p>
+                  <h3>Choose a participation mode</h3>
+                  <p>Set up your private profile as an individual, collective, or institution.</p>
+                </div>
+                <div>
+                  <h3>Turn on non-AI background networking</h3>
+                  <p>Record wishes, delegate rules, and source permissions before using the registry.</p>
                 </div>
               </div>
             </article>

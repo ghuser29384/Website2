@@ -38,11 +38,18 @@ type HelperStrategyRow = Database["public"]["Tables"]["helper_strategies"]["Row"
 type HelperRunRow = Database["public"]["Tables"]["helper_runs"]["Row"];
 type MatchIntroductionPlanRow =
   Database["public"]["Tables"]["match_introduction_plans"]["Row"];
+type MatchIntroductionTaskRow =
+  Database["public"]["Tables"]["match_introduction_tasks"]["Row"];
 type PrivacyGrantRow = Database["public"]["Tables"]["privacy_grants"]["Row"];
+type PrivacyAccessRequestRow =
+  Database["public"]["Tables"]["privacy_access_requests"]["Row"];
 type RiskSignalRow = Database["public"]["Tables"]["risk_signals"]["Row"];
 type BrokerageBountyRow = Database["public"]["Tables"]["brokerage_bounties"]["Row"];
 type CollectiveRow = Database["public"]["Tables"]["collectives"]["Row"];
 type CollectiveMemberRow = Database["public"]["Tables"]["collective_members"]["Row"];
+type CollectiveDecisionRow = Database["public"]["Tables"]["collective_decisions"]["Row"];
+type CollectiveDecisionResponseRow =
+  Database["public"]["Tables"]["collective_decision_responses"]["Row"];
 type InterestStatus = Database["public"]["Enums"]["interest_status"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -210,11 +217,15 @@ export interface DashboardDataResult {
   helperStrategies: HelperStrategyRow[];
   helperRuns: HelperRunRow[];
   introductionPlans: MatchIntroductionPlanRow[];
+  introductionTasks: MatchIntroductionTaskRow[];
   privacyGrants: PrivacyGrantRow[];
+  privacyAccessRequests: PrivacyAccessRequestRow[];
   riskSignals: RiskSignalRow[];
   brokerageBounties: BrokerageBountyRow[];
   collectives: CollectiveRow[];
   collectiveMemberships: CollectiveMemberRow[];
+  collectiveDecisions: CollectiveDecisionRow[];
+  collectiveDecisionResponses: CollectiveDecisionResponseRow[];
   paymentAccount: ProfilePaymentAccountRow | null;
   savedSearches: SavedSearchRow[];
   errors: {
@@ -238,11 +249,15 @@ export interface DashboardDataResult {
     helperStrategies: string | null;
     helperRuns: string | null;
     introductionPlans: string | null;
+    introductionTasks: string | null;
     privacyGrants: string | null;
+    privacyAccessRequests: string | null;
     riskSignals: string | null;
     brokerageBounties: string | null;
     collectives: string | null;
     collectiveMemberships: string | null;
+    collectiveDecisions: string | null;
+    collectiveDecisionResponses: string | null;
     paymentAccount: string | null;
     savedSearches: string | null;
   };
@@ -1836,6 +1851,27 @@ async function listIntroductionPlansForUser(userId: string): Promise<MatchIntrod
   return (data ?? []) as MatchIntroductionPlanRow[];
 }
 
+async function listIntroductionTasksForUser(userId: string): Promise<MatchIntroductionTaskRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("match_introduction_tasks")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("sort_order", { ascending: true })
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE * 3);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as MatchIntroductionTaskRow[];
+}
+
 async function listPrivacyGrantsForUser(userId: string): Promise<PrivacyGrantRow[]> {
   if (!hasSupabaseEnv()) {
     return [];
@@ -1854,6 +1890,28 @@ async function listPrivacyGrantsForUser(userId: string): Promise<PrivacyGrantRow
   }
 
   return (data ?? []) as PrivacyGrantRow[];
+}
+
+async function listPrivacyAccessRequestsForUser(
+  userId: string,
+): Promise<PrivacyAccessRequestRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("privacy_access_requests")
+    .select("*")
+    .or(`owner_profile_id.eq.${userId},requester_profile_id.eq.${userId}`)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as PrivacyAccessRequestRow[];
 }
 
 async function listRiskSignalsForUser(userId: string): Promise<RiskSignalRow[]> {
@@ -1896,8 +1954,45 @@ async function listBrokerageBountiesForUser(userId: string): Promise<BrokerageBo
   return (data ?? []) as BrokerageBountyRow[];
 }
 
+async function listAccessibleCollectiveIdsForUser(userId: string): Promise<string[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const [{ data: ownedCollectives, error: ownedError }, { data: memberships, error: membershipError }] =
+    await Promise.all([
+      supabase.from("collectives").select("id").eq("owner_id", userId),
+      supabase
+        .from("collective_members")
+        .select("collective_id")
+        .eq("profile_id", userId)
+        .in("status", ["active", "invited"]),
+    ]);
+
+  if (ownedError) {
+    throw new Error(ownedError.message);
+  }
+
+  if (membershipError) {
+    throw new Error(membershipError.message);
+  }
+
+  return [
+    ...new Set([
+      ...((ownedCollectives ?? []).map((collective) => collective.id) as string[]),
+      ...((memberships ?? []).map((membership) => membership.collective_id) as string[]),
+    ]),
+  ];
+}
+
 async function listCollectivesForUser(userId: string): Promise<CollectiveRow[]> {
   if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const collectiveIds = await listAccessibleCollectiveIdsForUser(userId);
+  if (!collectiveIds.length) {
     return [];
   }
 
@@ -1905,7 +2000,7 @@ async function listCollectivesForUser(userId: string): Promise<CollectiveRow[]> 
   const { data, error } = await supabase
     .from("collectives")
     .select("*")
-    .eq("owner_id", userId)
+    .in("id", collectiveIds)
     .order("updated_at", { ascending: false })
     .limit(DASHBOARD_PAGE_SIZE);
 
@@ -1921,11 +2016,16 @@ async function listCollectiveMembershipsForUser(userId: string): Promise<Collect
     return [];
   }
 
+  const collectiveIds = await listAccessibleCollectiveIdsForUser(userId);
+  if (!collectiveIds.length) {
+    return [];
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("collective_members")
     .select("*")
-    .eq("profile_id", userId)
+    .in("collective_id", collectiveIds)
     .order("created_at", { ascending: false })
     .limit(DASHBOARD_PAGE_SIZE);
 
@@ -1934,6 +2034,78 @@ async function listCollectiveMembershipsForUser(userId: string): Promise<Collect
   }
 
   return (data ?? []) as CollectiveMemberRow[];
+}
+
+async function listCollectiveDecisionsForUser(
+  userId: string,
+): Promise<CollectiveDecisionRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const collectiveIds = await listAccessibleCollectiveIdsForUser(userId);
+  if (!collectiveIds.length) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("collective_decisions")
+    .select("*")
+    .in("collective_id", collectiveIds)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as CollectiveDecisionRow[];
+}
+
+async function listCollectiveDecisionResponsesForUser(
+  userId: string,
+): Promise<CollectiveDecisionResponseRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const collectiveIds = await listAccessibleCollectiveIdsForUser(userId);
+  if (!collectiveIds.length) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data: decisions, error: decisionsError } = await supabase
+    .from("collective_decisions")
+    .select("id")
+    .in("collective_id", collectiveIds);
+
+  if (decisionsError) {
+    throw new Error(decisionsError.message);
+  }
+
+  const decisionIds = ((decisions ?? []).map((decision) => decision.id) as string[]).slice(
+    0,
+    DASHBOARD_PAGE_SIZE,
+  );
+
+  if (!decisionIds.length) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("collective_decision_responses")
+    .select("*")
+    .in("decision_id", decisionIds)
+    .order("responded_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as CollectiveDecisionResponseRow[];
 }
 
 async function getPaymentAccountForUser(userId: string): Promise<ProfilePaymentAccountRow | null> {
@@ -1997,11 +2169,15 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       helperStrategies: [],
       helperRuns: [],
       introductionPlans: [],
+      introductionTasks: [],
       privacyGrants: [],
+      privacyAccessRequests: [],
       riskSignals: [],
       brokerageBounties: [],
       collectives: [],
       collectiveMemberships: [],
+      collectiveDecisions: [],
+      collectiveDecisionResponses: [],
       paymentAccount: null,
       savedSearches: [],
       errors: {
@@ -2025,11 +2201,15 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         helperStrategies: null,
         helperRuns: null,
         introductionPlans: null,
+        introductionTasks: null,
         privacyGrants: null,
+        privacyAccessRequests: null,
         riskSignals: null,
         brokerageBounties: null,
         collectives: null,
         collectiveMemberships: null,
+        collectiveDecisions: null,
+        collectiveDecisionResponses: null,
         paymentAccount: null,
         savedSearches: null,
       },
@@ -2058,11 +2238,15 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     helperStrategies: null,
     helperRuns: null,
     introductionPlans: null,
+    introductionTasks: null,
     privacyGrants: null,
+    privacyAccessRequests: null,
     riskSignals: null,
     brokerageBounties: null,
     collectives: null,
     collectiveMemberships: null,
+    collectiveDecisions: null,
+    collectiveDecisionResponses: null,
     paymentAccount: null,
     savedSearches: null,
   };
@@ -2357,6 +2541,16 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load introduction plans", { message, userId });
   }
 
+  let introductionTasks: MatchIntroductionTaskRow[] = [];
+  try {
+    introductionTasks = await listIntroductionTasksForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load introduction tasks.";
+    errors.introductionTasks = message;
+    console.error("[supabase] Failed to load introduction tasks", { message, userId });
+  }
+
   let privacyGrants: PrivacyGrantRow[] = [];
   try {
     privacyGrants = await listPrivacyGrantsForUser(userId);
@@ -2364,6 +2558,16 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     const message = error instanceof Error ? error.message : "Unable to load privacy grants.";
     errors.privacyGrants = message;
     console.error("[supabase] Failed to load privacy grants", { message, userId });
+  }
+
+  let privacyAccessRequests: PrivacyAccessRequestRow[] = [];
+  try {
+    privacyAccessRequests = await listPrivacyAccessRequestsForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load privacy access requests.";
+    errors.privacyAccessRequests = message;
+    console.error("[supabase] Failed to load privacy access requests", { message, userId });
   }
 
   let riskSignals: RiskSignalRow[] = [];
@@ -2401,6 +2605,25 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       error instanceof Error ? error.message : "Unable to load collective memberships.";
     errors.collectiveMemberships = message;
     console.error("[supabase] Failed to load collective memberships", { message, userId });
+  }
+
+  let collectiveDecisions: CollectiveDecisionRow[] = [];
+  try {
+    collectiveDecisions = await listCollectiveDecisionsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load collective decisions.";
+    errors.collectiveDecisions = message;
+    console.error("[supabase] Failed to load collective decisions", { message, userId });
+  }
+
+  let collectiveDecisionResponses: CollectiveDecisionResponseRow[] = [];
+  try {
+    collectiveDecisionResponses = await listCollectiveDecisionResponsesForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load collective decision responses.";
+    errors.collectiveDecisionResponses = message;
+    console.error("[supabase] Failed to load collective decision responses", { message, userId });
   }
 
   let paymentAccount: ProfilePaymentAccountRow | null = null;
@@ -2445,11 +2668,15 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     helperStrategies,
     helperRuns,
     introductionPlans,
+    introductionTasks,
     privacyGrants,
+    privacyAccessRequests,
     riskSignals,
     brokerageBounties,
     collectives,
     collectiveMemberships,
+    collectiveDecisions,
+    collectiveDecisionResponses,
     paymentAccount,
     savedSearches,
     errors,

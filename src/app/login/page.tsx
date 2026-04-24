@@ -11,7 +11,8 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
   title: "Login",
-  description: "Sign in to publish offers, respond to commitments, and manage your Moral Trade dashboard.",
+  description:
+    "Sign in to publish offers, review match suggestions, and manage your Moral Trade dashboard.",
   robots: {
     index: false,
     follow: false,
@@ -48,7 +49,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <h1>Log in to Moral Trade.</h1>
             <p className="hero-text">
               Sign in with email and password to publish public offers, respond to structured
-              commitments, and review your dashboard.
+              commitments, and review your background-networking dashboard.
             </p>
           </section>
 
@@ -72,8 +73,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Review your activity</strong>
-                  <p>See your own offers and interests in one place.</p>
+                  <strong>Review match signals</strong>
+                  <p>See your own offers, private alerts, and delegate settings in one place.</p>
                 </div>
               </div>
             </div>
@@ -142,12 +143,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   <p>State an offer on the shared board rather than keeping it only local.</p>
                 </div>
                 <div>
-                  <h3>Track interest</h3>
-                  <p>Your dashboard lists the offers you own and the offers you engaged with.</p>
+                  <h3>Track interest and alerts</h3>
+                  <p>Your dashboard lists the offers you own, the offers you engaged with, and new private match signals.</p>
                 </div>
                 <div>
-                  <h3>Prepare for agreements</h3>
-                  <p>The agreements record already exists, though the fuller process is unfinished.</p>
+                  <h3>Prepare delegate and registry settings</h3>
+                  <p>Saved searches, privacy grants, and source permissions all live behind login.</p>
                 </div>
               </div>
             </article>

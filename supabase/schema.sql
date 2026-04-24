@@ -510,7 +510,12 @@ create table if not exists public.profile_sources (
   label text not null,
   url text not null default '',
   access_level text not null default 'manual_summary' check (access_level in ('none', 'manual_summary', 'metadata_only')),
+  content_kind text not null default 'manual_summary' check (content_kind in ('manual_summary', 'pasted_excerpt', 'public_post', 'email_note', 'chat_note', 'calendar_note')),
   notes text not null default '',
+  snapshot_excerpt text not null default '',
+  captured_tags text[] not null default '{}',
+  needs_review boolean not null default true,
+  imported_at timestamptz,
   is_active boolean not null default true,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
@@ -564,8 +569,13 @@ create table if not exists public.match_reports (
 create table if not exists public.network_invites (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null references public.profiles (id) on delete cascade,
+  target_kind text not null default 'person' check (target_kind in ('person', 'collective', 'institution', 'community', 'public_call')),
   target_label text not null,
+  target_url text not null default '',
   target_context text not null default '',
+  desired_capability text not null default '',
+  suggested_message text not null default '',
+  priority smallint not null default 3 check (priority between 1 and 5),
   reason text not null default '',
   status text not null default 'draft' check (status in ('draft', 'sent', 'dismissed')),
   created_at timestamptz not null default timezone('utc', now()),
@@ -596,6 +606,10 @@ create table if not exists public.source_connections (
   access_status text not null default 'not_connected' check (access_status in ('not_connected', 'connected', 'revoked', 'needs_review')),
   access_scope text not null default '',
   consent_notes text not null default '',
+  import_mode text not null default 'manual_review' check (import_mode in ('manual_review', 'manual_paste', 'rss_pull', 'forwarded_note')),
+  sync_frequency text not null default 'manual' check (sync_frequency in ('manual', 'weekly', 'monthly')),
+  last_sync_summary text not null default '',
+  last_import_item_count integer not null default 0 check (last_import_item_count >= 0),
   last_imported_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
@@ -610,6 +624,14 @@ create table if not exists public.profile_syntheses (
   uncertainty text not null default '',
   confidence_score smallint not null default 0 check (confidence_score between 0 and 100),
   source_count integer not null default 0 check (source_count >= 0),
+  cause_priorities text[] not null default '{}',
+  offer_terms text[] not null default '{}',
+  ask_terms text[] not null default '{}',
+  capability_tags text[] not null default '{}',
+  constraint_flags text[] not null default '{}',
+  uncertainty_flags text[] not null default '{}',
+  missing_fields text[] not null default '{}',
+  confidence_breakdown jsonb not null default '{}'::jsonb,
   synthesis_version text not null default 'deterministic-v1',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
@@ -621,6 +643,8 @@ create table if not exists public.helper_strategies (
   helper_kind text not null default 'cause_overlap' check (helper_kind in ('cause_overlap', 'payment_compatibility', 'geographic', 'network_expansion', 'saved_search', 'risk_filter')),
   label text not null,
   priority smallint not null default 3 check (priority between 1 and 5),
+  min_score smallint not null default 55 check (min_score between 0 and 100),
+  strategy_config jsonb not null default '{}'::jsonb,
   status text not null default 'active' check (status in ('active', 'paused')),
   last_run_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
@@ -647,13 +671,33 @@ create table if not exists public.match_introduction_plans (
   status text not null default 'draft' check (status in ('draft', 'shared', 'archived')),
   intro_message text not null default '',
   proposal_outline text not null default '',
+  proposal_terms text not null default '',
   agenda text not null default '',
+  timeline text not null default '',
+  next_actions text not null default '',
   verification_plan text not null default '',
   privacy_notes text not null default '',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   unique (match_id, profile_id),
   check (profile_id <> counterparty_id)
+);
+
+create table if not exists public.match_introduction_tasks (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references public.match_introduction_plans (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  step_key text not null,
+  title text not null default '',
+  detail text not null default '',
+  note text not null default '',
+  sort_order smallint not null default 1 check (sort_order between 1 and 20),
+  status text not null default 'pending' check (status in ('pending', 'in_progress', 'done', 'skipped')),
+  due_at timestamptz,
+  completed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (plan_id, step_key)
 );
 
 create table if not exists public.privacy_grants (
@@ -663,10 +707,30 @@ create table if not exists public.privacy_grants (
   match_id uuid references public.match_suggestions (id) on delete cascade,
   field_key text not null,
   access_level text not null default 'broad' check (access_level in ('hidden', 'broad', 'specific', 'contact')),
+  audience_stage text not null default 'registry' check (audience_stage in ('registry', 'consent', 'introduced')),
   status text not null default 'draft' check (status in ('draft', 'granted', 'revoked')),
+  notes text not null default '',
+  expires_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   unique (profile_id, counterparty_id, match_id, field_key)
+);
+
+create table if not exists public.privacy_access_requests (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  requester_profile_id uuid not null references public.profiles (id) on delete cascade,
+  match_id uuid references public.match_suggestions (id) on delete set null,
+  requested_fields text[] not null default '{}',
+  requested_stage text not null default 'consent' check (requested_stage in ('registry', 'consent', 'introduced')),
+  purpose text not null default '',
+  justification text not null default '',
+  owner_note text not null default '',
+  status text not null default 'pending' check (status in ('pending', 'approved', 'denied', 'withdrawn')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  resolved_at timestamptz,
+  check (owner_profile_id <> requester_profile_id)
 );
 
 create table if not exists public.risk_signals (
@@ -676,6 +740,7 @@ create table if not exists public.risk_signals (
   signal_type text not null,
   severity text not null default 'low' check (severity in ('low', 'medium', 'high', 'critical')),
   summary text not null default '',
+  metadata jsonb not null default '{}'::jsonb,
   status text not null default 'open' check (status in ('open', 'reviewed', 'dismissed')),
   created_at timestamptz not null default timezone('utc', now()),
   reviewed_at timestamptz
@@ -685,10 +750,14 @@ create table if not exists public.brokerage_bounties (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null references public.profiles (id) on delete cascade,
   label text not null,
+  target_kind text not null default 'counterparty' check (target_kind in ('counterparty', 'group', 'institution', 'public_call')),
   cause_area text not null default '',
   max_amount_cents integer not null default 0 check (max_amount_cents >= 0),
   currency text not null default 'usd' check (currency ~ '^[a-z]{3}$'),
+  reward_type text not null default 'introduction' check (reward_type in ('introduction', 'verified_trade', 'group_formation', 'research_lead')),
+  preferred_regions text[] not null default '{}',
   success_condition text not null default '',
+  target_note text not null default '',
   status text not null default 'active' check (status in ('active', 'paused', 'awarded', 'cancelled')),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
@@ -699,6 +768,10 @@ create table if not exists public.collectives (
   owner_id uuid not null references public.profiles (id) on delete cascade,
   name text not null,
   description text not null default '',
+  homepage_url text not null default '',
+  contact_policy text not null default '',
+  decision_rule text not null default 'single_owner',
+  verification_notes text not null default '',
   verification_status text not null default 'unverified' check (verification_status in ('unverified', 'review_pending', 'verified')),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
@@ -709,9 +782,93 @@ create table if not exists public.collective_members (
   profile_id uuid not null references public.profiles (id) on delete cascade,
   role text not null default 'member' check (role in ('owner', 'admin', 'member', 'viewer')),
   status text not null default 'active' check (status in ('invited', 'active', 'removed')),
+  delegation_scope text not null default '',
+  can_approve_matches boolean not null default false,
+  can_grant_privacy boolean not null default false,
+  can_manage_bounties boolean not null default false,
   created_at timestamptz not null default timezone('utc', now()),
   primary key (collective_id, profile_id)
 );
+
+create table if not exists public.collective_decisions (
+  id uuid primary key default gen_random_uuid(),
+  collective_id uuid not null references public.collectives (id) on delete cascade,
+  created_by uuid not null references public.profiles (id) on delete cascade,
+  title text not null,
+  decision_type text not null default 'match_review' check (decision_type in ('match_review', 'privacy_grant', 'bounty_award', 'verification_request', 'general')),
+  target_kind text not null default 'internal' check (target_kind in ('match', 'collective', 'bounty', 'privacy_grant', 'internal')),
+  target_id uuid,
+  target_label text not null default '',
+  summary text not null default '',
+  required_approvals smallint not null default 1 check (required_approvals between 1 and 20),
+  status text not null default 'open' check (status in ('open', 'approved', 'rejected', 'archived')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.collective_decision_responses (
+  decision_id uuid not null references public.collective_decisions (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  response text not null default 'approve' check (response in ('approve', 'reject', 'abstain')),
+  note text not null default '',
+  responded_at timestamptz not null default timezone('utc', now()),
+  primary key (decision_id, profile_id)
+);
+
+alter table public.profile_sources add column if not exists content_kind text not null default 'manual_summary';
+alter table public.profile_sources add column if not exists snapshot_excerpt text not null default '';
+alter table public.profile_sources add column if not exists captured_tags text[] not null default '{}';
+alter table public.profile_sources add column if not exists needs_review boolean not null default true;
+alter table public.profile_sources add column if not exists imported_at timestamptz;
+alter table public.profile_sources add column if not exists source_connection_id uuid references public.source_connections (id) on delete set null;
+
+alter table public.network_invites add column if not exists target_kind text not null default 'person';
+alter table public.network_invites add column if not exists target_url text not null default '';
+alter table public.network_invites add column if not exists desired_capability text not null default '';
+alter table public.network_invites add column if not exists suggested_message text not null default '';
+alter table public.network_invites add column if not exists priority smallint not null default 3;
+
+alter table public.source_connections add column if not exists import_mode text not null default 'manual_review';
+alter table public.source_connections add column if not exists sync_frequency text not null default 'manual';
+alter table public.source_connections add column if not exists last_sync_summary text not null default '';
+alter table public.source_connections add column if not exists last_import_item_count integer not null default 0;
+
+alter table public.profile_syntheses add column if not exists cause_priorities text[] not null default '{}';
+alter table public.profile_syntheses add column if not exists offer_terms text[] not null default '{}';
+alter table public.profile_syntheses add column if not exists ask_terms text[] not null default '{}';
+alter table public.profile_syntheses add column if not exists capability_tags text[] not null default '{}';
+alter table public.profile_syntheses add column if not exists constraint_flags text[] not null default '{}';
+alter table public.profile_syntheses add column if not exists uncertainty_flags text[] not null default '{}';
+alter table public.profile_syntheses add column if not exists missing_fields text[] not null default '{}';
+alter table public.profile_syntheses add column if not exists confidence_breakdown jsonb not null default '{}'::jsonb;
+
+alter table public.helper_strategies add column if not exists min_score smallint not null default 55;
+alter table public.helper_strategies add column if not exists strategy_config jsonb not null default '{}'::jsonb;
+
+alter table public.match_introduction_plans add column if not exists proposal_terms text not null default '';
+alter table public.match_introduction_plans add column if not exists timeline text not null default '';
+alter table public.match_introduction_plans add column if not exists next_actions text not null default '';
+
+alter table public.privacy_grants add column if not exists audience_stage text not null default 'registry';
+alter table public.privacy_grants add column if not exists notes text not null default '';
+alter table public.privacy_grants add column if not exists expires_at timestamptz;
+
+alter table public.risk_signals add column if not exists metadata jsonb not null default '{}'::jsonb;
+
+alter table public.brokerage_bounties add column if not exists target_kind text not null default 'counterparty';
+alter table public.brokerage_bounties add column if not exists reward_type text not null default 'introduction';
+alter table public.brokerage_bounties add column if not exists preferred_regions text[] not null default '{}';
+alter table public.brokerage_bounties add column if not exists target_note text not null default '';
+
+alter table public.collectives add column if not exists homepage_url text not null default '';
+alter table public.collectives add column if not exists contact_policy text not null default '';
+alter table public.collectives add column if not exists decision_rule text not null default 'single_owner';
+alter table public.collectives add column if not exists verification_notes text not null default '';
+
+alter table public.collective_members add column if not exists delegation_scope text not null default '';
+alter table public.collective_members add column if not exists can_approve_matches boolean not null default false;
+alter table public.collective_members add column if not exists can_grant_privacy boolean not null default false;
+alter table public.collective_members add column if not exists can_manage_bounties boolean not null default false;
 
 create or replace view public.wish_profile_previews as
 select
@@ -794,26 +951,36 @@ create index if not exists match_suggestions_score_idx on public.match_suggestio
 create index if not exists match_consents_profile_id_idx on public.match_consents (profile_id);
 create index if not exists wish_notifications_profile_unread_idx on public.wish_notifications (profile_id, read_at, created_at desc);
 create index if not exists profile_sources_profile_active_idx on public.profile_sources (profile_id, is_active, updated_at desc);
+create index if not exists profile_sources_profile_review_idx on public.profile_sources (profile_id, needs_review, updated_at desc);
 create index if not exists clarification_questions_profile_status_idx on public.clarification_questions (profile_id, status, created_at desc);
 create index if not exists background_match_runs_profile_created_idx on public.background_match_runs (profile_id, created_at desc);
 create index if not exists match_audit_events_match_created_idx on public.match_audit_events (match_id, created_at desc);
 create index if not exists match_reports_match_status_idx on public.match_reports (match_id, status, created_at desc);
 create index if not exists network_invites_profile_status_idx on public.network_invites (profile_id, status, created_at desc);
+create index if not exists network_invites_profile_priority_idx on public.network_invites (profile_id, priority desc, updated_at desc);
 create index if not exists personal_delegates_status_idx on public.personal_delegates (status, operating_mode, last_run_at asc nulls first);
 create index if not exists source_connections_profile_status_idx on public.source_connections (profile_id, access_status, updated_at desc);
+create index if not exists source_connections_profile_import_idx on public.source_connections (profile_id, access_status, sync_frequency, updated_at desc);
 create index if not exists helper_strategies_profile_status_idx on public.helper_strategies (profile_id, status, priority asc, updated_at desc);
 create index if not exists helper_runs_profile_created_idx on public.helper_runs (profile_id, created_at desc);
 create index if not exists helper_runs_strategy_created_idx on public.helper_runs (strategy_id, created_at desc);
 create index if not exists match_introduction_plans_match_idx on public.match_introduction_plans (match_id, status, updated_at desc);
 create index if not exists match_introduction_plans_profile_idx on public.match_introduction_plans (profile_id, status, updated_at desc);
+create index if not exists match_introduction_tasks_profile_status_idx on public.match_introduction_tasks (profile_id, status, updated_at desc);
+create index if not exists match_introduction_tasks_plan_sort_idx on public.match_introduction_tasks (plan_id, sort_order asc, updated_at desc);
 create index if not exists privacy_grants_profile_status_idx on public.privacy_grants (profile_id, status, updated_at desc);
 create index if not exists privacy_grants_counterparty_status_idx on public.privacy_grants (counterparty_id, status, updated_at desc);
+create index if not exists privacy_access_requests_owner_status_idx on public.privacy_access_requests (owner_profile_id, status, updated_at desc);
+create index if not exists privacy_access_requests_requester_status_idx on public.privacy_access_requests (requester_profile_id, status, updated_at desc);
+create index if not exists privacy_access_requests_match_idx on public.privacy_access_requests (match_id, status, updated_at desc);
 create index if not exists risk_signals_status_idx on public.risk_signals (status, severity, created_at desc);
 create index if not exists risk_signals_profile_status_idx on public.risk_signals (profile_id, status, created_at desc);
 create index if not exists brokerage_bounties_profile_status_idx on public.brokerage_bounties (profile_id, status, updated_at desc);
 create index if not exists brokerage_bounties_cause_idx on public.brokerage_bounties (cause_area, status, max_amount_cents desc);
 create index if not exists collectives_owner_idx on public.collectives (owner_id, updated_at desc);
 create index if not exists collective_members_profile_idx on public.collective_members (profile_id, status, created_at desc);
+create index if not exists collective_decisions_collective_status_idx on public.collective_decisions (collective_id, status, updated_at desc);
+create index if not exists collective_decision_responses_profile_idx on public.collective_decision_responses (profile_id, responded_at desc);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -1597,9 +1764,19 @@ create trigger match_introduction_plans_set_updated_at
 before update on public.match_introduction_plans
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists match_introduction_tasks_set_updated_at on public.match_introduction_tasks;
+create trigger match_introduction_tasks_set_updated_at
+before update on public.match_introduction_tasks
+for each row execute procedure public.set_updated_at();
+
 drop trigger if exists privacy_grants_set_updated_at on public.privacy_grants;
 create trigger privacy_grants_set_updated_at
 before update on public.privacy_grants
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists privacy_access_requests_set_updated_at on public.privacy_access_requests;
+create trigger privacy_access_requests_set_updated_at
+before update on public.privacy_access_requests
 for each row execute procedure public.set_updated_at();
 
 drop trigger if exists brokerage_bounties_set_updated_at on public.brokerage_bounties;
@@ -1610,6 +1787,11 @@ for each row execute procedure public.set_updated_at();
 drop trigger if exists collectives_set_updated_at on public.collectives;
 create trigger collectives_set_updated_at
 before update on public.collectives
+for each row execute procedure public.set_updated_at();
+
+drop trigger if exists collective_decisions_set_updated_at on public.collective_decisions;
+create trigger collective_decisions_set_updated_at
+before update on public.collective_decisions
 for each row execute procedure public.set_updated_at();
 
 update public.profiles p
@@ -1695,11 +1877,15 @@ alter table public.profile_syntheses enable row level security;
 alter table public.helper_strategies enable row level security;
 alter table public.helper_runs enable row level security;
 alter table public.match_introduction_plans enable row level security;
+alter table public.match_introduction_tasks enable row level security;
 alter table public.privacy_grants enable row level security;
+alter table public.privacy_access_requests enable row level security;
 alter table public.risk_signals enable row level security;
 alter table public.brokerage_bounties enable row level security;
 alter table public.collectives enable row level security;
 alter table public.collective_members enable row level security;
+alter table public.collective_decisions enable row level security;
+alter table public.collective_decision_responses enable row level security;
 
 grant select on public.wish_profile_previews to anon, authenticated;
 
@@ -2721,6 +2907,21 @@ to authenticated
 using (profile_id = (select auth.uid()))
 with check (profile_id = (select auth.uid()));
 
+drop policy if exists "match_introduction_tasks_select_own" on public.match_introduction_tasks;
+create policy "match_introduction_tasks_select_own"
+on public.match_introduction_tasks
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "match_introduction_tasks_update_own" on public.match_introduction_tasks;
+create policy "match_introduction_tasks_update_own"
+on public.match_introduction_tasks
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
 drop policy if exists "privacy_grants_select_relevant" on public.privacy_grants;
 create policy "privacy_grants_select_relevant"
 on public.privacy_grants
@@ -2748,6 +2949,43 @@ for update
 to authenticated
 using (profile_id = (select auth.uid()))
 with check (profile_id = (select auth.uid()));
+
+drop policy if exists "privacy_access_requests_select_relevant" on public.privacy_access_requests;
+create policy "privacy_access_requests_select_relevant"
+on public.privacy_access_requests
+for select
+to authenticated
+using (
+  owner_profile_id = (select auth.uid())
+  or requester_profile_id = (select auth.uid())
+);
+
+drop policy if exists "privacy_access_requests_insert_requester" on public.privacy_access_requests;
+create policy "privacy_access_requests_insert_requester"
+on public.privacy_access_requests
+for insert
+to authenticated
+with check (
+  requester_profile_id = (select auth.uid())
+  and (
+    match_id is null
+    or public.profile_participates_in_match(match_id, (select auth.uid()))
+  )
+);
+
+drop policy if exists "privacy_access_requests_update_relevant" on public.privacy_access_requests;
+create policy "privacy_access_requests_update_relevant"
+on public.privacy_access_requests
+for update
+to authenticated
+using (
+  owner_profile_id = (select auth.uid())
+  or requester_profile_id = (select auth.uid())
+)
+with check (
+  owner_profile_id = (select auth.uid())
+  or requester_profile_id = (select auth.uid())
+);
 
 drop policy if exists "risk_signals_select_relevant" on public.risk_signals;
 create policy "risk_signals_select_relevant"
@@ -2853,4 +3091,82 @@ using (
 with check (
   profile_id = (select auth.uid())
   or public.viewer_can_access_collective(collective_id)
+);
+
+drop policy if exists "collective_decisions_select_accessible" on public.collective_decisions;
+create policy "collective_decisions_select_accessible"
+on public.collective_decisions
+for select
+to authenticated
+using (public.viewer_can_access_collective(collective_id));
+
+drop policy if exists "collective_decisions_insert_accessible" on public.collective_decisions;
+create policy "collective_decisions_insert_accessible"
+on public.collective_decisions
+for insert
+to authenticated
+with check (
+  created_by = (select auth.uid())
+  and public.viewer_can_access_collective(collective_id)
+);
+
+drop policy if exists "collective_decisions_update_accessible" on public.collective_decisions;
+create policy "collective_decisions_update_accessible"
+on public.collective_decisions
+for update
+to authenticated
+using (public.viewer_can_access_collective(collective_id))
+with check (public.viewer_can_access_collective(collective_id));
+
+drop policy if exists "collective_decision_responses_select_accessible" on public.collective_decision_responses;
+create policy "collective_decision_responses_select_accessible"
+on public.collective_decision_responses
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.collective_decisions
+    where public.collective_decisions.id = decision_id
+      and public.viewer_can_access_collective(public.collective_decisions.collective_id)
+  )
+);
+
+drop policy if exists "collective_decision_responses_insert_own" on public.collective_decision_responses;
+create policy "collective_decision_responses_insert_own"
+on public.collective_decision_responses
+for insert
+to authenticated
+with check (
+  profile_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.collective_decisions
+    where public.collective_decisions.id = decision_id
+      and public.viewer_can_access_collective(public.collective_decisions.collective_id)
+  )
+);
+
+drop policy if exists "collective_decision_responses_update_own" on public.collective_decision_responses;
+create policy "collective_decision_responses_update_own"
+on public.collective_decision_responses
+for update
+to authenticated
+using (
+  profile_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.collective_decisions
+    where public.collective_decisions.id = decision_id
+      and public.viewer_can_access_collective(public.collective_decisions.collective_id)
+  )
+)
+with check (
+  profile_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.collective_decisions
+    where public.collective_decisions.id = decision_id
+      and public.viewer_can_access_collective(public.collective_decisions.collective_id)
+  )
 );

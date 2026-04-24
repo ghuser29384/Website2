@@ -7,7 +7,8 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Safety",
-  description: "Safety standards for Moral Trade proposals, matches, payments, and comments.",
+  description:
+    "Safety standards for Moral Trade proposals, background networking, payments, and consent-gated introductions.",
   alternates: {
     canonical: "/safety",
   },
@@ -36,6 +37,23 @@ export default async function SafetyPage() {
           <p>
             The platform should reject or review proposals involving violence, illegal acts, fraud,
             extortion, doxxing, harassment, exploitation, or pressure on vulnerable people.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Background networking boundaries</h2>
+          <p>
+            The current prototype does not run autonomous AI outreach, mass profile ingestion, or
+            private-feed search. Matching is limited to explicit fields, broad previews, saved
+            searches, and manual source notes so the first version stays legible enough to audit.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Collusion, secrecy, and review</h2>
+          <p>
+            The safety problem is not solved by either full openness or total opacity. Broad
+            previews, review queues, match reports, and risk signals try to preserve enough
+            oversight to investigate suspicious activity without exposing every participant&apos;s exact
+            wishes to the public by default.
           </p>
         </section>
         <section className="panel data-card data-card-wide">

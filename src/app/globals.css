@@ -699,6 +699,33 @@ textarea {
   font-weight: 400;
 }
 
+.cause-area-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.cause-area-label-text {
+  min-width: 0;
+}
+
+.cause-area-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-family: var(--font-body-loaded);
+  font-size: 0.64rem;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0.7;
+}
+
 .cause-rank-card:active {
   cursor: grabbing;
 }
@@ -773,6 +800,12 @@ textarea {
   font-weight: 400;
 }
 
+.cause-option-button {
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: left;
+}
+
 .values-chip-grid button:hover,
 .values-chip-grid button:focus-visible,
 .values-radio-grid label:hover,
@@ -805,6 +838,10 @@ textarea {
   .cause-rank-card {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .cause-option-button {
+    width: 100%;
   }
 
   .cause-rank-controls {

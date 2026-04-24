@@ -846,7 +846,19 @@ export interface Database {
           label: string;
           url: string;
           access_level: "none" | "manual_summary" | "metadata_only";
+          content_kind:
+            | "manual_summary"
+            | "pasted_excerpt"
+            | "public_post"
+            | "email_note"
+            | "chat_note"
+            | "calendar_note";
           notes: string;
+          snapshot_excerpt: string;
+          captured_tags: string[];
+          needs_review: boolean;
+          imported_at: string | null;
+          source_connection_id: string | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -858,7 +870,19 @@ export interface Database {
           label: string;
           url?: string;
           access_level?: "none" | "manual_summary" | "metadata_only";
+          content_kind?:
+            | "manual_summary"
+            | "pasted_excerpt"
+            | "public_post"
+            | "email_note"
+            | "chat_note"
+            | "calendar_note";
           notes?: string;
+          snapshot_excerpt?: string;
+          captured_tags?: string[];
+          needs_review?: boolean;
+          imported_at?: string | null;
+          source_connection_id?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -868,7 +892,19 @@ export interface Database {
           label?: string;
           url?: string;
           access_level?: "none" | "manual_summary" | "metadata_only";
+          content_kind?:
+            | "manual_summary"
+            | "pasted_excerpt"
+            | "public_post"
+            | "email_note"
+            | "chat_note"
+            | "calendar_note";
           notes?: string;
+          snapshot_excerpt?: string;
+          captured_tags?: string[];
+          needs_review?: boolean;
+          imported_at?: string | null;
+          source_connection_id?: string | null;
           is_active?: boolean;
           updated_at?: string;
         };
@@ -999,8 +1035,13 @@ export interface Database {
         Row: {
           id: string;
           profile_id: string;
+          target_kind: "person" | "collective" | "institution" | "community" | "public_call";
           target_label: string;
+          target_url: string;
           target_context: string;
+          desired_capability: string;
+          suggested_message: string;
+          priority: number;
           reason: string;
           status: "draft" | "sent" | "dismissed";
           created_at: string;
@@ -1009,16 +1050,26 @@ export interface Database {
         Insert: {
           id?: string;
           profile_id: string;
+          target_kind?: "person" | "collective" | "institution" | "community" | "public_call";
           target_label: string;
+          target_url?: string;
           target_context?: string;
+          desired_capability?: string;
+          suggested_message?: string;
+          priority?: number;
           reason?: string;
           status?: "draft" | "sent" | "dismissed";
           created_at?: string;
           updated_at?: string;
         };
         Update: {
+          target_kind?: "person" | "collective" | "institution" | "community" | "public_call";
           target_label?: string;
+          target_url?: string;
           target_context?: string;
+          desired_capability?: string;
+          suggested_message?: string;
+          priority?: number;
           reason?: string;
           status?: "draft" | "sent" | "dismissed";
           updated_at?: string;
@@ -1086,6 +1137,10 @@ export interface Database {
           access_status: "not_connected" | "connected" | "revoked" | "needs_review";
           access_scope: string;
           consent_notes: string;
+          import_mode: "manual_review" | "manual_paste" | "rss_pull" | "forwarded_note";
+          sync_frequency: "manual" | "weekly" | "monthly";
+          last_sync_summary: string;
+          last_import_item_count: number;
           last_imported_at: string | null;
           created_at: string;
           updated_at: string;
@@ -1107,6 +1162,10 @@ export interface Database {
           access_status?: "not_connected" | "connected" | "revoked" | "needs_review";
           access_scope?: string;
           consent_notes?: string;
+          import_mode?: "manual_review" | "manual_paste" | "rss_pull" | "forwarded_note";
+          sync_frequency?: "manual" | "weekly" | "monthly";
+          last_sync_summary?: string;
+          last_import_item_count?: number;
           last_imported_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -1126,6 +1185,10 @@ export interface Database {
           access_status?: "not_connected" | "connected" | "revoked" | "needs_review";
           access_scope?: string;
           consent_notes?: string;
+          import_mode?: "manual_review" | "manual_paste" | "rss_pull" | "forwarded_note";
+          sync_frequency?: "manual" | "weekly" | "monthly";
+          last_sync_summary?: string;
+          last_import_item_count?: number;
           last_imported_at?: string | null;
           updated_at?: string;
         };
@@ -1141,6 +1204,14 @@ export interface Database {
           uncertainty: string;
           confidence_score: number;
           source_count: number;
+          cause_priorities: string[];
+          offer_terms: string[];
+          ask_terms: string[];
+          capability_tags: string[];
+          constraint_flags: string[];
+          uncertainty_flags: string[];
+          missing_fields: string[];
+          confidence_breakdown: Record<string, number>;
           synthesis_version: string;
           created_at: string;
           updated_at: string;
@@ -1154,6 +1225,14 @@ export interface Database {
           uncertainty?: string;
           confidence_score?: number;
           source_count?: number;
+          cause_priorities?: string[];
+          offer_terms?: string[];
+          ask_terms?: string[];
+          capability_tags?: string[];
+          constraint_flags?: string[];
+          uncertainty_flags?: string[];
+          missing_fields?: string[];
+          confidence_breakdown?: Record<string, number>;
           synthesis_version?: string;
           created_at?: string;
           updated_at?: string;
@@ -1166,6 +1245,14 @@ export interface Database {
           uncertainty?: string;
           confidence_score?: number;
           source_count?: number;
+          cause_priorities?: string[];
+          offer_terms?: string[];
+          ask_terms?: string[];
+          capability_tags?: string[];
+          constraint_flags?: string[];
+          uncertainty_flags?: string[];
+          missing_fields?: string[];
+          confidence_breakdown?: Record<string, number>;
           synthesis_version?: string;
           updated_at?: string;
         };
@@ -1184,6 +1271,8 @@ export interface Database {
             | "risk_filter";
           label: string;
           priority: number;
+          min_score: number;
+          strategy_config: Record<string, unknown>;
           status: "active" | "paused";
           last_run_at: string | null;
           created_at: string;
@@ -1201,6 +1290,8 @@ export interface Database {
             | "risk_filter";
           label: string;
           priority?: number;
+          min_score?: number;
+          strategy_config?: Record<string, unknown>;
           status?: "active" | "paused";
           last_run_at?: string | null;
           created_at?: string;
@@ -1216,6 +1307,8 @@ export interface Database {
             | "risk_filter";
           label?: string;
           priority?: number;
+          min_score?: number;
+          strategy_config?: Record<string, unknown>;
           status?: "active" | "paused";
           last_run_at?: string | null;
           updated_at?: string;
@@ -1264,7 +1357,10 @@ export interface Database {
           status: "draft" | "shared" | "archived";
           intro_message: string;
           proposal_outline: string;
+          proposal_terms: string;
           agenda: string;
+          timeline: string;
+          next_actions: string;
           verification_plan: string;
           privacy_notes: string;
           created_at: string;
@@ -1278,7 +1374,10 @@ export interface Database {
           status?: "draft" | "shared" | "archived";
           intro_message?: string;
           proposal_outline?: string;
+          proposal_terms?: string;
           agenda?: string;
+          timeline?: string;
+          next_actions?: string;
           verification_plan?: string;
           privacy_notes?: string;
           created_at?: string;
@@ -1288,9 +1387,56 @@ export interface Database {
           status?: "draft" | "shared" | "archived";
           intro_message?: string;
           proposal_outline?: string;
+          proposal_terms?: string;
           agenda?: string;
+          timeline?: string;
+          next_actions?: string;
           verification_plan?: string;
           privacy_notes?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      match_introduction_tasks: {
+        Row: {
+          id: string;
+          plan_id: string;
+          profile_id: string;
+          step_key: string;
+          title: string;
+          detail: string;
+          note: string;
+          sort_order: number;
+          status: "pending" | "in_progress" | "done" | "skipped";
+          due_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          plan_id: string;
+          profile_id: string;
+          step_key: string;
+          title?: string;
+          detail?: string;
+          note?: string;
+          sort_order?: number;
+          status?: "pending" | "in_progress" | "done" | "skipped";
+          due_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          step_key?: string;
+          title?: string;
+          detail?: string;
+          note?: string;
+          sort_order?: number;
+          status?: "pending" | "in_progress" | "done" | "skipped";
+          due_at?: string | null;
+          completed_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -1303,7 +1449,10 @@ export interface Database {
           match_id: string | null;
           field_key: string;
           access_level: "hidden" | "broad" | "specific" | "contact";
+          audience_stage: "registry" | "consent" | "introduced";
           status: "draft" | "granted" | "revoked";
+          notes: string;
+          expires_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1314,7 +1463,10 @@ export interface Database {
           match_id?: string | null;
           field_key: string;
           access_level?: "hidden" | "broad" | "specific" | "contact";
+          audience_stage?: "registry" | "consent" | "introduced";
           status?: "draft" | "granted" | "revoked";
+          notes?: string;
+          expires_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1323,8 +1475,57 @@ export interface Database {
           match_id?: string | null;
           field_key?: string;
           access_level?: "hidden" | "broad" | "specific" | "contact";
+          audience_stage?: "registry" | "consent" | "introduced";
           status?: "draft" | "granted" | "revoked";
+          notes?: string;
+          expires_at?: string | null;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      privacy_access_requests: {
+        Row: {
+          id: string;
+          owner_profile_id: string;
+          requester_profile_id: string;
+          match_id: string | null;
+          requested_fields: string[];
+          requested_stage: "registry" | "consent" | "introduced";
+          purpose: string;
+          justification: string;
+          owner_note: string;
+          status: "pending" | "approved" | "denied" | "withdrawn";
+          created_at: string;
+          updated_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          owner_profile_id: string;
+          requester_profile_id: string;
+          match_id?: string | null;
+          requested_fields?: string[];
+          requested_stage?: "registry" | "consent" | "introduced";
+          purpose?: string;
+          justification?: string;
+          owner_note?: string;
+          status?: "pending" | "approved" | "denied" | "withdrawn";
+          created_at?: string;
+          updated_at?: string;
+          resolved_at?: string | null;
+        };
+        Update: {
+          owner_profile_id?: string;
+          requester_profile_id?: string;
+          match_id?: string | null;
+          requested_fields?: string[];
+          requested_stage?: "registry" | "consent" | "introduced";
+          purpose?: string;
+          justification?: string;
+          owner_note?: string;
+          status?: "pending" | "approved" | "denied" | "withdrawn";
+          updated_at?: string;
+          resolved_at?: string | null;
         };
         Relationships: [];
       };
@@ -1336,6 +1537,7 @@ export interface Database {
           signal_type: string;
           severity: "low" | "medium" | "high" | "critical";
           summary: string;
+          metadata: Record<string, unknown>;
           status: "open" | "reviewed" | "dismissed";
           created_at: string;
           reviewed_at: string | null;
@@ -1347,6 +1549,7 @@ export interface Database {
           signal_type: string;
           severity?: "low" | "medium" | "high" | "critical";
           summary?: string;
+          metadata?: Record<string, unknown>;
           status?: "open" | "reviewed" | "dismissed";
           created_at?: string;
           reviewed_at?: string | null;
@@ -1355,6 +1558,7 @@ export interface Database {
           signal_type?: string;
           severity?: "low" | "medium" | "high" | "critical";
           summary?: string;
+          metadata?: Record<string, unknown>;
           status?: "open" | "reviewed" | "dismissed";
           reviewed_at?: string | null;
         };
@@ -1365,10 +1569,14 @@ export interface Database {
           id: string;
           profile_id: string;
           label: string;
+          target_kind: "counterparty" | "group" | "institution" | "public_call";
           cause_area: string;
           max_amount_cents: number;
           currency: string;
+          reward_type: "introduction" | "verified_trade" | "group_formation" | "research_lead";
+          preferred_regions: string[];
           success_condition: string;
+          target_note: string;
           status: "active" | "paused" | "awarded" | "cancelled";
           created_at: string;
           updated_at: string;
@@ -1377,20 +1585,28 @@ export interface Database {
           id?: string;
           profile_id: string;
           label: string;
+          target_kind?: "counterparty" | "group" | "institution" | "public_call";
           cause_area?: string;
           max_amount_cents?: number;
           currency?: string;
+          reward_type?: "introduction" | "verified_trade" | "group_formation" | "research_lead";
+          preferred_regions?: string[];
           success_condition?: string;
+          target_note?: string;
           status?: "active" | "paused" | "awarded" | "cancelled";
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           label?: string;
+          target_kind?: "counterparty" | "group" | "institution" | "public_call";
           cause_area?: string;
           max_amount_cents?: number;
           currency?: string;
+          reward_type?: "introduction" | "verified_trade" | "group_formation" | "research_lead";
+          preferred_regions?: string[];
           success_condition?: string;
+          target_note?: string;
           status?: "active" | "paused" | "awarded" | "cancelled";
           updated_at?: string;
         };
@@ -1402,6 +1618,10 @@ export interface Database {
           owner_id: string;
           name: string;
           description: string;
+          homepage_url: string;
+          contact_policy: string;
+          decision_rule: string;
+          verification_notes: string;
           verification_status: "unverified" | "review_pending" | "verified";
           created_at: string;
           updated_at: string;
@@ -1411,6 +1631,10 @@ export interface Database {
           owner_id: string;
           name: string;
           description?: string;
+          homepage_url?: string;
+          contact_policy?: string;
+          decision_rule?: string;
+          verification_notes?: string;
           verification_status?: "unverified" | "review_pending" | "verified";
           created_at?: string;
           updated_at?: string;
@@ -1418,6 +1642,10 @@ export interface Database {
         Update: {
           name?: string;
           description?: string;
+          homepage_url?: string;
+          contact_policy?: string;
+          decision_rule?: string;
+          verification_notes?: string;
           verification_status?: "unverified" | "review_pending" | "verified";
           updated_at?: string;
         };
@@ -1429,6 +1657,10 @@ export interface Database {
           profile_id: string;
           role: "owner" | "admin" | "member" | "viewer";
           status: "invited" | "active" | "removed";
+          delegation_scope: string;
+          can_approve_matches: boolean;
+          can_grant_privacy: boolean;
+          can_manage_bounties: boolean;
           created_at: string;
         };
         Insert: {
@@ -1436,11 +1668,100 @@ export interface Database {
           profile_id: string;
           role?: "owner" | "admin" | "member" | "viewer";
           status?: "invited" | "active" | "removed";
+          delegation_scope?: string;
+          can_approve_matches?: boolean;
+          can_grant_privacy?: boolean;
+          can_manage_bounties?: boolean;
           created_at?: string;
         };
         Update: {
           role?: "owner" | "admin" | "member" | "viewer";
           status?: "invited" | "active" | "removed";
+          delegation_scope?: string;
+          can_approve_matches?: boolean;
+          can_grant_privacy?: boolean;
+          can_manage_bounties?: boolean;
+        };
+        Relationships: [];
+      };
+      collective_decisions: {
+        Row: {
+          id: string;
+          collective_id: string;
+          created_by: string;
+          title: string;
+          decision_type:
+            | "match_review"
+            | "privacy_grant"
+            | "bounty_award"
+            | "verification_request"
+            | "general";
+          target_kind: "match" | "collective" | "bounty" | "privacy_grant" | "internal";
+          target_id: string | null;
+          target_label: string;
+          summary: string;
+          required_approvals: number;
+          status: "open" | "approved" | "rejected" | "archived";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          collective_id: string;
+          created_by: string;
+          title: string;
+          decision_type?:
+            | "match_review"
+            | "privacy_grant"
+            | "bounty_award"
+            | "verification_request"
+            | "general";
+          target_kind?: "match" | "collective" | "bounty" | "privacy_grant" | "internal";
+          target_id?: string | null;
+          target_label?: string;
+          summary?: string;
+          required_approvals?: number;
+          status?: "open" | "approved" | "rejected" | "archived";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          title?: string;
+          decision_type?:
+            | "match_review"
+            | "privacy_grant"
+            | "bounty_award"
+            | "verification_request"
+            | "general";
+          target_kind?: "match" | "collective" | "bounty" | "privacy_grant" | "internal";
+          target_id?: string | null;
+          target_label?: string;
+          summary?: string;
+          required_approvals?: number;
+          status?: "open" | "approved" | "rejected" | "archived";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      collective_decision_responses: {
+        Row: {
+          decision_id: string;
+          profile_id: string;
+          response: "approve" | "reject" | "abstain";
+          note: string;
+          responded_at: string;
+        };
+        Insert: {
+          decision_id: string;
+          profile_id: string;
+          response?: "approve" | "reject" | "abstain";
+          note?: string;
+          responded_at?: string;
+        };
+        Update: {
+          response?: "approve" | "reject" | "abstain";
+          note?: string;
+          responded_at?: string;
         };
         Relationships: [];
       };

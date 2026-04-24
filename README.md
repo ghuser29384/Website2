@@ -32,6 +32,8 @@ The product currently supports three offer modes: personal pledge swaps, donatio
 - `/api/jobs/saved-searches` cron endpoint for non-AI saved-search matching
 - `/api/jobs/delegates` cron endpoint for non-AI personal delegate heartbeats
 - `/api/profile/export` authenticated portable wish-profile export
+- `/api/profile/import` authenticated import endpoint for portable wish-profile records
+- `/api/profile/schema` JSON description of the portable import/export surface
 - `/api/wish-registry/search` broad semi-private wish registry search endpoint for integrations
 
 ## Project structure
@@ -154,9 +156,10 @@ The background networking model is intentionally narrow for now:
 - scans are rule-based, not AI-generated
 - identities and sensitive details are revealed only through mutual consent
 - source connections are consent records only; the app does not ingest external accounts
-- deterministic synthesis summarizes user-entered data without LLM processing
-- personal delegates run scheduled readiness checks and helper strategies, not autonomous AI
-- privacy grants record field-level sharing decisions for staged introductions
+- deterministic synthesis summarizes user-entered data, manual excerpts, source snapshots, and structured constraints without LLM processing
+- personal delegates run scheduled helper strategies that can surface deterministic hits, draft outreach targets, and open review signals without autonomous AI
+- privacy grants record field-level sharing decisions for staged introductions, notes, and expirations
+- collectives can open lightweight decision records and member responses for approvals without needing a separate human moderator workflow
 
 ## Supabase integration
 

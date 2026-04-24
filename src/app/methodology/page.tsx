@@ -7,7 +7,8 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Methodology",
-  description: "How Moral Trade structures offers, reasoning standards, matching, and verification.",
+  description:
+    "How Moral Trade structures offers, wish profiling, registry search, matching, and verification without AI-first automation.",
   alternates: {
     canonical: "/methodology",
   },
@@ -40,11 +41,47 @@ export default async function MethodologyPage() {
           </p>
         </section>
         <section className="panel data-card data-card-wide">
+          <h2>Participation modes</h2>
+          <p>
+            A participant can join as an individual, a collective, or an institution. The app also
+            distinguishes between a passive mode, where you record delegate rules and possible
+            source connections, and a proactive mode, where you state explicit wishes, offers,
+            asks, constraints, and verification preferences directly.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Wish profiling without AI</h2>
+          <p>
+            The current synthesis layer is deterministic. It summarizes user-entered fields,
+            captured excerpts, manual source notes, and structured constraints into a private
+            profile of hopes, intent, capabilities, and uncertainty. Clarification questions are
+            generated from missing or underspecified fields rather than from an LLM interviewer.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
           <h2>Matching</h2>
           <p>
             Current match suggestions are rule-based. They use stated cause areas, compatibility
             with payment or pledges, shared terms, and consent-gated previews rather than AI
             inference.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Wish registry and staged disclosure</h2>
+          <p>
+            The wish registry indexes broad previews only. Searches surface just enough
+            information to decide whether a counterparty seems worth exploring further. Exact
+            wishes, constraints, identity details, and contact data remain behind consent and
+            privacy-grant stages.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Follow-through after a promising match</h2>
+          <p>
+            Background scans can open notifications, saved-search results, match reports, network
+            invite drafts, brokerage bounties, and introduction plans. The goal is to take the
+            first bounded steps toward a real conversation without auto-sending messages or
+            pretending the system already has trustworthy autonomy.
           </p>
         </section>
         <section className="panel data-card data-card-wide">
@@ -55,9 +92,16 @@ export default async function MethodologyPage() {
             discourse.
           </p>
         </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Centralized first, portable later</h2>
+          <p>
+            The present implementation is centralized for simplicity, but the data model includes
+            export, import, and schema endpoints so wish profiles and source summaries can move if
+            a more interoperable or decentralized registry becomes preferable later.
+          </p>
+        </section>
       </main>
       <SiteFooter />
     </div>
   );
 }
-

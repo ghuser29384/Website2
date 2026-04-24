@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 
+import {
+  evaluateDeterministicMatch,
+  getDeterministicSignalsFromSynthesis,
+} from "@/lib/background-networking";
 import { isCronRequestAuthorized } from "@/lib/cron";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -8,22 +12,8 @@ export const runtime = "nodejs";
 
 type SavedSearchRow = Database["public"]["Tables"]["saved_searches"]["Row"];
 type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"]["Row"];
-
-function normalizeToken(value: string) {
-  return value.trim().toLowerCase();
-}
-
-function getTokens(value: string) {
-  return [
-    ...new Set(
-      value
-        .toLowerCase()
-        .split(/\W+/)
-        .map((token) => token.trim())
-        .filter((token) => token.length > 4),
-    ),
-  ].slice(0, 20);
-}
+type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
+type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Row"];
 
 function isSearchDue(search: SavedSearchRow, now: Date) {
   if (search.cadence === "manual") {
@@ -85,15 +75,67 @@ async function processSavedSearches(request: Request) {
     isSearchDue(search, now),
   );
   const previewRows = (previews ?? []) as WishProfilePreviewRow[];
-  const previewMap = new Map(previewRows.map((preview) => [preview.profile_id, preview]));
+  const dueProfileIds = [...new Set(dueSearches.map((search) => search.profile_id))];
+
+  const [
+    { data: ownerProfiles, error: ownerProfilesError },
+    { data: ownerSyntheses, error: ownerSynthesesError },
+    { data: previewSyntheses, error: previewSynthesesError },
+  ] = await Promise.all([
+    dueProfileIds.length
+      ? supabase.from("wish_profiles").select("*").in("profile_id", dueProfileIds)
+      : Promise.resolve({ data: [] as WishProfileRow[], error: null }),
+    dueProfileIds.length
+      ? supabase.from("profile_syntheses").select("*").in("profile_id", dueProfileIds)
+      : Promise.resolve({ data: [] as ProfileSynthesisRow[], error: null }),
+    previewRows.length
+      ? supabase
+          .from("profile_syntheses")
+          .select("*")
+          .in(
+            "profile_id",
+            previewRows.map((preview) => preview.profile_id),
+          )
+      : Promise.resolve({ data: [] as ProfileSynthesisRow[], error: null }),
+  ]);
+
+  if (ownerProfilesError || ownerSynthesesError || previewSynthesesError) {
+    return NextResponse.json(
+      {
+        error:
+          ownerProfilesError?.message ??
+          ownerSynthesesError?.message ??
+          previewSynthesesError?.message,
+      },
+      { status: 500 },
+    );
+  }
+
+  const ownerProfileById = new Map(
+    ((ownerProfiles ?? []) as WishProfileRow[]).map((profile) => [profile.profile_id, profile]),
+  );
+  const ownerSynthesisById = new Map(
+    ((ownerSyntheses ?? []) as ProfileSynthesisRow[]).map((synthesis) => [
+      synthesis.profile_id,
+      synthesis,
+    ]),
+  );
+  const previewSynthesisById = new Map(
+    ((previewSyntheses ?? []) as ProfileSynthesisRow[]).map((synthesis) => [
+      synthesis.profile_id,
+      synthesis,
+    ]),
+  );
+
   let searchesProcessed = 0;
   let candidatesScanned = 0;
   let matchesCreated = 0;
   let matchesRefreshed = 0;
 
   for (const search of dueSearches) {
-    const currentPreview = previewMap.get(search.profile_id);
-    if (!currentPreview) {
+    const ownerProfile = ownerProfileById.get(search.profile_id);
+
+    if (!ownerProfile) {
       await supabase
         .from("saved_searches")
         .update({ last_scanned_at: now.toISOString() })
@@ -101,7 +143,9 @@ async function processSavedSearches(request: Request) {
       continue;
     }
 
-    const queryTokens = getTokens(`${search.query} ${search.causes.join(" ")}`);
+    const ownerSignals = getDeterministicSignalsFromSynthesis(
+      ownerSynthesisById.get(search.profile_id) ?? null,
+    );
     let runCreated = 0;
     let runRefreshed = 0;
     let runCandidates = 0;
@@ -112,17 +156,35 @@ async function processSavedSearches(request: Request) {
       }
 
       runCandidates += 1;
-      const sharedCauses = search.causes.filter((cause) =>
-        (preview.causes ?? []).map(normalizeToken).includes(normalizeToken(cause)),
-      );
-      const previewTokens = new Set(getTokens(`${preview.public_preview} ${preview.causes.join(" ")}`));
-      const sharedTokens = queryTokens.filter((token) => previewTokens.has(token)).slice(0, 5);
-      const score = Math.min(
-        100,
-        sharedCauses.length * 35 + sharedTokens.length * 8 + (preview.openness_to_payment ? 8 : 0),
-      );
+      const evaluation = evaluateDeterministicMatch({
+        counterparty: preview,
+        counterpartySignals: getDeterministicSignalsFromSynthesis(
+          previewSynthesisById.get(preview.profile_id) ?? null,
+        ),
+        runLabel: `saved-search:${search.id}`,
+        viewer: {
+          askText: search.query,
+          askTerms: ownerSignals?.askTerms,
+          brokeragePreference: ownerProfile.brokerage_preference,
+          capabilityTags: ownerSignals?.capabilityTags,
+          causes: search.causes.length ? search.causes : ownerProfile.causes,
+          collectiveName: ownerProfile.collective_name,
+          locationCity: ownerProfile.location_city,
+          locationRegion: ownerProfile.location_region,
+          offerTerms: ownerSignals?.offerTerms,
+          offerText: ownerProfile.capabilities,
+          openToPayment: ownerProfile.openness_to_payment,
+          openToPledges: ownerProfile.openness_to_pledges,
+          participantKind: ownerProfile.participant_kind,
+          privacyStage: ownerProfile.privacy_stage,
+          publicPreview: ownerProfile.public_preview,
+          signals: ownerSignals,
+          sourceCount: ownerSignals?.sourceCount,
+          wishText: search.query,
+        },
+      });
 
-      if (score < search.min_score || (!sharedCauses.length && !sharedTokens.length)) {
+      if (evaluation.score < search.min_score) {
         continue;
       }
 
@@ -133,7 +195,8 @@ async function processSavedSearches(request: Request) {
       const dedupeKey = [
         profileAId,
         profileBId,
-        normalizeToken(sharedCauses[0] ?? sharedTokens[0] ?? search.label),
+        search.id,
+        preview.profile_id,
       ].join(":");
       const { data: existingMatch } = await supabase
         .from("match_suggestions")
@@ -145,12 +208,8 @@ async function processSavedSearches(request: Request) {
         continue;
       }
 
-      const reasonForSearchOwner = sharedCauses.length
-        ? `Your saved search "${search.label}" matched a counterparty preview around ${sharedCauses.join(", ")}.`
-        : `Your saved search "${search.label}" matched a counterparty preview with shared terms: ${sharedTokens.join(", ")}.`;
-      const reasonForCounterparty = sharedCauses.length
-        ? `A saved search from another participant matched your public preview around ${sharedCauses.join(", ")}.`
-        : "A saved search from another participant matched your public preview.";
+      const reasonForSearchOwner = `${evaluation.viewerReason} Saved search: ${search.label}.`;
+      const reasonForCounterparty = `${evaluation.counterpartyReason} Saved search label: ${search.label}.`;
       const { error: upsertError } = await supabase.from("match_suggestions").upsert(
         {
           profile_a_id: profileAId,
@@ -159,17 +218,14 @@ async function processSavedSearches(request: Request) {
           profile_b_entry_id: null,
           reason_for_a: viewerIsProfileA ? reasonForSearchOwner : reasonForCounterparty,
           reason_for_b: viewerIsProfileA ? reasonForCounterparty : reasonForSearchOwner,
-          score,
+          score: evaluation.score,
           match_basis: [
-            sharedCauses.length ? `Shared causes: ${sharedCauses.join(", ")}` : "",
-            sharedTokens.length ? `Shared terms: ${sharedTokens.join(", ")}` : "",
-            `Generated by saved search: ${search.label}`,
-          ].filter(Boolean),
-          shared_causes: sharedCauses,
-          suggested_first_step:
-            "If both sides opt in, exchange a bounded proposal: action, duration, cost, verification, and exit condition.",
-          risk_notes:
-            "Rule-based saved-search suggestion only. Review consent, legality, privacy, and verification before acting.",
+            ...evaluation.compatibilityTags.map((tag) => `Compatibility tag: ${tag}`),
+            `Saved search: ${search.label}`,
+          ],
+          shared_causes: evaluation.sharedCauses,
+          suggested_first_step: evaluation.suggestedFirstStep,
+          risk_notes: evaluation.riskNotes,
           generated_by: "saved-search-cron",
           status: "suggested",
           dedupe_key: dedupeKey,

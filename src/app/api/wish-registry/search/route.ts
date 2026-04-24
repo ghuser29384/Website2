@@ -43,7 +43,10 @@ export async function GET(request: Request) {
       limit,
       opennessToPayment: url.searchParams.get("payment") === "1",
       opennessToPledges: url.searchParams.get("pledges") === "1",
+      participantKind: url.searchParams.get("participant") ?? "",
+      privacyStage: url.searchParams.get("privacy") ?? "",
       query,
+      region: url.searchParams.get("region") ?? "",
     });
 
     return NextResponse.json({

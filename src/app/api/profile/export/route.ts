@@ -31,11 +31,15 @@ export async function GET() {
     profileSynthesis,
     helperStrategies,
     helperRuns,
+    introductionTasks,
     savedSearches,
     privacyGrants,
+    privacyAccessRequests,
     brokerageBounties,
     collectives,
     collectiveMemberships,
+    collectiveDecisions,
+    collectiveDecisionResponses,
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", profileId).maybeSingle(),
     supabase.from("wish_profiles").select("*").eq("profile_id", profileId).maybeSingle(),
@@ -46,11 +50,18 @@ export async function GET() {
     supabase.from("profile_syntheses").select("*").eq("profile_id", profileId).maybeSingle(),
     supabase.from("helper_strategies").select("*").eq("profile_id", profileId),
     supabase.from("helper_runs").select("*").eq("profile_id", profileId),
+    supabase.from("match_introduction_tasks").select("*").eq("profile_id", profileId),
     supabase.from("saved_searches").select("*").eq("profile_id", profileId),
     supabase.from("privacy_grants").select("*").eq("profile_id", profileId),
+    supabase
+      .from("privacy_access_requests")
+      .select("*")
+      .or(`owner_profile_id.eq.${profileId},requester_profile_id.eq.${profileId}`),
     supabase.from("brokerage_bounties").select("*").eq("profile_id", profileId),
     supabase.from("collectives").select("*").eq("owner_id", profileId),
     supabase.from("collective_members").select("*").eq("profile_id", profileId),
+    supabase.from("collective_decisions").select("*").eq("created_by", profileId),
+    supabase.from("collective_decision_responses").select("*").eq("profile_id", profileId),
   ]);
 
   const firstError = [
@@ -63,11 +74,15 @@ export async function GET() {
     profileSynthesis.error,
     helperStrategies.error,
     helperRuns.error,
+    introductionTasks.error,
     savedSearches.error,
     privacyGrants.error,
+    privacyAccessRequests.error,
     brokerageBounties.error,
     collectives.error,
     collectiveMemberships.error,
+    collectiveDecisions.error,
+    collectiveDecisionResponses.error,
   ].find(Boolean);
 
   if (firstError) {
@@ -85,11 +100,17 @@ export async function GET() {
     profileSynthesis: profileSynthesis.data,
     helperStrategies: helperStrategies.data ?? [],
     helperRuns: helperRuns.data ?? [],
+    introductionTasks: introductionTasks.data ?? [],
     savedSearches: savedSearches.data ?? [],
     privacyGrants: privacyGrants.data ?? [],
+    privacyAccessRequests: privacyAccessRequests.data ?? [],
     brokerageBounties: brokerageBounties.data ?? [],
     collectives: collectives.data ?? [],
     collectiveMemberships: collectiveMemberships.data ?? [],
+    collectiveDecisions: collectiveDecisions.data ?? [],
+    collectiveDecisionResponses: collectiveDecisionResponses.data ?? [],
+    schemaUrl: "/api/profile/schema",
+    importUrl: "/api/profile/import",
     privacyNotice:
       "This export contains only records readable by the signed-in profile. It does not include other users' private wish data.",
   });

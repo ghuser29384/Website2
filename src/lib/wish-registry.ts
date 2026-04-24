@@ -8,7 +8,10 @@ export interface WishRegistrySearchOptions {
   limit?: number;
   opennessToPayment?: boolean;
   opennessToPledges?: boolean;
+  participantKind?: string;
+  privacyStage?: string;
   query?: string;
+  region?: string;
 }
 
 export interface WishRegistrySearchResult {
@@ -70,10 +73,14 @@ export async function searchWishRegistryPreviews({
   limit = 20,
   opennessToPayment = false,
   opennessToPledges = false,
+  participantKind = "",
+  privacyStage = "",
   query = "",
+  region = "",
 }: WishRegistrySearchOptions = {}) {
   const normalizedCause = normalizeWishRegistryText(cause);
   const normalizedQuery = normalizeWishRegistryText(query);
+  const normalizedRegion = normalizeWishRegistryText(region);
   const queryTokens = getWishRegistryTokens(normalizedQuery);
   const safeLimit = Math.min(50, Math.max(1, limit));
   const supabase = await createClient();
@@ -97,20 +104,38 @@ export async function searchWishRegistryPreviews({
         ? causes.some((entry) => normalizeWishRegistryText(entry).includes(normalizedCause))
         : true;
       const sharedTokens = [...queryTokens].filter((token) => previewText.includes(token));
+      const regionMatch = normalizedRegion
+        ? [preview.location_city, preview.location_region]
+            .filter(Boolean)
+            .some((value) => normalizeWishRegistryText(String(value)).includes(normalizedRegion))
+        : true;
       const score =
         (normalizedCause && causeMatch ? 50 : 0) +
         Math.min(40, sharedTokens.length * 10) +
+        (normalizedRegion && regionMatch ? 15 : 0) +
         (preview.openness_to_payment ? 5 : 0) +
         (preview.openness_to_pledges ? 5 : 0);
 
-      return { preview, score, sharedTokens };
+      return { preview, regionMatch, score, sharedTokens };
     })
-    .filter(({ preview, score }) => {
+    .filter(({ preview, regionMatch, score }) => {
       if (opennessToPayment && !preview.openness_to_payment) {
         return false;
       }
 
       if (opennessToPledges && !preview.openness_to_pledges) {
+        return false;
+      }
+
+      if (participantKind && preview.participant_kind !== participantKind) {
+        return false;
+      }
+
+      if (privacyStage && preview.privacy_stage !== privacyStage) {
+        return false;
+      }
+
+      if (!regionMatch) {
         return false;
       }
 

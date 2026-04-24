@@ -45,6 +45,21 @@ const feasibilityTracks = [
   },
 ] as const;
 
+const participationModes = [
+  {
+    title: "Passive delegate mode",
+    text: "You can log consented source connections, import scope, and review rules for blogs, email archives, chatbot logs, search profiles, or other records without importing raw data yet.",
+  },
+  {
+    title: "Proactive wish mode",
+    text: "If you want to steer the search directly, the interview and dashboard let you write explicit wishes, asks, capabilities, constraints, and verification terms in your own words.",
+  },
+  {
+    title: "Collective mode",
+    text: "Existing groups can open a collective profile, add delegated members, and record approvals so background networking can represent a real team instead of a single spokesperson.",
+  },
+] as const;
+
 const milestoneRows = [
   {
     label: "Built now",
@@ -153,6 +168,25 @@ export function BackgroundNetworkingSketch({ isAuthenticated }: { isAuthenticate
             <li key={control}>{control}</li>
           ))}
         </ul>
+      </div>
+
+      <div className="networking-roadmap panel">
+        <div>
+          <p className="detail-kicker">Participation modes</p>
+          <h3>Individuals, collectives, and delegates can all enter the network</h3>
+          <p>
+            The original sketch allows passive background help as well as deliberate wish entry.
+            This prototype exposes both shapes without turning on automatic ingestion yet.
+          </p>
+        </div>
+        <div className="networking-roadmap-rows">
+          {participationModes.map((mode) => (
+            <div className="networking-roadmap-row" key={mode.title}>
+              <strong>{mode.title}</strong>
+              <p>{mode.text}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="networking-feasibility-grid" aria-label="Background networking feasibility plan">
