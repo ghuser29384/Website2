@@ -2367,6 +2367,11 @@ output {
   font-size: 0.78rem;
 }
 
+.stack-cards {
+  display: grid;
+  gap: 1.5rem;
+}
+
 .status-banner {
   margin-bottom: 1rem;
   padding: 0.95rem 1rem;

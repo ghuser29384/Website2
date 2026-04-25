@@ -3,6 +3,7 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
     { href: "/#how-it-works", label: "How it works" },
     { href: "/#background-networking", label: "Networking" },
     { href: "/#standards", label: "Standards" },
+    { href: "/priority-correction-fund", label: "Priority fund" },
     { href: "/offers#best-offers", label: "Best offers" },
     { href: "/offers", label: "Offers" },
     { href: "/people", label: "People" },
@@ -46,6 +47,7 @@ export const FOOTER_LINK_GROUPS = [
     title: "Participation",
     links: [
       { href: "/offers", label: "Public offers" },
+      { href: "/priority-correction-fund", label: "Priority fund" },
       { href: "/people", label: "People" },
       { href: "/wish-registry", label: "Wish registry" },
       { href: "/cart", label: "Cart" },

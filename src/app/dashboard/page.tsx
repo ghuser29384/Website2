@@ -37,6 +37,7 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
+import { getPriorityCorrectionSummary } from "@/lib/priority-correction";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { hasStripeEnv } from "@/lib/stripe";
@@ -79,6 +80,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const stripeReady = hasStripeEnv();
   const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
   const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
+  const priorityFundSummary =
+    viewer && supabaseReady ? await getPriorityCorrectionSummary(viewer.authUser.id) : null;
   const collectiveNameById = new Map(
     (dashboardData?.collectives ?? []).map((collective) => [collective.id, collective.name]),
   );
@@ -196,6 +199,55 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             logged on the server.
           </div>
         ) : null}
+
+        <section className="section section-white">
+          <div className="section-head">
+            <p className="eyebrow">Priority Correction Fund</p>
+            <h2>Monthly correction pool</h2>
+            <p>
+              This section tracks the current month&apos;s fund, your own share of it, and whether
+              you have been assigned an arbiter role.
+            </p>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            {priorityFundSummary?.currentCycle ? (
+              <>
+                <div className="tag-row">
+                  <span className="badge">
+                    {priorityFundSummary.currentCycle.status.replaceAll("_", " ")}
+                  </span>
+                  <span className="source-pill">
+                    Fund {formatPaymentAmount(priorityFundSummary.currentCycle.published_fund_cents, "usd")}
+                  </span>
+                </div>
+                <p className="route-text">
+                  Published for {new Date(priorityFundSummary.currentCycle.cycle_month).toLocaleDateString()}.
+                  {priorityFundSummary.viewerSnapshot
+                    ? ` Your current share this month is ${formatPaymentAmount(priorityFundSummary.viewerSnapshot.fund_share_cents, "usd")}.`
+                    : " You do not have a current member snapshot yet."}
+                </p>
+                <p className="route-text">
+                  {priorityFundSummary.viewerAssignments.length
+                    ? `You are assigned to ${priorityFundSummary.viewerAssignments.length} arbiter role(s) this cycle.`
+                    : "You are not assigned to an arbiter role this cycle."}
+                </p>
+                <div className="form-actions">
+                  <Link className="button button-secondary button-mini" href="/priority-correction-fund">
+                    Open fund page
+                  </Link>
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No Priority Correction Fund cycle has been published yet.</strong>
+                  <p>Once the current month is published, your dashboard will summarize it here.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
 
         <section className="section section-white">
           <div className="section-head">

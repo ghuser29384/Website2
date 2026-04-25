@@ -19,6 +19,11 @@ import {
   normalizeBackgroundToken,
 } from "@/lib/background-networking";
 import { getSafeInternalPath } from "@/lib/paths";
+import {
+  finalizePriorityCorrectionCycle,
+  parseStructuredLines,
+  publishPriorityCorrectionCycleForMonth,
+} from "@/lib/priority-correction";
 import { takeRateLimitSlot } from "@/lib/rate-limit";
 import {
   calculatePlatformFeeCents,
@@ -4995,4 +5000,694 @@ export async function rateAgreementAction(formData: FormData) {
   revalidatePath("/people");
   revalidatePath(`/people/${ratedUserId}`);
   redirectWithMessage(returnTo, "message", "Agreement rating recorded.");
+}
+
+function getPriorityFundServiceClient() {
+  return createServiceClient() as any;
+}
+
+async function requirePriorityAssignment({
+  cycleId,
+  profileId,
+  role,
+  causeArea,
+}: {
+  cycleId: string;
+  profileId: string;
+  role: "specific_action_arbiter" | "cause_area_arbiter";
+  causeArea?: string | null;
+}) {
+  const supabase = getPriorityFundServiceClient();
+  let query = supabase
+    .from("priority_correction_arbiter_assignments")
+    .select("*")
+    .eq("cycle_id", cycleId)
+    .eq("profile_id", profileId)
+    .eq("role", role)
+    .eq("status", "active");
+
+  if (role === "specific_action_arbiter") {
+    query = query.eq("cause_area", causeArea ?? "");
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error("You are not assigned to that Priority Correction Fund role.");
+  }
+
+  return data as {
+    id: string;
+    cycle_id: string;
+    profile_id: string;
+    role: "specific_action_arbiter" | "cause_area_arbiter";
+    cause_area: string | null;
+  };
+}
+
+export async function logImpactContributionAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/priority-correction-fund", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    "/priority-correction-fund",
+  );
+  const viewer = await requireViewer(returnTo);
+  const supabase = getPriorityFundServiceClient();
+  const contributionKind =
+    readOptional(formData, "contribution_kind") === "money_equivalent"
+      ? "money_equivalent"
+      : "donation";
+  const causeArea = readRequired(formData, "cause_area");
+  const actionLabel = readOptional(formData, "action_label");
+  const amountDollars = Number(readRequired(formData, "amount_dollars"));
+  const occurredAt = readOptional(formData, "occurred_at");
+  const evidenceUrl = readOptional(formData, "evidence_url");
+  const evidenceNote = readOptional(formData, "evidence_note");
+  const verificationStatus =
+    readOptional(formData, "verification_status") === "verified"
+      ? "verified"
+      : readOptional(formData, "verification_status") === "imported"
+        ? "imported"
+        : "self_reported";
+
+  if (!causeArea) {
+    redirectWithMessage(returnTo, "error", "Choose a cause area for this contribution.");
+  }
+
+  if (!Number.isFinite(amountDollars) || amountDollars <= 0) {
+    redirectWithMessage(returnTo, "error", "Contribution amount must be greater than zero.");
+  }
+
+  const amountCents = Math.round(amountDollars * 100);
+  const occurredAtIso = occurredAt
+    ? new Date(`${occurredAt}T12:00:00.000Z`).toISOString()
+    : new Date().toISOString();
+
+  const { error } = await supabase.from("impact_contributions").insert({
+    profile_id: viewer.authUser.id,
+    contribution_kind: contributionKind,
+    cause_area: causeArea,
+    action_label: actionLabel,
+    amount_cents: amountCents,
+    currency: "usd",
+    occurred_at: occurredAtIso,
+    evidence_url: evidenceUrl,
+    evidence_note: evidenceNote,
+    verification_status: verificationStatus,
+    source_label: "manual_dashboard_entry",
+  });
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/priority-correction-fund");
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Contribution logged.");
+}
+
+export async function publishPriorityCorrectionCycleAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/priority-correction-fund", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    "/priority-correction-fund",
+  );
+  const viewer = await requireAdminViewer(returnTo);
+
+  try {
+    await publishPriorityCorrectionCycleForMonth({
+      actingProfileId: viewer.authUser.id,
+      cycleMonth: readOptional(formData, "cycle_month") || null,
+    });
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Unable to publish the Priority Correction Fund cycle.",
+    );
+  }
+
+  revalidatePath("/priority-correction-fund");
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Priority Correction Fund cycle published.");
+}
+
+export async function finalizePriorityCorrectionCycleAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/priority-correction-fund", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    "/priority-correction-fund",
+  );
+  await requireAdminViewer(returnTo);
+  const cycleId = readRequired(formData, "cycle_id");
+
+  if (!cycleId) {
+    redirectWithMessage(returnTo, "error", "Priority Correction Fund cycle id is missing.");
+  }
+
+  try {
+    const result = await finalizePriorityCorrectionCycle(cycleId);
+
+    revalidatePath("/priority-correction-fund");
+    revalidatePath("/dashboard");
+    redirectWithMessage(
+      returnTo,
+      "message",
+      result.status === "reserved"
+        ? "This month’s fund was reserved and carried forward."
+        : "Priority Correction Fund cycle finalized.",
+    );
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Unable to finalize the Priority Correction Fund cycle.",
+    );
+  }
+}
+
+export async function submitPrioritySpecificActionReasoningAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/priority-correction-fund", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    "/priority-correction-fund",
+  );
+  const viewer = await requireViewer(returnTo);
+  const supabase = getPriorityFundServiceClient();
+  const cycleId = readRequired(formData, "cycle_id");
+  const causeArea = readRequired(formData, "cause_area");
+  const title = readRequired(formData, "title");
+  const combinationSummary = readRequired(formData, "combination_summary");
+  const allocationSchedule = parseStructuredLines(readOptional(formData, "allocation_schedule"));
+  const effectSchedule = parseStructuredLines(readOptional(formData, "effect_schedule"));
+  const reasoning = readRequired(formData, "reasoning");
+
+  if (!cycleId || !causeArea || !title || !combinationSummary || !reasoning) {
+    redirectWithMessage(returnTo, "error", "Specific-action reasoning is incomplete.");
+  }
+
+  try {
+    await requirePriorityAssignment({
+      cycleId,
+      profileId: viewer.authUser.id,
+      role: "specific_action_arbiter",
+      causeArea,
+    });
+  } catch (error) {
+    redirectWithMessage(returnTo, "error", error instanceof Error ? error.message : "Assignment required.");
+  }
+
+  const { data: previousSubmissions, error: previousError } = await supabase
+    .from("priority_specific_action_submissions")
+    .select("id,version")
+    .eq("cycle_id", cycleId)
+    .eq("cause_area", causeArea)
+    .order("version", { ascending: false });
+
+  if (previousError) {
+    redirectWithMessage(returnTo, "error", previousError.message);
+  }
+
+  const nextVersion = (((previousSubmissions ?? []) as Array<{ version: number }>)[0]?.version ?? 0) + 1;
+
+  if ((previousSubmissions ?? []).length) {
+    const { error: supersedeError } = await supabase
+      .from("priority_specific_action_submissions")
+      .update({
+        status: "superseded",
+      })
+      .eq("cycle_id", cycleId)
+      .eq("cause_area", causeArea)
+      .neq("status", "excluded");
+
+    if (supersedeError) {
+      redirectWithMessage(returnTo, "error", supersedeError.message);
+    }
+  }
+
+  const { error } = await supabase.from("priority_specific_action_submissions").insert({
+    cycle_id: cycleId,
+    cause_area: causeArea,
+    version: nextVersion,
+    submitted_by: viewer.authUser.id,
+    title,
+    combination_summary: combinationSummary,
+    allocation_schedule: allocationSchedule,
+    effect_schedule: effectSchedule,
+    reasoning,
+    status: "draft",
+  });
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/priority-correction-fund");
+  redirectWithMessage(returnTo, "message", "Specific-action reasoning draft submitted.");
+}
+
+export async function recordPrioritySpecificActionPositionAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/priority-correction-fund", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    "/priority-correction-fund",
+  );
+  const viewer = await requireViewer(returnTo);
+  const supabase = getPriorityFundServiceClient();
+  const cycleId = readRequired(formData, "cycle_id");
+  const causeArea = readRequired(formData, "cause_area");
+  const submissionId = readRequired(formData, "submission_id");
+  const stance = readOptional(formData, "stance") === "dissent" ? "dissent" : "agree";
+  const note = readOptional(formData, "note");
+
+  if (!submissionId || !cycleId || !causeArea) {
+    redirectWithMessage(returnTo, "error", "Specific-action arbiter response is incomplete.");
+  }
+
+  let assignmentId = "";
+
+  try {
+    const assignment = await requirePriorityAssignment({
+      cycleId,
+      profileId: viewer.authUser.id,
+      role: "specific_action_arbiter",
+      causeArea,
+    });
+    assignmentId = assignment.id;
+  } catch (error) {
+    redirectWithMessage(returnTo, "error", error instanceof Error ? error.message : "Assignment required.");
+  }
+
+  const { error } = await supabase.from("priority_specific_action_positions").upsert(
+    {
+      submission_id: submissionId,
+      arbiter_assignment_id: assignmentId,
+      stance,
+      note,
+    },
+    {
+      onConflict: "submission_id,arbiter_assignment_id",
+    },
+  );
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  const { data: positions, error: positionsError } = await supabase
+    .from("priority_specific_action_positions")
+    .select("stance")
+    .eq("submission_id", submissionId);
+
+  if (positionsError) {
+    redirectWithMessage(returnTo, "error", positionsError.message);
+  }
+
+  const agreeCount = ((positions ?? []) as Array<{ stance: "agree" | "dissent" }>).filter(
+    (position) => position.stance === "agree",
+  ).length;
+
+  if (agreeCount >= 3) {
+    const { error: publishError } = await supabase
+      .from("priority_specific_action_submissions")
+      .update({
+        status: "published",
+        published_at: new Date().toISOString(),
+      })
+      .eq("id", submissionId);
+
+    if (publishError) {
+      redirectWithMessage(returnTo, "error", publishError.message);
+    }
+  }
+
+  revalidatePath("/priority-correction-fund");
+  redirectWithMessage(returnTo, "message", "Specific-action arbiter position recorded.");
+}
+
+export async function recordPrioritySpecificActionFeedbackAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/priority-correction-fund", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    "/priority-correction-fund",
+  );
+  const viewer = await requireViewer(returnTo);
+  const supabase = getPriorityFundServiceClient();
+  const submissionId = readRequired(formData, "submission_id");
+  const cycleId = readRequired(formData, "cycle_id");
+  const causeArea = readRequired(formData, "cause_area");
+  const stance =
+    readOptional(formData, "stance") === "agree_with_dissent"
+      ? "agree_with_dissent"
+      : "object";
+
+  if (!submissionId || !cycleId || !causeArea) {
+    redirectWithMessage(returnTo, "error", "Specific-action feedback is incomplete.");
+  }
+
+  const { data: snapshot, error: snapshotError } = await supabase
+    .from("priority_correction_member_snapshots")
+    .select("prioritized_cause_area")
+    .eq("cycle_id", cycleId)
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+
+  if (snapshotError) {
+    redirectWithMessage(returnTo, "error", snapshotError.message);
+  }
+
+  if (!snapshot || snapshot.prioritized_cause_area !== causeArea) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Only members who currently prioritize this cause area can file feedback here.",
+    );
+  }
+
+  const { error } = await supabase.from("priority_specific_action_feedback").upsert(
+    {
+      submission_id: submissionId,
+      profile_id: viewer.authUser.id,
+      stance,
+    },
+    {
+      onConflict: "submission_id,profile_id",
+    },
+  );
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  const [{ data: feedbackRows, error: feedbackError }, { count, error: countError }] =
+    await Promise.all([
+      supabase
+        .from("priority_specific_action_feedback")
+        .select("profile_id", { count: "exact" })
+        .eq("submission_id", submissionId),
+      supabase
+        .from("priority_correction_member_snapshots")
+        .select("profile_id", { count: "exact", head: true })
+        .eq("cycle_id", cycleId)
+        .eq("prioritized_cause_area", causeArea),
+    ]);
+
+  if (feedbackError || countError) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      feedbackError?.message ?? countError?.message ?? "Unable to evaluate feedback threshold.",
+    );
+  }
+
+  const eligibleCount = count ?? 0;
+  const feedbackCount = (feedbackRows ?? []).length;
+
+  if (eligibleCount > 0 && feedbackCount / eligibleCount >= 0.2) {
+    const { error: reconsiderError } = await supabase
+      .from("priority_specific_action_submissions")
+      .update({
+        status: "reconsideration_requested",
+      })
+      .eq("id", submissionId);
+
+    if (reconsiderError) {
+      redirectWithMessage(returnTo, "error", reconsiderError.message);
+    }
+  }
+
+  revalidatePath("/priority-correction-fund");
+  redirectWithMessage(returnTo, "message", "Specific-action feedback recorded.");
+}
+
+export async function submitPriorityCauseAreaAllocationAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/priority-correction-fund", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    "/priority-correction-fund",
+  );
+  const viewer = await requireViewer(returnTo);
+  const supabase = getPriorityFundServiceClient();
+  const cycleId = readRequired(formData, "cycle_id");
+  const allocationSchedule = parseStructuredLines(readOptional(formData, "allocation_schedule"));
+  const expectedImpact = readRequired(formData, "expected_impact");
+  const reasoning = readRequired(formData, "reasoning");
+
+  if (!cycleId || !allocationSchedule.length || !expectedImpact || !reasoning) {
+    redirectWithMessage(returnTo, "error", "Cause-area allocation reasoning is incomplete.");
+  }
+
+  try {
+    await requirePriorityAssignment({
+      cycleId,
+      profileId: viewer.authUser.id,
+      role: "cause_area_arbiter",
+    });
+  } catch (error) {
+    redirectWithMessage(returnTo, "error", error instanceof Error ? error.message : "Assignment required.");
+  }
+
+  const { data: previousRows, error: previousError } = await supabase
+    .from("priority_cause_area_allocations")
+    .select("id,version")
+    .eq("cycle_id", cycleId)
+    .order("version", { ascending: false });
+
+  if (previousError) {
+    redirectWithMessage(returnTo, "error", previousError.message);
+  }
+
+  const nextVersion = (((previousRows ?? []) as Array<{ version: number }>)[0]?.version ?? 0) + 1;
+
+  if ((previousRows ?? []).length) {
+    const { error: supersedeError } = await supabase
+      .from("priority_cause_area_allocations")
+      .update({
+        status: "superseded",
+      })
+      .eq("cycle_id", cycleId);
+
+    if (supersedeError) {
+      redirectWithMessage(returnTo, "error", supersedeError.message);
+    }
+  }
+
+  const { error } = await supabase.from("priority_cause_area_allocations").insert({
+    cycle_id: cycleId,
+    version: nextVersion,
+    submitted_by: viewer.authUser.id,
+    allocation_schedule: allocationSchedule,
+    expected_impact: expectedImpact,
+    reasoning,
+    status: "draft",
+  });
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/priority-correction-fund");
+  redirectWithMessage(returnTo, "message", "Cause-area allocation draft submitted.");
+}
+
+export async function recordPriorityCauseAreaPositionAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/priority-correction-fund", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    "/priority-correction-fund",
+  );
+  const viewer = await requireViewer(returnTo);
+  const supabase = getPriorityFundServiceClient();
+  const cycleId = readRequired(formData, "cycle_id");
+  const allocationId = readRequired(formData, "allocation_id");
+  const stance = readOptional(formData, "stance") === "dissent" ? "dissent" : "agree";
+  const note = readOptional(formData, "note");
+
+  if (!cycleId || !allocationId) {
+    redirectWithMessage(returnTo, "error", "Cause-area arbiter response is incomplete.");
+  }
+
+  let assignmentId = "";
+
+  try {
+    const assignment = await requirePriorityAssignment({
+      cycleId,
+      profileId: viewer.authUser.id,
+      role: "cause_area_arbiter",
+    });
+    assignmentId = assignment.id;
+  } catch (error) {
+    redirectWithMessage(returnTo, "error", error instanceof Error ? error.message : "Assignment required.");
+  }
+
+  const { error } = await supabase.from("priority_cause_area_positions").upsert(
+    {
+      allocation_id: allocationId,
+      arbiter_assignment_id: assignmentId,
+      stance,
+      note,
+    },
+    {
+      onConflict: "allocation_id,arbiter_assignment_id",
+    },
+  );
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  const { data: positions, error: positionsError } = await supabase
+    .from("priority_cause_area_positions")
+    .select("stance")
+    .eq("allocation_id", allocationId);
+
+  if (positionsError) {
+    redirectWithMessage(returnTo, "error", positionsError.message);
+  }
+
+  const agreeCount = ((positions ?? []) as Array<{ stance: "agree" | "dissent" }>).filter(
+    (position) => position.stance === "agree",
+  ).length;
+
+  if (agreeCount >= 4) {
+    const { error: publishError } = await supabase
+      .from("priority_cause_area_allocations")
+      .update({
+        status: "published",
+        published_at: new Date().toISOString(),
+      })
+      .eq("id", allocationId);
+
+    if (publishError) {
+      redirectWithMessage(returnTo, "error", publishError.message);
+    }
+  }
+
+  revalidatePath("/priority-correction-fund");
+  redirectWithMessage(returnTo, "message", "Cause-area arbiter position recorded.");
+}
+
+export async function recordPriorityCauseAreaFeedbackAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/priority-correction-fund", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(
+    readOptional(formData, "return_to"),
+    "/priority-correction-fund",
+  );
+  const viewer = await requireViewer(returnTo);
+  const supabase = getPriorityFundServiceClient();
+  const allocationId = readRequired(formData, "allocation_id");
+  const cycleId = readRequired(formData, "cycle_id");
+  const stance =
+    readOptional(formData, "stance") === "agree_with_dissent"
+      ? "agree_with_dissent"
+      : "object";
+
+  if (!allocationId || !cycleId) {
+    redirectWithMessage(returnTo, "error", "Cause-area allocation feedback is incomplete.");
+  }
+
+  const { data: snapshot, error: snapshotError } = await supabase
+    .from("priority_correction_member_snapshots")
+    .select("prioritized_cause_area")
+    .eq("cycle_id", cycleId)
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+
+  if (snapshotError) {
+    redirectWithMessage(returnTo, "error", snapshotError.message);
+  }
+
+  if (!snapshot?.prioritized_cause_area) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Only members with a recorded prioritized cause area can file community feedback here.",
+    );
+  }
+
+  const { error } = await supabase.from("priority_cause_area_feedback").upsert(
+    {
+      allocation_id: allocationId,
+      profile_id: viewer.authUser.id,
+      stance,
+    },
+    {
+      onConflict: "allocation_id,profile_id",
+    },
+  );
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  const [{ data: feedbackRows, error: feedbackError }, { count, error: countError }] =
+    await Promise.all([
+      supabase
+        .from("priority_cause_area_feedback")
+        .select("profile_id")
+        .eq("allocation_id", allocationId),
+      supabase
+        .from("priority_correction_member_snapshots")
+        .select("profile_id", { count: "exact", head: true })
+        .eq("cycle_id", cycleId)
+        .not("prioritized_cause_area", "is", null),
+    ]);
+
+  if (feedbackError || countError) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      feedbackError?.message ?? countError?.message ?? "Unable to evaluate community feedback.",
+    );
+  }
+
+  const communityEligibleCount = count ?? 0;
+  const feedbackCount = (feedbackRows ?? []).length;
+
+  if (communityEligibleCount > 0 && feedbackCount / communityEligibleCount >= 0.4) {
+    const { error: reconsiderError } = await supabase
+      .from("priority_cause_area_allocations")
+      .update({
+        status: "reconsideration_requested",
+      })
+      .eq("id", allocationId);
+
+    if (reconsiderError) {
+      redirectWithMessage(returnTo, "error", reconsiderError.message);
+    }
+  }
+
+  revalidatePath("/priority-correction-fund");
+  redirectWithMessage(returnTo, "message", "Community feedback recorded.");
 }
