@@ -278,6 +278,27 @@ h4 {
   text-decoration-thickness: 1px;
 }
 
+@media (max-width: 2160px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    row-gap: 0.95rem;
+  }
+
+  .topbar-links {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.8rem 1.15rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--line);
+  }
+
+  .topbar-actions {
+    align-self: center;
+  }
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
