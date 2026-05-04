@@ -14,6 +14,7 @@ import {
   updateOfferDiscountAction,
 } from "@/app/actions";
 import { CommentThread } from "@/components/community/comment-thread";
+import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
@@ -26,8 +27,9 @@ import {
   listOfferRecommendations,
   listRecommendableOffers,
 } from "@/lib/app-data";
+import { findEveryOrgTargetForCauseArea } from "@/lib/every-org";
 import { getFormMessage } from "@/lib/form-state";
-import { formatMode, formatPaymentCadence } from "@/lib/offers";
+import { formatMode, formatOffsetSummary, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 
@@ -88,6 +90,50 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
         ? await listRecommendableOffers(viewer.authUser.id, offer.id)
         : Promise.resolve([]),
     ]);
+  const relatedDonationTarget =
+    findEveryOrgTargetForCauseArea(offer.compromise_cause) ??
+    findEveryOrgTargetForCauseArea(offer.offered_cause) ??
+    findEveryOrgTargetForCauseArea(offer.requested_cause);
+  const offsetSummary =
+    offer.mode === "offset" && offer.donationOffset
+      ? formatOffsetSummary({
+          id: offer.id,
+          alias: offer.owner_alias,
+          mode: "offset",
+          offeredCause: offer.offered_cause,
+          requestedCause: offer.requested_cause,
+          offerAction: offer.offer_action,
+          requestAction: offer.request_action,
+          compromiseCause: offer.compromise_cause,
+          offerImpact: offer.offer_impact,
+          minCounterpartyImpact: offer.min_counterparty_impact,
+          verification: offer.verification,
+          duration: offer.duration,
+          paymentIntervalValue: offer.payment_interval_value,
+          paymentIntervalUnit:
+            offer.payment_interval_unit === "day" ||
+            offer.payment_interval_unit === "month" ||
+            offer.payment_interval_unit === "year"
+              ? offer.payment_interval_unit
+              : "none",
+          trustLevel: offer.trust_level,
+          notes: offer.notes,
+          baselineAmountUsd: offer.donationOffset.baseline_amount_cents / 100,
+          baselineOpposedCause: offer.donationOffset.baseline_opposed_cause,
+          requestedMatchingAmountUsd:
+            offer.donationOffset.requested_matching_amount_cents / 100,
+          requestedOpposedCause: offer.donationOffset.requested_opposed_cause,
+          compromiseDestinationId: offer.donationOffset.compromise_charity_id,
+          offsetRatio: offer.donationOffset.offset_ratio,
+          offsetTimeHorizon: offer.donationOffset.time_horizon,
+          offsetVerificationMethod: offer.donationOffset.verification_method,
+          unmatchedSurplusRule: offer.donationOffset.unmatched_surplus_rule,
+          evidenceUrl: offer.donationOffset.evidence_url,
+          moderationStatus: offer.donationOffset.moderation_status,
+          source: "Live offer",
+          createdAt: Date.parse(offer.created_at),
+        })
+      : null;
   const offerStructuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -228,6 +274,14 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </div>
         ) : null}
 
+        {offer.mode === "offset" && offer.donationOffset?.moderation_status === "flagged" ? (
+          <div className="status-banner status-banner-error">
+            This donation offset is publicly visible but flagged because the baseline donation is not
+            yet well verified. Ask for receipts, escrow confirmation, or a third-party audit before
+            relying on it.
+          </div>
+        ) : null}
+
         <section className="section section-white">
           <div className="detail-grid detail-grid-wide">
             <article className="panel detail-block">
@@ -259,8 +313,60 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                 </div>
                 <div>
                   <h3>Compromise destination</h3>
-                  <p>{offer.compromise_cause}</p>
+                  <p>
+                    {offer.mode === "offset" && offer.donationOffset?.compromiseCharity
+                      ? offer.donationOffset.compromiseCharity.name
+                      : offer.compromise_cause}
+                  </p>
                 </div>
+                {offer.mode === "offset" && offer.donationOffset ? (
+                  <div>
+                    <h3>Donation offset terms</h3>
+                    <p>
+                      Baseline: ${(offer.donationOffset.baseline_amount_cents / 100).toFixed(2)} from{" "}
+                      {offer.donationOffset.baseline_opposed_cause}
+                    </p>
+                    <p>
+                      Requested matching donation: $
+                      {(offer.donationOffset.requested_matching_amount_cents / 100).toFixed(2)} from{" "}
+                      {offer.donationOffset.requested_opposed_cause}
+                    </p>
+                    <p>
+                      {offsetSummary?.ratio ?? "1:1"} | {offsetSummary?.timeHorizon ?? "One-off"} |{" "}
+                      {offsetSummary?.verification ?? "Receipts uploaded"}
+                    </p>
+                    <p>{offsetSummary?.unmatchedRule}</p>
+                    {offer.donationOffset.evidence_url ? (
+                      <p>
+                        Evidence link:{" "}
+                        <a className="inline-link" href={offer.donationOffset.evidence_url}>
+                          open verification record
+                        </a>
+                      </p>
+                    ) : (
+                      <p>Evidence link not yet provided. This offer may remain flagged.</p>
+                    )}
+                  </div>
+                ) : null}
+                {relatedDonationTarget ? (
+                  <div className="related-donation-card">
+                    <h3>Direct donation route</h3>
+                    <p>
+                      This offer touches a cause area that currently has a verified Every.org
+                      route: {relatedDonationTarget.title}.
+                    </p>
+                    <div className="offer-actions">
+                      <EveryOrgDonateButton
+                        className="button button-secondary button-mini"
+                        label="Donate on Every.org"
+                        target={relatedDonationTarget}
+                      />
+                      <Link className="text-button" href="/donate">
+                        See all donation routes
+                      </Link>
+                    </div>
+                  </div>
+                ) : null}
                 <div>
                   <h3>Verification and term</h3>
                   <p>
@@ -325,7 +431,13 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
 
                   <div className="form-actions">
                     <button className="button button-primary" type="submit">
-                      {myInterest ? "Update response" : "Express interest"}
+                      {myInterest
+                        ? offer.mode === "offset"
+                          ? "Update offset commitment"
+                          : "Update response"
+                        : offer.mode === "offset"
+                          ? "Accept offset"
+                          : "Express interest"}
                     </button>
                     <Link className="button button-secondary" href="/dashboard">
                       Open dashboard
@@ -381,7 +493,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
 
                     <div className="form-actions">
                       <button className="button button-primary" type="submit">
-                        Continue without account
+                        {offer.mode === "offset" ? "Accept offset without account" : "Continue without account"}
                       </button>
                       <Link
                         className="button button-secondary"
@@ -463,7 +575,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                         </label>
                         <div className="form-actions">
                           <button className="button button-secondary button-mini" type="submit">
-                            Accept and create agreement
+                            {offer.mode === "offset"
+                              ? "Accept offset and record redirect"
+                              : "Accept and create agreement"}
                           </button>
                         </div>
                       </form>
@@ -486,7 +600,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                         </label>
                         <div className="form-actions">
                           <button className="button button-secondary button-mini" type="submit">
-                            Accept linked guest response
+                            {offer.mode === "offset"
+                              ? "Accept guest offset and record redirect"
+                              : "Accept linked guest response"}
                           </button>
                         </div>
                       </form>

@@ -6,7 +6,14 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffersPage, listOpenOffersPreview, OFFERS_PAGE_SIZE } from "@/lib/app-data";
 import type { OfferRecord } from "@/lib/app-data";
-import { formatMode, formatPaymentCadence } from "@/lib/offers";
+import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
+import {
+  formatDonationOffsetRatio,
+  formatDonationOffsetTimeHorizon,
+  formatDonationOffsetVerificationMethod,
+} from "@/lib/donation-offsets";
+import { findEveryOrgTargetForCauseArea } from "@/lib/every-org";
+import { FILTER_MODE_OPTIONS, formatMode, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -84,6 +91,16 @@ function parsePage(value: string | string[] | undefined) {
   return Number.isFinite(page) && page > 0 ? page : 1;
 }
 
+function parseMode(value: string | string[] | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  if (rawValue === "pledge" || rawValue === "offset" || rawValue === "payment") {
+    return rawValue;
+  }
+
+  return "all" as const;
+}
+
 function getCostEfficiencyScore(offer: OfferRecord) {
   if (offer.min_counterparty_impact <= 0) {
     return offer.offer_impact;
@@ -132,8 +149,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
   const page = parsePage(resolvedSearchParams.page);
+  const mode = parseMode(resolvedSearchParams.mode);
   const offersPage = hasSupabaseEnv()
-    ? await listOpenOffersPage(page, OFFERS_PAGE_SIZE)
+    ? await listOpenOffersPage(page, OFFERS_PAGE_SIZE, mode)
     : { items: [], page, pageSize: OFFERS_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
   const bestOfferCandidates = hasSupabaseEnv() ? await listOpenOffersPreview(120) : [];
   const offers = offersPage.items;
@@ -244,8 +262,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           ) : null}
 
           <div className="data-grid">
-            {bestOffersByCause.map((entry) =>
-              entry.offer ? (
+            {bestOffersByCause.map((entry) => {
+              const donationTarget = findEveryOrgTargetForCauseArea(entry.label);
+
+              return entry.offer ? (
                 <article key={entry.label} className="panel data-card">
                   <p className="detail-kicker">{entry.label}</p>
                   <h3>{entry.offer.offered_cause} for {entry.offer.requested_cause}</h3>
@@ -283,6 +303,13 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       ) : null}
                     </div>
                     <div className="offer-actions">
+                      {donationTarget ? (
+                        <EveryOrgDonateButton
+                          className="button button-secondary button-mini"
+                          label="Donate on Every.org"
+                          target={donationTarget}
+                        />
+                      ) : null}
                       <Link className="text-button" href={`/offers/${entry.offer.id}`}>
                         View offer
                       </Link>
@@ -298,14 +325,25 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   </p>
                   <div className="offer-footer">
                     <div className="offer-actions">
+                      {donationTarget ? (
+                        <EveryOrgDonateButton
+                          className="button button-secondary button-mini"
+                          label="Donate on Every.org"
+                          target={donationTarget}
+                        />
+                      ) : (
+                        <Link className="text-button" href="/donate">
+                          See donation routes
+                        </Link>
+                      )}
                       <Link className="text-button" href={viewer ? "/offers/new" : "/signup"}>
                         {viewer ? "Create the first offer" : "Create an account"}
                       </Link>
                     </div>
                   </div>
                 </article>
-              ),
-            )}
+              );
+            })}
           </div>
         </section>
 
@@ -317,6 +355,25 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               Each card links to a fuller dossier where visitors can inspect the terms and
               signed-in users can register interest.
             </p>
+          </div>
+
+          <div className="sort-tabs">
+            {FILTER_MODE_OPTIONS.map((option) => {
+              const href =
+                option.value === "all"
+                  ? "/offers"
+                  : `/offers?mode=${encodeURIComponent(option.value)}`;
+
+              return (
+                <Link
+                  key={option.value}
+                  className={`sort-tab ${mode === option.value ? "is-active" : ""}`}
+                  href={href}
+                >
+                  {option.label}
+                </Link>
+              );
+            })}
           </div>
 
           {formMessage ? (
@@ -357,14 +414,47 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     <span className="impact-pill">{offer.recommendationCount} recommendations</span>
                   </div>
                   <div className="offer-footer">
-                    <div className="tag-row">
-                      <span>{offer.verification}</span>
-                      <span>{offer.duration}</span>
-                      {offer.mode === "payment" ? (
-                        <span>{formatPaymentCadence(offer)}</span>
-                      ) : null}
-                    </div>
+                    {offer.mode === "offset" && offer.donationOffset ? (
+                      <div className="clean-stack">
+                        <p className="route-text">
+                          {offer.donationOffset.baseline_opposed_cause}: $
+                          {(offer.donationOffset.baseline_amount_cents / 100).toFixed(2)} | Requests $
+                          {(offer.donationOffset.requested_matching_amount_cents / 100).toFixed(2)} from{" "}
+                          {offer.donationOffset.requested_opposed_cause}
+                        </p>
+                        <p className="route-text">
+                          {offer.donationOffset.compromiseCharity?.name ?? offer.compromise_cause} |{" "}
+                          {formatDonationOffsetRatio(offer.donationOffset.offset_ratio)} |{" "}
+                          {formatDonationOffsetVerificationMethod(
+                            offer.donationOffset.verification_method,
+                          )}
+                        </p>
+                        <p className="route-text">
+                          {formatDonationOffsetTimeHorizon(offer.donationOffset.time_horizon)} |{" "}
+                          {offer.donationOffset.unmatched_surplus_rule.replaceAll("_", " ")}
+                        </p>
+                        {offer.donationOffset.moderation_status === "flagged" ? (
+                          <p className="route-text">
+                            Warning: baseline evidence is incomplete, so this offset is flagged for
+                            extra scrutiny.
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="tag-row">
+                        <span>{offer.verification}</span>
+                        <span>{offer.duration}</span>
+                        {offer.mode === "payment" ? (
+                          <span>{formatPaymentCadence(offer)}</span>
+                        ) : null}
+                      </div>
+                    )}
                     <div className="offer-actions">
+                      {offer.mode === "offset" ? (
+                        <Link className="button button-secondary button-mini" href={`/offers/${offer.id}#respond`}>
+                          Accept offset
+                        </Link>
+                      ) : null}
                       <Link className="text-button" href={`/offers/${offer.id}`}>
                         View offer
                       </Link>
@@ -385,7 +475,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           {offersPage.hasPreviousPage || offersPage.hasNextPage ? (
             <div className="offer-actions">
               {offersPage.hasPreviousPage ? (
-                <Link className="button button-secondary" href={`/offers?page=${offersPage.page - 1}`}>
+                <Link
+                  className="button button-secondary"
+                  href={`/offers?page=${offersPage.page - 1}${mode !== "all" ? `&mode=${mode}` : ""}`}
+                >
                   Previous page
                 </Link>
               ) : (
@@ -393,7 +486,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               )}
 
               {offersPage.hasNextPage ? (
-                <Link className="button button-secondary" href={`/offers?page=${offersPage.page + 1}`}>
+                <Link
+                  className="button button-secondary"
+                  href={`/offers?page=${offersPage.page + 1}${mode !== "all" ? `&mode=${mode}` : ""}`}
+                >
                   Next page
                 </Link>
               ) : null}

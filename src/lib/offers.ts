@@ -1,3 +1,18 @@
+import {
+  assessDonationOffsetModeration,
+  calculateDonationOffsetPreview,
+  createDefaultDonationOffsetFields,
+  formatDonationOffsetRatio,
+  formatDonationOffsetTimeHorizon,
+  formatDonationOffsetUnmatchedRule,
+  formatDonationOffsetVerificationMethod,
+  validateDonationOffsetFields,
+  type DonationOffsetModerationStatus,
+  type DonationOffsetTimeHorizon,
+  type DonationOffsetUnmatchedSurplusRule,
+  type DonationOffsetVerificationMethod,
+} from "@/lib/donation-offsets";
+
 export type OfferMode = "pledge" | "offset" | "payment";
 export type PaymentIntervalUnit = "none" | "day" | "month" | "year";
 export type FilterMode = OfferMode | "all";
@@ -20,6 +35,17 @@ export interface Offer {
   paymentIntervalUnit: PaymentIntervalUnit;
   trustLevel: number;
   notes: string;
+  baselineAmountUsd: number | null;
+  baselineOpposedCause: string;
+  requestedMatchingAmountUsd: number | null;
+  requestedOpposedCause: string;
+  compromiseDestinationId: string;
+  offsetRatio: number | null;
+  offsetTimeHorizon: DonationOffsetTimeHorizon;
+  offsetVerificationMethod: DonationOffsetVerificationMethod;
+  unmatchedSurplusRule: DonationOffsetUnmatchedSurplusRule;
+  evidenceUrl: string;
+  moderationStatus: DonationOffsetModerationStatus | null;
   source: string;
   createdAt: number;
 }
@@ -40,6 +66,16 @@ export interface OfferDraft {
   paymentIntervalUnit: PaymentIntervalUnit;
   trustLevel: number;
   notes: string;
+  baselineAmountUsd: number | null;
+  baselineOpposedCause: string;
+  requestedMatchingAmountUsd: number | null;
+  requestedOpposedCause: string;
+  compromiseDestinationId: string;
+  offsetRatio: number | null;
+  offsetTimeHorizon: DonationOffsetTimeHorizon;
+  offsetVerificationMethod: DonationOffsetVerificationMethod;
+  unmatchedSurplusRule: DonationOffsetUnmatchedSurplusRule;
+  evidenceUrl: string;
   counterfactualHonesty: boolean;
   policyPledge: boolean;
 }
@@ -54,6 +90,8 @@ export interface EvaluatedPair {
   offer: Offer;
   reciprocal: boolean;
   compromiseCompatible: boolean;
+  offsetRatioCompatible: boolean;
+  offsetTimingCompatible: boolean;
   impactCompatible: boolean;
   trustAligned: boolean;
   verificationAligned: boolean;
@@ -143,6 +181,8 @@ export const DEFAULT_FILTERS: OfferFilters = {
 };
 
 export function createDefaultOfferDraft(): OfferDraft {
+  const defaultOffsetFields = createDefaultDonationOffsetFields();
+
   return {
     alias: "",
     mode: "pledge",
@@ -159,6 +199,16 @@ export function createDefaultOfferDraft(): OfferDraft {
     paymentIntervalUnit: "none",
     trustLevel: 3,
     notes: "",
+    baselineAmountUsd: defaultOffsetFields.baselineAmountUsd,
+    baselineOpposedCause: defaultOffsetFields.baselineOpposedCause,
+    requestedMatchingAmountUsd: defaultOffsetFields.requestedMatchingAmountUsd,
+    requestedOpposedCause: defaultOffsetFields.requestedOpposedCause,
+    compromiseDestinationId: defaultOffsetFields.compromiseDestinationId,
+    offsetRatio: defaultOffsetFields.offsetRatio,
+    offsetTimeHorizon: defaultOffsetFields.timeHorizon,
+    offsetVerificationMethod: defaultOffsetFields.verificationMethod,
+    unmatchedSurplusRule: defaultOffsetFields.unmatchedSurplusRule,
+    evidenceUrl: "",
     counterfactualHonesty: false,
     policyPledge: false,
   };
@@ -182,6 +232,17 @@ export const SEED_OFFERS: Offer[] = [
     paymentIntervalUnit: "none",
     trustLevel: 3,
     notes: "I already care about poverty, but a reciprocal trade would let me buy much more animal welfare than I could create alone.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "receipts_uploaded",
+    unmatchedSurplusRule: "return_to_donors",
+    evidenceUrl: "",
+    moderationStatus: null,
     source: "Seeded example",
     createdAt: 1700000001000,
   },
@@ -202,6 +263,17 @@ export const SEED_OFFERS: Offer[] = [
     paymentIntervalUnit: "none",
     trustLevel: 3,
     notes: "The diet shift is worth it if it reliably increases poverty giving that I would not otherwise cause.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "receipts_uploaded",
+    unmatchedSurplusRule: "return_to_donors",
+    evidenceUrl: "",
+    moderationStatus: null,
     source: "Seeded example",
     createdAt: 1700000002000,
   },
@@ -222,6 +294,17 @@ export const SEED_OFFERS: Offer[] = [
     paymentIntervalUnit: "none",
     trustLevel: 2,
     notes: "I want a mixed trade that links a climate habit to a public-health action with light verification.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "receipts_uploaded",
+    unmatchedSurplusRule: "return_to_donors",
+    evidenceUrl: "",
+    moderationStatus: null,
     source: "Seeded example",
     createdAt: 1700000003000,
   },
@@ -242,6 +325,17 @@ export const SEED_OFFERS: Offer[] = [
     paymentIntervalUnit: "none",
     trustLevel: 2,
     notes: "This is a reciprocal mixed trade, not a shared moral consensus.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "receipts_uploaded",
+    unmatchedSurplusRule: "return_to_donors",
+    evidenceUrl: "",
+    moderationStatus: null,
     source: "Seeded example",
     createdAt: 1700000004000,
   },
@@ -262,6 +356,17 @@ export const SEED_OFFERS: Offer[] = [
     paymentIntervalUnit: "none",
     trustLevel: 4,
     notes: "If matched, this beats spending money on a zero-sum advocacy fight.",
+    baselineAmountUsd: 1000,
+    baselineOpposedCause: "Gun rights",
+    requestedMatchingAmountUsd: 1000,
+    requestedOpposedCause: "Gun control",
+    compromiseDestinationId: "givewell-top-charities-fund",
+    offsetRatio: 1,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "funds_in_escrow",
+    unmatchedSurplusRule: "donate_to_compromise_destination",
+    evidenceUrl: "https://example.com/rebecca-escrow-confirmation",
+    moderationStatus: "clear",
     source: "Seeded example",
     createdAt: 1700000005000,
   },
@@ -282,6 +387,17 @@ export const SEED_OFFERS: Offer[] = [
     paymentIntervalUnit: "none",
     trustLevel: 4,
     notes: "I still care most about policy, but matched redirection dominates cancelling out.",
+    baselineAmountUsd: 1000,
+    baselineOpposedCause: "Gun control",
+    requestedMatchingAmountUsd: 1000,
+    requestedOpposedCause: "Gun rights",
+    compromiseDestinationId: "givewell-top-charities-fund",
+    offsetRatio: 1,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "funds_in_escrow",
+    unmatchedSurplusRule: "donate_to_compromise_destination",
+    evidenceUrl: "https://example.com/christopher-escrow-confirmation",
+    moderationStatus: "clear",
     source: "Seeded example",
     createdAt: 1700000006000,
   },
@@ -302,6 +418,17 @@ export const SEED_OFFERS: Offer[] = [
     paymentIntervalUnit: "month",
     trustLevel: 4,
     notes: "For me, paying for a real dietary shift is worth the money if it changes behavior that would not have happened otherwise.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "receipts_uploaded",
+    unmatchedSurplusRule: "return_to_donors",
+    evidenceUrl: "",
+    moderationStatus: null,
     source: "Seeded example",
     createdAt: 1700000007000,
   },
@@ -322,6 +449,17 @@ export const SEED_OFFERS: Offer[] = [
     paymentIntervalUnit: "month",
     trustLevel: 4,
     notes: "I am already somewhat open to the diet, so a credible payment offer makes the switch prudentially worthwhile.",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "receipts_uploaded",
+    unmatchedSurplusRule: "return_to_donors",
+    evidenceUrl: "",
+    moderationStatus: null,
     source: "Seeded example",
     createdAt: 1700000008000,
   },
@@ -340,6 +478,27 @@ export function formatMode(mode: OfferMode) {
     default:
       return "Personal pledge swap";
   }
+}
+
+export function formatOffsetSummary(offer: Offer) {
+  if (offer.mode !== "offset") {
+    return null;
+  }
+
+  const preview = calculateDonationOffsetPreview({
+    baselineAmountUsd: offer.baselineAmountUsd,
+    requestedMatchingAmountUsd: offer.requestedMatchingAmountUsd,
+    offsetRatio: offer.offsetRatio,
+    unmatchedSurplusRule: offer.unmatchedSurplusRule,
+  });
+
+  return {
+    ratio: formatDonationOffsetRatio(offer.offsetRatio),
+    timeHorizon: formatDonationOffsetTimeHorizon(offer.offsetTimeHorizon),
+    verification: formatDonationOffsetVerificationMethod(offer.offsetVerificationMethod),
+    unmatchedRule: formatDonationOffsetUnmatchedRule(offer.unmatchedSurplusRule),
+    preview,
+  };
 }
 
 function pluralizeInterval(unit: Exclude<PaymentIntervalUnit, "none">, value: number) {
@@ -436,6 +595,11 @@ export function evaluatePair(selected: Offer, candidate: Offer): EvaluatedPair {
     selected.compromiseCause === "Not needed" ||
     candidate.compromiseCause === "Not needed" ||
     normalize(selected.compromiseCause) === normalize(candidate.compromiseCause);
+  const offsetRatioCompatible =
+    selected.mode !== "offset" ||
+    Math.abs((selected.offsetRatio ?? 1) - (candidate.offsetRatio ?? 1)) <= 0.25;
+  const offsetTimingCompatible =
+    selected.mode !== "offset" || selected.offsetTimeHorizon === candidate.offsetTimeHorizon;
 
   const impactCompatible =
     candidate.offerImpact >= selected.minCounterpartyImpact &&
@@ -453,6 +617,8 @@ export function evaluatePair(selected: Offer, candidate: Offer): EvaluatedPair {
   const score =
     (reciprocal ? 48 : sameMode ? 18 : 0) +
     (compromiseCompatible ? 8 : 0) +
+    (offsetRatioCompatible ? 5 : 0) +
+    (offsetTimingCompatible ? 4 : 0) +
     (impactCompatible ? 18 : 0) +
     Math.max(0, 10 - trustGap * 3) +
     (verificationAligned ? 6 : 0) +
@@ -463,6 +629,8 @@ export function evaluatePair(selected: Offer, candidate: Offer): EvaluatedPair {
     offer: candidate,
     reciprocal,
     compromiseCompatible,
+    offsetRatioCompatible,
+    offsetTimingCompatible,
     impactCompatible,
     trustAligned,
     verificationAligned,
@@ -505,6 +673,14 @@ export function gapReasons(pair: EvaluatedPair) {
     reasons.push("Different compromise destination");
   }
 
+  if (!pair.offsetRatioCompatible) {
+    reasons.push("Different offset ratio");
+  }
+
+  if (!pair.offsetTimingCompatible) {
+    reasons.push("Different offset horizon");
+  }
+
   if (!pair.trustAligned) {
     reasons.push("Trust intensity differs");
   }
@@ -519,6 +695,13 @@ export function gapReasons(pair: EvaluatedPair) {
 export function validateOfferDraft(draft: OfferDraft) {
   if (!draft.alias.trim() || !draft.offerAction.trim() || !draft.requestAction.trim()) {
     return "Alias, your action, and the requested action are required.";
+  }
+
+  if (draft.mode === "offset") {
+    const errors = validateDonationOffsetDraft(draft);
+    if (errors.length) {
+      return errors[0];
+    }
   }
 
   if (!draft.counterfactualHonesty || !draft.policyPledge) {
@@ -549,6 +732,34 @@ export function createOfferFromDraft(draft: OfferDraft): Offer {
     paymentIntervalUnit: draft.mode === "payment" ? draft.paymentIntervalUnit : "none",
     trustLevel: draft.trustLevel,
     notes: draft.notes.trim(),
+    baselineAmountUsd: draft.mode === "offset" ? draft.baselineAmountUsd : null,
+    baselineOpposedCause: draft.mode === "offset" ? draft.baselineOpposedCause : "",
+    requestedMatchingAmountUsd: draft.mode === "offset" ? draft.requestedMatchingAmountUsd : null,
+    requestedOpposedCause: draft.mode === "offset" ? draft.requestedOpposedCause : "",
+    compromiseDestinationId: draft.mode === "offset" ? draft.compromiseDestinationId : "",
+    offsetRatio: draft.mode === "offset" ? draft.offsetRatio : null,
+    offsetTimeHorizon: draft.mode === "offset" ? draft.offsetTimeHorizon : "one_off",
+    offsetVerificationMethod:
+      draft.mode === "offset" ? draft.offsetVerificationMethod : "receipts_uploaded",
+    unmatchedSurplusRule:
+      draft.mode === "offset" ? draft.unmatchedSurplusRule : "return_to_donors",
+    evidenceUrl: draft.mode === "offset" ? draft.evidenceUrl.trim() : "",
+    moderationStatus:
+      draft.mode === "offset"
+        ? assessDonationOffsetModeration({
+            baselineAmountUsd: draft.baselineAmountUsd,
+            baselineOpposedCause: draft.baselineOpposedCause,
+            requestedMatchingAmountUsd: draft.requestedMatchingAmountUsd,
+            requestedOpposedCause: draft.requestedOpposedCause,
+            compromiseDestinationId: draft.compromiseDestinationId,
+            offsetRatio: draft.offsetRatio,
+            timeHorizon: draft.offsetTimeHorizon,
+            verificationMethod: draft.offsetVerificationMethod,
+            unmatchedSurplusRule: draft.unmatchedSurplusRule,
+            description: [draft.offerAction, draft.requestAction, draft.notes].filter(Boolean).join("\n"),
+            evidenceUrl: draft.evidenceUrl,
+          }).status
+        : null,
     source: "Your local offer",
     createdAt: Date.now(),
   };
@@ -556,6 +767,7 @@ export function createOfferFromDraft(draft: OfferDraft): Offer {
 
 export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDraft {
   if (mode === "offset") {
+    const defaultOffsetFields = createDefaultDonationOffsetFields();
     return {
       ...draft,
       mode,
@@ -564,6 +776,19 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
       duration: "3 months",
       paymentIntervalValue: null,
       paymentIntervalUnit: "none",
+      baselineAmountUsd: draft.baselineAmountUsd ?? defaultOffsetFields.baselineAmountUsd,
+      baselineOpposedCause:
+        draft.baselineOpposedCause || defaultOffsetFields.baselineOpposedCause,
+      requestedMatchingAmountUsd:
+        draft.requestedMatchingAmountUsd ?? defaultOffsetFields.requestedMatchingAmountUsd,
+      requestedOpposedCause:
+        draft.requestedOpposedCause || defaultOffsetFields.requestedOpposedCause,
+      compromiseDestinationId:
+        draft.compromiseDestinationId || defaultOffsetFields.compromiseDestinationId,
+      offsetRatio: draft.offsetRatio ?? defaultOffsetFields.offsetRatio,
+      offsetTimeHorizon: draft.offsetTimeHorizon,
+      offsetVerificationMethod: draft.offsetVerificationMethod,
+      unmatchedSurplusRule: draft.unmatchedSurplusRule,
     };
   }
 
@@ -581,6 +806,16 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
       paymentIntervalValue: draft.paymentIntervalValue ?? 1,
       paymentIntervalUnit:
         draft.paymentIntervalUnit === "none" ? "month" : draft.paymentIntervalUnit,
+      baselineAmountUsd: null,
+      baselineOpposedCause: "",
+      requestedMatchingAmountUsd: null,
+      requestedOpposedCause: "",
+      compromiseDestinationId: "",
+      offsetRatio: null,
+      offsetTimeHorizon: "one_off",
+      offsetVerificationMethod: "receipts_uploaded",
+      unmatchedSurplusRule: "return_to_donors",
+      evidenceUrl: "",
     };
   }
 
@@ -591,7 +826,33 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
     verification: draft.verification === "Escrow-backed" ? "Annual receipts" : draft.verification,
     paymentIntervalValue: null,
     paymentIntervalUnit: "none",
+    baselineAmountUsd: null,
+    baselineOpposedCause: "",
+    requestedMatchingAmountUsd: null,
+    requestedOpposedCause: "",
+    compromiseDestinationId: "",
+    offsetRatio: null,
+    offsetTimeHorizon: "one_off",
+    offsetVerificationMethod: "receipts_uploaded",
+    unmatchedSurplusRule: "return_to_donors",
+    evidenceUrl: "",
   };
+}
+
+export function validateDonationOffsetDraft(draft: OfferDraft) {
+  return validateDonationOffsetFields({
+    baselineAmountUsd: draft.baselineAmountUsd,
+    baselineOpposedCause: draft.baselineOpposedCause,
+    requestedMatchingAmountUsd: draft.requestedMatchingAmountUsd,
+    requestedOpposedCause: draft.requestedOpposedCause,
+    compromiseDestinationId: draft.compromiseDestinationId,
+    offsetRatio: draft.offsetRatio,
+    timeHorizon: draft.offsetTimeHorizon,
+    verificationMethod: draft.offsetVerificationMethod,
+    unmatchedSurplusRule: draft.unmatchedSurplusRule,
+    description: [draft.offerAction, draft.requestAction, draft.notes].filter(Boolean).join("\n"),
+    evidenceUrl: draft.evidenceUrl,
+  });
 }
 
 export function loadLocalOffers() {

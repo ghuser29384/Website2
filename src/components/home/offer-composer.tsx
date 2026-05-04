@@ -1,8 +1,13 @@
 import type { FormEvent } from "react";
 
 import {
+  DONATION_OFFSET_TIME_HORIZON_OPTIONS,
+  DONATION_OFFSET_UNMATCHED_RULE_OPTIONS,
+  DONATION_OFFSET_VERIFICATION_OPTIONS,
+  getSelectableRegisteredCharities,
+} from "@/lib/donation-offsets";
+import {
   CAUSE_OPTIONS,
-  COMPROMISE_CAUSE_OPTIONS,
   DURATION_OPTIONS,
   OFFER_MODE_OPTIONS,
   PAYMENT_INTERVAL_UNIT_OPTIONS,
@@ -36,6 +41,7 @@ export function OfferComposer({
 }: OfferComposerProps) {
   const isOffset = draft.mode === "offset";
   const isPayment = draft.mode === "payment";
+  const charities = getSelectableRegisteredCharities();
 
   return (
     <form className="panel composer" onSubmit={onSubmit}>
@@ -164,20 +170,188 @@ export function OfferComposer({
           disabled={!isOffset}
           name="compromiseCause"
           value={draft.compromiseCause}
-          onChange={(event) =>
-            onFieldChange(
-              "compromiseCause",
-              readControlValue(event.target),
-            )
-          }
+          onChange={(event) => onFieldChange("compromiseCause", readControlValue(event.target))}
         >
-          {COMPROMISE_CAUSE_OPTIONS.map((cause) => (
-            <option key={cause} value={cause}>
-              {cause}
+          {charities.map((charity) => (
+            <option key={charity.id} value={charity.name}>
+              {charity.name}
             </option>
           ))}
         </select>
       </label>
+
+      {isOffset ? (
+        <div className="panel subtle-panel offset-fieldset">
+          <div className="field-grid">
+            <label className="field">
+              <span>Baseline donation amount</span>
+              <input
+                min={0.01}
+                name="baselineAmountUsd"
+                step="0.01"
+                type="number"
+                value={draft.baselineAmountUsd ?? 0}
+                onChange={(event) =>
+                  onFieldChange("baselineAmountUsd", Number(readControlValue(event.target)))
+                }
+              />
+              <small>What you would otherwise have donated to the opposed cause.</small>
+            </label>
+
+            <label className="field">
+              <span>Baseline opposed cause</span>
+              <select
+                name="baselineOpposedCause"
+                value={draft.baselineOpposedCause}
+                onChange={(event) =>
+                  onFieldChange("baselineOpposedCause", readControlValue(event.target))
+                }
+              >
+                {CAUSE_OPTIONS.map((cause) => (
+                  <option key={cause} value={cause}>
+                    {cause}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="field-grid">
+            <label className="field">
+              <span>Requested matching donation</span>
+              <input
+                min={0.01}
+                name="requestedMatchingAmountUsd"
+                step="0.01"
+                type="number"
+                value={draft.requestedMatchingAmountUsd ?? 0}
+                onChange={(event) =>
+                  onFieldChange("requestedMatchingAmountUsd", Number(readControlValue(event.target)))
+                }
+              />
+            </label>
+
+            <label className="field">
+              <span>Requested opposing cause</span>
+              <select
+                name="requestedOpposedCause"
+                value={draft.requestedOpposedCause}
+                onChange={(event) =>
+                  onFieldChange("requestedOpposedCause", readControlValue(event.target))
+                }
+              >
+                {CAUSE_OPTIONS.map((cause) => (
+                  <option key={cause} value={cause}>
+                    {cause}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="field-grid">
+            <label className="field">
+              <span>Compromise charity</span>
+              <select
+                name="compromiseDestinationId"
+                value={draft.compromiseDestinationId}
+                onChange={(event) =>
+                  onFieldChange("compromiseDestinationId", readControlValue(event.target))
+                }
+              >
+                {charities.map((charity) => (
+                  <option key={charity.id} value={charity.id}>
+                    {charity.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Offset ratio</span>
+              <input
+                min={0.01}
+                name="offsetRatio"
+                step="0.01"
+                type="number"
+                value={draft.offsetRatio ?? 1}
+                onChange={(event) =>
+                  onFieldChange("offsetRatio", Number(readControlValue(event.target)))
+                }
+              />
+              <small>How many counterparty dollars should match each $1 of your baseline donation.</small>
+            </label>
+          </div>
+
+          <div className="field-grid">
+            <label className="field">
+              <span>Time horizon</span>
+              <select
+                name="offsetTimeHorizon"
+                value={draft.offsetTimeHorizon}
+                onChange={(event) =>
+                  onFieldChange("offsetTimeHorizon", readControlValue(event.target))
+                }
+              >
+                {DONATION_OFFSET_TIME_HORIZON_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Verification method</span>
+              <select
+                name="offsetVerificationMethod"
+                value={draft.offsetVerificationMethod}
+                onChange={(event) =>
+                  onFieldChange("offsetVerificationMethod", readControlValue(event.target))
+                }
+              >
+                {DONATION_OFFSET_VERIFICATION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label className="field">
+            <span>Verification link</span>
+            <input
+              name="evidenceUrl"
+              placeholder="https://..."
+              type="url"
+              value={draft.evidenceUrl}
+              onChange={(event) => onFieldChange("evidenceUrl", readControlValue(event.target))}
+            />
+            <small>Receipt, escrow confirmation, or third-party audit link.</small>
+          </label>
+
+          <fieldset className="field">
+            <legend>Unmatched surplus rule</legend>
+            <div className="radio-stack">
+              {DONATION_OFFSET_UNMATCHED_RULE_OPTIONS.map((option) => (
+                <label className="radio-row" key={option.value}>
+                  <input
+                    checked={draft.unmatchedSurplusRule === option.value}
+                    name="unmatchedSurplusRule"
+                    type="radio"
+                    value={option.value}
+                    onChange={(event) =>
+                      onFieldChange("unmatchedSurplusRule", readControlValue(event.target))
+                    }
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        </div>
+      ) : null}
 
       <div className="meter-grid">
         <label className="field meter-field">

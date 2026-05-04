@@ -598,14 +598,17 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             <article className="panel concept-card">
               <h3>Donation offsets</h3>
               <p>
-                If opposed spending would largely cancel out, both sides can redirect money to a
-                compromise destination instead and each get a future closer to its own view.
+                If donations to opposed causes would cancel each other out, both sides can redirect
+                the matched portion to a mutually-supported charity.
               </p>
               <ul className="clean-list">
                 <li>Matched redirection instead of zero-sum spending</li>
-                <li>Named compromise destination and visible unmatched surplus</li>
+                <li>Named compromise charity, ratio, and surplus rule</li>
                 <li>Especially relevant for public-goods style conflicts</li>
               </ul>
+              <Link className="inline-link" href="/donation-offsets">
+                Learn more
+              </Link>
             </article>
 
             <article className="panel concept-card">

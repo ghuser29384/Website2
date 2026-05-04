@@ -7,6 +7,9 @@ import { createClient } from "@/lib/supabase/server";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
+type RegisteredCharityRow = Database["public"]["Tables"]["registered_charities"]["Row"];
+type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
+type DonationOffsetMatchRow = Database["public"]["Tables"]["donation_offset_matches"]["Row"];
 type InterestRow = Database["public"]["Tables"]["interests"]["Row"];
 type GuestInterestRow = Database["public"]["Tables"]["guest_interests"]["Row"];
 type AgreementRow = Database["public"]["Tables"]["agreements"]["Row"];
@@ -98,6 +101,7 @@ export interface OfferRecord extends OfferRow {
   recommendationCount: number;
   commentCount: number;
   isInCart: boolean;
+  donationOffset: (DonationOffsetOfferRow & { compromiseCharity: RegisteredCharityRow | null }) | null;
 }
 
 export interface InterestRecord extends InterestRow {
@@ -136,6 +140,10 @@ export interface AgreementRecord extends AgreementRow {
   payments: AgreementPaymentRow[];
   paymentSchedules: AgreementPaymentScheduleRow[];
   events: AgreementEventRow[];
+}
+
+export interface DonationOffsetMatchRecord extends DonationOffsetMatchRow {
+  offer: OfferRecord | null;
 }
 
 export interface OfferRecommendationRecord extends OfferRecommendationRow {
@@ -529,7 +537,14 @@ async function hydrateOffers(
   const supabase = await createClient();
   const offerIds = offers.map((offer) => offer.id);
   const ownerIds = [...new Set(offers.map((offer) => offer.owner_id))];
-  const [profileMap, { data: recommendations, error: recommendationsError }, { data: comments, error: commentsError }, cartResult] =
+  const [
+    profileMap,
+    { data: recommendations, error: recommendationsError },
+    { data: comments, error: commentsError },
+    cartResult,
+    { data: offsetOffers, error: offsetOffersError },
+    { data: charities, error: charitiesError },
+  ] =
     await Promise.all([
       getProfileSummaryMap(viewerId, ownerIds),
       supabase.from("offer_recommendations").select("*").in("recommended_offer_id", offerIds),
@@ -537,6 +552,8 @@ async function hydrateOffers(
       viewerId
         ? supabase.from("offer_carts").select("*").eq("user_id", viewerId).in("offer_id", offerIds)
         : Promise.resolve({ data: [] as OfferCartRow[], error: null }),
+      supabase.from("donation_offset_offers").select("*").in("offer_id", offerIds),
+      supabase.from("registered_charities").select("*"),
     ]);
 
   if (recommendationsError) {
@@ -547,6 +564,12 @@ async function hydrateOffers(
   }
   if (cartResult.error) {
     throw new Error(cartResult.error.message);
+  }
+  if (offsetOffersError) {
+    throw new Error(offsetOffersError.message);
+  }
+  if (charitiesError) {
+    throw new Error(charitiesError.message);
   }
 
   const recommendationCounts = new Map<string, number>();
@@ -562,6 +585,17 @@ async function hydrateOffers(
   const cartSet = new Set(
     ((cartResult.data ?? []) as OfferCartRow[]).map((row) => row.offer_id),
   );
+  const charityMap = new Map(
+    ((charities ?? []) as RegisteredCharityRow[]).map((row) => [row.id, row] as const),
+  );
+  const offsetOfferMap = new Map<string, DonationOffsetOfferRow & { compromiseCharity: RegisteredCharityRow | null }>();
+
+  for (const row of (offsetOffers ?? []) as DonationOffsetOfferRow[]) {
+    offsetOfferMap.set(row.offer_id, {
+      ...row,
+      compromiseCharity: charityMap.get(row.compromise_charity_id) ?? null,
+    });
+  }
 
   return offers.map((offer) => ({
     ...offer,
@@ -569,6 +603,7 @@ async function hydrateOffers(
     recommendationCount: recommendationCounts.get(offer.id) ?? 0,
     commentCount: commentCounts.get(offer.id) ?? 0,
     isInCart: cartSet.has(offer.id),
+    donationOffset: offsetOfferMap.get(offer.id) ?? null,
   }));
 }
 
@@ -709,6 +744,7 @@ export async function requireViewer(nextPath?: string) {
 export async function listOpenOffersPage(
   page = 1,
   pageSize = OFFERS_PAGE_SIZE,
+  mode: OfferRow["mode"] | "all" = "all",
 ): Promise<PaginatedResult<OfferRecord>> {
   if (!hasSupabaseEnv()) {
     return buildPaginatedResult([], normalizePage(page), pageSize);
@@ -717,10 +753,16 @@ export async function listOpenOffersPage(
   const normalizedPage = normalizePage(page);
   const offset = (normalizedPage - 1) * pageSize;
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("offers")
     .select("*")
-    .eq("status", "open")
+    .eq("status", "open");
+
+  if (mode !== "all") {
+    query = query.eq("mode", mode);
+  }
+
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .order("id", { ascending: true })
     .range(offset, offset + pageSize);
@@ -734,16 +776,22 @@ export async function listOpenOffersPage(
   return buildPaginatedResult(hydrated, normalizedPage, pageSize);
 }
 
-export async function listOpenOffersPreview(limit = 120) {
+export async function listOpenOffersPreview(limit = 120, mode: OfferRow["mode"] | "all" = "all") {
   if (!hasSupabaseEnv()) {
     return [] as OfferRecord[];
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("offers")
     .select("*")
-    .eq("status", "open")
+    .eq("status", "open");
+
+  if (mode !== "all") {
+    query = query.eq("mode", mode);
+  }
+
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .order("id", { ascending: true })
     .limit(limit);

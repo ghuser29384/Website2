@@ -9,7 +9,8 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "latest",
@@ -25,6 +26,7 @@
     "@types/react-dom": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.3"
   }
 }

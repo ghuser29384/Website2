@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { isAdminEmail } from "@/lib/admin";
+import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
+import { EVERY_ORG_CURATED_TARGETS } from "@/lib/every-org";
 import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -307,6 +309,25 @@ export default async function PriorityCorrectionFundPage({
                     Use this for off-platform charitable donations or other monetary contributions
                     you want included in cause-priority inference.
                   </p>
+                </div>
+                <div className="donation-inline-strip">
+                  <p className="route-text">
+                    Need a direct giving route first? Use Every.org, then log the donation below
+                    so it enters the Priority Correction Fund calculation.
+                  </p>
+                  <div className="offer-actions">
+                    {EVERY_ORG_CURATED_TARGETS.map((target) => (
+                      <EveryOrgDonateButton
+                        key={target.id}
+                        className="button button-secondary button-mini"
+                        label={`Donate: ${target.causeAreas[0]}`}
+                        target={target}
+                      />
+                    ))}
+                    <Link className="text-button" href="/donate">
+                      See all donation routes
+                    </Link>
+                  </div>
                 </div>
                 <form action={logImpactContributionAction} className="stack-form">
                   <input name="return_to" type="hidden" value="/priority-correction-fund" />

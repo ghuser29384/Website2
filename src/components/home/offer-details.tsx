@@ -1,5 +1,11 @@
 import type { EvaluatedPair, Offer } from "@/lib/offers";
-import { exactReasons, formatMode, formatPaymentCadence, gapReasons } from "@/lib/offers";
+import {
+  exactReasons,
+  formatMode,
+  formatOffsetSummary,
+  formatPaymentCadence,
+  gapReasons,
+} from "@/lib/offers";
 
 interface OfferDetailsProps {
   selected: Offer | null;
@@ -8,6 +14,8 @@ interface OfferDetailsProps {
 }
 
 export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsProps) {
+  const offsetSummary = selected ? formatOffsetSummary(selected) : null;
+
   return (
     <>
       <article className="panel details-panel">
@@ -53,10 +61,38 @@ export function OfferDetails({ selected, matches, onFocusOffer }: OfferDetailsPr
                 </div>
               </div>
 
-              <div className="detail-block">
-                <p className="detail-kicker">Compromise destination</p>
-                <p>{selected.mode === "offset" ? selected.compromiseCause : "Not needed"}</p>
-              </div>
+              {selected.mode === "offset" ? (
+                <div className="detail-block">
+                  <p className="detail-kicker">Offset structure</p>
+                  <p>
+                    Redirect {selected.baselineAmountUsd ? `$${selected.baselineAmountUsd}` : "the baseline amount"}{" "}
+                    from {selected.baselineOpposedCause} and request{" "}
+                    {selected.requestedMatchingAmountUsd ? `$${selected.requestedMatchingAmountUsd}` : "the matching amount"}{" "}
+                    from {selected.requestedOpposedCause}.
+                  </p>
+                  <p>Compromise destination: {selected.compromiseCause}</p>
+                  {offsetSummary ? (
+                    <>
+                      <p>
+                        Ratio {offsetSummary.ratio} | {offsetSummary.timeHorizon} |{" "}
+                        {offsetSummary.verification}
+                      </p>
+                      <p>
+                        Redirect summary: ${offsetSummary.preview.matchedBaselineUsd.toFixed(2)} from
+                        the baseline side, ${offsetSummary.preview.matchedCounterpartyUsd.toFixed(2)} from
+                        the counterparty side, ${offsetSummary.preview.compromiseTotalUsd.toFixed(2)} to
+                        the compromise destination.
+                      </p>
+                      <p>{offsetSummary.unmatchedRule}</p>
+                    </>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="detail-block">
+                  <p className="detail-kicker">Compromise destination</p>
+                  <p>{selected.compromiseCause}</p>
+                </div>
+              )}
 
               <div className="detail-block">
                 <p className="detail-kicker">Notes</p>

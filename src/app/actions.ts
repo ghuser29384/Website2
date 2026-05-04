@@ -20,6 +20,16 @@ import {
 } from "@/lib/background-networking";
 import { getSafeInternalPath } from "@/lib/paths";
 import {
+  assessDonationOffsetModeration,
+  calculateDonationOffsetPreview,
+  findRegisteredCharityById,
+  formatDonationOffsetUnmatchedRule,
+  type DonationOffsetFields,
+  type DonationOffsetTimeHorizon,
+  type DonationOffsetUnmatchedSurplusRule,
+  type DonationOffsetVerificationMethod,
+} from "@/lib/donation-offsets";
+import {
   finalizePriorityCorrectionCycle,
   parseStructuredLines,
   publishPriorityCorrectionCycleForMonth,
@@ -40,6 +50,8 @@ type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Ro
 type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Insert"];
 type ClarificationQuestionInsert = Database["public"]["Tables"]["clarification_questions"]["Insert"];
 type AgreementEventInsert = Database["public"]["Tables"]["agreement_events"]["Insert"];
+type DonationOffsetOfferInsert = Database["public"]["Tables"]["donation_offset_offers"]["Insert"];
+type DonationOffsetMatchInsert = Database["public"]["Tables"]["donation_offset_matches"]["Insert"];
 type AgreementPaymentScheduleInsert = Database["public"]["Tables"]["agreement_payment_schedules"]["Insert"];
 type PersonalDelegateInsert = Database["public"]["Tables"]["personal_delegates"]["Insert"];
 type SourceConnectionInsert = Database["public"]["Tables"]["source_connections"]["Insert"];
@@ -82,6 +94,22 @@ function readOptional(formData: FormData, key: string) {
 function readBoolean(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim().toLowerCase();
   return value === "on" || value === "true" || value === "1" || value === "yes";
+}
+
+function readPositiveMoneyAmount(formData: FormData, key: string) {
+  const rawValue = readOptional(formData, key);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  const parsed = Number(rawValue);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Number(parsed.toFixed(2));
 }
 
 function readStringList(formData: FormData, key: string) {
@@ -232,6 +260,34 @@ function readBoundedInt(
   }
 
   return Math.min(max, Math.max(min, Math.round(parsedValue)));
+}
+
+function convertUsdToCents(amountUsd: number | null | undefined) {
+  if (!Number.isFinite(amountUsd ?? NaN) || !amountUsd || amountUsd <= 0) {
+    return 0;
+  }
+
+  return Math.round(Number(amountUsd) * 100);
+}
+
+function normalizeDonationOffsetTimeHorizon(value: string): DonationOffsetTimeHorizon {
+  return value === "recurring" ? "recurring" : "one_off";
+}
+
+function normalizeDonationOffsetVerificationMethod(value: string): DonationOffsetVerificationMethod {
+  if (value === "funds_in_escrow" || value === "third_party_audit") {
+    return value;
+  }
+
+  return "receipts_uploaded";
+}
+
+function normalizeDonationOffsetUnmatchedRule(value: string): DonationOffsetUnmatchedSurplusRule {
+  if (value === "donate_to_compromise_destination" || value === "split_evenly") {
+    return value;
+  }
+
+  return "return_to_donors";
 }
 
 const blockedWishPatterns: Array<{ pattern: RegExp; label: string }> = [
@@ -1233,6 +1289,7 @@ export async function createOfferAction(formData: FormData) {
   const normalizedMode = normalizeOfferMode(mode);
   const offeredCause = readRequired(formData, "offered_cause");
   const requestedCause = readRequired(formData, "requested_cause");
+  const ownerAliasOverride = readOptional(formData, "owner_alias_override");
   const offerAction = readRequired(formData, "offer_action");
   const requestAction = readRequired(formData, "request_action");
   const compromiseCause = readRequired(formData, "compromise_cause") || "Not needed";
@@ -1265,12 +1322,86 @@ export async function createOfferAction(formData: FormData) {
     min: 1,
     max: 5,
   });
+  const baselineAmountUsd = normalizedMode === "offset"
+    ? readPositiveMoneyAmount(formData, "baseline_amount_usd")
+    : null;
+  const baselineOpposedCause = normalizedMode === "offset"
+    ? readRequired(formData, "baseline_opposed_cause")
+    : "";
+  const requestedMatchingAmountUsd = normalizedMode === "offset"
+    ? readPositiveMoneyAmount(formData, "requested_matching_amount_usd")
+    : null;
+  const requestedOpposedCause = normalizedMode === "offset"
+    ? readRequired(formData, "requested_opposed_cause")
+    : "";
+  const compromiseDestinationId = normalizedMode === "offset"
+    ? readRequired(formData, "compromise_destination_id")
+    : "";
+  const offsetRatioRaw = normalizedMode === "offset" ? Number(readOptional(formData, "offset_ratio")) : 1;
+  const offsetRatio = Number.isFinite(offsetRatioRaw) && offsetRatioRaw > 0
+    ? Number(offsetRatioRaw.toFixed(4))
+    : null;
+  const offsetTimeHorizon = normalizedMode === "offset"
+    ? normalizeDonationOffsetTimeHorizon(readOptional(formData, "offset_time_horizon"))
+    : "one_off";
+  const offsetVerificationMethod = normalizedMode === "offset"
+    ? normalizeDonationOffsetVerificationMethod(readOptional(formData, "offset_verification_method"))
+    : "receipts_uploaded";
+  const unmatchedSurplusRule = normalizedMode === "offset"
+    ? normalizeDonationOffsetUnmatchedRule(readOptional(formData, "unmatched_surplus_rule"))
+    : "return_to_donors";
+  const evidenceUrl = normalizedMode === "offset" ? readOptional(formData, "offset_evidence_url") : "";
 
   if (!offerAction || !requestAction || !offeredCause || !requestedCause) {
     redirectWithMessage("/offers/new", "error", "Complete all required offer fields.");
   }
 
-  const ownerAlias = deriveDisplayName(viewer.authUser, viewer.profile);
+  let donationOffsetFields: DonationOffsetFields | null = null;
+
+  if (normalizedMode === "offset") {
+    donationOffsetFields = {
+      baselineAmountUsd,
+      baselineOpposedCause,
+      requestedMatchingAmountUsd,
+      requestedOpposedCause,
+      compromiseDestinationId,
+      offsetRatio,
+      timeHorizon: offsetTimeHorizon,
+      verificationMethod: offsetVerificationMethod,
+      unmatchedSurplusRule,
+      description: [offerAction, requestAction, notes].filter(Boolean).join("\n"),
+      evidenceUrl,
+    };
+
+    const charity = findRegisteredCharityById(compromiseDestinationId);
+    const moderation = assessDonationOffsetModeration(donationOffsetFields, charity);
+
+    if (
+      !baselineAmountUsd ||
+      !requestedMatchingAmountUsd ||
+      !baselineOpposedCause ||
+      !requestedOpposedCause ||
+      !compromiseDestinationId ||
+      !offsetRatio
+    ) {
+      redirectWithMessage("/offers/new", "error", "Complete all required donation offset fields.");
+    }
+
+    if (!charity?.isActive) {
+      redirectWithMessage("/offers/new", "error", "Choose a valid registered compromise destination.");
+    }
+
+    if (moderation.status === "blocked") {
+      redirectWithMessage(
+        "/offers/new",
+        "error",
+        moderation.reasons[0] ??
+          "This donation offset could not be published because it violates the platform safeguards.",
+      );
+    }
+  }
+
+  const ownerAlias = ownerAliasOverride || deriveDisplayName(viewer.authUser, viewer.profile);
   await ensureAccountRowsForUser(viewer.authUser, supabase);
 
   const { data, error } = await supabase
@@ -1303,6 +1434,37 @@ export async function createOfferAction(formData: FormData) {
       mode: normalizedMode,
     });
     redirectWithMessage("/offers/new", "error", error?.message ?? "Unable to create offer.");
+  }
+
+  if (normalizedMode === "offset" && donationOffsetFields) {
+    const moderation = assessDonationOffsetModeration(donationOffsetFields);
+    const offsetInsert: DonationOffsetOfferInsert = {
+      offer_id: data.id,
+      baseline_amount_cents: convertUsdToCents(donationOffsetFields.baselineAmountUsd),
+      baseline_opposed_cause: donationOffsetFields.baselineOpposedCause,
+      requested_matching_amount_cents: convertUsdToCents(
+        donationOffsetFields.requestedMatchingAmountUsd,
+      ),
+      requested_opposed_cause: donationOffsetFields.requestedOpposedCause,
+      compromise_charity_id: donationOffsetFields.compromiseDestinationId,
+      offset_ratio: donationOffsetFields.offsetRatio ?? 1,
+      time_horizon: donationOffsetFields.timeHorizon,
+      verification_method: donationOffsetFields.verificationMethod,
+      unmatched_surplus_rule: donationOffsetFields.unmatchedSurplusRule,
+      evidence_url: donationOffsetFields.evidenceUrl,
+      moderation_status: moderation.status,
+      moderation_notes: moderation.reasons.join(" "),
+    };
+
+    const { error: offsetError } = await supabase.from("donation_offset_offers").insert(offsetInsert);
+
+    if (offsetError) {
+      logSupabaseActionError("Failed to create donation offset details", offsetError, {
+        offerId: data.id,
+        ownerId: viewer.authUser.id,
+      });
+      redirectWithMessage("/offers/new", "error", offsetError.message);
+    }
   }
 
   revalidatePath("/offers");
@@ -4718,6 +4880,58 @@ export async function acceptInterestAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", agreementError.message);
   }
 
+  if (offer.mode === "offset") {
+    const { data: offsetDetails, error: offsetError } = await supabase
+      .from("donation_offset_offers")
+      .select("*")
+      .eq("offer_id", offerId)
+      .maybeSingle();
+
+    if (offsetError || !offsetDetails) {
+      logSupabaseActionError("Failed to load donation offset details during acceptance", offsetError, {
+        offerId,
+        interestId,
+      });
+      redirectWithMessage(
+        returnTo,
+        "error",
+        offsetError?.message ?? "Donation offset details were missing for this offer.",
+      );
+    }
+
+    const preview = calculateDonationOffsetPreview({
+      baselineAmountUsd: offsetDetails.baseline_amount_cents / 100,
+      requestedMatchingAmountUsd: offsetDetails.requested_matching_amount_cents / 100,
+      offsetRatio: offsetDetails.offset_ratio,
+      unmatchedSurplusRule: offsetDetails.unmatched_surplus_rule,
+    });
+
+    const matchInsert: DonationOffsetMatchInsert = {
+      offer_id: offerId,
+      interest_id: interestId,
+      owner_profile_id: viewer.authUser.id,
+      counterparty_profile_id: interest.user_id,
+      matched_baseline_cents: convertUsdToCents(preview.matchedBaselineUsd),
+      matched_counterparty_cents: convertUsdToCents(preview.matchedCounterpartyUsd),
+      compromise_total_cents: convertUsdToCents(preview.compromiseTotalUsd),
+      unmatched_baseline_cents: convertUsdToCents(preview.unmatchedBaselineUsd),
+      unmatched_counterparty_cents: convertUsdToCents(preview.unmatchedCounterpartyUsd),
+      status: "completed",
+      owner_evidence_url: offsetDetails.evidence_url,
+      compromise_evidence_url: offsetDetails.evidence_url,
+    };
+
+    const { error: matchError } = await supabase.from("donation_offset_matches").insert(matchInsert);
+
+    if (matchError) {
+      logSupabaseActionError("Failed to record donation offset match", matchError, {
+        offerId,
+        interestId,
+      });
+      redirectWithMessage(returnTo, "error", matchError.message);
+    }
+  }
+
   const { data: responderProfile } = await supabase
     .from("profiles")
     .select("email, display_name")
@@ -4883,6 +5097,63 @@ export async function acceptGuestInterestAction(formData: FormData) {
       responderId: guestInterest.claimed_by_profile_id,
     });
     redirectWithMessage(returnTo, "error", agreementError.message);
+  }
+
+  if (offer.mode === "offset") {
+    const { data: offsetDetails, error: offsetError } = await supabase
+      .from("donation_offset_offers")
+      .select("*")
+      .eq("offer_id", offerId)
+      .maybeSingle();
+
+    if (offsetError || !offsetDetails) {
+      logSupabaseActionError(
+        "Failed to load donation offset details during guest acceptance",
+        offsetError,
+        {
+          offerId,
+          guestInterestId,
+        },
+      );
+      redirectWithMessage(
+        returnTo,
+        "error",
+        offsetError?.message ?? "Donation offset details were missing for this offer.",
+      );
+    }
+
+    const preview = calculateDonationOffsetPreview({
+      baselineAmountUsd: offsetDetails.baseline_amount_cents / 100,
+      requestedMatchingAmountUsd: offsetDetails.requested_matching_amount_cents / 100,
+      offsetRatio: offsetDetails.offset_ratio,
+      unmatchedSurplusRule: offsetDetails.unmatched_surplus_rule,
+    });
+
+    const matchInsert: DonationOffsetMatchInsert = {
+      offer_id: offerId,
+      guest_interest_id: guestInterestId,
+      owner_profile_id: viewer.authUser.id,
+      counterparty_profile_id: guestInterest.claimed_by_profile_id,
+      counterparty_email: guestInterest.contact_email,
+      matched_baseline_cents: convertUsdToCents(preview.matchedBaselineUsd),
+      matched_counterparty_cents: convertUsdToCents(preview.matchedCounterpartyUsd),
+      compromise_total_cents: convertUsdToCents(preview.compromiseTotalUsd),
+      unmatched_baseline_cents: convertUsdToCents(preview.unmatchedBaselineUsd),
+      unmatched_counterparty_cents: convertUsdToCents(preview.unmatchedCounterpartyUsd),
+      status: "completed",
+      owner_evidence_url: offsetDetails.evidence_url,
+      compromise_evidence_url: offsetDetails.evidence_url,
+    };
+
+    const { error: matchError } = await supabase.from("donation_offset_matches").insert(matchInsert);
+
+    if (matchError) {
+      logSupabaseActionError("Failed to record guest donation offset match", matchError, {
+        offerId,
+        guestInterestId,
+      });
+      redirectWithMessage(returnTo, "error", matchError.message);
+    }
   }
 
   await queueEmailOutbox({

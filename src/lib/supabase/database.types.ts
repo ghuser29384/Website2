@@ -128,6 +128,112 @@ export interface Database {
         };
         Relationships: [];
       };
+      registered_charities: {
+        Row: {
+          id: string;
+          name: string;
+          cause_area: string;
+          website_url: string;
+          summary: string;
+          is_active: boolean;
+          is_political_campaign: boolean;
+          selectable: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          name: string;
+          cause_area?: string;
+          website_url?: string;
+          summary?: string;
+          is_active?: boolean;
+          is_political_campaign?: boolean;
+          selectable?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          name?: string;
+          cause_area?: string;
+          website_url?: string;
+          summary?: string;
+          is_active?: boolean;
+          is_political_campaign?: boolean;
+          selectable?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      donation_offset_offers: {
+        Row: {
+          offer_id: string;
+          baseline_amount_cents: number;
+          baseline_opposed_cause: string;
+          requested_matching_amount_cents: number;
+          requested_opposed_cause: string;
+          compromise_charity_id: string;
+          offset_ratio: number;
+          time_horizon: "one_off" | "recurring";
+          verification_method:
+            | "receipts_uploaded"
+            | "funds_in_escrow"
+            | "third_party_audit";
+          unmatched_surplus_rule:
+            | "return_to_donors"
+            | "donate_to_compromise_destination"
+            | "split_evenly";
+          evidence_url: string;
+          moderation_status: "clear" | "flagged" | "blocked";
+          moderation_notes: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          offer_id: string;
+          baseline_amount_cents: number;
+          baseline_opposed_cause?: string;
+          requested_matching_amount_cents: number;
+          requested_opposed_cause?: string;
+          compromise_charity_id: string;
+          offset_ratio: number;
+          time_horizon: "one_off" | "recurring";
+          verification_method:
+            | "receipts_uploaded"
+            | "funds_in_escrow"
+            | "third_party_audit";
+          unmatched_surplus_rule:
+            | "return_to_donors"
+            | "donate_to_compromise_destination"
+            | "split_evenly";
+          evidence_url?: string;
+          moderation_status?: "clear" | "flagged" | "blocked";
+          moderation_notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          baseline_amount_cents?: number;
+          baseline_opposed_cause?: string;
+          requested_matching_amount_cents?: number;
+          requested_opposed_cause?: string;
+          compromise_charity_id?: string;
+          offset_ratio?: number;
+          time_horizon?: "one_off" | "recurring";
+          verification_method?:
+            | "receipts_uploaded"
+            | "funds_in_escrow"
+            | "third_party_audit";
+          unmatched_surplus_rule?:
+            | "return_to_donors"
+            | "donate_to_compromise_destination"
+            | "split_evenly";
+          evidence_url?: string;
+          moderation_status?: "clear" | "flagged" | "blocked";
+          moderation_notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       interests: {
         Row: {
           id: string;
@@ -192,6 +298,68 @@ export interface Database {
           message?: string;
           status?: "pending" | "accepted" | "declined" | "withdrawn";
           claimed_by_profile_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      donation_offset_matches: {
+        Row: {
+          id: string;
+          offer_id: string;
+          interest_id: string | null;
+          guest_interest_id: string | null;
+          owner_profile_id: string;
+          counterparty_profile_id: string | null;
+          counterparty_email: string | null;
+          matched_baseline_cents: number;
+          matched_counterparty_cents: number;
+          compromise_total_cents: number;
+          unmatched_baseline_cents: number;
+          unmatched_counterparty_cents: number;
+          status: "matched" | "completed" | "cancelled";
+          owner_evidence_url: string;
+          counterparty_evidence_url: string;
+          compromise_evidence_url: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          offer_id: string;
+          interest_id?: string | null;
+          guest_interest_id?: string | null;
+          owner_profile_id: string;
+          counterparty_profile_id?: string | null;
+          counterparty_email?: string | null;
+          matched_baseline_cents: number;
+          matched_counterparty_cents: number;
+          compromise_total_cents: number;
+          unmatched_baseline_cents?: number;
+          unmatched_counterparty_cents?: number;
+          status?: "matched" | "completed" | "cancelled";
+          owner_evidence_url?: string;
+          counterparty_evidence_url?: string;
+          compromise_evidence_url?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          offer_id?: string;
+          interest_id?: string | null;
+          guest_interest_id?: string | null;
+          owner_profile_id?: string;
+          counterparty_profile_id?: string | null;
+          counterparty_email?: string | null;
+          matched_baseline_cents?: number;
+          matched_counterparty_cents?: number;
+          compromise_total_cents?: number;
+          unmatched_baseline_cents?: number;
+          unmatched_counterparty_cents?: number;
+          status?: "matched" | "completed" | "cancelled";
+          owner_evidence_url?: string;
+          counterparty_evidence_url?: string;
+          compromise_evidence_url?: string;
+          created_at?: string;
           updated_at?: string;
         };
         Relationships: [];
