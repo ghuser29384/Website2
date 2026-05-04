@@ -24,6 +24,7 @@ import {
   calculateDonationOffsetPreview,
   findRegisteredCharityById,
   formatDonationOffsetUnmatchedRule,
+  validateDonationOffsetFields,
   type DonationOffsetFields,
   type DonationOffsetParticipationMode,
   type DonationOffsetPoolSide,
