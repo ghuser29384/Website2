@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   assessDonationOffsetModeration,
   calculateDonationOffsetPreview,
+  calculateDonationOffsetPoolProgress,
   createDefaultDonationOffsetFields,
   validateDonationOffsetFields,
 } from "@/lib/donation-offsets";
@@ -74,4 +75,51 @@ test("ratio calculation correctly computes matched and unmatched portions", () =
   assert.equal(preview.compromiseTotalUsd, 200);
   assert.equal(preview.unmatchedBaselineUsd, 20);
   assert.equal(preview.unmatchedCounterpartyUsd, 0);
+});
+
+test("pool validation requires side, pool identity, and deadline", () => {
+  const draft = createDefaultDonationOffsetFields();
+  const errors = validateDonationOffsetFields({
+    ...draft,
+    participationMode: "pool",
+    poolId: "",
+    poolName: "",
+    poolSide: "",
+    assuranceDeadline: "",
+  });
+
+  assert.ok(errors.includes("Choose which side of the offset pool you are joining."));
+  assert.ok(errors.includes("Choose an existing pool or name a new offset pool."));
+  assert.ok(errors.includes("Pool offsets should include an assurance deadline."));
+});
+
+test("pool progress reaches assurance once matched compromise exceeds threshold", () => {
+  const progress = calculateDonationOffsetPoolProgress({
+    sideATotalUsd: 600,
+    sideBTotalUsd: 650,
+    offsetRatio: 1,
+    assuranceMinimumUsd: 1000,
+    deadlineAt: "2099-01-01T00:00:00.000Z",
+  });
+
+  assert.equal(progress.assuranceReached, true);
+  assert.equal(progress.status, "assurance_met");
+  assert.equal(progress.matchedCompromiseUsd, 1200);
+  assert.equal(progress.assuranceProgressPct, 100);
+});
+
+test("pool moderation flags missing deadline when pool mode is selected", () => {
+  const draft = createDefaultDonationOffsetFields();
+  const moderation = assessDonationOffsetModeration({
+    ...draft,
+    participationMode: "pool",
+    poolName: "Example pooled offset",
+    poolSide: "side_a",
+    description: "Pool commitments redirect opposed donations toward a shared compromise charity.",
+    evidenceUrl: "https://example.com/proof",
+    assuranceDeadline: "",
+  });
+
+  assert.equal(moderation.status, "flagged");
+  assert.match(moderation.reasons.join(" "), /deadline/i);
 });

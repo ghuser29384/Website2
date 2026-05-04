@@ -5,14 +5,20 @@ import Link from "next/link";
 
 import { createOfferAction } from "@/app/actions";
 import {
+  calculateDonationOffsetPoolProgress,
   calculateDonationOffsetPreview,
   createDefaultDonationOffsetFields,
+  formatDonationOffsetPoolStatus,
   formatDonationOffsetRatio,
   formatDonationOffsetTimeHorizon,
   formatDonationOffsetUnmatchedRule,
   formatDonationOffsetVerificationMethod,
+  getConsensusCharities,
+  getDonationOffsetComplexityWarnings,
   getSelectableRegisteredCharities,
   validateDonationOffsetFields,
+  DONATION_OFFSET_PARTICIPATION_MODE_OPTIONS,
+  DONATION_OFFSET_POOL_SIDE_OPTIONS,
   DONATION_OFFSET_TIME_HORIZON_OPTIONS,
   DONATION_OFFSET_UNMATCHED_RULE_OPTIONS,
   DONATION_OFFSET_VERIFICATION_OPTIONS,
@@ -27,6 +33,29 @@ import {
   type OfferMode,
 } from "@/lib/offers";
 
+interface DonationOffsetPoolOption {
+  id: string;
+  name: string;
+  compromiseCharityId: string;
+  compromiseCharityName: string;
+  offsetRatio: number;
+  timeHorizon: "one_off" | "recurring";
+  verificationMethod: "proof_of_past_donations" | "receipts_uploaded" | "funds_in_escrow" | "third_party_audit";
+  unmatchedSurplusRule:
+    | "return_to_donors"
+    | "donate_to_compromise_destination"
+    | "donate_to_original_cause"
+    | "split_evenly";
+  assuranceMinimumCents: number;
+  assuranceDeadlineAt: string | null;
+  sideALabel: string;
+  sideBLabel: string;
+  sideATotalCents: number;
+  sideBTotalCents: number;
+  matchedCompromiseCents: number;
+  status: "open" | "assurance_pending" | "assurance_met" | "closed";
+}
+
 interface OfferCreateFormProps {
   formMessage:
     | {
@@ -35,6 +64,11 @@ interface OfferCreateFormProps {
       }
     | null;
   supabaseReady: boolean;
+  availablePools: DonationOffsetPoolOption[];
+  initialMode?: OfferMode;
+  initialOffsetParticipationMode?: "direct" | "pool";
+  initialOffsetPoolId?: string;
+  initialOffsetPoolSide?: "side_a" | "side_b" | "";
 }
 
 const defaultOffsetFields = createDefaultDonationOffsetFields();
@@ -47,9 +81,24 @@ function formatUsd(amount: number) {
   }).format(amount);
 }
 
-export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormProps) {
-  const [mode, setMode] = useState<OfferMode>("pledge");
-  const [offsetErrors, setOffsetErrors] = useState<string[]>([]);
+function toDateInputValue(value: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  return value.slice(0, 10);
+}
+
+export function OfferCreateForm({
+  formMessage,
+  supabaseReady,
+  availablePools,
+  initialMode = "pledge",
+  initialOffsetParticipationMode = defaultOffsetFields.participationMode,
+  initialOffsetPoolId = "",
+  initialOffsetPoolSide = "",
+}: OfferCreateFormProps) {
+  const [mode, setMode] = useState<OfferMode>(initialMode);
   const [baselineAmountUsd, setBaselineAmountUsd] = useState(
     String(defaultOffsetFields.baselineAmountUsd ?? 1000),
   );
@@ -76,21 +125,155 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
   const [unmatchedSurplusRule, setUnmatchedSurplusRule] = useState(
     defaultOffsetFields.unmatchedSurplusRule,
   );
+  const [participationMode, setParticipationMode] = useState(initialOffsetParticipationMode);
+  const [poolId, setPoolId] = useState(initialOffsetPoolId);
+  const [poolName, setPoolName] = useState("");
+  const [poolSide, setPoolSide] = useState<"side_a" | "side_b" | "">(initialOffsetPoolSide);
+  const [assuranceMinimumUsd, setAssuranceMinimumUsd] = useState("");
+  const [assuranceDeadline, setAssuranceDeadline] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
 
   const isOffset = mode === "offset";
   const selectableCharities = getSelectableRegisteredCharities();
+  const consensusCharities = getConsensusCharities();
+  const selectedPool = useMemo(
+    () => availablePools.find((pool) => pool.id === poolId) ?? null,
+    [availablePools, poolId],
+  );
+  const isJoiningExistingPool = participationMode === "pool" && Boolean(selectedPool);
+  const effectivePoolName = isJoiningExistingPool ? selectedPool.name : poolName;
+  const effectiveBaselineOpposedCause =
+    isJoiningExistingPool && poolSide
+      ? poolSide === "side_a"
+        ? selectedPool.sideALabel
+        : selectedPool.sideBLabel
+      : baselineOpposedCause;
+  const effectiveRequestedOpposedCause =
+    isJoiningExistingPool && poolSide
+      ? poolSide === "side_a"
+        ? selectedPool.sideBLabel
+        : selectedPool.sideALabel
+      : requestedOpposedCause;
+  const effectiveCompromiseDestinationId = isJoiningExistingPool
+    ? selectedPool.compromiseCharityId
+    : compromiseDestinationId;
+  const effectiveOffsetRatio = isJoiningExistingPool
+    ? String(selectedPool.offsetRatio)
+    : offsetRatio;
+  const effectiveTimeHorizon = isJoiningExistingPool ? selectedPool.timeHorizon : timeHorizon;
+  const effectiveVerificationMethod = isJoiningExistingPool
+    ? selectedPool.verificationMethod
+    : verificationMethod;
+  const effectiveUnmatchedSurplusRule = isJoiningExistingPool
+    ? selectedPool.unmatchedSurplusRule
+    : unmatchedSurplusRule;
+  const effectiveAssuranceMinimumUsd = isJoiningExistingPool
+    ? selectedPool.assuranceMinimumCents > 0
+      ? String(selectedPool.assuranceMinimumCents / 100)
+      : ""
+    : assuranceMinimumUsd;
+  const effectiveAssuranceDeadline = isJoiningExistingPool
+    ? toDateInputValue(selectedPool.assuranceDeadlineAt)
+    : assuranceDeadline;
+
+  const normalizedOffsetFields = useMemo(
+    () => ({
+      baselineAmountUsd: Number(baselineAmountUsd),
+      baselineOpposedCause: effectiveBaselineOpposedCause,
+      requestedMatchingAmountUsd: Number(requestedMatchingAmountUsd),
+      requestedOpposedCause: effectiveRequestedOpposedCause,
+      compromiseDestinationId: effectiveCompromiseDestinationId,
+      offsetRatio: Number(effectiveOffsetRatio),
+      timeHorizon: effectiveTimeHorizon,
+      verificationMethod: effectiveVerificationMethod,
+      unmatchedSurplusRule: effectiveUnmatchedSurplusRule,
+      participationMode,
+      poolId,
+      poolName: effectivePoolName,
+      poolSide,
+      assuranceMinimumUsd:
+        effectiveAssuranceMinimumUsd === "" ? null : Number(effectiveAssuranceMinimumUsd),
+      assuranceDeadline: effectiveAssuranceDeadline,
+      description: [offerAction, requestAction, notes].filter(Boolean).join("\n"),
+      evidenceUrl,
+    }),
+    [
+      baselineAmountUsd,
+      evidenceUrl,
+      effectiveAssuranceDeadline,
+      effectiveAssuranceMinimumUsd,
+      effectiveBaselineOpposedCause,
+      effectiveCompromiseDestinationId,
+      effectiveOffsetRatio,
+      effectivePoolName,
+      effectiveRequestedOpposedCause,
+      effectiveTimeHorizon,
+      effectiveUnmatchedSurplusRule,
+      effectiveVerificationMethod,
+      notes,
+      offerAction,
+      participationMode,
+      poolId,
+      poolSide,
+      requestAction,
+      requestedMatchingAmountUsd,
+    ],
+  );
+
+  const liveOffsetErrors = useMemo(
+    () => (isOffset ? validateDonationOffsetFields(normalizedOffsetFields) : []),
+    [isOffset, normalizedOffsetFields],
+  );
 
   const offsetPreview = useMemo(
     () =>
       calculateDonationOffsetPreview({
         baselineAmountUsd: Number(baselineAmountUsd),
         requestedMatchingAmountUsd: Number(requestedMatchingAmountUsd),
-        offsetRatio: Number(offsetRatio),
-        unmatchedSurplusRule,
+        offsetRatio: Number(effectiveOffsetRatio),
+        unmatchedSurplusRule: effectiveUnmatchedSurplusRule,
       }),
-    [baselineAmountUsd, requestedMatchingAmountUsd, offsetRatio, unmatchedSurplusRule],
+    [
+      baselineAmountUsd,
+      effectiveOffsetRatio,
+      effectiveUnmatchedSurplusRule,
+      requestedMatchingAmountUsd,
+    ],
   );
+
+  const complexityWarnings = useMemo(
+    () => (isOffset ? getDonationOffsetComplexityWarnings(normalizedOffsetFields) : []),
+    [isOffset, normalizedOffsetFields],
+  );
+
+  const joinedPoolProgress = useMemo(() => {
+    if (!selectedPool || participationMode !== "pool" || !poolSide) {
+      return null;
+    }
+
+    const baselineCents = Math.round((Number(baselineAmountUsd) || 0) * 100);
+    const nextSideATotal =
+      selectedPool.sideATotalCents + (poolSide === "side_a" ? baselineCents : 0);
+    const nextSideBTotal =
+      selectedPool.sideBTotalCents + (poolSide === "side_b" ? baselineCents : 0);
+
+    return calculateDonationOffsetPoolProgress({
+      sideATotalUsd: nextSideATotal / 100,
+      sideBTotalUsd: nextSideBTotal / 100,
+      offsetRatio: Number(effectiveOffsetRatio),
+      assuranceMinimumUsd:
+        effectiveAssuranceMinimumUsd === "" ? 0 : Number(effectiveAssuranceMinimumUsd),
+      deadlineAt: effectiveAssuranceDeadline || selectedPool.assuranceDeadlineAt || undefined,
+    });
+  }, [
+    baselineAmountUsd,
+    effectiveAssuranceDeadline,
+    effectiveAssuranceMinimumUsd,
+    effectiveOffsetRatio,
+    participationMode,
+    poolSide,
+    selectedPool,
+  ]);
 
   return (
     <article className="panel auth-card">
@@ -122,18 +305,28 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
 
       {isOffset ? (
         <div className="status-banner status-banner-error">
-          Extortion is not allowed. Do not post an offset offer unless the baseline donation is a
-          real trade-dependent intention that you can verify with receipts, escrow, or a third-party
-          audit.
+          Extortion is not allowed. Only publish an offset if the baseline donation is a real
+          intention you can support with past-donation proof, escrow, or a third-party audit.
         </div>
       ) : null}
 
-      {isOffset && offsetErrors.length ? (
+      {isOffset && liveOffsetErrors.length ? (
         <div className="status-banner status-banner-error">
-          <strong>Complete the donation offset fields before publishing.</strong>
+          <strong>Fix these fields before publishing.</strong>
           <ul className="clean-list">
-            {offsetErrors.map((error) => (
+            {liveOffsetErrors.map((error) => (
               <li key={error}>{error}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {isOffset && complexityWarnings.length ? (
+        <div className="status-banner status-banner-warning">
+          <strong>Complexity warning.</strong>
+          <ul className="clean-list">
+            {complexityWarnings.map((warning) => (
+              <li key={warning}>{warning}</li>
             ))}
           </ul>
         </div>
@@ -144,41 +337,20 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
         className="stack-form"
         onSubmit={(event) => {
           if (!isOffset) {
-            setOffsetErrors([]);
             return;
           }
 
-          const errors = validateDonationOffsetFields({
-            baselineAmountUsd: Number(baselineAmountUsd),
-            baselineOpposedCause,
-            requestedMatchingAmountUsd: Number(requestedMatchingAmountUsd),
-            requestedOpposedCause,
-            compromiseDestinationId,
-            offsetRatio: Number(offsetRatio),
-            timeHorizon,
-            verificationMethod,
-            unmatchedSurplusRule,
-            description: [offerAction, requestAction, notes].filter(Boolean).join("\n"),
-            evidenceUrl,
-          });
-
-          if (errors.length) {
+          if (liveOffsetErrors.length) {
             event.preventDefault();
-            setOffsetErrors(errors);
-            return;
           }
-
-          setOffsetErrors([]);
         }}
       >
         <label className="field">
           <span>Exchange mode</span>
           <select
-            defaultValue="pledge"
+            value={mode}
             name="mode"
-            onChange={(event) =>
-              setMode((event.currentTarget as unknown as { value: string }).value as OfferMode)
-            }
+            onChange={(event) => setMode(event.currentTarget.value as OfferMode)}
           >
             {OFFER_MODE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -225,7 +397,7 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
           <span>What will you do?</span>
           <textarea
             name="offer_action"
-            onChange={(event) => setOfferAction((event.currentTarget as unknown as { value: string }).value)}
+            onChange={(event) => setOfferAction(event.currentTarget.value)}
             placeholder="e.g. Redirect $1,000 I would otherwise have donated to an opposed lobbying cause into the named compromise fund."
             rows={4}
             value={offerAction}
@@ -236,9 +408,7 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
           <span>What do you want the other side to do?</span>
           <textarea
             name="request_action"
-            onChange={(event) =>
-              setRequestAction((event.currentTarget as unknown as { value: string }).value)
-            }
+            onChange={(event) => setRequestAction(event.currentTarget.value)}
             placeholder="e.g. Redirect the matched portion of your opposed donation into the same compromise destination."
             rows={4}
             value={requestAction}
@@ -265,6 +435,143 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
               </div>
             </div>
 
+            {isJoiningExistingPool ? (
+              <>
+                <input
+                  name="baseline_opposed_cause"
+                  type="hidden"
+                  value={effectiveBaselineOpposedCause}
+                />
+                <input
+                  name="requested_opposed_cause"
+                  type="hidden"
+                  value={effectiveRequestedOpposedCause}
+                />
+                <input
+                  name="compromise_destination_id"
+                  type="hidden"
+                  value={effectiveCompromiseDestinationId}
+                />
+                <input name="offset_ratio" type="hidden" value={effectiveOffsetRatio} />
+                <input
+                  name="offset_time_horizon"
+                  type="hidden"
+                  value={effectiveTimeHorizon}
+                />
+                <input
+                  name="offset_verification_method"
+                  type="hidden"
+                  value={effectiveVerificationMethod}
+                />
+                <input
+                  name="unmatched_surplus_rule"
+                  type="hidden"
+                  value={effectiveUnmatchedSurplusRule}
+                />
+                <input
+                  name="assurance_minimum_usd"
+                  type="hidden"
+                  value={effectiveAssuranceMinimumUsd}
+                />
+                <input
+                  name="assurance_deadline"
+                  type="hidden"
+                  value={effectiveAssuranceDeadline}
+                />
+              </>
+            ) : null}
+
+            <fieldset className="field">
+              <legend>Participation mode</legend>
+              <div className="radio-stack">
+                {DONATION_OFFSET_PARTICIPATION_MODE_OPTIONS.map((option) => (
+                  <label className="radio-row" key={option.value}>
+                    <input
+                      checked={participationMode === option.value}
+                      name="offset_participation_mode"
+                      type="radio"
+                      value={option.value}
+                      onChange={(event) => setParticipationMode(event.currentTarget.value as "direct" | "pool")}
+                    />
+                    <span>
+                      <strong>{option.label}</strong>
+                      <br />
+                      <small>{option.description}</small>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {participationMode === "pool" ? (
+              <div className="field-grid">
+                <label className="field">
+                  <span>Join an existing offset pool</span>
+                  <select
+                    name="offset_pool_id"
+                    value={poolId}
+                    onChange={(event) => setPoolId(event.currentTarget.value)}
+                  >
+                    <option value="">Create a new pool instead</option>
+                    {availablePools.map((pool) => (
+                      <option key={pool.id} value={pool.id}>
+                        {pool.name} | {pool.compromiseCharityName} |{" "}
+                        {formatDonationOffsetPoolStatus(pool.status)}
+                      </option>
+                    ))}
+                  </select>
+                  <small>
+                    Existing pools aggregate donors on each side and apply one shared ratio,
+                    verification method, and assurance deadline.
+                  </small>
+                </label>
+
+                <label className="field">
+                  <span>Name for a new pool</span>
+                  <input
+                    name="offset_pool_name"
+                    placeholder="e.g. Pro-choice / pro-life global health pool"
+                    type="text"
+                    value={effectivePoolName}
+                    disabled={isJoiningExistingPool}
+                    onChange={(event) => setPoolName(event.currentTarget.value)}
+                  />
+                  <small>
+                    Use this when you are opening a pooled offset rather than joining one that already
+                    exists.
+                  </small>
+                </label>
+              </div>
+            ) : null}
+
+            {participationMode === "pool" ? (
+              <fieldset className="field">
+                <legend>Which side are you joining?</legend>
+                <div className="radio-stack">
+                  {DONATION_OFFSET_POOL_SIDE_OPTIONS.map((option) => (
+                    <label className="radio-row" key={option.value}>
+                      <input
+                        checked={poolSide === option.value}
+                        name="offset_pool_side"
+                        type="radio"
+                        value={option.value}
+                        onChange={(event) => setPoolSide(event.currentTarget.value as "side_a" | "side_b")}
+                      />
+                      <span>
+                        {option.value === "side_a"
+                          ? selectedPool?.sideALabel || "Side A"
+                          : selectedPool?.sideBLabel || "Side B"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <small>
+                  Pools work best when each side is named clearly, so that aggregate pledges remain
+                  legible.
+                </small>
+              </fieldset>
+            ) : null}
+
             <div className="field-grid">
               <label className="field">
                 <span>Baseline donation amount</span>
@@ -275,13 +582,11 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                   step="0.01"
                   type="number"
                   value={baselineAmountUsd}
-                  onChange={(event) =>
-                    setBaselineAmountUsd((event.currentTarget as unknown as { value: string }).value)
-                  }
+                  onChange={(event) => setBaselineAmountUsd(event.currentTarget.value)}
                 />
                 <small>
-                  This is what you would otherwise have donated to the opposed cause. Provide evidence
-                  so the offer does not look like a coercive threat.
+                  The amount you would otherwise have donated to the opposed cause. Baseline proof is
+                  what prevents extortion concerns.
                 </small>
               </label>
 
@@ -290,10 +595,9 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                 <select
                   name="baseline_opposed_cause"
                   required={isOffset}
-                  value={baselineOpposedCause}
-                  onChange={(event) =>
-                    setBaselineOpposedCause((event.currentTarget as unknown as { value: string }).value)
-                  }
+                  value={effectiveBaselineOpposedCause}
+                  disabled={isJoiningExistingPool}
+                  onChange={(event) => setBaselineOpposedCause(event.currentTarget.value)}
                 >
                   {CAUSE_OPTIONS.map((cause) => (
                     <option key={cause} value={cause}>
@@ -315,13 +619,11 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                   step="0.01"
                   type="number"
                   value={requestedMatchingAmountUsd}
-                  onChange={(event) =>
-                    setRequestedMatchingAmountUsd(
-                      (event.currentTarget as unknown as { value: string }).value,
-                    )
-                  }
+                  onChange={(event) => setRequestedMatchingAmountUsd(event.currentTarget.value)}
                 />
-                <small>The counterparty amount you want redirected away from the opposed cause.</small>
+                <small>
+                  The amount you want redirected away from the other side&apos;s opposed cause.
+                </small>
               </label>
 
               <label className="field">
@@ -329,10 +631,9 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                 <select
                   name="requested_opposed_cause"
                   required={isOffset}
-                  value={requestedOpposedCause}
-                  onChange={(event) =>
-                    setRequestedOpposedCause((event.currentTarget as unknown as { value: string }).value)
-                  }
+                  value={effectiveRequestedOpposedCause}
+                  disabled={isJoiningExistingPool}
+                  onChange={(event) => setRequestedOpposedCause(event.currentTarget.value)}
                 >
                   {CAUSE_OPTIONS.map((cause) => (
                     <option key={cause} value={cause}>
@@ -350,10 +651,9 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                 <select
                   name="compromise_destination_id"
                   required={isOffset}
-                  value={compromiseDestinationId}
-                  onChange={(event) =>
-                    setCompromiseDestinationId((event.currentTarget as unknown as { value: string }).value)
-                  }
+                  value={effectiveCompromiseDestinationId}
+                  disabled={isJoiningExistingPool}
+                  onChange={(event) => setCompromiseDestinationId(event.currentTarget.value)}
                 >
                   {selectableCharities.map((charity) => (
                     <option key={charity.id} value={charity.id}>
@@ -361,7 +661,10 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                     </option>
                   ))}
                 </select>
-                <small>A registered charity both sides can name as the redirected destination.</small>
+                <small>
+                  Choose a named destination both sides can recognize. Consensus charities make better
+                  compromise endpoints. Existing pools inherit this from the pool.
+                </small>
               </label>
 
               <label className="field">
@@ -372,14 +675,13 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                   required={isOffset}
                   step="0.01"
                   type="number"
-                  value={offsetRatio}
-                  onChange={(event) =>
-                    setOffsetRatio((event.currentTarget as unknown as { value: string }).value)
-                  }
+                  value={effectiveOffsetRatio}
+                  disabled={isJoiningExistingPool}
+                  onChange={(event) => setOffsetRatio(event.currentTarget.value)}
                 />
                 <small>
-                  How many counterparty dollars should match each $1 of your baseline donation. Simple{" "}
-                  <strong>1:1</strong> offsets are usually easier to match.
+                  How many counterparty dollars should match each $1 of your baseline donation.
+                  Simple <strong>1:1</strong> offsets are usually easier to match.
                 </small>
               </label>
             </div>
@@ -390,12 +692,9 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                 <select
                   name="offset_time_horizon"
                   required={isOffset}
-                  value={timeHorizon}
-                  onChange={(event) =>
-                    setTimeHorizon(
-                      (event.currentTarget as unknown as { value: string }).value as typeof timeHorizon,
-                    )
-                  }
+                  value={effectiveTimeHorizon}
+                  disabled={isJoiningExistingPool}
+                  onChange={(event) => setTimeHorizon(event.currentTarget.value as "one_off" | "recurring")}
                 >
                   {DONATION_OFFSET_TIME_HORIZON_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -411,11 +710,14 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                 <select
                   name="offset_verification_method"
                   required={isOffset}
-                  value={verificationMethod}
+                  value={effectiveVerificationMethod}
+                  disabled={isJoiningExistingPool}
                   onChange={(event) =>
                     setVerificationMethod(
-                      (event.currentTarget as unknown as { value: string })
-                        .value as typeof verificationMethod,
+                      event.currentTarget.value as
+                        | "proof_of_past_donations"
+                        | "funds_in_escrow"
+                        | "third_party_audit",
                     )
                   }
                 >
@@ -426,7 +728,8 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                   ))}
                 </select>
                 <small>
-                  Acceptable verification includes receipts, escrow, or third-party attestation.
+                  Proof of past donations helps establish counterfactual credibility. Escrow and audit
+                  can add stronger factual trust.
                 </small>
               </label>
             </div>
@@ -437,14 +740,17 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                 {DONATION_OFFSET_UNMATCHED_RULE_OPTIONS.map((option) => (
                   <label className="radio-row" key={option.value}>
                     <input
-                      checked={unmatchedSurplusRule === option.value}
+                      checked={effectiveUnmatchedSurplusRule === option.value}
+                      disabled={isJoiningExistingPool}
                       name="unmatched_surplus_rule"
                       type="radio"
                       value={option.value}
                       onChange={(event) =>
                         setUnmatchedSurplusRule(
-                          (event.currentTarget as unknown as { value: string })
-                            .value as typeof unmatchedSurplusRule,
+                          event.currentTarget.value as
+                            | "return_to_donors"
+                            | "donate_to_compromise_destination"
+                            | "donate_to_original_cause",
                         )
                       }
                     />
@@ -452,8 +758,46 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                   </label>
                 ))}
               </div>
-              <small>Say in advance what happens if only part of the intended offset can be matched.</small>
+              <small>
+                State in advance what happens if only part of the intended offset is matched.
+              </small>
             </fieldset>
+
+            {participationMode === "pool" ? (
+              <div className="field-grid">
+                <label className="field">
+                  <span>Assurance minimum</span>
+                  <input
+                    min="0"
+                    name="assurance_minimum_usd"
+                    step="0.01"
+                    type="number"
+                    value={effectiveAssuranceMinimumUsd}
+                    disabled={isJoiningExistingPool}
+                    onChange={(event) => setAssuranceMinimumUsd(event.currentTarget.value)}
+                  />
+                  <small>
+                    Donors can commit on the condition that the pool reaches this minimum matched
+                    redirection.
+                  </small>
+                </label>
+
+                <label className="field">
+                  <span>Assurance deadline</span>
+                    <input
+                      name="assurance_deadline"
+                      type="date"
+                      value={effectiveAssuranceDeadline}
+                      disabled={isJoiningExistingPool}
+                      onChange={(event) => setAssuranceDeadline(event.currentTarget.value)}
+                    />
+                  <small>
+                    A deadline makes the assurance contract legible and gives people a clear decision
+                    point.
+                  </small>
+                </label>
+              </div>
+            ) : null}
 
             <label className="field">
               <span>Receipt, escrow, or audit link</span>
@@ -462,13 +806,10 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                 placeholder="https://..."
                 type="url"
                 value={evidenceUrl}
-                onChange={(event) =>
-                  setEvidenceUrl((event.currentTarget as unknown as { value: string }).value)
-                }
+                onChange={(event) => setEvidenceUrl(event.currentTarget.value)}
               />
               <small>
-                A link is not legally required to draft an offer, but unverifiable baselines are flagged
-                and may be kept out of the public marketplace.
+                Unverified baselines are kept out of the public marketplace until they are reviewed.
               </small>
             </label>
 
@@ -479,7 +820,7 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
                 This offer redirects <strong>{formatUsd(offsetPreview.matchedBaselineUsd)}</strong> from the
                 baseline side and asks the counterparty to redirect{" "}
                 <strong>{formatUsd(offsetPreview.matchedCounterpartyUsd)}</strong> at a ratio of{" "}
-                <strong>{formatDonationOffsetRatio(Number(offsetRatio))}</strong>.
+                <strong>{formatDonationOffsetRatio(Number(effectiveOffsetRatio))}</strong>.
               </p>
               <p>
                 Unmatched remainder: {formatUsd(offsetPreview.unmatchedBaselineUsd)} on the baseline side
@@ -487,9 +828,61 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
               </p>
               <p>{offsetPreview.unmatchedRuleLabel}</p>
               <p>
-                Verification: {formatDonationOffsetVerificationMethod(verificationMethod)} | Horizon:{" "}
-                {formatDonationOffsetTimeHorizon(timeHorizon)} | Surplus rule:{" "}
-                {formatDonationOffsetUnmatchedRule(unmatchedSurplusRule)}
+                Verification: {formatDonationOffsetVerificationMethod(effectiveVerificationMethod)} | Horizon:{" "}
+                {formatDonationOffsetTimeHorizon(effectiveTimeHorizon)} | Surplus rule:{" "}
+                {formatDonationOffsetUnmatchedRule(effectiveUnmatchedSurplusRule)}
+              </p>
+              {participationMode === "pool" ? (
+                <div className="offset-pool-preview">
+                  <p>
+                    Pool mode turns this into a larger aggregate offset. Your side is{" "}
+                    <strong>{poolSide || "not yet chosen"}</strong>.
+                  </p>
+                  {selectedPool ? (
+                    <>
+                      <p>
+                        Current pool: <strong>{selectedPool.name}</strong> | Already matched:{" "}
+                        <strong>{formatUsd(selectedPool.matchedCompromiseCents / 100)}</strong>
+                      </p>
+                      {joinedPoolProgress ? (
+                        <>
+                          <div className="offset-progress-track" aria-hidden="true">
+                            <span
+                              className="offset-progress-fill"
+                              style={{ width: `${joinedPoolProgress.assuranceProgressPct}%` }}
+                            />
+                          </div>
+                          <p>
+                            After your commitment, the pool would show{" "}
+                            <strong>{formatUsd(joinedPoolProgress.matchedCompromiseUsd)}</strong> matched
+                            toward an assurance threshold of{" "}
+                            <strong>{formatUsd(joinedPoolProgress.assuranceMinimumUsd)}</strong>.
+                          </p>
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p>
+                      New pool commitments can set an assurance threshold and deadline so donors only
+                      redirect once enough matching support appears.
+                    </p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="panel subtle-panel">
+              <p className="eyebrow">Consensus destinations</p>
+              <div className="tag-row">
+                {consensusCharities.map((charity) => (
+                  <span className="badge badge-secondary" key={charity.id}>
+                    {charity.name}
+                  </span>
+                ))}
+              </div>
+              <p className="panel-note">
+                These are the compromise destinations on Moral Trade most clearly framed as moral
+                public goods: broad goods many different moral views can value at once.
               </p>
             </div>
           </div>
@@ -561,8 +954,8 @@ export function OfferCreateForm({ formMessage, supabaseReady }: OfferCreateFormP
           <span>Description</span>
           <textarea
             name="notes"
-            onChange={(event) => setNotes((event.currentTarget as unknown as { value: string }).value)}
-            placeholder="Explain why this offset beats zero-sum spending on your view, what evidence you can provide, and what happens if only part of the donation can be matched."
+            onChange={(event) => setNotes(event.currentTarget.value)}
+            placeholder="Explain why this offset beats zero-sum spending on your view, what evidence you can provide, and what should happen if matching is incomplete."
             required={isOffset}
             rows={4}
             value={notes}

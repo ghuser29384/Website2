@@ -1,6 +1,10 @@
 import type { User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 
+import {
+  calculateDonationOffsetPoolProgress,
+  type DonationOffsetPoolProgress,
+} from "@/lib/donation-offsets";
 import type { Database } from "@/lib/supabase/database.types";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -8,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type RegisteredCharityRow = Database["public"]["Tables"]["registered_charities"]["Row"];
+type DonationOffsetPoolRow = Database["public"]["Tables"]["donation_offset_pools"]["Row"];
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
 type DonationOffsetMatchRow = Database["public"]["Tables"]["donation_offset_matches"]["Row"];
 type InterestRow = Database["public"]["Tables"]["interests"]["Row"];
@@ -96,12 +101,26 @@ export interface PublicProfileSummary extends ProfileRow {
   wishPrivacyStage: "strict" | "broad" | "limited" | null;
 }
 
+export interface DonationOffsetPoolRecord extends DonationOffsetPoolRow {
+  compromiseCharity: RegisteredCharityRow | null;
+  commitmentCount: number;
+  sideACommitmentCount: number;
+  sideBCommitmentCount: number;
+  sideATotalCents: number;
+  sideBTotalCents: number;
+  matchedCompromiseCents: number;
+  progress: DonationOffsetPoolProgress;
+}
+
 export interface OfferRecord extends OfferRow {
   ownerProfile: PublicProfileSummary | null;
   recommendationCount: number;
   commentCount: number;
   isInCart: boolean;
-  donationOffset: (DonationOffsetOfferRow & { compromiseCharity: RegisteredCharityRow | null }) | null;
+  donationOffset: (DonationOffsetOfferRow & {
+    compromiseCharity: RegisteredCharityRow | null;
+    pool: DonationOffsetPoolRecord | null;
+  }) | null;
 }
 
 export interface InterestRecord extends InterestRow {
@@ -283,6 +302,20 @@ export interface OfferCartState {
   cartCount: number | null;
 }
 
+export interface DonationOffsetOverview {
+  totalRedirectedCents: number;
+  completedMatchCount: number;
+  pooledCommitmentCents: number;
+  moralPublicGoodsRedirectedCents: number;
+  moralPublicGoodsMatchCount: number;
+  topCompromiseDestinations: Array<{
+    charity: RegisteredCharityRow | null;
+    totalRedirectedCents: number;
+    matchCount: number;
+  }>;
+  pools: DonationOffsetPoolRecord[];
+}
+
 function logSupabaseError(
   context: string,
   error: LoggedErrorLike,
@@ -362,6 +395,80 @@ function buildPaginatedResult<T>(items: T[], page: number, pageSize: number): Pa
 
 function incrementCount(map: Map<string, number>, key: string, by = 1) {
   map.set(key, (map.get(key) ?? 0) + by);
+}
+
+function buildDonationOffsetPoolMap({
+  pools,
+  poolOffers,
+  offersById,
+  charities,
+}: {
+  pools: DonationOffsetPoolRow[];
+  poolOffers: DonationOffsetOfferRow[];
+  offersById: Map<string, OfferRow>;
+  charities: RegisteredCharityRow[];
+}) {
+  const charityMap = new Map(charities.map((row) => [row.id, row] as const));
+  const entries = new Map<string, DonationOffsetPoolRecord>();
+
+  for (const pool of pools) {
+    entries.set(pool.id, {
+      ...pool,
+      compromiseCharity: charityMap.get(pool.compromise_charity_id) ?? null,
+      commitmentCount: 0,
+      sideACommitmentCount: 0,
+      sideBCommitmentCount: 0,
+      sideATotalCents: 0,
+      sideBTotalCents: 0,
+      matchedCompromiseCents: 0,
+      progress: calculateDonationOffsetPoolProgress({
+        sideATotalUsd: 0,
+        sideBTotalUsd: 0,
+        offsetRatio: pool.offset_ratio,
+        assuranceMinimumUsd: pool.assurance_minimum_cents / 100,
+        deadlineAt: pool.assurance_deadline_at,
+      }),
+    });
+  }
+
+  for (const poolOffer of poolOffers) {
+    if (!poolOffer.pool_id) {
+      continue;
+    }
+
+    const pool = entries.get(poolOffer.pool_id);
+    const offer = offersById.get(poolOffer.offer_id);
+
+    if (!pool || !offer || (offer.status !== "open" && offer.status !== "matched")) {
+      continue;
+    }
+
+    const sideKey = poolOffer.pool_side === "side_b" ? "sideB" : "sideA";
+    const baselineContribution = poolOffer.baseline_amount_cents;
+
+    pool.commitmentCount += 1;
+
+    if (sideKey === "sideA") {
+      pool.sideACommitmentCount += 1;
+      pool.sideATotalCents += baselineContribution;
+    } else {
+      pool.sideBCommitmentCount += 1;
+      pool.sideBTotalCents += baselineContribution;
+    }
+  }
+
+  for (const pool of entries.values()) {
+    pool.progress = calculateDonationOffsetPoolProgress({
+      sideATotalUsd: pool.sideATotalCents / 100,
+      sideBTotalUsd: pool.sideBTotalCents / 100,
+      offsetRatio: pool.offset_ratio,
+      assuranceMinimumUsd: pool.assurance_minimum_cents / 100,
+      deadlineAt: pool.assurance_deadline_at,
+    });
+    pool.matchedCompromiseCents = Math.round(pool.progress.matchedCompromiseUsd * 100);
+  }
+
+  return entries;
 }
 
 async function ensureUserProfile(
@@ -543,6 +650,7 @@ async function hydrateOffers(
     { data: comments, error: commentsError },
     cartResult,
     { data: offsetOffers, error: offsetOffersError },
+    { data: offsetPools, error: offsetPoolsError },
     { data: charities, error: charitiesError },
   ] =
     await Promise.all([
@@ -553,6 +661,7 @@ async function hydrateOffers(
         ? supabase.from("offer_carts").select("*").eq("user_id", viewerId).in("offer_id", offerIds)
         : Promise.resolve({ data: [] as OfferCartRow[], error: null }),
       supabase.from("donation_offset_offers").select("*").in("offer_id", offerIds),
+      supabase.from("donation_offset_pools").select("*"),
       supabase.from("registered_charities").select("*"),
     ]);
 
@@ -567,6 +676,9 @@ async function hydrateOffers(
   }
   if (offsetOffersError) {
     throw new Error(offsetOffersError.message);
+  }
+  if (offsetPoolsError) {
+    throw new Error(offsetPoolsError.message);
   }
   if (charitiesError) {
     throw new Error(charitiesError.message);
@@ -585,15 +697,27 @@ async function hydrateOffers(
   const cartSet = new Set(
     ((cartResult.data ?? []) as OfferCartRow[]).map((row) => row.offer_id),
   );
-  const charityMap = new Map(
-    ((charities ?? []) as RegisteredCharityRow[]).map((row) => [row.id, row] as const),
-  );
-  const offsetOfferMap = new Map<string, DonationOffsetOfferRow & { compromiseCharity: RegisteredCharityRow | null }>();
+  const charityRows = (charities ?? []) as RegisteredCharityRow[];
+  const charityMap = new Map(charityRows.map((row) => [row.id, row] as const));
+  const poolMap = buildDonationOffsetPoolMap({
+    pools: (offsetPools ?? []) as DonationOffsetPoolRow[],
+    poolOffers: (offsetOffers ?? []) as DonationOffsetOfferRow[],
+    offersById: new Map(offers.map((offer) => [offer.id, offer] as const)),
+    charities: charityRows,
+  });
+  const offsetOfferMap = new Map<
+    string,
+    DonationOffsetOfferRow & {
+      compromiseCharity: RegisteredCharityRow | null;
+      pool: DonationOffsetPoolRecord | null;
+    }
+  >();
 
   for (const row of (offsetOffers ?? []) as DonationOffsetOfferRow[]) {
     offsetOfferMap.set(row.offer_id, {
       ...row,
       compromiseCharity: charityMap.get(row.compromise_charity_id) ?? null,
+      pool: row.pool_id ? poolMap.get(row.pool_id) ?? null : null,
     });
   }
 
@@ -802,6 +926,129 @@ export async function listOpenOffersPreview(limit = 120, mode: OfferRow["mode"] 
 
   const viewer = await getViewer();
   return hydrateOffers((data ?? []) as OfferRow[], viewer?.authUser.id);
+}
+
+export async function getDonationOffsetOverview(): Promise<DonationOffsetOverview> {
+  if (!hasSupabaseEnv()) {
+    return {
+      totalRedirectedCents: 0,
+      completedMatchCount: 0,
+      pooledCommitmentCents: 0,
+      moralPublicGoodsRedirectedCents: 0,
+      moralPublicGoodsMatchCount: 0,
+      topCompromiseDestinations: [],
+      pools: [],
+    };
+  }
+
+  const supabase = await createClient();
+  const [
+    { data: matches, error: matchesError },
+    { data: offsetOffers, error: offsetOffersError },
+    { data: pools, error: poolsError },
+    { data: charities, error: charitiesError },
+    { data: offers, error: offersError },
+  ] = await Promise.all([
+    supabase.from("donation_offset_matches").select("*"),
+    supabase.from("donation_offset_offers").select("*"),
+    supabase.from("donation_offset_pools").select("*"),
+    supabase.from("registered_charities").select("*"),
+    supabase.from("offers").select("*").eq("mode", "offset"),
+  ]);
+
+  if (matchesError) {
+    throw new Error(matchesError.message);
+  }
+  if (offsetOffersError) {
+    throw new Error(offsetOffersError.message);
+  }
+  if (poolsError) {
+    throw new Error(poolsError.message);
+  }
+  if (charitiesError) {
+    throw new Error(charitiesError.message);
+  }
+  if (offersError) {
+    throw new Error(offersError.message);
+  }
+
+  const matchRows = (matches ?? []) as DonationOffsetMatchRow[];
+  const offsetRows = (offsetOffers ?? []) as DonationOffsetOfferRow[];
+  const charityRows = (charities ?? []) as RegisteredCharityRow[];
+  const offerRows = (offers ?? []) as OfferRow[];
+  const charityMap = new Map(charityRows.map((row) => [row.id, row] as const));
+  const offsetMap = new Map(offsetRows.map((row) => [row.offer_id, row] as const));
+  const poolMap = buildDonationOffsetPoolMap({
+    pools: (pools ?? []) as DonationOffsetPoolRow[],
+    poolOffers: offsetRows.filter((row) => row.participation_mode === "pool"),
+    offersById: new Map(offerRows.map((row) => [row.id, row] as const)),
+    charities: charityRows,
+  });
+
+  const destinationTotals = new Map<
+    string,
+    { totalRedirectedCents: number; matchCount: number }
+  >();
+  let totalRedirectedCents = 0;
+  let completedMatchCount = 0;
+  let moralPublicGoodsRedirectedCents = 0;
+  let moralPublicGoodsMatchCount = 0;
+
+  for (const match of matchRows) {
+    if (match.status === "cancelled") {
+      continue;
+    }
+
+    const offset = offsetMap.get(match.offer_id);
+    if (!offset) {
+      continue;
+    }
+
+    const redirected = match.compromise_total_cents;
+    const charity = charityMap.get(offset.compromise_charity_id) ?? null;
+
+    totalRedirectedCents += redirected;
+    completedMatchCount += 1;
+
+    if (charity?.is_moral_public_good) {
+      moralPublicGoodsRedirectedCents += redirected;
+      moralPublicGoodsMatchCount += 1;
+    }
+
+    if (charity) {
+      const current = destinationTotals.get(charity.id) ?? {
+        totalRedirectedCents: 0,
+        matchCount: 0,
+      };
+      current.totalRedirectedCents += redirected;
+      current.matchCount += 1;
+      destinationTotals.set(charity.id, current);
+    }
+  }
+
+  const activePools = [...poolMap.values()]
+    .filter((pool) => pool.status !== "closed" && pool.moderation_status === "clear")
+    .sort((left, right) => right.matchedCompromiseCents - left.matchedCompromiseCents);
+
+  return {
+    totalRedirectedCents,
+    completedMatchCount,
+    pooledCommitmentCents: activePools.reduce(
+      (total, pool) => total + pool.matchedCompromiseCents,
+      0,
+    ),
+    moralPublicGoodsRedirectedCents,
+    moralPublicGoodsMatchCount,
+    topCompromiseDestinations: [...destinationTotals.entries()]
+      .map(([charityId, totals]) => ({
+        charity: charityMap.get(charityId) ?? null,
+        totalRedirectedCents: totals.totalRedirectedCents,
+        matchCount: totals.matchCount,
+      }))
+      .sort((left, right) => right.totalRedirectedCents - left.totalRedirectedCents)
+      .slice(0, 6),
+    pools: activePools,
+  };
 }
 
 export async function getOfferById(offerId: string) {

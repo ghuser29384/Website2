@@ -76,6 +76,18 @@ export default async function MethodologyPage() {
           </p>
         </section>
         <section className="panel data-card data-card-wide">
+          <h2>Moral public goods and distributed coordination</h2>
+          <p>
+            Some compromise destinations matter because many different moral views can value them
+            at once. Global health, anti-poverty work, climate resilience, and other broadly shared
+            public goods can make donation offsets more credible by giving opposed donors a named
+            destination that is not merely a thin bilateral settlement. The platform therefore
+            highlights moral-public-goods compromise destinations and treats coordination power as
+            something that should be distributed, reviewable, and hard to weaponize through
+            coercive threats.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
           <h2>Follow-through after a promising match</h2>
           <p>
             Background scans can open notifications, saved-search results, match reports, network

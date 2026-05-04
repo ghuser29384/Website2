@@ -138,6 +138,9 @@ export interface Database {
           is_active: boolean;
           is_political_campaign: boolean;
           selectable: boolean;
+          is_moral_public_good: boolean;
+          consensus_label: string;
+          sort_order: number;
           created_at: string;
         };
         Insert: {
@@ -149,6 +152,9 @@ export interface Database {
           is_active?: boolean;
           is_political_campaign?: boolean;
           selectable?: boolean;
+          is_moral_public_good?: boolean;
+          consensus_label?: string;
+          sort_order?: number;
           created_at?: string;
         };
         Update: {
@@ -159,7 +165,94 @@ export interface Database {
           is_active?: boolean;
           is_political_campaign?: boolean;
           selectable?: boolean;
+          is_moral_public_good?: boolean;
+          consensus_label?: string;
+          sort_order?: number;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      donation_offset_pools: {
+        Row: {
+          id: string;
+          created_by: string;
+          name: string;
+          description: string;
+          compromise_charity_id: string;
+          offset_ratio: number;
+          time_horizon: "one_off" | "recurring";
+          verification_method:
+            | "proof_of_past_donations"
+            | "receipts_uploaded"
+            | "funds_in_escrow"
+            | "third_party_audit";
+          unmatched_surplus_rule:
+            | "return_to_donors"
+            | "donate_to_compromise_destination"
+            | "donate_to_original_cause"
+            | "split_evenly";
+          assurance_minimum_cents: number;
+          assurance_deadline_at: string | null;
+          side_a_label: string;
+          side_b_label: string;
+          status: "open" | "assurance_pending" | "assurance_met" | "closed";
+          moderation_status: "clear" | "flagged" | "blocked";
+          moderation_notes: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          created_by: string;
+          name: string;
+          description?: string;
+          compromise_charity_id: string;
+          offset_ratio: number;
+          time_horizon: "one_off" | "recurring";
+          verification_method:
+            | "proof_of_past_donations"
+            | "receipts_uploaded"
+            | "funds_in_escrow"
+            | "third_party_audit";
+          unmatched_surplus_rule:
+            | "return_to_donors"
+            | "donate_to_compromise_destination"
+            | "donate_to_original_cause"
+            | "split_evenly";
+          assurance_minimum_cents?: number;
+          assurance_deadline_at?: string | null;
+          side_a_label?: string;
+          side_b_label?: string;
+          status?: "open" | "assurance_pending" | "assurance_met" | "closed";
+          moderation_status?: "clear" | "flagged" | "blocked";
+          moderation_notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          description?: string;
+          compromise_charity_id?: string;
+          offset_ratio?: number;
+          time_horizon?: "one_off" | "recurring";
+          verification_method?:
+            | "proof_of_past_donations"
+            | "receipts_uploaded"
+            | "funds_in_escrow"
+            | "third_party_audit";
+          unmatched_surplus_rule?:
+            | "return_to_donors"
+            | "donate_to_compromise_destination"
+            | "donate_to_original_cause"
+            | "split_evenly";
+          assurance_minimum_cents?: number;
+          assurance_deadline_at?: string | null;
+          side_a_label?: string;
+          side_b_label?: string;
+          status?: "open" | "assurance_pending" | "assurance_met" | "closed";
+          moderation_status?: "clear" | "flagged" | "blocked";
+          moderation_notes?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -174,16 +267,25 @@ export interface Database {
           offset_ratio: number;
           time_horizon: "one_off" | "recurring";
           verification_method:
+            | "proof_of_past_donations"
             | "receipts_uploaded"
             | "funds_in_escrow"
             | "third_party_audit";
           unmatched_surplus_rule:
             | "return_to_donors"
             | "donate_to_compromise_destination"
+            | "donate_to_original_cause"
             | "split_evenly";
+          participation_mode: "direct" | "pool";
+          pool_id: string | null;
+          pool_side: "side_a" | "side_b" | null;
+          assurance_minimum_cents: number;
+          assurance_deadline_at: string | null;
           evidence_url: string;
           moderation_status: "clear" | "flagged" | "blocked";
           moderation_notes: string;
+          moderation_reviewed_by: string | null;
+          moderation_reviewed_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -197,16 +299,25 @@ export interface Database {
           offset_ratio: number;
           time_horizon: "one_off" | "recurring";
           verification_method:
+            | "proof_of_past_donations"
             | "receipts_uploaded"
             | "funds_in_escrow"
             | "third_party_audit";
           unmatched_surplus_rule:
             | "return_to_donors"
             | "donate_to_compromise_destination"
+            | "donate_to_original_cause"
             | "split_evenly";
+          participation_mode?: "direct" | "pool";
+          pool_id?: string | null;
+          pool_side?: "side_a" | "side_b" | null;
+          assurance_minimum_cents?: number;
+          assurance_deadline_at?: string | null;
           evidence_url?: string;
           moderation_status?: "clear" | "flagged" | "blocked";
           moderation_notes?: string;
+          moderation_reviewed_by?: string | null;
+          moderation_reviewed_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -219,16 +330,25 @@ export interface Database {
           offset_ratio?: number;
           time_horizon?: "one_off" | "recurring";
           verification_method?:
+            | "proof_of_past_donations"
             | "receipts_uploaded"
             | "funds_in_escrow"
             | "third_party_audit";
           unmatched_surplus_rule?:
             | "return_to_donors"
             | "donate_to_compromise_destination"
+            | "donate_to_original_cause"
             | "split_evenly";
+          participation_mode?: "direct" | "pool";
+          pool_id?: string | null;
+          pool_side?: "side_a" | "side_b" | null;
+          assurance_minimum_cents?: number;
+          assurance_deadline_at?: string | null;
           evidence_url?: string;
           moderation_status?: "clear" | "flagged" | "blocked";
           moderation_notes?: string;
+          moderation_reviewed_by?: string | null;
+          moderation_reviewed_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

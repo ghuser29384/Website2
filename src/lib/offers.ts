@@ -1,13 +1,19 @@
 import {
   assessDonationOffsetModeration,
   calculateDonationOffsetPreview,
+  calculateDonationOffsetPoolProgress,
   createDefaultDonationOffsetFields,
+  formatDonationOffsetParticipationMode,
+  formatDonationOffsetPoolSide,
   formatDonationOffsetRatio,
   formatDonationOffsetTimeHorizon,
   formatDonationOffsetUnmatchedRule,
   formatDonationOffsetVerificationMethod,
+  getDonationOffsetComplexityWarnings,
   validateDonationOffsetFields,
   type DonationOffsetModerationStatus,
+  type DonationOffsetParticipationMode,
+  type DonationOffsetPoolSide,
   type DonationOffsetTimeHorizon,
   type DonationOffsetUnmatchedSurplusRule,
   type DonationOffsetVerificationMethod,
@@ -44,6 +50,12 @@ export interface Offer {
   offsetTimeHorizon: DonationOffsetTimeHorizon;
   offsetVerificationMethod: DonationOffsetVerificationMethod;
   unmatchedSurplusRule: DonationOffsetUnmatchedSurplusRule;
+  offsetParticipationMode: DonationOffsetParticipationMode;
+  offsetPoolId: string;
+  offsetPoolName: string;
+  offsetPoolSide: DonationOffsetPoolSide | "";
+  assuranceMinimumUsd: number | null;
+  assuranceDeadline: string;
   evidenceUrl: string;
   moderationStatus: DonationOffsetModerationStatus | null;
   source: string;
@@ -75,6 +87,12 @@ export interface OfferDraft {
   offsetTimeHorizon: DonationOffsetTimeHorizon;
   offsetVerificationMethod: DonationOffsetVerificationMethod;
   unmatchedSurplusRule: DonationOffsetUnmatchedSurplusRule;
+  offsetParticipationMode: DonationOffsetParticipationMode;
+  offsetPoolId: string;
+  offsetPoolName: string;
+  offsetPoolSide: DonationOffsetPoolSide | "";
+  assuranceMinimumUsd: number | null;
+  assuranceDeadline: string;
   evidenceUrl: string;
   counterfactualHonesty: boolean;
   policyPledge: boolean;
@@ -208,6 +226,12 @@ export function createDefaultOfferDraft(): OfferDraft {
     offsetTimeHorizon: defaultOffsetFields.timeHorizon,
     offsetVerificationMethod: defaultOffsetFields.verificationMethod,
     unmatchedSurplusRule: defaultOffsetFields.unmatchedSurplusRule,
+    offsetParticipationMode: defaultOffsetFields.participationMode,
+    offsetPoolId: defaultOffsetFields.poolId,
+    offsetPoolName: defaultOffsetFields.poolName,
+    offsetPoolSide: defaultOffsetFields.poolSide,
+    assuranceMinimumUsd: defaultOffsetFields.assuranceMinimumUsd,
+    assuranceDeadline: defaultOffsetFields.assuranceDeadline,
     evidenceUrl: "",
     counterfactualHonesty: false,
     policyPledge: false,
@@ -239,8 +263,14 @@ export const SEED_OFFERS: Offer[] = [
     compromiseDestinationId: "",
     offsetRatio: null,
     offsetTimeHorizon: "one_off",
-    offsetVerificationMethod: "receipts_uploaded",
+    offsetVerificationMethod: "proof_of_past_donations",
     unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
     source: "Seeded example",
@@ -270,8 +300,14 @@ export const SEED_OFFERS: Offer[] = [
     compromiseDestinationId: "",
     offsetRatio: null,
     offsetTimeHorizon: "one_off",
-    offsetVerificationMethod: "receipts_uploaded",
+    offsetVerificationMethod: "proof_of_past_donations",
     unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
     source: "Seeded example",
@@ -301,8 +337,14 @@ export const SEED_OFFERS: Offer[] = [
     compromiseDestinationId: "",
     offsetRatio: null,
     offsetTimeHorizon: "one_off",
-    offsetVerificationMethod: "receipts_uploaded",
+    offsetVerificationMethod: "proof_of_past_donations",
     unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
     source: "Seeded example",
@@ -332,8 +374,14 @@ export const SEED_OFFERS: Offer[] = [
     compromiseDestinationId: "",
     offsetRatio: null,
     offsetTimeHorizon: "one_off",
-    offsetVerificationMethod: "receipts_uploaded",
+    offsetVerificationMethod: "proof_of_past_donations",
     unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
     source: "Seeded example",
@@ -365,6 +413,12 @@ export const SEED_OFFERS: Offer[] = [
     offsetTimeHorizon: "one_off",
     offsetVerificationMethod: "funds_in_escrow",
     unmatchedSurplusRule: "donate_to_compromise_destination",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    assuranceDeadline: "",
     evidenceUrl: "https://example.com/rebecca-escrow-confirmation",
     moderationStatus: "clear",
     source: "Seeded example",
@@ -396,6 +450,12 @@ export const SEED_OFFERS: Offer[] = [
     offsetTimeHorizon: "one_off",
     offsetVerificationMethod: "funds_in_escrow",
     unmatchedSurplusRule: "donate_to_compromise_destination",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    assuranceDeadline: "",
     evidenceUrl: "https://example.com/christopher-escrow-confirmation",
     moderationStatus: "clear",
     source: "Seeded example",
@@ -425,8 +485,14 @@ export const SEED_OFFERS: Offer[] = [
     compromiseDestinationId: "",
     offsetRatio: null,
     offsetTimeHorizon: "one_off",
-    offsetVerificationMethod: "receipts_uploaded",
+    offsetVerificationMethod: "proof_of_past_donations",
     unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
     source: "Seeded example",
@@ -456,8 +522,14 @@ export const SEED_OFFERS: Offer[] = [
     compromiseDestinationId: "",
     offsetRatio: null,
     offsetTimeHorizon: "one_off",
-    offsetVerificationMethod: "receipts_uploaded",
+    offsetVerificationMethod: "proof_of_past_donations",
     unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
     source: "Seeded example",
@@ -497,7 +569,41 @@ export function formatOffsetSummary(offer: Offer) {
     timeHorizon: formatDonationOffsetTimeHorizon(offer.offsetTimeHorizon),
     verification: formatDonationOffsetVerificationMethod(offer.offsetVerificationMethod),
     unmatchedRule: formatDonationOffsetUnmatchedRule(offer.unmatchedSurplusRule),
+    participationMode: formatDonationOffsetParticipationMode(offer.offsetParticipationMode),
+    poolSide: formatDonationOffsetPoolSide(offer.offsetPoolSide),
+    poolName: offer.offsetPoolName,
+    complexityWarnings: getDonationOffsetComplexityWarnings({
+      baselineAmountUsd: offer.baselineAmountUsd,
+      baselineOpposedCause: offer.baselineOpposedCause,
+      requestedMatchingAmountUsd: offer.requestedMatchingAmountUsd,
+      requestedOpposedCause: offer.requestedOpposedCause,
+      compromiseDestinationId: offer.compromiseDestinationId,
+      offsetRatio: offer.offsetRatio,
+      timeHorizon: offer.offsetTimeHorizon,
+      verificationMethod: offer.offsetVerificationMethod,
+      unmatchedSurplusRule: offer.unmatchedSurplusRule,
+      participationMode: offer.offsetParticipationMode,
+      poolId: offer.offsetPoolId,
+      poolName: offer.offsetPoolName,
+      poolSide: offer.offsetPoolSide,
+      assuranceMinimumUsd: offer.assuranceMinimumUsd,
+      assuranceDeadline: offer.assuranceDeadline,
+      description: offer.notes,
+      evidenceUrl: offer.evidenceUrl,
+    }),
     preview,
+    poolProgress:
+      offer.offsetParticipationMode === "pool"
+        ? calculateDonationOffsetPoolProgress({
+            sideATotalUsd:
+              offer.offsetPoolSide === "side_b" ? offer.requestedMatchingAmountUsd ?? 0 : offer.baselineAmountUsd ?? 0,
+            sideBTotalUsd:
+              offer.offsetPoolSide === "side_b" ? offer.baselineAmountUsd ?? 0 : offer.requestedMatchingAmountUsd ?? 0,
+            offsetRatio: offer.offsetRatio,
+            assuranceMinimumUsd: offer.assuranceMinimumUsd,
+            deadlineAt: offer.assuranceDeadline,
+          })
+        : null,
   };
 }
 

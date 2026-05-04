@@ -2408,6 +2408,27 @@ output {
   margin-bottom: 0.15rem;
 }
 
+.offset-pool-preview {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.offset-progress-track {
+  overflow: hidden;
+  width: 100%;
+  height: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.offset-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
 .radio-stack {
   display: grid;
   gap: 0.65rem;
@@ -2502,6 +2523,11 @@ output {
 .status-banner-success {
   background: var(--success-soft);
   color: var(--success-ink);
+}
+
+.status-banner-warning {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .state-page {

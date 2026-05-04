@@ -3,7 +3,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { OfferCreateForm } from "@/components/offers/offer-create-form";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
-import { requireViewer } from "@/lib/app-data";
+import { getDonationOffsetOverview, requireViewer } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -22,8 +22,51 @@ interface NewOfferPageProps {
 export default async function NewOfferPage({ searchParams }: NewOfferPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
+  const initialMode =
+    typeof resolvedSearchParams.mode === "string" &&
+    (resolvedSearchParams.mode === "pledge" ||
+      resolvedSearchParams.mode === "offset" ||
+      resolvedSearchParams.mode === "payment")
+      ? resolvedSearchParams.mode
+      : "pledge";
+  const initialOffsetParticipationMode =
+    typeof resolvedSearchParams.offset_participation_mode === "string" &&
+    (resolvedSearchParams.offset_participation_mode === "direct" ||
+      resolvedSearchParams.offset_participation_mode === "pool")
+      ? resolvedSearchParams.offset_participation_mode
+      : "direct";
+  const initialOffsetPoolId =
+    typeof resolvedSearchParams.offset_pool_id === "string"
+      ? resolvedSearchParams.offset_pool_id
+      : "";
+  const initialOffsetPoolSide =
+    typeof resolvedSearchParams.offset_pool_side === "string" &&
+    (resolvedSearchParams.offset_pool_side === "side_a" ||
+      resolvedSearchParams.offset_pool_side === "side_b")
+      ? resolvedSearchParams.offset_pool_side
+      : "";
   const supabaseReady = hasSupabaseEnv();
   const viewer = supabaseReady ? await requireViewer("/offers/new") : null;
+  const donationOffsetOverview = supabaseReady ? await getDonationOffsetOverview() : null;
+  const availablePools =
+    donationOffsetOverview?.pools.map((pool) => ({
+      id: pool.id,
+      name: pool.name,
+      compromiseCharityId: pool.compromise_charity_id,
+      compromiseCharityName: pool.compromiseCharity?.name ?? "Compromise destination",
+      offsetRatio: pool.offset_ratio,
+      timeHorizon: pool.time_horizon,
+      verificationMethod: pool.verification_method,
+      unmatchedSurplusRule: pool.unmatched_surplus_rule,
+      assuranceMinimumCents: pool.assurance_minimum_cents,
+      assuranceDeadlineAt: pool.assurance_deadline_at,
+      sideALabel: pool.side_a_label,
+      sideBLabel: pool.side_b_label,
+      sideATotalCents: pool.sideATotalCents,
+      sideBTotalCents: pool.sideBTotalCents,
+      matchedCompromiseCents: pool.matchedCompromiseCents,
+      status: pool.status,
+    })) ?? [];
 
   return (
     <div className="page-shell">
@@ -84,7 +127,15 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
       <main>
         <section className="section section-white">
           <div className="auth-grid">
-            <OfferCreateForm formMessage={formMessage} supabaseReady={supabaseReady} />
+            <OfferCreateForm
+              availablePools={availablePools}
+              formMessage={formMessage}
+              initialMode={initialMode}
+              initialOffsetParticipationMode={initialOffsetParticipationMode}
+              initialOffsetPoolId={initialOffsetPoolId}
+              initialOffsetPoolSide={initialOffsetPoolSide}
+              supabaseReady={supabaseReady}
+            />
 
             <article className="panel auth-side-card">
               <p className="eyebrow">Current account</p>

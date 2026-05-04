@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
+  reviewDonationOffsetOfferAction,
   suppressEmailOutboxAction,
   updateMatchReportStatusAction,
   updatePaymentReviewStatusAction,
@@ -33,6 +34,15 @@ type AgreementPaymentRow = Database["public"]["Tables"]["agreement_payments"]["R
 type AgreementEventRow = Database["public"]["Tables"]["agreement_events"]["Row"];
 type EmailOutboxRow = Database["public"]["Tables"]["email_outbox"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
+type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
+type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
+type RegisteredCharityRow = Database["public"]["Tables"]["registered_charities"]["Row"];
+
+interface DonationOffsetReviewRecord {
+  offset: DonationOffsetOfferRow;
+  offer: OfferRow | null;
+  charity: RegisteredCharityRow | null;
+}
 
 function formatPaymentAmount(amountCents: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -76,7 +86,21 @@ async function loadAdminQueues() {
       .limit(50),
   ]);
 
-  const errors = [reports.error, payments.error, events.error, emails.error, wishProfiles.error]
+  const flaggedOffsetsResult = await supabase
+    .from("donation_offset_offers")
+    .select("*")
+    .eq("moderation_status", "flagged")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const errors = [
+    reports.error,
+    payments.error,
+    events.error,
+    emails.error,
+    wishProfiles.error,
+    flaggedOffsetsResult.error,
+  ]
     .filter(Boolean)
     .map((error) => error?.message)
     .join(" ");
@@ -85,12 +109,40 @@ async function loadAdminQueues() {
     throw new Error(errors);
   }
 
+  const flaggedOffsets = (flaggedOffsetsResult.data ?? []) as DonationOffsetOfferRow[];
+  const flaggedOfferIds = flaggedOffsets.map((row) => row.offer_id);
+  const charityIds = [...new Set(flaggedOffsets.map((row) => row.compromise_charity_id))];
+  const [flaggedOffersResult, flaggedCharitiesResult] = await Promise.all([
+    flaggedOfferIds.length
+      ? supabase.from("offers").select("*").in("id", flaggedOfferIds)
+      : Promise.resolve({ data: [] as OfferRow[], error: null }),
+    charityIds.length
+      ? supabase.from("registered_charities").select("*").in("id", charityIds)
+      : Promise.resolve({ data: [] as RegisteredCharityRow[], error: null }),
+  ]);
+
+  if (flaggedOffersResult.error || flaggedCharitiesResult.error) {
+    throw new Error(flaggedOffersResult.error?.message ?? flaggedCharitiesResult.error?.message);
+  }
+
+  const offerMap = new Map(
+    ((flaggedOffersResult.data ?? []) as OfferRow[]).map((row) => [row.id, row] as const),
+  );
+  const charityMap = new Map(
+    ((flaggedCharitiesResult.data ?? []) as RegisteredCharityRow[]).map((row) => [row.id, row] as const),
+  );
+
   return {
     reports: (reports.data ?? []) as MatchReportRow[],
     payments: (payments.data ?? []) as AgreementPaymentRow[],
     events: (events.data ?? []) as AgreementEventRow[],
     emails: (emails.data ?? []) as EmailOutboxRow[],
     wishProfiles: (wishProfiles.data ?? []) as WishProfileRow[],
+    donationOffsetReviews: flaggedOffsets.map((offset) => ({
+      offset,
+      offer: offerMap.get(offset.offer_id) ?? null,
+      charity: charityMap.get(offset.compromise_charity_id) ?? null,
+    })),
   };
 }
 
@@ -144,12 +196,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
+                  <strong>{queues?.donationOffsetReviews.length ?? 0} offset review item(s)</strong>
+                  <p>Paused donation offsets needing baseline or legality review.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">03</span>
+                <div>
                   <strong>{queues?.payments.length ?? 0} payment issue(s)</strong>
                   <p>Refund requests, disputes, and failures.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">03</span>
+                <span className="flow-number">04</span>
                 <div>
                   <strong>{queues?.emails.length ?? 0} email item(s)</strong>
                   <p>Queued or failed outbound mail.</p>
@@ -231,6 +290,65 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     <div>
                       <strong>No open match reports.</strong>
                       <p>Reports submitted from participant dashboards will appear here.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="section section-subtle">
+              <div className="section-head">
+                <p className="eyebrow">Donation offsets</p>
+                <h2>Paused offset offers awaiting review</h2>
+                <p>
+                  Review baseline evidence, political-destination issues, and coercion concerns before
+                  letting an offset enter the public marketplace.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.donationOffsetReviews.length ? (
+                  queues.donationOffsetReviews.map((review) => (
+                    <article className="panel data-card" key={review.offset.offer_id}>
+                      <p className="detail-kicker">
+                        {review.charity?.name ?? "Compromise destination"} | {review.offset.verification_method.replaceAll("_", " ")}
+                      </p>
+                      <h3>{review.offer?.offered_cause ?? "Offset"} for {review.offer?.requested_cause ?? "counterparty"}</h3>
+                      <p className="route-text">
+                        Baseline ${review.offset.baseline_amount_cents / 100} from {review.offset.baseline_opposed_cause}
+                      </p>
+                      <p className="route-text">
+                        Requests ${review.offset.requested_matching_amount_cents / 100} from {review.offset.requested_opposed_cause}
+                      </p>
+                      <p className="route-text">{review.offset.moderation_notes || "No moderation notes yet."}</p>
+                      <p className="route-text">
+                        Participation: {review.offset.participation_mode}
+                        {review.offset.pool_id ? ` | Pool ${review.offset.pool_id.slice(0, 8)}` : ""}
+                      </p>
+                      <div className="form-actions">
+                        <form action={reviewDonationOffsetOfferAction}>
+                          <input name="offer_id" type="hidden" value={review.offset.offer_id} />
+                          <input name="return_to" type="hidden" value="/admin" />
+                          <input name="moderation_status" type="hidden" value="clear" />
+                          <button className="button button-secondary button-mini" type="submit">
+                            Approve and publish
+                          </button>
+                        </form>
+                        <form action={reviewDonationOffsetOfferAction}>
+                          <input name="offer_id" type="hidden" value={review.offset.offer_id} />
+                          <input name="return_to" type="hidden" value="/admin" />
+                          <input name="moderation_status" type="hidden" value="blocked" />
+                          <button className="button button-secondary button-mini" type="submit">
+                            Block
+                          </button>
+                        </form>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No paused donation offsets.</strong>
+                      <p>Flagged offset offers will appear here for review.</p>
                     </div>
                   </div>
                 )}

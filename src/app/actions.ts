@@ -25,6 +25,8 @@ import {
   findRegisteredCharityById,
   formatDonationOffsetUnmatchedRule,
   type DonationOffsetFields,
+  type DonationOffsetParticipationMode,
+  type DonationOffsetPoolSide,
   type DonationOffsetTimeHorizon,
   type DonationOffsetUnmatchedSurplusRule,
   type DonationOffsetVerificationMethod,
@@ -52,6 +54,7 @@ type ClarificationQuestionInsert = Database["public"]["Tables"]["clarification_q
 type AgreementEventInsert = Database["public"]["Tables"]["agreement_events"]["Insert"];
 type DonationOffsetOfferInsert = Database["public"]["Tables"]["donation_offset_offers"]["Insert"];
 type DonationOffsetMatchInsert = Database["public"]["Tables"]["donation_offset_matches"]["Insert"];
+type DonationOffsetPoolInsert = Database["public"]["Tables"]["donation_offset_pools"]["Insert"];
 type AgreementPaymentScheduleInsert = Database["public"]["Tables"]["agreement_payment_schedules"]["Insert"];
 type PersonalDelegateInsert = Database["public"]["Tables"]["personal_delegates"]["Insert"];
 type SourceConnectionInsert = Database["public"]["Tables"]["source_connections"]["Insert"];
@@ -106,6 +109,22 @@ function readPositiveMoneyAmount(formData: FormData, key: string) {
   const parsed = Number(rawValue);
 
   if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Number(parsed.toFixed(2));
+}
+
+function readNonNegativeMoneyAmount(formData: FormData, key: string) {
+  const rawValue = readOptional(formData, key);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  const parsed = Number(rawValue);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
     return null;
   }
 
@@ -275,19 +294,40 @@ function normalizeDonationOffsetTimeHorizon(value: string): DonationOffsetTimeHo
 }
 
 function normalizeDonationOffsetVerificationMethod(value: string): DonationOffsetVerificationMethod {
-  if (value === "funds_in_escrow" || value === "third_party_audit") {
+  if (
+    value === "proof_of_past_donations" ||
+    value === "receipts_uploaded" ||
+    value === "funds_in_escrow" ||
+    value === "third_party_audit"
+  ) {
     return value;
   }
 
-  return "receipts_uploaded";
+  return "proof_of_past_donations";
 }
 
 function normalizeDonationOffsetUnmatchedRule(value: string): DonationOffsetUnmatchedSurplusRule {
-  if (value === "donate_to_compromise_destination" || value === "split_evenly") {
+  if (
+    value === "donate_to_compromise_destination" ||
+    value === "donate_to_original_cause" ||
+    value === "split_evenly"
+  ) {
     return value;
   }
 
   return "return_to_donors";
+}
+
+function normalizeDonationOffsetParticipationMode(value: string): DonationOffsetParticipationMode {
+  return value === "pool" ? "pool" : "direct";
+}
+
+function normalizeDonationOffsetPoolSide(value: string): DonationOffsetPoolSide | "" {
+  if (value === "side_a" || value === "side_b") {
+    return value;
+  }
+
+  return "";
 }
 
 const blockedWishPatterns: Array<{ pattern: RegExp; label: string }> = [
@@ -1350,10 +1390,32 @@ export async function createOfferAction(formData: FormData) {
   const unmatchedSurplusRule = normalizedMode === "offset"
     ? normalizeDonationOffsetUnmatchedRule(readOptional(formData, "unmatched_surplus_rule"))
     : "return_to_donors";
+  const participationMode = normalizedMode === "offset"
+    ? normalizeDonationOffsetParticipationMode(readOptional(formData, "offset_participation_mode"))
+    : "direct";
+  const poolId = normalizedMode === "offset" ? readOptional(formData, "offset_pool_id") : "";
+  const poolName = normalizedMode === "offset" ? readOptional(formData, "offset_pool_name") : "";
+  const poolSide = normalizedMode === "offset"
+    ? normalizeDonationOffsetPoolSide(readOptional(formData, "offset_pool_side"))
+    : "";
+  const assuranceMinimumUsd = normalizedMode === "offset"
+    ? readNonNegativeMoneyAmount(formData, "assurance_minimum_usd")
+    : null;
+  const assuranceDeadline = normalizedMode === "offset"
+    ? readOptional(formData, "assurance_deadline")
+    : "";
   const evidenceUrl = normalizedMode === "offset" ? readOptional(formData, "offset_evidence_url") : "";
+  const newOfferReturnPath =
+    normalizedMode === "offset"
+      ? `/offers/new?mode=offset${
+          participationMode === "pool" ? "&offset_participation_mode=pool" : ""
+        }${poolId ? `&offset_pool_id=${encodeURIComponent(poolId)}` : ""}${
+          poolSide ? `&offset_pool_side=${poolSide}` : ""
+        }`
+      : "/offers/new";
 
   if (!offerAction || !requestAction || !offeredCause || !requestedCause) {
-    redirectWithMessage("/offers/new", "error", "Complete all required offer fields.");
+    redirectWithMessage(newOfferReturnPath, "error", "Complete all required offer fields.");
   }
 
   let donationOffsetFields: DonationOffsetFields | null = null;
@@ -1369,12 +1431,21 @@ export async function createOfferAction(formData: FormData) {
       timeHorizon: offsetTimeHorizon,
       verificationMethod: offsetVerificationMethod,
       unmatchedSurplusRule,
+      participationMode,
+      poolId,
+      poolName,
+      poolSide,
+      assuranceMinimumUsd,
+      assuranceDeadline,
       description: [offerAction, requestAction, notes].filter(Boolean).join("\n"),
       evidenceUrl,
     };
 
     const charity = findRegisteredCharityById(compromiseDestinationId);
     const moderation = assessDonationOffsetModeration(donationOffsetFields, charity);
+    const validationErrors = donationOffsetFields
+      ? validateDonationOffsetFields(donationOffsetFields)
+      : [];
 
     if (
       !baselineAmountUsd ||
@@ -1384,16 +1455,24 @@ export async function createOfferAction(formData: FormData) {
       !compromiseDestinationId ||
       !offsetRatio
     ) {
-      redirectWithMessage("/offers/new", "error", "Complete all required donation offset fields.");
+      redirectWithMessage(newOfferReturnPath, "error", "Complete all required donation offset fields.");
     }
 
     if (!charity?.isActive) {
-      redirectWithMessage("/offers/new", "error", "Choose a valid registered compromise destination.");
+      redirectWithMessage(newOfferReturnPath, "error", "Choose a valid registered compromise destination.");
+    }
+
+    if (validationErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        validationErrors[0] ?? "Complete the donation offset fields.",
+      );
     }
 
     if (moderation.status === "blocked") {
       redirectWithMessage(
-        "/offers/new",
+        newOfferReturnPath,
         "error",
         moderation.reasons[0] ??
           "This donation offset could not be published because it violates the platform safeguards.",
@@ -1403,6 +1482,101 @@ export async function createOfferAction(formData: FormData) {
 
   const ownerAlias = ownerAliasOverride || deriveDisplayName(viewer.authUser, viewer.profile);
   await ensureAccountRowsForUser(viewer.authUser, supabase);
+  let poolRecord:
+    | Database["public"]["Tables"]["donation_offset_pools"]["Row"]
+    | null = null;
+
+  if (normalizedMode === "offset" && donationOffsetFields?.participationMode === "pool") {
+    if (donationOffsetFields.poolId) {
+      const { data: existingPool, error: existingPoolError } = await supabase
+        .from("donation_offset_pools")
+        .select("*")
+        .eq("id", donationOffsetFields.poolId)
+        .maybeSingle();
+
+      if (existingPoolError || !existingPool) {
+        logSupabaseActionError("Failed to load donation offset pool during offer creation", existingPoolError, {
+          ownerId: viewer.authUser.id,
+          poolId: donationOffsetFields.poolId,
+        });
+        redirectWithMessage(
+          newOfferReturnPath,
+          "error",
+          existingPoolError?.message ?? "That offset pool could not be found.",
+        );
+      }
+
+      if (
+        existingPool.status === "closed" ||
+        existingPool.moderation_status !== "clear" ||
+        existingPool.compromise_charity_id !== donationOffsetFields.compromiseDestinationId ||
+        existingPool.time_horizon !== donationOffsetFields.timeHorizon ||
+        existingPool.offset_ratio !== (donationOffsetFields.offsetRatio ?? 1) ||
+        existingPool.verification_method !== donationOffsetFields.verificationMethod ||
+        existingPool.unmatched_surplus_rule !== donationOffsetFields.unmatchedSurplusRule ||
+        existingPool.assurance_minimum_cents !==
+          convertUsdToCents(donationOffsetFields.assuranceMinimumUsd) ||
+        (existingPool.assurance_deadline_at?.slice(0, 10) ?? "") !==
+          (donationOffsetFields.assuranceDeadline?.slice(0, 10) ?? "") ||
+        (donationOffsetFields.poolSide === "side_a" &&
+          (donationOffsetFields.baselineOpposedCause !== existingPool.side_a_label ||
+            donationOffsetFields.requestedOpposedCause !== existingPool.side_b_label)) ||
+        (donationOffsetFields.poolSide === "side_b" &&
+          (donationOffsetFields.baselineOpposedCause !== existingPool.side_b_label ||
+            donationOffsetFields.requestedOpposedCause !== existingPool.side_a_label))
+      ) {
+        redirectWithMessage(
+          newOfferReturnPath,
+          "error",
+          "Join-pool commitments must use the pool's shared charity, ratio, horizon, verification, surplus rule, assurance settings, and side labels.",
+        );
+      }
+
+      poolRecord = existingPool;
+    } else {
+      const poolInsert: DonationOffsetPoolInsert = {
+        created_by: viewer.authUser.id,
+        name: donationOffsetFields.poolName,
+        description: notes,
+        compromise_charity_id: donationOffsetFields.compromiseDestinationId,
+        offset_ratio: donationOffsetFields.offsetRatio ?? 1,
+        time_horizon: donationOffsetFields.timeHorizon,
+        verification_method: donationOffsetFields.verificationMethod,
+        unmatched_surplus_rule: donationOffsetFields.unmatchedSurplusRule,
+        assurance_minimum_cents: convertUsdToCents(donationOffsetFields.assuranceMinimumUsd),
+        assurance_deadline_at: parseOptionalTimestamp(donationOffsetFields.assuranceDeadline),
+        side_a_label: donationOffsetFields.baselineOpposedCause,
+        side_b_label: donationOffsetFields.requestedOpposedCause,
+        status: "open",
+        moderation_status: assessDonationOffsetModeration(donationOffsetFields).status,
+        moderation_notes: assessDonationOffsetModeration(donationOffsetFields).reasons.join(" "),
+      };
+
+      const { data: createdPool, error: createdPoolError } = await supabase
+        .from("donation_offset_pools")
+        .insert(poolInsert)
+        .select("*")
+        .single();
+
+      if (createdPoolError || !createdPool) {
+        logSupabaseActionError("Failed to create donation offset pool", createdPoolError, {
+          ownerId: viewer.authUser.id,
+        });
+        redirectWithMessage(
+          newOfferReturnPath,
+          "error",
+          createdPoolError?.message ?? "Unable to create the donation offset pool.",
+        );
+      }
+
+      poolRecord = createdPool;
+    }
+  }
+
+  const offsetModeration =
+    normalizedMode === "offset" && donationOffsetFields
+      ? assessDonationOffsetModeration(donationOffsetFields)
+      : null;
 
   const { data, error } = await supabase
     .from("offers")
@@ -1423,7 +1597,10 @@ export async function createOfferAction(formData: FormData) {
       payment_interval_value: paymentIntervalValue,
       trust_level: trustLevel,
       notes,
-      status: "open",
+      status:
+        normalizedMode === "offset" && offsetModeration?.status === "flagged"
+          ? "paused"
+          : "open",
     })
     .select("id")
     .single();
@@ -1433,11 +1610,10 @@ export async function createOfferAction(formData: FormData) {
       ownerId: viewer.authUser.id,
       mode: normalizedMode,
     });
-    redirectWithMessage("/offers/new", "error", error?.message ?? "Unable to create offer.");
+    redirectWithMessage(newOfferReturnPath, "error", error?.message ?? "Unable to create offer.");
   }
 
   if (normalizedMode === "offset" && donationOffsetFields) {
-    const moderation = assessDonationOffsetModeration(donationOffsetFields);
     const offsetInsert: DonationOffsetOfferInsert = {
       offer_id: data.id,
       baseline_amount_cents: convertUsdToCents(donationOffsetFields.baselineAmountUsd),
@@ -1451,9 +1627,14 @@ export async function createOfferAction(formData: FormData) {
       time_horizon: donationOffsetFields.timeHorizon,
       verification_method: donationOffsetFields.verificationMethod,
       unmatched_surplus_rule: donationOffsetFields.unmatchedSurplusRule,
+      participation_mode: donationOffsetFields.participationMode,
+      pool_id: poolRecord?.id ?? null,
+      pool_side: donationOffsetFields.poolSide || null,
+      assurance_minimum_cents: convertUsdToCents(donationOffsetFields.assuranceMinimumUsd),
+      assurance_deadline_at: parseOptionalTimestamp(donationOffsetFields.assuranceDeadline),
       evidence_url: donationOffsetFields.evidenceUrl,
-      moderation_status: moderation.status,
-      moderation_notes: moderation.reasons.join(" "),
+      moderation_status: offsetModeration?.status ?? "clear",
+      moderation_notes: offsetModeration?.reasons.join(" ") ?? "",
     };
 
     const { error: offsetError } = await supabase.from("donation_offset_offers").insert(offsetInsert);
@@ -1463,13 +1644,21 @@ export async function createOfferAction(formData: FormData) {
         offerId: data.id,
         ownerId: viewer.authUser.id,
       });
-      redirectWithMessage("/offers/new", "error", offsetError.message);
+      redirectWithMessage(newOfferReturnPath, "error", offsetError.message);
     }
   }
 
   revalidatePath("/offers");
+  revalidatePath("/donation-offsets");
+  revalidatePath("/admin");
   revalidatePath("/dashboard");
-  redirectWithMessage(`/offers/${data.id}`, "message", "Offer created successfully.");
+  redirectWithMessage(
+    `/offers/${data.id}`,
+    "message",
+    normalizedMode === "offset" && offsetModeration?.status === "flagged"
+      ? "Donation offset saved for moderator review. It will remain paused until the baseline evidence is approved."
+      : "Offer created successfully.",
+  );
 }
 
 export async function expressInterestAction(formData: FormData) {
@@ -4297,6 +4486,86 @@ export async function suppressEmailOutboxAction(formData: FormData) {
   redirectWithMessage(returnTo, "message", "Email suppressed.");
 }
 
+export async function reviewDonationOffsetOfferAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const offerId = readRequired(formData, "offer_id");
+  const rawStatus = readRequired(formData, "moderation_status");
+  const moderationStatus =
+    rawStatus === "clear" || rawStatus === "blocked" ? rawStatus : "flagged";
+  const moderationNotes = readOptional(formData, "moderation_notes");
+
+  if (!offerId) {
+    redirectWithMessage(returnTo, "error", "Offer ID is required.");
+  }
+
+  const admin = await requireAdminViewer(returnTo);
+  const supabase = createServiceClient();
+  const reviewedAt = new Date().toISOString();
+
+  const { data: offsetOffer, error: offsetOfferError } = await supabase
+    .from("donation_offset_offers")
+    .update({
+      moderation_status: moderationStatus,
+      moderation_notes: moderationNotes,
+      moderation_reviewed_by: admin.authUser.id,
+      moderation_reviewed_at: reviewedAt,
+    })
+    .eq("offer_id", offerId)
+    .select("*")
+    .maybeSingle();
+
+  if (offsetOfferError || !offsetOffer) {
+    logSupabaseActionError("Failed to review donation offset offer", offsetOfferError, {
+      offerId,
+      moderationStatus,
+    });
+    redirectWithMessage(returnTo, "error", offsetOfferError?.message ?? "Donation offset offer not found.");
+  }
+
+  const nextOfferStatus =
+    moderationStatus === "clear" ? "open" : moderationStatus === "blocked" ? "closed" : "paused";
+
+  const { error: offerError } = await supabase
+    .from("offers")
+    .update({
+      status: nextOfferStatus,
+    })
+    .eq("id", offerId);
+
+  if (offerError) {
+    logSupabaseActionError("Failed to update offer status after donation offset review", offerError, {
+      offerId,
+      moderationStatus,
+    });
+    redirectWithMessage(returnTo, "error", offerError.message);
+  }
+
+  if (offsetOffer.pool_id) {
+    const { error: poolError } = await supabase
+      .from("donation_offset_pools")
+      .update({
+        moderation_status: moderationStatus,
+        moderation_notes: moderationNotes,
+      })
+      .eq("id", offsetOffer.pool_id);
+
+    if (poolError) {
+      logSupabaseActionError("Failed to update donation offset pool review state", poolError, {
+        offerId,
+        poolId: offsetOffer.pool_id,
+        moderationStatus,
+      });
+      redirectWithMessage(returnTo, "error", poolError.message);
+    }
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/offers");
+  revalidatePath("/donation-offsets");
+  revalidatePath(`/offers/${offerId}`);
+  redirectWithMessage(returnTo, "message", "Donation offset review updated.");
+}
+
 export async function toggleFollowAction(formData: FormData) {
   if (!hasSupabaseEnv()) {
     redirectWithMessage("/", "error", "Supabase is not configured yet.");
@@ -4899,6 +5168,14 @@ export async function acceptInterestAction(formData: FormData) {
       );
     }
 
+    if (offsetDetails.participation_mode === "pool") {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "Pool commitments are aggregated through the pool itself. Join the pool instead of accepting it one-to-one.",
+      );
+    }
+
     const preview = calculateDonationOffsetPreview({
       baselineAmountUsd: offsetDetails.baseline_amount_cents / 100,
       requestedMatchingAmountUsd: offsetDetails.requested_matching_amount_cents / 100,
@@ -5119,6 +5396,14 @@ export async function acceptGuestInterestAction(formData: FormData) {
         returnTo,
         "error",
         offsetError?.message ?? "Donation offset details were missing for this offer.",
+      );
+    }
+
+    if (offsetDetails.participation_mode === "pool") {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "Pool commitments are aggregated through the pool itself. Join the pool instead of accepting it one-to-one.",
       );
     }
 

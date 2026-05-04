@@ -603,7 +603,8 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               </p>
               <ul className="clean-list">
                 <li>Matched redirection instead of zero-sum spending</li>
-                <li>Named compromise charity, ratio, and surplus rule</li>
+                <li>Named compromise charity, ratio, surplus rule, and verification method</li>
+                <li>Can be one-to-one or pooled with assurance thresholds</li>
                 <li>Especially relevant for public-goods style conflicts</li>
               </ul>
               <Link className="inline-link" href="/donation-offsets">

@@ -128,11 +128,25 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           offsetTimeHorizon: offer.donationOffset.time_horizon,
           offsetVerificationMethod: offer.donationOffset.verification_method,
           unmatchedSurplusRule: offer.donationOffset.unmatched_surplus_rule,
+          offsetParticipationMode: offer.donationOffset.participation_mode,
+          offsetPoolId: offer.donationOffset.pool_id ?? "",
+          offsetPoolName: offer.donationOffset.pool?.name ?? "",
+          offsetPoolSide: offer.donationOffset.pool_side ?? "",
+          assuranceMinimumUsd: offer.donationOffset.assurance_minimum_cents / 100,
+          assuranceDeadline: offer.donationOffset.assurance_deadline_at ?? "",
           evidenceUrl: offer.donationOffset.evidence_url,
           moderationStatus: offer.donationOffset.moderation_status,
           source: "Live offer",
           createdAt: Date.parse(offer.created_at),
         })
+      : null;
+  const poolJoinHref =
+    offer.mode === "offset" &&
+    offer.donationOffset?.participation_mode === "pool" &&
+    offer.donationOffset.pool_id
+      ? `/offers/new?mode=offset&offset_participation_mode=pool&offset_pool_id=${
+          offer.donationOffset.pool_id
+        }&offset_pool_side=${offer.donationOffset.pool_side === "side_a" ? "side_b" : "side_a"}`
       : null;
   const offerStructuredData = {
     "@context": "https://schema.org",
@@ -199,15 +213,34 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               ) : null}
               {!viewer ? (
                 <>
-                  <a className="button button-primary" href="#respond">
-                    Respond without account
-                  </a>
-                  <Link
-                    className="button button-secondary"
-                    href={`/login?next=${encodeURIComponent(`/offers/${offerId}`)}`}
-                  >
-                    Log in
-                  </Link>
+                  {offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool" ? (
+                    <>
+                      <Link
+                        className="button button-primary"
+                        href={`/signup?next=${encodeURIComponent(poolJoinHref ?? `/offers/${offer.id}`)}`}
+                      >
+                        Create account to join pool
+                      </Link>
+                      <Link
+                        className="button button-secondary"
+                        href={`/login?next=${encodeURIComponent(poolJoinHref ?? `/offers/${offer.id}`)}`}
+                      >
+                        Log in
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <a className="button button-primary" href="#respond">
+                        Respond without account
+                      </a>
+                      <Link
+                        className="button button-secondary"
+                        href={`/login?next=${encodeURIComponent(`/offers/${offerId}`)}`}
+                      >
+                        Log in
+                      </Link>
+                    </>
+                  )}
                 </>
               ) : null}
             </div>
@@ -336,6 +369,28 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                       {offsetSummary?.verification ?? "Receipts uploaded"}
                     </p>
                     <p>{offsetSummary?.unmatchedRule}</p>
+                    {offer.donationOffset.participation_mode === "pool" && offer.donationOffset.pool ? (
+                      <>
+                        <p>
+                          Pool: <strong>{offer.donationOffset.pool.name}</strong> |{" "}
+                          {offsetSummary?.participationMode ?? "Offset pool"}
+                        </p>
+                        <p>
+                          Side: <strong>{offsetSummary?.poolSide ?? "Not assigned"}</strong> | Matched so
+                          far ${(offer.donationOffset.pool.matchedCompromiseCents / 100).toFixed(2)}
+                        </p>
+                        {offer.donationOffset.pool.assurance_deadline_at ? (
+                          <p>
+                            Assurance target $
+                            {(offer.donationOffset.pool.assurance_minimum_cents / 100).toFixed(2)} by{" "}
+                            {new Date(
+                              offer.donationOffset.pool.assurance_deadline_at,
+                            ).toLocaleDateString()}
+                            .
+                          </p>
+                        ) : null}
+                      </>
+                    ) : null}
                     {offer.donationOffset.evidence_url ? (
                       <p>
                         Evidence link:{" "}
@@ -416,6 +471,34 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                     </div>
                   </form>
                 </div>
+              ) : viewer && offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool" ? (
+                <div className="clean-stack">
+                  <p className="route-text">
+                    This listing is part of an offset pool, so it is not accepted one-to-one. To
+                    participate, publish a matching commitment on the opposite side of the same pool.
+                  </p>
+                  {offer.donationOffset.pool ? (
+                    <div className="tag-row">
+                      <span className="badge">{offer.donationOffset.pool.name}</span>
+                      <span className="badge badge-secondary">
+                        Your side would be{" "}
+                        {offer.donationOffset.pool_side === "side_a"
+                          ? offer.donationOffset.pool.side_b_label
+                          : offer.donationOffset.pool.side_a_label}
+                      </span>
+                    </div>
+                  ) : null}
+                  <div className="form-actions">
+                    {poolJoinHref ? (
+                      <Link className="button button-primary" href={poolJoinHref}>
+                        Create matching pool commitment
+                      </Link>
+                    ) : null}
+                    <Link className="button button-secondary" href="/donation-offsets">
+                      Review pool safeguards
+                    </Link>
+                  </div>
+                </div>
               ) : viewer ? (
                 <form action={expressInterestAction} className="stack-form">
                   <input name="offer_id" type="hidden" value={offer.id} />
@@ -433,10 +516,14 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                     <button className="button button-primary" type="submit">
                       {myInterest
                         ? offer.mode === "offset"
-                          ? "Update offset commitment"
+                          ? offer.donationOffset?.participation_mode === "pool"
+                            ? "Update pool commitment"
+                            : "Update offset commitment"
                           : "Update response"
                         : offer.mode === "offset"
-                          ? "Accept offset"
+                          ? offer.donationOffset?.participation_mode === "pool"
+                            ? "Join offset pool"
+                            : "Accept offset"
                           : "Express interest"}
                     </button>
                     <Link className="button button-secondary" href="/dashboard">
@@ -444,6 +531,28 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                     </Link>
                   </div>
                 </form>
+              ) : offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool" ? (
+                <div className="clean-stack">
+                  <p className="route-text">
+                    Pooled offsets require a public matching commitment rather than an anonymous
+                    one-to-one response. Create an account to join the opposite side of this pool,
+                    publish your baseline evidence, and let the platform aggregate the match.
+                  </p>
+                  <div className="form-actions">
+                    <Link
+                      className="button button-primary"
+                      href={`/signup?next=${encodeURIComponent(poolJoinHref ?? `/offers/${offer.id}`)}`}
+                    >
+                      Create account to join pool
+                    </Link>
+                    <Link
+                      className="button button-secondary"
+                      href={`/login?next=${encodeURIComponent(poolJoinHref ?? `/offers/${offer.id}`)}`}
+                    >
+                      Log in
+                    </Link>
+                  </div>
+                </div>
               ) : (
                 <div className="clean-stack">
                   <p className="route-text">
@@ -493,7 +602,11 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
 
                     <div className="form-actions">
                       <button className="button button-primary" type="submit">
-                        {offer.mode === "offset" ? "Accept offset without account" : "Continue without account"}
+                        {offer.mode === "offset"
+                          ? offer.donationOffset?.participation_mode === "pool"
+                            ? "Join pool without account"
+                            : "Accept offset without account"
+                          : "Continue without account"}
                       </button>
                       <Link
                         className="button button-secondary"
@@ -560,7 +673,12 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                         {new Date(interest.created_at).toLocaleDateString()}
                       </span>
                     </div>
-                    {interest.kind === "member" && interest.canCreateAgreement && interest.status !== "accepted" ? (
+                    {offer.mode === "offset" && offer.donationOffset?.participation_mode === "pool" ? (
+                      <div className="status-banner status-banner-error">
+                        Pool commitments are not accepted one-to-one. Ask respondents to publish a
+                        matching pool commitment instead.
+                      </div>
+                    ) : interest.kind === "member" && interest.canCreateAgreement && interest.status !== "accepted" ? (
                       <form action={acceptInterestAction} className="stack-form compact-form">
                         <input name="interest_id" type="hidden" value={interest.memberInterestId ?? ""} />
                         <input name="offer_id" type="hidden" value={offer.id} />
@@ -576,7 +694,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                         <div className="form-actions">
                           <button className="button button-secondary button-mini" type="submit">
                             {offer.mode === "offset"
-                              ? "Accept offset and record redirect"
+                              ? offer.donationOffset?.participation_mode === "pool"
+                                ? "Pool commitments are not accepted one-to-one"
+                                : "Accept offset and record redirect"
                               : "Accept and create agreement"}
                           </button>
                         </div>
@@ -601,7 +721,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                         <div className="form-actions">
                           <button className="button button-secondary button-mini" type="submit">
                             {offer.mode === "offset"
-                              ? "Accept guest offset and record redirect"
+                              ? offer.donationOffset?.participation_mode === "pool"
+                                ? "Pool commitments are not accepted one-to-one"
+                                : "Accept guest offset and record redirect"
                               : "Accept linked guest response"}
                           </button>
                         </div>

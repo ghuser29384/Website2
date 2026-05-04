@@ -8,8 +8,10 @@ import { getViewer, listOpenOffersPage, listOpenOffersPreview, OFFERS_PAGE_SIZE 
 import type { OfferRecord } from "@/lib/app-data";
 import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
 import {
+  formatDonationOffsetPoolStatus,
   formatDonationOffsetRatio,
   formatDonationOffsetTimeHorizon,
+  formatDonationOffsetUnmatchedRule,
   formatDonationOffsetVerificationMethod,
 } from "@/lib/donation-offsets";
 import { findEveryOrgTargetForCauseArea } from "@/lib/every-org";
@@ -206,6 +208,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <div className="hero-actions">
               <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup"}>
                 {viewer ? "Create an offer" : "Create an account"}
+              </Link>
+              <Link className="button button-secondary" href="/donation-offsets">
+                Donation offsets guide
               </Link>
               <Link className="button button-secondary" href={viewer ? "/dashboard" : "/login"}>
                 {viewer ? "Open dashboard" : "Log in"}
@@ -431,8 +436,24 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         </p>
                         <p className="route-text">
                           {formatDonationOffsetTimeHorizon(offer.donationOffset.time_horizon)} |{" "}
-                          {offer.donationOffset.unmatched_surplus_rule.replaceAll("_", " ")}
+                          {formatDonationOffsetUnmatchedRule(
+                            offer.donationOffset.unmatched_surplus_rule,
+                          )}
                         </p>
+                        {offer.donationOffset.participation_mode === "pool" &&
+                        offer.donationOffset.pool ? (
+                          <>
+                            <p className="route-text">
+                              Pool: <strong>{offer.donationOffset.pool.name}</strong> |{" "}
+                              {formatDonationOffsetPoolStatus(offer.donationOffset.pool.progress.status)}
+                            </p>
+                            <p className="route-text">
+                              Matched so far: $
+                              {(offer.donationOffset.pool.matchedCompromiseCents / 100).toFixed(2)} |{" "}
+                              {offer.donationOffset.pool.commitmentCount} commitment(s)
+                            </p>
+                          </>
+                        ) : null}
                         {offer.donationOffset.moderation_status === "flagged" ? (
                           <p className="route-text">
                             Warning: baseline evidence is incomplete, so this offset is flagged for
@@ -451,9 +472,22 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     )}
                     <div className="offer-actions">
                       {offer.mode === "offset" ? (
-                        <Link className="button button-secondary button-mini" href={`/offers/${offer.id}#respond`}>
-                          Accept offset
-                        </Link>
+                        offer.donationOffset?.participation_mode === "pool" ? (
+                          <Link
+                            className="button button-secondary button-mini"
+                            href={`/offers/new?mode=offset&offset_participation_mode=pool&offset_pool_id=${
+                              offer.donationOffset.pool_id ?? ""
+                            }&offset_pool_side=${
+                              offer.donationOffset.pool_side === "side_a" ? "side_b" : "side_a"
+                            }`}
+                          >
+                            Join pool
+                          </Link>
+                        ) : (
+                          <Link className="button button-secondary button-mini" href={`/offers/${offer.id}#respond`}>
+                            Accept offset
+                          </Link>
+                        )
                       ) : null}
                       <Link className="text-button" href={`/offers/${offer.id}`}>
                         View offer
