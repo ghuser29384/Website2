@@ -140,40 +140,33 @@ export function OfferCreateForm({
     () => availablePools.find((pool) => pool.id === poolId) ?? null,
     [availablePools, poolId],
   );
-  const isJoiningExistingPool = participationMode === "pool" && Boolean(selectedPool);
-  const effectivePoolName = isJoiningExistingPool ? selectedPool.name : poolName;
+  const joinedPool = participationMode === "pool" ? selectedPool : null;
+  const isJoiningExistingPool = joinedPool !== null;
+  const effectivePoolName = joinedPool?.name ?? poolName;
   const effectiveBaselineOpposedCause =
-    isJoiningExistingPool && poolSide
+    joinedPool && poolSide
       ? poolSide === "side_a"
-        ? selectedPool.sideALabel
-        : selectedPool.sideBLabel
+        ? joinedPool.sideALabel
+        : joinedPool.sideBLabel
       : baselineOpposedCause;
   const effectiveRequestedOpposedCause =
-    isJoiningExistingPool && poolSide
+    joinedPool && poolSide
       ? poolSide === "side_a"
-        ? selectedPool.sideBLabel
-        : selectedPool.sideALabel
+        ? joinedPool.sideBLabel
+        : joinedPool.sideALabel
       : requestedOpposedCause;
-  const effectiveCompromiseDestinationId = isJoiningExistingPool
-    ? selectedPool.compromiseCharityId
-    : compromiseDestinationId;
-  const effectiveOffsetRatio = isJoiningExistingPool
-    ? String(selectedPool.offsetRatio)
-    : offsetRatio;
-  const effectiveTimeHorizon = isJoiningExistingPool ? selectedPool.timeHorizon : timeHorizon;
-  const effectiveVerificationMethod = isJoiningExistingPool
-    ? selectedPool.verificationMethod
-    : verificationMethod;
-  const effectiveUnmatchedSurplusRule = isJoiningExistingPool
-    ? selectedPool.unmatchedSurplusRule
-    : unmatchedSurplusRule;
-  const effectiveAssuranceMinimumUsd = isJoiningExistingPool
-    ? selectedPool.assuranceMinimumCents > 0
-      ? String(selectedPool.assuranceMinimumCents / 100)
+  const effectiveCompromiseDestinationId = joinedPool?.compromiseCharityId ?? compromiseDestinationId;
+  const effectiveOffsetRatio = joinedPool ? String(joinedPool.offsetRatio) : offsetRatio;
+  const effectiveTimeHorizon = joinedPool?.timeHorizon ?? timeHorizon;
+  const effectiveVerificationMethod = joinedPool?.verificationMethod ?? verificationMethod;
+  const effectiveUnmatchedSurplusRule = joinedPool?.unmatchedSurplusRule ?? unmatchedSurplusRule;
+  const effectiveAssuranceMinimumUsd = joinedPool
+    ? joinedPool.assuranceMinimumCents > 0
+      ? String(joinedPool.assuranceMinimumCents / 100)
       : ""
     : assuranceMinimumUsd;
-  const effectiveAssuranceDeadline = isJoiningExistingPool
-    ? toDateInputValue(selectedPool.assuranceDeadlineAt)
+  const effectiveAssuranceDeadline = joinedPool
+    ? toDateInputValue(joinedPool.assuranceDeadlineAt)
     : assuranceDeadline;
 
   const normalizedOffsetFields = useMemo(
