@@ -849,6 +849,14 @@ export function createOfferFromDraft(draft: OfferDraft): Offer {
       draft.mode === "offset" ? draft.offsetVerificationMethod : "receipts_uploaded",
     unmatchedSurplusRule:
       draft.mode === "offset" ? draft.unmatchedSurplusRule : "return_to_donors",
+    offsetParticipationMode:
+      draft.mode === "offset" ? draft.offsetParticipationMode : "direct",
+    offsetPoolId: draft.mode === "offset" ? draft.offsetPoolId : "",
+    offsetPoolName: draft.mode === "offset" ? draft.offsetPoolName.trim() : "",
+    offsetPoolSide: draft.mode === "offset" ? draft.offsetPoolSide : "",
+    assuranceMinimumUsd:
+      draft.mode === "offset" ? draft.assuranceMinimumUsd : null,
+    assuranceDeadline: draft.mode === "offset" ? draft.assuranceDeadline : "",
     evidenceUrl: draft.mode === "offset" ? draft.evidenceUrl.trim() : "",
     moderationStatus:
       draft.mode === "offset"
@@ -862,6 +870,12 @@ export function createOfferFromDraft(draft: OfferDraft): Offer {
             timeHorizon: draft.offsetTimeHorizon,
             verificationMethod: draft.offsetVerificationMethod,
             unmatchedSurplusRule: draft.unmatchedSurplusRule,
+            participationMode: draft.offsetParticipationMode,
+            poolId: draft.offsetPoolId,
+            poolName: draft.offsetPoolName,
+            poolSide: draft.offsetPoolSide,
+            assuranceMinimumUsd: draft.assuranceMinimumUsd,
+            assuranceDeadline: draft.assuranceDeadline,
             description: [draft.offerAction, draft.requestAction, draft.notes].filter(Boolean).join("\n"),
             evidenceUrl: draft.evidenceUrl,
           }).status
@@ -895,6 +909,13 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
       offsetTimeHorizon: draft.offsetTimeHorizon,
       offsetVerificationMethod: draft.offsetVerificationMethod,
       unmatchedSurplusRule: draft.unmatchedSurplusRule,
+      offsetParticipationMode: draft.offsetParticipationMode,
+      offsetPoolId: draft.offsetPoolId,
+      offsetPoolName: draft.offsetPoolName,
+      offsetPoolSide: draft.offsetPoolSide,
+      assuranceMinimumUsd: draft.assuranceMinimumUsd,
+      assuranceDeadline: draft.assuranceDeadline,
+      evidenceUrl: draft.evidenceUrl,
     };
   }
 
@@ -921,6 +942,12 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
       offsetTimeHorizon: "one_off",
       offsetVerificationMethod: "receipts_uploaded",
       unmatchedSurplusRule: "return_to_donors",
+      offsetParticipationMode: "direct",
+      offsetPoolId: "",
+      offsetPoolName: "",
+      offsetPoolSide: "",
+      assuranceMinimumUsd: null,
+      assuranceDeadline: "",
       evidenceUrl: "",
     };
   }
@@ -941,6 +968,12 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
     offsetTimeHorizon: "one_off",
     offsetVerificationMethod: "receipts_uploaded",
     unmatchedSurplusRule: "return_to_donors",
+    offsetParticipationMode: "direct",
+    offsetPoolId: "",
+    offsetPoolName: "",
+    offsetPoolSide: "",
+    assuranceMinimumUsd: null,
+    assuranceDeadline: "",
     evidenceUrl: "",
   };
 }
@@ -956,6 +989,12 @@ export function validateDonationOffsetDraft(draft: OfferDraft) {
     timeHorizon: draft.offsetTimeHorizon,
     verificationMethod: draft.offsetVerificationMethod,
     unmatchedSurplusRule: draft.unmatchedSurplusRule,
+    participationMode: draft.offsetParticipationMode,
+    poolId: draft.offsetPoolId,
+    poolName: draft.offsetPoolName,
+    poolSide: draft.offsetPoolSide,
+    assuranceMinimumUsd: draft.assuranceMinimumUsd,
+    assuranceDeadline: draft.assuranceDeadline,
     description: [draft.offerAction, draft.requestAction, draft.notes].filter(Boolean).join("\n"),
     evidenceUrl: draft.evidenceUrl,
   });
