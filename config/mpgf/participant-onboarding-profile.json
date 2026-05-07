@@ -1,0 +1,11 @@
+{
+  "version": "mpgf-participant-onboarding-v1",
+  "mode": "public_signup",
+  "publicEntryRoute": "/mpgf",
+  "authEntryRoute": "/signup?returnTo=/mpgf",
+  "supportRouteOrEmail": "/contact",
+  "termsRoute": "/terms",
+  "privacyRoute": "/privacy",
+  "accessProvisioningEvidencePath": "docs/mpgf/www-participant-journey-verification.md",
+  "intendedParticipantAccessProcess": "Ordinary participants can view the non-real-money demo immediately and use existing sign-up routes for account-backed participation."
+}

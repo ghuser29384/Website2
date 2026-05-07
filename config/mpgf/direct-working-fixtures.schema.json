@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Direct Working Fixtures",
+  "type": "object",
+  "required": ["version", "seedMode", "workflowStages", "createsRealMoneyRecords", "demoCycleId"],
+  "properties": {
+    "seedMode": { "const": "non_real_money_demo" },
+    "workflowStages": {
+      "type": "array",
+      "contains": { "const": "proposal_open" }
+    },
+    "createsRealMoneyRecords": { "const": false },
+    "mutatesLiveRecords": { "const": false },
+    "requiresWallClockNow": { "type": "boolean" },
+    "demoCycleId": { "type": "string" }
+  },
+  "additionalProperties": true
+}

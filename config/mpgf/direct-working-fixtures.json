@@ -1,0 +1,16 @@
+{
+  "version": "mpgf-direct-working-fixtures-v1",
+  "seedMode": "non_real_money_demo",
+  "workflowStages": ["proposal_open", "ballot_open_with_locked_budget", "dry_run"],
+  "createsRealMoneyRecords": false,
+  "mutatesLiveRecords": false,
+  "requiresWallClockNow": false,
+  "demoCycleId": "mpgf-cycle-demo-2026-05",
+  "demoParticipantRef": "fixture:mpgf-demo-participant",
+  "visibleDemoPoolAlternativeIds": [
+    "global-health-basic-needs",
+    "existential-risk-resilience",
+    "animal-welfare-transition",
+    "public-interest-knowledge"
+  ]
+}

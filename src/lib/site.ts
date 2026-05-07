@@ -4,12 +4,14 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
     { href: "/#background-networking", label: "Networking" },
     { href: "/#standards", label: "Standards" },
     { href: "/priority-correction-fund", label: "Priority fund" },
+    { href: "/mpgf", label: "MPGF" },
     { href: "/offers", label: "Offers" },
     { href: "/people", label: "People" },
     {
       label: "More",
       items: [
         { href: "/donation-offsets", label: "Donation offsets" },
+        { href: "/mpgf/pools", label: "MPGF pools" },
         { href: "/donate", label: "Donate" },
         { href: "/offers#best-offers", label: "Best offers" },
         { href: "/wish-registry", label: "Registry" },
@@ -55,6 +57,8 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/offers", label: "Public offers" },
       { href: "/donation-offsets", label: "Donation offsets" },
+      { href: "/mpgf", label: "MPGF" },
+      { href: "/mpgf/contribute", label: "MPGF pledges" },
       { href: "/priority-correction-fund", label: "Priority fund" },
       { href: "/donate", label: "Donate" },
       { href: "/people", label: "People" },

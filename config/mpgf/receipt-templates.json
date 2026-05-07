@@ -1,0 +1,12 @@
+{
+  "version": "mpgf-receipt-templates-v1",
+  "realMoneyReceiptsEnabled": false,
+  "templates": [
+    {
+      "id": "non_real_money_pledge_acknowledgement",
+      "mode": "pledge_only",
+      "approved": true,
+      "copy": "This acknowledges a non-real-money MPGF demo pledge. It is not a donation receipt, charge receipt, tax receipt, or payment confirmation."
+    }
+  ]
+}

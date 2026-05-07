@@ -1,0 +1,8 @@
+{
+  "version": "mpgf-public-experience-v1",
+  "requiredRoutes": ["/mpgf", "/mpgf/about", "/mpgf/contribute", "/mpgf/pools", "/mpgf/account/contributions", "/mpgf/technical-spec"],
+  "requiredModeLabels": ["non-real-money", "pledge-only", "real-money disabled"],
+  "requiredCopyKeys": ["plainLanguageSummary", "moralPublicGoods", "moralTrade", "nonRealMoney", "pledgeOnly", "monthlyPledgeOnly", "allocationDisbursement"],
+  "primaryActionsMustAvoid": ["disabled", "admin-only", "real-money-only"],
+  "visibleDemoPoolRequired": true
+}

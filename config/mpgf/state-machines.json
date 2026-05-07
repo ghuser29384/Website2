@@ -1,0 +1,47 @@
+{
+  "version": "mpgf-state-machines-v0.3-demo",
+  "machines": {
+    "cycle": {
+      "initial": "draft",
+      "statuses": ["draft", "scheduled", "proposal_open", "budget_locked", "ballot_open", "allocation_pending", "summary_published", "closed", "emergency_suspended"],
+      "transitions": [
+        ["draft", "scheduled"],
+        ["scheduled", "proposal_open"],
+        ["proposal_open", "budget_locked"],
+        ["budget_locked", "ballot_open"],
+        ["ballot_open", "allocation_pending"],
+        ["allocation_pending", "summary_published"],
+        ["summary_published", "closed"],
+        ["draft", "emergency_suspended"],
+        ["scheduled", "emergency_suspended"],
+        ["proposal_open", "emergency_suspended"],
+        ["budget_locked", "emergency_suspended"],
+        ["ballot_open", "emergency_suspended"],
+        ["allocation_pending", "emergency_suspended"]
+      ]
+    },
+    "pool_proposal": {
+      "initial": "draft",
+      "statuses": ["draft", "submitted", "under_review", "approved_as_candidate", "rejected", "withdrawn"],
+      "transitions": [
+        ["draft", "submitted"],
+        ["submitted", "under_review"],
+        ["under_review", "approved_as_candidate"],
+        ["under_review", "rejected"],
+        ["draft", "withdrawn"],
+        ["submitted", "withdrawn"]
+      ]
+    },
+    "payout_authorization": {
+      "initial": "draft",
+      "statuses": ["draft", "pending_review", "approved", "rejected", "voided", "paid_externally"],
+      "transitions": [
+        ["draft", "pending_review"],
+        ["pending_review", "approved"],
+        ["pending_review", "rejected"],
+        ["approved", "voided"],
+        ["approved", "paid_externally"]
+      ]
+    }
+  }
+}

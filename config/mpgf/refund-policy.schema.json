@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Refund Policy",
+  "type": "object",
+  "required": ["version", "mode", "realMoneyRefundsEnabled", "copy"],
+  "properties": {
+    "realMoneyRefundsEnabled": { "const": false }
+  },
+  "additionalProperties": true
+}

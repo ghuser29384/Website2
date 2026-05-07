@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF WWW Production Health Checks",
+  "type": "object",
+  "required": ["version", "monitorWindow", "sampleIntervalSeconds", "minimumMonitorWindowSeconds", "minimumSampleCount", "checks", "rollbackPolicy"],
+  "properties": {
+    "sampleIntervalSeconds": { "type": "integer", "minimum": 1 },
+    "minimumMonitorWindowSeconds": { "type": "integer", "minimum": 1 },
+    "minimumSampleCount": { "type": "integer", "minimum": 3 },
+    "checks": { "type": "array", "minItems": 1 }
+  },
+  "additionalProperties": true
+}

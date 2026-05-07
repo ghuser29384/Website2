@@ -1,0 +1,16 @@
+{
+  "version": "mpgf-repo-adaptation-v1",
+  "framework": "next-app-router",
+  "database": "supabase-postgres",
+  "auth": "supabase-auth",
+  "paymentProvider": "stripe-disabled-for-mpgf-direct-working",
+  "styling": "existing-global-css",
+  "decisions": [
+    { "subsystem": "public_routes", "decision": "direct_repo_convention", "paths": ["src/app/mpgf"] },
+    { "subsystem": "domain_services", "decision": "new_mpgf_module", "paths": ["src/lib/mpgf"] },
+    { "subsystem": "configuration", "decision": "new_mpgf_module", "paths": ["config/mpgf"] },
+    { "subsystem": "database", "decision": "thin_adapter", "paths": ["supabase/migrations/20260507_mpgf_pilot_v0_3.sql"] },
+    { "subsystem": "payments", "decision": "blocked", "reason": "MPGF real-money mode is disabled until real_money_complete." }
+  ],
+  "unresolvedCount": 0
+}

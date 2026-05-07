@@ -1,0 +1,11 @@
+{
+  "version": "mpgf-www-smoke-test-profile-v1",
+  "enabled": true,
+  "identityMode": "fixture_owned",
+  "authRoute": "/login?returnTo=/mpgf",
+  "allowedRoutes": ["/mpgf", "/mpgf/about", "/mpgf/contribute", "/mpgf/pools", "/mpgf/technical-spec"],
+  "allowedActions": ["view_public_routes", "create_non_real_money_pledge", "create_monthly_non_real_money_pledge", "draft_pool_proposal", "simulate_ballot"],
+  "forbiddenActions": ["real_money_contribution", "live_ledger_mutation", "production_enablement", "automated_payout", "external_payout"],
+  "createsPublicRealUser": false,
+  "grantsAdminPermissions": false
+}

@@ -1,0 +1,14 @@
+{
+  "version": "mpgf-production-deployment-target-v1",
+  "provider": "vercel",
+  "projectName": "moral-trade",
+  "canonicalBaseUrl": "https://www.moraltrade.org",
+  "canonicalHost": "www.moraltrade.org",
+  "requiredEnvironment": {
+    "MPGF_ENV": "production",
+    "MPGF_PUBLIC_BASE_URL": "https://www.moraltrade.org",
+    "MPGF_CANONICAL_HOST": "www.moraltrade.org",
+    "FEATURE_MPGF_ENABLED": "true",
+    "MPGF_REAL_MONEY_ENABLED": "false"
+  }
+}

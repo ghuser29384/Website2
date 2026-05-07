@@ -1,0 +1,14 @@
+{
+  "version": "mpgf-production-auth-session-v1",
+  "provider": "supabase",
+  "loginRoute": "/login",
+  "signupRoute": "/signup",
+  "callbackRoute": "/auth/confirm",
+  "signOutRouteOrAction": "supabase.auth.signOut via SiteTopbar",
+  "safeReturnToPrefix": "/mpgf",
+  "allowedRedirectOrigins": ["https://www.moraltrade.org"],
+  "sessionCookieScope": "canonical_host_only",
+  "csrfRequired": true,
+  "createsAdminSession": false,
+  "createsRealMoneyEligibility": false
+}

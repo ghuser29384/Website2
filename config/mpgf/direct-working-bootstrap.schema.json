@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Direct Working Bootstrap",
+  "type": "object",
+  "required": [
+    "version",
+    "enabled",
+    "seedMode",
+    "createDemoCycle",
+    "formalMechanismVersion",
+    "protocolVersion",
+    "protocolParameterVersion",
+    "thetaVersion",
+    "termsVersion",
+    "privacyVersion"
+  ],
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "seedMode": { "enum": ["non_real_money_demo", "pledge_only", "test_mode"] },
+    "createDemoCycle": { "type": "boolean" },
+    "createsPublicRealUser": { "const": false },
+    "createsRealMoneyEligibility": { "const": false },
+    "createsPaymentProviderObjects": { "const": false }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Public Cycle Summary",
+  "type": "object",
+  "required": ["cycleId", "mode", "nonRealMoneyStatus", "budgetCents", "pledgedCents", "releasedInternalCents", "payoutAuthorizedCents", "externallyPaidCents", "allocations", "disclaimers"],
+  "properties": {
+    "mode": { "enum": ["non_real_money_demo", "pledge_only", "test_mode", "real_money"] },
+    "budgetCents": { "type": "integer", "minimum": 0 },
+    "pledgedCents": { "type": "integer", "minimum": 0 },
+    "releasedInternalCents": { "type": "integer", "minimum": 0 },
+    "payoutAuthorizedCents": { "type": "integer", "minimum": 0 },
+    "externallyPaidCents": { "type": "integer", "minimum": 0 },
+    "allocations": { "type": "array" },
+    "disclaimers": { "type": "object" }
+  },
+  "additionalProperties": true
+}

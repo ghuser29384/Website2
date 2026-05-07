@@ -1,0 +1,7 @@
+{
+  "version": "mpgf-data-retention-policy-v1",
+  "mode": "non_real_money_demo",
+  "privateEvidenceRetentionDays": 0,
+  "demoAuditRetentionDays": 365,
+  "realMoneyPrivateDataEnabled": false
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Safe Fallbacks",
+  "type": "object",
+  "required": ["version", "fallbacks"],
+  "properties": {
+    "fallbacks": { "type": "array" }
+  },
+  "additionalProperties": true
+}

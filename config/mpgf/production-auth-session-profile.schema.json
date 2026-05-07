@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Production Auth Session Profile",
+  "type": "object",
+  "required": ["version", "provider", "loginRoute", "signupRoute", "callbackRoute", "safeReturnToPrefix", "allowedRedirectOrigins", "sessionCookieScope"],
+  "properties": {
+    "provider": { "const": "supabase" },
+    "createsAdminSession": { "const": false },
+    "createsRealMoneyEligibility": { "const": false }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,15 @@
+{
+  "version": "mpgf-direct-working-bootstrap-v1",
+  "enabled": true,
+  "seedMode": "non_real_money_demo",
+  "createDemoCycle": true,
+  "formalMechanismVersion": "mpgf-formal-mechanism-v0.3",
+  "protocolVersion": "mpgf-pilot-v0.3-demo-2026-05",
+  "protocolParameterVersion": "mpgf-pilot-v0.3-demo-2026-05",
+  "thetaVersion": "mpgf-theta-demo-v1",
+  "termsVersion": "mpgf-demo-terms-v1",
+  "privacyVersion": "mpgf-demo-privacy-v1",
+  "createsPublicRealUser": false,
+  "createsRealMoneyEligibility": false,
+  "createsPaymentProviderObjects": false
+}

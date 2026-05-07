@@ -1,0 +1,43 @@
+{
+  "version": "mpgf-ledger-templates-v0.3-demo",
+  "currency": "usd",
+  "mode": "non_real_money_demo",
+  "templates": [
+    {
+      "id": "pledge_recorded",
+      "description": "Record a one-time non-real-money pledge for demo accounting.",
+      "realMoneyEligible": false,
+      "entries": [
+        { "account": "pledge_receivable_non_real_money", "direction": "debit" },
+        { "account": "pledge_commitment_non_real_money", "direction": "credit" }
+      ]
+    },
+    {
+      "id": "monthly_pledge_recorded",
+      "description": "Record a monthly non-real-money recurring pledge commitment.",
+      "realMoneyEligible": false,
+      "entries": [
+        { "account": "pledge_receivable_non_real_money", "direction": "debit" },
+        { "account": "monthly_pledge_commitment_non_real_money", "direction": "credit" }
+      ]
+    },
+    {
+      "id": "demo_allocation_reserved",
+      "description": "Reserve internal demo allocation amounts without authorization or external payout.",
+      "realMoneyEligible": false,
+      "entries": [
+        { "account": "demo_allocation_pool", "direction": "debit" },
+        { "account": "demo_allocation_reserved", "direction": "credit" }
+      ]
+    },
+    {
+      "id": "late_contribution_assigned_next_cycle",
+      "description": "Assign a late successful payment or pledge to the next open cycle; disabled for real money in this pilot.",
+      "realMoneyEligible": false,
+      "entries": [
+        { "account": "next_cycle_receivable_non_real_money", "direction": "debit" },
+        { "account": "next_cycle_commitment_non_real_money", "direction": "credit" }
+      ]
+    }
+  ]
+}

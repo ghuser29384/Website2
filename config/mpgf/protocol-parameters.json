@@ -1,0 +1,19 @@
+{
+  "version": "mpgf-pilot-v0.3-demo-2026-05",
+  "formalMechanismVersion": "mpgf-formal-mechanism-v0.3",
+  "thetaVersion": "mpgf-theta-demo-v1",
+  "termsVersion": "mpgf-demo-terms-v1",
+  "privacyVersion": "mpgf-demo-privacy-v1",
+  "stage": "pilot",
+  "currency": "usd",
+  "realMoneyEnabled": false,
+  "representativeQuorumBps": 1000,
+  "strongNegativeThresholdBps": 2500,
+  "maxAllocationAlternatives": 12,
+  "maxBallotWeightBps": 10000,
+  "riskCapBps": 10000,
+  "tailLossCapBps": 10000,
+  "fallbackCarryoverBps": 10000,
+  "approvedBy": "codex-direct-working-bootstrap",
+  "approvedAt": "2026-05-07T00:00:00.000Z"
+}
