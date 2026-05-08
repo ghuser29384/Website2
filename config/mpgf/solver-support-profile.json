@@ -1,0 +1,13 @@
+{
+  "solverSupportProfileVersion": "mpgf-solver-support-direct-working-v1",
+  "status": "direct_working_demo_supported",
+  "benchmarkEvidencePath": "docs/mpgf/solver-benchmark-report.md",
+  "maxAlternatives": 4,
+  "maxBallots": 4,
+  "maxBreakpointsPerBallot": 1,
+  "maxRegions": 1,
+  "maxBranchAndBoundNodes": 0,
+  "maxCertificateBytes": 32768,
+  "maxVerifierRuntimeMs": 1000,
+  "supportsExactPilotComplete": false
+}

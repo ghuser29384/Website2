@@ -1,0 +1,14 @@
+{
+  "version": "mpgf-formal-kernel-direct-working-v1",
+  "status": "direct_working_subset_only",
+  "fullExactPilotBlockedBy": "docs/mpgf/formal-mechanism.raw.md",
+  "implementedKernel": {
+    "contributionMode": "pledge_only_non_real_money",
+    "ballotWeightDomain": "integer_basis_points_0_to_10000",
+    "allocationAlgorithm": "exact_integer_proportional_v0",
+    "deterministicTieBreak": "alternative_id_ascending",
+    "publicSummaryDisbursementCents": 0,
+    "realMoneyEnabled": false,
+    "automatedPayoutsEnabled": false
+  }
+}

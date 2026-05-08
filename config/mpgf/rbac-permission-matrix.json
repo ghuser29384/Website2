@@ -1,0 +1,54 @@
+{
+  "version": "mpgf-rbac-permission-matrix-v1",
+  "defaultDeny": true,
+  "roles": ["public", "participant", "admin", "cycle_admin", "payout_admin", "auditor", "super_admin"],
+  "permissions": [
+    {
+      "permission": "mpgf.public.read",
+      "allowedRoles": ["public", "participant", "admin", "cycle_admin", "payout_admin", "auditor", "super_admin"],
+      "requiresApproval": false,
+      "conformanceRows": ["AC-RBAC-001"]
+    },
+    {
+      "permission": "mpgf.pledge.create",
+      "allowedRoles": ["participant"],
+      "requiresApproval": false,
+      "mode": "pledge_only",
+      "conformanceRows": ["AC-PAYMENT-019"]
+    },
+    {
+      "permission": "mpgf.pool_proposal.draft",
+      "allowedRoles": ["participant"],
+      "requiresApproval": false,
+      "mode": "non_real_money_demo",
+      "conformanceRows": ["AC-RBAC-001"]
+    },
+    {
+      "permission": "mpgf.admin.read",
+      "allowedRoles": ["admin", "cycle_admin", "payout_admin", "auditor", "super_admin"],
+      "requiresApproval": false,
+      "conformanceRows": ["AC-RBAC-001"]
+    },
+    {
+      "permission": "mpgf.cycle.approve",
+      "allowedRoles": ["cycle_admin", "super_admin"],
+      "requiresApproval": true,
+      "approvalRule": "cycle_admin_or_super_admin_plus_auditor",
+      "conformanceRows": ["AC-RBAC-001"]
+    },
+    {
+      "permission": "mpgf.payout_authorization.approve",
+      "allowedRoles": ["payout_admin", "super_admin"],
+      "requiresApproval": true,
+      "approvalRule": "(payout_admin or super_admin) + auditor",
+      "conformanceRows": ["AC-DISBURSEMENT-016", "AC-RBAC-001"]
+    },
+    {
+      "permission": "mpgf.real_money.enable",
+      "allowedRoles": ["super_admin"],
+      "requiresApproval": true,
+      "approvalRule": "super_admin + auditor + deployment_admin + legal_approval",
+      "conformanceRows": ["AC-COMPLETION-008"]
+    }
+  ]
+}

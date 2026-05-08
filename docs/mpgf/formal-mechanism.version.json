@@ -1,0 +1,14 @@
+{
+  "mechanism_version": "mpgf-formal-v0.3",
+  "date_adopted": "2026-05-07",
+  "source_hash": null,
+  "annotated_source_hash": null,
+  "source_file": "docs/mpgf/formal-mechanism.raw.md",
+  "annotated_source_file": "docs/mpgf/formal-mechanism.md",
+  "source_completeness": "blocked_pending_verbatim_complete_source",
+  "annotation_policy": "embedded_source_ids_only_no_substantive_change",
+  "protocol_version": "mpgf-pilot-v0.3",
+  "theta_version": "theta-pilot-v0.3",
+  "constitution_version": "not_locked_for_full_exact_pilot",
+  "schema_version": "mpgf-direct-working-schema-v1"
+}

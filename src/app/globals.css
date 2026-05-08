@@ -354,6 +354,18 @@
   font-weight: 700;
 }
 
+.mpgf-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.mpgf-inline-actions .button {
+  min-height: 2rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.82rem;
+}
+
 .mpgf-admin-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }

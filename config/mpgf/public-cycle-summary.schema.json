@@ -2,16 +2,152 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "MPGF Public Cycle Summary",
   "type": "object",
-  "required": ["cycleId", "mode", "nonRealMoneyStatus", "budgetCents", "pledgedCents", "releasedInternalCents", "payoutAuthorizedCents", "externallyPaidCents", "allocations", "disclaimers"],
+  "required": [
+    "summarySchemaVersion",
+    "cycle",
+    "mode",
+    "budget",
+    "nonRealMoney",
+    "participation",
+    "allocationOutcome",
+    "amountsByState",
+    "fundedAlternatives",
+    "fallbackAllocations",
+    "strongNegativeResults",
+    "riskSummary",
+    "auditSummary",
+    "incidents",
+    "appeals",
+    "privacy",
+    "disclaimers"
+  ],
   "properties": {
-    "mode": { "enum": ["non_real_money_demo", "pledge_only", "test_mode", "real_money"] },
-    "budgetCents": { "type": "integer", "minimum": 0 },
-    "pledgedCents": { "type": "integer", "minimum": 0 },
-    "releasedInternalCents": { "type": "integer", "minimum": 0 },
-    "payoutAuthorizedCents": { "type": "integer", "minimum": 0 },
-    "externallyPaidCents": { "type": "integer", "minimum": 0 },
-    "allocations": { "type": "array" },
-    "disclaimers": { "type": "object" }
+    "summarySchemaVersion": { "const": "mpgf-public-cycle-summary-v0.3" },
+    "cycle": {
+      "type": "object",
+      "required": [
+        "cycleId",
+        "cycleKey",
+        "stage",
+        "status",
+        "formalMechanismVersion",
+        "protocolVersion",
+        "thetaVersion",
+        "publishedAt"
+      ],
+      "additionalProperties": true
+    },
+    "mode": {
+      "type": "object",
+      "required": ["featureEnabled", "realMoneyEnabled", "completionProfile", "productionEnablementStatus"],
+      "properties": {
+        "featureEnabled": { "type": "boolean" },
+        "realMoneyEnabled": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "budget": {
+      "type": "object",
+      "required": ["currency", "budgetCents", "lockedBudgetCents", "carryoverInCents", "carryoverOutCents"],
+      "properties": {
+        "currency": { "const": "usd" },
+        "budgetCents": { "type": "string", "pattern": "^[0-9]+$" },
+        "lockedBudgetCents": { "type": "string", "pattern": "^[0-9]+$" },
+        "carryoverInCents": { "type": "string", "pattern": "^[0-9]+$" },
+        "carryoverOutCents": { "type": "string", "pattern": "^[0-9]+$" }
+      },
+      "additionalProperties": true
+    },
+    "nonRealMoney": {
+      "type": "object",
+      "required": ["pledgedCents", "recurringPledgeMonthlyCents", "testContributionCents", "testBudgetCents"],
+      "additionalProperties": true
+    },
+    "participation": {
+      "type": "object",
+      "required": [
+        "eligibleVoterCount",
+        "validVoterCount",
+        "eligibleWeightUnits",
+        "validVoterWeightUnits",
+        "quorumPass",
+        "quorumReason"
+      ],
+      "additionalProperties": true
+    },
+    "allocationOutcome": {
+      "type": "object",
+      "required": [
+        "outcomeType",
+        "allocationPlanStatus",
+        "solverVerificationStatus",
+        "fallbackType",
+        "ordinaryAllocationUsed"
+      ],
+      "properties": {
+        "outcomeType": {
+          "enum": [
+            "ordinary_allocation",
+            "failed_quorum_fallback",
+            "emergency_suspension_fallback",
+            "constitutional_infeasibility_fallback",
+            "carryover_only",
+            "shadow_only",
+            "failed_certification"
+          ]
+        },
+        "ordinaryAllocationUsed": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "amountsByState": {
+      "type": "object",
+      "required": [
+        "authorizedCents",
+        "releasedInternalCents",
+        "payoutAuthorizedCents",
+        "externallyPaidCents",
+        "paymentFailedCents",
+        "voidedCents",
+        "carriedOverCents"
+      ],
+      "additionalProperties": true
+    },
+    "fundedAlternatives": { "type": "array" },
+    "fallbackAllocations": { "type": "array" },
+    "strongNegativeResults": { "type": "array" },
+    "riskSummary": { "type": "array" },
+    "auditSummary": {
+      "type": "object",
+      "required": ["auditStatus", "blockingConcerns", "nonblockingConcerns"],
+      "additionalProperties": true
+    },
+    "incidents": { "type": "array" },
+    "appeals": {
+      "type": "object",
+      "required": ["blockingAppealsCount", "nonblockingAppealsCount", "deferredAppealsCount"],
+      "additionalProperties": true
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["visibilityFilterVersion", "privateFieldsExcluded"],
+      "additionalProperties": true
+    },
+    "disclaimers": {
+      "type": "object",
+      "required": [
+        "pilotStatus",
+        "taxStatus",
+        "charityEvaluatorStatus",
+        "effectivenessStatus",
+        "escrowStatus",
+        "refundStatus",
+        "privacyStatus",
+        "ballotFinalityStatus",
+        "allocationDisbursementStatus"
+      ],
+      "additionalProperties": true
+    }
   },
   "additionalProperties": true
 }

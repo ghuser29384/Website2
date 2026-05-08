@@ -5,9 +5,10 @@ Mode: non-real-money direct-working
 1. Confirm `config/mpgf/production-deployment-target.json` matches the production deployment provider.
 2. Confirm `FEATURE_MPGF_ENABLED=true` and `MPGF_REAL_MONEY_ENABLED=false`.
 3. Apply `supabase/migrations/20260507_mpgf_pilot_v0_3.sql`.
-4. Deploy the intended commit to `https://www.moraltrade.org`.
-5. Visit `/mpgf`, `/mpgf/about`, `/mpgf/contribute`, `/mpgf/pools`, and `/mpgf/technical-spec`.
-6. Confirm pledge-only actions do not call Stripe and do not create payment-provider objects.
-7. Run or manually record `runMpgfDirectWorkingSmokeTest`.
-8. Record browser-level production-domain verification in `docs/mpgf/www-direct-working-verification.md`.
-9. Do not enable real money unless `real_money_complete` later passes.
+4. Apply `supabase/migrations/20260508_mpgf_pilot_v0_3_contract_tables.sql`.
+5. Deploy the intended commit to `https://www.moraltrade.org`.
+6. Visit `/mpgf`, `/mpgf/about`, `/mpgf/contribute`, `/mpgf/pools`, and `/mpgf/technical-spec`.
+7. Confirm pledge-only actions do not call Stripe and do not create payment-provider objects.
+8. Run or manually record `runMpgfDirectWorkingSmokeTest`.
+9. Record browser-level production-domain verification in `docs/mpgf/www-direct-working-verification.md`.
+10. Do not enable real money unless `real_money_complete` later passes.

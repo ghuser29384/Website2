@@ -19,13 +19,17 @@ export default async function MpgfAdminPage() {
       <section className="mpgf-panel">
         <p className="eyebrow">{isAdmin ? "Admin verified" : "Gated route"}</p>
         <h2>{isAdmin ? "Administrative sections" : "Admin access required"}</h2>
-        <div className="mpgf-admin-grid">
-          {mpgfAdminSections.map((section) => (
-            <Link key={section} className="mpgf-admin-link" href={`/mpgf/admin/${section}`}>
-              {section.replaceAll("-", " ")}
-            </Link>
-          ))}
-        </div>
+        {isAdmin ? (
+          <div className="mpgf-admin-grid">
+            {mpgfAdminSections.map((section) => (
+              <Link key={section} className="mpgf-admin-link" href={`/mpgf/admin/${section}`}>
+                {section.replaceAll("-", " ")}
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p>Administrative sections require an authenticated admin session.</p>
+        )}
       </section>
     </MpgfPageFrame>
   );

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Solver Support Profile",
+  "type": "object",
+  "required": [
+    "solverSupportProfileVersion",
+    "status",
+    "benchmarkEvidencePath",
+    "maxAlternatives",
+    "maxBallots",
+    "maxBreakpointsPerBallot",
+    "maxRegions",
+    "maxBranchAndBoundNodes",
+    "maxCertificateBytes",
+    "maxVerifierRuntimeMs",
+    "supportsExactPilotComplete"
+  ],
+  "properties": {
+    "supportsExactPilotComplete": { "const": false }
+  },
+  "additionalProperties": true
+}

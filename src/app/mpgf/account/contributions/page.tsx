@@ -34,7 +34,11 @@ export default async function MpgfAccountContributionsPage() {
               <span>{formatUsd(pledge.amountCents)}</span>
               <span>{pledge.cadence.replace("_", " ")}</span>
               <span>{pledge.status}</span>
-              <span>Pause, resume, and cancel are demo-only controls.</span>
+              <span className="mpgf-inline-actions">
+                <button className="button button-secondary" disabled type="button">Pause</button>
+                <button className="button button-secondary" disabled type="button">Resume</button>
+                <button className="button button-secondary" disabled type="button">Cancel</button>
+              </span>
             </div>
           ))}
         </div>

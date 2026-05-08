@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
@@ -17,6 +17,10 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
 
   if (!mpgfAdminSections.includes(section as (typeof mpgfAdminSections)[number])) {
     notFound();
+  }
+
+  if (!viewer) {
+    redirect(`/login?returnTo=/mpgf/admin/${section}`);
   }
 
   return (

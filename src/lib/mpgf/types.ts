@@ -23,6 +23,9 @@ export interface MpgfCheckResult {
   label: string;
   status: MpgfValidationStatus;
   evidence: string;
+  routeOrAction: string;
+  check: string;
+  passed: boolean;
 }
 
 export interface MpgfCandidateAlternative {
@@ -134,9 +137,12 @@ export interface MpgfPublicSummary {
 }
 
 export interface MpgfDirectWorkingResult {
+  passed: boolean;
   baseUrl: string;
-  environment: string;
-  featureMode: "non_real_money";
+  checkedAt: string;
+  environment: "local" | "test" | "staging" | "production";
+  featureMode: "demo" | "pledge_only" | "test_mode";
+  deployedCommitShaOrBuildId?: string;
   checks: MpgfCheckResult[];
   status: MpgfValidationStatus;
   blockers: MpgfValidationIssue[];

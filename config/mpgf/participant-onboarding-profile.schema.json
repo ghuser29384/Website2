@@ -2,9 +2,31 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "MPGF Participant Onboarding Profile",
   "type": "object",
-  "required": ["version", "mode", "publicEntryRoute", "authEntryRoute", "supportRouteOrEmail", "termsRoute", "privacyRoute"],
+  "required": [
+    "profileVersion",
+    "enabled",
+    "onboardingMode",
+    "publicEntryRoute",
+    "authEntryRoute",
+    "accessProvisioningEvidencePath",
+    "intendedParticipantAccessProcess",
+    "supportRouteOrEmail",
+    "returnToMpgfSupported",
+    "termsRoute",
+    "privacyRoute",
+    "requiredTermsVersion",
+    "requiredPrivacyVersion",
+    "verificationMode",
+    "participantTestAccountPolicy",
+    "allowedJourneyActions",
+    "fixtureKeys",
+    "auditLogRequired"
+  ],
   "properties": {
-    "mode": { "enum": ["public_signup", "private_beta_invite", "preexisting_participant_access"] }
+    "enabled": { "const": true },
+    "onboardingMode": { "enum": ["public_signup", "private_beta_invite", "preexisting_participant_access"] },
+    "returnToMpgfSupported": { "const": true },
+    "auditLogRequired": { "const": true }
   },
   "additionalProperties": true
 }

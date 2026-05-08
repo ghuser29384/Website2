@@ -1,47 +1,229 @@
 {
-  "version": "mpgf-state-machines-v0.3-demo",
+  "version": "mpgf-state-machines-v0.3-direct-working",
   "machines": {
+    "genesis": {
+      "repositoryObject": "direct-working bootstrap records",
+      "initial": "draft",
+      "statuses": ["draft", "validated", "activated", "revoked", "emergency_suspended"],
+      "transitions": [["draft", "validated"], ["validated", "activated"], ["activated", "revoked"], ["draft", "emergency_suspended"], ["validated", "emergency_suspended"], ["activated", "emergency_suspended"]],
+      "terminalStatuses": ["activated", "revoked", "emergency_suspended"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
     "cycle": {
+      "repositoryObject": "mpgf_cycles",
       "initial": "draft",
       "statuses": ["draft", "scheduled", "proposal_open", "budget_locked", "ballot_open", "allocation_pending", "summary_published", "closed", "emergency_suspended"],
-      "transitions": [
-        ["draft", "scheduled"],
-        ["scheduled", "proposal_open"],
-        ["proposal_open", "budget_locked"],
-        ["budget_locked", "ballot_open"],
-        ["ballot_open", "allocation_pending"],
-        ["allocation_pending", "summary_published"],
-        ["summary_published", "closed"],
-        ["draft", "emergency_suspended"],
-        ["scheduled", "emergency_suspended"],
-        ["proposal_open", "emergency_suspended"],
-        ["budget_locked", "emergency_suspended"],
-        ["ballot_open", "emergency_suspended"],
-        ["allocation_pending", "emergency_suspended"]
-      ]
+      "transitions": [["draft", "scheduled"], ["scheduled", "proposal_open"], ["proposal_open", "budget_locked"], ["budget_locked", "ballot_open"], ["ballot_open", "allocation_pending"], ["allocation_pending", "summary_published"], ["summary_published", "closed"], ["draft", "emergency_suspended"], ["scheduled", "emergency_suspended"], ["proposal_open", "emergency_suspended"], ["budget_locked", "emergency_suspended"], ["ballot_open", "emergency_suspended"], ["allocation_pending", "emergency_suspended"]],
+      "terminalStatuses": ["closed", "emergency_suspended"],
+      "conformanceRows": ["AC-STATE-001", "AC-STATE-010"]
     },
-    "pool_proposal": {
+    "ledger_transaction": {
+      "repositoryObject": "posted accounting transaction records",
       "initial": "draft",
-      "statuses": ["draft", "submitted", "under_review", "approved_as_candidate", "rejected", "withdrawn"],
-      "transitions": [
-        ["draft", "submitted"],
-        ["submitted", "under_review"],
-        ["under_review", "approved_as_candidate"],
-        ["under_review", "rejected"],
-        ["draft", "withdrawn"],
-        ["submitted", "withdrawn"]
-      ]
+      "statuses": ["draft", "posted", "voided", "corrected"],
+      "transitions": [["draft", "posted"], ["posted", "voided"], ["posted", "corrected"]],
+      "terminalStatuses": ["posted", "voided", "corrected"],
+      "conformanceRows": ["AC-STATE-001", "AC-LEDGER-011"]
+    },
+    "payment_intent": {
+      "repositoryObject": "payment intent workflow records",
+      "initial": "created",
+      "statuses": ["created", "requires_provider", "requires_payment_method", "requires_confirmation", "processing", "succeeded", "failed", "cancelled"],
+      "transitions": [["created", "requires_provider"], ["requires_provider", "requires_payment_method"], ["requires_payment_method", "requires_confirmation"], ["requires_confirmation", "processing"], ["processing", "succeeded"], ["processing", "failed"], ["created", "cancelled"], ["requires_provider", "cancelled"], ["requires_payment_method", "cancelled"], ["requires_confirmation", "cancelled"]],
+      "terminalStatuses": ["succeeded", "failed", "cancelled"],
+      "conformanceRows": ["AC-PAYMENT-019", "AC-STATE-001"]
+    },
+    "contribution": {
+      "repositoryObject": "settled contribution records",
+      "initial": "pending",
+      "statuses": ["pending", "recorded", "late_assigned_next_cycle", "refunded", "voided"],
+      "transitions": [["pending", "recorded"], ["pending", "late_assigned_next_cycle"], ["recorded", "refunded"], ["recorded", "voided"]],
+      "terminalStatuses": ["recorded", "late_assigned_next_cycle", "refunded", "voided"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "pledge": {
+      "repositoryObject": "pledge-only contribution records",
+      "initial": "pledged",
+      "statuses": ["pledged", "paused", "cancelled", "converted"],
+      "transitions": [["pledged", "paused"], ["paused", "pledged"], ["pledged", "cancelled"], ["paused", "cancelled"], ["pledged", "converted"]],
+      "terminalStatuses": ["cancelled", "converted"],
+      "conformanceRows": ["AC-PAYMENT-019", "AC-STATE-001"]
+    },
+    "recurring_contribution_commitment": {
+      "repositoryObject": "standing monthly contribution-commitment records",
+      "initial": "active",
+      "statuses": ["active", "paused", "cancelled", "expired"],
+      "transitions": [["active", "paused"], ["paused", "active"], ["active", "cancelled"], ["paused", "cancelled"], ["active", "expired"], ["paused", "expired"]],
+      "terminalStatuses": ["cancelled", "expired"],
+      "conformanceRows": ["AC-PAYMENT-021", "AC-PAYMENT-022", "AC-STATE-001"]
+    },
+    "eligibility_snapshot": {
+      "repositoryObject": "eligible-voter snapshot records",
+      "initial": "draft",
+      "statuses": ["draft", "active", "superseded", "voided"],
+      "transitions": [["draft", "active"], ["active", "superseded"], ["draft", "voided"], ["active", "voided"]],
+      "terminalStatuses": ["superseded", "voided"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "candidate_set_snapshot": {
+      "repositoryObject": "candidate-set snapshot records",
+      "initial": "draft",
+      "statuses": ["draft", "active", "superseded", "voided"],
+      "transitions": [["draft", "active"], ["active", "superseded"], ["draft", "voided"], ["active", "voided"]],
+      "terminalStatuses": ["superseded", "voided"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "sybil_review": {
+      "repositoryObject": "duplicate/sybil review records",
+      "initial": "open",
+      "statuses": ["open", "cleared", "flagged", "appealed", "voided"],
+      "transitions": [["open", "cleared"], ["open", "flagged"], ["flagged", "appealed"], ["appealed", "cleared"], ["appealed", "flagged"], ["open", "voided"]],
+      "terminalStatuses": ["cleared", "flagged", "voided"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "safe_fallback": {
+      "repositoryObject": "safe-fallback registry",
+      "initial": "draft",
+      "statuses": ["draft", "active", "retired"],
+      "transitions": [["draft", "active"], ["active", "retired"]],
+      "terminalStatuses": ["retired"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "pool_risk_assessment": {
+      "repositoryObject": "pool risk assessment records",
+      "initial": "draft",
+      "statuses": ["draft", "reviewed", "approved", "rejected", "superseded"],
+      "transitions": [["draft", "reviewed"], ["reviewed", "approved"], ["reviewed", "rejected"], ["approved", "superseded"]],
+      "terminalStatuses": ["rejected", "superseded"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "pool": {
+      "repositoryObject": "pool-proposal and candidate-alternative pool records",
+      "initial": "draft",
+      "statuses": ["draft", "submitted", "under_review", "approved_as_candidate", "rejected", "withdrawn", "emergency_suspended"],
+      "transitions": [["draft", "submitted"], ["submitted", "under_review"], ["under_review", "approved_as_candidate"], ["under_review", "rejected"], ["draft", "withdrawn"], ["submitted", "withdrawn"], ["submitted", "emergency_suspended"], ["under_review", "emergency_suspended"], ["approved_as_candidate", "emergency_suspended"]],
+      "terminalStatuses": ["approved_as_candidate", "rejected", "withdrawn", "emergency_suspended"],
+      "conformanceRows": ["AC-STATE-001", "AC-STATE-010"]
+    },
+    "ballot": {
+      "repositoryObject": "mpgf_ballots",
+      "initial": "draft",
+      "statuses": ["draft", "submitted", "invalidated", "voided"],
+      "transitions": [["draft", "submitted"], ["draft", "voided"], ["submitted", "invalidated"]],
+      "terminalStatuses": ["submitted", "invalidated", "voided"],
+      "conformanceRows": ["AC-BALLOT-009", "AC-STATE-001"]
+    },
+    "allocation_plan": {
+      "repositoryObject": "mpgf_allocation_plans",
+      "initial": "draft",
+      "statuses": ["draft", "compiled", "solver_running", "certified_optimal", "certified_infeasible", "failed_certification", "shadow_only", "audit_approved", "audit_rejected"],
+      "transitions": [["draft", "compiled"], ["compiled", "solver_running"], ["solver_running", "certified_optimal"], ["solver_running", "certified_infeasible"], ["solver_running", "failed_certification"], ["compiled", "shadow_only"], ["certified_optimal", "audit_approved"], ["certified_optimal", "audit_rejected"]],
+      "terminalStatuses": ["certified_infeasible", "failed_certification", "shadow_only", "audit_approved", "audit_rejected"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "authorization": {
+      "repositoryObject": "mpgf_authorizations",
+      "initial": "proposed",
+      "statuses": ["proposed", "approved", "paused", "voided", "carried_over", "closed"],
+      "transitions": [["proposed", "approved"], ["approved", "paused"], ["paused", "approved"], ["approved", "voided"], ["approved", "carried_over"], ["approved", "closed"], ["paused", "voided"], ["paused", "carried_over"]],
+      "terminalStatuses": ["voided", "carried_over", "closed"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "tranche": {
+      "repositoryObject": "mpgf_tranches",
+      "initial": "draft",
+      "statuses": ["draft", "ready_for_review", "released_internal", "payout_authorized", "externally_paid", "paused", "voided", "carried_over"],
+      "transitions": [["draft", "ready_for_review"], ["ready_for_review", "released_internal"], ["released_internal", "payout_authorized"], ["payout_authorized", "externally_paid"], ["ready_for_review", "paused"], ["paused", "ready_for_review"], ["ready_for_review", "voided"], ["released_internal", "voided"], ["released_internal", "carried_over"]],
+      "terminalStatuses": ["externally_paid", "voided", "carried_over"],
+      "conformanceRows": ["AC-STATE-001"]
     },
     "payout_authorization": {
+      "repositoryObject": "mpgf_payout_authorizations",
       "initial": "draft",
       "statuses": ["draft", "pending_review", "approved", "rejected", "voided", "paid_externally"],
-      "transitions": [
-        ["draft", "pending_review"],
-        ["pending_review", "approved"],
-        ["pending_review", "rejected"],
-        ["approved", "voided"],
-        ["approved", "paid_externally"]
-      ]
+      "transitions": [["draft", "pending_review"], ["pending_review", "approved"], ["pending_review", "rejected"], ["approved", "voided"], ["approved", "paid_externally"]],
+      "terminalStatuses": ["rejected", "voided", "paid_externally"],
+      "conformanceRows": ["AC-DISBURSEMENT-016", "AC-STATE-001", "AC-STATE-010"]
+    },
+    "refund": {
+      "repositoryObject": "mpgf_refunds",
+      "initial": "requested",
+      "statuses": ["requested", "approved", "rejected", "succeeded", "failed"],
+      "transitions": [["requested", "approved"], ["requested", "rejected"], ["approved", "succeeded"], ["approved", "failed"]],
+      "terminalStatuses": ["rejected", "succeeded", "failed"],
+      "conformanceRows": ["AC-PAYMENT-016", "AC-STATE-001"]
+    },
+    "receipt": {
+      "repositoryObject": "receipt issuance records",
+      "initial": "draft",
+      "statuses": ["draft", "rendered", "issued", "sent", "voided"],
+      "transitions": [["draft", "rendered"], ["rendered", "issued"], ["issued", "sent"], ["draft", "voided"], ["rendered", "voided"], ["issued", "voided"]],
+      "terminalStatuses": ["sent", "voided"],
+      "conformanceRows": ["AC-COPY-011", "AC-STATE-001"]
+    },
+    "public_cycle_summary": {
+      "repositoryObject": "public summary publication records",
+      "initial": "draft",
+      "statuses": ["draft", "generated", "visibility_filtered", "validated", "published", "withdrawn", "failed"],
+      "transitions": [["draft", "generated"], ["generated", "visibility_filtered"], ["visibility_filtered", "validated"], ["validated", "published"], ["published", "withdrawn"], ["generated", "failed"], ["visibility_filtered", "failed"], ["validated", "failed"]],
+      "terminalStatuses": ["published", "withdrawn", "failed"],
+      "conformanceRows": ["AC-PRIVACY-007", "AC-STATE-001"]
+    },
+    "production_enablement": {
+      "repositoryObject": "production enablement records",
+      "initial": "blocked",
+      "statuses": ["blocked", "pre_launch_validated", "demo_complete", "exact_pilot_complete", "real_money_complete", "revoked"],
+      "transitions": [["blocked", "pre_launch_validated"], ["pre_launch_validated", "demo_complete"], ["demo_complete", "exact_pilot_complete"], ["exact_pilot_complete", "real_money_complete"], ["demo_complete", "revoked"], ["exact_pilot_complete", "revoked"], ["real_money_complete", "revoked"]],
+      "terminalStatuses": ["real_money_complete", "revoked"],
+      "conformanceRows": ["AC-COMPLETION-008", "AC-STATE-001"]
+    },
+    "idempotency_key": {
+      "repositoryObject": "mutation-idempotency records",
+      "initial": "reserved",
+      "statuses": ["reserved", "succeeded", "failed", "expired"],
+      "transitions": [["reserved", "succeeded"], ["reserved", "failed"], ["reserved", "expired"]],
+      "terminalStatuses": ["succeeded", "failed", "expired"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "admin_approval_record": {
+      "repositoryObject": "independent approval records",
+      "initial": "draft",
+      "statuses": ["draft", "approved", "rejected", "abstain", "revoked", "expired"],
+      "transitions": [["draft", "approved"], ["draft", "rejected"], ["draft", "abstain"], ["approved", "revoked"], ["approved", "expired"]],
+      "terminalStatuses": ["approved", "rejected", "abstain", "revoked", "expired"],
+      "conformanceRows": ["AC-RBAC-013", "AC-RBAC-014", "AC-STATE-001"]
+    },
+    "governance_judgment": {
+      "repositoryObject": "governance judgment records",
+      "initial": "draft",
+      "statuses": ["draft", "approved", "rejected", "superseded"],
+      "transitions": [["draft", "approved"], ["draft", "rejected"], ["approved", "superseded"]],
+      "terminalStatuses": ["rejected", "superseded"],
+      "conformanceRows": ["AC-GOVERNANCE-005", "AC-STATE-001"]
+    },
+    "appeal": {
+      "repositoryObject": "appeal workflow records",
+      "initial": "submitted",
+      "statuses": ["submitted", "under_review", "granted", "denied", "withdrawn"],
+      "transitions": [["submitted", "under_review"], ["under_review", "granted"], ["under_review", "denied"], ["submitted", "withdrawn"]],
+      "terminalStatuses": ["granted", "denied", "withdrawn"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "conflict_disclosure": {
+      "repositoryObject": "conflict disclosure records",
+      "initial": "draft",
+      "statuses": ["draft", "submitted", "reviewed", "mitigated", "unresolved", "voided"],
+      "transitions": [["draft", "submitted"], ["submitted", "reviewed"], ["reviewed", "mitigated"], ["reviewed", "unresolved"], ["draft", "voided"], ["submitted", "voided"]],
+      "terminalStatuses": ["mitigated", "unresolved", "voided"],
+      "conformanceRows": ["AC-STATE-001"]
+    },
+    "emergency_shutdown": {
+      "repositoryObject": "emergency shutdown control records",
+      "initial": "inactive",
+      "statuses": ["inactive", "active", "recovery_review", "resolved"],
+      "transitions": [["inactive", "active"], ["active", "recovery_review"], ["recovery_review", "resolved"], ["resolved", "inactive"]],
+      "terminalStatuses": ["resolved"],
+      "conformanceRows": ["AC-STATE-001"]
     }
   }
 }

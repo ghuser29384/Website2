@@ -47,6 +47,12 @@ export default async function MpgfAboutPage() {
             <h2>No real-money operations</h2>
             <p>{MPGF_COPY.nonRealMoney}</p>
           </article>
+          <article className="mpgf-panel">
+            <p className="eyebrow">Participant access</p>
+            <h2>Support and public status</h2>
+            <p>{MPGF_COPY.pilot_status}</p>
+            <p>{MPGF_COPY.support_or_access}</p>
+          </article>
         </div>
       </section>
     </MpgfPageFrame>

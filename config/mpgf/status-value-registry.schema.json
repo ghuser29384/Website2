@@ -7,9 +7,23 @@
     "values": {
       "type": "object",
       "additionalProperties": {
-        "type": "array",
-        "items": { "type": "string" },
-        "minItems": 1
+        "oneOf": [
+          {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 1
+          },
+          {
+            "type": "object",
+            "required": ["allowedValues", "owner", "conformanceRows", "acceptanceCriteria"],
+            "properties": {
+              "allowedValues": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+              "owner": { "type": "string" },
+              "conformanceRows": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+              "acceptanceCriteria": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+            }
+          }
+        ]
       }
     }
   },
