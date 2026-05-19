@@ -249,7 +249,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="section section-subtle">
           <div className="section-head">
             <p className="eyebrow">Example structures</p>

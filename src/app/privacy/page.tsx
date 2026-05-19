@@ -25,7 +25,7 @@ export default async function PrivacyPage() {
         {...getTopbarActions(Boolean(viewer))}
         showLogout={Boolean(viewer)}
       />
-      <main className="legal-page">
+      <main className="legal-page" id="main-content" tabIndex={-1}>
         <p className="eyebrow">Privacy</p>
         <h1>Privacy for semi-private moral matching</h1>
         <p>

@@ -25,7 +25,7 @@ export default async function SafetyPage() {
         {...getTopbarActions(Boolean(viewer))}
         showLogout={Boolean(viewer)}
       />
-      <main className="legal-page">
+      <main className="legal-page" id="main-content" tabIndex={-1}>
         <p className="eyebrow">Safety</p>
         <h1>Safety rules for voluntary moral trade</h1>
         <p>

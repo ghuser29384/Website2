@@ -25,6 +25,33 @@
   --content-width: 1180px;
 }
 
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1000;
+  transform: translateY(-150%);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0.65rem 0.9rem;
+  box-shadow: var(--shadow-card);
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.16s ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 3px solid var(--accent-deep);
+  outline-offset: 3px;
+}
+
+#main-content:focus {
+  outline: none;
+}
+
 .mpgf-shell {
   --mpgf-accent: #326b68;
   --mpgf-accent-strong: #1f4f4c;
@@ -3564,6 +3591,20 @@ output {
   margin-bottom: 0.75rem;
 }
 
+.checkbox-label {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  margin-bottom: 0.85rem;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.checkbox-label input {
+  flex: 0 0 auto;
+  margin-top: 0.2rem;
+}
+
 .comment-thread {
   display: grid;
   gap: 1rem;
@@ -3986,5 +4027,39 @@ strong {
 
   .panel-note {
     white-space: normal;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --line: #7e8790;
+    --line-strong: #1d2530;
+    --ink-soft: #253141;
+    --ink-muted: #344153;
+    --accent: #245f9b;
+    --accent-deep: #123f70;
+    --accent-soft: #dbeeff;
+  }
+
+  .panel,
+  .button,
+  .sort-tab,
+  .badge,
+  .source-pill,
+  .impact-pill,
+  input,
+  select,
+  textarea {
+    border-color: var(--line-strong);
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  summary:focus-visible {
+    outline: 3px solid var(--accent-deep);
+    outline-offset: 3px;
   }
 }

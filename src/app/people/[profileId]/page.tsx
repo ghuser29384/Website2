@@ -161,7 +161,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {formMessage ? (
           <div
             className={`status-banner ${

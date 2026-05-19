@@ -190,7 +190,7 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Search</p>

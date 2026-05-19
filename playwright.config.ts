@@ -8,13 +8,13 @@ export default defineConfig({
     timeout: 5_000,
   },
   webServer: {
-    command: "npm run dev -- -p 3210",
+    command: "npm run dev -- -H 127.0.0.1 -p 3210",
     reuseExistingServer: true,
     timeout: 120_000,
-    url: "http://localhost:3210",
+    url: "http://127.0.0.1:3210",
   },
   use: {
-    baseURL: "http://localhost:3210",
+    baseURL: "http://127.0.0.1:3210",
     trace: "retain-on-failure",
   },
 });

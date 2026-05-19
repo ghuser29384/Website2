@@ -25,7 +25,7 @@ export default async function MethodologyPage() {
         {...getTopbarActions(Boolean(viewer))}
         showLogout={Boolean(viewer)}
       />
-      <main className="legal-page">
+      <main className="legal-page" id="main-content" tabIndex={-1}>
         <p className="eyebrow">Methodology</p>
         <h1>How Moral Trade structures reasoning</h1>
         <p>

@@ -121,7 +121,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {formMessage ? (
           <div
             className={`status-banner ${

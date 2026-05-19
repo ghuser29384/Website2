@@ -125,7 +125,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
           <div className="auth-grid">
             <OfferCreateForm

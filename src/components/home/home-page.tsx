@@ -510,7 +510,7 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="section section-white" id="about">
           <div className="section-head">
             <p className="eyebrow">What Moral Trade is</p>

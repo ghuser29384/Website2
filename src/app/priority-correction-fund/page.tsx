@@ -154,7 +154,7 @@ export default async function PriorityCorrectionFundPage({
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {!supabaseReady ? (
           <div className="status-banner status-banner-error">
             Supabase is not configured yet. Add environment variables and apply the SQL schema
@@ -171,6 +171,42 @@ export default async function PriorityCorrectionFundPage({
             {formMessage.text}
           </div>
         ) : null}
+
+        <section className="section section-subtle">
+          <div className="section-head">
+            <p className="eyebrow">Process record</p>
+            <h2>Monthly cycles publish the calculation and the selection rule</h2>
+            <p>
+              The mechanism is not a hidden recommendation feed. A published cycle records the
+              previous-month money base, any carryover, assigned arbiters, selection pools, support
+              counts, reasoning, and dissent notes.
+            </p>
+          </div>
+
+          <div className="concept-grid">
+            <article className="panel concept-card">
+              <h3>Fund calculation</h3>
+              <p>
+                The monthly base is 10% of verified donations plus 10% of verified member-to-member
+                payments recorded for the previous month, then adjusted for any published carryover.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Specific-action arbiters</h3>
+              <p>
+                Each cause area can receive up to five randomly selected arbiters from members in
+                the top 10% of karma for that cycle, excluding members who recently served.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Community-wide arbiters</h3>
+              <p>
+                Seven cycle-wide arbiters are selected from high-karma members with diverse cause
+                priorities. Their allocation reasoning is recorded before a cycle is finalized.
+              </p>
+            </article>
+          </div>
+        </section>
 
         <section className="section section-white">
           <div className="section-head">

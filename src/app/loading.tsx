@@ -1,7 +1,7 @@
 export default function Loading() {
   return (
     <div className="page-shell">
-      <main className="section section-white state-page">
+      <main className="section section-white state-page" id="main-content" tabIndex={-1}>
         <div className="section-head">
           <p className="eyebrow">Loading</p>
           <h1>Loading Moral Trade.</h1>

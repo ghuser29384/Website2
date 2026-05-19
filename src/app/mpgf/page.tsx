@@ -79,6 +79,43 @@ export default async function MpgfPage() {
         </div>
       </section>
 
+      <section className="section section-subtle">
+        <div className="section-head">
+          <p className="eyebrow">Evidence and payment review path</p>
+          <h2>Manual evidence starts review; it does not move or certify money by itself</h2>
+          <p>
+            Signed-in participants can record external-payment evidence for MPGF review. A record
+            is counted only after review accepts the destination, reference, amount, evidence
+            standard, and any provider event that applies.
+          </p>
+        </div>
+
+        <div className="concept-grid">
+          <article className="panel concept-card">
+            <h3>Manual evidence</h3>
+            <p>
+              Participants submit an external destination, amount, date, reference, and evidence
+              note. Until review accepts it, the contribution remains a pending claim.
+            </p>
+          </article>
+          <article className="panel concept-card">
+            <h3>Provider events</h3>
+            <p>
+              Stripe webhook records can support provider-approved flows when real-money mode is
+              configured. The public pilot still treats provider data as review evidence rather
+              than a promise of custody or legal escrow.
+            </p>
+          </article>
+          <article className="panel concept-card">
+            <h3>Participant controls</h3>
+            <p>
+              Signed-out visitors can inspect the workflow, but manual evidence submission and
+              persisted contribution records are available only after sign-in.
+            </p>
+          </article>
+        </div>
+      </section>
+
       <section className="section section-white">
         <div className="section-head">
           <p className="eyebrow">Flagship flow</p>

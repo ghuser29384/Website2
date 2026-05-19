@@ -8,10 +8,11 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
     {
       label: "More",
       items: [
-        { href: "/#background-networking", label: "Background networking" },
-        { href: "/#standards", label: "Standards" },
+        { href: "/background-networking", label: "Background networking" },
+        { href: "/reasoning-standards", label: "Standards" },
         { href: "/methodology", label: "Methodology" },
         { href: "/safety", label: "Safety" },
+        ...(isAuthenticated ? [] : [{ href: "/signup", label: "Create account" }]),
       ],
     },
   ];
@@ -34,7 +35,7 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/#about", label: "About" },
       { href: "/#how-it-works", label: "How it works" },
-      { href: "/#background-networking", label: "Background networking" },
+      { href: "/background-networking", label: "Background networking" },
       { href: "/#commitments", label: "Blockers" },
     ],
   },
@@ -42,7 +43,7 @@ export const FOOTER_LINK_GROUPS = [
     title: "Standards",
     links: [
       { href: "/methodology", label: "Methodology" },
-      { href: "/#standards", label: "Reasoning standards" },
+      { href: "/reasoning-standards", label: "Reasoning standards" },
       { href: "/safety", label: "Safety" },
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },

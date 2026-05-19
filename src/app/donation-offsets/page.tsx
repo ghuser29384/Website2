@@ -111,7 +111,7 @@ export default async function DonationOffsetsPage() {
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">What a donation offset is</p>
@@ -250,6 +250,44 @@ export default async function DonationOffsetsPage() {
               <p>
                 When compromise is possible, it is usually better to choose a destination that many
                 moral views independently care about, especially widely shared public goods.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle">
+          <div className="section-head">
+            <p className="eyebrow">Verification pipeline</p>
+            <h2>A submitted offset is screened before others should rely on it</h2>
+            <p>
+              The platform records evidence and review state; it does not automatically decide
+              that a past donation, baseline intention, or compromise payment is verified merely
+              because a participant submitted a form.
+            </p>
+          </div>
+
+          <div className="concept-grid">
+            <article className="panel concept-card">
+              <h3>Rule-based screening</h3>
+              <p>
+                Offset submissions are checked for prohibited political campaign contributions,
+                threat-like descriptions, missing verification metadata, unverifiable baselines,
+                and incomplete pool thresholds or deadlines.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Manual review state</h3>
+              <p>
+                Clear records can be listed, flagged records require extra scrutiny, and blocked
+                records are not treated as public offers. Review notes travel with the offset so
+                users can see why it is paused or rejected.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Third-party payment evidence</h3>
+              <p>
+                Receipts, external payment records, and audits can support factual trust. They are
+                evidence for review, not platform custody, tax advice, or legal escrow.
               </p>
             </article>
           </div>

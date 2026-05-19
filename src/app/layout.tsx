@@ -104,6 +104,9 @@ export default function RootLayout({
           }}
           type="application/ld+json"
         />
+        <a className="skip-link" href="#main-content">
+          Skip to main content
+        </a>
         {children}
       </body>
     </html>

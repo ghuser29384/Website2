@@ -32,6 +32,7 @@ import {
   updateIntroductionTaskAction,
   updateAgreementStatusAction,
 } from "@/app/actions";
+import { ProfilePortabilityPanel } from "@/components/dashboard/profile-portability-panel";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
@@ -175,7 +176,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {!supabaseReady ? (
           <div className="status-banner status-banner-error">
             Supabase is not configured yet. Add environment variables and apply the SQL schema
@@ -199,6 +200,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             logged on the server.
           </div>
         ) : null}
+
+        {viewer ? <ProfilePortabilityPanel /> : null}
 
         <section className="section section-white">
           <div className="section-head">

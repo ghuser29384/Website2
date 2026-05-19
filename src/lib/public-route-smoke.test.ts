@@ -29,6 +29,11 @@ test("public navigation points at the flagship MPGF flow and hides unfinished ro
   assert.ok(hrefs.includes("/mpgf"));
   assert.ok(hrefs.includes("/offers"));
   assert.ok(hrefs.includes("/donate"));
+  assert.ok(hrefs.includes("/background-networking"));
+  assert.ok(hrefs.includes("/reasoning-standards"));
+  assert.ok(hrefs.includes("/signup"));
+  assert.ok(!hrefs.includes("/#background-networking"));
+  assert.ok(!hrefs.includes("/#standards"));
   assert.ok(!hrefs.includes("/cart"));
   assert.ok(!hrefs.includes("/wish-registry"));
   assert.ok(!hrefs.includes("/donation-offsets"));
@@ -247,6 +252,53 @@ test("MPGF signed-out manual evidence copy and controls are gated", () => {
   assert.match(consoleSource, /if \(!viewerPresent\)/);
 });
 
+test("background networking and reasoning standards are distinct public routes", () => {
+  const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
+  const standardsPage = readRepoFile("src/app/reasoning-standards/page.tsx");
+  const sitemapSource = readRepoFile("src/app/sitemap.ts");
+
+  assert.match(backgroundPage, /Find possible trades without turning people into targets/);
+  assert.match(backgroundPage, /does not ingest private feeds/);
+  assert.match(backgroundPage, /No autonomous outreach/);
+  assert.match(standardsPage, /Make trade records specific enough to judge/);
+  assert.match(standardsPage, /not legal escrow/i);
+  assert.match(standardsPage, /voluntary/i);
+  assert.match(sitemapSource, /\/background-networking/);
+  assert.match(sitemapSource, /\/reasoning-standards/);
+});
+
+test("dashboard exposes existing profile portability endpoints", () => {
+  const dashboardSource = readRepoFile("src/app/dashboard/page.tsx");
+  const panelSource = readRepoFile("src/components/dashboard/profile-portability-panel.tsx");
+  const exportRoute = readRepoFile("src/app/api/profile/export/route.ts");
+  const importRoute = readRepoFile("src/app/api/profile/import/route.ts");
+
+  assert.match(dashboardSource, /ProfilePortabilityPanel/);
+  assert.match(panelSource, /\/api\/profile\/export/);
+  assert.match(panelSource, /\/api\/profile\/import/);
+  assert.match(panelSource, /\/api\/profile\/schema/);
+  assert.match(panelSource, /replaceExisting/);
+  assert.match(exportRoute, /schemaUrl: "\/api\/profile\/schema"/);
+  assert.match(exportRoute, /importUrl: "\/api\/profile\/import"/);
+  assert.match(importRoute, /buildDeterministicSynthesis/);
+});
+
+test("public guidance describes verification pipelines without custody overclaims", () => {
+  const donationOffsetsPage = readRepoFile("src/app/donation-offsets/page.tsx");
+  const mpfgPage = readRepoFile("src/app/mpgf/page.tsx");
+  const priorityFundPage = readRepoFile("src/app/priority-correction-fund/page.tsx");
+  const joinedSources = [donationOffsetsPage, mpfgPage, priorityFundPage].join("\n");
+
+  assert.match(donationOffsetsPage, /Rule-based screening/);
+  assert.match(donationOffsetsPage, /not platform custody, tax advice, or legal escrow/);
+  assert.match(mpfgPage, /Manual evidence starts review/);
+  assert.match(mpfgPage, /than a promise of custody or legal escrow/);
+  assert.match(priorityFundPage, /10% of verified donations plus 10% of verified member-to-member/);
+  assert.match(priorityFundPage, /top 10% of karma/);
+  assert.equal(joinedSources.includes("Escrow-backed"), false);
+  assert.equal(joinedSources.includes("guaranteed custody"), false);
+});
+
 test("pooled donation offset creation has visible path and server-side guardrails", () => {
   const donationOffsetsPage = readRepoFile("src/app/donation-offsets/page.tsx");
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
@@ -278,7 +330,7 @@ test("offer creation form has live client validation aligned with server-require
 
 test("offers page keeps content before the footer in source order", () => {
   const offersPage = readRepoFile("src/app/offers/page.tsx");
-  const mainIndex = offersPage.indexOf("<main>");
+  const mainIndex = offersPage.indexOf("<main");
   const exampleIndex = offersPage.indexOf("Example structures");
   const directoryIndex = offersPage.indexOf("Offer directory");
   const footerIndex = offersPage.indexOf("<SiteFooter />");

@@ -154,7 +154,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {!hasSupabaseEnv() ? (
           <div className="status-banner status-banner-error">
             Supabase is not configured yet. Add environment variables and apply the SQL schema

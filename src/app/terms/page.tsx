@@ -24,7 +24,7 @@ export default async function TermsPage() {
         {...getTopbarActions(Boolean(viewer))}
         showLogout={Boolean(viewer)}
       />
-      <main className="legal-page">
+      <main className="legal-page" id="main-content" tabIndex={-1}>
         <p className="eyebrow">Terms</p>
         <h1>Terms for careful participation</h1>
         <p>

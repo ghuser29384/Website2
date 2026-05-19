@@ -77,7 +77,7 @@ export function MpgfPageFrame({
         </div>
       </header>
 
-      <main>{children}</main>
+      <main id="main-content" tabIndex={-1}>{children}</main>
       <SiteFooter />
     </div>
   );

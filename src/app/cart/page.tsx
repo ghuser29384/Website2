@@ -70,7 +70,7 @@ export default async function CartPage({ searchParams }: CartPageProps) {
         </div>
       </header>
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {formMessage ? (
           <div
             className={`status-banner ${

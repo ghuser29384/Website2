@@ -18,7 +18,7 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
 
   return (
     <div className="page-shell">
-      <main className="section section-white state-page">
+      <main className="section section-white state-page" id="main-content" tabIndex={-1}>
         <div className="section-head">
           <p className="eyebrow">Something failed</p>
           <h1>The site could not finish loading this page.</h1>
