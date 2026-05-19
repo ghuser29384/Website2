@@ -179,10 +179,10 @@
     },
     "idempotency_key": {
       "repositoryObject": "mutation-idempotency records",
-      "initial": "reserved",
-      "statuses": ["reserved", "succeeded", "failed", "expired"],
-      "transitions": [["reserved", "succeeded"], ["reserved", "failed"], ["reserved", "expired"]],
-      "terminalStatuses": ["succeeded", "failed", "expired"],
+      "initial": "received",
+      "statuses": ["received", "completed", "failed", "conflict", "expired"],
+      "transitions": [["received", "completed"], ["received", "failed"], ["received", "conflict"], ["received", "expired"]],
+      "terminalStatuses": ["completed", "failed", "conflict", "expired"],
       "conformanceRows": ["AC-STATE-001"]
     },
     "admin_approval_record": {

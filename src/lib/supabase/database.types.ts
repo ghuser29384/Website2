@@ -16,6 +16,8 @@ export interface Database {
           display_name: string | null;
           city: string | null;
           region: string | null;
+          country: string | null;
+          public_location_granularity: "hidden" | "country" | "region" | "city";
           bio: string;
           follower_count: number;
           following_count: number;
@@ -32,6 +34,8 @@ export interface Database {
           display_name?: string | null;
           city?: string | null;
           region?: string | null;
+          country?: string | null;
+          public_location_granularity?: "hidden" | "country" | "region" | "city";
           bio?: string;
           follower_count?: number;
           following_count?: number;
@@ -47,6 +51,8 @@ export interface Database {
           display_name?: string | null;
           city?: string | null;
           region?: string | null;
+          country?: string | null;
+          public_location_granularity?: "hidden" | "country" | "region" | "city";
           bio?: string;
           follower_count?: number;
           following_count?: number;
@@ -192,6 +198,7 @@ export interface Database {
             | "donate_to_original_cause"
             | "split_evenly";
           assurance_minimum_cents: number;
+          maximum_cap_cents: number;
           assurance_deadline_at: string | null;
           side_a_label: string;
           side_b_label: string;
@@ -220,6 +227,7 @@ export interface Database {
             | "donate_to_original_cause"
             | "split_evenly";
           assurance_minimum_cents?: number;
+          maximum_cap_cents?: number;
           assurance_deadline_at?: string | null;
           side_a_label?: string;
           side_b_label?: string;
@@ -246,6 +254,7 @@ export interface Database {
             | "donate_to_original_cause"
             | "split_evenly";
           assurance_minimum_cents?: number;
+          maximum_cap_cents?: number;
           assurance_deadline_at?: string | null;
           side_a_label?: string;
           side_b_label?: string;

@@ -56,6 +56,10 @@ create table if not exists public.profiles (
   display_name text,
   city text,
   region text,
+  country text,
+  public_location_granularity text not null default 'hidden' check (
+    public_location_granularity in ('hidden', 'country', 'region', 'city')
+  ),
   bio text not null default '',
   follower_count integer not null default 0,
   following_count integer not null default 0,
@@ -74,6 +78,12 @@ alter table public.profiles add column if not exists comment_count integer not n
 alter table public.profiles add column if not exists rating_avg double precision;
 alter table public.profiles add column if not exists rating_count integer not null default 0;
 alter table public.profiles add column if not exists offer_count integer not null default 0;
+alter table public.profiles add column if not exists country text;
+alter table public.profiles add column if not exists public_location_granularity text not null default 'hidden';
+alter table public.profiles drop constraint if exists profiles_public_location_granularity_check;
+alter table public.profiles
+add constraint profiles_public_location_granularity_check
+check (public_location_granularity in ('hidden', 'country', 'region', 'city'));
 
 create table if not exists public.offers (
   id uuid primary key default gen_random_uuid(),
@@ -141,6 +151,7 @@ create table if not exists public.donation_offset_pools (
     )
   ),
   assurance_minimum_cents integer not null default 0 check (assurance_minimum_cents >= 0),
+  maximum_cap_cents integer not null default 0 check (maximum_cap_cents >= 0),
   assurance_deadline_at timestamptz,
   side_a_label text not null default 'Side A',
   side_b_label text not null default 'Side B',
@@ -150,6 +161,12 @@ create table if not exists public.donation_offset_pools (
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.donation_offset_pools add column if not exists maximum_cap_cents integer not null default 0;
+alter table public.donation_offset_pools drop constraint if exists donation_offset_pools_maximum_cap_cents_check;
+alter table public.donation_offset_pools
+add constraint donation_offset_pools_maximum_cap_cents_check
+check (maximum_cap_cents >= 0);
 
 create table if not exists public.donation_offset_offers (
   offer_id uuid primary key references public.offers (id) on delete cascade,
@@ -1899,13 +1916,28 @@ security definer
 set search_path = public, auth
 as $$
 begin
-  insert into public.profiles (id, email, display_name, city, region, bio)
+  insert into public.profiles (
+    id,
+    email,
+    display_name,
+    city,
+    region,
+    country,
+    public_location_granularity,
+    bio
+  )
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data ->> 'display_name', split_part(new.email, '@', 1)),
     nullif(new.raw_user_meta_data ->> 'city', ''),
     nullif(new.raw_user_meta_data ->> 'region', ''),
+    nullif(new.raw_user_meta_data ->> 'country', ''),
+    case
+      when new.raw_user_meta_data ->> 'public_location_granularity' in ('country', 'region', 'city')
+        then new.raw_user_meta_data ->> 'public_location_granularity'
+      else 'hidden'
+    end,
     coalesce(new.raw_user_meta_data ->> 'bio', '')
   )
   on conflict (id) do update
@@ -1913,6 +1945,11 @@ begin
         display_name = coalesce(excluded.display_name, public.profiles.display_name),
         city = coalesce(excluded.city, public.profiles.city),
         region = coalesce(excluded.region, public.profiles.region),
+        country = coalesce(excluded.country, public.profiles.country),
+        public_location_granularity = coalesce(
+          excluded.public_location_granularity,
+          public.profiles.public_location_granularity
+        ),
         bio = case
           when excluded.bio <> '' then excluded.bio
           else public.profiles.bio
@@ -1922,13 +1959,28 @@ begin
 end;
 $$;
 
-insert into public.profiles (id, email, display_name, city, region, bio)
+insert into public.profiles (
+  id,
+  email,
+  display_name,
+  city,
+  region,
+  country,
+  public_location_granularity,
+  bio
+)
 select
   users.id,
   users.email,
   coalesce(users.raw_user_meta_data ->> 'display_name', split_part(users.email, '@', 1)),
   nullif(users.raw_user_meta_data ->> 'city', ''),
   nullif(users.raw_user_meta_data ->> 'region', ''),
+  nullif(users.raw_user_meta_data ->> 'country', ''),
+  case
+    when users.raw_user_meta_data ->> 'public_location_granularity' in ('country', 'region', 'city')
+      then users.raw_user_meta_data ->> 'public_location_granularity'
+    else 'hidden'
+  end,
   coalesce(users.raw_user_meta_data ->> 'bio', '')
 from auth.users as users
 on conflict (id) do update
@@ -1936,6 +1988,11 @@ on conflict (id) do update
       display_name = coalesce(excluded.display_name, public.profiles.display_name),
       city = coalesce(excluded.city, public.profiles.city),
       region = coalesce(excluded.region, public.profiles.region),
+      country = coalesce(excluded.country, public.profiles.country),
+      public_location_granularity = coalesce(
+        excluded.public_location_granularity,
+        public.profiles.public_location_granularity
+      ),
       bio = case
         when excluded.bio <> '' then excluded.bio
         else public.profiles.bio

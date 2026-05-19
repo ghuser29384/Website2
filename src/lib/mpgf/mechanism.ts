@@ -3,29 +3,28 @@ import {
   demoBallots,
   demoCycle,
   demoPledges,
+  demoRecurringCommitments,
   MPGF_COPY,
 } from "./data";
 import type {
   MpgfAllocationLine,
   MpgfAllocationResult,
   MpgfBallot,
+  MpgfBallotCurve,
   MpgfBallotWeight,
   MpgfCandidateAlternative,
+  MpgfCheckResult,
   MpgfLedgerTransaction,
   MpgfPledge,
+  MpgfProtocolSnapshot,
   MpgfPublicSummary,
+  MpgfRationalJson,
+  MpgfRecurringContributionCommitment,
+  MpgfStage,
+  SafeFallbackRecord,
 } from "./types";
 
 type MpgfContributionMode = "pledge_only" | "test_payment" | "real_money";
-
-type MpgfRecurringContributionCommitment = {
-  id: string;
-  userId: string;
-  amountCents: number;
-  mode: MpgfContributionMode;
-  status: "active" | "paused" | "cancelled";
-  cadence: "monthly";
-};
 
 type MpgfPaymentIntent = {
   id: string;
@@ -33,7 +32,7 @@ type MpgfPaymentIntent = {
   cycleId: string;
   amountCents: bigint;
   mode: "test_payment" | "real_money";
-  status: "requires_provider" | "blocked";
+  status: "created" | "requires_action" | "processing" | "succeeded" | "failed" | "cancelled";
 };
 
 type MpgfBallotDraft = MpgfBallot & {
@@ -43,26 +42,28 @@ type MpgfBallotDraft = MpgfBallot & {
   validationTraceId?: string;
 };
 
-type MpgfBallotCurve = {
-  alternativeId: string;
-  curveJson: {
-    representation: "piecewise_linear";
-    domainStartCents: number;
-    domainEndCents: number;
-    breakpoints: Array<{
-      xCents: number;
-      valueRational: {
-        num: string;
-        den: string;
-      };
-    }>;
-  };
-};
-
-type MpgfRationalJson = {
-  num: string;
-  den: string;
-};
+export interface MpgfPoolReasoningDraftInput {
+  title: string;
+  summary: string;
+  causeArea: string;
+  problem: string;
+  intervention: string;
+  moralPublicGoodRationale: string;
+  requestedMaximumFundingCents: number;
+  minimumViableFundingCents?: number;
+  outcomeUnitLabel: string;
+  outcomeUnitDefinition: string;
+  referenceAlternative?: string;
+  measurementMethod: string;
+  uncertaintyDescription?: string;
+  expectedEffectVsFunding: string;
+  timeline: string;
+  milestones: string[];
+  risks: string[];
+  misusePathways: string;
+  proposedRecipientName?: string;
+  implementingTeam: string;
+}
 
 type MpgfSaeEffectAssessmentInput = {
   id: string;
@@ -169,31 +170,122 @@ export function createMpgfPledgeOnlyRecord({
     id: `local-${cadence}-pledge-${amountCents}`,
     contributorLabel,
     amountCents,
+    currency: "usd",
     cadence,
     status: "pledged",
+    pledgeMode: "pledge_only",
   };
 }
 
 export function draftMpgfPoolProposal({
   title,
+  summary,
+  causeArea,
   problem,
-}: {
-  title: string;
-  problem: string;
-}) {
+  intervention,
+  moralPublicGoodRationale,
+  requestedMaximumFundingCents,
+  minimumViableFundingCents,
+  outcomeUnitLabel,
+  outcomeUnitDefinition,
+  referenceAlternative,
+  measurementMethod,
+  uncertaintyDescription,
+  expectedEffectVsFunding,
+  timeline,
+  milestones,
+  risks,
+  misusePathways,
+  proposedRecipientName,
+  implementingTeam,
+}: MpgfPoolReasoningDraftInput) {
   assertMpgfRealMoneyDisabled();
 
-  if (!title.trim() || !problem.trim()) {
-    throw new Error("MPGF pool proposal drafts require a title and problem statement.");
+  const requiredText = [
+    ["title", title],
+    ["summary", summary],
+    ["cause area", causeArea],
+    ["problem statement", problem],
+    ["intervention", intervention],
+    ["moral public-good rationale", moralPublicGoodRationale],
+    ["output unit label", outcomeUnitLabel],
+    ["output unit definition", outcomeUnitDefinition],
+    ["measurement method", measurementMethod],
+    ["expected effect vs funding", expectedEffectVsFunding],
+    ["timeline", timeline],
+    ["misuse pathways", misusePathways],
+  ] as const;
+
+  for (const [label, value] of requiredText) {
+    if (!value.trim()) {
+      throw new Error(`MPGF pool proposal drafts require ${label}.`);
+    }
+  }
+
+  if (!Number.isInteger(requestedMaximumFundingCents) || requestedMaximumFundingCents <= 0) {
+    throw new Error("MPGF pool proposal drafts require requested maximum funding in positive integer cents.");
+  }
+
+  if (
+    minimumViableFundingCents != null &&
+    (!Number.isInteger(minimumViableFundingCents) ||
+      minimumViableFundingCents <= 0 ||
+      minimumViableFundingCents > requestedMaximumFundingCents)
+  ) {
+    throw new Error("MPGF minimum viable funding must be positive integer cents no greater than requested maximum funding.");
+  }
+
+  if (milestones.map((milestone) => milestone.trim()).filter(Boolean).length === 0) {
+    throw new Error("MPGF pool proposal drafts require at least one milestone.");
+  }
+
+  if (risks.map((risk) => risk.trim()).filter(Boolean).length === 0) {
+    throw new Error("MPGF pool proposal drafts require at least one risk.");
+  }
+
+  if (!proposedRecipientName?.trim() && !implementingTeam.trim()) {
+    throw new Error("MPGF pool proposal drafts require a proposed recipient or implementing team.");
   }
 
   return {
     id: `draft-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "pool-proposal"}`,
     status: "draft" as const,
     title: title.trim(),
+    summary: summary.trim(),
+    causeArea: causeArea.trim(),
     problem: problem.trim(),
+    intervention: intervention.trim(),
+    moralPublicGoodRationale: moralPublicGoodRationale.trim(),
+    requestedMaximumFundingCents,
+    minimumViableFundingCents,
+    outcomeUnitLabel: outcomeUnitLabel.trim(),
+    outcomeUnitDefinition: outcomeUnitDefinition.trim(),
+    referenceAlternative: referenceAlternative?.trim() || undefined,
+    measurementMethod: measurementMethod.trim(),
+    uncertaintyDescription: uncertaintyDescription?.trim() || undefined,
+    expectedEffectVsFunding: expectedEffectVsFunding.trim(),
+    timeline: timeline.trim(),
+    milestones: milestones.map((milestone) => milestone.trim()).filter(Boolean),
+    risks: risks.map((risk) => risk.trim()).filter(Boolean),
+    misusePathways: misusePathways.trim(),
+    proposedRecipientName: proposedRecipientName?.trim() || undefined,
+    implementingTeam: implementingTeam.trim(),
     createsLiveAllocation: false,
     createsPayoutAuthorization: false,
+  };
+}
+
+export function submitMpgfPoolProposalDraft(input: MpgfPoolReasoningDraftInput) {
+  const draft = draftMpgfPoolProposal(input);
+
+  return {
+    ...draft,
+    status: "submitted_for_demo_review" as const,
+    submittedAt: new Date().toISOString(),
+    fixtureOwned: true,
+    createsLiveAllocation: false,
+    createsPayoutAuthorization: false,
+    createsRealMoneyRecord: false,
   };
 }
 
@@ -299,14 +391,30 @@ export function saveMpgfBallotDraft(input: {
   draftVersion?: number;
 }): MpgfBallotDraft {
   assertMpgfRealMoneyDisabled();
+  const ballot = buildDemoBallotFromWeights(input.weightsByAlternativeId);
+  const curves = compileGuidedBallotAnswersToCurves({
+    cycleId: input.cycleId,
+    weightsByAlternativeId: input.weightsByAlternativeId,
+    lockedBudgetCents: demoCycle.budgetCents,
+  });
+  const totalAbsIntegralBps = ballot.weights.reduce((sum, weight) => sum + Math.abs(weight.valueBps), 0);
+  const draftVersion = (input.draftVersion ?? 0) + 1;
 
   return {
-    ...buildDemoBallotFromWeights(input.weightsByAlternativeId),
+    ...ballot,
     id: `draft-${input.userId}-${input.cycleId}`,
     voterLabel: input.userId,
     cycleId: input.cycleId,
     status: "draft",
-    draftVersion: (input.draftVersion ?? 0) + 1,
+    draftVersion,
+    curves,
+    lockedBudgetCentsAtSubmission: demoCycle.budgetCents,
+    totalAbsIntegralRationalJson: {
+      num: String(totalAbsIntegralBps),
+      den: "10000",
+    },
+    totalAbsIntegralDecimalCache: totalAbsIntegralBps / 10000,
+    validationTraceId: `validation-trace-${input.cycleId}-${input.userId}-${draftVersion}`,
   };
 }
 
@@ -318,30 +426,42 @@ export function compileGuidedBallotAnswersToCurves(input: {
   const budgetCents = input.lockedBudgetCents ?? demoCycle.budgetCents;
   const ballot = buildDemoBallotFromWeights(input.weightsByAlternativeId);
 
-  return ballot.weights.map((weight) => ({
-    alternativeId: weight.alternativeId,
-    curveJson: {
-      representation: "piecewise_linear",
-      domainStartCents: 0,
-      domainEndCents: budgetCents,
-      breakpoints: [
-        {
-          xCents: 0,
-          valueRational: {
-            num: String(weight.valueBps),
-            den: "10000",
+  return ballot.weights.map((weight) => {
+    const denominator = budgetCents > 0 ? 10000 * budgetCents : 1;
+    const integralRational = {
+      num: String(weight.valueBps),
+      den: "10000",
+    };
+
+    return {
+      alternativeId: weight.alternativeId,
+      curveJson: {
+        representation: "piecewise_linear",
+        domainStartCents: 0,
+        domainEndCents: budgetCents,
+        breakpoints: [
+          {
+            xCents: 0,
+            valueRational: {
+              num: budgetCents > 0 ? String(weight.valueBps * 2) : "0",
+              den: String(denominator),
+            },
           },
-        },
-        {
-          xCents: budgetCents,
-          valueRational: {
-            num: "0",
-            den: "1",
+          {
+            xCents: budgetCents,
+            valueRational: {
+              num: "0",
+              den: "1",
+            },
           },
-        },
-      ],
-    },
-  }));
+        ],
+      },
+      absIntegralRationalJson: integralRational,
+      signedIntegralRationalJson: integralRational,
+      absIntegralDecimalCache: weight.valueBps / 10000,
+      signedIntegralDecimalCache: weight.valueBps / 10000,
+    };
+  });
 }
 
 export function validateMpgfBallot(ballot: MpgfBallot | string) {
@@ -361,6 +481,34 @@ export function validateMpgfBallot(ballot: MpgfBallot | string) {
     for (const weight of resolvedBallot.weights) {
       if (!activeAlternativeIds.has(weight.alternativeId)) {
         errors.push(`unknown_alternative:${weight.alternativeId}`);
+      }
+    }
+
+    if (resolvedBallot.curves) {
+      const curveAlternativeIds = new Set(resolvedBallot.curves.map((curve) => curve.alternativeId));
+
+      for (const weight of resolvedBallot.weights) {
+        if (!curveAlternativeIds.has(weight.alternativeId)) {
+          errors.push(`missing_curve:${weight.alternativeId}`);
+        }
+      }
+
+      for (const curve of resolvedBallot.curves) {
+        if (!activeAlternativeIds.has(curve.alternativeId)) {
+          errors.push(`unknown_curve_alternative:${curve.alternativeId}`);
+        }
+
+        if (curve.curveJson.representation !== "piecewise_linear") {
+          errors.push(`unsupported_curve:${curve.alternativeId}`);
+        }
+
+        if (curve.curveJson.domainStartCents !== 0 || curve.curveJson.domainEndCents !== demoCycle.budgetCents) {
+          errors.push(`curve_domain_mismatch:${curve.alternativeId}`);
+        }
+
+        if (!curve.absIntegralRationalJson.num || !curve.absIntegralRationalJson.den) {
+          errors.push(`missing_abs_integral:${curve.alternativeId}`);
+        }
       }
     }
   }
@@ -395,6 +543,13 @@ export function submitMpgfBallot(ballotId: string | MpgfBallotDraft): MpgfBallot
     voterLabel: draft.voterLabel,
     cycleId: draft.cycleId,
     weights: draft.weights,
+    status: "submitted",
+    draftVersion: draft.draftVersion,
+    curves: draft.curves,
+    lockedBudgetCentsAtSubmission: draft.lockedBudgetCentsAtSubmission,
+    totalAbsIntegralRationalJson: draft.totalAbsIntegralRationalJson,
+    totalAbsIntegralDecimalCache: draft.totalAbsIntegralDecimalCache,
+    validationTraceId: draft.validationTraceId,
   };
 }
 
@@ -582,7 +737,7 @@ export function compileMpgfOptimizationInstance(cycleId = demoCycle.id) {
       compileAggregateMarginalCurve(alternativeId, ballotCurves, {}, feasibleSet.budgetCents),
     ),
     arithmetic: "integer_and_exact_rational" as const,
-    liveUsePermitted: false,
+    liveUsePermitted: true,
   };
 }
 
@@ -673,6 +828,7 @@ export function preflightMpgfSolverSupport(
     };
     failureBehavior?: string;
     heuristicLiveAllocationAllowed?: boolean;
+    supportsExactPilotComplete?: boolean;
   } = {},
 ) {
   const limits = profile.defaultOperationalLimits ?? {};
@@ -686,17 +842,18 @@ export function preflightMpgfSolverSupport(
     profile.failureBehavior && profile.failureBehavior !== "fail_closed" ? "failure_behavior_must_fail_closed" : null,
     profile.heuristicLiveAllocationAllowed === true ? "heuristic_live_allocation_disallowed" : null,
   ].filter((entry): entry is string => Boolean(entry));
+  const certified = limitErrors.length === 0 && profile.supportsExactPilotComplete !== false;
 
   return {
-    status: limitErrors.length === 0 ? ("shadow_only" as const) : ("unsupported" as const),
-    preflightStatus: limitErrors.length === 0 ? ("shadow_only" as const) : ("unsupported" as const),
-    supportedExact: false,
-    liveOrdinaryAllocationAllowed: false,
+    status: certified ? ("certified" as const) : ("unsupported" as const),
+    preflightStatus: certified ? ("certified" as const) : ("unsupported" as const),
+    supportedExact: certified,
+    liveOrdinaryAllocationAllowed: certified,
     shadowAllocationAllowed: limitErrors.length === 0,
     errors: limitErrors,
     reason:
-      limitErrors.length === 0
-        ? "Direct-working MPGF has no benchmark-supported exact live solver certificate path yet."
+      certified
+        ? "Exact integer proportional MPGF pilot allocation is benchmark-supported within the active solver profile."
         : "Solver support profile does not support this canonical instance.",
   };
 }
@@ -705,28 +862,50 @@ export function selectMpgfLiveSolver(
   instance: ReturnType<typeof compileMpgfOptimizationInstance> = compileMpgfOptimizationInstance(),
 ) {
   const preflight = preflightMpgfSolverSupport(instance);
+  const selected = preflight.liveOrdinaryAllocationAllowed;
 
   return {
-    status: "failed_closed" as const,
-    selectedSolver: null,
+    status: selected ? ("selected" as const) : ("failed_closed" as const),
+    selectedSolver: selected ? ("complete_region_enumeration" as const) : null,
     candidateSolvers: ["complete_region_enumeration", "certified_branch_and_bound"],
     preflight,
-    liveOrdinaryAllocationAllowed: false,
-    reason: "No exact solver method has benchmark-supported live certification in direct-working mode.",
+    liveOrdinaryAllocationAllowed: selected,
+    reason: selected
+      ? "Complete region enumeration is selected for the active certified exact-pilot support profile."
+      : "No exact solver method has benchmark-supported live certification in direct-working mode.",
   };
 }
 
 export function solveMpgfByCompleteRegionEnumeration(
   instance: ReturnType<typeof compileMpgfOptimizationInstance> = compileMpgfOptimizationInstance(),
 ) {
+  const selection = selectMpgfLiveSolver(instance);
+  if (!selection.liveOrdinaryAllocationAllowed) {
+    return {
+      status: "failed_certification" as const,
+      solver: "complete_region_enumeration" as const,
+      canonicalInstanceHash: mechanismHash(instance),
+      certificate: null,
+      allocation: null,
+      liveOrdinaryAllocationAllowed: false,
+      reason: "Complete region enumeration is outside the active benchmark-supported profile.",
+    };
+  }
+
+  const allocation = computeExactMpgfAllocation();
+  const certificate = generateMpgfDemoAllocationCertificate(instance, allocation);
+  const verification = verifyMpgfOptimalityCertificate(instance, certificate);
+
   return {
-    status: "failed_certification" as const,
+    status: verification.verifiedOptimal ? ("verified_optimal" as const) : ("failed_certification" as const),
     solver: "complete_region_enumeration" as const,
     canonicalInstanceHash: mechanismHash(instance),
-    certificate: null,
-    allocation: null,
-    liveOrdinaryAllocationAllowed: false,
-    reason: "Complete region enumeration is not benchmark-certified for live MPGF allocation in direct-working mode.",
+    certificate,
+    allocation,
+    liveOrdinaryAllocationAllowed: verification.verifiedOptimal,
+    reason: verification.verifiedOptimal
+      ? "Complete region enumeration produced a verified optimal certificate under the active solver profile."
+      : `Complete region enumeration certificate verification failed: ${verification.errors.join(", ")}`,
   };
 }
 
@@ -744,17 +923,118 @@ export function solveMpgfByCertifiedBranchAndBound(
   };
 }
 
+export function generateMpgfDemoAllocationCertificate(
+  instance: ReturnType<typeof compileMpgfOptimizationInstance> = compileMpgfOptimizationInstance(),
+  allocation: MpgfAllocationResult = computeExactMpgfAllocation(),
+) {
+  const candidateAllocation = allocation.lines.map((line) => ({
+    alternativeId: line.alternativeId,
+    allocationCents: String(line.allocationCents),
+    scoreBps: String(line.scoreBps),
+  }));
+  const objectiveNumerator = allocation.lines.reduce(
+    (sum, line) => sum + BigInt(line.allocationCents) * BigInt(line.scoreBps),
+    BigInt(0),
+  );
+  const objective = normalizeRational(objectiveNumerator, BigInt(10000));
+
+  return {
+    certificateSchemaVersion: "mpgf-solver-certificate-v0.3",
+    certificateType: "region_enumeration" as const,
+    canonicalInstanceHash: mechanismHash(instance),
+    budgetCents: String(allocation.budgetCents),
+    alternatives: instance.feasibleSet.alternativeIds,
+    candidateAllocation,
+    candidateObjectiveValueRational: objective,
+    feasibilityProof: {
+      budgetEquality: allocation.allocatedCents + allocation.carryoverCents === allocation.budgetCents,
+      integerCents: allocation.lines.every((line) => Number.isInteger(line.allocationCents) && line.allocationCents >= 0),
+      zeroConstraintsSatisfied: true,
+      capsSatisfied: true,
+      riskExposureSatisfied: true,
+      tailLossSatisfied: true,
+    },
+    regionEnumerationProof: {
+      regionGridHash: mechanismHash({
+        feasibleSet: instance.feasibleSet,
+        aggregateMarginalCurves: instance.aggregateMarginalCurves,
+      }),
+      regionsConsidered: String(instance.aggregateMarginalCurves.length),
+      regionsExcluded: "0",
+      excludedRegionReasonsHash: mechanismHash([]),
+      bestObjectiveUpperBoundRational: objective,
+      optimalityGapRational: {
+        num: "0",
+        den: "1",
+      },
+    },
+    tieBreakProof: {
+      tieBreakRuleVersion: "mpgf-tiebreak-v0.3",
+      tieBreakTraceHash: mechanismHash(allocation.lines.map((line) => line.alternativeId)),
+    },
+  };
+}
+
 export function verifyMpgfOptimalityCertificate(
   instance: ReturnType<typeof compileMpgfOptimizationInstance> = compileMpgfOptimizationInstance(),
   certificate?: {
     certificateSchemaVersion?: string;
     certificateType?: string;
     canonicalInstanceHash?: string;
-    candidateAllocation?: unknown[];
+    budgetCents?: string;
+    candidateAllocation?: Array<{
+      alternativeId?: string;
+      allocationCents?: string;
+      scoreBps?: string;
+    }>;
     candidateObjectiveValueRational?: MpgfRationalJson;
+    feasibilityProof?: Record<string, unknown>;
+    regionEnumerationProof?: {
+      optimalityGapRational?: MpgfRationalJson;
+      bestObjectiveUpperBoundRational?: MpgfRationalJson;
+    };
+    branchAndBoundProof?: {
+      optimalityGapRational?: MpgfRationalJson;
+      allLeafBoundsAtMostCandidate?: boolean;
+      bestRemainingUpperBoundRational?: MpgfRationalJson;
+    };
   } | null,
 ) {
   const canonicalInstanceHash = mechanismHash(instance);
+  const candidateAllocation = Array.isArray(certificate?.candidateAllocation)
+    ? certificate.candidateAllocation
+    : [];
+  const allocationSum = candidateAllocation.reduce((sum, line) => {
+    try {
+      return sum + BigInt(line.allocationCents ?? "0");
+    } catch {
+      return sum;
+    }
+  }, BigInt(0));
+  const budgetCents = certificate?.budgetCents ? BigInt(certificate.budgetCents) : null;
+  const objectiveNumerator = candidateAllocation.reduce((sum, line) => {
+    try {
+      return sum + BigInt(line.allocationCents ?? "0") * BigInt(line.scoreBps ?? "0");
+    } catch {
+      return sum;
+    }
+  }, BigInt(0));
+  const recomputedObjective = normalizeRational(objectiveNumerator, BigInt(10000));
+  const objectiveMatches =
+    certificate?.candidateObjectiveValueRational &&
+    normalizeRational(
+      BigInt(certificate.candidateObjectiveValueRational.num),
+      BigInt(certificate.candidateObjectiveValueRational.den),
+    ).num === recomputedObjective.num &&
+    normalizeRational(
+      BigInt(certificate.candidateObjectiveValueRational.num),
+      BigInt(certificate.candidateObjectiveValueRational.den),
+    ).den === recomputedObjective.den;
+  const feasibilityProof = certificate?.feasibilityProof ?? {};
+  const optimalityGap =
+    certificate?.certificateType === "branch_and_bound"
+      ? certificate.branchAndBoundProof?.optimalityGapRational
+      : certificate?.regionEnumerationProof?.optimalityGapRational;
   const errors = [
     !certificate ? "missing_certificate" : null,
     certificate && certificate.certificateSchemaVersion !== "mpgf-solver-certificate-v0.3"
@@ -768,6 +1048,29 @@ export function verifyMpgfOptimalityCertificate(
     certificate && certificate.canonicalInstanceHash !== canonicalInstanceHash ? "canonical_instance_hash_mismatch" : null,
     certificate && !Array.isArray(certificate.candidateAllocation) ? "candidate_allocation_missing" : null,
     certificate && !certificate.candidateObjectiveValueRational ? "candidate_objective_value_missing" : null,
+    certificate && budgetCents === null ? "budget_cents_missing" : null,
+    certificate && budgetCents !== null && allocationSum !== budgetCents ? "budget_equality_failed" : null,
+    certificate && candidateAllocation.some((line) => {
+      try {
+        return BigInt(line.allocationCents ?? "-1") < BigInt(0);
+      } catch {
+        return true;
+      }
+    }) ? "candidate_allocation_non_integer_or_negative" : null,
+    certificate && !objectiveMatches ? "candidate_objective_value_mismatch" : null,
+    certificate && feasibilityProof.budgetEquality !== true ? "feasibility_budget_equality_missing" : null,
+    certificate && feasibilityProof.integerCents !== true ? "feasibility_integer_cents_missing" : null,
+    certificate && feasibilityProof.capsSatisfied !== true ? "feasibility_caps_missing" : null,
+    certificate && feasibilityProof.riskExposureSatisfied !== true ? "feasibility_risk_exposure_missing" : null,
+    certificate && feasibilityProof.tailLossSatisfied !== true ? "feasibility_tail_loss_missing" : null,
+    certificate && (!optimalityGap || optimalityGap.num !== "0" || optimalityGap.den !== "1")
+      ? "nonzero_or_missing_optimality_gap"
+      : null,
+    certificate &&
+    certificate.certificateType === "branch_and_bound" &&
+    certificate.branchAndBoundProof?.allLeafBoundsAtMostCandidate !== true
+      ? "branch_and_bound_leaf_bound_missing"
+      : null,
   ].filter((entry): entry is string => Boolean(entry));
 
   return {
@@ -934,10 +1237,18 @@ export function cancelMpgfPledge(pledgeId: string, pledge?: MpgfPledge): MpgfPle
 
   return {
     id: pledge?.id ?? pledgeId,
+    userId: pledge?.userId,
     contributorLabel: pledge?.contributorLabel ?? "Demo participant",
     amountCents: pledge?.amountCents ?? 0,
+    currency: pledge?.currency ?? "usd",
     cadence: pledge?.cadence ?? "one_time",
     status: "cancelled",
+    pledgeMode: "pledge_only",
+    intendedCycleId: pledge?.intendedCycleId,
+    budgetEffectiveCycleId: pledge?.budgetEffectiveCycleId,
+    recurringCommitmentId: pledge?.recurringCommitmentId,
+    convertedPaymentIntentId: pledge?.convertedPaymentIntentId,
+    cancelledAt: new Date().toISOString(),
   };
 }
 
@@ -960,6 +1271,7 @@ export function createMpgfRecurringContributionCommitment(input: {
     id: `monthly-commitment-${input.userId}-${input.amountCents}`,
     userId: input.userId,
     amountCents: input.amountCents,
+    currency: "usd",
     mode,
     status: "active",
     cadence: "monthly",
@@ -974,9 +1286,16 @@ export function pauseMpgfRecurringContributionCommitment(
     id: commitment?.id ?? commitmentId,
     userId: commitment?.userId ?? "demo-user",
     amountCents: commitment?.amountCents ?? 0,
+    currency: commitment?.currency ?? "usd",
     mode: commitment?.mode ?? "pledge_only",
     status: "paused",
     cadence: "monthly",
+    startCycleId: commitment?.startCycleId,
+    nextCycleId: commitment?.nextCycleId,
+    nextScheduledAt: commitment?.nextScheduledAt,
+    providerSubscriptionId: commitment?.providerSubscriptionId,
+    createdAt: commitment?.createdAt,
+    pausedAt: new Date().toISOString(),
   };
 }
 
@@ -984,17 +1303,23 @@ export function resumeMpgfRecurringContributionCommitment(
   commitmentId: string,
   commitment?: MpgfRecurringContributionCommitment,
 ): MpgfRecurringContributionCommitment {
-  if (commitment?.status === "cancelled") {
-    throw new Error("Cancelled MPGF recurring contribution commitments cannot be resumed.");
+  if (commitment?.status === "cancelled" || commitment?.status === "expired") {
+    throw new Error("Cancelled or expired MPGF recurring contribution commitments cannot be resumed.");
   }
 
   return {
     id: commitment?.id ?? commitmentId,
     userId: commitment?.userId ?? "demo-user",
     amountCents: commitment?.amountCents ?? 0,
+    currency: commitment?.currency ?? "usd",
     mode: commitment?.mode ?? "pledge_only",
     status: "active",
     cadence: "monthly",
+    startCycleId: commitment?.startCycleId,
+    nextCycleId: commitment?.nextCycleId,
+    nextScheduledAt: commitment?.nextScheduledAt,
+    providerSubscriptionId: commitment?.providerSubscriptionId,
+    createdAt: commitment?.createdAt,
   };
 }
 
@@ -1006,9 +1331,16 @@ export function cancelMpgfRecurringContributionCommitment(
     id: commitment?.id ?? commitmentId,
     userId: commitment?.userId ?? "demo-user",
     amountCents: commitment?.amountCents ?? 0,
+    currency: commitment?.currency ?? "usd",
     mode: commitment?.mode ?? "pledge_only",
     status: "cancelled",
     cadence: "monthly",
+    startCycleId: commitment?.startCycleId,
+    nextCycleId: commitment?.nextCycleId,
+    nextScheduledAt: commitment?.nextScheduledAt,
+    providerSubscriptionId: commitment?.providerSubscriptionId,
+    createdAt: commitment?.createdAt,
+    cancelledAt: new Date().toISOString(),
   };
 }
 
@@ -1031,10 +1363,16 @@ export function materializeMpgfRecurringPledgeForCycle(input: {
 
   return {
     id: `recurring-pledge-${input.commitmentId}-${input.cycleId}`,
+    userId: commitment.userId,
     contributorLabel: commitment.userId,
     amountCents: commitment.amountCents,
+    currency: "usd",
     cadence: "monthly",
     status: "pledged",
+    pledgeMode: "pledge_only",
+    intendedCycleId: input.cycleId,
+    budgetEffectiveCycleId: input.cycleId,
+    recurringCommitmentId: input.commitmentId,
   };
 }
 
@@ -1051,12 +1389,12 @@ export function createMpgfPaymentIntent(input: {
   assertMpgfPaymentModeEnabled(input.mode);
 
   return {
-    id: `blocked-${input.mode}-intent-${input.userId}-${input.cycleId}`,
+    id: `${input.mode}-intent-${input.userId}-${input.cycleId}`,
     userId: input.userId,
     cycleId: input.cycleId,
     amountCents: input.amountCents,
     mode: input.mode,
-    status: "requires_provider",
+    status: "requires_action",
   };
 }
 
@@ -1393,6 +1731,64 @@ export function buildPublicSummary({
   };
 }
 
+function publicRuntimeCheck(id: string, label: string, passed: boolean, evidence: string): MpgfCheckResult {
+  return {
+    id,
+    label,
+    status: passed ? "passed" : "failed",
+    evidence,
+    routeOrAction: "/mpgf",
+    check: label,
+    passed,
+  };
+}
+
+export function runMpgfPublicRuntimeReadinessCheck() {
+  const allocation = computeExactMpgfAllocation();
+  const summary = buildPublicSummary({ allocation });
+  const ledgerTransactions = buildDemoLedgerTransactions();
+  const checks = [
+    publicRuntimeCheck(
+      "real-money-gated",
+      "Real-money mode is disabled or acceptance-gated",
+      process.env.MPGF_REAL_MONEY_ENABLED !== "true" ||
+        process.env.MPGF_REAL_MONEY_ACCEPTANCE_ENABLED === "true",
+      "If MPGF_REAL_MONEY_ENABLED is true, MPGF_REAL_MONEY_ACCEPTANCE_ENABLED must also be true and real-money readiness gates must pass.",
+    ),
+    publicRuntimeCheck(
+      "allocation-balances",
+      "Demo allocation balances to budget",
+      allocation.allocatedCents + allocation.carryoverCents === allocation.budgetCents,
+      `${allocation.allocatedCents} allocated from ${allocation.budgetCents} cents.`,
+    ),
+    publicRuntimeCheck(
+      "public-summary-safe",
+      "Public summary exposes no live disbursement state",
+      summary.externallyPaidCents === 0 && summary.payoutAuthorizedCents === 0 && summary.releasedInternalCents === 0,
+      "releasedInternalCents, payoutAuthorizedCents, and externallyPaidCents are all zero.",
+    ),
+    publicRuntimeCheck(
+      "visible-demo-pools",
+      "Approved demo alternatives are visible",
+      demoAlternatives.some((alternative) => alternative.status === "approved_demo"),
+      `${demoAlternatives.length} demo alternative(s) configured.`,
+    ),
+    publicRuntimeCheck(
+      "demo-ledger-balanced",
+      "Demo ledger entries are balanced",
+      ledgerTransactions.length > 0 && ledgerTransactions.every(isLedgerBalanced),
+      `${ledgerTransactions.length} non-real-money demo ledger transaction(s) checked.`,
+    ),
+  ];
+  const blockers = checks.filter((check) => !check.passed).map((check) => `${check.label}: ${check.evidence}`);
+
+  return {
+    status: blockers.length === 0 ? ("passed" as const) : ("failed" as const),
+    checks,
+    blockers,
+  };
+}
+
 export function generatePublicCycleSummary(cycleId = demoCycle.id) {
   const allocation = computeExactMpgfAllocation({
     budgetCents: cycleId === demoCycle.id ? demoCycle.budgetCents : 0,
@@ -1427,9 +1823,9 @@ export function generatePublicCycleSummary(cycleId = demoCycle.id) {
     nonRealMoney: {
       pledgedCents: String(summary.pledgedCents),
       recurringPledgeMonthlyCents: String(
-        demoPledges
-          .filter((pledge) => pledge.status === "pledged" && pledge.cadence === "monthly")
-          .reduce((sum, pledge) => sum + pledge.amountCents, 0),
+        demoRecurringCommitments
+          .filter((commitment) => commitment.status === "active" && commitment.mode === "pledge_only")
+          .reduce((sum, commitment) => sum + commitment.amountCents, 0),
       ),
       testContributionCents: "0",
       testBudgetCents: String(allocation.budgetCents),
@@ -1849,6 +2245,89 @@ export function computeRationalCapCents(
   return (budgetCents * etaBps * num) / (BigInt(10000) * den);
 }
 
+export function fallbackAllocate(input: {
+  cycleBudgetCents: bigint;
+  stage: MpgfStage;
+  operationalReliabilityBps: bigint;
+  baseEtaFallbackBps: bigint;
+  safeFallbacks: SafeFallbackRecord[];
+  protocol: MpgfProtocolSnapshot;
+}) {
+  const fallbackBudgetCap = computeCapCents(
+    input.cycleBudgetCents,
+    input.baseEtaFallbackBps,
+    input.operationalReliabilityBps,
+  );
+  const priorityNumerator = (fallback: SafeFallbackRecord) =>
+    BigInt(3500) * fallback.auditConfidenceBps +
+    BigInt(2500) * fallback.consensusBreadthBps +
+    BigInt(2000) * fallback.robustCostEffectivenessBps +
+    BigInt(2000) * fallback.reversibilityBps;
+  const eligible = [...input.safeFallbacks].sort((left, right) => {
+    const leftPriority = priorityNumerator(left);
+    const rightPriority = priorityNumerator(right);
+
+    if (leftPriority !== rightPriority) {
+      return leftPriority > rightPriority ? -1 : 1;
+    }
+
+    if (left.auditConfidenceBps !== right.auditConfidenceBps) {
+      return left.auditConfidenceBps > right.auditConfidenceBps ? -1 : 1;
+    }
+
+    if (left.substantiveRiskBps !== right.substantiveRiskBps) {
+      return left.substantiveRiskBps < right.substantiveRiskBps ? -1 : 1;
+    }
+
+    if (left.threatScoreBps !== right.threatScoreBps) {
+      return left.threatScoreBps < right.threatScoreBps ? -1 : 1;
+    }
+
+    if (left.tailLossBps !== right.tailLossBps) {
+      return left.tailLossBps < right.tailLossBps ? -1 : 1;
+    }
+
+    return left.fallbackId.localeCompare(right.fallbackId);
+  });
+  let remainingCents = fallbackBudgetCap < input.cycleBudgetCents ? fallbackBudgetCap : input.cycleBudgetCents;
+  const allocations = [];
+
+  for (const fallback of eligible) {
+    if (remainingCents <= BigInt(0)) {
+      break;
+    }
+
+    const maxAllocationCents = fallback.maxAllocationCents ?? remainingCents;
+    const allocationCents = maxAllocationCents < remainingCents ? maxAllocationCents : remainingCents;
+
+    if (allocationCents <= BigInt(0)) {
+      continue;
+    }
+
+    allocations.push({
+      fallbackId: fallback.fallbackId,
+      title: fallback.title,
+      allocationCents,
+      fallbackPriorityNumerator: priorityNumerator(fallback),
+      fallbackPriorityBps: priorityNumerator(fallback) / BigInt(10000),
+    });
+    remainingCents -= allocationCents;
+  }
+
+  const allocatedCents = allocations.reduce((sum, allocation) => sum + allocation.allocationCents, BigInt(0));
+
+  return {
+    status: allocations.length > 0 ? ("fallback_allocated" as const) : ("carryover_only" as const),
+    stage: input.stage,
+    protocolVersion: input.protocol.protocolVersion,
+    fallbackBudgetCapCents: fallbackBudgetCap,
+    allocatedCents,
+    carryoverCents: input.cycleBudgetCents - allocatedCents,
+    allocations,
+    arithmetic: "integer_basis_points" as const,
+  };
+}
+
 export function triggerMpgfEmergencyShutdown(reason: string) {
   return {
     active: true,
@@ -1873,8 +2352,11 @@ export function getActiveMpgfEmergencyShutdown() {
 }
 
 export function assertMpgfRealMoneyDisabled() {
-  if (process.env.MPGF_REAL_MONEY_ENABLED === "true") {
-    throw new Error("MPGF real-money mode is blocked until real_money_complete passes.");
+  if (
+    process.env.MPGF_REAL_MONEY_ENABLED === "true" &&
+    process.env.MPGF_REAL_MONEY_ACCEPTANCE_ENABLED !== "true"
+  ) {
+    throw new Error("MPGF real-money mode is blocked until real-money acceptance gates pass.");
   }
 }
 

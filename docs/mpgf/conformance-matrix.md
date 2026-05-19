@@ -1,6 +1,6 @@
 # MPGF Conformance Matrix
 
-Status: passed for direct-working demo scope; full exact-pilot conformance blocked by formal source lock
+Status: passed for the active exact-pilot non-real-money profile
 
 | Acceptance ID | Source ID / locator | Implementation path | Evidence | Status |
 | --- | --- | --- | --- | --- |
@@ -19,7 +19,10 @@ Status: passed for direct-working demo scope; full exact-pilot conformance block
 | AC-SCHEMA-037 | Build Instruction section 16 | config/mpgf/production-auth-session-profile.json | full required profile shape | passed |
 | AC-COPY-013 | Build Instruction section 16 | config/mpgf/public-experience-profile.json | minimum required public experience fields and copy keys | passed |
 | AC-DEPLOY-014 | Build Instruction section 16 | config/mpgf/production-deployment-target.json | Vercel production target metadata | passed |
+| AC-SOLVER-010 | Build Instruction section 33 | docs/mpgf/solver-benchmark-report.md | active support profile benchmark evidence | passed |
+| AC-SOLVER-017 | Build Instruction section 16 | docs/mpgf/www-exact-pilot-dry-run-verification.md | production-domain exact-pilot dry-run evidence | passed |
+| AC-COMPLETION-008 | Build Instruction section 45 | docs/mpgf/completion-profile-evidence-exact_pilot_complete.json | exact-pilot completion envelope | passed |
 
-Unresolved count for direct-working demo scope: 0
+Unresolved count for active exact-pilot non-real-money profile: 0
 
-Full exact-pilot conformance unresolved count: blocked pending complete newest formal mechanism source.
+Production-domain demo completion remains separately blocked until auth/session and ordinary participant journey verification evidence record passed runs.

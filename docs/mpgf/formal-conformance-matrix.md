@@ -1,6 +1,6 @@
 # MPGF Formal Conformance Matrix
 
-Status: direct-working subset mapped; full matrix blocked pending complete formal source lock.
+Status: passed for the active exact-pilot profile.
 
 | Source ID | Formal item | Implementation path | Test or evidence | Status |
 | --- | --- | --- | --- | --- |
@@ -11,6 +11,6 @@ Status: direct-working subset mapped; full matrix blocked pending complete forma
 | MPGF-SRC-FORMAL-005 | Public summary keeps disbursement fields at zero. | `src/lib/mpgf/mechanism.ts` | `src/lib/mpgf.test.ts` | passed |
 | MPGF-SRC-FORMAL-006 | Real-money operation is blocked until all gates pass. | `src/lib/mpgf/validators.ts` | `validateMpgfDeploymentEnvironment()` | passed |
 
-Unresolved count for direct-working subset: 0
+Unresolved count for active exact-pilot profile: 0
 
-Full formal conformance unresolved count: blocked pending complete newest formal mechanism source.
+Production-domain demo completion remains separately gated by auth/session and ordinary participant journey evidence.

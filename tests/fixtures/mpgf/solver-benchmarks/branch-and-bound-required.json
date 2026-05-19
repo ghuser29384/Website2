@@ -1,0 +1,7 @@
+{
+  "fixtureId": "branch-and-bound-required",
+  "fixtureType": "solver_benchmark",
+  "preferredSolver": "certified_branch_and_bound",
+  "expectedBehavior": "verified_optimal_or_fail_closed"
+}
+

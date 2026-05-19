@@ -5,6 +5,8 @@ import { MpgfConsole } from "@/components/mpgf/mpgf-console";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { demoAlternatives } from "@/lib/mpgf/data";
+import { loadMpgfParticipantState } from "@/lib/mpgf/persistence";
+import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -21,14 +23,23 @@ export const metadata: Metadata = {
   },
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function MpgfPoolsPage() {
   const viewer = await getViewer();
+  const participantState = await loadMpgfParticipantState({
+    userId: viewer?.authUser.id,
+    displayName: viewer?.displayName,
+  });
+  const manualEvidenceReadiness = await loadMpgfManualEvidenceReadiness();
+  const realMoneyReadiness = await loadMpgfRealMoneyReadiness();
 
   return (
     <MpgfPageFrame
       actions={<Link className="button button-primary" href="/mpgf/pools/new">Draft pool proposal</Link>}
       description="These visible demo alternatives satisfy the production direct-working requirement without real-money effects."
       title="Approved demo ordinary-pool alternatives."
+      realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
       <section className="mpgf-pool-directory">
@@ -44,7 +55,13 @@ export default async function MpgfPoolsPage() {
       </section>
 
       <section className="section section-white">
-        <MpgfConsole initialTab="pools" />
+        <MpgfConsole
+          initialTab="pools"
+          manualEvidenceReadiness={manualEvidenceReadiness}
+          participantState={participantState}
+          realMoneyReadiness={realMoneyReadiness}
+          viewerPresent={Boolean(viewer)}
+        />
       </section>
     </MpgfPageFrame>
   );

@@ -1,0 +1,7 @@
+{
+  "fixtureId": "many-breakpoints-within-limit",
+  "fixtureType": "solver_benchmark",
+  "withinOperationalLimits": true,
+  "expectedBehavior": "verified_optimal_or_fail_closed"
+}
+

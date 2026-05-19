@@ -1,0 +1,7 @@
+{
+  "fixtureId": "too-many-breakpoints",
+  "fixtureType": "solver_benchmark",
+  "exceedsLimit": "maxBreakpointsPerCurve",
+  "expectedBehavior": "fail_closed"
+}
+

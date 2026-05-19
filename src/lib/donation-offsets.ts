@@ -42,8 +42,16 @@ export interface DonationOffsetFields {
   poolName: string;
   poolSide: DonationOffsetPoolSide | "";
   assuranceMinimumUsd: number | null;
+  poolMaximumCapUsd: number | null;
   assuranceDeadline: string;
   description: string;
+  evidenceUrl: string;
+}
+
+export interface DonationOffsetSubmissionGuards {
+  participationMode: DonationOffsetParticipationMode;
+  antiThreatCertification: boolean;
+  verificationMetadataAcknowledged: boolean;
   evidenceUrl: string;
 }
 
@@ -218,7 +226,7 @@ export const DONATION_OFFSET_VERIFICATION_OPTIONS: Array<{
   label: string;
 }> = [
   { value: "proof_of_past_donations", label: "Proof of past donations" },
-  { value: "funds_in_escrow", label: "Funds in escrow" },
+  { value: "funds_in_escrow", label: "Third-party payment; not legal escrow" },
   { value: "third_party_audit", label: "Third-party audit" },
 ];
 
@@ -250,6 +258,7 @@ export function createDefaultDonationOffsetFields(): DonationOffsetFields {
     poolName: "",
     poolSide: "",
     assuranceMinimumUsd: null,
+    poolMaximumCapUsd: 10_000,
     assuranceDeadline: "",
     description: "",
     evidenceUrl: "",
@@ -326,7 +335,7 @@ export function formatDonationOffsetPoolSide(
 export function formatDonationOffsetVerificationMethod(value: DonationOffsetVerificationMethod) {
   switch (value) {
     case "funds_in_escrow":
-      return "Funds in escrow";
+      return "Third-party payment; not legal escrow";
     case "third_party_audit":
       return "Third-party audit";
     case "proof_of_past_donations":
@@ -522,13 +531,44 @@ export function validateDonationOffsetFields(fields: DonationOffsetFields) {
     }
 
     const assuranceMinimumUsd = normalizeUsdThreshold(fields.assuranceMinimumUsd);
-    if (fields.assuranceMinimumUsd !== null && assuranceMinimumUsd === null) {
-      errors.push("Assurance minimum must be zero or a positive number.");
+    if (fields.assuranceMinimumUsd === null || assuranceMinimumUsd === null) {
+      errors.push("Assurance minimum threshold is required for pooled offsets.");
+    }
+
+    const poolMaximumCapUsd = normalizeUsdAmount(fields.poolMaximumCapUsd);
+    if (!poolMaximumCapUsd) {
+      errors.push("Pool maximum cap must be a positive number.");
+    } else if (assuranceMinimumUsd !== null && assuranceMinimumUsd > poolMaximumCapUsd) {
+      errors.push("Pool maximum cap must be at least as large as the assurance minimum.");
     }
   }
 
   if (!fields.description.trim()) {
     errors.push("Add a short description of the offset.");
+  }
+
+  return errors;
+}
+
+export function validateDonationOffsetSubmissionGuards(
+  fields: DonationOffsetSubmissionGuards,
+) {
+  const errors: string[] = [];
+
+  if (fields.participationMode !== "pool") {
+    return errors;
+  }
+
+  if (!fields.antiThreatCertification) {
+    errors.push(
+      "Pooled offsets require anti-threat certification before submission.",
+    );
+  }
+
+  if (!fields.verificationMetadataAcknowledged || !fields.evidenceUrl.trim()) {
+    errors.push(
+      "Pooled offsets require verification metadata and a reviewable evidence link before submission.",
+    );
   }
 
   return errors;
@@ -574,7 +614,7 @@ export function assessDonationOffsetModeration(
 
   if (!fields.evidenceUrl.trim()) {
     reasons.push(
-      "No proof of past donation, escrow confirmation, or third-party audit link was provided, so the baseline intent is not yet credible enough for public publication.",
+      "No proof of past donation, third-party payment confirmation, or third-party audit link was provided, so the baseline intent is not yet credible enough for public publication.",
     );
   }
 

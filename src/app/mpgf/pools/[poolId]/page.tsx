@@ -1,12 +1,43 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { demoAlternatives } from "@/lib/mpgf/data";
+import { getAbsoluteUrl } from "@/lib/seo";
 
 interface MpgfPoolPageProps {
   params: Promise<{ poolId: string }>;
+}
+
+export async function generateMetadata({ params }: MpgfPoolPageProps): Promise<Metadata> {
+  const { poolId } = await params;
+  const alternative = demoAlternatives.find((candidate) => candidate.id === poolId);
+
+  if (!alternative) {
+    return {
+      title: "MPGF Pool",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  return {
+    title: `${alternative.shortName} MPGF Pool`,
+    description: alternative.moralPublicGoodRationale,
+    alternates: {
+      canonical: `/mpgf/pools/${alternative.id}`,
+    },
+    openGraph: {
+      title: `${alternative.shortName} MPGF Pool`,
+      description: alternative.moralPublicGoodRationale,
+      url: getAbsoluteUrl(`/mpgf/pools/${alternative.id}`),
+      type: "website",
+    },
+  };
 }
 
 export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {

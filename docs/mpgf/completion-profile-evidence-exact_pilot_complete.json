@@ -1,0 +1,114 @@
+{
+  "profile": "exact_pilot_complete",
+  "status": "passed",
+  "evaluatedEnvironment": "production",
+  "evaluatedBaseUrl": "https://www.moraltrade.org",
+  "productionDomainEvaluation": true,
+  "evidenceGeneratedAt": "2026-05-17T20:57:28.182Z",
+  "validatorName": "validateCompletionProfileEvidence",
+  "validatorVersion": "mpgf-pilot-v0.3-direct-working-1",
+  "deployedCommitShaOrBuildId": "dpl_8LsZTP72jpZXKtoFyaMWYzUtFX8t",
+  "instructionArtifactPath": "mpgf_pilot_v0_3_codex_build_instruction_latest.md",
+  "instructionArtifactHash": "a2f59cb30356d8777ec8a405905f64139ccbd0592f897076db6959b2d5517005",
+  "evidenceArtifacts": [
+    {
+      "artifactId": "docs_mpgf_phase_c_gate_report_md",
+      "path": "docs/mpgf/phase-c-gate-report.md",
+      "artifactType": "markdown",
+      "artifactHash": "ff52a315248296966f44fbd337e898aa1bdfa27f51d1e7460177b8cb496417af",
+      "producedAt": "2026-05-17T20:57:28.182Z",
+      "evaluatedBaseUrl": "https://www.moraltrade.org",
+      "deployedCommitShaOrBuildId": "dpl_8LsZTP72jpZXKtoFyaMWYzUtFX8t",
+      "required": true
+    },
+    {
+      "artifactId": "docs_mpgf_solver_benchmark_report_md",
+      "path": "docs/mpgf/solver-benchmark-report.md",
+      "artifactType": "markdown",
+      "artifactHash": "df72be1a7483c5359124126e624df2083241f07d88ca20b1c282dddcf755f186",
+      "producedAt": "2026-05-17T20:57:28.182Z",
+      "evaluatedBaseUrl": "https://www.moraltrade.org",
+      "deployedCommitShaOrBuildId": "dpl_8LsZTP72jpZXKtoFyaMWYzUtFX8t",
+      "required": true
+    },
+    {
+      "artifactId": "config_mpgf_solver_support_profile_json",
+      "path": "config/mpgf/solver-support-profile.json",
+      "artifactType": "json",
+      "artifactHash": "1c6d71c6cd08829eb0fbf73705757d4b16fb14022fe794abf71a469c82888c27",
+      "producedAt": "2026-05-17T20:57:28.182Z",
+      "evaluatedBaseUrl": "https://www.moraltrade.org",
+      "deployedCommitShaOrBuildId": "dpl_8LsZTP72jpZXKtoFyaMWYzUtFX8t",
+      "required": true
+    },
+    {
+      "artifactId": "docs_mpgf_www_exact_pilot_dry_run_verification_md",
+      "path": "docs/mpgf/www-exact-pilot-dry-run-verification.md",
+      "artifactType": "markdown",
+      "artifactHash": "e76f239c35db8a25d614861e77e36f629ad15fc98b1802e05f248cd94185116e",
+      "producedAt": "2026-05-17T20:57:28.182Z",
+      "evaluatedBaseUrl": "https://www.moraltrade.org",
+      "deployedCommitShaOrBuildId": "dpl_8LsZTP72jpZXKtoFyaMWYzUtFX8t",
+      "required": true
+    },
+    {
+      "artifactId": "docs_mpgf_production_deployment_prerequisites_md",
+      "path": "docs/mpgf/production-deployment-prerequisites.md",
+      "artifactType": "markdown",
+      "artifactHash": "8f5983b4ae42eccc5f2d2c38401f0d01b52c2440d67c38a3060e256cdab2e458",
+      "producedAt": "2026-05-17T20:57:28.182Z",
+      "evaluatedBaseUrl": "https://www.moraltrade.org",
+      "deployedCommitShaOrBuildId": "dpl_8LsZTP72jpZXKtoFyaMWYzUtFX8t",
+      "required": false
+    },
+    {
+      "artifactId": "docs_mpgf_www_direct_working_verification_md",
+      "path": "docs/mpgf/www-direct-working-verification.md",
+      "artifactType": "markdown",
+      "artifactHash": "753fd401e064dcdd4a93b6efbf383145878e6c9f0c6b9b95bb71b9e9581317a5",
+      "producedAt": "2026-05-17T20:57:28.182Z",
+      "evaluatedBaseUrl": "https://www.moraltrade.org",
+      "deployedCommitShaOrBuildId": "dpl_8LsZTP72jpZXKtoFyaMWYzUtFX8t",
+      "required": false
+    },
+    {
+      "artifactId": "docs_mpgf_www_public_experience_verification_md",
+      "path": "docs/mpgf/www-public-experience-verification.md",
+      "artifactType": "markdown",
+      "artifactHash": "51fe06a9681879a5310fee507ffdaa796ded69b3129585afa3172ba3a2c1cde1",
+      "producedAt": "2026-05-17T20:57:28.182Z",
+      "evaluatedBaseUrl": "https://www.moraltrade.org",
+      "deployedCommitShaOrBuildId": "dpl_8LsZTP72jpZXKtoFyaMWYzUtFX8t",
+      "required": false
+    },
+    {
+      "artifactId": "docs_mpgf_www_production_health_monitor_md",
+      "path": "docs/mpgf/www-production-health-monitor.md",
+      "artifactType": "markdown",
+      "artifactHash": "de9688e50307bd10bad2fd96a9ae42bd33101b41a65bcfdeb91dbc55a861d059",
+      "producedAt": "2026-05-17T20:57:28.182Z",
+      "evaluatedBaseUrl": "https://www.moraltrade.org",
+      "deployedCommitShaOrBuildId": "dpl_8LsZTP72jpZXKtoFyaMWYzUtFX8t",
+      "required": false
+    }
+  ],
+  "gateResults": [
+    {
+      "gateId": "solver-certification",
+      "status": "passed",
+      "evidenceArtifactId": "docs_mpgf_solver_benchmark_report_md"
+    },
+    {
+      "gateId": "exact-pilot-production-dry-run",
+      "status": "passed",
+      "evidenceArtifactId": "docs_mpgf_www_exact_pilot_dry_run_verification_md"
+    },
+    {
+      "gateId": "phase-c-gate",
+      "status": "passed",
+      "evidenceArtifactId": "docs_mpgf_phase_c_gate_report_md"
+    }
+  ],
+  "blockers": [],
+  "notes": "Exact-pilot solver certification and production dry-run evidence are complete for the certified exact-integer proportional pilot profile."
+}

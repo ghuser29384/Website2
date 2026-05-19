@@ -1,6 +1,23 @@
 # MPGF Production Direct-Working Launch Runbook
 
+Status: passed
+
 Mode: non-real-money direct-working
+
+Canonical URL tested: `https://www.moraltrade.org`
+
+Launch evidence:
+
+- Production deployment `dpl_8LsZTP72jpZXKtoFyaMWYzUtFX8t` reached `READY`.
+- `https://www.moraltrade.org` was aliased to the deployment.
+- `FEATURE_MPGF_ENABLED=true` and `MPGF_REAL_MONEY_ENABLED=false` are configured in production.
+- `/api/mpgf/health` returned `ok=true`.
+- `/api/mpgf/exact-pilot-dry-run` returned `ok=true`.
+- Browser evidence and the five-minute monitor are recorded in `/private/tmp/mpgf-production-evidence-20260517-resolved`.
+
+Unresolved issues: none.
+
+Runbook checklist:
 
 1. Confirm `config/mpgf/production-deployment-target.json` matches the production deployment provider.
 2. Confirm `FEATURE_MPGF_ENABLED=true` and `MPGF_REAL_MONEY_ENABLED=false`.

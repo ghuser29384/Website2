@@ -94,8 +94,14 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 STRIPE_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_PLATFORM_FEE_BPS=0
+MPGF_REAL_MONEY_ENABLED=false
+MPGF_REAL_MONEY_ACCEPTANCE_ENABLED=false
+MPGF_TEST_PAYMENT_ENABLED=false
+MPGF_MANUAL_EVIDENCE_PROVIDER_LABEL=Open Collective
+NEXT_PUBLIC_MPGF_EXTERNAL_PAYMENT_URL=
 RESEND_API_KEY=re_...
 EMAIL_FROM="Moral Trade <notifications@moraltrade.org>"
 CRON_SECRET=long-random-secret
@@ -107,6 +113,12 @@ ADMIN_EMAILS=operator@example.com
 If your project was created before `public.profiles` existed, you can still apply [`supabase/profiles.sql`](supabase/profiles.sql) first, but the current app expects the full updated [`supabase/schema.sql`](supabase/schema.sql) afterward.
 
 Re-running the current schema is the intended repair step for older deployments. It backfills `public.profiles`, recreates the current foreign keys, and aligns `offers`, `interests`, and `agreements` with the current app code.
+
+For MPGF real-money Checkout/Billing, apply the MPGF migrations in timestamp order through the Supabase SQL editor, including [`supabase/migrations/20260513_mpgf_participant_workflow.sql`](supabase/migrations/20260513_mpgf_participant_workflow.sql) and [`supabase/migrations/20260515_mpgf_real_money_checkout.sql`](supabase/migrations/20260515_mpgf_real_money_checkout.sql). Production Stripe acceptance remains blocked until `MPGF_REAL_MONEY_ENABLED`, `MPGF_REAL_MONEY_ACCEPTANCE_ENABLED`, Stripe keys, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, and every relevant `mpgf_real_money_gate_status` row are configured and approved.
+
+For manual Open Collective or fiscal-host evidence intake, also apply [`supabase/migrations/20260516_mpgf_manual_external_payment_evidence.sql`](supabase/migrations/20260516_mpgf_manual_external_payment_evidence.sql). Signed-in participants can submit manual evidence as soon as Supabase Auth is configured and the manual evidence table exists; the submit path uses the participant session and RLS, not `SUPABASE_SERVICE_ROLE_KEY`. `MPGF_MANUAL_EVIDENCE_PROVIDER_LABEL` and `NEXT_PUBLIC_MPGF_EXTERNAL_PAYMENT_URL` only control the displayed external destination link; they do not gate submission. Submitted manual evidence is review state only; it is not verified contribution accounting until review marks it verified.
+
+For pool reasoning drafts, apply [`supabase/migrations/20260516_mpgf_pool_reasoning_fields.sql`](supabase/migrations/20260516_mpgf_pool_reasoning_fields.sql) after the participant workflow migration. It adds the Build Instruction proposal fields for cause area, funding bounds, outcome/output units, effect-vs-funding reasoning, timeline, milestones, risks, misuse pathways, and recipient or implementing-team information.
 
 5. Start the development server.
 

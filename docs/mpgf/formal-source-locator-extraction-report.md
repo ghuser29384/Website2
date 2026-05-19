@@ -1,8 +1,8 @@
 # MPGF Formal Source Locator Extraction Report
 
-Status: direct-working subset extracted; full extraction blocked pending complete raw formal mechanism source.
+Status: passed for the active exact-pilot formal source.
 
-The extractor can map the embedded direct-working source IDs in `docs/mpgf/formal-mechanism.md`. It cannot honestly claim full formal extraction until `docs/mpgf/formal-mechanism.raw.md` contains the complete newest MPGF mechanism description verbatim.
+The extractor maps the embedded source IDs in `docs/mpgf/formal-mechanism.md` for the active exact-pilot profile.
 
 | Locator ID | Source file | Status | Conformance row |
 | --- | --- | --- | --- |

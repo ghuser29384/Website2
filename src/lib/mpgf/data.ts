@@ -1,4 +1,10 @@
-import type { MpgfBallot, MpgfCandidateAlternative, MpgfCycle, MpgfPledge } from "./types";
+import type {
+  MpgfBallot,
+  MpgfCandidateAlternative,
+  MpgfCycle,
+  MpgfPledge,
+  MpgfRecurringContributionCommitment,
+} from "./types";
 
 export const MPGF_DEMO_BASE_URL = "https://www.moraltrade.org";
 
@@ -44,7 +50,7 @@ export const MPGF_COPY = {
   support_or_access:
     "For MPGF access or support, contact support@moraltrade.org.",
   plainLanguageSummary:
-    "The Moral Public Goods Fund is a non-real-money pilot for coordinating contributions toward goods many moral views value.",
+    "The Moral Public Goods Fund coordinates support for goods many moral views value. The current public flow starts with manual external-payment evidence, reviewed before it counts.",
   moralPublicGoods:
     "Moral public goods are things many people value for moral reasons, such as global health, existential-risk reduction, animal welfare, and durable public-interest knowledge.",
   moralTrade:
@@ -52,11 +58,17 @@ export const MPGF_COPY = {
   nonRealMoney:
     "This production demo is pledge-only and non-real-money. It does not collect payments, issue receipts, authorize payouts, or publish real-user financial totals.",
   pledgeOnly:
-    "Pledges are commitments for testing the mechanism. They are excluded from real-money accounting and public real-user metrics.",
+    "Pledges let participants rehearse the mechanism before evidence is reviewed. They do not charge a payment method.",
   monthlyPledgeOnly:
     "Monthly recurring commitments in this demo are non-real-money recurring pledges, not subscriptions, donations, charges, or payments.",
   allocationDisbursement:
     "Allocation describes an internal demo plan. Disbursement would require separate authorization, evidence, and legal/payment gates.",
+  realMoneyContribution:
+    "Real-money MPGF contributions use Stripe Checkout after production readiness, terms, refund, webhook, and compliance gates pass. Stripe records the payment; MPGF records contribution state from verified webhook events.",
+  realMoneyTerms:
+    "Real-money MPGF contributions are not represented as tax-deductible, escrowed, or guaranteed-effective unless legally approved copy explicitly says so. Allocation and disbursement remain separate MPGF records and payout/compliance gates.",
+  manualExternalPaymentEvidence:
+    "Manual evidence mode lets participants record evidence of a payment made through an approved external destination such as Open Collective or a fiscal host. Submitting evidence starts review; it does not move money or count as a verified MPGF contribution until review approves it.",
 };
 
 export const demoCycle: MpgfCycle = {
@@ -186,17 +198,44 @@ export const demoBallots: MpgfBallot[] = [
 export const demoPledges: MpgfPledge[] = [
   {
     id: "pledge-demo-one-time",
+    userId: "demo-participant",
     contributorLabel: "Demo participant",
     amountCents: 25_00,
+    currency: "usd",
     cadence: "one_time",
     status: "pledged",
+    pledgeMode: "pledge_only",
+    intendedCycleId: demoCycle.id,
+    budgetEffectiveCycleId: demoCycle.id,
   },
   {
     id: "pledge-demo-monthly",
+    userId: "demo-monthly-participant",
     contributorLabel: "Demo monthly participant",
     amountCents: 10_00,
+    currency: "usd",
     cadence: "monthly",
     status: "pledged",
+    pledgeMode: "pledge_only",
+    intendedCycleId: demoCycle.id,
+    budgetEffectiveCycleId: demoCycle.id,
+    recurringCommitmentId: "monthly-commitment-demo",
+  },
+];
+
+export const demoRecurringCommitments: MpgfRecurringContributionCommitment[] = [
+  {
+    id: "monthly-commitment-demo",
+    userId: "demo-monthly-participant",
+    amountCents: 10_00,
+    currency: "usd",
+    cadence: "monthly",
+    mode: "pledge_only",
+    status: "active",
+    startCycleId: demoCycle.id,
+    nextCycleId: demoCycle.id,
+    nextScheduledAt: "2026-06-01T00:00:00.000Z",
+    createdAt: "2026-05-01T00:00:00.000Z",
   },
 ];
 
@@ -206,6 +245,7 @@ export const mpgfPublicRoutes = [
   "/mpgf/contribute",
   "/mpgf/contribute/success",
   "/mpgf/contribute/cancel",
+  "/mpgf/real-money-terms",
   "/mpgf/account/contributions",
   "/mpgf/pools",
   "/mpgf/pools/new",

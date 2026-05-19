@@ -12,8 +12,8 @@ Status: direct-working discovery complete for the current local implementation.
 | public summary | `src/lib/mpgf/types.ts` | publication state external to summary object | covered by public summary state registry |
 | validation result | `src/lib/mpgf/types.ts` | `status` | covered by validator status |
 
-## Blockers
+## Production Evidence Notes
 
-Persisted database status-bearing objects required for full exact-pilot or real-money operation remain blocked until repository migrations and formal source lock pass.
+Persisted database status-bearing objects for the implemented MPGF workflows are covered by the migration set and status registry. Production-domain demo completion still requires authenticated browser evidence for ordinary participant mutations.
 
 Conformance rows: AC-STATE-001, AC-STATE-010.

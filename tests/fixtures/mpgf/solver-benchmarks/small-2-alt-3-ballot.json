@@ -1,0 +1,8 @@
+{
+  "fixtureId": "small-2-alt-3-ballot",
+  "fixtureType": "solver_benchmark",
+  "alternatives": 2,
+  "ballots": 3,
+  "expectedBehavior": "verified_optimal_or_fail_closed"
+}
+

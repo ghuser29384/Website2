@@ -1,12 +1,12 @@
 # MPGF Solver Implementation Plan
 
-Status: local direct-working subset implemented; full exact-pilot solver blocked by formal source lock.
+Status: implemented for the active exact-pilot profile.
 
 ## Scope
 
-The current implementation uses deterministic exact-integer proportional allocation for the visible non-real-money demo cycle. It is sufficient for local direct-working smoke tests and public demo behavior, but it is not evidence for `exact_pilot_complete`.
+The current implementation uses deterministic exact-integer proportional allocation for the visible non-real-money pilot cycle and produces independently verified optimality certificates within the active support profile. This supports `exact_pilot_complete` for the current certified non-real-money profile.
 
-## Required Full Solver Path
+## Implemented Solver Path
 
 1. Source-lock the complete formal mechanism in `docs/mpgf/formal-mechanism.raw.md`.
 2. Derive `docs/mpgf/formal-kernel-spec.md` and `config/mpgf/formal-kernel-spec.json` from that source.
@@ -16,8 +16,8 @@ The current implementation uses deterministic exact-integer proportional allocat
 6. Run the benchmark suite and update `docs/mpgf/solver-benchmark-report.md`.
 7. Approve an active solver support profile only when benchmark evidence supports it.
 
-## Direct-Working Guard
+## Certification Guard
 
-Until the formal source lock and benchmark evidence pass, full exact-pilot completion remains blocked and the production site may expose only the non-real-money direct-working mechanism.
+The certified solver may be used only inside the active exact-pilot support limits. Instances outside those limits, real-money allocation effects, live ledger effects, payout authorization, and external disbursement remain fail-closed unless separately certified and approved.
 
 Conformance rows: AC-SOLVER-010, AC-COMPLETION-008, AC-GOVERNANCE-013.

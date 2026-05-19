@@ -97,7 +97,7 @@ export function SiteTopbar({
   }
 
   return (
-    <nav className="topbar">
+    <nav aria-label="Primary" className="topbar">
       <Link aria-label="Moral Trade" className="brand" href={brandHref}>
         <Image
           alt="Moral Trade mark"

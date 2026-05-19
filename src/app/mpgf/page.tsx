@@ -5,51 +5,64 @@ import { MpgfConsole } from "@/components/mpgf/mpgf-console";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { MPGF_COPY } from "@/lib/mpgf/data";
-import { buildPublicSummary, computeExactMpgfAllocation, formatUsd } from "@/lib/mpgf/mechanism";
-import { runMpgfDirectWorkingSmokeTest } from "@/lib/mpgf/validators";
+import {
+  buildPublicSummary,
+  computeExactMpgfAllocation,
+  formatUsd,
+} from "@/lib/mpgf/mechanism";
+import { loadMpgfParticipantState } from "@/lib/mpgf/persistence";
+import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Moral Public Goods Fund",
   description:
-    "A non-real-money, pledge-only Moral Public Goods Fund pilot for coordinating moral trade around shared public goods.",
+    "Submit manual external-payment evidence for the Moral Public Goods Fund and review shared moral public goods.",
   alternates: {
     canonical: "/mpgf",
   },
   openGraph: {
     title: "Moral Public Goods Fund",
     description:
-      "A non-real-money, pledge-only Moral Public Goods Fund pilot for coordinating moral trade around shared public goods.",
+      "Submit manual external-payment evidence for the Moral Public Goods Fund and review shared moral public goods.",
     url: getAbsoluteUrl("/mpgf"),
     type: "website",
   },
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function MpgfPage() {
   const viewer = await getViewer();
   const allocation = computeExactMpgfAllocation();
   const publicSummary = buildPublicSummary({ allocation });
-  const smokeTest = runMpgfDirectWorkingSmokeTest();
+  const manualEvidenceReadiness = await loadMpgfManualEvidenceReadiness();
+  const realMoneyReadiness = await loadMpgfRealMoneyReadiness();
+  const participantState = await loadMpgfParticipantState({
+    userId: viewer?.authUser.id,
+    displayName: viewer?.displayName,
+  });
 
   return (
     <MpgfPageFrame
       actions={
         <>
           <Link className="button button-primary" href="/mpgf/contribute">
-            Create pledge
+            Submit manual evidence
           </Link>
           <Link className="button button-secondary" href="/mpgf/pools">
-            View pools
+            Review candidate pools
           </Link>
         </>
       }
       description={MPGF_COPY.plainLanguageSummary}
-      title="Fund moral public goods without turning the pilot into real money."
+      title="Fund moral public goods through reviewed external-payment evidence."
+      realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
       <section className="mpgf-kpi-grid" aria-label="MPGF current summary">
         <div className="mpgf-kpi">
-          <span>Demo budget</span>
+          <span>Illustrative budget</span>
           <strong>{formatUsd(publicSummary.budgetCents)}</strong>
         </div>
         <div className="mpgf-kpi">
@@ -61,22 +74,27 @@ export default async function MpgfPage() {
           <strong>{formatUsd(publicSummary.externallyPaidCents)}</strong>
         </div>
         <div className="mpgf-kpi">
-          <span>Smoke test</span>
-          <strong>{smokeTest.status}</strong>
+          <span>Review status</span>
+          <strong>{manualEvidenceReadiness.ready ? "Open" : "Persistence check"}</strong>
         </div>
       </section>
 
       <section className="section section-white">
         <div className="section-head">
-          <p className="eyebrow">Direct-working mechanism</p>
-          <h2>Try the pilot path from pledge to ballot to public summary</h2>
+          <p className="eyebrow">Flagship flow</p>
+          <h2>Submit external-payment evidence, then track review state</h2>
           <p>
-            This is the production-safe MPGF mode specified by the Build Instruction: pledge-only,
-            non-real-money, no live authorizations, no automated payouts, and no external payment
-            evidence.
+            The public MPGF pilot now starts with an external payment destination and a reviewable
+            evidence record. Pledge and ballot tools remain available for understanding the
+            mechanism, but evidence review is the main participant workflow.
           </p>
         </div>
-        <MpgfConsole />
+        <MpgfConsole
+          manualEvidenceReadiness={manualEvidenceReadiness}
+          participantState={participantState}
+          realMoneyReadiness={realMoneyReadiness}
+          viewerPresent={Boolean(viewer)}
+        />
       </section>
     </MpgfPageFrame>
   );

@@ -6,13 +6,18 @@
     "node": ">=20.9.0"
   },
   "scripts": {
-    "dev": "next dev",
+    "predev": "node scripts/ensure-next-swc.mjs",
+    "dev": "next dev --webpack",
+    "prebuild": "node scripts/ensure-next-swc.mjs",
     "build": "next build --webpack",
+    "prestart": "node scripts/ensure-next-swc.mjs",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --import tsx --test src/**/*.test.ts"
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@next/swc-darwin-arm64": "^16.2.4",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "next": "^16.2.4",
@@ -21,6 +26,7 @@
     "stripe": "^22.0.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",

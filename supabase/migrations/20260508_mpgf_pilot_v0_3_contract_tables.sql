@@ -18,6 +18,50 @@ create table if not exists public.mpgf_epochs (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+alter table public.mpgf_genesis
+  add column if not exists genesis_key text,
+  add column if not exists status text,
+  add column if not exists feature_mode text,
+  add column if not exists config_hash text,
+  add column if not exists seed_manifest_json jsonb,
+  add column if not exists activated_by uuid;
+
+update public.mpgf_genesis
+set
+  genesis_key = coalesce(genesis_key, concat('mpgf-genesis-', id::text)),
+  status = coalesce(
+    status,
+    case
+      when real_money_enabled then 'real_money_enabled'
+      else 'activated_non_real_money'
+    end
+  ),
+  feature_mode = coalesce(
+    feature_mode,
+    case mode
+      when 'non_real_money_demo' then 'demo'
+      else mode
+    end
+  ),
+  config_hash = coalesce(config_hash, 'legacy-genesis-config-hash-unrecorded'),
+  seed_manifest_json = coalesce(seed_manifest_json, '{}'::jsonb);
+
+alter table public.mpgf_genesis
+  alter column genesis_key set not null,
+  alter column status set not null,
+  alter column feature_mode set not null,
+  alter column config_hash set not null,
+  alter column seed_manifest_json set not null,
+  drop constraint if exists mpgf_genesis_status_check,
+  add constraint mpgf_genesis_status_check
+    check (status in ('not_started', 'activated_non_real_money', 'ready_for_real_money_review', 'real_money_enabled', 'emergency_disabled')),
+  drop constraint if exists mpgf_genesis_feature_mode_check,
+  add constraint mpgf_genesis_feature_mode_check
+    check (feature_mode in ('demo', 'pledge_only', 'test_mode', 'real_money'));
+
+create unique index if not exists mpgf_genesis_genesis_key_idx
+  on public.mpgf_genesis (genesis_key);
+
 alter table public.mpgf_cycles
   add column if not exists epoch_id uuid references public.mpgf_epochs (id),
   add column if not exists cycle_key text,
@@ -42,6 +86,41 @@ create table if not exists public.mpgf_conformance_reports (
   generated_at timestamptz not null default timezone('utc', now()),
   created_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.mpgf_conformance_reports
+  add column if not exists generated_for_version text,
+  add column if not exists mechanism_version text,
+  add column if not exists protocol_version text,
+  add column if not exists theta_version text,
+  add column if not exists conformance_json jsonb,
+  add column if not exists unresolved_count integer,
+  add column if not exists generated_by uuid;
+
+update public.mpgf_conformance_reports
+set
+  generated_for_version = coalesce(generated_for_version, 'mpgf-pilot-v0.3'),
+  mechanism_version = coalesce(mechanism_version, 'mpgf-formal-v0.3'),
+  protocol_version = coalesce(protocol_version, 'mpgf-pilot-v0.3'),
+  theta_version = coalesce(theta_version, 'theta-pilot-v0.3'),
+  conformance_json = coalesce(conformance_json, report_json, '{}'::jsonb),
+  unresolved_count = coalesce(
+    unresolved_count,
+    case
+      when status = 'passed' then 0
+      else 1
+    end
+  );
+
+alter table public.mpgf_conformance_reports
+  alter column generated_for_version set not null,
+  alter column mechanism_version set not null,
+  alter column protocol_version set not null,
+  alter column theta_version set not null,
+  alter column conformance_json set not null,
+  alter column unresolved_count set not null,
+  drop constraint if exists mpgf_conformance_reports_unresolved_count_nonnegative,
+  add constraint mpgf_conformance_reports_unresolved_count_nonnegative
+    check (unresolved_count >= 0);
 
 create table if not exists public.mpgf_safe_fallbacks (
   id uuid primary key default gen_random_uuid(),
@@ -115,10 +194,31 @@ create table if not exists public.mpgf_payment_intents (
   mode text not null check (mode in ('test_payment', 'real_money')),
   provider text,
   provider_payment_intent_id text,
-  status text not null check (status in ('created', 'requires_provider', 'requires_payment_method', 'requires_confirmation', 'processing', 'succeeded', 'failed', 'cancelled')),
+  stripe_payment_intent_id text,
+  status text not null check (status in ('created', 'requires_action', 'processing', 'succeeded', 'failed', 'cancelled')),
   idempotency_key text,
-  created_at timestamptz not null default timezone('utc', now())
+  created_at timestamptz not null default timezone('utc', now()),
+  confirmed_at timestamptz
 );
+
+alter table public.mpgf_payment_intents
+  add column if not exists stripe_payment_intent_id text,
+  add column if not exists confirmed_at timestamptz;
+
+update public.mpgf_payment_intents
+set
+  stripe_payment_intent_id = coalesce(stripe_payment_intent_id, provider_payment_intent_id),
+  status = case status
+    when 'requires_provider' then 'requires_action'
+    when 'requires_payment_method' then 'requires_action'
+    when 'requires_confirmation' then 'requires_action'
+    else status
+  end;
+
+alter table public.mpgf_payment_intents
+  drop constraint if exists mpgf_payment_intents_status_check,
+  add constraint mpgf_payment_intents_status_check
+    check (status in ('created', 'requires_action', 'processing', 'succeeded', 'failed', 'cancelled'));
 
 create table if not exists public.mpgf_contributions (
   id uuid primary key default gen_random_uuid(),
@@ -129,17 +229,31 @@ create table if not exists public.mpgf_contributions (
   amount_cents bigint not null check (amount_cents > 0),
   currency text not null default 'usd' check (currency = 'usd'),
   contribution_mode text not null check (contribution_mode in ('test_payment', 'real_money')),
-  status text not null check (status in ('pending', 'recorded', 'late_assigned_next_cycle', 'refunded', 'voided')),
+  status text not null check (status in ('pending', 'recorded', 'late_assigned_next_cycle', 'refunded', 'chargeback_disputed', 'chargeback_lost', 'voided')),
   received_at timestamptz,
   budget_effective_at timestamptz,
   created_at timestamptz not null default timezone('utc', now())
 );
 
+alter table public.mpgf_contributions
+  drop constraint if exists mpgf_contributions_status_check,
+  add constraint mpgf_contributions_status_check
+    check (status in ('pending', 'recorded', 'late_assigned_next_cycle', 'refunded', 'chargeback_disputed', 'chargeback_lost', 'voided'));
+
 alter table public.mpgf_pledges
+  add column if not exists user_id uuid,
+  add column if not exists currency text not null default 'usd' check (currency = 'usd'),
   add column if not exists intended_cycle_id text references public.mpgf_cycles (id),
   add column if not exists budget_effective_cycle_id text references public.mpgf_cycles (id),
   add column if not exists pledge_mode text default 'pledge_only' check (pledge_mode = 'pledge_only'),
-  add column if not exists converted_payment_intent_id uuid references public.mpgf_payment_intents (id);
+  add column if not exists converted_payment_intent_id uuid references public.mpgf_payment_intents (id),
+  add column if not exists cancelled_at timestamptz,
+  add column if not exists expires_at timestamptz;
+
+alter table public.mpgf_pledges
+  drop constraint if exists mpgf_pledges_status_check,
+  add constraint mpgf_pledges_status_check
+    check (status in ('pledged', 'cancelled', 'converted_to_payment_intent', 'expired'));
 
 create table if not exists public.mpgf_recurring_contribution_commitments (
   id uuid primary key default gen_random_uuid(),
@@ -151,19 +265,70 @@ create table if not exists public.mpgf_recurring_contribution_commitments (
   status text not null check (status in ('active', 'paused', 'cancelled', 'expired')),
   start_cycle_id text references public.mpgf_cycles (id),
   next_cycle_id text references public.mpgf_cycles (id),
+  next_scheduled_at timestamptz,
+  provider_subscription_id text,
   created_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.mpgf_recurring_contribution_commitments
+  add column if not exists next_scheduled_at timestamptz,
+  add column if not exists provider_subscription_id text,
+  add column if not exists paused_at timestamptz,
+  add column if not exists cancelled_at timestamptz;
+
+update public.mpgf_recurring_contribution_commitments
+set user_id = gen_random_uuid()
+where user_id is null;
+
+alter table public.mpgf_recurring_contribution_commitments
+  drop constraint if exists mpgf_recurring_contribution_commitments_status_check,
+  alter column user_id set not null,
+  add constraint mpgf_recurring_contribution_commitments_status_check
+    check (status in ('active', 'paused', 'cancelled', 'expired', 'provider_action_required', 'provider_failed'));
+
+alter table public.mpgf_pledges
+  add column if not exists recurring_commitment_id uuid references public.mpgf_recurring_contribution_commitments (id);
 
 create table if not exists public.mpgf_payment_webhook_events (
   id uuid primary key default gen_random_uuid(),
   provider text not null,
   provider_event_id text not null,
+  stripe_event_id text unique,
   event_type text not null,
+  raw_body_hash text,
   payload_json jsonb not null default '{}'::jsonb,
+  signature_verified boolean not null default false,
+  signature_verified_at timestamptz,
+  processed boolean default false,
+  processed_at timestamptz,
+  processing_error text,
   status text not null default 'received' check (status in ('received', 'processed', 'ignored', 'failed')),
   created_at timestamptz not null default timezone('utc', now()),
   unique (provider, provider_event_id)
 );
+
+alter table public.mpgf_payment_webhook_events
+  add column if not exists stripe_event_id text,
+  add column if not exists raw_body_hash text,
+  add column if not exists signature_verified boolean not null default false,
+  add column if not exists signature_verified_at timestamptz,
+  add column if not exists processed boolean default false,
+  add column if not exists processed_at timestamptz,
+  add column if not exists processing_error text;
+
+update public.mpgf_payment_webhook_events
+set
+  stripe_event_id = coalesce(stripe_event_id, provider_event_id),
+  raw_body_hash = coalesce(raw_body_hash, 'missing-raw-body-hash'),
+  processed = coalesce(processed, status = 'processed'),
+  processed_at = case when status = 'processed' then coalesce(processed_at, created_at) else processed_at end;
+
+alter table public.mpgf_payment_webhook_events
+  alter column stripe_event_id set not null,
+  alter column raw_body_hash set not null;
+
+create unique index if not exists mpgf_payment_webhook_events_stripe_event_id_idx
+on public.mpgf_payment_webhook_events (stripe_event_id);
 
 create table if not exists public.mpgf_refunds (
   id uuid primary key default gen_random_uuid(),
@@ -171,10 +336,39 @@ create table if not exists public.mpgf_refunds (
   payment_intent_id uuid references public.mpgf_payment_intents (id),
   amount_cents bigint not null check (amount_cents > 0),
   currency text not null default 'usd' check (currency = 'usd'),
-  status text not null check (status in ('requested', 'approved', 'rejected', 'succeeded', 'failed')),
+  status text not null check (status in ('requested', 'approved', 'submitted_to_provider', 'succeeded', 'failed', 'cancelled')),
   reason text,
+  provider_refund_id text,
+  requested_by uuid,
+  requested_at timestamptz,
+  approved_by uuid,
+  approved_at timestamptz,
+  provider_submitted_at timestamptz,
+  processed_at timestamptz,
+  evidence_json jsonb,
   created_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.mpgf_refunds
+  add column if not exists provider_refund_id text,
+  add column if not exists requested_by uuid,
+  add column if not exists requested_at timestamptz,
+  add column if not exists approved_by uuid,
+  add column if not exists approved_at timestamptz,
+  add column if not exists provider_submitted_at timestamptz,
+  add column if not exists processed_at timestamptz,
+  add column if not exists evidence_json jsonb;
+
+update public.mpgf_refunds
+set status = case status
+  when 'rejected' then 'failed'
+  else status
+end;
+
+alter table public.mpgf_refunds
+  drop constraint if exists mpgf_refunds_status_check,
+  add constraint mpgf_refunds_status_check
+    check (status in ('requested', 'approved', 'submitted_to_provider', 'succeeded', 'failed', 'cancelled'));
 
 create table if not exists public.mpgf_cycle_calendars (
   id uuid primary key default gen_random_uuid(),
@@ -620,6 +814,38 @@ create table if not exists public.mpgf_production_enablement (
 );
 
 alter table public.mpgf_completion_profiles
+  add column if not exists id uuid,
+  add column if not exists normalization_report_path text,
+  add column if not exists dry_run_report_path text,
+  add column if not exists launch_readiness_report_path text,
+  add column if not exists approved_by uuid,
+  add column if not exists approved_at timestamptz,
+  add column if not exists created_at timestamptz;
+
+update public.mpgf_completion_profiles
+set
+  id = coalesce(id, gen_random_uuid()),
+  created_at = coalesce(created_at, timezone('utc', now()));
+
+alter table public.mpgf_completion_profiles
+  alter column id set default gen_random_uuid(),
+  alter column id set not null,
+  alter column profile set not null,
+  alter column created_at set default timezone('utc', now()),
+  alter column created_at set not null,
+  drop constraint if exists mpgf_completion_profiles_profile_check,
+  add constraint mpgf_completion_profiles_profile_check
+    check (profile in ('demo_complete', 'exact_pilot_complete', 'real_money_complete')),
+  drop constraint if exists mpgf_completion_profiles_status_check,
+  add constraint mpgf_completion_profiles_status_check
+    check (status in ('not_started', 'in_progress', 'blocked', 'passed', 'revoked')),
+  drop constraint if exists mpgf_completion_profiles_pkey,
+  add constraint mpgf_completion_profiles_pkey primary key (id);
+
+create unique index if not exists mpgf_completion_profiles_profile_idx
+  on public.mpgf_completion_profiles (profile);
+
+alter table public.mpgf_completion_profiles
   add column if not exists conformance_report_id uuid references public.mpgf_conformance_reports (id);
 
 create table if not exists public.mpgf_receipts (
@@ -651,14 +877,39 @@ create table if not exists public.mpgf_idempotency_keys (
   id uuid primary key default gen_random_uuid(),
   scope text not null,
   idempotency_key text not null,
+  actor_user_id uuid,
+  action text not null default 'unknown',
   request_hash text not null,
   cycle_id text references public.mpgf_cycles (id),
-  status text not null check (status in ('reserved', 'succeeded', 'failed', 'expired')),
-  response_json jsonb,
+  status text not null check (status in ('received', 'completed', 'failed', 'conflict', 'expired')),
+  response_reference_json jsonb,
   created_at timestamptz not null default timezone('utc', now()),
-  expires_at timestamptz,
+  expires_at timestamptz not null default (timezone('utc', now()) + interval '30 days'),
   unique (scope, idempotency_key)
 );
+
+alter table public.mpgf_idempotency_keys
+  add column if not exists actor_user_id uuid,
+  add column if not exists action text default 'unknown',
+  add column if not exists response_reference_json jsonb,
+  add column if not exists expires_at timestamptz default (timezone('utc', now()) + interval '30 days');
+
+update public.mpgf_idempotency_keys
+set
+  action = coalesce(action, 'unknown'),
+  expires_at = coalesce(expires_at, timezone('utc', now()) + interval '30 days'),
+  status = case status
+    when 'reserved' then 'received'
+    when 'succeeded' then 'completed'
+    else status
+  end;
+
+alter table public.mpgf_idempotency_keys
+  drop constraint if exists mpgf_idempotency_keys_status_check,
+  alter column action set not null,
+  alter column expires_at set not null,
+  add constraint mpgf_idempotency_keys_status_check
+    check (status in ('received', 'completed', 'failed', 'conflict', 'expired'));
 
 create table if not exists public.mpgf_notifications (
   id uuid primary key default gen_random_uuid(),

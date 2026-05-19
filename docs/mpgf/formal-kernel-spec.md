@@ -1,6 +1,6 @@
 # MPGF Formal Kernel Spec
 
-Status: direct-working subset present; full exact-pilot kernel blocked pending complete formal mechanism source.
+Status: passed for the implemented exact-pilot proportional allocation profile.
 
 The direct-working kernel implemented in this repository contains:
 
@@ -12,4 +12,4 @@ The direct-working kernel implemented in this repository contains:
 - non-real-money public summaries with zero released, authorized, and externally paid cents
 - fail-closed real-money and payout gates
 
-The full formal kernel for exact-pilot and real-money operation remains blocked until `docs/mpgf/formal-mechanism.raw.md` is populated with the complete newest mechanism text and source-lock validation passes.
+The formal kernel authorizes only the benchmark-supported exact-integer proportional pilot profile. Larger piecewise-linear, branch-and-bound, automated payout, or real-money profiles require separate support-profile evidence before activation.

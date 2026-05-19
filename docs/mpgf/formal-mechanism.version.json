@@ -1,14 +1,14 @@
 {
   "mechanism_version": "mpgf-formal-v0.3",
   "date_adopted": "2026-05-07",
-  "source_hash": null,
-  "annotated_source_hash": null,
+  "source_hash": "8b2d81144ba609d507071fed64ddce51284fb9aea47db60666d381f3be77482f",
+  "annotated_source_hash": "6d2234ab3f3ae63309cd2b8d68646e87c1194e6e97620f5995196e7ab5233852",
   "source_file": "docs/mpgf/formal-mechanism.raw.md",
   "annotated_source_file": "docs/mpgf/formal-mechanism.md",
-  "source_completeness": "blocked_pending_verbatim_complete_source",
+  "source_completeness": "verbatim_complete",
   "annotation_policy": "embedded_source_ids_only_no_substantive_change",
   "protocol_version": "mpgf-pilot-v0.3",
   "theta_version": "theta-pilot-v0.3",
-  "constitution_version": "not_locked_for_full_exact_pilot",
+  "constitution_version": "mpgf-pilot-v0.3",
   "schema_version": "mpgf-direct-working-schema-v1"
 }

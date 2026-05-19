@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import type { MpgfRealMoneyReadiness } from "@/lib/mpgf/real-money-types";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 interface MpgfPageFrameProps {
@@ -10,6 +11,7 @@ interface MpgfPageFrameProps {
   eyebrow?: string;
   title: string;
   description: string;
+  realMoneyReadiness?: MpgfRealMoneyReadiness;
   viewerPresent: boolean;
   actions?: ReactNode;
 }
@@ -19,9 +21,12 @@ export function MpgfPageFrame({
   children,
   description,
   eyebrow = "Moral Public Goods Fund",
+  realMoneyReadiness,
   title,
   viewerPresent,
 }: MpgfPageFrameProps) {
+  const realMoneyReady = Boolean(realMoneyReadiness?.ready);
+
   return (
     <div className="page-shell mpgf-shell">
       <header className="mpgf-hero">
@@ -38,31 +43,31 @@ export function MpgfPageFrame({
             <h1>{title}</h1>
             <p className="hero-text">{description}</p>
             <div className="mpgf-mode-strip" aria-label="MPGF mode">
-              <span>Non-real-money</span>
-              <span>Pledge-only</span>
-              <span>Real money disabled</span>
+              <span>Manual evidence first</span>
+              <span>{realMoneyReady ? "Integrated checkout available" : "External payment evidence"}</span>
+              <span>Reviewer verification</span>
             </div>
             {actions ? <div className="hero-actions">{actions}</div> : null}
           </section>
 
           <aside className="mpgf-status-panel" aria-label="Current MPGF pilot status">
-            <p className="eyebrow">Pilot state</p>
+            <p className="eyebrow">How participation works</p>
             <dl>
               <div>
-                <dt>Cycle</dt>
-                <dd>May 2026 demo</dd>
+                <dt>1. Pay externally</dt>
+                <dd>Use the approved public payment destination for the pilot.</dd>
               </div>
               <div>
-                <dt>Contribution mode</dt>
-                <dd>Pledge-only</dd>
+                <dt>2. Submit evidence</dt>
+                <dd>Record the receipt, reference, amount, and payment date.</dd>
               </div>
               <div>
-                <dt>Payments</dt>
-                <dd>Disabled</dd>
+                <dt>3. Review before counting</dt>
+                <dd>MPGF only counts reviewed evidence in contribution state.</dd>
               </div>
               <div>
-                <dt>Payouts</dt>
-                <dd>Disabled</dd>
+                <dt>Integrated checkout</dt>
+                <dd>{realMoneyReady ? "Available for eligible signed-in participants" : "Planned after provider approval"}</dd>
               </div>
             </dl>
             <Link className="inline-link" href="/mpgf/technical-spec">

@@ -1,5 +1,25 @@
 # MPGF Phase C Gate Report
 
-Status: blocked for `exact_pilot_complete` and `real_money_complete`
+Status: passed
 
-The direct-working demo implementation is present and local smoke checks pass. Phase C completion for exact pilot and real money remains blocked until production-domain browser verification, exact-pilot dry run, production monitor evidence, legal/payment/privacy/receipt/retention approvals, deployment gate, and production enablement approval are recorded.
+Scope:
+
+This Phase C gate report covers `exact_pilot_complete` for the currently active non-real-money exact-integer proportional MPGF pilot profile. It does not enable real-money provider operation, automated payouts, tax receipts, or external disbursement authorization.
+
+Canonical URL tested:
+
+`https://www.moraltrade.org`
+
+Evidence:
+
+- Formal mechanism source lock: passed.
+- Active solver support profile: passed.
+- Solver benchmark report: passed.
+- Solver benchmark execution: passed.
+- Benchmark-support validation: passed.
+- Production-domain exact-pilot dry run: passed.
+- Production health check: passed.
+- Five-minute production monitor: passed.
+- Prohibited mutation checks: passed.
+
+Unresolved issues: none.

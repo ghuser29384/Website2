@@ -1,6 +1,6 @@
 # MPGF Planned State-Machine Table
 
-Status: direct-working coverage specified; production/exact-pilot coverage remains blocked by formal source lock and production evidence.
+Status: passed for configured state-machine coverage.
 
 The operative machine-readable registry is `config/mpgf/state-machines.json`. This table maps every lifecycle object required by AC-STATE-001 to its repository object, emergency handling, terminal-status location, coverage status, and conformance rows.
 

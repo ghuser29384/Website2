@@ -1,0 +1,7 @@
+{
+  "fixtureId": "zero-crossing-curves",
+  "fixtureType": "solver_benchmark",
+  "containsZeroCrossingCurves": true,
+  "expectedBehavior": "verified_optimal_or_fail_closed"
+}
+

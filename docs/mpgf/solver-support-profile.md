@@ -1,9 +1,9 @@
 # MPGF Solver Support Profile
 
-Status: direct-working demo support only; exact-pilot support blocked pending benchmark evidence.
+Status: certified for the active exact-pilot profile.
 
-Active support profile: `mpgf-solver-support-direct-working-v1`
+Active support profile: `mpgf-solver-support-exact-pilot-v1`
 
-The direct-working profile supports the current fixture size and exact integer proportional demo allocation. It does not authorize larger piecewise-linear exact-pilot instances, real-money allocations, or `exact_pilot_complete`.
+The active profile supports the current exact-integer proportional pilot limits in `config/mpgf/solver-support-profile.json`: at most four alternatives, four ballots, two canonical breakpoints per ballot, four region-enumeration regions, 32768 certificate JSON bytes, and 1000 ms verifier runtime.
 
-`exact_pilot_complete` remains blocked until benchmark evidence supports the active limits and the active profile is benchmark-supported or stricter.
+`exact_pilot_complete` is supported for this active non-real-money exact-pilot profile by `docs/mpgf/solver-benchmark-report.md` and `docs/mpgf/www-exact-pilot-dry-run-verification.md`. Larger piecewise-linear, branch-and-bound, real-money allocation, payout, or disbursement profiles remain outside the active certified limits.

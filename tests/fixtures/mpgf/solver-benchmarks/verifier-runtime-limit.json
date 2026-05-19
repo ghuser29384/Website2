@@ -1,0 +1,7 @@
+{
+  "fixtureId": "verifier-runtime-limit",
+  "fixtureType": "solver_benchmark",
+  "exceedsLimit": "maxVerifierRuntimeSeconds",
+  "expectedBehavior": "fail_closed"
+}
+

@@ -1,7 +1,7 @@
 {
-  "version": "mpgf-formal-kernel-direct-working-v1",
-  "status": "direct_working_subset_only",
-  "fullExactPilotBlockedBy": "docs/mpgf/formal-mechanism.raw.md",
+  "version": "mpgf-formal-kernel-exact-pilot-v1",
+  "status": "implemented_exact_pilot_profile",
+  "fullExactPilotBlockedBy": null,
   "implementedKernel": {
     "contributionMode": "pledge_only_non_real_money",
     "ballotWeightDomain": "integer_basis_points_0_to_10000",

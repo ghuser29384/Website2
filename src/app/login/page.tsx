@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import { getSafeInternalPath } from "@/lib/paths";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -26,10 +27,13 @@ interface LoginPageProps {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
-  const next =
-    (Array.isArray(resolvedSearchParams.next)
-      ? resolvedSearchParams.next[0]
-      : resolvedSearchParams.next) || "/dashboard";
+  const requestedReturnTo = Array.isArray(resolvedSearchParams.returnTo)
+    ? resolvedSearchParams.returnTo[0]
+    : resolvedSearchParams.returnTo;
+  const requestedNext = Array.isArray(resolvedSearchParams.next)
+    ? resolvedSearchParams.next[0]
+    : resolvedSearchParams.next;
+  const next = getSafeInternalPath(requestedReturnTo || requestedNext, "/dashboard");
   const supabaseReady = hasSupabaseEnv();
   const viewer = await getViewer();
 

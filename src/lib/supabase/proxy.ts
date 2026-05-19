@@ -4,6 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 
+const SESSION_REFRESH_TIMEOUT_MS = 1_500;
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
     request,
@@ -38,7 +40,12 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  await supabase.auth.getClaims();
+  await Promise.race([
+    supabase.auth.getClaims(),
+    new Promise((resolve) => {
+      setTimeout(resolve, SESSION_REFRESH_TIMEOUT_MS);
+    }),
+  ]);
 
   return response;
 }

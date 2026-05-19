@@ -29,6 +29,15 @@ export interface WishRegistrySearchResult {
   sharedTokens: string[];
 }
 
+export interface WishRegistryExamplePreview {
+  causes: readonly string[];
+  location: string;
+  name: string;
+  openness: readonly string[];
+  participantKind: string;
+  preview: string;
+}
+
 export function normalizeWishRegistryText(value: string) {
   return value.trim().toLowerCase();
 }
@@ -41,6 +50,62 @@ export function getWishRegistryTokens(value: string) {
       .map((token) => token.trim())
       .filter((token) => token.length > 3),
   );
+}
+
+export function filterWishRegistryExamplePreviews<TPreview extends WishRegistryExamplePreview>(
+  previews: readonly TPreview[],
+  {
+    cause = "",
+    opennessToPayment = false,
+    opennessToPledges = false,
+    query = "",
+  }: Pick<
+    WishRegistrySearchOptions,
+    "cause" | "opennessToPayment" | "opennessToPledges" | "query"
+  > = {},
+) {
+  const normalizedCause = normalizeWishRegistryText(cause);
+  const queryTokens = [...getWishRegistryTokens(query)];
+
+  return previews.filter((preview) => {
+    if (
+      opennessToPayment &&
+      !preview.openness.some((entry) => normalizeWishRegistryText(entry) === "payment-open")
+    ) {
+      return false;
+    }
+
+    if (
+      opennessToPledges &&
+      !preview.openness.some((entry) => normalizeWishRegistryText(entry) === "pledge-open")
+    ) {
+      return false;
+    }
+
+    if (
+      normalizedCause &&
+      !preview.causes.some((entry) => normalizeWishRegistryText(entry).includes(normalizedCause))
+    ) {
+      return false;
+    }
+
+    if (queryTokens.length) {
+      const searchableText = normalizeWishRegistryText(
+        [
+          preview.name,
+          preview.preview,
+          preview.location,
+          preview.participantKind,
+          preview.causes.join(" "),
+          preview.openness.join(" "),
+        ].join(" "),
+      );
+
+      return queryTokens.some((token) => searchableText.includes(token));
+    }
+
+    return true;
+  });
 }
 
 function toCauses(preview: WishProfilePreviewRow) {

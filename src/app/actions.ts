@@ -9,7 +9,13 @@ import { isAdminEmail } from "@/lib/admin";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
-import { deriveDisplayName, ensureAccountRowsForUser, getViewer, requireViewer } from "@/lib/app-data";
+import {
+  deriveDisplayName,
+  ensureAccountRowsForUser,
+  getViewer,
+  normalizePublicLocationGranularity,
+  requireViewer,
+} from "@/lib/app-data";
 import {
   buildDeterministicClarificationQuestions,
   buildDeterministicSynthesis,
@@ -25,6 +31,7 @@ import {
   findRegisteredCharityById,
   formatDonationOffsetUnmatchedRule,
   validateDonationOffsetFields,
+  validateDonationOffsetSubmissionGuards,
   type DonationOffsetFields,
   type DonationOffsetParticipationMode,
   type DonationOffsetPoolSide,
@@ -1216,6 +1223,7 @@ export async function signUpAction(formData: FormData) {
   const displayName = readRequired(formData, "display_name");
   const city = readOptional(formData, "city");
   const region = readOptional(formData, "region");
+  const country = readOptional(formData, "country");
 
   if (!email || !password) {
     redirectWithMessage("/signup", "error", "Email and password are required.");
@@ -1243,6 +1251,8 @@ export async function signUpAction(formData: FormData) {
         display_name: displayName,
         city,
         region,
+        country,
+        public_location_granularity: "hidden",
       },
     },
   });
@@ -1402,10 +1412,19 @@ export async function createOfferAction(formData: FormData) {
   const assuranceMinimumUsd = normalizedMode === "offset"
     ? readNonNegativeMoneyAmount(formData, "assurance_minimum_usd")
     : null;
+  const poolMaximumCapUsd = normalizedMode === "offset"
+    ? readPositiveMoneyAmount(formData, "offset_pool_maximum_cap_usd")
+    : null;
   const assuranceDeadline = normalizedMode === "offset"
     ? readOptional(formData, "assurance_deadline")
     : "";
   const evidenceUrl = normalizedMode === "offset" ? readOptional(formData, "offset_evidence_url") : "";
+  const antiThreatCertification = normalizedMode === "offset"
+    ? readBoolean(formData, "offset_anti_threat_certification")
+    : false;
+  const verificationMetadataAcknowledged = normalizedMode === "offset"
+    ? readBoolean(formData, "offset_verification_metadata_acknowledgement")
+    : false;
   const newOfferReturnPath =
     normalizedMode === "offset"
       ? `/offers/new?mode=offset${
@@ -1437,6 +1456,7 @@ export async function createOfferAction(formData: FormData) {
       poolName,
       poolSide,
       assuranceMinimumUsd,
+      poolMaximumCapUsd,
       assuranceDeadline,
       description: [offerAction, requestAction, notes].filter(Boolean).join("\n"),
       evidenceUrl,
@@ -1444,9 +1464,15 @@ export async function createOfferAction(formData: FormData) {
 
     const charity = findRegisteredCharityById(compromiseDestinationId);
     const moderation = assessDonationOffsetModeration(donationOffsetFields, charity);
-    const validationErrors = donationOffsetFields
-      ? validateDonationOffsetFields(donationOffsetFields)
-      : [];
+    const validationErrors = [
+      ...(donationOffsetFields ? validateDonationOffsetFields(donationOffsetFields) : []),
+      ...validateDonationOffsetSubmissionGuards({
+        participationMode,
+        antiThreatCertification,
+        verificationMetadataAcknowledged,
+        evidenceUrl,
+      }),
+    ];
 
     if (
       !baselineAmountUsd ||
@@ -1517,6 +1543,8 @@ export async function createOfferAction(formData: FormData) {
         existingPool.unmatched_surplus_rule !== donationOffsetFields.unmatchedSurplusRule ||
         existingPool.assurance_minimum_cents !==
           convertUsdToCents(donationOffsetFields.assuranceMinimumUsd) ||
+        existingPool.maximum_cap_cents !==
+          convertUsdToCents(donationOffsetFields.poolMaximumCapUsd) ||
         (existingPool.assurance_deadline_at?.slice(0, 10) ?? "") !==
           (donationOffsetFields.assuranceDeadline?.slice(0, 10) ?? "") ||
         (donationOffsetFields.poolSide === "side_a" &&
@@ -1529,7 +1557,7 @@ export async function createOfferAction(formData: FormData) {
         redirectWithMessage(
           newOfferReturnPath,
           "error",
-          "Join-pool commitments must use the pool's shared charity, ratio, horizon, verification, surplus rule, assurance settings, and side labels.",
+          "Join-pool commitments must use the pool's shared charity, ratio, horizon, verification, surplus rule, assurance settings, maximum cap, and side labels.",
         );
       }
 
@@ -1545,6 +1573,7 @@ export async function createOfferAction(formData: FormData) {
         verification_method: donationOffsetFields.verificationMethod,
         unmatched_surplus_rule: donationOffsetFields.unmatchedSurplusRule,
         assurance_minimum_cents: convertUsdToCents(donationOffsetFields.assuranceMinimumUsd),
+        maximum_cap_cents: convertUsdToCents(donationOffsetFields.poolMaximumCapUsd),
         assurance_deadline_at: parseOptionalTimestamp(donationOffsetFields.assuranceDeadline),
         side_a_label: donationOffsetFields.baselineOpposedCause,
         side_b_label: donationOffsetFields.requestedOpposedCause,
@@ -1818,6 +1847,10 @@ export async function updateProfileAction(formData: FormData) {
   const displayName = readOptional(formData, "display_name");
   const city = readOptional(formData, "city");
   const region = readOptional(formData, "region");
+  const country = readOptional(formData, "country");
+  const publicLocationGranularity = normalizePublicLocationGranularity(
+    readOptional(formData, "public_location_granularity"),
+  );
   const bio = readOptional(formData, "bio");
 
   const { error } = await supabase
@@ -1826,6 +1859,8 @@ export async function updateProfileAction(formData: FormData) {
       display_name: displayName || null,
       city: city || null,
       region: region || null,
+      country: country || null,
+      public_location_granularity: publicLocationGranularity,
       bio,
     })
     .eq("id", viewer.authUser.id);

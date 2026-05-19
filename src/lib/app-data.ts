@@ -62,9 +62,11 @@ type InterestStatus = Database["public"]["Enums"]["interest_status"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export type PeopleSort = "rating" | "followers" | "karma" | "comments";
+export type PublicLocationGranularity = "hidden" | "country" | "region" | "city";
 export const OFFERS_PAGE_SIZE = 24;
 export const PEOPLE_PAGE_SIZE = 24;
 export const DASHBOARD_PAGE_SIZE = 50;
+const AUTH_RESOLUTION_TIMEOUT_MS = 1_500;
 
 interface LoggedErrorLike {
   code?: string | null;
@@ -341,9 +343,13 @@ function buildFallbackProfile(user: User, profile?: Partial<ProfileRow> | null) 
       deriveDisplayName(
         user,
         profile ? { display_name: profile.display_name ?? null } : null,
-      ),
+    ),
     city: profile?.city ?? null,
     region: profile?.region ?? null,
+    country: profile?.country ?? null,
+    public_location_granularity: normalizePublicLocationGranularity(
+      profile?.public_location_granularity,
+    ),
     bio: profile?.bio ?? "",
     follower_count: profile?.follower_count ?? 0,
     following_count: profile?.following_count ?? 0,
@@ -363,6 +369,44 @@ function normalizeEmail(value: string) {
 function formatLocation(city?: string | null, region?: string | null) {
   const parts = [city?.trim(), region?.trim()].filter(Boolean);
   return parts.length ? parts.join(", ") : null;
+}
+
+export function normalizePublicLocationGranularity(
+  value?: string | null,
+): PublicLocationGranularity {
+  if (value === "country" || value === "region" || value === "city") {
+    return value;
+  }
+
+  return "hidden";
+}
+
+export function formatPublicProfileLocation(
+  profile: Pick<
+    ProfileRow,
+    "city" | "region" | "country" | "public_location_granularity"
+  >,
+) {
+  const granularity = normalizePublicLocationGranularity(
+    profile.public_location_granularity,
+  );
+  const city = profile.city?.trim();
+  const region = profile.region?.trim();
+  const country = profile.country?.trim();
+
+  if (granularity === "city") {
+    return [city, region, country].filter(Boolean).join(", ") || null;
+  }
+
+  if (granularity === "region") {
+    return [region, country].filter(Boolean).join(", ") || null;
+  }
+
+  if (granularity === "country") {
+    return country || null;
+  }
+
+  return null;
 }
 
 function getGuestInterestDisplayName(guestInterest: Pick<GuestInterestRow, "display_name" | "contact_email">) {
@@ -509,6 +553,8 @@ async function ensureUserProfile(
         display_name: seedProfile.display_name,
         city: seedProfile.city,
         region: seedProfile.region,
+        country: seedProfile.country,
+        public_location_granularity: seedProfile.public_location_granularity,
         bio: seedProfile.bio,
       },
       {
@@ -796,13 +842,41 @@ export async function getViewer() {
   }
 
   const supabase = await createClient();
+  const authResult = await Promise.race([
+    supabase.auth.getUser().then((result) => ({
+      ...result,
+      timedOut: false,
+    })),
+    new Promise<{
+      data: { user: null };
+      error: { message: string };
+      timedOut: true;
+    }>((resolve) => {
+      setTimeout(
+        () =>
+          resolve({
+            data: { user: null },
+            error: { message: "Timed out resolving authenticated user." },
+            timedOut: true,
+          }),
+        AUTH_RESOLUTION_TIMEOUT_MS,
+      );
+    }),
+  ]);
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+    timedOut,
+  } = authResult;
 
   if (authError) {
-    logSupabaseError("Failed to resolve authenticated user", authError);
+    if (timedOut) {
+      console.warn("[supabase] Auth resolution timed out; rendering signed-out state.", {
+        timeoutMs: AUTH_RESOLUTION_TIMEOUT_MS,
+      });
+    } else {
+      logSupabaseError("Failed to resolve authenticated user", authError);
+    }
     return null;
   }
 
@@ -858,7 +932,7 @@ export async function requireViewer(nextPath?: string) {
   const viewer = await getViewer();
 
   if (!viewer) {
-    const target = nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login";
+    const target = nextPath ? `/login?returnTo=${encodeURIComponent(nextPath)}` : "/login";
     redirect(target);
   }
 

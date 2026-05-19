@@ -137,6 +137,12 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
                 </div>
 
                 <label className="field">
+                  <span>Country</span>
+                  <input name="country" placeholder="e.g. United States" type="text" />
+                  <small>Location is hidden publicly by default; you can change visibility later.</small>
+                </label>
+
+                <label className="field">
                   <span>Password</span>
                   <input name="password" placeholder="Create a password" type="password" />
                 </label>

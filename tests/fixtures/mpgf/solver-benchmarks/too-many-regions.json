@@ -1,0 +1,7 @@
+{
+  "fixtureId": "too-many-regions",
+  "fixtureType": "solver_benchmark",
+  "exceedsLimit": "maxRegionEnumerationRegions",
+  "expectedBehavior": "fail_closed"
+}
+

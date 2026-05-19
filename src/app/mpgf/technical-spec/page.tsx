@@ -49,7 +49,7 @@ export default async function MpgfTechnicalSpecPage() {
               <dd>{phaseA.status}</dd>
             </div>
             <div>
-              <dt>Smoke test</dt>
+              <dt>Mechanism check</dt>
               <dd>{smoke.status}</dd>
             </div>
             <div>

@@ -192,7 +192,6 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
   const [selectedOfferId, setSelectedOfferId] = useState("seed-victoria");
   const [statusMessage, setStatusMessage] = useState("");
   const [hasLoadedLocalOffers, setHasLoadedLocalOffers] = useState(false);
-  const [openingProgress, setOpeningProgress] = useState(0);
   const [openingRevealProgress, setOpeningRevealProgress] = useState(0);
 
   useEffect(() => {
@@ -246,9 +245,6 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
       const totalScrollableDistance = Math.max(sequenceElement.offsetHeight - viewportHeight, 1);
       const distanceScrolled = clamp(-rect.top / totalScrollableDistance);
 
-      setOpeningProgress((current) =>
-        Math.abs(current - distanceScrolled) > 0.004 ? distanceScrolled : current,
-      );
       setOpeningRevealProgress((current) => {
         const nextProgress = Math.max(current, distanceScrolled);
 
@@ -295,12 +291,6 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
   const firstDefinitionProgress = getSegmentProgress(openingRevealProgress, 0.08, 0.34);
   const secondWordProgress = getSegmentProgress(openingRevealProgress, 0.46, 0.68);
   const secondDefinitionProgress = getSegmentProgress(openingRevealProgress, 0.74, 1);
-  const floatingTopbarProgress = getSegmentProgress(openingProgress, 0.84, 0.97);
-  const showFloatingTopbar = floatingTopbarProgress > 0.01;
-  const floatingTopbarStyle: CSSProperties = {
-    opacity: floatingTopbarProgress,
-    transform: `translate3d(-50%, ${(1 - floatingTopbarProgress) * -18}px, 0)`,
-  };
 
   function handleDraftFieldChange(field: keyof OfferDraft, value: string | number | boolean) {
     setDraft(
@@ -379,19 +369,6 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
     <div className="page-shell">
       <ValuesInterview isAuthenticated={isAuthenticated} />
       <header className="hero">
-        <div
-          aria-hidden={!showFloatingTopbar}
-          className={`topbar-floating-shell${showFloatingTopbar ? " is-visible" : ""}`}
-          style={floatingTopbarStyle}
-        >
-          <SiteTopbar
-            brandHref="/"
-            links={getPrimaryNavLinks(isAuthenticated)}
-            {...getTopbarActions(isAuthenticated)}
-            showLogout={isAuthenticated}
-          />
-        </div>
-
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(isAuthenticated)}
@@ -440,14 +417,17 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 each regards as morally better than acting alone.
               </p>
               <div className="hero-actions">
+                <Link className="button button-primary" href="/mpgf/contribute">
+                  Submit MPGF evidence
+                </Link>
+                <Link className="button button-secondary" href="/offers">
+                  Review example offers
+                </Link>
                 <Link
-                  className="button button-primary"
+                  className="button button-secondary"
                   href={isAuthenticated ? "/dashboard" : "/signup"}
                 >
                   {isAuthenticated ? "Open dashboard" : "Create an account"}
-                </Link>
-                <Link className="button button-secondary" href="/offers">
-                  Review public offers
                 </Link>
               </div>
               <ul className="hero-signals" aria-label="Operating standards">

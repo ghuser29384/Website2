@@ -16,6 +16,7 @@ import {
 } from "@/lib/donation-offsets";
 import { findEveryOrgTargetForCauseArea } from "@/lib/every-org";
 import { FILTER_MODE_OPTIONS, formatMode, formatPaymentCadence } from "@/lib/offers";
+import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -157,6 +158,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     : { items: [], page, pageSize: OFFERS_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
   const bestOfferCandidates = hasSupabaseEnv() ? await listOpenOffersPreview(120) : [];
   const offers = offersPage.items;
+  const exampleOffers = CANONICAL_WORKED_CASE_OFFERS;
   const bestOffersByCause = buildBestOffersByCause(bestOfferCandidates);
   const formMessage = getFormMessage(resolvedSearchParams);
   const offersStructuredData = {
@@ -248,6 +250,40 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       </header>
 
       <main>
+        <section className="section section-subtle">
+          <div className="section-head">
+            <p className="eyebrow">Example structures</p>
+            <h2>{exampleOffers.length} worked examples show what a usable trade record looks like</h2>
+            <p>
+              These examples are not live offers. They show the level of specificity a published
+              trade should have: the action, the reciprocal request, the cause areas, and the
+              verification terms.
+            </p>
+          </div>
+
+          <div className="data-grid">
+            {exampleOffers.map((offer) => (
+              <article className="panel data-card" key={offer.id}>
+                <p className="detail-kicker">{formatMode(offer.mode)} example</p>
+                <h3>{offer.alias}: {offer.offeredCause} for {offer.requestedCause}</h3>
+                <p className="route-text">{offer.offerAction}</p>
+                <p className="route-text">Requests in return: {offer.requestAction}</p>
+                <div className="tag-row">
+                  <span className="badge">{offer.offeredCause}</span>
+                  <span className="badge badge-secondary">{offer.requestedCause}</span>
+                  <span className="impact-pill">{offer.offerImpact}/10 offered</span>
+                  <span className="impact-pill">{offer.minCounterpartyImpact}+/10 needed</span>
+                  <span className="impact-pill">{offer.verification}</span>
+                  <span className="impact-pill">{offer.duration}</span>
+                  {formatPaymentCadence(offer) ? (
+                    <span className="impact-pill">{formatPaymentCadence(offer)}</span>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="section section-white" id="best-offers">
           <div className="section-head">
             <p className="eyebrow">Best Offers</p>
@@ -326,7 +362,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   <p className="detail-kicker">{entry.label}</p>
                   <h3>No published offer yet</h3>
                   <p className="route-text">
-                    There is not yet an open public offer in this cause area.
+                    No live participant offer has been published in this cause area yet. The
+                    examples above show the expected shape.
                   </p>
                   <div className="offer-footer">
                     <div className="offer-actions">
@@ -499,8 +536,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             ) : (
               <div className="empty-state">
                 <div>
-                  <strong>No public offers have been published yet.</strong>
-                  <p>Create the first offer once auth and the database are configured.</p>
+                  <strong>Live participant offers will appear here.</strong>
+                  <p>
+                    Until then, use the seeded examples above to inspect the expected offer
+                    structure, then create the first live offer from an account.
+                  </p>
                 </div>
               </div>
             )}

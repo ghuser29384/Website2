@@ -5,9 +5,15 @@ import { toggleFollowAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
-import { getViewer, listPublicProfilesPage, PEOPLE_PAGE_SIZE, type PeopleSort } from "@/lib/app-data";
+import {
+  formatPublicProfileLocation,
+  getViewer,
+  listPublicProfilesPage,
+  PEOPLE_PAGE_SIZE,
+  type PeopleSort,
+} from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
+import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
@@ -93,7 +99,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
         url: getAbsoluteUrl(`/people/${profile.id}`),
         name: profile.resolvedName,
         description: truncateDescription(
-          `${formatLocation(profile.city, profile.region) || "Location not listed"}. ${profile.offerCount} open offers. ${profile.followerCount} followers. ${profile.commentCount} comments.`,
+          `${formatPublicProfileLocation(profile) || "Location not listed"}. ${profile.offerCount} open offers. ${profile.followerCount} followers. ${profile.commentCount} comments.`,
           140,
         ),
       })),
@@ -197,7 +203,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                       <p className="detail-kicker">Public profile</p>
                       <h3>{profile.resolvedName}</h3>
                       <p className="route-text">
-                        {[profile.city, profile.region].filter(Boolean).join(", ") || "Location not listed"}
+                        {formatPublicProfileLocation(profile) || "Location not listed"}
                       </p>
                     </div>
                     <span className="badge">

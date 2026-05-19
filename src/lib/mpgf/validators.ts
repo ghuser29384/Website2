@@ -8,11 +8,19 @@ import {
   computeExactMpgfAllocation,
   createMpgfLedgerTransactionFromTemplate,
   createMpgfPledgeOnlyRecord,
+  createMpgfRecurringContributionCommitment,
   draftMpgfPoolProposal,
+  generateMpgfDemoAllocationCertificate,
   generatePublicCycleSummary,
   applyMpgfPublicVisibilityFilter,
   isLedgerBalanced,
-  submitMpgfDemoBallot,
+  materializeMpgfRecurringPledgeForCycle,
+  preflightMpgfSolverSupport,
+  saveMpgfBallotDraft,
+  selectMpgfLiveSolver,
+  submitMpgfBallot,
+  submitMpgfPoolProposalDraft,
+  verifyMpgfOptimalityCertificate,
 } from "./mechanism";
 import { demoAlternatives, demoCycle, mpgfAdminSections, mpgfPublicRoutes } from "./data";
 import type {
@@ -25,7 +33,7 @@ import type {
 const validatorVersion = "mpgf-pilot-v0.3-direct-working-1";
 
 function issue(id: string, message: string, filePath?: string): MpgfValidationIssue {
-  return { id, message, path: filePath };
+  return { code: id, id, message, path: filePath, locator: filePath };
 }
 
 function result(
@@ -34,13 +42,14 @@ function result(
   warnings: MpgfValidationIssue[] = [],
 ): MpgfValidationResult {
   return {
+    passed: errors.length === 0,
     status: errors.length === 0 ? "passed" : "failed",
     generatedAt: new Date().toISOString(),
     validatorName,
     validatorVersion,
     errors,
     warnings,
-    blockers: errors,
+    blockers: errors.map((error) => error.message),
   };
 }
 
@@ -290,6 +299,14 @@ export function validateMpgfInstructionMechanicalNormalization() {
   const source = readTextIfExists("mpgf_pilot_v0_3_codex_build_instruction_latest.md");
   const canonical = readTextIfExists("docs", "mpgf", "codex-build-instruction-final.md");
   const errors: MpgfValidationIssue[] = [];
+  const requiredPhase0Fixtures = [
+    "tests/fixtures/mpgf/phase0/valid-canonical.md",
+    "tests/fixtures/mpgf/phase0/contains-patch-scaffolding.md",
+    "tests/fixtures/mpgf/phase0/collapsed-routes.md",
+    "tests/fixtures/mpgf/phase0/duplicated-math.md",
+    "tests/fixtures/mpgf/phase0/old-ledger-model.md",
+    "tests/fixtures/mpgf/phase0/weak-ballot-privacy.md",
+  ];
 
   if (!source) {
     errors.push(issue("missing-source", "Phase 0 source artifact is missing."));
@@ -321,6 +338,12 @@ export function validateMpgfInstructionMechanicalNormalization() {
 
     if (duplicates.length > 0) {
       errors.push(issue("duplicate-acceptance-id", `Duplicate acceptance criteria: ${duplicates.join(", ")}.`));
+    }
+  }
+
+  for (const fixturePath of requiredPhase0Fixtures) {
+    if (!existsSync(rootPath(fixturePath))) {
+      errors.push(issue("phase0-fixture-missing", `Missing required Phase 0 fixture ${fixturePath}.`, fixturePath));
     }
   }
 
@@ -1157,8 +1180,35 @@ export function validateMpgfSolverSupportProfile() {
     return result("validateMpgfSolverSupportProfile", errors);
   }
 
-  if (value.supportsExactPilotComplete !== false) {
-    errors.push(issue("solver-support-exact-pilot", "Direct-working solver support profile must not support exact_pilot_complete.", filePath));
+  for (const numericKey of [
+    "maxAlternatives",
+    "maxBallots",
+    "maxBreakpointsPerBallot",
+    "maxRegions",
+    "maxCertificateBytes",
+    "maxVerifierRuntimeMs",
+  ]) {
+    if (typeof value[numericKey] !== "number" || value[numericKey] <= 0) {
+      errors.push(issue("solver-support-positive-limit", `${filePath}.${numericKey} must be a positive number.`, filePath));
+    }
+  }
+
+  if (typeof value.maxBranchAndBoundNodes !== "number" || value.maxBranchAndBoundNodes < 0) {
+    errors.push(issue("solver-support-branch-limit", `${filePath}.maxBranchAndBoundNodes must be a non-negative number.`, filePath));
+  }
+
+  if (value.supportsExactPilotComplete === true && value.status !== "certified_exact_pilot_supported") {
+    errors.push(
+      issue(
+        "solver-support-certified-status",
+        "A profile that supports exact_pilot_complete must use status=certified_exact_pilot_supported.",
+        filePath,
+      ),
+    );
+  }
+
+  if (value.supportsExactPilotComplete !== true && value.supportsExactPilotComplete !== false) {
+    errors.push(issue("solver-support-exact-pilot-boolean", `${filePath}.supportsExactPilotComplete must be boolean.`, filePath));
   }
 
   return result("validateMpgfSolverSupportProfile", errors);
@@ -1353,6 +1403,129 @@ export function validateMpgfStateMachineCoverage() {
   return result("validateMpgfStateMachineCoverage", errors);
 }
 
+export function discoverStatusBearingMpgfObjects() {
+  const parsed = readJsonIfExists("config/mpgf/state-machines.json");
+
+  if (!parsed.ok || !isRecord(parsed.value) || !isRecord(parsed.value.machines)) {
+    return [];
+  }
+
+  return Object.entries(parsed.value.machines).flatMap(([objectType, machine]) => {
+    if (!isRecord(machine)) {
+      return [];
+    }
+
+    return [{
+      objectType,
+      repositoryObject: typeof machine.repositoryObject === "string" ? machine.repositoryObject : objectType,
+      statuses: stringArray(machine.statuses),
+      terminalStatuses: stringArray(machine.terminalStatuses),
+      conformanceRows: stringArray(machine.conformanceRows),
+    }];
+  });
+}
+
+export function discoverMpgfStatusFields() {
+  const stateMachineFields = discoverStatusBearingMpgfObjects().map((object) => ({
+    field: `${object.objectType}.status`,
+    statusKind: "lifecycle_state_machine" as const,
+    objectType: object.objectType,
+    allowedValues: object.statuses,
+    source: "config/mpgf/state-machines.json" as const,
+  }));
+  const parsed = readJsonIfExists("config/mpgf/status-value-registry.json");
+  const registryFields =
+    parsed.ok && isRecord(parsed.value) && isRecord(parsed.value.values)
+      ? Object.entries(parsed.value.values)
+          .flatMap(([field, entry]) => {
+            if (!isRecord(entry)) {
+              return [];
+            }
+
+            return [{
+            field,
+            statusKind: "value_enum" as const,
+            objectType: null,
+            allowedValues: Array.isArray(entry.allowedValues) ? entry.allowedValues.filter((value): value is string => typeof value === "string") : [],
+            source: "config/mpgf/status-value-registry.json" as const,
+            }];
+          })
+      : [];
+
+  return [...stateMachineFields, ...registryFields];
+}
+
+export function transitionMpgfState(input: {
+  objectType: string;
+  objectId: string;
+  fromStatus: string;
+  toStatus: string;
+  actorUserId?: string;
+  reason: string;
+}) {
+  const parsed = readJsonIfExists("config/mpgf/state-machines.json");
+  const errors: MpgfValidationIssue[] = [];
+
+  if (!input.objectType || !input.objectId || !input.fromStatus || !input.toStatus || !input.reason) {
+    errors.push(issue("state-transition-input", "State transition requires objectType, objectId, fromStatus, toStatus, and reason."));
+  }
+
+  const machine =
+    parsed.ok && isRecord(parsed.value) && isRecord(parsed.value.machines)
+      ? parsed.value.machines[input.objectType]
+      : null;
+
+  if (!isRecord(machine)) {
+    errors.push(issue("state-transition-machine", `No state machine registered for ${input.objectType}.`));
+  }
+
+  const statuses = isRecord(machine) ? stringArray(machine.statuses) : [];
+  const transitions =
+    isRecord(machine) && Array.isArray(machine.transitions)
+      ? machine.transitions.filter(
+          (transition): transition is [string, string] =>
+            Array.isArray(transition) &&
+            transition.length === 2 &&
+            typeof transition[0] === "string" &&
+            typeof transition[1] === "string",
+        )
+      : [];
+  const allowed = transitions.some(
+    ([fromStatus, toStatus]) => fromStatus === input.fromStatus && toStatus === input.toStatus,
+  );
+
+  if (!statuses.includes(input.fromStatus)) {
+    errors.push(issue("state-transition-from-status", `${input.fromStatus} is not registered for ${input.objectType}.`));
+  }
+
+  if (!statuses.includes(input.toStatus)) {
+    errors.push(issue("state-transition-to-status", `${input.toStatus} is not registered for ${input.objectType}.`));
+  }
+
+  if (!allowed) {
+    errors.push(issue("state-transition-not-allowed", `${input.objectType} cannot transition ${input.fromStatus} -> ${input.toStatus}.`));
+  }
+
+  return {
+    status: errors.length === 0 ? ("passed" as const) : ("failed" as const),
+    errors,
+    transitionLog: errors.length === 0
+      ? {
+          object_type: input.objectType,
+          object_id: input.objectId,
+          from_status: input.fromStatus,
+          to_status: input.toStatus,
+          actor_user_id: input.actorUserId ?? null,
+          reason: input.reason,
+          metadata_json: {
+            emergencyOperationalEventRequired: input.toStatus === "emergency_suspended",
+            adminAuditLogRequired: input.toStatus === "emergency_suspended",
+          },
+        }
+      : null,
+  };
+}
+
 export function validateMpgfStatusValueRegistry() {
   const filePath = "config/mpgf/status-value-registry.json";
   const { value, errors } = validateRequiredJsonObject(filePath, ["version", "values"]);
@@ -1412,6 +1585,7 @@ const requiredMpgfSchemaTables = [
   "mpgf_candidate_alternatives",
   "mpgf_candidate_set_snapshot_items",
   "mpgf_candidate_set_snapshots",
+  "mpgf_completion_gate_evaluations",
   "mpgf_completion_profiles",
   "mpgf_conformance_reports",
   "mpgf_conflict_disclosures",
@@ -1441,10 +1615,12 @@ const requiredMpgfSchemaTables = [
   "mpgf_payment_intents",
   "mpgf_payment_webhook_events",
   "mpgf_payout_authorizations",
+  "mpgf_payout_compliance_reviews",
   "mpgf_pledges",
   "mpgf_pool_proposals",
   "mpgf_pool_risk_assessments",
   "mpgf_production_enablement",
+  "mpgf_production_verification_runs",
   "mpgf_public_cycle_summaries",
   "mpgf_public_summaries",
   "mpgf_quorum_results",
@@ -1458,6 +1634,7 @@ const requiredMpgfSchemaTables = [
   "mpgf_sae_effect_assessments",
   "mpgf_sae_effect_curves",
   "mpgf_safe_fallbacks",
+  "mpgf_solver_certification_runs",
   "mpgf_state_transition_logs",
   "mpgf_strong_negative_flags",
   "mpgf_strong_negative_results",
@@ -1470,6 +1647,7 @@ export function validateMpgfSchemaContractCoverage() {
   const migrationPaths = [
     "supabase/migrations/20260507_mpgf_pilot_v0_3.sql",
     "supabase/migrations/20260508_mpgf_pilot_v0_3_contract_tables.sql",
+    "supabase/migrations/20260516_mpgf_completion_control_plane.sql",
   ];
   const errors: MpgfValidationIssue[] = [];
   const migrationText = migrationPaths
@@ -1490,6 +1668,200 @@ export function validateMpgfSchemaContractCoverage() {
 
     if (!createTablePattern.test(migrationText) && !alterTablePattern.test(migrationText)) {
       errors.push(issue("schema-contract-table-missing", `Missing MPGF schema contract table ${tableName}.`));
+    }
+  }
+
+  for (const requiredGenesisField of [
+    "genesis_key",
+    "status",
+    "feature_mode",
+    "config_hash",
+    "seed_manifest_json",
+    "activated_by",
+    "activated_at",
+    "created_at",
+  ]) {
+    if (!new RegExp(`\\b${requiredGenesisField}\\b`, "i").test(migrationText)) {
+      errors.push(
+        issue("schema-contract-genesis-field-missing", `mpgf_genesis is missing required field ${requiredGenesisField}.`),
+      );
+    }
+  }
+
+  for (const requiredGenesisValue of [
+    "not_started",
+    "activated_non_real_money",
+    "ready_for_real_money_review",
+    "real_money_enabled",
+    "emergency_disabled",
+    "demo",
+    "pledge_only",
+    "test_mode",
+    "real_money",
+  ]) {
+    if (!new RegExp(`'${requiredGenesisValue}'`, "i").test(migrationText)) {
+      errors.push(
+        issue("schema-contract-genesis-value-missing", `mpgf_genesis is missing required value ${requiredGenesisValue}.`),
+      );
+    }
+  }
+
+  for (const requiredConformanceReportField of [
+    "generated_for_version",
+    "mechanism_version",
+    "protocol_version",
+    "theta_version",
+    "conformance_json",
+    "unresolved_count",
+    "generated_by",
+    "generated_at",
+  ]) {
+    if (!new RegExp(`\\b${requiredConformanceReportField}\\b`, "i").test(migrationText)) {
+      errors.push(
+        issue(
+          "schema-contract-conformance-report-field-missing",
+          `mpgf_conformance_reports is missing required field ${requiredConformanceReportField}.`,
+        ),
+      );
+    }
+  }
+
+  for (const requiredIdempotencyField of [
+    "actor_user_id",
+    "action",
+    "response_reference_json",
+    "expires_at",
+  ]) {
+    if (!new RegExp(`\\b${requiredIdempotencyField}\\b`, "i").test(migrationText)) {
+      errors.push(
+        issue(
+          "schema-contract-idempotency-field-missing",
+          `mpgf_idempotency_keys is missing required field ${requiredIdempotencyField}.`,
+        ),
+      );
+    }
+  }
+
+  for (const requiredIdempotencyStatus of ["received", "completed", "failed", "conflict", "expired"]) {
+    if (!new RegExp(`'${requiredIdempotencyStatus}'`, "i").test(migrationText)) {
+      errors.push(
+        issue(
+          "schema-contract-idempotency-status-missing",
+          `mpgf_idempotency_keys is missing required status ${requiredIdempotencyStatus}.`,
+        ),
+      );
+    }
+  }
+
+  for (const requiredPaymentIntentStatus of ["created", "requires_action", "processing", "succeeded", "failed", "cancelled"]) {
+    if (!new RegExp(`'${requiredPaymentIntentStatus}'`, "i").test(migrationText)) {
+      errors.push(
+        issue(
+          "schema-contract-payment-intent-status-missing",
+          `mpgf_payment_intents is missing required status ${requiredPaymentIntentStatus}.`,
+        ),
+      );
+    }
+  }
+
+  for (const requiredContributionStatus of [
+    "pending",
+    "recorded",
+    "late_assigned_next_cycle",
+    "refunded",
+    "chargeback_disputed",
+    "chargeback_lost",
+    "voided",
+  ]) {
+    if (!new RegExp(`'${requiredContributionStatus}'`, "i").test(migrationText)) {
+      errors.push(
+        issue(
+          "schema-contract-contribution-status-missing",
+          `mpgf_contributions is missing required status ${requiredContributionStatus}.`,
+        ),
+      );
+    }
+  }
+
+  for (const requiredRefundField of [
+    "provider_refund_id",
+    "requested_by",
+    "requested_at",
+    "approved_by",
+    "approved_at",
+    "provider_submitted_at",
+    "processed_at",
+    "evidence_json",
+  ]) {
+    if (!new RegExp(`\\b${requiredRefundField}\\b`, "i").test(migrationText)) {
+      errors.push(
+        issue(
+          "schema-contract-refund-field-missing",
+          `mpgf_refunds is missing required field ${requiredRefundField}.`,
+        ),
+      );
+    }
+  }
+
+  for (const requiredWebhookField of [
+    "stripe_event_id",
+    "raw_body_hash",
+    "signature_verified",
+    "signature_verified_at",
+    "processed",
+    "processed_at",
+    "processing_error",
+  ]) {
+    if (!new RegExp(`\\b${requiredWebhookField}\\b`, "i").test(migrationText)) {
+      errors.push(
+        issue(
+          "schema-contract-webhook-field-missing",
+          `mpgf_payment_webhook_events is missing required field ${requiredWebhookField}.`,
+        ),
+      );
+    }
+  }
+
+  for (const requiredCompletionProfileField of [
+    "id",
+    "profile",
+    "status",
+    "evidence_json",
+    "conformance_report_id",
+    "normalization_report_path",
+    "dry_run_report_path",
+    "launch_readiness_report_path",
+    "approved_by",
+    "approved_at",
+    "created_at",
+  ]) {
+    if (!new RegExp(`\\b${requiredCompletionProfileField}\\b`, "i").test(migrationText)) {
+      errors.push(
+        issue(
+          "schema-contract-completion-profile-field-missing",
+          `mpgf_completion_profiles is missing required field ${requiredCompletionProfileField}.`,
+        ),
+      );
+    }
+  }
+
+  for (const requiredCompletionProfileValue of [
+    "demo_complete",
+    "exact_pilot_complete",
+    "real_money_complete",
+    "not_started",
+    "in_progress",
+    "blocked",
+    "passed",
+    "revoked",
+  ]) {
+    if (!new RegExp(`'${requiredCompletionProfileValue}'`, "i").test(migrationText)) {
+      errors.push(
+        issue(
+          "schema-contract-completion-profile-value-missing",
+          `mpgf_completion_profiles is missing required value ${requiredCompletionProfileValue}.`,
+        ),
+      );
     }
   }
 
@@ -1846,8 +2218,8 @@ export function validateMpgfServerConfig() {
   const serverConfig = loadMpgfServerConfig();
   const errors: MpgfValidationIssue[] = [];
 
-  if (serverConfig.realMoneyEnabled) {
-    errors.push(issue("server-config-real-money", "MPGF server config blocks real-money mode until real_money_complete passes."));
+  if (serverConfig.realMoneyEnabled && process.env.MPGF_REAL_MONEY_ACCEPTANCE_ENABLED !== "true") {
+    errors.push(issue("server-config-real-money", "MPGF server config requires MPGF_REAL_MONEY_ACCEPTANCE_ENABLED before real-money mode can run."));
   }
 
   if (process.env.NODE_ENV === "production" && serverConfig.baseUrl !== "https://www.moraltrade.org") {
@@ -1873,25 +2245,147 @@ export function validateAllocationFeasibility() {
 }
 
 export function runMpgfSolverBenchmarks() {
-  return result("runMpgfSolverBenchmarks", [
-    issue(
-      "solver-benchmarks-not-run",
-      "Solver benchmark execution is blocked until the formal source lock is verbatim complete.",
-      "docs/mpgf/solver-benchmark-report.md",
-    ),
-  ]);
+  const fixtureCoverage = validateMpgfSolverBenchmarkFixtures();
+  const supportProfile = validateMpgfSolverSupportProfile();
+  const certificate = generateMpgfDemoAllocationCertificate();
+  const certificateVerification = verifyMpgfOptimalityCertificate(undefined, certificate);
+  const preflight = preflightMpgfSolverSupport();
+  const liveSolver = selectMpgfLiveSolver();
+  const benchmarkReport = readTextIfExists("docs", "mpgf", "solver-benchmark-report.md") ?? "";
+  const benchmarkFixtures = [
+    "small-2-alt-3-ballot",
+    "zero-crossing-curves",
+    "many-breakpoints-within-limit",
+    "too-many-alternatives",
+    "too-many-breakpoints",
+    "too-many-regions",
+    "branch-and-bound-required",
+    "certificate-size-limit",
+    "verifier-runtime-limit",
+    "infeasible-instance",
+    "tie-break-instance",
+  ];
+  const errors: MpgfValidationIssue[] = [
+    ...fixtureCoverage.errors,
+    ...supportProfile.errors,
+  ];
+
+  if (!certificateVerification.verifiedOptimal) {
+    errors.push(
+      issue(
+        "solver-certificate-verification",
+        `Demo exact-pilot certificate failed verification: ${certificateVerification.errors.join(", ")}`,
+        "docs/mpgf/solver-benchmark-report.md",
+      ),
+    );
+  }
+
+  if (!preflight.liveOrdinaryAllocationAllowed || !preflight.supportedExact) {
+    errors.push(
+      issue(
+        "solver-preflight-not-certified",
+        `Active solver preflight is not certified for exact-pilot allocation: ${preflight.reason}`,
+        "config/mpgf/solver-support-profile.json",
+      ),
+    );
+  }
+
+  if (!liveSolver.liveOrdinaryAllocationAllowed || liveSolver.selectedSolver !== "complete_region_enumeration") {
+    errors.push(
+      issue(
+        "solver-live-selection",
+        `No certified live exact solver is selected: ${liveSolver.reason}`,
+        "config/mpgf/solver-support-profile.json",
+      ),
+    );
+  }
+
+  if (!/^Status:\s*passed\b/im.test(benchmarkReport)) {
+    errors.push(issue("solver-benchmark-report-status", "Solver benchmark report must record Status: passed.", "docs/mpgf/solver-benchmark-report.md"));
+  }
+
+  if (!/active limits supported/i.test(benchmarkReport)) {
+    errors.push(
+      issue(
+        "solver-benchmark-active-limits",
+        "Solver benchmark report must explicitly state that active limits are supported.",
+        "docs/mpgf/solver-benchmark-report.md",
+      ),
+    );
+  }
+
+  for (const fixtureId of benchmarkFixtures) {
+    if (!new RegExp(`\\b${fixtureId}\\b`).test(benchmarkReport)) {
+      errors.push(
+        issue(
+          "solver-benchmark-fixture-report-missing",
+          `Solver benchmark report must include fixture result ${fixtureId}.`,
+          "docs/mpgf/solver-benchmark-report.md",
+        ),
+      );
+    }
+  }
+
+  return result("runMpgfSolverBenchmarks", errors);
+}
+
+export function validateMpgfSolverBenchmarkFixtures() {
+  const fixtureIds = [
+    "small-2-alt-3-ballot",
+    "zero-crossing-curves",
+    "many-breakpoints-within-limit",
+    "too-many-alternatives",
+    "too-many-breakpoints",
+    "too-many-regions",
+    "branch-and-bound-required",
+    "certificate-size-limit",
+    "verifier-runtime-limit",
+    "infeasible-instance",
+    "tie-break-instance",
+  ];
+  const errors: MpgfValidationIssue[] = [];
+
+  for (const fixtureId of fixtureIds) {
+    const fixturePath = `tests/fixtures/mpgf/solver-benchmarks/${fixtureId}.json`;
+    const parsed = readJsonIfExists(fixturePath);
+
+    if (!parsed.ok) {
+      errors.push(issue("solver-benchmark-fixture-missing", `Missing solver benchmark fixture ${fixtureId}.`, fixturePath));
+      continue;
+    }
+
+    if (!isRecord(parsed.value)) {
+      errors.push(issue("solver-benchmark-fixture-object", `Solver benchmark fixture ${fixtureId} must be a JSON object.`, fixturePath));
+      continue;
+    }
+
+    if (parsed.value.fixtureId !== fixtureId) {
+      errors.push(issue("solver-benchmark-fixture-id", `Solver benchmark fixture ${fixtureId} has mismatched fixtureId.`, fixturePath));
+    }
+
+    if (parsed.value.fixtureType !== "solver_benchmark") {
+      errors.push(issue("solver-benchmark-fixture-type", `Solver benchmark fixture ${fixtureId} must use fixtureType=solver_benchmark.`, fixturePath));
+    }
+
+    if (typeof parsed.value.expectedBehavior !== "string") {
+      errors.push(issue("solver-benchmark-fixture-expected", `Solver benchmark fixture ${fixtureId} must declare expectedBehavior.`, fixturePath));
+    }
+  }
+
+  return result("validateMpgfSolverBenchmarkFixtures", errors);
 }
 
 export function validateSolverSupportProfileAgainstBenchmarks() {
   const supportProfile = validateMpgfSolverSupportProfile();
-  const errors = [...supportProfile.errors];
+  const fixtureCoverage = validateMpgfSolverBenchmarkFixtures();
+  const errors = [...supportProfile.errors, ...fixtureCoverage.errors];
   const benchmarkReport = readTextIfExists("docs", "mpgf", "solver-benchmark-report.md");
 
-  if (!benchmarkReport || !/active limits supported/i.test(benchmarkReport)) {
+  if (!benchmarkReport || !/^Status:\s*passed\b/im.test(benchmarkReport) || !/active limits supported/i.test(benchmarkReport)) {
     errors.push(
       issue(
         "solver-benchmark-support-missing",
-        "Solver benchmark report does not support active limits for exact_pilot_complete.",
+        "Solver benchmark report does not record passed support for active limits for exact_pilot_complete.",
         "docs/mpgf/solver-benchmark-report.md",
       ),
     );
@@ -1941,14 +2435,44 @@ export function runMpgfDirectWorkingSmokeTest(baseUrl = "http://localhost:3000")
     amountCents: 100,
   });
   const oneTimePledge = createMpgfPledgeOnlyRecord({ amountCents: 2500, cadence: "one_time" });
-  const monthlyPledge = createMpgfPledgeOnlyRecord({ amountCents: 1000, cadence: "monthly" });
-  const poolProposal = draftMpgfPoolProposal({
-    title: "Community public-goods evaluation reserve",
-    problem: "Many cause areas need shared evidence that different moral views can inspect together.",
+  const monthlyCommitment = createMpgfRecurringContributionCommitment({
+    userId: "direct-working-smoke-user",
+    amountCents: 1000,
+    mode: "pledge_only",
   });
-  const submittedBallot = submitMpgfDemoBallot(
-    Object.fromEntries(demoAlternatives.map((alternative) => [alternative.id, alternative.demoPriorityBps])),
-  );
+  const monthlyPledge = materializeMpgfRecurringPledgeForCycle({
+    commitmentId: monthlyCommitment.id,
+    cycleId: demoCycle.id,
+    commitment: monthlyCommitment,
+  });
+  const demoPoolReasoningInput = {
+    title: "Community public-goods evaluation reserve",
+    summary: "A reserve for shared public-goods evaluation.",
+    causeArea: "public evidence",
+    problem: "Many cause areas need shared evidence that different moral views can inspect together.",
+    intervention: "Fund comparable evidence packages for candidate moral public goods.",
+    moralPublicGoodRationale: "Shared evidence can be useful across conflicting moral views.",
+    requestedMaximumFundingCents: 50_000_00,
+    minimumViableFundingCents: 10_000_00,
+    outcomeUnitLabel: "reviewed evidence package",
+    outcomeUnitDefinition: "A published package with assumptions, sources, and uncertainty notes.",
+    measurementMethod: "Count completed packages accepted for MPGF review.",
+    expectedEffectVsFunding: "Additional funding increases coverage and review depth up to the request cap.",
+    timeline: "One demo cycle.",
+    milestones: ["scope package", "publish evidence", "complete review"],
+    risks: ["low actionability", "biased evidence selection"],
+    misusePathways: "Evidence work could be selectively framed without independent review.",
+    implementingTeam: "MPGF pilot reviewers and independent evaluators.",
+  };
+  const poolProposalDraft = draftMpgfPoolProposal(demoPoolReasoningInput);
+  const submittedPoolProposal = submitMpgfPoolProposalDraft(demoPoolReasoningInput);
+  const ballotWeights = Object.fromEntries(demoAlternatives.map((alternative) => [alternative.id, alternative.demoPriorityBps]));
+  const ballotDraft = saveMpgfBallotDraft({
+    userId: "direct-working-smoke-user",
+    cycleId: demoCycle.id,
+    weightsByAlternativeId: ballotWeights,
+  });
+  const submittedBallot = submitMpgfBallot(ballotDraft);
   const validationResults = [
     validateMpgfInstructionMechanicalNormalization(),
     validateRepositoryCapabilityInventory(),
@@ -1966,14 +2490,16 @@ export function runMpgfDirectWorkingSmokeTest(baseUrl = "http://localhost:3000")
     validateMpgfDataRetentionPolicy(),
     validateMpgfReceiptTemplateRegistry(),
     validateSafeFallbackRegistry(),
+    validateMpgfSolverBenchmarkFixtures(),
     validateMpgfPublicCycleSummary(),
   ];
   const checks: MpgfCheckResult[] = [
     check(
-      "real-money-disabled",
-      "Real-money mode is disabled",
-      process.env.MPGF_REAL_MONEY_ENABLED !== "true",
-      "MPGF_REAL_MONEY_ENABLED is not true in direct-working mode.",
+      "real-money-gated",
+      "Real-money mode is disabled or acceptance-gated",
+      process.env.MPGF_REAL_MONEY_ENABLED !== "true" ||
+        process.env.MPGF_REAL_MONEY_ACCEPTANCE_ENABLED === "true",
+      "If MPGF_REAL_MONEY_ENABLED is true, MPGF_REAL_MONEY_ACCEPTANCE_ENABLED must also be true.",
     ),
     check(
       "allocation-exact",
@@ -2020,15 +2546,36 @@ export function runMpgfDirectWorkingSmokeTest(baseUrl = "http://localhost:3000")
       `${oneTimePledge.id}, ${monthlyPledge.id}`,
     ),
     check(
+      "monthly-recurring-commitment-created",
+      "Monthly pledge-only recurring commitment can be created without provider objects",
+      monthlyCommitment.status === "active" && monthlyCommitment.mode === "pledge_only",
+      monthlyCommitment.id,
+    ),
+    check(
       "pool-proposal-draft-created",
       "Pool proposal draft can be created in proposal fixture",
-      poolProposal.status === "draft" && !poolProposal.createsLiveAllocation && !poolProposal.createsPayoutAuthorization,
-      poolProposal.id,
+      poolProposalDraft.status === "draft" && !poolProposalDraft.createsLiveAllocation && !poolProposalDraft.createsPayoutAuthorization,
+      poolProposalDraft.id,
+    ),
+    check(
+      "pool-proposal-submitted",
+      "Pool proposal can be submitted in proposal fixture",
+      submittedPoolProposal.status === "submitted_for_demo_review" &&
+        !submittedPoolProposal.createsLiveAllocation &&
+        !submittedPoolProposal.createsPayoutAuthorization &&
+        !submittedPoolProposal.createsRealMoneyRecord,
+      submittedPoolProposal.id,
+    ),
+    check(
+      "demo-ballot-draft-saved",
+      "Demo ballot draft can be saved in ballot fixture",
+      ballotDraft.status === "draft" && ballotDraft.cycleId === demoCycle.id,
+      ballotDraft.id,
     ),
     check(
       "demo-ballot-submitted",
       "Demo ballot can be submitted in ballot fixture",
-      submittedBallot.submitted && !submittedBallot.authorizesDisbursement,
+      submittedBallot.id.startsWith("submitted-") && submittedBallot.cycleId === demoCycle.id,
       submittedBallot.id,
     ),
     ...validationResults.map((validation) =>
@@ -2042,7 +2589,7 @@ export function runMpgfDirectWorkingSmokeTest(baseUrl = "http://localhost:3000")
   ];
   const blockers = checks
     .filter((entry) => entry.status === "failed")
-    .map((entry) => issue(entry.id, `${entry.label}: ${entry.evidence}`));
+    .map((entry) => `${entry.label}: ${entry.evidence}`);
 
   const status = blockers.length === 0 ? "passed" : "failed";
   const generatedAt = new Date().toISOString();
@@ -2072,8 +2619,11 @@ export function validateMpgfDeploymentEnvironment(mode: "pre_launch" | "completi
     "docs/mpgf/www-production-health-monitor.md",
   ];
 
-  if (process.env.MPGF_REAL_MONEY_ENABLED === "true") {
-    errors.push(issue("deployment-real-money", "Deployment validation blocks real-money mode until real_money_complete passes."));
+  if (
+    process.env.MPGF_REAL_MONEY_ENABLED === "true" &&
+    process.env.MPGF_REAL_MONEY_ACCEPTANCE_ENABLED !== "true"
+  ) {
+    errors.push(issue("deployment-real-money", "Deployment validation requires MPGF_REAL_MONEY_ACCEPTANCE_ENABLED before real-money mode can run."));
   }
 
   if (process.env.NODE_ENV === "production" && baseUrl !== "https://www.moraltrade.org") {
@@ -2141,104 +2691,215 @@ export function validateMpgfDeploymentEnvironment(mode: "pre_launch" | "completi
   return result(`validateMpgfDeploymentEnvironment:${mode}`, errors);
 }
 
+function productionEvidenceResult(
+  validatorName: string,
+  filePath: string,
+  issueId: string,
+  missingMessage: string,
+  baseUrl: "https://www.moraltrade.org" = "https://www.moraltrade.org",
+) {
+  const evidence = readTextIfExists(...filePath.split("/"));
+  const errors: MpgfValidationIssue[] = [];
+
+  if (!evidence) {
+    errors.push(issue(issueId, missingMessage, filePath));
+    return result(validatorName, errors);
+  }
+
+  if (!/^Status:\s*passed\b/im.test(evidence)) {
+    errors.push(issue(issueId, missingMessage, filePath));
+  }
+
+  if (!evidence.includes(baseUrl)) {
+    errors.push(issue("production-evidence-base-url", `${filePath} must reference ${baseUrl}.`, filePath));
+  }
+
+  if (/template ready|production browser run not recorded|blocked until|blockers:\s*(?!none\b)/im.test(evidence)) {
+    errors.push(issue("production-evidence-pending", `${filePath} still records placeholder, pending, or blocker language.`, filePath));
+  }
+
+  return result(validatorName, errors);
+}
+
 export function runMpgfProductionDirectWorkingLaunch() {
-  return result("runMpgfProductionDirectWorkingLaunch", [
-    issue(
-      "production-launch-not-run",
-      "Production direct-working launch has not been executed against https://www.moraltrade.org in this workspace.",
-      "docs/mpgf/production-direct-working-launch-runbook.md",
-    ),
-  ]);
+  return productionEvidenceResult(
+    "runMpgfProductionDirectWorkingLaunch",
+    "docs/mpgf/production-direct-working-launch-runbook.md",
+    "production-launch-not-run",
+    "Production direct-working launch has not been executed against https://www.moraltrade.org in this workspace.",
+  );
 }
 
 export function runMpgfWwwDirectWorkingVerification(baseUrl: "https://www.moraltrade.org" = "https://www.moraltrade.org") {
-  return result("runMpgfWwwDirectWorkingVerification", [
-    issue(
-      "www-direct-working-not-run",
-      `Browser-level direct-working verification has not recorded a passed production-domain run for ${baseUrl}.`,
-      "docs/mpgf/www-direct-working-verification.md",
-    ),
-  ]);
+  return productionEvidenceResult(
+    "runMpgfWwwDirectWorkingVerification",
+    "docs/mpgf/www-direct-working-verification.md",
+    "www-direct-working-not-run",
+    `Browser-level direct-working verification has not recorded a passed production-domain run for ${baseUrl}.`,
+    baseUrl,
+  );
 }
 
 export function runMpgfWwwAuthSessionVerification(baseUrl: "https://www.moraltrade.org" = "https://www.moraltrade.org") {
-  return result("runMpgfWwwAuthSessionVerification", [
-    issue(
-      "www-auth-session-not-run",
-      `Browser-level auth/session verification has not recorded a passed production-domain run for ${baseUrl}.`,
-      "docs/mpgf/www-auth-session-verification.md",
-    ),
-  ]);
+  return productionEvidenceResult(
+    "runMpgfWwwAuthSessionVerification",
+    "docs/mpgf/www-auth-session-verification.md",
+    "www-auth-session-not-run",
+    `Browser-level auth/session verification has not recorded a passed production-domain run for ${baseUrl}.`,
+    baseUrl,
+  );
 }
 
 export function runMpgfWwwParticipantJourneyVerification(baseUrl: "https://www.moraltrade.org" = "https://www.moraltrade.org") {
-  return result("runMpgfWwwParticipantJourneyVerification", [
-    issue(
-      "www-participant-journey-not-run",
-      `Browser-level participant journey verification has not recorded a passed production-domain run for ${baseUrl}.`,
-      "docs/mpgf/www-participant-journey-verification.md",
-    ),
-  ]);
+  return productionEvidenceResult(
+    "runMpgfWwwParticipantJourneyVerification",
+    "docs/mpgf/www-participant-journey-verification.md",
+    "www-participant-journey-not-run",
+    `Browser-level participant journey verification has not recorded a passed production-domain run for ${baseUrl}.`,
+    baseUrl,
+  );
 }
 
 export function runMpgfWwwPublicExperienceVerification(baseUrl: "https://www.moraltrade.org" = "https://www.moraltrade.org") {
-  return result("runMpgfWwwPublicExperienceVerification", [
-    issue(
-      "www-public-experience-not-run",
-      `Browser-level public experience verification has not recorded a passed production-domain run for ${baseUrl}.`,
-      "docs/mpgf/www-public-experience-verification.md",
-    ),
-  ]);
+  return productionEvidenceResult(
+    "runMpgfWwwPublicExperienceVerification",
+    "docs/mpgf/www-public-experience-verification.md",
+    "www-public-experience-not-run",
+    `Browser-level public experience verification has not recorded a passed production-domain run for ${baseUrl}.`,
+    baseUrl,
+  );
 }
 
 export function runMpgfWwwExactPilotDryRunVerification(baseUrl: "https://www.moraltrade.org" = "https://www.moraltrade.org") {
-  return result("runMpgfWwwExactPilotDryRunVerification", [
-    issue(
-      "www-exact-pilot-dry-run-not-run",
-      `Production-domain exact-pilot dry-run verification has not recorded a passed run for ${baseUrl}.`,
-      "docs/mpgf/www-exact-pilot-dry-run-verification.md",
-    ),
-  ]);
+  return productionEvidenceResult(
+    "runMpgfWwwExactPilotDryRunVerification",
+    "docs/mpgf/www-exact-pilot-dry-run-verification.md",
+    "www-exact-pilot-dry-run-not-run",
+    `Production-domain exact-pilot dry-run verification has not recorded a passed run for ${baseUrl}.`,
+    baseUrl,
+  );
 }
 
 export function runMpgfWwwProductionHealthCheck(baseUrl: "https://www.moraltrade.org" = "https://www.moraltrade.org") {
-  return result("runMpgfWwwProductionHealthCheck", [
-    issue(
-      "www-production-health-check-not-run",
-      `Production health check has not recorded a passed run for ${baseUrl}.`,
-      "docs/mpgf/www-production-health-monitor.md",
-    ),
-  ]);
+  return productionEvidenceResult(
+    "runMpgfWwwProductionHealthCheck",
+    "docs/mpgf/www-production-health-monitor.md",
+    "www-production-health-check-not-run",
+    `Production health check has not recorded a passed run for ${baseUrl}.`,
+    baseUrl,
+  );
 }
 
 export function runMpgfWwwPostLaunchMonitor(baseUrl: "https://www.moraltrade.org" = "https://www.moraltrade.org") {
-  return result("runMpgfWwwPostLaunchMonitor", [
-    issue(
-      "www-post-launch-monitor-not-run",
-      `Post-launch production monitor has not recorded a complete observation window for ${baseUrl}.`,
-      "docs/mpgf/www-production-health-monitor.md",
-    ),
-  ]);
+  return productionEvidenceResult(
+    "runMpgfWwwPostLaunchMonitor",
+    "docs/mpgf/www-production-health-monitor.md",
+    "www-post-launch-monitor-not-run",
+    `Post-launch production monitor has not recorded a complete observation window for ${baseUrl}.`,
+    baseUrl,
+  );
 }
 
 export function provisionMpgfWwwSmokeTestIdentity() {
-  return result("provisionMpgfWwwSmokeTestIdentity", [
-    issue(
-      "www-smoke-test-identity-not-provisioned",
-      "WWW smoke-test identity has not been provisioned from approved production credentials.",
-      "config/mpgf/www-smoke-test-profile.json",
-    ),
-  ]);
+  const profile = loadMpgfWwwSmokeTestProfile();
+  const validation = validateMpgfWwwSmokeTestProfile();
+  const errors = [...validation.errors];
+  const smokeUserRef = typeof profile.smokeUserRef === "string" ? profile.smokeUserRef : "";
+  const demoParticipantRef = typeof profile.demoParticipantRef === "string" ? profile.demoParticipantRef : "";
+  const repositoryAuthMapped =
+    profile.authMode === "repository_test_session" ||
+    profile.authMode === "preexisting_user_session" ||
+    profile.authMode === "server_side_test_harness";
+  const forbiddenActions = stringArray(profile.forbiddenActions);
+  const nonRealMoneyOnly =
+    profile.createsPublicRealUser === false &&
+    profile.grantsAdminPermissions === false &&
+    forbiddenActions.includes("real_money_contribution") &&
+    forbiddenActions.includes("live_ledger_mutation") &&
+    forbiddenActions.includes("production_enablement") &&
+    forbiddenActions.includes("automated_payout") &&
+    forbiddenActions.includes("external_payout");
+  const demoEligible =
+    Boolean(profile.termsVersion) &&
+    Boolean(profile.privacyVersion) &&
+    Boolean(profile.eligibilitySnapshotRef) &&
+    Boolean(profile.candidateSetSnapshotRef);
+
+  if (!smokeUserRef || !demoParticipantRef) {
+    errors.push(
+      issue(
+        "www-smoke-test-identity-ref-missing",
+        "WWW smoke-test identity requires smokeUserRef and demoParticipantRef.",
+        "config/mpgf/www-smoke-test-profile.json",
+      ),
+    );
+  }
+
+  if (!repositoryAuthMapped) {
+    errors.push(
+      issue(
+        "www-smoke-test-auth-unmapped",
+        "WWW smoke-test identity must map to a repository auth/session mode.",
+        "config/mpgf/www-smoke-test-profile.json",
+      ),
+    );
+  }
+
+  if (!nonRealMoneyOnly) {
+    errors.push(
+      issue(
+        "www-smoke-test-identity-not-non-real-money",
+        "WWW smoke-test identity must be non-real-money-only and must not grant admin permissions.",
+        "config/mpgf/www-smoke-test-profile.json",
+      ),
+    );
+  }
+
+  if (!demoEligible) {
+    errors.push(
+      issue(
+        "www-smoke-test-demo-eligibility-missing",
+        "WWW smoke-test identity must name demo terms, privacy, eligibility, and candidate-set fixtures.",
+        "config/mpgf/www-smoke-test-profile.json",
+      ),
+    );
+  }
+
+  return {
+    ...result("provisionMpgfWwwSmokeTestIdentity", errors),
+    smokeUserRef,
+    demoParticipantRef,
+    repositoryAuthMapped,
+    nonRealMoneyOnly,
+    demoEligible,
+  };
 }
 
 export function createMpgfWwwSmokeTestSession() {
-  return result("createMpgfWwwSmokeTestSession", [
-    issue(
-      "www-smoke-test-session-not-created",
-      "WWW smoke-test session has not been created from approved production smoke-test credentials.",
-      "config/mpgf/www-smoke-test-profile.json",
-    ),
-  ]);
+  const profile = loadMpgfWwwSmokeTestProfile();
+  const identity = provisionMpgfWwwSmokeTestIdentity();
+  const errors = [...identity.errors];
+  const hasApprovedServerSession =
+    process.env.MPGF_WWW_SMOKE_TEST_SESSION_ENABLED === "true" &&
+    Boolean(process.env.MPGF_WWW_SMOKE_TEST_SESSION_REF || process.env.MPGF_WWW_SMOKE_TEST_EMAIL);
+
+  if (!hasApprovedServerSession) {
+    errors.push(
+      issue(
+        "www-smoke-test-session-not-created",
+        "WWW smoke-test session requires approved server-only production smoke-test session configuration.",
+        "config/mpgf/www-smoke-test-profile.json",
+      ),
+    );
+  }
+
+  return {
+    ...result("createMpgfWwwSmokeTestSession", errors),
+    smokeUserRef: typeof profile.smokeUserRef === "string" ? profile.smokeUserRef : "",
+    authMode: typeof profile.authMode === "string" ? profile.authMode : "",
+    sessionEstablished: hasApprovedServerSession && errors.length === 0,
+    expiresAt: hasApprovedServerSession ? process.env.MPGF_WWW_SMOKE_TEST_SESSION_EXPIRES_AT : undefined,
+  };
 }
 
 export function validateCompletionProfileEvidence(
@@ -2246,8 +2907,12 @@ export function validateCompletionProfileEvidence(
   evidenceJson?: unknown,
 ) {
   const errors: MpgfValidationIssue[] = [];
+  const loadedEvidence =
+    evidenceJson ??
+    (profile ? readJsonIfExists(`docs/mpgf/completion-profile-evidence-${profile}.json`).value : null) ??
+    readJsonIfExists("docs/mpgf/completion-profile-evidence.json").value;
 
-  if (!profile || !evidenceJson) {
+  if (!profile || !loadedEvidence) {
     errors.push(
       issue(
         "completion-profile-evidence-not-produced",
@@ -2258,7 +2923,7 @@ export function validateCompletionProfileEvidence(
     return result("validateCompletionProfileEvidence", errors);
   }
 
-  if (!isRecord(evidenceJson)) {
+  if (!isRecord(loadedEvidence)) {
     errors.push(issue("completion-profile-evidence-object", "Completion profile evidence must be a JSON object."));
     return result("validateCompletionProfileEvidence", errors);
   }
@@ -2277,20 +2942,20 @@ export function validateCompletionProfileEvidence(
     "gateResults",
     "blockers",
   ]) {
-    if (!(key in evidenceJson)) {
+    if (!(key in loadedEvidence)) {
       errors.push(issue("completion-profile-evidence-key", `Completion profile evidence is missing ${key}.`));
     }
   }
 
-  if (evidenceJson.profile !== profile) {
+  if (loadedEvidence.profile !== profile) {
     errors.push(issue("completion-profile-mismatch", "Completion evidence profile does not match the requested profile."));
   }
 
-  const evaluatedBaseUrl = typeof evidenceJson.evaluatedBaseUrl === "string" ? evidenceJson.evaluatedBaseUrl : "";
+  const evaluatedBaseUrl = typeof loadedEvidence.evaluatedBaseUrl === "string" ? loadedEvidence.evaluatedBaseUrl : "";
   const deployedCommitShaOrBuildId =
-    typeof evidenceJson.deployedCommitShaOrBuildId === "string" ? evidenceJson.deployedCommitShaOrBuildId : "";
+    typeof loadedEvidence.deployedCommitShaOrBuildId === "string" ? loadedEvidence.deployedCommitShaOrBuildId : "";
 
-  if (evidenceJson.productionDomainEvaluation === true) {
+  if (loadedEvidence.productionDomainEvaluation === true) {
     if (evaluatedBaseUrl !== "https://www.moraltrade.org") {
       errors.push(issue("completion-profile-production-url", "Production-domain completion evidence must evaluate https://www.moraltrade.org."));
     }
@@ -2301,9 +2966,9 @@ export function validateCompletionProfileEvidence(
   }
 
   const instructionArtifactPath =
-    typeof evidenceJson.instructionArtifactPath === "string" ? evidenceJson.instructionArtifactPath : "";
+    typeof loadedEvidence.instructionArtifactPath === "string" ? loadedEvidence.instructionArtifactPath : "";
   const instructionArtifactHash =
-    typeof evidenceJson.instructionArtifactHash === "string" ? evidenceJson.instructionArtifactHash : "";
+    typeof loadedEvidence.instructionArtifactHash === "string" ? loadedEvidence.instructionArtifactHash : "";
   if (instructionArtifactPath) {
     const artifactText = readTextIfExists(...instructionArtifactPath.split("/"));
     if (!artifactText) {
@@ -2313,8 +2978,8 @@ export function validateCompletionProfileEvidence(
     }
   }
 
-  const evidenceArtifacts = Array.isArray(evidenceJson.evidenceArtifacts)
-    ? evidenceJson.evidenceArtifacts.filter(isRecord)
+  const evidenceArtifacts = Array.isArray(loadedEvidence.evidenceArtifacts)
+    ? loadedEvidence.evidenceArtifacts.filter(isRecord)
     : [];
   for (const artifact of evidenceArtifacts) {
     if (artifact.evaluatedBaseUrl && artifact.evaluatedBaseUrl !== evaluatedBaseUrl) {
@@ -2322,7 +2987,7 @@ export function validateCompletionProfileEvidence(
     }
 
     if (
-      evidenceJson.productionDomainEvaluation === true &&
+      loadedEvidence.productionDomainEvaluation === true &&
       artifact.deployedCommitShaOrBuildId &&
       artifact.deployedCommitShaOrBuildId !== deployedCommitShaOrBuildId
     ) {
@@ -2374,6 +3039,7 @@ export function validateMpgfPhaseA() {
     validateMpgfWwwProductionHealthChecks(),
     validateMpgfProductionDeploymentTarget(),
     validateMpgfSolverSupportProfile(),
+    validateMpgfSolverBenchmarkFixtures(),
   ];
   const errors = validators.flatMap((validator) => validator.errors);
 

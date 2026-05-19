@@ -14,12 +14,13 @@ import {
   getFormMessage,
 } from "@/lib/form-state";
 import {
+  formatPublicProfileLocation,
   getPublicProfilePageData,
   getViewer,
   listRecommendableOffers,
 } from "@/lib/app-data";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
-import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
+import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -43,7 +44,7 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
     title: data.profile ? data.profile.resolvedName : "Profile",
     description: data.profile
       ? truncateDescription(
-          `${data.profile.resolvedName}${formatLocation(data.profile.city, data.profile.region) ? ` from ${formatLocation(data.profile.city, data.profile.region)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers, ${data.profile.followerCount} followers, and ${data.authoredCommentCount} comments.`,
+          `${data.profile.resolvedName}${formatPublicProfileLocation(data.profile) ? ` from ${formatPublicProfileLocation(data.profile)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers, ${data.profile.followerCount} followers, and ${data.authoredCommentCount} comments.`,
         )
       : "Public Moral Trade member profile.",
     alternates: {
@@ -53,7 +54,7 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
       title: data.profile ? data.profile.resolvedName : "Profile",
       description: data.profile
         ? truncateDescription(
-            `${data.profile.resolvedName}${formatLocation(data.profile.city, data.profile.region) ? ` from ${formatLocation(data.profile.city, data.profile.region)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers, ${data.profile.followerCount} followers, and ${data.authoredCommentCount} comments.`,
+            `${data.profile.resolvedName}${formatPublicProfileLocation(data.profile) ? ` from ${formatPublicProfileLocation(data.profile)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers, ${data.profile.followerCount} followers, and ${data.authoredCommentCount} comments.`,
           )
         : "Public Moral Trade member profile.",
       url: getAbsoluteUrl(`/people/${profileId}`),
@@ -82,6 +83,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
 
   const profile = data.profile;
   const isOwnProfile = viewer?.authUser.id === profile.id;
+  const publicLocation = formatPublicProfileLocation(profile);
   const recommendableOffers =
     viewer && isOwnProfile ? await listRecommendableOffers(viewer.authUser.id) : [];
   const profileStructuredData = {
@@ -90,7 +92,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     name: profile.resolvedName,
     url: getAbsoluteUrl(`/people/${profile.id}`),
     description: profile.bio || undefined,
-    homeLocation: formatLocation(profile.city, profile.region) || undefined,
+    homeLocation: publicLocation || undefined,
   };
 
   return (
@@ -114,7 +116,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
             <p className="eyebrow">Public member record</p>
             <h1>{profile.resolvedName}</h1>
             <p className="hero-text">
-              {[profile.city, profile.region].filter(Boolean).join(", ") || "Location not listed"}.
+              {publicLocation || "Location not listed"}.
               {" "}
               This public profile aggregates open offers, transaction ratings, followers, karma, and
               public recommendations.
@@ -176,8 +178,8 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
               <p className="eyebrow">Profile settings</p>
               <h2>Edit your public profile</h2>
               <p>
-                City, region, display name, and bio are shown publicly in the member directory and
-                on offer pages.
+                Display name, bio, and any location granularity you select are shown publicly in the
+                member directory and on offer pages.
               </p>
             </div>
 
@@ -201,6 +203,24 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
                 <label className="field">
                   <span>Region</span>
                   <input defaultValue={profile.region ?? ""} name="region" type="text" />
+                </label>
+                <label className="field">
+                  <span>Country</span>
+                  <input defaultValue={profile.country ?? ""} name="country" type="text" />
+                </label>
+              </div>
+              <div className="field-grid">
+                <label className="field">
+                  <span>Public location visibility</span>
+                  <select
+                    defaultValue={profile.public_location_granularity}
+                    name="public_location_granularity"
+                  >
+                    <option value="hidden">Hidden</option>
+                    <option value="country">Country only</option>
+                    <option value="region">Region and country</option>
+                    <option value="city">City, region, and country</option>
+                  </select>
                 </label>
                 <label className="field">
                   <span>Email</span>

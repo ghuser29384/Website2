@@ -7,7 +7,7 @@ import { getViewer } from "@/lib/app-data";
 import { formatLocation, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import { searchWishRegistryPreviews } from "@/lib/wish-registry";
+import { filterWishRegistryExamplePreviews, searchWishRegistryPreviews } from "@/lib/wish-registry";
 import type { WishRegistrySearchResult } from "@/lib/wish-registry";
 
 export const metadata: Metadata = {
@@ -29,6 +29,39 @@ export const metadata: Metadata = {
 interface WishRegistryPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
+
+const EXAMPLE_WISH_PREVIEWS = [
+  {
+    id: "example-animal-poverty",
+    participantKind: "individual",
+    name: "Animal welfare and poverty donor",
+    preview:
+      "Interested in reciprocal pledge swaps between animal welfare actions and evidence-backed global poverty donations.",
+    causes: ["Animal welfare", "Global poverty"],
+    location: "Public preview",
+    openness: ["Payment-open", "Pledge-open"],
+  },
+  {
+    id: "example-xrisk-public-health",
+    participantKind: "collective",
+    name: "Risk and health working group",
+    preview:
+      "Looking for counterparties who value public health, biosecurity, and institution-building enough to test shared moral public goods.",
+    causes: ["Existential risk", "Public health", "Institutions"],
+    location: "Remote",
+    openness: ["Pledge-open"],
+  },
+  {
+    id: "example-climate-community",
+    participantKind: "individual",
+    name: "Climate and community-service participant",
+    preview:
+      "Open to bounded trades pairing climate-friendly habit changes with local public-health or community-service commitments.",
+    causes: ["Climate", "Public health", "Community service"],
+    location: "Regional preview",
+    openness: ["Pledge-open"],
+  },
+] as const;
 
 function readParam(
   searchParams: Record<string, string | string[] | undefined>,
@@ -60,6 +93,12 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
   const hasFilters = Boolean(query || cause || opennessToPayment || opennessToPledges);
   let results: WishRegistrySearchResult[] = [];
   let searchError = "";
+  const examplePreviews = filterWishRegistryExamplePreviews(EXAMPLE_WISH_PREVIEWS, {
+    cause,
+    opennessToPayment,
+    opennessToPledges,
+    query,
+  });
 
   if (hasSupabaseEnv()) {
     try {
@@ -284,6 +323,36 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                       </Link>
                     </div>
                   </div>
+                </article>
+              ))
+            ) : examplePreviews.length ? (
+              examplePreviews.map((preview) => (
+                <article className="panel data-card" key={preview.id}>
+                  <div className="profile-card-head">
+                    <div>
+                      <p className="detail-kicker">{preview.participantKind} example</p>
+                      <h3>{preview.name}</h3>
+                    </div>
+                    <span className="badge">Example preview</span>
+                  </div>
+                  <p className="route-text">{preview.preview}</p>
+                  <div className="tag-row">
+                    <span className="source-pill">{preview.location}</span>
+                    {preview.openness.map((entry) => (
+                      <span className="impact-pill" key={`${preview.id}-${entry}`}>{entry}</span>
+                    ))}
+                  </div>
+                  <div className="tag-row">
+                    {preview.causes.map((entry) => (
+                      <span className="badge badge-secondary" key={`${preview.id}-${entry}`}>
+                        {entry}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="panel-note">
+                    Live broad previews will appear here after participants publish privacy-filtered
+                    wish profiles.
+                  </p>
                 </article>
               ))
             ) : (

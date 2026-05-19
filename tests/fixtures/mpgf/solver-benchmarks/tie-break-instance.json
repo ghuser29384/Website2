@@ -1,0 +1,6 @@
+{
+  "fixtureId": "tie-break-instance",
+  "fixtureType": "solver_benchmark",
+  "requiresTieBreakProof": true,
+  "expectedBehavior": "verified_optimal_or_fail_closed"
+}

@@ -6,6 +6,7 @@ import {
   calculateDonationOffsetPreview,
   calculateDonationOffsetPoolProgress,
   createDefaultDonationOffsetFields,
+  validateDonationOffsetSubmissionGuards,
   validateDonationOffsetFields,
 } from "@/lib/donation-offsets";
 
@@ -59,7 +60,7 @@ test("moderation flags unverifiable baselines", () => {
   });
 
   assert.equal(moderation.status, "flagged");
-  assert.match(moderation.reasons[0] ?? "", /unverifiable|receipt|audit|escrow/i);
+  assert.match(moderation.reasons[0] ?? "", /unverifiable|receipt|audit|payment/i);
 });
 
 test("ratio calculation correctly computes matched and unmatched portions", () => {
@@ -85,12 +86,38 @@ test("pool validation requires side, pool identity, and deadline", () => {
     poolId: "",
     poolName: "",
     poolSide: "",
+    assuranceMinimumUsd: null,
     assuranceDeadline: "",
+    poolMaximumCapUsd: null,
   });
 
   assert.ok(errors.includes("Choose which side of the offset pool you are joining."));
   assert.ok(errors.includes("Choose an existing pool or name a new offset pool."));
+  assert.ok(errors.includes("Assurance minimum threshold is required for pooled offsets."));
   assert.ok(errors.includes("Pool offsets should include an assurance deadline."));
+  assert.ok(errors.includes("Pool maximum cap must be a positive number."));
+});
+
+test("pooled offset submission guards require anti-threat and verification metadata", () => {
+  const errors = validateDonationOffsetSubmissionGuards({
+    participationMode: "pool",
+    antiThreatCertification: false,
+    verificationMetadataAcknowledged: false,
+    evidenceUrl: "",
+  });
+
+  assert.ok(errors.some((error) => /anti-threat/i.test(error)));
+  assert.ok(errors.some((error) => /verification metadata/i.test(error)));
+
+  assert.deepEqual(
+    validateDonationOffsetSubmissionGuards({
+      participationMode: "pool",
+      antiThreatCertification: true,
+      verificationMetadataAcknowledged: true,
+      evidenceUrl: "https://example.com/reviewable-evidence",
+    }),
+    [],
+  );
 });
 
 test("pool progress reaches assurance once matched compromise exceeds threshold", () => {

@@ -59,6 +59,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
       verificationMethod: pool.verification_method,
       unmatchedSurplusRule: pool.unmatched_surplus_rule,
       assuranceMinimumCents: pool.assurance_minimum_cents,
+      maximumCapCents: pool.maximum_cap_cents ?? 0,
       assuranceDeadlineAt: pool.assurance_deadline_at,
       sideALabel: pool.side_a_label,
       sideBLabel: pool.side_b_label,

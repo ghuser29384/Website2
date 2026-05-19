@@ -1,0 +1,6 @@
+{
+  "fixtureId": "infeasible-instance",
+  "fixtureType": "solver_benchmark",
+  "expectedBehavior": "certified_infeasible_or_fail_closed"
+}
+

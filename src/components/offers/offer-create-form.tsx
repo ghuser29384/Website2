@@ -17,6 +17,7 @@ import {
   getDonationOffsetComplexityWarnings,
   getSelectableRegisteredCharities,
   validateDonationOffsetFields,
+  validateDonationOffsetSubmissionGuards,
   DONATION_OFFSET_PARTICIPATION_MODE_OPTIONS,
   DONATION_OFFSET_POOL_SIDE_OPTIONS,
   DONATION_OFFSET_TIME_HORIZON_OPTIONS,
@@ -47,6 +48,7 @@ interface DonationOffsetPoolOption {
     | "donate_to_original_cause"
     | "split_evenly";
   assuranceMinimumCents: number;
+  maximumCapCents: number;
   assuranceDeadlineAt: string | null;
   sideALabel: string;
   sideBLabel: string;
@@ -87,6 +89,10 @@ function toDateInputValue(value: string | null) {
   }
 
   return value.slice(0, 10);
+}
+
+function readFormControlValue(event: { currentTarget: EventTarget }) {
+  return (event.currentTarget as unknown as { value: string }).value;
 }
 
 export function OfferCreateForm({
@@ -130,8 +136,13 @@ export function OfferCreateForm({
   const [poolName, setPoolName] = useState("");
   const [poolSide, setPoolSide] = useState<"side_a" | "side_b" | "">(initialOffsetPoolSide);
   const [assuranceMinimumUsd, setAssuranceMinimumUsd] = useState("");
+  const [poolMaximumCapUsd, setPoolMaximumCapUsd] = useState(
+    String(defaultOffsetFields.poolMaximumCapUsd ?? 10_000),
+  );
   const [assuranceDeadline, setAssuranceDeadline] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [antiThreatCertified, setAntiThreatCertified] = useState(false);
+  const [verificationMetadataAcknowledged, setVerificationMetadataAcknowledged] = useState(false);
 
   const isOffset = mode === "offset";
   const selectableCharities = getSelectableRegisteredCharities();
@@ -165,6 +176,9 @@ export function OfferCreateForm({
       ? String(joinedPool.assuranceMinimumCents / 100)
       : ""
     : assuranceMinimumUsd;
+  const effectivePoolMaximumCapUsd = joinedPool
+    ? String(joinedPool.maximumCapCents / 100)
+    : poolMaximumCapUsd;
   const effectiveAssuranceDeadline = joinedPool
     ? toDateInputValue(joinedPool.assuranceDeadlineAt)
     : assuranceDeadline;
@@ -186,6 +200,8 @@ export function OfferCreateForm({
       poolSide,
       assuranceMinimumUsd:
         effectiveAssuranceMinimumUsd === "" ? null : Number(effectiveAssuranceMinimumUsd),
+      poolMaximumCapUsd:
+        effectivePoolMaximumCapUsd === "" ? null : Number(effectivePoolMaximumCapUsd),
       assuranceDeadline: effectiveAssuranceDeadline,
       description: [offerAction, requestAction, notes].filter(Boolean).join("\n"),
       evidenceUrl,
@@ -199,6 +215,7 @@ export function OfferCreateForm({
       effectiveCompromiseDestinationId,
       effectiveOffsetRatio,
       effectivePoolName,
+      effectivePoolMaximumCapUsd,
       effectiveRequestedOpposedCause,
       effectiveTimeHorizon,
       effectiveUnmatchedSurplusRule,
@@ -214,8 +231,26 @@ export function OfferCreateForm({
   );
 
   const liveOffsetErrors = useMemo(
-    () => (isOffset ? validateDonationOffsetFields(normalizedOffsetFields) : []),
-    [isOffset, normalizedOffsetFields],
+    () =>
+      isOffset
+        ? [
+            ...validateDonationOffsetFields(normalizedOffsetFields),
+            ...validateDonationOffsetSubmissionGuards({
+              participationMode,
+              antiThreatCertification: antiThreatCertified,
+              verificationMetadataAcknowledged,
+              evidenceUrl,
+            }),
+          ]
+        : [],
+    [
+      antiThreatCertified,
+      evidenceUrl,
+      isOffset,
+      normalizedOffsetFields,
+      participationMode,
+      verificationMetadataAcknowledged,
+    ],
   );
 
   const offsetPreview = useMemo(
@@ -299,7 +334,8 @@ export function OfferCreateForm({
       {isOffset ? (
         <div className="status-banner status-banner-error">
           Extortion is not allowed. Only publish an offset if the baseline donation is a real
-          intention you can support with past-donation proof, escrow, or a third-party audit.
+          intention you can support with past-donation proof, a third-party payment record, or a
+          third-party audit.
         </div>
       ) : null}
 
@@ -343,7 +379,7 @@ export function OfferCreateForm({
           <select
             value={mode}
             name="mode"
-            onChange={(event) => setMode(event.currentTarget.value as OfferMode)}
+            onChange={(event) => setMode(readFormControlValue(event) as OfferMode)}
           >
             {OFFER_MODE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -390,7 +426,7 @@ export function OfferCreateForm({
           <span>What will you do?</span>
           <textarea
             name="offer_action"
-            onChange={(event) => setOfferAction(event.currentTarget.value)}
+            onChange={(event) => setOfferAction(readFormControlValue(event))}
             placeholder="e.g. Redirect $1,000 I would otherwise have donated to an opposed lobbying cause into the named compromise fund."
             rows={4}
             value={offerAction}
@@ -401,7 +437,7 @@ export function OfferCreateForm({
           <span>What do you want the other side to do?</span>
           <textarea
             name="request_action"
-            onChange={(event) => setRequestAction(event.currentTarget.value)}
+            onChange={(event) => setRequestAction(readFormControlValue(event))}
             placeholder="e.g. Redirect the matched portion of your opposed donation into the same compromise destination."
             rows={4}
             value={requestAction}
@@ -467,6 +503,11 @@ export function OfferCreateForm({
                   value={effectiveAssuranceMinimumUsd}
                 />
                 <input
+                  name="offset_pool_maximum_cap_usd"
+                  type="hidden"
+                  value={effectivePoolMaximumCapUsd}
+                />
+                <input
                   name="assurance_deadline"
                   type="hidden"
                   value={effectiveAssuranceDeadline}
@@ -484,7 +525,7 @@ export function OfferCreateForm({
                       name="offset_participation_mode"
                       type="radio"
                       value={option.value}
-                      onChange={(event) => setParticipationMode(event.currentTarget.value as "direct" | "pool")}
+                      onChange={(event) => setParticipationMode(readFormControlValue(event) as "direct" | "pool")}
                     />
                     <span>
                       <strong>{option.label}</strong>
@@ -503,7 +544,7 @@ export function OfferCreateForm({
                   <select
                     name="offset_pool_id"
                     value={poolId}
-                    onChange={(event) => setPoolId(event.currentTarget.value)}
+                    onChange={(event) => setPoolId(readFormControlValue(event))}
                   >
                     <option value="">Create a new pool instead</option>
                     {availablePools.map((pool) => (
@@ -527,7 +568,7 @@ export function OfferCreateForm({
                     type="text"
                     value={effectivePoolName}
                     disabled={isJoiningExistingPool}
-                    onChange={(event) => setPoolName(event.currentTarget.value)}
+                    onChange={(event) => setPoolName(readFormControlValue(event))}
                   />
                   <small>
                     Use this when you are opening a pooled offset rather than joining one that already
@@ -548,7 +589,7 @@ export function OfferCreateForm({
                         name="offset_pool_side"
                         type="radio"
                         value={option.value}
-                        onChange={(event) => setPoolSide(event.currentTarget.value as "side_a" | "side_b")}
+                        onChange={(event) => setPoolSide(readFormControlValue(event) as "side_a" | "side_b")}
                       />
                       <span>
                         {option.value === "side_a"
@@ -575,7 +616,7 @@ export function OfferCreateForm({
                   step="0.01"
                   type="number"
                   value={baselineAmountUsd}
-                  onChange={(event) => setBaselineAmountUsd(event.currentTarget.value)}
+                  onChange={(event) => setBaselineAmountUsd(readFormControlValue(event))}
                 />
                 <small>
                   The amount you would otherwise have donated to the opposed cause. Baseline proof is
@@ -590,7 +631,7 @@ export function OfferCreateForm({
                   required={isOffset}
                   value={effectiveBaselineOpposedCause}
                   disabled={isJoiningExistingPool}
-                  onChange={(event) => setBaselineOpposedCause(event.currentTarget.value)}
+                  onChange={(event) => setBaselineOpposedCause(readFormControlValue(event))}
                 >
                   {CAUSE_OPTIONS.map((cause) => (
                     <option key={cause} value={cause}>
@@ -612,7 +653,7 @@ export function OfferCreateForm({
                   step="0.01"
                   type="number"
                   value={requestedMatchingAmountUsd}
-                  onChange={(event) => setRequestedMatchingAmountUsd(event.currentTarget.value)}
+                  onChange={(event) => setRequestedMatchingAmountUsd(readFormControlValue(event))}
                 />
                 <small>
                   The amount you want redirected away from the other side&apos;s opposed cause.
@@ -626,7 +667,7 @@ export function OfferCreateForm({
                   required={isOffset}
                   value={effectiveRequestedOpposedCause}
                   disabled={isJoiningExistingPool}
-                  onChange={(event) => setRequestedOpposedCause(event.currentTarget.value)}
+                  onChange={(event) => setRequestedOpposedCause(readFormControlValue(event))}
                 >
                   {CAUSE_OPTIONS.map((cause) => (
                     <option key={cause} value={cause}>
@@ -646,7 +687,7 @@ export function OfferCreateForm({
                   required={isOffset}
                   value={effectiveCompromiseDestinationId}
                   disabled={isJoiningExistingPool}
-                  onChange={(event) => setCompromiseDestinationId(event.currentTarget.value)}
+                  onChange={(event) => setCompromiseDestinationId(readFormControlValue(event))}
                 >
                   {selectableCharities.map((charity) => (
                     <option key={charity.id} value={charity.id}>
@@ -670,7 +711,7 @@ export function OfferCreateForm({
                   type="number"
                   value={effectiveOffsetRatio}
                   disabled={isJoiningExistingPool}
-                  onChange={(event) => setOffsetRatio(event.currentTarget.value)}
+                  onChange={(event) => setOffsetRatio(readFormControlValue(event))}
                 />
                 <small>
                   How many counterparty dollars should match each $1 of your baseline donation.
@@ -687,7 +728,7 @@ export function OfferCreateForm({
                   required={isOffset}
                   value={effectiveTimeHorizon}
                   disabled={isJoiningExistingPool}
-                  onChange={(event) => setTimeHorizon(event.currentTarget.value as "one_off" | "recurring")}
+                  onChange={(event) => setTimeHorizon(readFormControlValue(event) as "one_off" | "recurring")}
                 >
                   {DONATION_OFFSET_TIME_HORIZON_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -707,7 +748,7 @@ export function OfferCreateForm({
                   disabled={isJoiningExistingPool}
                   onChange={(event) =>
                     setVerificationMethod(
-                      event.currentTarget.value as
+                      readFormControlValue(event) as
                         | "proof_of_past_donations"
                         | "funds_in_escrow"
                         | "third_party_audit",
@@ -721,8 +762,8 @@ export function OfferCreateForm({
                   ))}
                 </select>
                 <small>
-                  Proof of past donations helps establish counterfactual credibility. Escrow and audit
-                  can add stronger factual trust.
+                  Proof of past donations helps establish counterfactual credibility. Third-party
+                  payment records and audits can add stronger factual trust.
                 </small>
               </label>
             </div>
@@ -740,7 +781,7 @@ export function OfferCreateForm({
                       value={option.value}
                       onChange={(event) =>
                         setUnmatchedSurplusRule(
-                          event.currentTarget.value as
+                          readFormControlValue(event) as
                             | "return_to_donors"
                             | "donate_to_compromise_destination"
                             | "donate_to_original_cause",
@@ -767,7 +808,7 @@ export function OfferCreateForm({
                     type="number"
                     value={effectiveAssuranceMinimumUsd}
                     disabled={isJoiningExistingPool}
-                    onChange={(event) => setAssuranceMinimumUsd(event.currentTarget.value)}
+                    onChange={(event) => setAssuranceMinimumUsd(readFormControlValue(event))}
                   />
                   <small>
                     Donors can commit on the condition that the pool reaches this minimum matched
@@ -782,29 +823,90 @@ export function OfferCreateForm({
                       type="date"
                       value={effectiveAssuranceDeadline}
                       disabled={isJoiningExistingPool}
-                      onChange={(event) => setAssuranceDeadline(event.currentTarget.value)}
+                      onChange={(event) => setAssuranceDeadline(readFormControlValue(event))}
                     />
                   <small>
                     A deadline makes the assurance contract legible and gives people a clear decision
                     point.
                   </small>
                 </label>
+
+                <label className="field">
+                  <span>Pool maximum cap</span>
+                  <input
+                    disabled={isJoiningExistingPool}
+                    min="0.01"
+                    name="offset_pool_maximum_cap_usd"
+                    step="0.01"
+                    type="number"
+                    value={effectivePoolMaximumCapUsd}
+                    onChange={(event) => setPoolMaximumCapUsd(readFormControlValue(event))}
+                  />
+                  <small>
+                    The maximum aggregate compromise amount this pool should gather before review
+                    closes further matching.
+                  </small>
+                </label>
               </div>
             ) : null}
 
             <label className="field">
-              <span>Receipt, escrow, or audit link</span>
+              <span>Receipt, payment record, or audit link</span>
               <input
                 name="offset_evidence_url"
                 placeholder="https://..."
                 type="url"
                 value={evidenceUrl}
-                onChange={(event) => setEvidenceUrl(event.currentTarget.value)}
+                onChange={(event) => setEvidenceUrl(readFormControlValue(event))}
               />
               <small>
                 Unverified baselines are kept out of the public marketplace until they are reviewed.
               </small>
             </label>
+
+            {participationMode === "pool" ? (
+              <div className="panel subtle-panel">
+                <p className="eyebrow">Pool review status</p>
+                <p className="route-text">
+                  New pooled offsets are saved for manual review. They are not legal escrow,
+                  payment custody, or a promise that any redirection has happened.
+                </p>
+                <label className="radio-row">
+                  <input
+                    checked={antiThreatCertified}
+                    name="offset_anti_threat_certification"
+                    required
+                    type="checkbox"
+                    onChange={(event) =>
+                      setAntiThreatCertified(
+                        (event.currentTarget as HTMLInputElement).checked,
+                      )
+                    }
+                  />
+                  <span>
+                    I certify this pool is based on a real baseline intention, not a threat,
+                    coercive demand, harassment, doxxing, fraud, or pressure on vulnerable people.
+                  </span>
+                </label>
+                <label className="radio-row">
+                  <input
+                    checked={verificationMetadataAcknowledged}
+                    name="offset_verification_metadata_acknowledgement"
+                    required
+                    type="checkbox"
+                    onChange={(event) =>
+                      setVerificationMetadataAcknowledged(
+                        (event.currentTarget as HTMLInputElement).checked,
+                      )
+                    }
+                  />
+                  <span>
+                    I have provided a verification method and evidence link that a reviewer can
+                    inspect before treating the pooled offset as credible.
+                  </span>
+                </label>
+              </div>
+            ) : null}
 
             <div className="panel offset-summary">
               <p className="eyebrow">Live summary</p>
@@ -860,6 +962,10 @@ export function OfferCreateForm({
                       redirect once enough matching support appears.
                     </p>
                   )}
+                  <p>
+                    Pool cap: <strong>{formatUsd(Number(effectivePoolMaximumCapUsd) || 0)}</strong>.
+                    Review status: manual review required before public reliance.
+                  </p>
                 </div>
               ) : null}
             </div>
@@ -947,7 +1053,7 @@ export function OfferCreateForm({
           <span>Description</span>
           <textarea
             name="notes"
-            onChange={(event) => setNotes(event.currentTarget.value)}
+            onChange={(event) => setNotes(readFormControlValue(event))}
             placeholder="Explain why this offset beats zero-sum spending on your view, what evidence you can provide, and what should happen if matching is incomplete."
             required={isOffset}
             rows={4}

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 
@@ -5,9 +6,38 @@ import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { demoCycle } from "@/lib/mpgf/data";
 import { buildPublicSummary, computeExactMpgfAllocation, formatUsd } from "@/lib/mpgf/mechanism";
+import { getAbsoluteUrl } from "@/lib/seo";
 
 interface MpgfCyclePageProps {
   params: Promise<{ cycleId: string }>;
+}
+
+export async function generateMetadata({ params }: MpgfCyclePageProps): Promise<Metadata> {
+  const { cycleId } = await params;
+
+  if (cycleId !== demoCycle.id) {
+    return {
+      title: "MPGF Cycle",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  return {
+    title: `${demoCycle.label} MPGF Cycle`,
+    description: "Public non-real-money MPGF demo cycle summary with no external disbursement state.",
+    alternates: {
+      canonical: `/mpgf/cycles/${demoCycle.id}`,
+    },
+    openGraph: {
+      title: `${demoCycle.label} MPGF Cycle`,
+      description: "Public non-real-money MPGF demo cycle summary with no external disbursement state.",
+      url: getAbsoluteUrl(`/mpgf/cycles/${demoCycle.id}`),
+      type: "website",
+    },
+  };
 }
 
 export default async function MpgfCyclePage({ params }: MpgfCyclePageProps) {

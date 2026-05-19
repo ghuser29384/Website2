@@ -133,6 +133,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           offsetPoolName: offer.donationOffset.pool?.name ?? "",
           offsetPoolSide: offer.donationOffset.pool_side ?? "",
           assuranceMinimumUsd: offer.donationOffset.assurance_minimum_cents / 100,
+          poolMaximumCapUsd: offer.donationOffset.pool
+            ? offer.donationOffset.pool.maximum_cap_cents / 100
+            : null,
           assuranceDeadline: offer.donationOffset.assurance_deadline_at ?? "",
           evidenceUrl: offer.donationOffset.evidence_url,
           moderationStatus: offer.donationOffset.moderation_status,
@@ -310,8 +313,8 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
         {offer.mode === "offset" && offer.donationOffset?.moderation_status === "flagged" ? (
           <div className="status-banner status-banner-error">
             This donation offset is publicly visible but flagged because the baseline donation is not
-            yet well verified. Ask for receipts, escrow confirmation, or a third-party audit before
-            relying on it.
+            yet well verified. Ask for receipts, third-party payment confirmation, or a third-party
+            audit before relying on it.
           </div>
         ) : null}
 

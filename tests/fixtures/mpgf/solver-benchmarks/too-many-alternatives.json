@@ -1,0 +1,7 @@
+{
+  "fixtureId": "too-many-alternatives",
+  "fixtureType": "solver_benchmark",
+  "exceedsLimit": "maxAlternatives",
+  "expectedBehavior": "fail_closed"
+}
+

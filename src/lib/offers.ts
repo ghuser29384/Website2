@@ -55,6 +55,7 @@ export interface Offer {
   offsetPoolName: string;
   offsetPoolSide: DonationOffsetPoolSide | "";
   assuranceMinimumUsd: number | null;
+  poolMaximumCapUsd: number | null;
   assuranceDeadline: string;
   evidenceUrl: string;
   moderationStatus: DonationOffsetModerationStatus | null;
@@ -92,6 +93,7 @@ export interface OfferDraft {
   offsetPoolName: string;
   offsetPoolSide: DonationOffsetPoolSide | "";
   assuranceMinimumUsd: number | null;
+  poolMaximumCapUsd: number | null;
   assuranceDeadline: string;
   evidenceUrl: string;
   counterfactualHonesty: boolean;
@@ -165,7 +167,9 @@ export const COMPROMISE_CAUSE_OPTIONS = [
 export const VERIFICATION_OPTIONS = [
   "Annual receipts",
   "Peer witness",
-  "Escrow-backed",
+  "Evidence-gated",
+  "Manual review required",
+  "Payment pending verification",
   "Public pledge",
 ] as const;
 
@@ -231,6 +235,7 @@ export function createDefaultOfferDraft(): OfferDraft {
     offsetPoolName: defaultOffsetFields.poolName,
     offsetPoolSide: defaultOffsetFields.poolSide,
     assuranceMinimumUsd: defaultOffsetFields.assuranceMinimumUsd,
+    poolMaximumCapUsd: defaultOffsetFields.poolMaximumCapUsd,
     assuranceDeadline: defaultOffsetFields.assuranceDeadline,
     evidenceUrl: "",
     counterfactualHonesty: false,
@@ -270,6 +275,7 @@ export const SEED_OFFERS: Offer[] = [
     offsetPoolName: "",
     offsetPoolSide: "",
     assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
     assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
@@ -307,6 +313,7 @@ export const SEED_OFFERS: Offer[] = [
     offsetPoolName: "",
     offsetPoolSide: "",
     assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
     assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
@@ -344,6 +351,7 @@ export const SEED_OFFERS: Offer[] = [
     offsetPoolName: "",
     offsetPoolSide: "",
     assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
     assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
@@ -381,6 +389,7 @@ export const SEED_OFFERS: Offer[] = [
     offsetPoolName: "",
     offsetPoolSide: "",
     assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
     assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
@@ -398,7 +407,7 @@ export const SEED_OFFERS: Offer[] = [
     compromiseCause: "Global poverty",
     offerImpact: 8,
     minCounterpartyImpact: 7,
-    verification: "Escrow-backed",
+    verification: "Manual review required",
     duration: "3 months",
     paymentIntervalValue: null,
     paymentIntervalUnit: "none",
@@ -411,15 +420,16 @@ export const SEED_OFFERS: Offer[] = [
     compromiseDestinationId: "givewell-top-charities-fund",
     offsetRatio: 1,
     offsetTimeHorizon: "one_off",
-    offsetVerificationMethod: "funds_in_escrow",
+    offsetVerificationMethod: "third_party_audit",
     unmatchedSurplusRule: "donate_to_compromise_destination",
     offsetParticipationMode: "direct",
     offsetPoolId: "",
     offsetPoolName: "",
     offsetPoolSide: "",
     assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
     assuranceDeadline: "",
-    evidenceUrl: "https://example.com/rebecca-escrow-confirmation",
+    evidenceUrl: "https://example.com/rebecca-review-confirmation",
     moderationStatus: "clear",
     source: "Seeded example",
     createdAt: 1700000005000,
@@ -435,7 +445,7 @@ export const SEED_OFFERS: Offer[] = [
     compromiseCause: "Global poverty",
     offerImpact: 8,
     minCounterpartyImpact: 7,
-    verification: "Escrow-backed",
+    verification: "Manual review required",
     duration: "3 months",
     paymentIntervalValue: null,
     paymentIntervalUnit: "none",
@@ -448,15 +458,16 @@ export const SEED_OFFERS: Offer[] = [
     compromiseDestinationId: "givewell-top-charities-fund",
     offsetRatio: 1,
     offsetTimeHorizon: "one_off",
-    offsetVerificationMethod: "funds_in_escrow",
+    offsetVerificationMethod: "third_party_audit",
     unmatchedSurplusRule: "donate_to_compromise_destination",
     offsetParticipationMode: "direct",
     offsetPoolId: "",
     offsetPoolName: "",
     offsetPoolSide: "",
     assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
     assuranceDeadline: "",
-    evidenceUrl: "https://example.com/christopher-escrow-confirmation",
+    evidenceUrl: "https://example.com/christopher-review-confirmation",
     moderationStatus: "clear",
     source: "Seeded example",
     createdAt: 1700000006000,
@@ -472,7 +483,7 @@ export const SEED_OFFERS: Offer[] = [
     compromiseCause: "Not needed",
     offerImpact: 7,
     minCounterpartyImpact: 6,
-    verification: "Escrow-backed",
+    verification: "Payment pending verification",
     duration: "12 months",
     paymentIntervalValue: 1,
     paymentIntervalUnit: "month",
@@ -492,6 +503,7 @@ export const SEED_OFFERS: Offer[] = [
     offsetPoolName: "",
     offsetPoolSide: "",
     assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
     assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
@@ -509,7 +521,7 @@ export const SEED_OFFERS: Offer[] = [
     compromiseCause: "Not needed",
     offerImpact: 6,
     minCounterpartyImpact: 6,
-    verification: "Escrow-backed",
+    verification: "Payment pending verification",
     duration: "12 months",
     paymentIntervalValue: 1,
     paymentIntervalUnit: "month",
@@ -529,6 +541,7 @@ export const SEED_OFFERS: Offer[] = [
     offsetPoolName: "",
     offsetPoolSide: "",
     assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
     assuranceDeadline: "",
     evidenceUrl: "",
     moderationStatus: null,
@@ -587,6 +600,7 @@ export function formatOffsetSummary(offer: Offer) {
       poolName: offer.offsetPoolName,
       poolSide: offer.offsetPoolSide,
       assuranceMinimumUsd: offer.assuranceMinimumUsd,
+      poolMaximumCapUsd: offer.poolMaximumCapUsd,
       assuranceDeadline: offer.assuranceDeadline,
       description: offer.notes,
       evidenceUrl: offer.evidenceUrl,
@@ -856,6 +870,8 @@ export function createOfferFromDraft(draft: OfferDraft): Offer {
     offsetPoolSide: draft.mode === "offset" ? draft.offsetPoolSide : "",
     assuranceMinimumUsd:
       draft.mode === "offset" ? draft.assuranceMinimumUsd : null,
+    poolMaximumCapUsd:
+      draft.mode === "offset" ? draft.poolMaximumCapUsd : null,
     assuranceDeadline: draft.mode === "offset" ? draft.assuranceDeadline : "",
     evidenceUrl: draft.mode === "offset" ? draft.evidenceUrl.trim() : "",
     moderationStatus:
@@ -875,6 +891,7 @@ export function createOfferFromDraft(draft: OfferDraft): Offer {
             poolName: draft.offsetPoolName,
             poolSide: draft.offsetPoolSide,
             assuranceMinimumUsd: draft.assuranceMinimumUsd,
+            poolMaximumCapUsd: draft.poolMaximumCapUsd,
             assuranceDeadline: draft.assuranceDeadline,
             description: [draft.offerAction, draft.requestAction, draft.notes].filter(Boolean).join("\n"),
             evidenceUrl: draft.evidenceUrl,
@@ -892,7 +909,7 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
       ...draft,
       mode,
       compromiseCause: draft.compromiseCause === "Not needed" ? "Global poverty" : draft.compromiseCause,
-      verification: "Escrow-backed",
+      verification: "Manual review required",
       duration: "3 months",
       paymentIntervalValue: null,
       paymentIntervalUnit: "none",
@@ -914,6 +931,7 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
       offsetPoolName: draft.offsetPoolName,
       offsetPoolSide: draft.offsetPoolSide,
       assuranceMinimumUsd: draft.assuranceMinimumUsd,
+      poolMaximumCapUsd: draft.poolMaximumCapUsd ?? defaultOffsetFields.poolMaximumCapUsd,
       assuranceDeadline: draft.assuranceDeadline,
       evidenceUrl: draft.evidenceUrl,
     };
@@ -928,7 +946,7 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
       requestedCause:
         draft.requestedCause === "Global poverty" ? "Animal welfare" : draft.requestedCause,
       compromiseCause: "Not needed",
-      verification: "Escrow-backed",
+      verification: "Payment pending verification",
       duration: "12 months",
       paymentIntervalValue: draft.paymentIntervalValue ?? 1,
       paymentIntervalUnit:
@@ -947,6 +965,7 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
       offsetPoolName: "",
       offsetPoolSide: "",
       assuranceMinimumUsd: null,
+      poolMaximumCapUsd: null,
       assuranceDeadline: "",
       evidenceUrl: "",
     };
@@ -956,7 +975,9 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
     ...draft,
     mode,
     compromiseCause: "Not needed",
-    verification: draft.verification === "Escrow-backed" ? "Annual receipts" : draft.verification,
+    verification: draft.verification.toLowerCase().includes("escrow")
+      ? "Annual receipts"
+      : draft.verification,
     paymentIntervalValue: null,
     paymentIntervalUnit: "none",
     baselineAmountUsd: null,
@@ -973,6 +994,7 @@ export function adjustDraftForMode(draft: OfferDraft, mode: OfferMode): OfferDra
     offsetPoolName: "",
     offsetPoolSide: "",
     assuranceMinimumUsd: null,
+    poolMaximumCapUsd: null,
     assuranceDeadline: "",
     evidenceUrl: "",
   };
@@ -994,6 +1016,7 @@ export function validateDonationOffsetDraft(draft: OfferDraft) {
     poolName: draft.offsetPoolName,
     poolSide: draft.offsetPoolSide,
     assuranceMinimumUsd: draft.assuranceMinimumUsd,
+    poolMaximumCapUsd: draft.poolMaximumCapUsd,
     assuranceDeadline: draft.assuranceDeadline,
     description: [draft.offerAction, draft.requestAction, draft.notes].filter(Boolean).join("\n"),
     evidenceUrl: draft.evidenceUrl,

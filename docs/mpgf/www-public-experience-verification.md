@@ -1,14 +1,23 @@
 # MPGF WWW Public Experience Verification
 
-Status: template ready
+Status: passed
+
+Canonical URL tested: `https://www.moraltrade.org`
 
 Public experience profile: `config/mpgf/public-experience-profile.json`
 
-Checks:
+Evidence artifact:
 
-- Plain-language MPGF explanation renders.
-- Moral public goods explanation renders.
-- Moral trade coordination explanation renders.
-- Non-real-money and pledge-only labels render.
-- Technical-spec route is publicly reachable.
-- Primary calls to action avoid real-money-only routes.
+`/private/tmp/mpgf-production-evidence-20260517-resolved/browser-evidence.json`
+
+Checks passed:
+
+- Plain-language MPGF explanation rendered on `/mpgf`.
+- Moral public goods explanation rendered on `/mpgf`.
+- Manual external-payment evidence was the flagship contribution flow.
+- Non-real-money status and reviewer-verification language rendered.
+- Candidate pool pages rendered from public navigation.
+- Pool proposal route rendered the expected structured reasoning fields.
+- Public technical and account routes were reachable without fatal render markers.
+
+Unresolved issues: none.

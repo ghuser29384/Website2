@@ -328,7 +328,7 @@ export function OfferComposer({
               value={draft.evidenceUrl}
               onChange={(event) => onFieldChange("evidenceUrl", readControlValue(event.target))}
             />
-            <small>Receipt, escrow confirmation, or third-party audit link.</small>
+            <small>Receipt, payment confirmation, or third-party audit link.</small>
           </label>
 
           <fieldset className="field">

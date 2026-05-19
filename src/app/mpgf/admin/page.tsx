@@ -1,13 +1,37 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { isAdminEmail } from "@/lib/admin";
+import { loadMpgfProductionControlPlaneSummary } from "@/lib/mpgf/control-plane";
 import { mpgfAdminSections } from "@/lib/mpgf/data";
+import { getAbsoluteUrl } from "@/lib/seo";
+
+export const metadata: Metadata = {
+  title: "MPGF Admin",
+  description: "Gated MPGF admin control plane for direct-working route readiness.",
+  alternates: {
+    canonical: "/mpgf/admin",
+  },
+  robots: {
+    index: false,
+    follow: false,
+  },
+  openGraph: {
+    title: "MPGF Admin",
+    description: "Gated MPGF admin control plane for direct-working route readiness.",
+    url: getAbsoluteUrl("/mpgf/admin"),
+    type: "website",
+  },
+};
+
+export const dynamic = "force-dynamic";
 
 export default async function MpgfAdminPage() {
   const viewer = await getViewer();
   const isAdmin = isAdminEmail(viewer?.authUser.email);
+  const controlPlane = isAdmin ? await loadMpgfProductionControlPlaneSummary() : null;
 
   return (
     <MpgfPageFrame
@@ -20,13 +44,56 @@ export default async function MpgfAdminPage() {
         <p className="eyebrow">{isAdmin ? "Admin verified" : "Gated route"}</p>
         <h2>{isAdmin ? "Administrative sections" : "Admin access required"}</h2>
         {isAdmin ? (
-          <div className="mpgf-admin-grid">
-            {mpgfAdminSections.map((section) => (
-              <Link key={section} className="mpgf-admin-link" href={`/mpgf/admin/${section}`}>
-                {section.replaceAll("-", " ")}
-              </Link>
-            ))}
-          </div>
+          <>
+            <div className="mpgf-control-summary">
+              <div>
+                <span>Overall status</span>
+                <strong>{controlPlane?.status.replaceAll("_", " ")}</strong>
+              </div>
+              <div>
+                <span>demo_complete</span>
+                <strong>{controlPlane?.completionProfiles.demoComplete.replaceAll("_", " ")}</strong>
+              </div>
+              <div>
+                <span>exact_pilot_complete</span>
+                <strong>{controlPlane?.completionProfiles.exactPilotComplete.replaceAll("_", " ")}</strong>
+              </div>
+              <div>
+                <span>real_money_complete</span>
+                <strong>{controlPlane?.completionProfiles.realMoneyComplete.replaceAll("_", " ")}</strong>
+              </div>
+            </div>
+
+            <div className="mpgf-gate-list">
+              {controlPlane?.gates.map((gate) => (
+                <article key={gate.key} className="mpgf-gate-row">
+                  <div>
+                    <p className="eyebrow">{gate.area.replaceAll("_", " ")}</p>
+                    <h3>{gate.label}</h3>
+                    <p>{gate.summary}</p>
+                    {gate.blockers.length > 0 ? (
+                      <ul className="mpgf-check-list">
+                        {gate.blockers.slice(0, 4).map((blocker) => (
+                          <li key={blocker}>{blocker}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                  <span className={`mpgf-gate-status mpgf-gate-status-${gate.status}`}>
+                    {gate.status.replaceAll("_", " ")}
+                  </span>
+                </article>
+              ))}
+            </div>
+
+            <div className="mpgf-admin-grid">
+              {mpgfAdminSections.map((section) => (
+                <Link key={section} className="mpgf-admin-link" href={`/mpgf/admin/${section}`}>
+                  {section.replaceAll("-", " ")}
+                </Link>
+              ))}
+            </div>
+          </>
         ) : (
           <p>Administrative sections require an authenticated admin session.</p>
         )}

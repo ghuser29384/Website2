@@ -221,9 +221,9 @@ export default async function DonationOffsetsPage() {
             <article className="panel editorial-card">
               <h3>Factual trust</h3>
               <p>
-                Participants should verify baseline intent through proof of past donations, escrow,
-                or a third-party audit. On this platform, unverified offsets are paused for review
-                rather than treated as trustworthy by default.
+                Participants should verify baseline intent through proof of past donations,
+                third-party payment records, or a third-party audit. On this platform, unverified
+                offsets are paused for review rather than treated as trustworthy by default.
               </p>
             </article>
 
@@ -265,6 +265,21 @@ export default async function DonationOffsetsPage() {
               assurance threshold lets donors commit on the condition that a minimum matching amount
               is reached by a deadline.
             </p>
+            <div className="hero-actions">
+              <Link
+                className="button button-primary"
+                href={
+                  viewer
+                    ? "/offers/new?mode=offset&offset_participation_mode=pool"
+                    : "/login?returnTo=%2Foffers%2Fnew%3Fmode%3Doffset%26offset_participation_mode%3Dpool"
+                }
+              >
+                Create pooled offset
+              </Link>
+              <Link className="button button-secondary" href="/offers?mode=offset">
+                Browse offset offers
+              </Link>
+            </div>
           </div>
 
           <div className="concept-grid">
@@ -334,7 +349,7 @@ export default async function DonationOffsetsPage() {
               <h3>Verification methods</h3>
               <ul className="clean-list">
                 <li>Proof of past donations</li>
-                <li>Funds in escrow</li>
+                <li>Third-party payment record; not legal escrow</li>
                 <li>Third-party audit or attestation</li>
               </ul>
             </article>
@@ -482,6 +497,7 @@ export default async function DonationOffsetsPage() {
                     Status: {formatDonationOffsetPoolStatus(pool.progress.status)} | Assurance target{" "}
                     {formatUsdFromCents(pool.assurance_minimum_cents)}
                   </p>
+                  <p>Maximum cap: {formatUsdFromCents(pool.maximum_cap_cents ?? 0)}</p>
                   {pool.assurance_deadline_at ? (
                     <p>Deadline: {new Date(pool.assurance_deadline_at).toLocaleDateString()}</p>
                   ) : (

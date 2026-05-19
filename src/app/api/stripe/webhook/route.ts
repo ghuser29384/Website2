@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
 import type { Database } from "@/lib/supabase/database.types";
+import { handleMpgfStripeWebhookEvent, hashStripeWebhookBody } from "@/lib/mpgf/real-money";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 
@@ -76,22 +77,70 @@ async function markPaymentFromSession(
   }
 }
 
+function hasMpgfMetadata(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object") {
+    return false;
+  }
+
+  const record = metadata as Record<string, unknown>;
+
+  return (
+    record.purpose === "mpgf_contribution" ||
+    typeof record.mpgf_payment_intent_id === "string" ||
+    typeof record.mpgf_recurring_commitment_id === "string"
+  );
+}
+
+function isPotentialMpgfStripeEvent(event: Stripe.Event) {
+  const object = event.data.object as Record<string, any>;
+
+  if (hasMpgfMetadata(object.metadata) || hasMpgfMetadata(object.subscription_details?.metadata)) {
+    return true;
+  }
+
+  if (event.type === "invoice.paid") {
+    return Boolean(object.subscription);
+  }
+
+  if (event.type === "charge.refunded") {
+    return Boolean(object.payment_intent);
+  }
+
+  return false;
+}
+
 export async function POST(request: Request) {
   const stripe = getStripe();
   const webhookSecret = getStripeWebhookSecret();
   const rawBody = await request.text();
   const signature = request.headers.get("stripe-signature");
+  const rawBodyHash = hashStripeWebhookBody(rawBody);
 
   let event: Stripe.Event;
+  let signatureVerified = false;
 
   try {
-    event =
-      webhookSecret && signature
-        ? stripe.webhooks.constructEvent(rawBody, signature, webhookSecret)
-        : JSON.parse(rawBody);
+    if (webhookSecret && signature) {
+      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+      signatureVerified = true;
+    } else {
+      event = JSON.parse(rawBody);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Invalid Stripe webhook.";
     return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  if (isPotentialMpgfStripeEvent(event)) {
+    const mpgfResult = await handleMpgfStripeWebhookEvent({
+      event,
+      rawBodyHash,
+      signatureVerified,
+    });
+
+    if (mpgfResult.handled) {
+      return NextResponse.json({ received: true, mpgf: mpgfResult.status });
+    }
   }
 
   if (

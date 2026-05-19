@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { addOfferCommentAction, voteCommentAction } from "@/app/actions";
-import type { OfferCommentNode } from "@/lib/app-data";
+import { formatPublicProfileLocation, type OfferCommentNode } from "@/lib/app-data";
 
 interface CommentThreadProps {
   comments: OfferCommentNode[];
@@ -18,6 +18,7 @@ function CommentNode({ comment, offerId, returnTo, viewerId }: CommentNodeProps)
   const canReply = Boolean(viewerId) && comment.depth < 49;
   const canVote = Boolean(viewerId) && viewerId !== comment.author_id;
   const depthOffset = Math.min(comment.depth, 5) * 0.9;
+  const authorLocation = comment.author ? formatPublicProfileLocation(comment.author) : null;
 
   return (
     <article className="comment-card" style={{ marginLeft: `${depthOffset}rem` }}>
@@ -31,9 +32,7 @@ function CommentNode({ comment, offerId, returnTo, viewerId }: CommentNodeProps)
             )}
           </p>
           <p className="comment-meta">
-            {comment.author?.city || comment.author?.region
-              ? [comment.author.city, comment.author.region].filter(Boolean).join(", ")
-              : "Public comment"}{" "}
+            {authorLocation || "Public comment"}{" "}
             | {new Date(comment.created_at).toLocaleString()}
           </p>
         </div>

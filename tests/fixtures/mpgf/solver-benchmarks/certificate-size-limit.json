@@ -1,0 +1,7 @@
+{
+  "fixtureId": "certificate-size-limit",
+  "fixtureType": "solver_benchmark",
+  "exceedsLimit": "maxCertificateJsonBytes",
+  "expectedBehavior": "fail_closed"
+}
+
