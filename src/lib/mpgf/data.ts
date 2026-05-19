@@ -100,6 +100,12 @@ export const demoAlternatives: MpgfCandidateAlternative[] = [
     moralPublicGoodRationale:
       "Many moral views value reducing severe poverty and preventable illness, even when they disagree about other priorities.",
     outcomeUnit: "expected severe-poverty relief unit",
+    isConsensus: true,
+    isHybrid: false,
+    preferenceIntensityHint:
+      "High default weight because several demo voter profiles converge on severe-poverty and health gains.",
+    expectedMoralImpactTooltip:
+      "Consensus demo good: modeled as broadly valuable across moral views, not as a charity-evaluator claim.",
     status: "approved_demo",
     operationalReliabilityBps: 9400,
     riskBps: 500,
@@ -117,6 +123,12 @@ export const demoAlternatives: MpgfCandidateAlternative[] = [
     moralPublicGoodRationale:
       "Preserving the option of a flourishing future is broadly valuable across many longtermist, humanitarian, and pluralist views.",
     outcomeUnit: "risk-reduction research unit",
+    isConsensus: false,
+    isHybrid: true,
+    preferenceIntensityHint:
+      "High intensity for long-run views, with some cross-view support from resilience and option-value arguments.",
+    expectedMoralImpactTooltip:
+      "Hybrid demo good: different views may support it for different reasons, with impact still represented only by demo ballots.",
     status: "approved_demo",
     operationalReliabilityBps: 9000,
     riskBps: 900,
@@ -134,6 +146,12 @@ export const demoAlternatives: MpgfCandidateAlternative[] = [
     moralPublicGoodRationale:
       "Many moral views assign at least some weight to avoiding severe suffering, including nonhuman suffering.",
     outcomeUnit: "welfare-improvement unit",
+    isConsensus: false,
+    isHybrid: true,
+    preferenceIntensityHint:
+      "Medium default weight with stronger intensity for animal-inclusive moral views.",
+    expectedMoralImpactTooltip:
+      "Hybrid demo good: can combine direct animal-welfare concern with institutional transition benefits.",
     status: "approved_demo",
     operationalReliabilityBps: 9100,
     riskBps: 700,
@@ -151,6 +169,12 @@ export const demoAlternatives: MpgfCandidateAlternative[] = [
     moralPublicGoodRationale:
       "Better shared knowledge can improve coordination and allocation decisions across otherwise conflicting moral views.",
     outcomeUnit: "public-knowledge unit",
+    isConsensus: true,
+    isHybrid: true,
+    preferenceIntensityHint:
+      "Lower default weight, but high complementarity because shared evidence can improve later allocations.",
+    expectedMoralImpactTooltip:
+      "Consensus and hybrid demo good: shared knowledge is a coordination input and may benefit several causes indirectly.",
     status: "approved_demo",
     operationalReliabilityBps: 9300,
     riskBps: 400,

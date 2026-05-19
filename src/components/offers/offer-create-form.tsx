@@ -273,6 +273,28 @@ export function OfferCreateForm({
     () => (isOffset ? getDonationOffsetComplexityWarnings(normalizedOffsetFields) : []),
     [isOffset, normalizedOffsetFields],
   );
+  const liveCoreOfferErrors = useMemo(() => {
+    const errors: string[] = [];
+
+    if (!offerAction.trim()) {
+      errors.push("Describe the action you are offering.");
+    }
+
+    if (!requestAction.trim()) {
+      errors.push("Describe what you want the counterparty to do.");
+    }
+
+    if (!notes.trim()) {
+      errors.push("Add a public description covering evidence, boundaries, and why the trade is mutually beneficial.");
+    }
+
+    return errors;
+  }, [notes, offerAction, requestAction]);
+  const liveOfferErrors = useMemo(
+    () => [...liveCoreOfferErrors, ...liveOffsetErrors],
+    [liveCoreOfferErrors, liveOffsetErrors],
+  );
+  const canPublishOffer = supabaseReady && liveOfferErrors.length === 0;
 
   const joinedPoolProgress = useMemo(() => {
     if (!selectedPool || participationMode !== "pool" || !poolSide) {
@@ -339,14 +361,21 @@ export function OfferCreateForm({
         </div>
       ) : null}
 
-      {isOffset && liveOffsetErrors.length ? (
-        <div className="status-banner status-banner-error">
+      {liveOfferErrors.length ? (
+        <div className="status-banner status-banner-error" aria-live="polite">
           <strong>Fix these fields before publishing.</strong>
           <ul className="clean-list">
-            {liveOffsetErrors.map((error) => (
+            {liveOfferErrors.map((error) => (
               <li key={error}>{error}</li>
             ))}
           </ul>
+        </div>
+      ) : null}
+
+      {canPublishOffer ? (
+        <div className="status-banner status-banner-success" aria-live="polite">
+          Ready to publish. Server-side checks will still verify authentication, moderation, and
+          evidence rules before the offer is saved.
         </div>
       ) : null}
 
@@ -365,11 +394,7 @@ export function OfferCreateForm({
         action={createOfferAction}
         className="stack-form"
         onSubmit={(event) => {
-          if (!isOffset) {
-            return;
-          }
-
-          if (liveOffsetErrors.length) {
+          if (liveOfferErrors.length || !supabaseReady) {
             event.preventDefault();
           }
         }}
@@ -428,6 +453,7 @@ export function OfferCreateForm({
             name="offer_action"
             onChange={(event) => setOfferAction(readFormControlValue(event))}
             placeholder="e.g. Redirect $1,000 I would otherwise have donated to an opposed lobbying cause into the named compromise fund."
+            required
             rows={4}
             value={offerAction}
           />
@@ -439,6 +465,7 @@ export function OfferCreateForm({
             name="request_action"
             onChange={(event) => setRequestAction(readFormControlValue(event))}
             placeholder="e.g. Redirect the matched portion of your opposed donation into the same compromise destination."
+            required
             rows={4}
             value={requestAction}
           />
@@ -1055,14 +1082,14 @@ export function OfferCreateForm({
             name="notes"
             onChange={(event) => setNotes(readFormControlValue(event))}
             placeholder="Explain why this offset beats zero-sum spending on your view, what evidence you can provide, and what should happen if matching is incomplete."
-            required={isOffset}
+            required
             rows={4}
             value={notes}
           />
         </label>
 
         <div className="form-actions">
-          <button className="button button-primary" type="submit">
+          <button className="button button-primary" disabled={!canPublishOffer} type="submit">
             Publish offer
           </button>
           <Link className="button button-secondary" href="/offers">

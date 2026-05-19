@@ -11,6 +11,18 @@ interface MpgfPoolPageProps {
   params: Promise<{ poolId: string }>;
 }
 
+function formatBasisPoints(value: number) {
+  return `${(value / 100).toFixed(0)}%`;
+}
+
+function getGoodTypeLabel(alternative: (typeof demoAlternatives)[number]) {
+  if (alternative.isConsensus && alternative.isHybrid) {
+    return "Consensus + hybrid";
+  }
+
+  return alternative.isConsensus ? "Consensus" : "Hybrid";
+}
+
 export async function generateMetadata({ params }: MpgfPoolPageProps): Promise<Metadata> {
   const { poolId } = await params;
   const alternative = demoAlternatives.find((candidate) => candidate.id === poolId);
@@ -60,7 +72,16 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
         <article className="mpgf-panel">
           <p className="eyebrow">Recipient</p>
           <h2>{alternative.recipientName}</h2>
+          <div className="tag-row">
+            <span className="badge" title={alternative.expectedMoralImpactTooltip}>
+              {getGoodTypeLabel(alternative)} good
+            </span>
+            <span className="badge badge-secondary" title={alternative.preferenceIntensityHint}>
+              Default intensity {formatBasisPoints(alternative.demoPriorityBps)}
+            </span>
+          </div>
           <p>{alternative.description}</p>
+          <p>{alternative.moralPublicGoodRationale}</p>
         </article>
         <article className="mpgf-panel">
           <p className="eyebrow">Risk and reliability</p>
@@ -80,6 +101,10 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
             <div>
               <dt>Outcome unit</dt>
               <dd>{alternative.outcomeUnit}</dd>
+            </div>
+            <div>
+              <dt>Good type</dt>
+              <dd>{getGoodTypeLabel(alternative)}</dd>
             </div>
           </dl>
         </article>

@@ -333,6 +333,10 @@ export interface MpgfCandidateAlternative {
   description: string;
   moralPublicGoodRationale: string;
   outcomeUnit: string;
+  isConsensus: boolean;
+  isHybrid: boolean;
+  preferenceIntensityHint: string;
+  expectedMoralImpactTooltip: string;
   status: "approved_demo" | "carryover_only";
   operationalReliabilityBps: number;
   riskBps: number;

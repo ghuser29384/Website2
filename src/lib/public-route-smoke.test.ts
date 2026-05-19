@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
-import { MPGF_COPY } from "@/lib/mpgf/data";
+import { demoAlternatives, MPGF_COPY } from "@/lib/mpgf/data";
 import { getAllOffers } from "@/lib/offers";
 import {
   CANONICAL_WORKED_CASE_COUNT,
@@ -117,6 +117,29 @@ test("MPGF pool reasoning form requires the build-instruction proposal fields", 
   ]) {
     assert.ok(persistenceSource.includes(requiredColumn), `pool proposal persistence missing ${requiredColumn}`);
   }
+});
+
+test("MPGF demo pools distinguish consensus and hybrid goods without changing allocation", () => {
+  const poolsPageSource = readRepoFile("src/app/mpgf/pools/page.tsx");
+  const poolDetailSource = readRepoFile("src/app/mpgf/pools/[poolId]/page.tsx");
+
+  assert.ok(demoAlternatives.some((alternative) => alternative.isConsensus));
+  assert.ok(demoAlternatives.some((alternative) => alternative.isHybrid));
+  assert.ok(
+    demoAlternatives.every(
+      (alternative) =>
+        alternative.preferenceIntensityHint &&
+        alternative.expectedMoralImpactTooltip &&
+        alternative.demoPriorityBps >= 0,
+    ),
+  );
+  assert.match(poolsPageSource, /name="kind"/);
+  assert.match(poolsPageSource, /name="sort"/);
+  assert.match(poolsPageSource, /name="min_intensity"/);
+  assert.match(poolsPageSource, /Consensus goods/);
+  assert.match(poolsPageSource, /Hybrid goods/);
+  assert.match(poolDetailSource, /Good type/);
+  assert.match(poolDetailSource, /expectedMoralImpactTooltip/);
 });
 
 test("MPGF participant mutations require idempotency and audit evidence tables", () => {
@@ -235,6 +258,22 @@ test("pooled donation offset creation has visible path and server-side guardrail
   assert.match(offerForm, /offset_anti_threat_certification/);
   assert.match(offerForm, /offset_verification_metadata_acknowledgement/);
   assert.match(actionsSource, /validateDonationOffsetSubmissionGuards/);
+});
+
+test("offer creation form has live client validation aligned with server-required fields", () => {
+  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+
+  assert.match(actionsSource, /const offerAction = readRequired\(formData, "offer_action"\)/);
+  assert.match(actionsSource, /const requestAction = readRequired\(formData, "request_action"\)/);
+  assert.match(actionsSource, /const notes = readRequired\(formData, "notes"\)/);
+  assert.match(offerForm, /liveCoreOfferErrors/);
+  assert.match(offerForm, /liveOfferErrors/);
+  assert.match(offerForm, /Ready to publish/);
+  assert.match(offerForm, /disabled=\{!canPublishOffer\}/);
+  assert.match(offerForm, /name="offer_action"[\s\S]*required/);
+  assert.match(offerForm, /name="request_action"[\s\S]*required/);
+  assert.match(offerForm, /name="notes"[\s\S]*required/);
 });
 
 test("offers page keeps content before the footer in source order", () => {
