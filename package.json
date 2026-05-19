@@ -17,7 +17,6 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@next/swc-darwin-arm64": "^16.2.4",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "next": "^16.2.4",
