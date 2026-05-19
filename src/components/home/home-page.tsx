@@ -129,6 +129,29 @@ const faqItems = [
   },
 ] as const;
 
+const marketplaceCategories = [
+  {
+    title: "Global health",
+    text: "Donation offsets, pledge swaps, and public-good contributions connected to health and poverty.",
+    href: "/offers?search=Global%20Health",
+  },
+  {
+    title: "Animal welfare",
+    text: "Vegetarian commitments, welfare-focused offsets, and reciprocal action offers.",
+    href: "/offers?search=Animal%20Welfare",
+  },
+  {
+    title: "Climate action",
+    text: "Emission reductions, climate resilience, and compromise destinations with broad appeal.",
+    href: "/offers?search=Climate",
+  },
+  {
+    title: "Long-run futures",
+    text: "Existential risk, digital minds, and future-flourishing trade proposals.",
+    href: "/offers?search=Existential%20risk",
+  },
+] as const;
+
 const OPENING_FIRST_DEFINITION =
   ": People with conflicting interests both satisfy their own interests at a higher cost-efficiency than they otherwise would have on their own.";
 
@@ -376,64 +399,31 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           showLogout={isAuthenticated}
         />
 
-        <div
-          ref={openingSequenceRef}
-          className="opening-sequence"
-          aria-label="Opening explanation of trade and moral trade"
-        >
-          <div className="opening-stage">
-            <div className="opening-lines">
-              <div className="opening-line">
-                <div className="opening-line-anchor">
-                  <OpeningWord core="trade" />
-                </div>
-                <div className="opening-line-definition">
-                  <p style={getRevealStyle(firstDefinitionProgress)}>{OPENING_FIRST_DEFINITION}</p>
-                </div>
-              </div>
-
-              <div className="opening-line">
-                <div className="opening-line-anchor">
-                  <OpeningWord core="trade" prefix="moral" style={getWordRevealStyle(secondWordProgress)} />
-                </div>
-                <div className="opening-line-definition">
-                  <p style={getRevealStyle(secondDefinitionProgress)}>
-                    {OPENING_SECOND_DEFINITION}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div className="hero-stage panel">
           <div className="hero-grid hero-grid-editorial">
             <section className="hero-copy" id="top">
               <p className="eyebrow">Trade and compromise under disagreement</p>
-              <h1>There is another type of trade.</h1>
+              <h1>Transform disagreements into impact.</h1>
               <p className="hero-text">
-                Even if only some people aim at the good, trade and compromise can still matter.
-                People with different moral views may be able to make voluntary arrangements that
-                each regards as morally better than acting alone.
+                Moral Trade helps people turn compatible disagreements into voluntary,
+                evidence-gated offers: pledge swaps, donation offsets, and shared public-good
+                funding.
               </p>
               <div className="hero-actions">
-                <Link className="button button-primary" href="/mpgf/contribute">
-                  Submit MPGF evidence
+                <Link className="button button-primary" href="/offers">
+                  Explore trades
                 </Link>
-                <Link className="button button-secondary" href="/offers">
-                  Review example offers
+                <Link className="button button-secondary" href={isAuthenticated ? "/offers/new" : "/signup"}>
+                  {isAuthenticated ? "Start a trade" : "Create account"}
                 </Link>
-                <Link
-                  className="button button-secondary"
-                  href={isAuthenticated ? "/dashboard" : "/signup"}
-                >
-                  {isAuthenticated ? "Open dashboard" : "Create an account"}
+                <Link className="button button-secondary" href="/reasoning-standards">
+                  Learn the standards
                 </Link>
               </div>
               <ul className="hero-signals" aria-label="Operating standards">
-                <li>Partial convergence</li>
-                <li>Resource-compatible gains</li>
-                <li>Threats are different</li>
+                <li>Voluntary only</li>
+                <li>Evidence-gated</li>
+                <li>No legal escrow claim</li>
               </ul>
               <p className="hero-followup">
                 Review the <Link href="/offers">public offers</Link> and the safeguards below
@@ -506,6 +496,74 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 Read the limitations
               </a>
             </article>
+          </div>
+
+          <div className="home-metrics-strip" aria-label="Prototype marketplace metrics">
+            <article className="home-metric">
+              <span>Worked examples</span>
+              <strong>{allOffers.length}</strong>
+              <p>Pledge, offset, and payment structures ready to inspect.</p>
+            </article>
+            <article className="home-metric">
+              <span>Trade formats</span>
+              <strong>3</strong>
+              <p>Pledge swaps, donation offsets, and bounded paid actions.</p>
+            </article>
+            <article className="home-metric">
+              <span>Visible now</span>
+              <strong>{visibleOffers.length}</strong>
+              <p>Examples in the current local workspace view.</p>
+            </article>
+            <article className="home-metric">
+              <span>Strong fits</span>
+              <strong>{exactMatches.length}</strong>
+              <p>Reciprocal fits among the worked examples.</p>
+            </article>
+          </div>
+
+          <div className="home-category-strip" aria-label="Marketplace categories">
+            <div>
+              <p className="eyebrow">Browse by cause</p>
+              <h2>Find trades by moral priority</h2>
+            </div>
+            <div className="home-category-grid">
+              {marketplaceCategories.map((category) => (
+                <Link className="panel home-category-card" href={category.href} key={category.title}>
+                  <span>{category.title}</span>
+                  <p>{category.text}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div
+          ref={openingSequenceRef}
+          className="opening-sequence"
+          aria-label="Opening explanation of trade and moral trade"
+        >
+          <div className="opening-stage">
+            <div className="opening-lines">
+              <div className="opening-line">
+                <div className="opening-line-anchor">
+                  <OpeningWord core="trade" />
+                </div>
+                <div className="opening-line-definition">
+                  <p style={getRevealStyle(firstDefinitionProgress)}>{OPENING_FIRST_DEFINITION}</p>
+                </div>
+              </div>
+
+              <div className="opening-line">
+                <div className="opening-line-anchor">
+                  <OpeningWord core="trade" prefix="moral" style={getWordRevealStyle(secondWordProgress)} />
+                </div>
+                <div className="opening-line-definition">
+                  <p style={getRevealStyle(secondDefinitionProgress)}>
+                    {OPENING_SECOND_DEFINITION}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </header>

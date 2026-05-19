@@ -1,15 +1,18 @@
 export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
+    { href: "/offers?mode=pledge", label: "Pledge swaps" },
+    { href: "/donation-offsets", label: "Offsets" },
     { href: "/mpgf", label: "MPGF" },
-    { href: "/#how-it-works", label: "How it works" },
-    { href: "/offers", label: "Offers" },
-    { href: "/donate", label: "Donate" },
-    { href: "/people", label: "People" },
+    { href: "/reasoning-standards", label: "Learn" },
+    { href: "/people", label: "Community" },
     {
       label: "More",
       items: [
+        { href: "/#about", label: "About" },
+        { href: "/offers", label: "All offers" },
+        { href: "/donate", label: "Donate" },
         { href: "/background-networking", label: "Background networking" },
-        { href: "/reasoning-standards", label: "Standards" },
+        { href: "/wish-registry", label: "Wish registry" },
         { href: "/methodology", label: "Methodology" },
         { href: "/safety", label: "Safety" },
         ...(isAuthenticated ? [] : [{ href: "/signup", label: "Create account" }]),

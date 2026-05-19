@@ -943,6 +943,7 @@ export async function listOpenOffersPage(
   page = 1,
   pageSize = OFFERS_PAGE_SIZE,
   mode: OfferRow["mode"] | "all" = "all",
+  searchQuery = "",
 ): Promise<PaginatedResult<OfferRecord>> {
   if (!hasSupabaseEnv()) {
     return buildPaginatedResult([], normalizePage(page), pageSize);
@@ -950,6 +951,7 @@ export async function listOpenOffersPage(
 
   const normalizedPage = normalizePage(page);
   const offset = (normalizedPage - 1) * pageSize;
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const supabase = await createClient();
   let query = supabase
     .from("offers")
@@ -960,10 +962,12 @@ export async function listOpenOffersPage(
     query = query.eq("mode", mode);
   }
 
-  const { data, error } = await query
+  const orderedQuery = query
     .order("created_at", { ascending: false })
-    .order("id", { ascending: true })
-    .range(offset, offset + pageSize);
+    .order("id", { ascending: true });
+  const { data, error } = normalizedSearchQuery
+    ? await orderedQuery.limit(240)
+    : await orderedQuery.range(offset, offset + pageSize);
 
   if (error) {
     throw new Error(error.message);
@@ -971,7 +975,12 @@ export async function listOpenOffersPage(
 
   const viewer = await getViewer();
   const hydrated = await hydrateOffers((data ?? []) as OfferRow[], viewer?.authUser.id);
-  return buildPaginatedResult(hydrated, normalizedPage, pageSize);
+  const searched = normalizedSearchQuery
+    ? hydrated.filter((offer) => offerMatchesSearchQuery(offer, normalizedSearchQuery))
+    : hydrated;
+  const pagedItems = normalizedSearchQuery ? searched.slice(offset) : searched;
+
+  return buildPaginatedResult(pagedItems, normalizedPage, pageSize);
 }
 
 export async function listOpenOffersPreview(limit = 120, mode: OfferRow["mode"] | "all" = "all") {
@@ -1000,6 +1009,32 @@ export async function listOpenOffersPreview(limit = 120, mode: OfferRow["mode"] 
 
   const viewer = await getViewer();
   return hydrateOffers((data ?? []) as OfferRow[], viewer?.authUser.id);
+}
+
+function offerMatchesSearchQuery(offer: OfferRecord, normalizedSearchQuery: string) {
+  const haystack = [
+    offer.offered_cause,
+    offer.requested_cause,
+    offer.compromise_cause,
+    offer.offer_action,
+    offer.request_action,
+    offer.notes,
+    offer.verification,
+    offer.duration,
+    offer.owner_alias,
+    offer.mode,
+    offer.donationOffset?.baseline_opposed_cause,
+    offer.donationOffset?.requested_opposed_cause,
+    offer.donationOffset?.compromiseCharity?.name,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return normalizedSearchQuery
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((token) => haystack.includes(token));
 }
 
 export async function getDonationOffsetOverview(): Promise<DonationOffsetOverview> {

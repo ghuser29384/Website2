@@ -99,7 +99,7 @@ export function ProfilePortabilityPanel() {
   }
 
   return (
-    <section className="section section-subtle">
+    <section className="section section-subtle" id="data-portability">
       <div className="section-head">
         <p className="eyebrow">Data portability</p>
         <h2>Export or import your wish registry data</h2>

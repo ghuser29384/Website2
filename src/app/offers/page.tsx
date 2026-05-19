@@ -104,6 +104,12 @@ function parseMode(value: string | string[] | undefined) {
   return "all" as const;
 }
 
+function parseSearchQuery(value: string | string[] | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  return (rawValue ?? "").trim().slice(0, 120);
+}
+
 function getCostEfficiencyScore(offer: OfferRecord) {
   if (offer.min_counterparty_impact <= 0) {
     return offer.offer_impact;
@@ -148,17 +154,67 @@ function buildBestOffersByCause(offers: OfferRecord[]) {
   });
 }
 
+function workedCaseMatchesSearch(
+  offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number],
+  searchQuery: string,
+) {
+  const normalizedSearchQuery = searchQuery.toLowerCase().trim();
+
+  if (!normalizedSearchQuery) {
+    return true;
+  }
+
+  const haystack = [
+    offer.alias,
+    offer.mode,
+    offer.offeredCause,
+    offer.requestedCause,
+    offer.compromiseCause,
+    offer.offerAction,
+    offer.requestAction,
+    offer.verification,
+    offer.duration,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return normalizedSearchQuery
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((token) => haystack.includes(token));
+}
+
+function buildOffersHref(mode: ReturnType<typeof parseMode>, searchQuery: string) {
+  const params = new URLSearchParams();
+
+  if (mode !== "all") {
+    params.set("mode", mode);
+  }
+
+  if (searchQuery) {
+    params.set("search", searchQuery);
+  }
+
+  const serialized = params.toString();
+  return serialized ? `/offers?${serialized}` : "/offers";
+}
+
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
   const page = parsePage(resolvedSearchParams.page);
   const mode = parseMode(resolvedSearchParams.mode);
+  const searchQuery = parseSearchQuery(resolvedSearchParams.search);
   const offersPage = hasSupabaseEnv()
-    ? await listOpenOffersPage(page, OFFERS_PAGE_SIZE, mode)
+    ? await listOpenOffersPage(page, OFFERS_PAGE_SIZE, mode, searchQuery)
     : { items: [], page, pageSize: OFFERS_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
   const bestOfferCandidates = hasSupabaseEnv() ? await listOpenOffersPreview(120) : [];
   const offers = offersPage.items;
-  const exampleOffers = CANONICAL_WORKED_CASE_OFFERS;
+  const exampleOffers = CANONICAL_WORKED_CASE_OFFERS.filter((offer) => {
+    const modeMatches = mode === "all" || offer.mode === mode;
+    return modeMatches && workedCaseMatchesSearch(offer, searchQuery);
+  });
   const bestOffersByCause = buildBestOffersByCause(bestOfferCandidates);
   const formMessage = getFormMessage(resolvedSearchParams);
   const offersStructuredData = {
@@ -253,7 +309,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         <section className="section section-subtle">
           <div className="section-head">
             <p className="eyebrow">Example structures</p>
-            <h2>{exampleOffers.length} worked examples show what a usable trade record looks like</h2>
+            <h2>
+              {exampleOffers.length} worked example{exampleOffers.length === 1 ? "" : "s"} match
+              the current view
+            </h2>
             <p>
               These examples are not live offers. They show the level of specificity a published
               trade should have: the action, the reciprocal request, the cause areas, and the
@@ -262,25 +321,34 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </div>
 
           <div className="data-grid">
-            {exampleOffers.map((offer) => (
-              <article className="panel data-card" key={offer.id}>
-                <p className="detail-kicker">{formatMode(offer.mode)} example</p>
-                <h3>{offer.alias}: {offer.offeredCause} for {offer.requestedCause}</h3>
-                <p className="route-text">{offer.offerAction}</p>
-                <p className="route-text">Requests in return: {offer.requestAction}</p>
-                <div className="tag-row">
-                  <span className="badge">{offer.offeredCause}</span>
-                  <span className="badge badge-secondary">{offer.requestedCause}</span>
-                  <span className="impact-pill">{offer.offerImpact}/10 offered</span>
-                  <span className="impact-pill">{offer.minCounterpartyImpact}+/10 needed</span>
-                  <span className="impact-pill">{offer.verification}</span>
-                  <span className="impact-pill">{offer.duration}</span>
-                  {formatPaymentCadence(offer) ? (
-                    <span className="impact-pill">{formatPaymentCadence(offer)}</span>
-                  ) : null}
+            {exampleOffers.length ? (
+              exampleOffers.map((offer) => (
+                <article className="panel data-card" key={offer.id}>
+                  <p className="detail-kicker">{formatMode(offer.mode)} example</p>
+                  <h3>{offer.alias}: {offer.offeredCause} for {offer.requestedCause}</h3>
+                  <p className="route-text">{offer.offerAction}</p>
+                  <p className="route-text">Requests in return: {offer.requestAction}</p>
+                  <div className="tag-row">
+                    <span className="badge">{offer.offeredCause}</span>
+                    <span className="badge badge-secondary">{offer.requestedCause}</span>
+                    <span className="impact-pill">{offer.offerImpact}/10 offered</span>
+                    <span className="impact-pill">{offer.minCounterpartyImpact}+/10 needed</span>
+                    <span className="impact-pill">{offer.verification}</span>
+                    <span className="impact-pill">{offer.duration}</span>
+                    {formatPaymentCadence(offer) ? (
+                      <span className="impact-pill">{formatPaymentCadence(offer)}</span>
+                    ) : null}
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No worked example matches this filter.</strong>
+                  <p>Clear the search or switch trade type to inspect the full seed set.</p>
                 </div>
-              </article>
-            ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -399,12 +467,30 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             </p>
           </div>
 
+          <form action="/offers" className="marketplace-search" role="search">
+            <label className="field marketplace-search-field">
+              <span>Search trades</span>
+              <input
+                defaultValue={searchQuery}
+                name="search"
+                placeholder="Search cause areas, actions, verification terms"
+                type="search"
+              />
+            </label>
+            {mode !== "all" ? <input name="mode" type="hidden" value={mode} /> : null}
+            <button className="button button-primary" type="submit">
+              Search
+            </button>
+            {searchQuery ? (
+              <Link className="button button-secondary" href={buildOffersHref(mode, "")}>
+                Clear search
+              </Link>
+            ) : null}
+          </form>
+
           <div className="sort-tabs">
             {FILTER_MODE_OPTIONS.map((option) => {
-              const href =
-                option.value === "all"
-                  ? "/offers"
-                  : `/offers?mode=${encodeURIComponent(option.value)}`;
+              const href = buildOffersHref(option.value, searchQuery);
 
               return (
                 <Link
@@ -551,7 +637,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               {offersPage.hasPreviousPage ? (
                 <Link
                   className="button button-secondary"
-                  href={`/offers?page=${offersPage.page - 1}${mode !== "all" ? `&mode=${mode}` : ""}`}
+                  href={`${buildOffersHref(mode, searchQuery)}${
+                    buildOffersHref(mode, searchQuery).includes("?") ? "&" : "?"
+                  }page=${offersPage.page - 1}`}
                 >
                   Previous page
                 </Link>
@@ -562,7 +650,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               {offersPage.hasNextPage ? (
                 <Link
                   className="button button-secondary"
-                  href={`/offers?page=${offersPage.page + 1}${mode !== "all" ? `&mode=${mode}` : ""}`}
+                  href={`${buildOffersHref(mode, searchQuery)}${
+                    buildOffersHref(mode, searchQuery).includes("?") ? "&" : "?"
+                  }page=${offersPage.page + 1}`}
                 >
                   Next page
                 </Link>

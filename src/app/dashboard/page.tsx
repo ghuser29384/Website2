@@ -1835,7 +1835,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        <section className="section section-white">
+        <section className="section section-white" id="my-trades">
           <div className="section-head">
             <p className="eyebrow">Your offers</p>
             <h2>Recent published commitments</h2>

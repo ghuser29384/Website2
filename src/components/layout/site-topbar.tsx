@@ -3,9 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useId, useMemo, useState, useTransition, type FormEvent } from "react";
 
 import { createClient } from "@/lib/supabase/browser";
+import { filterSiteSearchItems } from "@/lib/site-search";
 
 interface NavRouteItem {
   href: string;
@@ -85,7 +86,24 @@ export function SiteTopbar({
   logoutRedirectTo = "/",
 }: SiteTopbarProps) {
   const router = useRouter();
+  const searchInputId = useId();
   const [isLoggingOut, startLogoutTransition] = useTransition();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchResults = useMemo(() => filterSiteSearchItems(searchQuery, 6), [searchQuery]);
+
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedQuery = searchQuery.trim();
+
+    if (!trimmedQuery) {
+      router.push("/offers");
+      return;
+    }
+
+    setSearchOpen(false);
+    router.push(`/offers?search=${encodeURIComponent(trimmedQuery)}`);
+  }
 
   function handleLogout() {
     startLogoutTransition(async () => {
@@ -118,8 +136,81 @@ export function SiteTopbar({
           ) : null,
         )}
       </div>
+      <form className="topbar-search" role="search" onSubmit={handleSearchSubmit}>
+        <label className="sr-only" htmlFor={searchInputId}>
+          Search trades
+        </label>
+        <div className="topbar-search-box">
+          <span aria-hidden="true" className="topbar-search-icon">
+            Search
+          </span>
+          <input
+            id={searchInputId}
+            name="search"
+            placeholder="Search trades"
+            type="search"
+            value={searchQuery}
+            onBlur={() => {
+              globalThis.setTimeout(() => setSearchOpen(false), 120);
+            }}
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              setSearchOpen(true);
+            }}
+            onFocus={() => setSearchOpen(true)}
+          />
+          {searchQuery ? (
+            <button
+              aria-label="Clear search"
+              className="topbar-search-clear"
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setSearchOpen(false);
+              }}
+            >
+              Clear
+            </button>
+          ) : null}
+          <button className="topbar-search-submit" type="submit">
+            Go
+          </button>
+        </div>
+        {searchOpen && searchQuery.trim() ? (
+          <div className="topbar-search-results" role="listbox" aria-label="Search suggestions">
+            {searchResults.length ? (
+              searchResults.map((result) => (
+                <Link
+                  className="topbar-search-result"
+                  href={result.href}
+                  key={`${result.kind}-${result.href}`}
+                  role="option"
+                  onClick={() => setSearchOpen(false)}
+                >
+                  <span>{result.label}</span>
+                  <small>{result.summary}</small>
+                </Link>
+              ))
+            ) : (
+              <div className="topbar-search-empty" role="status">
+                No matching routes yet. Press Go to search offers.
+              </div>
+            )}
+          </div>
+        ) : null}
+      </form>
       {showLogout || authLink || primaryAction ? (
         <div className="topbar-actions">
+          {showLogout ? (
+            <NavMenu
+              items={[
+                { href: "/dashboard#my-trades", label: "My trades" },
+                { href: "/dashboard#data-portability", label: "Profile data" },
+                { href: "/cart", label: "Favourites" },
+              ]}
+              label="Account"
+            />
+          ) : null}
           {primaryAction ? (
             <NavItem className="button button-nav" href={primaryAction.href} label={primaryAction.label} />
           ) : null}

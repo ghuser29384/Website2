@@ -9,6 +9,7 @@ import {
   CANONICAL_WORKED_CASE_COUNT,
   CANONICAL_WORKED_CASE_OFFERS,
 } from "@/lib/seed-data";
+import { filterSiteSearchItems } from "@/lib/site-search";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 function readRepoFile(path: string) {
@@ -22,21 +23,22 @@ function flattenPrimaryNavHrefs() {
   ]);
 }
 
-test("public navigation points at the flagship MPGF flow and hides unfinished routes", () => {
+test("public navigation exposes professional marketplace routes", () => {
   const hrefs = flattenPrimaryNavHrefs();
 
   assert.equal(getTopbarActions(false).primaryAction.href, "/mpgf/contribute");
+  assert.ok(hrefs.includes("/offers?mode=pledge"));
+  assert.ok(hrefs.includes("/donation-offsets"));
   assert.ok(hrefs.includes("/mpgf"));
   assert.ok(hrefs.includes("/offers"));
   assert.ok(hrefs.includes("/donate"));
   assert.ok(hrefs.includes("/background-networking"));
   assert.ok(hrefs.includes("/reasoning-standards"));
+  assert.ok(hrefs.includes("/wish-registry"));
   assert.ok(hrefs.includes("/signup"));
   assert.ok(!hrefs.includes("/#background-networking"));
   assert.ok(!hrefs.includes("/#standards"));
   assert.ok(!hrefs.includes("/cart"));
-  assert.ok(!hrefs.includes("/wish-registry"));
-  assert.ok(!hrefs.includes("/donation-offsets"));
   assert.ok(!hrefs.includes("/mpgf/pools"));
   assert.ok(!hrefs.includes("/offers#best-offers"));
 });
@@ -241,6 +243,39 @@ test("home page exposes a single primary nav source", () => {
 
   assert.match(topbarSource, /aria-label="Primary"/);
   assert.equal(homeSource.includes("topbar-floating-shell"), false);
+});
+
+test("global search and offers search expose real marketplace discovery", () => {
+  const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
+  const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const appDataSource = readRepoFile("src/lib/app-data.ts");
+  const animalResults = filterSiteSearchItems("animal welfare");
+  const mpfgResults = filterSiteSearchItems("manual evidence");
+
+  assert.match(topbarSource, /placeholder="Search trades"/);
+  assert.match(topbarSource, /filterSiteSearchItems/);
+  assert.match(topbarSource, /topbar-search-results/);
+  assert.match(offersPage, /name="search"/);
+  assert.match(offersPage, /workedCaseMatchesSearch/);
+  assert.match(appDataSource, /offerMatchesSearchQuery/);
+  assert.equal(animalResults[0]?.href, "/offers?search=Animal%20Welfare");
+  assert.ok(mpfgResults.some((result) => result.href === "/mpgf"));
+});
+
+test("home page leads with action, prototype metrics, and categories before dense definitions", () => {
+  const homeSource = readRepoFile("src/components/home/home-page.tsx");
+  const heroIndex = homeSource.indexOf("Transform disagreements into impact.");
+  const metricsIndex = homeSource.indexOf("home-metrics-strip");
+  const categoriesIndex = homeSource.indexOf("Browse by cause");
+  const openingIndex = homeSource.indexOf("opening-sequence");
+
+  assert.ok(heroIndex > -1);
+  assert.ok(metricsIndex > heroIndex);
+  assert.ok(categoriesIndex > metricsIndex);
+  assert.ok(openingIndex > categoriesIndex);
+  assert.match(homeSource, /Explore trades/);
+  assert.match(homeSource, /Start a trade|Create account/);
+  assert.match(homeSource, /marketplaceCategories/);
 });
 
 test("MPGF signed-out manual evidence copy and controls are gated", () => {
