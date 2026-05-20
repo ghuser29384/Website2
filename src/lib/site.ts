@@ -1,23 +1,36 @@
 export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
-    { href: "/offers?mode=pledge", label: "Pledge swaps" },
-    { href: "/donation-offsets", label: "Offsets" },
-    { href: "/mpgf", label: "MPGF" },
-    { href: "/reasoning-standards", label: "Learn" },
-    { href: "/people", label: "Community" },
     {
-      label: "More",
+      label: "Marketplace",
       items: [
-        { href: "/#about", label: "About" },
-        { href: "/offers", label: "All offers" },
-        { href: "/donate", label: "Donate" },
-        { href: "/background-networking", label: "Background networking" },
-        { href: "/wish-registry", label: "Wish registry" },
-        { href: "/methodology", label: "Methodology" },
-        { href: "/safety", label: "Safety" },
-        ...(isAuthenticated ? [] : [{ href: "/signup", label: "Create account" }]),
+        { href: "/offers", label: "All trades" },
+        { href: "/offers?mode=pledge", label: "Pledge swaps" },
+        { href: "/donation-offsets", label: "Donation offsets" },
+        { href: "/mpgf", label: "Moral Public Goods Fund" },
+        { href: isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new", label: "Create trade" },
       ],
     },
+    {
+      label: "Learn",
+      items: [
+        { href: "/reasoning-standards", label: "Tutorials" },
+        { href: "/methodology", label: "Methodology" },
+        { href: "/safety", label: "Safety" },
+        { href: "/background-networking", label: "Background networking" },
+        { href: "/#faq", label: "FAQ" },
+      ],
+    },
+    {
+      label: "Community",
+      items: [
+        { href: "/people", label: "Profiles" },
+        { href: "/wish-registry", label: "Wish registry" },
+        { href: "/priority-correction-fund", label: "Priority fund" },
+        { href: "/mpgf/pools", label: "MPGF pools" },
+        { href: isAuthenticated ? "/dashboard" : "/signup", label: isAuthenticated ? "Dashboard" : "Create account" },
+      ],
+    },
+    { href: "/#about", label: "About" },
   ];
 
   return links;
@@ -28,49 +41,49 @@ export function getTopbarActions(isAuthenticated = false) {
     authLink: isAuthenticated
       ? { href: "/dashboard", label: "Dashboard" }
       : { href: "/login", label: "Sign in" },
-    primaryAction: { href: "/mpgf/contribute", label: "Contribute" },
+    primaryAction: {
+      href: isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new",
+      label: "Create trade",
+    },
   };
 }
 
 export const FOOTER_LINK_GROUPS = [
   {
-    title: "Moral Trade",
+    title: "Marketplace",
     links: [
-      { href: "/#about", label: "About" },
-      { href: "/#how-it-works", label: "How it works" },
-      { href: "/background-networking", label: "Background networking" },
-      { href: "/#commitments", label: "Blockers" },
+      { href: "/offers", label: "All trades" },
+      { href: "/offers?mode=pledge", label: "Pledge swaps" },
+      { href: "/donation-offsets", label: "Donation offsets" },
+      { href: "/offers/new", label: "Create trade" },
+      { href: "/donate", label: "Donation routes" },
     ],
   },
   {
-    title: "Standards",
+    title: "Learn",
     links: [
+      { href: "/#about", label: "About" },
+      { href: "/#how-it-works", label: "How it works" },
       { href: "/methodology", label: "Methodology" },
       { href: "/reasoning-standards", label: "Reasoning standards" },
       { href: "/safety", label: "Safety" },
+      { href: "/#faq", label: "FAQ" },
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },
     ],
   },
   {
-    title: "Participation",
+    title: "Community",
     links: [
+      { href: "/people", label: "People" },
+      { href: "/wish-registry", label: "Wish registry" },
+      { href: "/background-networking", label: "Background networking" },
+      { href: "/priority-correction-fund", label: "Priority fund" },
       { href: "/mpgf", label: "MPGF" },
       { href: "/mpgf/contribute", label: "Manual evidence" },
-      { href: "/offers", label: "Public offers" },
-      { href: "/donate", label: "Donate" },
-      { href: "/people", label: "People" },
+      { href: "/mpgf/pools", label: "MPGF pools" },
       { href: "/signup", label: "Sign up" },
       { href: "/login", label: "Log in" },
-    ],
-  },
-  {
-    title: "Prototype lab",
-    links: [
-      { href: "/donation-offsets", label: "Donation offsets guide" },
-      { href: "/mpgf/pools", label: "MPGF pools" },
-      { href: "/wish-registry", label: "Wish registry" },
-      { href: "/priority-correction-fund", label: "Priority fund" },
     ],
   },
 ] as const;

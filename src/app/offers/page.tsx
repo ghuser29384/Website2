@@ -83,6 +83,14 @@ const SPOTLIGHT_CAUSES = [
   },
 ] as const;
 
+const CAUSE_FILTER_CHIPS = [
+  "Global poverty",
+  "Animal welfare",
+  "Climate",
+  "Existential risk",
+  "Future flourishing",
+] as const;
+
 function normalizeCause(cause: string) {
   return cause.trim().toLowerCase();
 }
@@ -487,6 +495,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </Link>
             ) : null}
           </form>
+
+          <div className="filter-chip-row" aria-label="Popular cause filters">
+            {CAUSE_FILTER_CHIPS.map((cause) => (
+              <Link
+                className={`filter-chip ${searchQuery.toLowerCase() === cause.toLowerCase() ? "is-active" : ""}`}
+                href={buildOffersHref(mode, cause)}
+                key={cause}
+              >
+                {cause}
+              </Link>
+            ))}
+          </div>
 
           <div className="sort-tabs">
             {FILTER_MODE_OPTIONS.map((option) => {

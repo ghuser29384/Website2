@@ -12,6 +12,7 @@ import { OfferBoard } from "@/components/home/offer-board";
 import { OfferDetails } from "@/components/home/offer-details";
 import { ParetoChart } from "@/components/home/pareto-chart";
 import { ValuesInterview } from "@/components/home/values-interview";
+import type { MarketplaceOverview } from "@/lib/app-data";
 import {
   adjustDraftForMode,
   CAUSE_OPTIONS,
@@ -36,6 +37,7 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 interface HomePageProps {
   isAuthenticated: boolean;
+  marketplaceOverview: MarketplaceOverview;
 }
 
 const standards = [
@@ -134,21 +136,25 @@ const marketplaceCategories = [
     title: "Global health",
     text: "Donation offsets, pledge swaps, and public-good contributions connected to health and poverty.",
     href: "/offers?search=Global%20Health",
+    keywords: ["global health", "public health", "poverty"],
   },
   {
     title: "Animal welfare",
     text: "Vegetarian commitments, welfare-focused offsets, and reciprocal action offers.",
     href: "/offers?search=Animal%20Welfare",
+    keywords: ["animal", "vegetarian", "welfare"],
   },
   {
     title: "Climate action",
     text: "Emission reductions, climate resilience, and compromise destinations with broad appeal.",
     href: "/offers?search=Climate",
+    keywords: ["climate", "emission", "carbon"],
   },
   {
     title: "Long-run futures",
     text: "Existential risk, digital minds, and future-flourishing trade proposals.",
     href: "/offers?search=Existential%20risk",
+    keywords: ["existential", "future", "digital mind", "s-risk"],
   },
 ] as const;
 
@@ -190,6 +196,46 @@ function getWordRevealStyle(progress: number): CSSProperties {
   };
 }
 
+function formatIntegerMetric(value: number | null) {
+  if (value === null) {
+    return "Unavailable";
+  }
+
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function formatMoneyMetric(cents: number | null) {
+  if (cents === null) {
+    return "Unavailable";
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
+  }).format(cents / 100);
+}
+
+function countCategoryOffers(
+  category: (typeof marketplaceCategories)[number],
+  offers: Offer[],
+) {
+  return offers.filter((offer) => {
+    const haystack = [
+      offer.offeredCause,
+      offer.requestedCause,
+      offer.compromiseCause,
+      offer.offerAction,
+      offer.requestAction,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+
+    return category.keywords.some((keyword) => haystack.includes(keyword));
+  }).length;
+}
+
 function OpeningWord({
   prefix,
   core,
@@ -207,7 +253,7 @@ function OpeningWord({
   );
 }
 
-export function HomePage({ isAuthenticated }: HomePageProps) {
+export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps) {
   const openingSequenceRef = useRef<HTMLDivElement | null>(null);
   const [draft, setDraft] = useState<OfferDraft>(createDefaultOfferDraft());
   const [filters, setFilters] = useState<OfferFilters>(DEFAULT_FILTERS);
@@ -311,6 +357,11 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
   const exactMatches = scoredPairs.filter((pair) => pair.exact);
   const displayedMatches = exactMatches.length ? exactMatches : scoredPairs.slice(0, 3);
   const visibleOffers = sortOffers(filterOffers(allOffers, filters), selectedOffer, filters.sortOrder);
+  const createTradeHref = isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new";
+  const categoryCards = marketplaceCategories.map((category) => ({
+    ...category,
+    workedExampleCount: countCategoryOffers(category, allOffers),
+  }));
   const firstDefinitionProgress = getSegmentProgress(openingRevealProgress, 0.08, 0.34);
   const secondWordProgress = getSegmentProgress(openingRevealProgress, 0.46, 0.68);
   const secondDefinitionProgress = getSegmentProgress(openingRevealProgress, 0.74, 1);
@@ -403,21 +454,17 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
           <div className="hero-grid hero-grid-editorial">
             <section className="hero-copy" id="top">
               <p className="eyebrow">Trade and compromise under disagreement</p>
-              <h1>Transform disagreements into impact.</h1>
+              <h1>Turn disagreements into impact.</h1>
               <p className="hero-text">
-                Moral Trade helps people turn compatible disagreements into voluntary,
-                evidence-gated offers: pledge swaps, donation offsets, and shared public-good
-                funding.
+                Connect with others to swap pledges, redirect donation offsets, and fund moral
+                public goods under voluntary terms and explicit verification rules.
               </p>
               <div className="hero-actions">
                 <Link className="button button-primary" href="/offers">
                   Explore trades
                 </Link>
-                <Link className="button button-secondary" href={isAuthenticated ? "/offers/new" : "/signup"}>
-                  {isAuthenticated ? "Start a trade" : "Create account"}
-                </Link>
-                <Link className="button button-secondary" href="/reasoning-standards">
-                  Learn the standards
+                <Link className="button button-secondary" href={createTradeHref}>
+                  Create a trade
                 </Link>
               </div>
               <ul className="hero-signals" aria-label="Operating standards">
@@ -426,38 +473,38 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
                 <li>No legal escrow claim</li>
               </ul>
               <p className="hero-followup">
-                Review the <Link href="/offers">public offers</Link> and the safeguards below
-                before taking part.
+                New here? Review the <Link href="/reasoning-standards">standards</Link> and{" "}
+                <Link href="/safety">safety rules</Link> before taking part.
               </p>
             </section>
 
             <aside className="hero-panel panel">
-              <p className="eyebrow">What has to be checked</p>
+              <p className="eyebrow">How it works</p>
               <div className="flow-card">
                 <div className="flow-step">
                   <span className="flow-number">01</span>
                   <div>
-                    <strong>Where the gain comes from</strong>
+                    <strong>Choose a trade type</strong>
                     <p>
-                      State why each side regards the outcome as better than acting separately.
+                      Start with a pledge swap, donation offset, paid action, or MPGF contribution.
                     </p>
                   </div>
                 </div>
                 <div className="flow-step">
                   <span className="flow-number">02</span>
                   <div>
-                    <strong>Whether the views are resource-compatible</strong>
+                    <strong>State reciprocal terms</strong>
                     <p>
-                      Some trades work because the same resources can satisfy both views unusually well.
+                      Make the action, ask, baseline, threshold, exit rule, and verification standard explicit.
                     </p>
                   </div>
                 </div>
                 <div className="flow-step">
                   <span className="flow-number">03</span>
                   <div>
-                    <strong>Why this is trade rather than threat</strong>
+                    <strong>Review before trust</strong>
                     <p>
-                      A bargain is not enough if one side would still see the world as worse either way.
+                      Publication stays evidence-gated and must distinguish voluntary trade from pressure.
                     </p>
                   </div>
                 </div>
@@ -498,11 +545,22 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
             </article>
           </div>
 
-          <div className="home-metrics-strip" aria-label="Prototype marketplace metrics">
+          <div
+            className="home-metrics-strip"
+            aria-label={marketplaceOverview.hasLiveData ? "Marketplace metrics" : "Prototype marketplace metrics"}
+          >
             <article className="home-metric">
-              <span>Worked examples</span>
-              <strong>{allOffers.length}</strong>
-              <p>Pledge, offset, and payment structures ready to inspect.</p>
+              <span>{marketplaceOverview.hasLiveData ? "Open trades" : "Worked examples"}</span>
+              <strong>
+                {marketplaceOverview.hasLiveData
+                  ? formatIntegerMetric(marketplaceOverview.openOfferCount)
+                  : allOffers.length}
+              </strong>
+              <p>
+                {marketplaceOverview.hasLiveData
+                  ? "Published public offers currently open for review."
+                  : "Seeded pledge, offset, and payment structures ready to inspect."}
+              </p>
             </article>
             <article className="home-metric">
               <span>Trade formats</span>
@@ -510,14 +568,22 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               <p>Pledge swaps, donation offsets, and bounded paid actions.</p>
             </article>
             <article className="home-metric">
-              <span>Visible now</span>
-              <strong>{visibleOffers.length}</strong>
-              <p>Examples in the current local workspace view.</p>
+              <span>Public profiles</span>
+              <strong>
+                {marketplaceOverview.hasLiveData
+                  ? formatIntegerMetric(marketplaceOverview.publicProfileCount)
+                  : "Not live"}
+              </strong>
+              <p>Members shown with privacy-limited public fields when the database is connected.</p>
             </article>
             <article className="home-metric">
-              <span>Strong fits</span>
-              <strong>{exactMatches.length}</strong>
-              <p>Reciprocal fits among the worked examples.</p>
+              <span>Reviewed offsets</span>
+              <strong>
+                {marketplaceOverview.hasLiveData
+                  ? formatMoneyMetric(marketplaceOverview.redirectedOffsetCents)
+                  : "Not live"}
+              </strong>
+              <p>Donation offsets logged after review; this is not a custody or escrow claim.</p>
             </article>
           </div>
 
@@ -527,10 +593,11 @@ export function HomePage({ isAuthenticated }: HomePageProps) {
               <h2>Find trades by moral priority</h2>
             </div>
             <div className="home-category-grid">
-              {marketplaceCategories.map((category) => (
+              {categoryCards.map((category) => (
                 <Link className="panel home-category-card" href={category.href} key={category.title}>
                   <span>{category.title}</span>
                   <p>{category.text}</p>
+                  <small>{category.workedExampleCount} worked example{category.workedExampleCount === 1 ? "" : "s"}</small>
                 </Link>
               ))}
             </div>

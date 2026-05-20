@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { HomePage } from "@/components/home/home-page";
-import { getViewer } from "@/lib/app-data";
+import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, SITE_NAME, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
@@ -67,7 +67,10 @@ const faqStructuredData = {
 };
 
 export default async function Page() {
-  const viewer = await getViewer();
+  const [viewer, marketplaceOverview] = await Promise.all([
+    getViewer(),
+    getMarketplaceOverview(),
+  ]);
 
   return (
     <>
@@ -77,7 +80,7 @@ export default async function Page() {
         }}
         type="application/ld+json"
       />
-      <HomePage isAuthenticated={Boolean(viewer)} />
+      <HomePage isAuthenticated={Boolean(viewer)} marketplaceOverview={marketplaceOverview} />
     </>
   );
 }

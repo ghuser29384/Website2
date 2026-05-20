@@ -24,14 +24,16 @@ function flattenPrimaryNavHrefs() {
 }
 
 test("public navigation exposes professional marketplace routes", () => {
+  const labels = getPrimaryNavLinks(false).map((link) => link.label);
   const hrefs = flattenPrimaryNavHrefs();
 
-  assert.equal(getTopbarActions(false).primaryAction.href, "/mpgf/contribute");
+  assert.deepEqual(labels, ["Marketplace", "Learn", "Community", "About"]);
+  assert.equal(getTopbarActions(false).primaryAction.href, "/signup?returnTo=/offers/new");
+  assert.equal(getTopbarActions(false).primaryAction.label, "Create trade");
   assert.ok(hrefs.includes("/offers?mode=pledge"));
   assert.ok(hrefs.includes("/donation-offsets"));
   assert.ok(hrefs.includes("/mpgf"));
   assert.ok(hrefs.includes("/offers"));
-  assert.ok(hrefs.includes("/donate"));
   assert.ok(hrefs.includes("/background-networking"));
   assert.ok(hrefs.includes("/reasoning-standards"));
   assert.ok(hrefs.includes("/wish-registry"));
@@ -39,7 +41,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(!hrefs.includes("/#background-networking"));
   assert.ok(!hrefs.includes("/#standards"));
   assert.ok(!hrefs.includes("/cart"));
-  assert.ok(!hrefs.includes("/mpgf/pools"));
+  assert.ok(hrefs.includes("/mpgf/pools"));
   assert.ok(!hrefs.includes("/offers#best-offers"));
 });
 
@@ -256,6 +258,8 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(topbarSource, /filterSiteSearchItems/);
   assert.match(topbarSource, /topbar-search-results/);
   assert.match(offersPage, /name="search"/);
+  assert.match(offersPage, /CAUSE_FILTER_CHIPS/);
+  assert.match(offersPage, /filter-chip/);
   assert.match(offersPage, /workedCaseMatchesSearch/);
   assert.match(appDataSource, /offerMatchesSearchQuery/);
   assert.equal(animalResults[0]?.href, "/offers?search=Animal%20Welfare");
@@ -264,7 +268,7 @@ test("global search and offers search expose real marketplace discovery", () => 
 
 test("home page leads with action, prototype metrics, and categories before dense definitions", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
-  const heroIndex = homeSource.indexOf("Transform disagreements into impact.");
+  const heroIndex = homeSource.indexOf("Turn disagreements into impact.");
   const metricsIndex = homeSource.indexOf("home-metrics-strip");
   const categoriesIndex = homeSource.indexOf("Browse by cause");
   const openingIndex = homeSource.indexOf("opening-sequence");
@@ -274,8 +278,26 @@ test("home page leads with action, prototype metrics, and categories before dens
   assert.ok(categoriesIndex > metricsIndex);
   assert.ok(openingIndex > categoriesIndex);
   assert.match(homeSource, /Explore trades/);
-  assert.match(homeSource, /Start a trade|Create account/);
+  assert.match(homeSource, /Create a trade/);
+  assert.match(homeSource, /marketplaceOverview/);
+  assert.match(homeSource, /workedExampleCount/);
   assert.match(homeSource, /marketplaceCategories/);
+});
+
+test("homepage metrics use live counts when available and avoid fake impact totals", () => {
+  const pageSource = readRepoFile("src/app/page.tsx");
+  const homeSource = readRepoFile("src/components/home/home-page.tsx");
+  const appDataSource = readRepoFile("src/lib/app-data.ts");
+
+  assert.match(pageSource, /getMarketplaceOverview/);
+  assert.match(homeSource, /Open trades/);
+  assert.match(homeSource, /Public profiles/);
+  assert.match(homeSource, /Reviewed offsets/);
+  assert.match(homeSource, /not a custody or escrow claim/);
+  assert.match(appDataSource, /openOfferCount/);
+  assert.match(appDataSource, /completedAgreementCount/);
+  assert.equal(homeSource.includes("total value traded"), false);
+  assert.equal(homeSource.includes("registered users"), false);
 });
 
 test("MPGF signed-out manual evidence copy and controls are gated", () => {

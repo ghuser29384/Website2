@@ -318,6 +318,15 @@ export interface DonationOffsetOverview {
   pools: DonationOffsetPoolRecord[];
 }
 
+export interface MarketplaceOverview {
+  hasLiveData: boolean;
+  openOfferCount: number | null;
+  publicProfileCount: number | null;
+  completedAgreementCount: number | null;
+  redirectedOffsetCents: number | null;
+  pooledCommitmentCents: number | null;
+}
+
 function logSupabaseError(
   context: string,
   error: LoggedErrorLike,
@@ -1157,6 +1166,57 @@ export async function getDonationOffsetOverview(): Promise<DonationOffsetOvervie
       .sort((left, right) => right.totalRedirectedCents - left.totalRedirectedCents)
       .slice(0, 6),
     pools: activePools,
+  };
+}
+
+export async function getMarketplaceOverview(): Promise<MarketplaceOverview> {
+  if (!hasSupabaseEnv()) {
+    return {
+      hasLiveData: false,
+      openOfferCount: null,
+      publicProfileCount: null,
+      completedAgreementCount: null,
+      redirectedOffsetCents: null,
+      pooledCommitmentCents: null,
+    };
+  }
+
+  const supabase = await createClient();
+  const [openOffersResult, profilesResult, completedAgreementsResult, donationOffsetOverview] =
+    await Promise.all([
+      supabase.from("offers").select("id", { count: "exact", head: true }).eq("status", "open"),
+      supabase.from("profiles").select("id", { count: "exact", head: true }),
+      supabase
+        .from("agreements")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "completed"),
+      getDonationOffsetOverview().catch((error) => {
+        const message =
+          error instanceof Error ? error.message : "Unable to load donation offset overview.";
+        console.error("[supabase] Failed to load donation offset metrics", { message });
+        return null;
+      }),
+    ]);
+
+  if (openOffersResult.error) {
+    logSupabaseError("Failed to count open public offers", openOffersResult.error);
+  }
+  if (profilesResult.error) {
+    logSupabaseError("Failed to count public profiles", profilesResult.error);
+  }
+  if (completedAgreementsResult.error) {
+    logSupabaseError("Failed to count completed agreements", completedAgreementsResult.error);
+  }
+
+  return {
+    hasLiveData: true,
+    openOfferCount: openOffersResult.error ? null : openOffersResult.count ?? 0,
+    publicProfileCount: profilesResult.error ? null : profilesResult.count ?? 0,
+    completedAgreementCount: completedAgreementsResult.error
+      ? null
+      : completedAgreementsResult.count ?? 0,
+    redirectedOffsetCents: donationOffsetOverview?.totalRedirectedCents ?? null,
+    pooledCommitmentCents: donationOffsetOverview?.pooledCommitmentCents ?? null,
   };
 }
 
