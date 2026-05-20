@@ -31,6 +31,7 @@ import {
   OFFER_MODE_OPTIONS,
   PAYMENT_INTERVAL_UNIT_OPTIONS,
   VERIFICATION_OPTIONS,
+  type PaymentIntervalUnit,
   type OfferMode,
 } from "@/lib/offers";
 
@@ -73,7 +74,108 @@ interface OfferCreateFormProps {
   initialOffsetPoolSide?: "side_a" | "side_b" | "";
 }
 
+interface OfferTemplate {
+  title: string;
+  description: string;
+  mode: OfferMode;
+  offeredCause: string;
+  requestedCause: string;
+  compromiseCause: string;
+  offerAction: string;
+  requestAction: string;
+  notes: string;
+  offerImpact: string;
+  minCounterpartyImpact: string;
+  verification: string;
+  duration: string;
+  paymentIntervalUnit: PaymentIntervalUnit;
+  paymentIntervalValue: string;
+  trustLevel: string;
+  offset?: {
+    baselineAmountUsd: string;
+    requestedMatchingAmountUsd: string;
+    baselineOpposedCause: string;
+    requestedOpposedCause: string;
+    participationMode: "direct" | "pool";
+    offsetRatio: string;
+  };
+}
+
 const defaultOffsetFields = createDefaultDonationOffsetFields();
+
+const OFFER_TEMPLATES: OfferTemplate[] = [
+  {
+    title: "Vegetarian pledge swap",
+    description: "A bounded habit change in exchange for a donation or volunteer commitment.",
+    mode: "pledge",
+    offeredCause: "Animal welfare",
+    requestedCause: "Global poverty",
+    compromiseCause: "Not needed",
+    offerAction:
+      "I will follow a vegetarian diet for the review period and keep a simple public log of exceptions.",
+    requestAction:
+      "The counterparty will donate to an evidence-focused global health or poverty charity during the same period.",
+    notes:
+      "This is a voluntary pledge swap. Each side should be free to decline, pause, or renegotiate if the burden becomes materially different from what was stated.",
+    offerImpact: "7",
+    minCounterpartyImpact: "6",
+    verification: "Public pledge",
+    duration: "6 months",
+    paymentIntervalUnit: "none",
+    paymentIntervalValue: "1",
+    trustLevel: "3",
+  },
+  {
+    title: "Matched donation offset",
+    description: "Redirect opposed donations to a named compromise destination with evidence rules.",
+    mode: "offset",
+    offeredCause: "Democracy",
+    requestedCause: "Global poverty",
+    compromiseCause: "Global poverty",
+    offerAction:
+      "I will redirect a real planned donation away from my baseline opposed cause and into the named compromise destination.",
+    requestAction:
+      "The counterparty will redirect the matched portion of their opposed donation into the same compromise destination.",
+    notes:
+      "This offset should only be used for a genuine baseline intention. It is not a threat, custody promise, tax claim, or legal escrow arrangement.",
+    offerImpact: "7",
+    minCounterpartyImpact: "7",
+    verification: "Manual review required",
+    duration: "3 months",
+    paymentIntervalUnit: "none",
+    paymentIntervalValue: "1",
+    trustLevel: "4",
+    offset: {
+      baselineAmountUsd: "1000",
+      requestedMatchingAmountUsd: "1000",
+      baselineOpposedCause: "Democracy",
+      requestedOpposedCause: "Gun rights",
+      participationMode: "direct",
+      offsetRatio: "1",
+    },
+  },
+  {
+    title: "Paid action trial",
+    description: "A bounded action offer with payment pending verification rather than custody.",
+    mode: "payment",
+    offeredCause: "Climate",
+    requestedCause: "Financial support",
+    compromiseCause: "Not needed",
+    offerAction:
+      "I will complete a defined climate action trial and submit the agreed evidence before asking for payment.",
+    requestAction:
+      "The counterparty will pay the stated amount only after the evidence standard is met and reviewed.",
+    notes:
+      "The action, payment amount, evidence standard, and exit conditions should be specific enough that both sides can judge the trade before committing.",
+    offerImpact: "6",
+    minCounterpartyImpact: "5",
+    verification: "Payment pending verification",
+    duration: "3 months",
+    paymentIntervalUnit: "month",
+    paymentIntervalValue: "1",
+    trustLevel: "3",
+  },
+];
 
 function formatUsd(amount: number) {
   return new Intl.NumberFormat("en-US", {
@@ -105,6 +207,9 @@ export function OfferCreateForm({
   initialOffsetPoolSide = "",
 }: OfferCreateFormProps) {
   const [mode, setMode] = useState<OfferMode>(initialMode);
+  const [offeredCause, setOfferedCause] = useState("Animal welfare");
+  const [requestedCause, setRequestedCause] = useState("Global poverty");
+  const [compromiseCause, setCompromiseCause] = useState("Not needed");
   const [baselineAmountUsd, setBaselineAmountUsd] = useState(
     String(defaultOffsetFields.baselineAmountUsd ?? 1000),
   );
@@ -141,6 +246,13 @@ export function OfferCreateForm({
   );
   const [assuranceDeadline, setAssuranceDeadline] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [offerImpact, setOfferImpact] = useState("7");
+  const [minCounterpartyImpact, setMinCounterpartyImpact] = useState("6");
+  const [verificationPreference, setVerificationPreference] = useState("Annual receipts");
+  const [reviewPeriod, setReviewPeriod] = useState("6 months");
+  const [paymentIntervalUnit, setPaymentIntervalUnit] = useState<PaymentIntervalUnit>("none");
+  const [paymentIntervalValue, setPaymentIntervalValue] = useState("1");
+  const [trustLevel, setTrustLevel] = useState("3");
   const [antiThreatCertified, setAntiThreatCertified] = useState(false);
   const [verificationMetadataAcknowledged, setVerificationMetadataAcknowledged] = useState(false);
 
@@ -325,6 +437,34 @@ export function OfferCreateForm({
     selectedPool,
   ]);
 
+  function applyOfferTemplate(template: OfferTemplate) {
+    setMode(template.mode);
+    setOfferedCause(template.offeredCause);
+    setRequestedCause(template.requestedCause);
+    setCompromiseCause(template.compromiseCause);
+    setOfferAction(template.offerAction);
+    setRequestAction(template.requestAction);
+    setNotes(template.notes);
+    setOfferImpact(template.offerImpact);
+    setMinCounterpartyImpact(template.minCounterpartyImpact);
+    setVerificationPreference(template.verification);
+    setReviewPeriod(template.duration);
+    setPaymentIntervalUnit(template.paymentIntervalUnit);
+    setPaymentIntervalValue(template.paymentIntervalValue);
+    setTrustLevel(template.trustLevel);
+
+    if (template.offset) {
+      setBaselineAmountUsd(template.offset.baselineAmountUsd);
+      setRequestedMatchingAmountUsd(template.offset.requestedMatchingAmountUsd);
+      setBaselineOpposedCause(template.offset.baselineOpposedCause);
+      setRequestedOpposedCause(template.offset.requestedOpposedCause);
+      setParticipationMode(template.offset.participationMode);
+      setOffsetRatio(template.offset.offsetRatio);
+      setPoolId("");
+      setPoolSide("");
+    }
+  }
+
   return (
     <article className="panel auth-card">
       <div className="section-head auth-head">
@@ -390,6 +530,30 @@ export function OfferCreateForm({
         </div>
       ) : null}
 
+      <section className="panel offer-template-panel" aria-labelledby="offer-template-heading">
+        <div>
+          <p className="eyebrow">Start from a template</p>
+          <h3 id="offer-template-heading">Prefill a common moral-trade structure</h3>
+          <p>
+            Templates only fill the form. You still need to edit the terms so the offer is true,
+            voluntary, and verifiable.
+          </p>
+        </div>
+        <div className="offer-template-grid">
+          {OFFER_TEMPLATES.map((template) => (
+            <button
+              className="offer-template-button"
+              key={template.title}
+              type="button"
+              onClick={() => applyOfferTemplate(template)}
+            >
+              <strong>{template.title}</strong>
+              <span>{template.description}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
       <form
         action={createOfferAction}
         className="stack-form"
@@ -417,7 +581,11 @@ export function OfferCreateForm({
         <div className="field-grid">
           <label className="field">
             <span>What you&apos;re offering</span>
-            <select defaultValue="Animal welfare" name="offered_cause">
+            <select
+              name="offered_cause"
+              value={offeredCause}
+              onChange={(event) => setOfferedCause(readFormControlValue(event))}
+            >
               {CAUSE_OPTIONS.map((cause) => (
                 <option key={cause} value={cause}>
                   {cause}
@@ -428,7 +596,11 @@ export function OfferCreateForm({
 
           <label className="field">
             <span>What you want in return</span>
-            <select defaultValue="Global poverty" name="requested_cause">
+            <select
+              name="requested_cause"
+              value={requestedCause}
+              onChange={(event) => setRequestedCause(readFormControlValue(event))}
+            >
               {CAUSE_OPTIONS.map((cause) => (
                 <option key={cause} value={cause}>
                   {cause}
@@ -473,7 +645,11 @@ export function OfferCreateForm({
 
         <label className="field">
           <span>Compromise destination (offset only)</span>
-          <select defaultValue="Not needed" name="compromise_cause">
+          <select
+            name="compromise_cause"
+            value={compromiseCause}
+            onChange={(event) => setCompromiseCause(readFormControlValue(event))}
+          >
             {COMPROMISE_CAUSE_OPTIONS.map((cause) => (
               <option key={cause} value={cause}>
                 {cause}
@@ -1017,19 +1193,37 @@ export function OfferCreateForm({
         <div className="field-grid">
           <label className="field">
             <span>Your impact estimate</span>
-            <input defaultValue={7} max={10} min={1} name="offer_impact" type="number" />
+            <input
+              max={10}
+              min={1}
+              name="offer_impact"
+              type="number"
+              value={offerImpact}
+              onChange={(event) => setOfferImpact(readFormControlValue(event))}
+            />
           </label>
 
           <label className="field">
             <span>Minimum counterparty impact</span>
-            <input defaultValue={6} max={10} min={1} name="min_counterparty_impact" type="number" />
+            <input
+              max={10}
+              min={1}
+              name="min_counterparty_impact"
+              type="number"
+              value={minCounterpartyImpact}
+              onChange={(event) => setMinCounterpartyImpact(readFormControlValue(event))}
+            />
           </label>
         </div>
 
         <div className="field-grid">
           <label className="field">
             <span>Verification preference</span>
-            <select defaultValue="Annual receipts" name="verification">
+            <select
+              name="verification"
+              value={verificationPreference}
+              onChange={(event) => setVerificationPreference(readFormControlValue(event))}
+            >
               {VERIFICATION_OPTIONS.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -1040,7 +1234,11 @@ export function OfferCreateForm({
 
           <label className="field">
             <span>Review period</span>
-            <select defaultValue="6 months" name="duration">
+            <select
+              name="duration"
+              value={reviewPeriod}
+              onChange={(event) => setReviewPeriod(readFormControlValue(event))}
+            >
               {DURATION_OPTIONS.map((option) => (
                 <option key={option} value={option}>
                   {option}
@@ -1053,7 +1251,11 @@ export function OfferCreateForm({
         <div className="field-grid">
           <label className="field">
             <span>Payment cadence (payment offers only)</span>
-            <select defaultValue="none" name="payment_interval_unit">
+            <select
+              name="payment_interval_unit"
+              value={paymentIntervalUnit}
+              onChange={(event) => setPaymentIntervalUnit(readFormControlValue(event) as PaymentIntervalUnit)}
+            >
               {PAYMENT_INTERVAL_UNIT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -1064,7 +1266,13 @@ export function OfferCreateForm({
 
           <label className="field">
             <span>Repeat every</span>
-            <input defaultValue={1} min={1} name="payment_interval_value" type="number" />
+            <input
+              min={1}
+              name="payment_interval_value"
+              type="number"
+              value={paymentIntervalValue}
+              onChange={(event) => setPaymentIntervalValue(readFormControlValue(event))}
+            />
           </label>
         </div>
         <p className="panel-note">
@@ -1073,7 +1281,14 @@ export function OfferCreateForm({
 
         <label className="field">
           <span>Trust intensity</span>
-          <input defaultValue={3} max={5} min={1} name="trust_level" type="number" />
+          <input
+            max={5}
+            min={1}
+            name="trust_level"
+            type="number"
+            value={trustLevel}
+            onChange={(event) => setTrustLevel(readFormControlValue(event))}
+          />
         </label>
 
         <label className="field">

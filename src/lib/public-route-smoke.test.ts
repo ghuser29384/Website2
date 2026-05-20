@@ -43,6 +43,9 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(!hrefs.includes("/cart"));
   assert.ok(hrefs.includes("/mpgf/pools"));
   assert.ok(!hrefs.includes("/offers#best-offers"));
+
+  const siteSource = readRepoFile("src/lib/site.ts");
+  assert.match(siteSource, /mailto:support@moraltrade\.org/);
 });
 
 test("MPGF public copy leads with manual evidence instead of raw gate/debug wording", () => {
@@ -259,6 +262,8 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(topbarSource, /topbar-search-results/);
   assert.match(offersPage, /name="search"/);
   assert.match(offersPage, /CAUSE_FILTER_CHIPS/);
+  assert.match(offersPage, /IMPACT_FILTER_CHIPS/);
+  assert.match(offersPage, /parseMinimumImpact/);
   assert.match(offersPage, /filter-chip/);
   assert.match(offersPage, /workedCaseMatchesSearch/);
   assert.match(appDataSource, /offerMatchesSearchQuery/);
@@ -383,6 +388,20 @@ test("offer creation form has live client validation aligned with server-require
   assert.match(offerForm, /name="offer_action"[\s\S]*required/);
   assert.match(offerForm, /name="request_action"[\s\S]*required/);
   assert.match(offerForm, /name="notes"[\s\S]*required/);
+});
+
+test("offer creation form exposes preset templates without weakening validation", () => {
+  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+
+  assert.match(offerForm, /OFFER_TEMPLATES/);
+  assert.match(offerForm, /Vegetarian pledge swap/);
+  assert.match(offerForm, /Matched donation offset/);
+  assert.match(offerForm, /Paid action trial/);
+  assert.match(offerForm, /applyOfferTemplate/);
+  assert.match(offerForm, /Templates only fill the form/);
+  assert.match(offerForm, /setOfferAction\(template\.offerAction\)/);
+  assert.match(offerForm, /disabled=\{!canPublishOffer\}/);
+  assert.match(offerForm, /liveOfferErrors/);
 });
 
 test("offers page keeps content before the footer in source order", () => {

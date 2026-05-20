@@ -1263,6 +1263,15 @@ textarea {
   margin-top: 1.7rem;
 }
 
+.hero-actions .button {
+  min-width: 10.8rem;
+}
+
+.hero-actions .button-primary {
+  border-color: var(--accent-deep);
+  box-shadow: 0 0.85rem 1.8rem rgba(79, 117, 159, 0.18);
+}
+
 .marketplace-search {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -1841,7 +1850,22 @@ textarea {
   margin-top: 0.95rem;
 }
 
+.hero-panel .flow-card {
+  position: relative;
+}
+
+.hero-panel .flow-card::before {
+  content: "";
+  position: absolute;
+  top: 1.55rem;
+  bottom: 1.55rem;
+  left: 2.05rem;
+  width: 1px;
+  background: var(--line-strong);
+}
+
 .flow-step {
+  position: relative;
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 0.85rem;
@@ -1858,6 +1882,8 @@ textarea {
 }
 
 .flow-number {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3266,6 +3292,54 @@ output {
   margin-top: 0.25rem;
 }
 
+.offer-template-panel {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1.15rem;
+  background: var(--surface-muted);
+}
+
+.offer-template-panel h3,
+.offer-template-panel p {
+  margin: 0;
+}
+
+.offer-template-panel p {
+  color: var(--ink-soft);
+}
+
+.offer-template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.offer-template-button {
+  display: grid;
+  gap: 0.35rem;
+  min-height: 8.4rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+}
+
+.offer-template-button:hover,
+.offer-template-button:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.offer-template-button span {
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .stack-form,
 .clean-stack,
 .offers-board,
@@ -4037,6 +4111,7 @@ strong {
   .data-grid,
   .directory-grid,
   .cart-grid,
+  .offer-template-grid,
   .footer-grid,
   .detail-grid-wide {
     grid-template-columns: 1fr;
@@ -4117,6 +4192,7 @@ strong {
   .data-grid,
   .directory-grid,
   .cart-grid,
+  .offer-template-grid,
   .profile-stats,
   .detail-grid {
     grid-template-columns: 1fr;

@@ -68,6 +68,7 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/reasoning-standards", label: "Reasoning standards" },
       { href: "/safety", label: "Safety" },
       { href: "/#faq", label: "FAQ" },
+      { href: "mailto:support@moraltrade.org", label: "Contact" },
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },
     ],

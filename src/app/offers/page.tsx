@@ -91,6 +91,12 @@ const CAUSE_FILTER_CHIPS = [
   "Future flourishing",
 ] as const;
 
+const IMPACT_FILTER_CHIPS = [
+  { label: "Any impact", value: null },
+  { label: "7+ offered impact", value: 7 },
+  { label: "9+ offered impact", value: 9 },
+] as const;
+
 function normalizeCause(cause: string) {
   return cause.trim().toLowerCase();
 }
@@ -116,6 +122,13 @@ function parseSearchQuery(value: string | string[] | undefined) {
   const rawValue = Array.isArray(value) ? value[0] : value;
 
   return (rawValue ?? "").trim().slice(0, 120);
+}
+
+function parseMinimumImpact(value: string | string[] | undefined) {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  const impact = Number.parseInt(rawValue ?? "", 10);
+
+  return impact === 7 || impact === 9 ? impact : null;
 }
 
 function getCostEfficiencyScore(offer: OfferRecord) {
@@ -193,7 +206,11 @@ function workedCaseMatchesSearch(
     .every((token) => haystack.includes(token));
 }
 
-function buildOffersHref(mode: ReturnType<typeof parseMode>, searchQuery: string) {
+function buildOffersHref(
+  mode: ReturnType<typeof parseMode>,
+  searchQuery: string,
+  minimumImpact: number | null = null,
+) {
   const params = new URLSearchParams();
 
   if (mode !== "all") {
@@ -202,6 +219,10 @@ function buildOffersHref(mode: ReturnType<typeof parseMode>, searchQuery: string
 
   if (searchQuery) {
     params.set("search", searchQuery);
+  }
+
+  if (minimumImpact) {
+    params.set("min_impact", String(minimumImpact));
   }
 
   const serialized = params.toString();
@@ -214,14 +235,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const page = parsePage(resolvedSearchParams.page);
   const mode = parseMode(resolvedSearchParams.mode);
   const searchQuery = parseSearchQuery(resolvedSearchParams.search);
+  const minimumImpact = parseMinimumImpact(resolvedSearchParams.min_impact);
   const offersPage = hasSupabaseEnv()
     ? await listOpenOffersPage(page, OFFERS_PAGE_SIZE, mode, searchQuery)
     : { items: [], page, pageSize: OFFERS_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
   const bestOfferCandidates = hasSupabaseEnv() ? await listOpenOffersPreview(120) : [];
-  const offers = offersPage.items;
+  const offers = offersPage.items.filter(
+    (offer) => minimumImpact === null || offer.offer_impact >= minimumImpact,
+  );
   const exampleOffers = CANONICAL_WORKED_CASE_OFFERS.filter((offer) => {
     const modeMatches = mode === "all" || offer.mode === mode;
-    return modeMatches && workedCaseMatchesSearch(offer, searchQuery);
+    const impactMatches = minimumImpact === null || offer.offerImpact >= minimumImpact;
+    return modeMatches && impactMatches && workedCaseMatchesSearch(offer, searchQuery);
   });
   const bestOffersByCause = buildBestOffersByCause(bestOfferCandidates);
   const formMessage = getFormMessage(resolvedSearchParams);
@@ -486,11 +511,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               />
             </label>
             {mode !== "all" ? <input name="mode" type="hidden" value={mode} /> : null}
+            {minimumImpact ? (
+              <input name="min_impact" type="hidden" value={minimumImpact} />
+            ) : null}
             <button className="button button-primary" type="submit">
               Search
             </button>
             {searchQuery ? (
-              <Link className="button button-secondary" href={buildOffersHref(mode, "")}>
+              <Link className="button button-secondary" href={buildOffersHref(mode, "", minimumImpact)}>
                 Clear search
               </Link>
             ) : null}
@@ -500,7 +528,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             {CAUSE_FILTER_CHIPS.map((cause) => (
               <Link
                 className={`filter-chip ${searchQuery.toLowerCase() === cause.toLowerCase() ? "is-active" : ""}`}
-                href={buildOffersHref(mode, cause)}
+                href={buildOffersHref(mode, cause, minimumImpact)}
                 key={cause}
               >
                 {cause}
@@ -508,9 +536,21 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             ))}
           </div>
 
+          <div className="filter-chip-row" aria-label="Minimum offered impact filters">
+            {IMPACT_FILTER_CHIPS.map((impact) => (
+              <Link
+                className={`filter-chip ${minimumImpact === impact.value ? "is-active" : ""}`}
+                href={buildOffersHref(mode, searchQuery, impact.value)}
+                key={impact.label}
+              >
+                {impact.label}
+              </Link>
+            ))}
+          </div>
+
           <div className="sort-tabs">
             {FILTER_MODE_OPTIONS.map((option) => {
-              const href = buildOffersHref(option.value, searchQuery);
+              const href = buildOffersHref(option.value, searchQuery, minimumImpact);
 
               return (
                 <Link
