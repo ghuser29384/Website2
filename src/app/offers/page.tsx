@@ -97,6 +97,14 @@ const IMPACT_FILTER_CHIPS = [
   { label: "9+ offered impact", value: 9 },
 ] as const;
 
+const SORT_FILTER_CHIPS = [
+  { label: "Newest", value: "newest" },
+  { label: "Highest offered impact", value: "impact" },
+  { label: "Best offered/requested ratio", value: "efficient" },
+] as const;
+
+type DirectorySort = (typeof SORT_FILTER_CHIPS)[number]["value"];
+
 function normalizeCause(cause: string) {
   return cause.trim().toLowerCase();
 }
@@ -131,6 +139,16 @@ function parseMinimumImpact(value: string | string[] | undefined) {
   return impact === 7 || impact === 9 ? impact : null;
 }
 
+function parseDirectorySort(value: string | string[] | undefined): DirectorySort {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  if (rawValue === "impact" || rawValue === "efficient") {
+    return rawValue;
+  }
+
+  return "newest";
+}
+
 function getCostEfficiencyScore(offer: OfferRecord) {
   if (offer.min_counterparty_impact <= 0) {
     return offer.offer_impact;
@@ -154,6 +172,48 @@ function compareByCostEfficiency(left: OfferRecord, right: OfferRecord) {
   }
 
   return right.created_at.localeCompare(left.created_at);
+}
+
+function getWorkedCaseEfficiency(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]) {
+  if (offer.minCounterpartyImpact <= 0) {
+    return offer.offerImpact;
+  }
+
+  return offer.offerImpact / offer.minCounterpartyImpact;
+}
+
+function sortOfferRecords(offers: OfferRecord[], directorySort: DirectorySort) {
+  return [...offers].sort((left, right) => {
+    if (directorySort === "impact") {
+      return right.offer_impact - left.offer_impact || compareByCostEfficiency(left, right);
+    }
+
+    if (directorySort === "efficient") {
+      return compareByCostEfficiency(left, right);
+    }
+
+    return right.created_at.localeCompare(left.created_at);
+  });
+}
+
+function sortWorkedCases(
+  offers: Array<(typeof CANONICAL_WORKED_CASE_OFFERS)[number]>,
+  directorySort: DirectorySort,
+) {
+  return [...offers].sort((left, right) => {
+    if (directorySort === "impact") {
+      return right.offerImpact - left.offerImpact || getWorkedCaseEfficiency(right) - getWorkedCaseEfficiency(left);
+    }
+
+    if (directorySort === "efficient") {
+      return (
+        getWorkedCaseEfficiency(right) - getWorkedCaseEfficiency(left) ||
+        right.offerImpact - left.offerImpact
+      );
+    }
+
+    return left.id.localeCompare(right.id);
+  });
 }
 
 function buildBestOffersByCause(offers: OfferRecord[]) {
@@ -210,6 +270,7 @@ function buildOffersHref(
   mode: ReturnType<typeof parseMode>,
   searchQuery: string,
   minimumImpact: number | null = null,
+  directorySort: DirectorySort = "newest",
 ) {
   const params = new URLSearchParams();
 
@@ -225,8 +286,23 @@ function buildOffersHref(
     params.set("min_impact", String(minimumImpact));
   }
 
+  if (directorySort !== "newest") {
+    params.set("sort", directorySort);
+  }
+
   const serialized = params.toString();
   return serialized ? `/offers?${serialized}` : "/offers";
+}
+
+function buildOffersPageHref(
+  mode: ReturnType<typeof parseMode>,
+  searchQuery: string,
+  minimumImpact: number | null,
+  directorySort: DirectorySort,
+  page: number,
+) {
+  const href = buildOffersHref(mode, searchQuery, minimumImpact, directorySort);
+  return `${href}${href.includes("?") ? "&" : "?"}page=${page}`;
 }
 
 export default async function OffersPage({ searchParams }: OffersPageProps) {
@@ -236,18 +312,23 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const mode = parseMode(resolvedSearchParams.mode);
   const searchQuery = parseSearchQuery(resolvedSearchParams.search);
   const minimumImpact = parseMinimumImpact(resolvedSearchParams.min_impact);
+  const directorySort = parseDirectorySort(resolvedSearchParams.sort);
   const offersPage = hasSupabaseEnv()
     ? await listOpenOffersPage(page, OFFERS_PAGE_SIZE, mode, searchQuery)
     : { items: [], page, pageSize: OFFERS_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
   const bestOfferCandidates = hasSupabaseEnv() ? await listOpenOffersPreview(120) : [];
-  const offers = offersPage.items.filter(
-    (offer) => minimumImpact === null || offer.offer_impact >= minimumImpact,
+  const offers = sortOfferRecords(
+    offersPage.items.filter((offer) => minimumImpact === null || offer.offer_impact >= minimumImpact),
+    directorySort,
   );
-  const exampleOffers = CANONICAL_WORKED_CASE_OFFERS.filter((offer) => {
-    const modeMatches = mode === "all" || offer.mode === mode;
-    const impactMatches = minimumImpact === null || offer.offerImpact >= minimumImpact;
-    return modeMatches && impactMatches && workedCaseMatchesSearch(offer, searchQuery);
-  });
+  const exampleOffers = sortWorkedCases(
+    CANONICAL_WORKED_CASE_OFFERS.filter((offer) => {
+      const modeMatches = mode === "all" || offer.mode === mode;
+      const impactMatches = minimumImpact === null || offer.offerImpact >= minimumImpact;
+      return modeMatches && impactMatches && workedCaseMatchesSearch(offer, searchQuery);
+    }),
+    directorySort,
+  );
   const bestOffersByCause = buildBestOffersByCause(bestOfferCandidates);
   const formMessage = getFormMessage(resolvedSearchParams);
   const offersStructuredData = {
@@ -514,11 +595,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             {minimumImpact ? (
               <input name="min_impact" type="hidden" value={minimumImpact} />
             ) : null}
+            {directorySort !== "newest" ? (
+              <input name="sort" type="hidden" value={directorySort} />
+            ) : null}
             <button className="button button-primary" type="submit">
               Search
             </button>
             {searchQuery ? (
-              <Link className="button button-secondary" href={buildOffersHref(mode, "", minimumImpact)}>
+              <Link className="button button-secondary" href={buildOffersHref(mode, "", minimumImpact, directorySort)}>
                 Clear search
               </Link>
             ) : null}
@@ -528,7 +612,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             {CAUSE_FILTER_CHIPS.map((cause) => (
               <Link
                 className={`filter-chip ${searchQuery.toLowerCase() === cause.toLowerCase() ? "is-active" : ""}`}
-                href={buildOffersHref(mode, cause, minimumImpact)}
+                href={buildOffersHref(mode, cause, minimumImpact, directorySort)}
                 key={cause}
               >
                 {cause}
@@ -540,7 +624,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             {IMPACT_FILTER_CHIPS.map((impact) => (
               <Link
                 className={`filter-chip ${minimumImpact === impact.value ? "is-active" : ""}`}
-                href={buildOffersHref(mode, searchQuery, impact.value)}
+                href={buildOffersHref(mode, searchQuery, impact.value, directorySort)}
                 key={impact.label}
               >
                 {impact.label}
@@ -550,7 +634,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
           <div className="sort-tabs">
             {FILTER_MODE_OPTIONS.map((option) => {
-              const href = buildOffersHref(option.value, searchQuery, minimumImpact);
+              const href = buildOffersHref(option.value, searchQuery, minimumImpact, directorySort);
 
               return (
                 <Link
@@ -562,6 +646,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 </Link>
               );
             })}
+          </div>
+
+          <div className="filter-chip-row" aria-label="Offer sort options">
+            {SORT_FILTER_CHIPS.map((sort) => (
+              <Link
+                className={`filter-chip ${directorySort === sort.value ? "is-active" : ""}`}
+                href={buildOffersHref(mode, searchQuery, minimumImpact, sort.value)}
+                key={sort.value}
+              >
+                {sort.label}
+              </Link>
+            ))}
           </div>
 
           {formMessage ? (
@@ -697,9 +793,13 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               {offersPage.hasPreviousPage ? (
                 <Link
                   className="button button-secondary"
-                  href={`${buildOffersHref(mode, searchQuery)}${
-                    buildOffersHref(mode, searchQuery).includes("?") ? "&" : "?"
-                  }page=${offersPage.page - 1}`}
+                  href={buildOffersPageHref(
+                    mode,
+                    searchQuery,
+                    minimumImpact,
+                    directorySort,
+                    offersPage.page - 1,
+                  )}
                 >
                   Previous page
                 </Link>
@@ -710,9 +810,13 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               {offersPage.hasNextPage ? (
                 <Link
                   className="button button-secondary"
-                  href={`${buildOffersHref(mode, searchQuery)}${
-                    buildOffersHref(mode, searchQuery).includes("?") ? "&" : "?"
-                  }page=${offersPage.page + 1}`}
+                  href={buildOffersPageHref(
+                    mode,
+                    searchQuery,
+                    minimumImpact,
+                    directorySort,
+                    offersPage.page + 1,
+                  )}
                 >
                   Next page
                 </Link>

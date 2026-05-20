@@ -158,6 +158,30 @@ const marketplaceCategories = [
   },
 ] as const;
 
+const quickGuides = [
+  {
+    title: "Pledge swaps",
+    href: "/offers?mode=pledge",
+    cta: "See pledge examples",
+    text: "Exchange bounded commitments when each side values the other's action more than its own cost.",
+    checks: "State the action, reciprocal action, duration, exit rule, and evidence standard.",
+  },
+  {
+    title: "Donation offsets",
+    href: "/donation-offsets",
+    cta: "Open offset guide",
+    text: "Redirect matched opposed donations to a named compromise destination instead of cancelling out.",
+    checks: "Name both causes, the compromise destination, verification rule, threshold, expiry, and surplus rule.",
+  },
+  {
+    title: "Moral public goods",
+    href: "/mpgf",
+    cta: "Review MPGF",
+    text: "Use shared consensus goods as coordination mechanisms, not generic charity recommendations.",
+    checks: "Keep contribution rules, evidence states, and allocation records visible before anyone relies on them.",
+  },
+] as const;
+
 const OPENING_FIRST_DEFINITION =
   ": People with conflicting interests both satisfy their own interests at a higher cost-efficiency than they otherwise would have on their own.";
 
@@ -602,6 +626,31 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
               ))}
             </div>
           </div>
+
+          <section className="home-guide-strip" aria-label="Interactive trade guides">
+            <div className="home-guide-head">
+              <p className="eyebrow">Choose a path</p>
+              <h2>Start with the trade format, then inspect the safeguards.</h2>
+              <p>
+                Each guide expands into the minimum terms that keep the proposal voluntary,
+                evidence-gated, and distinct from pressure or unsupported payment claims.
+              </p>
+            </div>
+            <div className="home-guide-grid">
+              {quickGuides.map((guide, index) => (
+                <details className="panel home-guide-card" key={guide.title} open={index === 0}>
+                  <summary>
+                    <span>{guide.title}</span>
+                  </summary>
+                  <p>{guide.text}</p>
+                  <p>{guide.checks}</p>
+                  <Link className="inline-link" href={guide.href}>
+                    {guide.cta}
+                  </Link>
+                </details>
+              ))}
+            </div>
+          </section>
         </div>
 
         <div
@@ -647,29 +696,32 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             </p>
           </div>
 
-          <div className="editorial-grid">
-            <article className="panel editorial-card">
-              <h3>Partial AM-convergence can still matter</h3>
-              <p>
-                A mostly-great future need not require full agreement. A minority with meaningful
-                power can still matter if trade and compromise are available.
-              </p>
-            </article>
-            <article className="panel editorial-card">
-              <h3>Trade does not depend on one single disagreement</h3>
-              <p>
-                Different groups can continue to value different natural resources, locations,
-                times of use, and risk profiles, even in a technologically mature society.
-              </p>
-            </article>
-            <article className="panel editorial-card">
-              <h3>Compromise can approach near-best futures</h3>
-              <p>
-                When different views can divide resources or agree on hybrid goods, both can end up
-                much closer to what they each regard as best.
-              </p>
-            </article>
-          </div>
+          <details className="home-deep-dive">
+            <summary>Read the short theory notes</summary>
+            <div className="editorial-grid">
+              <article className="panel editorial-card">
+                <h3>Partial AM-convergence can still matter</h3>
+                <p>
+                  A mostly-great future need not require full agreement. A minority with meaningful
+                  power can still matter if trade and compromise are available.
+                </p>
+              </article>
+              <article className="panel editorial-card">
+                <h3>Trade does not depend on one single disagreement</h3>
+                <p>
+                  Different groups can continue to value different natural resources, locations,
+                  times of use, and risk profiles, even in a technologically mature society.
+                </p>
+              </article>
+              <article className="panel editorial-card">
+                <h3>Compromise can approach near-best futures</h3>
+                <p>
+                  When different views can divide resources or agree on hybrid goods, both can end up
+                  much closer to what they each regard as best.
+                </p>
+              </article>
+            </div>
+          </details>
         </section>
 
         <MoralTradeAnimations />
@@ -758,14 +810,17 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             </p>
           </div>
 
-          <div className="trust-grid">
-            {standards.map((item) => (
-              <article key={item.title} className="panel trust-card">
-                <h3>{item.title}</h3>
-                <p>{item.text}</p>
-              </article>
-            ))}
-          </div>
+          <details className="home-deep-dive">
+            <summary>Review the reasoning checklist</summary>
+            <div className="trust-grid">
+              {standards.map((item) => (
+                <article key={item.title} className="panel trust-card">
+                  <h3>{item.title}</h3>
+                  <p>{item.text}</p>
+                </article>
+              ))}
+            </div>
+          </details>
         </section>
 
         <section className="section section-subtle" id="examples">
@@ -812,34 +867,37 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             </p>
           </div>
 
-          <div className="concept-grid">
-            <article className="panel concept-card">
-              <h3>Threats are value-destroying</h3>
-              <ul className="clean-list">
-                <li>Extortion is not just a hard bargain; it can leave at least one side worse off whichever option it chooses</li>
-                <li>Even small risks of executed threats can eat into expected value</li>
-                <li>Preventing value-destroying threats is itself a central design goal</li>
-              </ul>
-            </article>
+          <details className="home-deep-dive" id="transparency">
+            <summary>Open the safeguards and limitations</summary>
+            <div className="concept-grid">
+              <article className="panel concept-card">
+                <h3>Threats are value-destroying</h3>
+                <ul className="clean-list">
+                  <li>Extortion is not just a hard bargain; it can leave at least one side worse off whichever option it chooses</li>
+                  <li>Even small risks of executed threats can eat into expected value</li>
+                  <li>Preventing value-destroying threats is itself a central design goal</li>
+                </ul>
+              </article>
 
-            <article className="panel concept-card">
-              <h3>Concentration of power</h3>
-              <ul className="clean-list">
-                <li>If only a few people control decisions, the right moral views may not be represented at all</li>
-                <li>The bargaining outcome depends on who has power and what happens without agreement</li>
-                <li>The platform should not assume that negotiation power is morally benign</li>
-              </ul>
-            </article>
+              <article className="panel concept-card">
+                <h3>Concentration of power</h3>
+                <ul className="clean-list">
+                  <li>If only a few people control decisions, the right moral views may not be represented at all</li>
+                  <li>The bargaining outcome depends on who has power and what happens without agreement</li>
+                  <li>The platform should not assume that negotiation power is morally benign</li>
+                </ul>
+              </article>
 
-            <article className="panel concept-card" id="transparency">
-              <h3>Sealed-off futures</h3>
-              <ul className="clean-list">
-                <li>Majority rule can ban goods or activities that minorities value highly</li>
-                <li>Decision rules can reward signaling or coalition behavior rather than good reasons</li>
-                <li>The same procedure can produce very different outcomes depending on when bargaining happens</li>
-              </ul>
-            </article>
-          </div>
+              <article className="panel concept-card">
+                <h3>Sealed-off futures</h3>
+                <ul className="clean-list">
+                  <li>Majority rule can ban goods or activities that minorities value highly</li>
+                  <li>Decision rules can reward signaling or coalition behavior rather than good reasons</li>
+                  <li>The same procedure can produce very different outcomes depending on when bargaining happens</li>
+                </ul>
+              </article>
+            </div>
+          </details>
         </section>
 
         <section className="section section-subtle" id="methodology">
@@ -853,39 +911,42 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             </p>
           </div>
 
-          <div className="editorial-grid editorial-grid-wide">
-            <article className="panel editorial-card">
-              <h3>How we reason</h3>
-              <ul className="clean-list">
-                <li>Ask which gains from frictionless trade are merely hypothetical</li>
-                <li>Ask which gains would actually be realised under existing institutions</li>
-                <li>Distinguish gains for many views from gains for the correct view</li>
-                <li>Separate voluntary trade from value-destroying threats</li>
-                <li>Check whether power distribution and decision rules block the best futures</li>
-              </ul>
-            </article>
+          <details className="home-deep-dive">
+            <summary>Open sources and methodology notes</summary>
+            <div className="editorial-grid editorial-grid-wide">
+              <article className="panel editorial-card">
+                <h3>How we reason</h3>
+                <ul className="clean-list">
+                  <li>Ask which gains from frictionless trade are merely hypothetical</li>
+                  <li>Ask which gains would actually be realised under existing institutions</li>
+                  <li>Distinguish gains for many views from gains for the correct view</li>
+                  <li>Separate voluntary trade from value-destroying threats</li>
+                  <li>Check whether power distribution and decision rules block the best futures</li>
+                </ul>
+              </article>
 
-            <article className="panel editorial-card">
-              <h3>Reference materials</h3>
-              <div className="reference-list">
-                <a href="https://www.amirrorclear.net/files/moral-trade.pdf" rel="noreferrer" target="_blank">
-                  Toby Ord, &quot;Moral Trade&quot;
-                </a>
-                <a
-                  href="https://www.forethought.org/research/convergence-and-compromise#3-what-if-some-people-aim-at-the-good"
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Forethought, &quot;Convergence and Compromise&quot;, section 3
-                </a>
-              </div>
-              <p className="editorial-note">
-                These sections are optimistic about trade and compromise, but only under the right
-                conditions: realised gains, low threat risk, and procedures that do not seal off
-                minority-valued futures.
-              </p>
-            </article>
-          </div>
+              <article className="panel editorial-card">
+                <h3>Reference materials</h3>
+                <div className="reference-list">
+                  <a href="https://www.amirrorclear.net/files/moral-trade.pdf" rel="noreferrer" target="_blank">
+                    Toby Ord, &quot;Moral Trade&quot;
+                  </a>
+                  <a
+                    href="https://www.forethought.org/research/convergence-and-compromise#3-what-if-some-people-aim-at-the-good"
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Forethought, &quot;Convergence and Compromise&quot;, section 3
+                  </a>
+                </div>
+                <p className="editorial-note">
+                  These sections are optimistic about trade and compromise, but only under the right
+                  conditions: realised gains, low threat risk, and procedures that do not seal off
+                  minority-valued futures.
+                </p>
+              </article>
+            </div>
+          </details>
         </section>
 
         <section className="section section-white exchange-section" id="workspace">

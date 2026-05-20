@@ -263,9 +263,12 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(offersPage, /name="search"/);
   assert.match(offersPage, /CAUSE_FILTER_CHIPS/);
   assert.match(offersPage, /IMPACT_FILTER_CHIPS/);
+  assert.match(offersPage, /SORT_FILTER_CHIPS/);
   assert.match(offersPage, /parseMinimumImpact/);
+  assert.match(offersPage, /parseDirectorySort/);
   assert.match(offersPage, /filter-chip/);
   assert.match(offersPage, /workedCaseMatchesSearch/);
+  assert.match(offersPage, /sortWorkedCases/);
   assert.match(appDataSource, /offerMatchesSearchQuery/);
   assert.equal(animalResults[0]?.href, "/offers?search=Animal%20Welfare");
   assert.ok(mpfgResults.some((result) => result.href === "/mpgf"));
@@ -287,6 +290,11 @@ test("home page leads with action, prototype metrics, and categories before dens
   assert.match(homeSource, /marketplaceOverview/);
   assert.match(homeSource, /workedExampleCount/);
   assert.match(homeSource, /marketplaceCategories/);
+  assert.match(homeSource, /quickGuides/);
+  assert.match(homeSource, /home-guide-strip/);
+  assert.match(homeSource, /home-deep-dive/);
+  assert.match(homeSource, /Read the short theory notes/);
+  assert.match(homeSource, /Open sources and methodology notes/);
 });
 
 test("homepage metrics use live counts when available and avoid fake impact totals", () => {
