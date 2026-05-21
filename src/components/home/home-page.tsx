@@ -134,24 +134,28 @@ const faqItems = [
 const marketplaceCategories = [
   {
     title: "Global health",
+    icon: "GH",
     text: "Donation offsets, pledge swaps, and public-good contributions connected to health and poverty.",
     href: "/offers?search=Global%20Health",
     keywords: ["global health", "public health", "poverty"],
   },
   {
     title: "Animal welfare",
+    icon: "AW",
     text: "Vegetarian commitments, welfare-focused offsets, and reciprocal action offers.",
     href: "/offers?search=Animal%20Welfare",
     keywords: ["animal", "vegetarian", "welfare"],
   },
   {
     title: "Climate action",
+    icon: "CA",
     text: "Emission reductions, climate resilience, and compromise destinations with broad appeal.",
     href: "/offers?search=Climate",
     keywords: ["climate", "emission", "carbon"],
   },
   {
     title: "Long-run futures",
+    icon: "LF",
     text: "Existential risk, digital minds, and future-flourishing trade proposals.",
     href: "/offers?search=Existential%20risk",
     keywords: ["existential", "future", "digital mind", "s-risk"],
@@ -480,8 +484,8 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
               <p className="eyebrow">Trade and compromise under disagreement</p>
               <h1>Turn disagreements into impact.</h1>
               <p className="hero-text">
-                Connect with others to swap pledges, redirect donation offsets, and fund moral
-                public goods under voluntary terms and explicit verification rules.
+                Swap pledges, redirect donation offsets, and fund shared moral goods transparently
+                under voluntary terms and explicit verification rules.
               </p>
               <div className="hero-actions">
                 <Link className="button button-primary" href="/offers">
@@ -619,6 +623,9 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             <div className="home-category-grid">
               {categoryCards.map((category) => (
                 <Link className="panel home-category-card" href={category.href} key={category.title}>
+                  <span className="home-category-icon" aria-hidden="true">
+                    {category.icon}
+                  </span>
                   <span>{category.title}</span>
                   <p>{category.text}</p>
                   <small>{category.workedExampleCount} worked example{category.workedExampleCount === 1 ? "" : "s"}</small>

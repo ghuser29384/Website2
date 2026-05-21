@@ -11,11 +11,13 @@ import { filterSiteSearchItems } from "@/lib/site-search";
 interface NavRouteItem {
   href: string;
   label: string;
+  description?: string;
 }
 
 interface NavLinkItem {
   href?: string;
   label: string;
+  summary?: string;
   items?: NavRouteItem[];
 }
 
@@ -54,7 +56,7 @@ function NavItem({ href, label, className }: { href: string; label: string; clas
   );
 }
 
-function NavMenu({ label, items }: { label: string; items: NavRouteItem[] }) {
+function NavMenu({ label, summary, items }: { label: string; summary?: string; items: NavRouteItem[] }) {
   const pathname = usePathname();
   const hasActiveItem = items.some((item) => (item.href ? isHrefActive(pathname, item.href) : false));
 
@@ -67,9 +69,25 @@ function NavMenu({ label, items }: { label: string; items: NavRouteItem[] }) {
         </span>
       </summary>
       <div className="topbar-menu-panel">
+        <div className="topbar-menu-heading">
+          <strong>{label}</strong>
+          {summary ? <span>{summary}</span> : null}
+        </div>
         {items.map((item) =>
           item.href ? (
-            <NavItem key={`${item.href}-${item.label}`} className="topbar-menu-link" href={item.href} label={item.label} />
+            <Link
+              key={`${item.href}-${item.label}`}
+              className={["topbar-menu-link", isHrefActive(pathname, item.href) ? "is-active" : ""]
+                .filter(Boolean)
+                .join(" ")}
+              href={item.href}
+            >
+              <span className="topbar-menu-icon" aria-hidden="true" />
+              <span className="topbar-menu-copy">
+                <span>{item.label}</span>
+                {item.description ? <small>{item.description}</small> : null}
+              </span>
+            </Link>
           ) : null,
         )}
       </div>
@@ -130,7 +148,7 @@ export function SiteTopbar({
       <div className="topbar-links">
         {links.map((link) =>
           link.items?.length ? (
-            <NavMenu key={link.label} items={link.items} label={link.label} />
+            <NavMenu key={link.label} items={link.items} label={link.label} summary={link.summary} />
           ) : link.href ? (
             <NavItem key={`${link.href}-${link.label}`} href={link.href} label={link.label} />
           ) : null,
@@ -204,11 +222,12 @@ export function SiteTopbar({
           {showLogout ? (
             <NavMenu
               items={[
-                { href: "/dashboard#my-trades", label: "My trades" },
-                { href: "/dashboard#data-portability", label: "Profile data" },
-                { href: "/cart", label: "Favourites" },
+                { href: "/dashboard#my-trades", label: "My trades", description: "Review owned and engaged offers." },
+                { href: "/dashboard#data-portability", label: "Profile data", description: "Export or import account data." },
+                { href: "/cart", label: "Favourites", description: "Watch offers for later review." },
               ]}
               label="Account"
+              summary="Manage your saved and private workspace."
             />
           ) : null}
           {primaryAction ? (

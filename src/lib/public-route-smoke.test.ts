@@ -26,10 +26,13 @@ function flattenPrimaryNavHrefs() {
 test("public navigation exposes professional marketplace routes", () => {
   const labels = getPrimaryNavLinks(false).map((link) => link.label);
   const hrefs = flattenPrimaryNavHrefs();
+  const marketplaceMenu = getPrimaryNavLinks(false).find((link) => link.label === "Marketplace");
 
   assert.deepEqual(labels, ["Marketplace", "Learn", "Community", "About"]);
   assert.equal(getTopbarActions(false).primaryAction.href, "/signup?returnTo=/offers/new");
   assert.equal(getTopbarActions(false).primaryAction.label, "Create trade");
+  assert.match(marketplaceMenu?.summary ?? "", /Browse, compare, or create/);
+  assert.ok(marketplaceMenu?.items?.every((item) => item.description));
   assert.ok(hrefs.includes("/offers?mode=pledge"));
   assert.ok(hrefs.includes("/donation-offsets"));
   assert.ok(hrefs.includes("/mpgf"));
@@ -45,7 +48,10 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(!hrefs.includes("/offers#best-offers"));
 
   const siteSource = readRepoFile("src/lib/site.ts");
+  const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   assert.match(siteSource, /mailto:support@moraltrade\.org/);
+  assert.match(topbarSource, /topbar-menu-heading/);
+  assert.match(topbarSource, /topbar-menu-icon/);
 });
 
 test("MPGF public copy leads with manual evidence instead of raw gate/debug wording", () => {
@@ -290,6 +296,9 @@ test("home page leads with action, prototype metrics, and categories before dens
   assert.match(homeSource, /marketplaceOverview/);
   assert.match(homeSource, /workedExampleCount/);
   assert.match(homeSource, /marketplaceCategories/);
+  assert.match(homeSource, /home-category-icon/);
+  assert.match(homeSource, /GH/);
+  assert.match(homeSource, /AW/);
   assert.match(homeSource, /quickGuides/);
   assert.match(homeSource, /home-guide-strip/);
   assert.match(homeSource, /home-deep-dive/);
