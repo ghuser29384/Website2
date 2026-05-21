@@ -11,7 +11,7 @@ import { filterWishRegistryExamplePreviews, searchWishRegistryPreviews } from "@
 import type { WishRegistrySearchResult } from "@/lib/wish-registry";
 
 export const metadata: Metadata = {
-  title: "Wish registry",
+  title: "Experimental wish registry",
   description:
     "Search broad Moral Trade wish-profile previews without exposing exact wishes, asks, contact details, or private source records.",
   alternates: {
@@ -151,12 +151,11 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Wish registry</p>
-            <h1>Search broad wish previews.</h1>
+            <p className="eyebrow">Experimental wish registry</p>
+            <h1>Search broad previews first.</h1>
             <p className="hero-text">
-              This page searches public preview fields only. Exact wishes, asks, constraints,
-              source records, identities behind private matches, and contact details stay gated
-              behind consent.
+              Search broad previews first; exact asks and contact details require mutual consent.
+              This prototype searches public preview fields only.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={viewer ? "/dashboard" : "/signup"}>
@@ -350,8 +349,8 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                     ))}
                   </div>
                   <p className="panel-note">
-                    Live broad previews will appear here after participants publish privacy-filtered
-                    wish profiles.
+                    Demo preview. Exact asks and contact details require mutual consent before
+                    disclosure.
                   </p>
                 </article>
               ))

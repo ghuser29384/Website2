@@ -3,6 +3,8 @@ import { expect, test } from "@playwright/test";
 const publicRoutes = [
   "/",
   "/offers",
+  "/offers/new",
+  "/create",
   "/background-networking",
   "/reasoning-standards",
   "/donate",
@@ -10,6 +12,7 @@ const publicRoutes = [
   "/wish-registry",
   "/people",
   "/mpgf",
+  "/public-goods-fund",
   "/mpgf/contribute",
   "/mpgf/account/contributions",
   "/mpgf/pools",
@@ -52,6 +55,7 @@ for (const route of publicRoutes) {
     await expect(page.locator("body")).not.toHaveText(
       /Loading Moral Trade\.\s*Opening the requested workflow\./,
     );
+    await expect(page.locator("body")).not.toContainText("Internal Error");
     await expect(page.locator('nav[aria-label="Primary"]')).toHaveCount(1);
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.locator("footer")).toHaveCount(1);

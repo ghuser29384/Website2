@@ -112,6 +112,15 @@ export default async function MethodologyPage() {
             a more interoperable or decentralized registry becomes preferable later.
           </p>
         </section>
+        <section className="panel data-card data-card-wide" id="faq">
+          <h2>FAQ</h2>
+          <p>
+            Moral Trade records structured proposals; it does not hold money, provide legal or tax
+            advice, or claim escrow. Public examples are worked examples unless a signed-in
+            participant publishes a live offer, and evidence must be reviewed before anyone relies
+            on a trade record as fulfilled.
+          </p>
+        </section>
       </main>
       <SiteFooter />
     </div>

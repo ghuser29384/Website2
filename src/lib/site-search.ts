@@ -30,8 +30,8 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   },
   {
     href: "/mpgf",
-    label: "Moral Public Goods Fund",
-    summary: "Review MPGF evidence submission, candidate pools, and allocation workflow.",
+    label: "Public Goods Fund",
+    summary: "Review external-payment evidence submission, candidate pools, and allocation workflow.",
     kind: "fund",
     keywords: ["mpgf", "fund", "public goods", "evidence", "contribution", "pool"],
   },

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { OfferCreateForm } from "@/components/offers/offer-create-form";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
-import { getDonationOffsetOverview, requireViewer } from "@/lib/app-data";
+import { getDonationOffsetOverview, getViewer } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -46,8 +47,8 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
       ? resolvedSearchParams.offset_pool_side
       : "";
   const supabaseReady = hasSupabaseEnv();
-  const viewer = supabaseReady ? await requireViewer("/offers/new") : null;
-  const donationOffsetOverview = supabaseReady ? await getDonationOffsetOverview() : null;
+  const viewer = supabaseReady ? await getViewer() : null;
+  const donationOffsetOverview = supabaseReady && viewer ? await getDonationOffsetOverview() : null;
   const availablePools =
     donationOffsetOverview?.pools.map((pool) => ({
       id: pool.id,
@@ -91,9 +92,19 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                   reciprocal terms, and the trust conditions plainly.
                 </>
               ) : (
-                <>Configure Supabase to enable live offer creation.</>
+                <>Create an account to save and publish a structured trade proposal.</>
               )}
             </p>
+            {!viewer ? (
+              <div className="hero-actions">
+                <Link className="button button-primary" href="/signup?returnTo=/offers/new">
+                  Create account
+                </Link>
+                <Link className="button button-secondary" href="/login?returnTo=/offers/new">
+                  Sign in
+                </Link>
+              </div>
+            ) : null}
           </section>
 
           <aside className="hero-panel panel">
@@ -128,15 +139,35 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
           <div className="auth-grid">
-            <OfferCreateForm
-              availablePools={availablePools}
-              formMessage={formMessage}
-              initialMode={initialMode}
-              initialOffsetParticipationMode={initialOffsetParticipationMode}
-              initialOffsetPoolId={initialOffsetPoolId}
-              initialOffsetPoolSide={initialOffsetPoolSide}
-              supabaseReady={supabaseReady}
-            />
+            {viewer ? (
+              <OfferCreateForm
+                availablePools={availablePools}
+                formMessage={formMessage}
+                initialMode={initialMode}
+                initialOffsetParticipationMode={initialOffsetParticipationMode}
+                initialOffsetPoolId={initialOffsetPoolId}
+                initialOffsetPoolSide={initialOffsetPoolSide}
+                supabaseReady={supabaseReady}
+              />
+            ) : (
+              <article className="panel auth-side-card auth-gate-card">
+                <p className="eyebrow">Account required</p>
+                <h2>Create an account to save and publish a structured trade proposal.</h2>
+                <p>
+                  You can browse worked examples without signing in. Publishing a live offer needs
+                  an account so the proposal can be saved, reviewed, edited, and returned to after
+                  sign-in.
+                </p>
+                <div className="hero-actions">
+                  <Link className="button button-primary" href="/signup?returnTo=/offers/new">
+                    Create account
+                  </Link>
+                  <Link className="button button-secondary" href="/login?returnTo=/offers/new">
+                    Sign in
+                  </Link>
+                </div>
+              </article>
+            )}
 
             <article className="panel auth-side-card">
               <p className="eyebrow">Current account</p>
@@ -148,8 +179,8 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                   </div>
                 ) : (
                   <div>
-                    <h3>Supabase setup required</h3>
-                    <p>Add the environment variables and apply the SQL schema to enable live publishing.</p>
+                    <h3>Signed out</h3>
+                    <p>Return to this page after account creation to publish the proposal.</p>
                   </div>
                 )}
                 <div>

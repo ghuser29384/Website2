@@ -19,7 +19,7 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "People",
   description:
-    "Browse public Moral Trade member profiles, visible reputation signals, open offers, followers, comments, and karma.",
+    "Browse opt-in public Moral Trade member records once participants publish offers or choose public profile visibility.",
   alternates: {
     canonical: "/people",
   },
@@ -127,8 +127,8 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             <p className="eyebrow">People directory</p>
             <h1>Public member records and visible reputation signals.</h1>
             <p className="hero-text">
-              Profiles are publicly viewable, sortable, and linked to offers, comments, followers,
-              ratings, and karma. The goal is public accountability, not social-feed growth.
+              Public profiles appear after participants publish offers or explicitly opt into
+              visibility. The goal is accountability around trades, not social-feed growth.
             </p>
           </section>
 
@@ -280,8 +280,19 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             ) : (
               <div className="empty-state">
                 <div>
-                  <strong>No public profiles are available yet.</strong>
-                  <p>Profiles will appear here once members sign up and the database is live.</p>
+                  <strong>Public member records will appear after participants publish offers or opt into public profiles.</strong>
+                  <p>
+                    Until then, browse worked examples in the marketplace or create an account to
+                    control your profile privacy before publishing.
+                  </p>
+                  <div className="hero-actions">
+                    <Link className="button button-secondary" href="/offers?view=examples">
+                      View worked examples
+                    </Link>
+                    <Link className="button button-primary" href={viewer ? "/dashboard" : "/signup"}>
+                      {viewer ? "Open dashboard" : "Create account"}
+                    </Link>
+                  </div>
                 </div>
               </div>
             )}

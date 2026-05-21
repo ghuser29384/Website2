@@ -1,38 +1,10 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { BackgroundNetworkingSketch } from "@/components/home/background-networking-sketch";
-import { MoralTradeAnimations } from "@/components/home/moral-trade-animations";
-import { OfferComposer } from "@/components/home/offer-composer";
-import { OfferBoard } from "@/components/home/offer-board";
-import { OfferDetails } from "@/components/home/offer-details";
-import { ParetoChart } from "@/components/home/pareto-chart";
-import { ValuesInterview } from "@/components/home/values-interview";
 import type { MarketplaceOverview } from "@/lib/app-data";
-import {
-  adjustDraftForMode,
-  CAUSE_OPTIONS,
-  createDefaultOfferDraft,
-  createOfferFromDraft,
-  DEFAULT_FILTERS,
-  evaluatePair,
-  FILTER_MODE_OPTIONS,
-  filterOffers,
-  getAllOffers,
-  loadLocalOffers,
-  persistLocalOffers,
-  sortOffers,
-  type Offer,
-  type OfferDraft,
-  type OfferFilters,
-  type OfferMode,
-  SORT_OPTIONS,
-  validateOfferDraft,
-} from "@/lib/offers";
+import { formatMode } from "@/lib/offers";
+import { CANONICAL_WORKED_CASE_COUNT, CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 interface HomePageProps {
@@ -40,437 +12,90 @@ interface HomePageProps {
   marketplaceOverview: MarketplaceOverview;
 }
 
-const standards = [
-  {
-    title: "Resource-compatible views",
-    text: "Some views can be jointly served with the same resources through hybrid goods or easily-satiable claims, so the gains from trade can be very large from each view's perspective.",
-  },
-  {
-    title: "Realised gains need institutions",
-    text: "What matters is not merely the hypothetical gains from frictionless trade, but which gains are actually realised, which depends on institutions, contracts, and whether parties take improving trades.",
-  },
-  {
-    title: "Threats are different from trade",
-    text: "A trade can leave both parties better off by their own lights. A threat can leave at least one side worse off whichever option it chooses.",
-  },
-  {
-    title: "Blockers can seal off futures",
-    text: "Concentration of power, majority rule, and badly chosen collective procedures can exclude minority-valued goods or activities even when trade would otherwise have been possible.",
-  },
-] as const;
-
-const featuredDialogues = [
-  {
-    type: "Pledge swap",
-    title: "A pledge swap",
-    proposition:
-      "Victoria gives to poverty-focused charities for a year if another person becomes vegetarian for the same period.",
-    premise:
-      "Each side prefers the other action to its own and judges the resulting world better than acting alone.",
-    commitment: "A fixed term and a way of checking that the acts were done.",
-  },
-  {
-    type: "Donation offset",
-    title: "A compromise destination",
-    proposition:
-      "Two people who would have spent against one another redirect the matched amount to a compromise cause instead.",
-    premise:
-      "If opposed efforts would largely cancel out, a compromise can leave both moral views better served.",
-    commitment: "Matched amounts, a named destination, and a rule for any unmatched funds.",
-  },
-  {
-    type: "Paid action offer",
-    title: "Paying for an action",
-    proposition:
-      "One person offers money for another to take up an action, such as vegetarianism, that the payer regards as important.",
-    premise:
-      "If the burden is low enough, payment can make the act worth doing for the actor while still looking morally worthwhile to the payer.",
-    commitment: "Clear milestones and a way of checking performance.",
-  },
-] as const;
-
-const ordHowItWorksExamples = [
-  {
-    title: "Victoria and Paul",
-    text: "Victoria cares especially about animal suffering; Paul cares especially about global poverty. She donates more to poverty relief if he becomes vegetarian, and each regards the resulting world as better.",
-  },
-  {
-    title: "Opposed campaign donations",
-    text: "Rebecca and Christopher would otherwise fund opposite sides of a gun-policy fight. They can instead redirect matched donations to a shared charity, avoiding a costly cancellation.",
-  },
-  {
-    title: "Paying for a bounded action",
-    text: "Someone who cares strongly about vegetarianism can pay another person to try it for a defined period, when the actor's burden is low and the payer judges the moral gain worth the cost.",
-  },
-  {
-    title: "Offsetting an internal conflict",
-    text: "A person who wants to fly but worries about emissions can pair the trip with more than compensating climate action, improving the choice by both prudential and moral lights.",
-  },
-] as const;
-
-const faqItems = [
-  {
-    question: "Why can moral trade matter even if only some people aim at the good?",
-    answer:
-      "Because even partial convergence can leave room for bargaining and compromise. A minority with meaningful power can still trade with others if each side sees the result as better than acting alone.",
-  },
-  {
-    question: "What decides whether hypothetical gains from trade are actually realised?",
-    answer:
-      "Institutions, contracts, transaction costs, and whether parties actually take improving trades. Possible gains are not enough on their own.",
-  },
-  {
-    question: "Why are threats a separate problem from trade?",
-    answer:
-      "Because a threat can make at least one side worse off whichever option it chooses. That is different from a voluntary exchange that both sides regard as better.",
-  },
-  {
-    question: "What can block a mostly-great future even if trade is possible?",
-    answer:
-      "Value-destroying threats, concentration of power, majority procedures that ban minority-valued goods, and other collective decision rules can all block the gains from trade.",
-  },
-] as const;
-
-const marketplaceCategories = [
-  {
-    title: "Global health",
-    icon: "GH",
-    text: "Donation offsets, pledge swaps, and public-good contributions connected to health and poverty.",
-    href: "/offers?search=Global%20Health",
-    keywords: ["global health", "public health", "poverty"],
-  },
-  {
-    title: "Animal welfare",
-    icon: "AW",
-    text: "Vegetarian commitments, welfare-focused offsets, and reciprocal action offers.",
-    href: "/offers?search=Animal%20Welfare",
-    keywords: ["animal", "vegetarian", "welfare"],
-  },
-  {
-    title: "Climate action",
-    icon: "CA",
-    text: "Emission reductions, climate resilience, and compromise destinations with broad appeal.",
-    href: "/offers?search=Climate",
-    keywords: ["climate", "emission", "carbon"],
-  },
-  {
-    title: "Long-run futures",
-    icon: "LF",
-    text: "Existential risk, digital minds, and future-flourishing trade proposals.",
-    href: "/offers?search=Existential%20risk",
-    keywords: ["existential", "future", "digital mind", "s-risk"],
-  },
-] as const;
-
-const quickGuides = [
+const formatCards = [
   {
     title: "Pledge swaps",
-    href: "/offers?mode=pledge",
-    cta: "See pledge examples",
-    text: "Exchange bounded commitments when each side values the other's action more than its own cost.",
-    checks: "State the action, reciprocal action, duration, exit rule, and evidence standard.",
+    href: "/offers?view=examples&mode=pledge",
+    cta: "View examples",
+    definition:
+      "Two parties exchange bounded commitments when each values the other's action more than its own cost.",
+    terms: ["Action and reciprocal action", "Duration and exit rule", "Evidence standard"],
   },
   {
     title: "Donation offsets",
     href: "/donation-offsets",
-    cta: "Open offset guide",
-    text: "Redirect matched opposed donations to a named compromise destination instead of cancelling out.",
-    checks: "Name both causes, the compromise destination, verification rule, threshold, expiry, and surplus rule.",
+    cta: "Open guide",
+    definition:
+      "Opposed donations can be redirected toward a named compromise destination instead of cancelling out.",
+    terms: ["Matched action", "Compromise destination", "Threshold, expiry, and surplus rule"],
   },
   {
     title: "Moral public goods",
     href: "/mpgf",
-    cta: "Review MPGF",
-    text: "Use shared consensus goods as coordination mechanisms, not generic charity recommendations.",
-    checks: "Keep contribution rules, evidence states, and allocation records visible before anyone relies on them.",
+    cta: "Open fund",
+    definition:
+      "Shared consensus goods can coordinate funding where different moral views have overlapping reasons to contribute.",
+    terms: ["External-payment evidence", "Manual review state", "Allocation and pool records"],
   },
 ] as const;
 
-const OPENING_FIRST_DEFINITION =
-  ": People with conflicting interests both satisfy their own interests at a higher cost-efficiency than they otherwise would have on their own.";
+const howItWorksSteps = [
+  {
+    title: "Choose a format.",
+    text: "Start with a pledge swap, donation offset, paid action, or public-good contribution path.",
+  },
+  {
+    title: "State reciprocal terms.",
+    text: "Name the action, request, threshold, duration, exit rule, and evidence standard before anyone relies on it.",
+  },
+  {
+    title: "Review evidence before relying on the trade.",
+    text: "Evidence must be checked before a proposal is counted as fulfilled, verified, or contribution-ready.",
+  },
+] as const;
 
-const OPENING_SECOND_DEFINITION =
-  ": People with conflicting moral views make the world better, in both of their views, at a higher cost-efficiency than they otherwise would have on their own.";
+const trustItems = [
+  { label: "No threats or extortion", href: "/safety" },
+  { label: "No illegal or deceptive asks", href: "/safety" },
+  { label: "Evidence is reviewed before counting", href: "/methodology" },
+  { label: "Political campaign contribution offsets prohibited", href: "/safety" },
+] as const;
 
-function clamp(value: number, min = 0, max = 1) {
-  return Math.min(max, Math.max(min, value));
+const pilotMetrics = [
+  { label: `${CANONICAL_WORKED_CASE_COUNT} worked examples`, detail: "Seeded examples for inspection" },
+  { label: "3 trade formats", detail: "Pledge, offset, paid action" },
+  { label: "Manual review before reliance", detail: "No automatic verification claim" },
+  { label: "External-payment evidence only", detail: "No escrow or custody claim" },
+] as const;
+
+function formatOptionalCount(value: number | null) {
+  return value === null ? "Unavailable" : new Intl.NumberFormat("en-US").format(value);
 }
 
-function getSegmentProgress(progress: number, start: number, end: number) {
-  if (progress <= start) {
-    return 0;
-  }
-
-  if (progress >= end) {
-    return 1;
-  }
-
-  return (progress - start) / (end - start);
-}
-
-function getRevealStyle(progress: number): CSSProperties {
-  const safeProgress = clamp(progress);
-
-  return {
-    opacity: safeProgress,
-  };
-}
-
-function getWordRevealStyle(progress: number): CSSProperties {
-  const safeProgress = clamp(progress);
-
-  return {
-    opacity: safeProgress,
-  };
-}
-
-function formatIntegerMetric(value: number | null) {
-  if (value === null) {
-    return "Unavailable";
-  }
-
-  return new Intl.NumberFormat("en-US").format(value);
-}
-
-function formatMoneyMetric(cents: number | null) {
+function formatOptionalUsd(cents: number | null) {
   if (cents === null) {
     return "Unavailable";
   }
 
   return new Intl.NumberFormat("en-US", {
-    style: "currency",
     currency: "USD",
     maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
+    style: "currency",
   }).format(cents / 100);
 }
 
-function countCategoryOffers(
-  category: (typeof marketplaceCategories)[number],
-  offers: Offer[],
-) {
-  return offers.filter((offer) => {
-    const haystack = [
-      offer.offeredCause,
-      offer.requestedCause,
-      offer.compromiseCause,
-      offer.offerAction,
-      offer.requestAction,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-
-    return category.keywords.some((keyword) => haystack.includes(keyword));
-  }).length;
-}
-
-function OpeningWord({
-  prefix,
-  core,
-  style,
-}: {
-  prefix?: string;
-  core: string;
-  style?: CSSProperties;
-}) {
-  return (
-    <span className="opening-anchor-frame" style={style}>
-      {prefix ? <span className="opening-prefix-slot">{prefix}</span> : null}
-      <span className="opening-anchor-word">{core}</span>
-    </span>
-  );
-}
-
 export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps) {
-  const openingSequenceRef = useRef<HTMLDivElement | null>(null);
-  const [draft, setDraft] = useState<OfferDraft>(createDefaultOfferDraft());
-  const [filters, setFilters] = useState<OfferFilters>(DEFAULT_FILTERS);
-  const [localOffers, setLocalOffers] = useState<Offer[]>([]);
-  const [selectedOfferId, setSelectedOfferId] = useState("seed-victoria");
-  const [statusMessage, setStatusMessage] = useState("");
-  const [hasLoadedLocalOffers, setHasLoadedLocalOffers] = useState(false);
-  const [openingRevealProgress, setOpeningRevealProgress] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    queueMicrotask(() => {
-      if (cancelled) {
-        return;
-      }
-
-      setLocalOffers(loadLocalOffers());
-      setHasLoadedLocalOffers(true);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!hasLoadedLocalOffers) {
-      return;
-    }
-
-    persistLocalOffers(localOffers);
-  }, [hasLoadedLocalOffers, localOffers]);
-
-  useEffect(() => {
-    let animationFrame = 0;
-    const browserWindow = globalThis as unknown as {
-      innerHeight?: number;
-      requestAnimationFrame: (callback: () => void) => number;
-      cancelAnimationFrame: (handle: number) => void;
-      addEventListener: (type: string, listener: () => void, options?: { passive?: boolean }) => void;
-      removeEventListener: (type: string, listener: () => void) => void;
-    };
-
-    function updateOpeningProgress() {
-      animationFrame = 0;
-
-      if (!openingSequenceRef.current) {
-        return;
-      }
-
-      const sequenceElement = openingSequenceRef.current as HTMLDivElement & {
-        getBoundingClientRect: () => { top: number };
-        offsetHeight: number;
-      };
-      const rect = sequenceElement.getBoundingClientRect();
-      const viewportHeight = browserWindow.innerHeight || 1;
-      const totalScrollableDistance = Math.max(sequenceElement.offsetHeight - viewportHeight, 1);
-      const distanceScrolled = clamp(-rect.top / totalScrollableDistance);
-
-      setOpeningRevealProgress((current) => {
-        const nextProgress = Math.max(current, distanceScrolled);
-
-        return Math.abs(current - nextProgress) > 0.004 ? nextProgress : current;
-      });
-    }
-
-    function requestUpdate() {
-      if (!animationFrame) {
-        animationFrame = browserWindow.requestAnimationFrame(updateOpeningProgress);
-      }
-    }
-
-    requestUpdate();
-    browserWindow.addEventListener("scroll", requestUpdate, { passive: true });
-    browserWindow.addEventListener("resize", requestUpdate);
-
-    return () => {
-      if (animationFrame) {
-        browserWindow.cancelAnimationFrame(animationFrame);
-      }
-      browserWindow.removeEventListener("scroll", requestUpdate);
-      browserWindow.removeEventListener("resize", requestUpdate);
-    };
-  }, []);
-
-  const allOffers = getAllOffers(localOffers);
-  const selectedOffer = allOffers.find((offer) => offer.id === selectedOfferId) ?? allOffers[0] ?? null;
-  const scoredPairs = selectedOffer
-    ? allOffers
-        .filter((offer) => offer.id !== selectedOffer.id)
-        .map((offer) => evaluatePair(selectedOffer, offer))
-        .sort((left, right) => {
-          if (left.exact !== right.exact) {
-            return Number(right.exact) - Number(left.exact);
-          }
-
-          return right.score - left.score;
-        })
-    : [];
-  const exactMatches = scoredPairs.filter((pair) => pair.exact);
-  const displayedMatches = exactMatches.length ? exactMatches : scoredPairs.slice(0, 3);
-  const visibleOffers = sortOffers(filterOffers(allOffers, filters), selectedOffer, filters.sortOrder);
   const createTradeHref = isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new";
-  const categoryCards = marketplaceCategories.map((category) => ({
-    ...category,
-    workedExampleCount: countCategoryOffers(category, allOffers),
-  }));
-  const firstDefinitionProgress = getSegmentProgress(openingRevealProgress, 0.08, 0.34);
-  const secondWordProgress = getSegmentProgress(openingRevealProgress, 0.46, 0.68);
-  const secondDefinitionProgress = getSegmentProgress(openingRevealProgress, 0.74, 1);
-
-  function handleDraftFieldChange(field: keyof OfferDraft, value: string | number | boolean) {
-    setDraft(
-      (current) =>
-        ({
-          ...current,
-          [field]: value,
-        }) as OfferDraft,
-    );
-  }
-
-  function handleModeChange(mode: OfferMode) {
-    setDraft((current) => adjustDraftForMode(current, mode));
-  }
-
-  function handleFilterChange(field: keyof OfferFilters, value: string) {
-    setFilters(
-      (current) =>
-        ({
-          ...current,
-          [field]: value,
-        }) as OfferFilters,
-    );
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const validationError = validateOfferDraft(draft);
-    if (validationError) {
-      setStatusMessage(validationError);
-      return;
-    }
-
-    const offer = createOfferFromDraft(draft);
-    setLocalOffers((current) => [offer, ...current]);
-    setSelectedOfferId(offer.id);
-    setDraft(createDefaultOfferDraft());
-    setStatusMessage(`Added ${offer.alias}'s offer to the local workspace.`);
-  }
-
-  function handleResetLocalOffers() {
-    if (!localOffers.length) {
-      setStatusMessage("There are no local offers to reset.");
-      return;
-    }
-
-    const shouldReset =
-      (globalThis as unknown as { confirm?: (message: string) => boolean }).confirm?.(
-        "Remove all local offers and keep only the seeded examples?",
-      ) ?? true;
-
-    if (!shouldReset) {
-      return;
-    }
-
-    setLocalOffers([]);
-    setSelectedOfferId("seed-victoria");
-    setStatusMessage("Reset the workspace to the seeded examples.");
-  }
-
-  function handleRemoveOffer(offerId: string) {
-    const offer = localOffers.find((entry) => entry.id === offerId);
-    if (!offer) {
-      return;
-    }
-
-    setLocalOffers((current) => current.filter((entry) => entry.id !== offerId));
-    if (selectedOfferId === offerId) {
-      setSelectedOfferId("seed-victoria");
-    }
-    setStatusMessage(`Removed ${offer.alias}'s local offer.`);
-  }
+  const previewOffers = CANONICAL_WORKED_CASE_OFFERS.slice(0, 6);
+  const liveCountsAreZero =
+    !marketplaceOverview.hasLiveData ||
+    (marketplaceOverview.openOfferCount === 0 &&
+      marketplaceOverview.publicProfileCount === 0 &&
+      marketplaceOverview.redirectedOffsetCents === 0);
 
   return (
-    <div className="page-shell">
-      <ValuesInterview isAuthenticated={isAuthenticated} />
-      <header className="hero">
+    <div className="page-shell page-shell-focused">
+      <header className="hero landing-hero">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(isAuthenticated)}
@@ -478,634 +103,206 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
           showLogout={isAuthenticated}
         />
 
-        <div className="hero-stage panel">
-          <div className="hero-grid hero-grid-editorial">
-            <section className="hero-copy" id="top">
-              <p className="eyebrow">Trade and compromise under disagreement</p>
-              <h1>Turn disagreements into impact.</h1>
-              <p className="hero-text">
-                Swap pledges, redirect donation offsets, and fund shared moral goods transparently
-                under voluntary terms and explicit verification rules.
-              </p>
-              <div className="hero-actions">
-                <Link className="button button-primary" href="/offers">
-                  Explore trades
-                </Link>
-                <Link className="button button-secondary" href={createTradeHref}>
-                  Create a trade
-                </Link>
-              </div>
-              <ul className="hero-signals" aria-label="Operating standards">
-                <li>Voluntary only</li>
-                <li>Evidence-gated</li>
-                <li>No legal escrow claim</li>
-              </ul>
-              <p className="hero-followup">
-                New here? Review the <Link href="/reasoning-standards">standards</Link> and{" "}
-                <Link href="/safety">safety rules</Link> before taking part.
-              </p>
-            </section>
-
-            <aside className="hero-panel panel">
-              <p className="eyebrow">How it works</p>
-              <div className="flow-card">
-                <div className="flow-step">
-                  <span className="flow-number">01</span>
-                  <div>
-                    <strong>Choose a trade type</strong>
-                    <p>
-                      Start with a pledge swap, donation offset, paid action, or MPGF contribution.
-                    </p>
-                  </div>
-                </div>
-                <div className="flow-step">
-                  <span className="flow-number">02</span>
-                  <div>
-                    <strong>State reciprocal terms</strong>
-                    <p>
-                      Make the action, ask, baseline, threshold, exit rule, and verification standard explicit.
-                    </p>
-                  </div>
-                </div>
-                <div className="flow-step">
-                  <span className="flow-number">03</span>
-                  <div>
-                    <strong>Review before trust</strong>
-                    <p>
-                      Publication stays evidence-gated and must distinguish voluntary trade from pressure.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </aside>
-          </div>
-
-          <div className="hero-proof-strip" aria-label="Credibility signals">
-            <article className="proof-card">
-              <p className="proof-label">Trade and compromise can matter</p>
-              <p>
-                Even without full moral convergence, bargaining and compromise may let different
-                views reach futures that are much closer to what each values.
-              </p>
-              <a className="inline-link" href="#methodology">
-                Review the method
-              </a>
-            </article>
-            <article className="proof-card">
-              <p className="proof-label">Resource-compatible views</p>
-              <p>
-                Some views can share the same resources unusually well through hybrid goods or
-                easily-satiable claims, which can make the gains from trade very large.
-              </p>
-              <a className="inline-link" href="#standards">
-                See the standards
-              </a>
-            </article>
-            <article className="proof-card">
-              <p className="proof-label">Threats and blockers can destroy value</p>
-              <p>
-                Even small risks of executed threats, concentrated power, or badly chosen
-                collective procedures can wipe out much of the value that trade would otherwise create.
-              </p>
-              <a className="inline-link" href="#transparency">
-                Read the limitations
-              </a>
-            </article>
-          </div>
-
-          <div
-            className="home-metrics-strip"
-            aria-label={marketplaceOverview.hasLiveData ? "Marketplace metrics" : "Prototype marketplace metrics"}
-          >
-            <article className="home-metric">
-              <span>{marketplaceOverview.hasLiveData ? "Open trades" : "Worked examples"}</span>
-              <strong>
-                {marketplaceOverview.hasLiveData
-                  ? formatIntegerMetric(marketplaceOverview.openOfferCount)
-                  : allOffers.length}
-              </strong>
-              <p>
-                {marketplaceOverview.hasLiveData
-                  ? "Published public offers currently open for review."
-                  : "Seeded pledge, offset, and payment structures ready to inspect."}
-              </p>
-            </article>
-            <article className="home-metric">
-              <span>Trade formats</span>
-              <strong>3</strong>
-              <p>Pledge swaps, donation offsets, and bounded paid actions.</p>
-            </article>
-            <article className="home-metric">
-              <span>Public profiles</span>
-              <strong>
-                {marketplaceOverview.hasLiveData
-                  ? formatIntegerMetric(marketplaceOverview.publicProfileCount)
-                  : "Not live"}
-              </strong>
-              <p>Members shown with privacy-limited public fields when the database is connected.</p>
-            </article>
-            <article className="home-metric">
-              <span>Reviewed offsets</span>
-              <strong>
-                {marketplaceOverview.hasLiveData
-                  ? formatMoneyMetric(marketplaceOverview.redirectedOffsetCents)
-                  : "Not live"}
-              </strong>
-              <p>Donation offsets logged after review; this is not a custody or escrow claim.</p>
-            </article>
-          </div>
-
-          <div className="home-category-strip" aria-label="Marketplace categories">
-            <div>
-              <p className="eyebrow">Browse by cause</p>
-              <h2>Find trades by moral priority</h2>
+        <div className="landing-hero-grid">
+          <section className="landing-hero-copy">
+            <h1>Trade across moral disagreement.</h1>
+            <p className="hero-text">
+              Moral Trade helps people structure voluntary pledge swaps, donation offsets, and
+              public-good contributions with explicit terms, evidence, and safety checks.
+            </p>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/offers">
+                Explore trades
+              </Link>
+              <Link className="button button-secondary" href={createTradeHref}>
+                Create a trade
+              </Link>
+              <Link className="text-button" href="#how-it-works">
+                How it works
+              </Link>
             </div>
-            <div className="home-category-grid">
-              {categoryCards.map((category) => (
-                <Link className="panel home-category-card" href={category.href} key={category.title}>
-                  <span className="home-category-icon" aria-hidden="true">
-                    {category.icon}
-                  </span>
-                  <span>{category.title}</span>
-                  <p>{category.text}</p>
-                  <small>{category.workedExampleCount} worked example{category.workedExampleCount === 1 ? "" : "s"}</small>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <section className="home-guide-strip" aria-label="Interactive trade guides">
-            <div className="home-guide-head">
-              <p className="eyebrow">Choose a path</p>
-              <h2>Start with the trade format, then inspect the safeguards.</h2>
-              <p>
-                Each guide expands into the minimum terms that keep the proposal voluntary,
-                evidence-gated, and distinct from pressure or unsupported payment claims.
-              </p>
-            </div>
-            <div className="home-guide-grid">
-              {quickGuides.map((guide, index) => (
-                <details className="panel home-guide-card" key={guide.title} open={index === 0}>
-                  <summary>
-                    <span>{guide.title}</span>
-                  </summary>
-                  <p>{guide.text}</p>
-                  <p>{guide.checks}</p>
-                  <Link className="inline-link" href={guide.href}>
-                    {guide.cta}
-                  </Link>
-                </details>
-              ))}
+            <div className="trust-chip-row" aria-label="Operating standards">
+              <span className="trust-chip">Voluntary only</span>
+              <span className="trust-chip">Evidence-gated</span>
+              <span className="trust-chip">No escrow or custody claim</span>
             </div>
           </section>
+
+          <aside className="pilot-status-card panel" aria-label="Pilot status">
+            <span>Pilot status</span>
+            <strong>Worked examples first</strong>
+            <p>
+              Live participation stays modest until offers, evidence records, and review states are
+              backed by signed-in users and configured data storage.
+            </p>
+          </aside>
         </div>
 
-        <div
-          ref={openingSequenceRef}
-          className="opening-sequence"
-          aria-label="Opening explanation of trade and moral trade"
-        >
-          <div className="opening-stage">
-            <div className="opening-lines">
-              <div className="opening-line">
-                <div className="opening-line-anchor">
-                  <OpeningWord core="trade" />
-                </div>
-                <div className="opening-line-definition">
-                  <p style={getRevealStyle(firstDefinitionProgress)}>{OPENING_FIRST_DEFINITION}</p>
-                </div>
-              </div>
-
-              <div className="opening-line">
-                <div className="opening-line-anchor">
-                  <OpeningWord core="trade" prefix="moral" style={getWordRevealStyle(secondWordProgress)} />
-                </div>
-                <div className="opening-line-definition">
-                  <p style={getRevealStyle(secondDefinitionProgress)}>
-                    {OPENING_SECOND_DEFINITION}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <section className="pilot-metric-grid" aria-label="Pilot trust indicators">
+          {pilotMetrics.map((metric) => (
+            <article className="stat-card" key={metric.label}>
+              <strong>{metric.label}</strong>
+              <span>{metric.detail}</span>
+            </article>
+          ))}
+        </section>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-white" id="about">
-          <div className="section-head">
-            <p className="eyebrow">What Moral Trade is</p>
-            <h2>Partial convergence can still leave room for trade and compromise</h2>
+        <section className="section section-white" aria-labelledby="formats-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Trade formats</p>
+            <h2 id="formats-heading">Choose the structure before the counterpart.</h2>
             <p>
-              The key question is not whether everyone shares one moral view. It is whether some
-              meaningful minority can still bargain and trade in ways that each side regards as
-              better than acting alone.
+              Each path starts from concrete terms and evidence rules, not vague agreement or
+              pressure to participate.
             </p>
           </div>
 
-          <details className="home-deep-dive">
-            <summary>Read the short theory notes</summary>
-            <div className="editorial-grid">
-              <article className="panel editorial-card">
-                <h3>Partial AM-convergence can still matter</h3>
-                <p>
-                  A mostly-great future need not require full agreement. A minority with meaningful
-                  power can still matter if trade and compromise are available.
-                </p>
+          <div className="format-card-grid">
+            {formatCards.map((card) => (
+              <article className="panel format-card" key={card.title}>
+                <div>
+                  <h3>{card.title}</h3>
+                  <p>{card.definition}</p>
+                </div>
+                <ul className="clean-list">
+                  {card.terms.map((term) => (
+                    <li key={term}>{term}</li>
+                  ))}
+                </ul>
+                <Link className="inline-link" href={card.href}>
+                  {card.cta}
+                </Link>
               </article>
-              <article className="panel editorial-card">
-                <h3>Trade does not depend on one single disagreement</h3>
-                <p>
-                  Different groups can continue to value different natural resources, locations,
-                  times of use, and risk profiles, even in a technologically mature society.
-                </p>
-              </article>
-              <article className="panel editorial-card">
-                <h3>Compromise can approach near-best futures</h3>
-                <p>
-                  When different views can divide resources or agree on hybrid goods, both can end up
-                  much closer to what they each regard as best.
-                </p>
-              </article>
-            </div>
-          </details>
-        </section>
-
-        <MoralTradeAnimations />
-
-        <BackgroundNetworkingSketch isAuthenticated={isAuthenticated} />
-
-        <section className="section section-subtle" id="how-it-works">
-          <div className="section-head">
-            <p className="eyebrow">How Moral Trade works</p>
-            <h2>Trade remains possible when the reasons for exchange are moral</h2>
-            <p>
-              The gains can be especially large when one side cares far more about an outcome than
-              the other, or when the same resources can satisfy both views unusually well.
-            </p>
-          </div>
-
-          <div className="concept-grid">
-            <article className="panel concept-card">
-              <h3>Personal pledge swaps</h3>
-              <p>
-                Two people each do something the other cares about more, so both can gain from the
-                exchange if each side values the trade more than the cost it bears.
-              </p>
-              <ul className="clean-list">
-                <li>Recurring donations, volunteering, or habit changes</li>
-                <li>Defined time horizon and verification method</li>
-                <li>Useful when each side can motivate the other more effectively than itself</li>
-              </ul>
-            </article>
-
-            <article className="panel concept-card">
-              <h3>Donation offsets</h3>
-              <p>
-                If donations to opposed causes would cancel each other out, both sides can redirect
-                the matched portion to a mutually-supported charity.
-              </p>
-              <ul className="clean-list">
-                <li>Matched redirection instead of zero-sum spending</li>
-                <li>Named compromise charity, ratio, surplus rule, and verification method</li>
-                <li>Can be one-to-one or pooled with assurance thresholds</li>
-                <li>Especially relevant for public-goods style conflicts</li>
-              </ul>
-              <Link className="inline-link" href="/donation-offsets">
-                Learn more
-              </Link>
-            </article>
-
-            <article className="panel concept-card">
-              <h3>Paid action offers</h3>
-              <p>
-                One person can pay another to take up an action that matters morally to the payer,
-                especially when the actor&apos;s cost is low and the payer&apos;s moral stake is high.
-              </p>
-              <ul className="clean-list">
-                <li>Appropriate for bounded actions with clear milestones</li>
-                <li>Requires extra care around burden, clarity, and verification</li>
-                <li>Most credible when the terms are highly specific</li>
-              </ul>
-            </article>
-          </div>
-
-          <div className="ord-example-block">
-            <div>
-              <p className="eyebrow">Examples from Toby Ord&apos;s paper</p>
-              <h3>Concrete cases make the structure easier to inspect</h3>
-            </div>
-
-            <div className="ord-example-grid">
-              {ordHowItWorksExamples.map((example) => (
-                <article className="panel ord-example-card" key={example.title}>
-                  <h4>{example.title}</h4>
-                  <p>{example.text}</p>
-                </article>
-              ))}
-            </div>
+            ))}
           </div>
         </section>
 
-        <section className="section section-white" id="standards">
-          <div className="section-head">
-            <p className="eyebrow">Reasoning standards</p>
-            <h2>Make the gains, the compatibility, the threats, and the blockers visible</h2>
-            <p>
-              Sections 3.1 to 3.5 distinguish possible gains from realised gains, and trade from
-              threats. Those distinctions should be explicit on the site.
-            </p>
+        <section className="section section-subtle" id="how-it-works" aria-labelledby="how-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">How it works</p>
+            <h2 id="how-heading">A short path from idea to reviewable terms.</h2>
           </div>
 
-          <details className="home-deep-dive">
-            <summary>Review the reasoning checklist</summary>
-            <div className="trust-grid">
-              {standards.map((item) => (
-                <article key={item.title} className="panel trust-card">
-                  <h3>{item.title}</h3>
-                  <p>{item.text}</p>
-                </article>
-              ))}
-            </div>
-          </details>
+          <div className="step-card-grid">
+            {howItWorksSteps.map((step, index) => (
+              <article className="panel step-card" key={step.title}>
+                <span className="step-index">{String(index + 1).padStart(2, "0")}</span>
+                <h3>{step.title}</h3>
+                <p>{step.text}</p>
+              </article>
+            ))}
+          </div>
         </section>
 
-        <section className="section section-subtle" id="examples">
-          <div className="section-head">
-            <p className="eyebrow">Example propositions</p>
-            <h2>Illustrative dialogues and commitments</h2>
+        <section className="section section-white" aria-labelledby="marketplace-preview-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Marketplace preview</p>
+            <h2 id="marketplace-preview-heading">Worked examples, not live offers.</h2>
             <p>
-              These are examples of the kinds of trade the paper discusses. They are not
-              endorsements.
+              These examples show how public listing cards should expose the action, reciprocal
+              request, causes, duration, verification method, and review status.
             </p>
           </div>
 
-          <div className="proposition-grid">
-            {featuredDialogues.map((dialogue) => (
-              <article key={dialogue.title} className="panel proposition-card">
-                <p className="detail-kicker">{dialogue.type}</p>
-                <h3>{dialogue.title}</h3>
-                <dl className="proposition-structure">
+          <div className="listing-grid compact-listing-grid">
+            {previewOffers.map((offer) => (
+              <article className="listing-card panel" key={offer.id}>
+                <div className="listing-card-head">
+                  <span className="badge">{formatMode(offer.mode)}</span>
+                  <span className="badge badge-secondary">Worked example</span>
+                </div>
+                <h3>{offer.alias}: {offer.offeredCause} for {offer.requestedCause}</h3>
+                <dl className="listing-terms">
                   <div>
-                    <dt>Proposition</dt>
-                    <dd>{dialogue.proposition}</dd>
+                    <dt>Offering</dt>
+                    <dd>{offer.offerAction}</dd>
                   </div>
                   <div>
-                    <dt>Underlying premise</dt>
-                    <dd>{dialogue.premise}</dd>
-                  </div>
-                  <div>
-                    <dt>What has to be checked</dt>
-                    <dd>{dialogue.commitment}</dd>
+                    <dt>Requesting</dt>
+                    <dd>{offer.requestAction}</dd>
                   </div>
                 </dl>
+                <div className="tag-row">
+                  <span className="source-pill">{offer.offeredCause}</span>
+                  <span className="source-pill">{offer.requestedCause}</span>
+                </div>
+                <div className="listing-meta">
+                  <span>{offer.duration}</span>
+                  <span>{offer.verification}</span>
+                  <span>Manual review required</span>
+                </div>
+                <Link className="text-button" href={`/offers?view=examples&search=${encodeURIComponent(offer.alias)}`}>
+                  Inspect terms
+                </Link>
               </article>
             ))}
           </div>
         </section>
 
-        <section className="section section-white" id="commitments">
-          <div className="section-head">
-            <p className="eyebrow">Threats, limits, and safeguards</p>
-            <h2>Trade is not enough if threats, power, or procedures destroy value</h2>
+        <section className="trust-strip" aria-label="Safety and trust rules">
+          {trustItems.map((item) => (
+            <Link className="trust-strip-item" href={item.href} key={item.label}>
+              {item.label}
+            </Link>
+          ))}
+        </section>
+
+        <section className="section section-subtle" id="about" aria-labelledby="learn-more-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Learn</p>
+            <h2 id="learn-more-heading">Theory stays available without turning the homepage into a memo.</h2>
             <p>
-              The optimistic case for trade is fragile. Threats, concentrated power, and collective
-              procedures that seal off minority-valued futures can undo much of the value at stake.
+              Read the method, safety rules, background networking notes, and public-goods details
+              when you need the full reasoning trail.
             </p>
           </div>
+          <div className="teaser-grid">
+            <Link className="panel teaser-card" href="/methodology">
+              <h3>Methodology</h3>
+              <p>Trade, compromise, threats, power, and review standards.</p>
+            </Link>
+            <Link className="panel teaser-card" href="/background-networking">
+              <h3>Background networking</h3>
+              <p>Consent-preserving discovery without private-feed ingestion or autonomous outreach.</p>
+            </Link>
+            <Link className="panel teaser-card" href="/mpgf">
+              <h3>Public Goods Fund</h3>
+              <p>External-payment evidence, candidate pools, and allocation process notes.</p>
+            </Link>
+          </div>
+        </section>
 
-          <details className="home-deep-dive" id="transparency">
-            <summary>Open the safeguards and limitations</summary>
-            <div className="concept-grid">
-              <article className="panel concept-card">
-                <h3>Threats are value-destroying</h3>
-                <ul className="clean-list">
-                  <li>Extortion is not just a hard bargain; it can leave at least one side worse off whichever option it chooses</li>
-                  <li>Even small risks of executed threats can eat into expected value</li>
-                  <li>Preventing value-destroying threats is itself a central design goal</li>
-                </ul>
+        {liveCountsAreZero ? (
+          <section className="section section-white" aria-labelledby="pilot-counts-heading">
+            <div className="section-head section-head-compact">
+              <p className="eyebrow">Pilot status</p>
+              <h2 id="pilot-counts-heading">Live marketplace counts are intentionally quiet while the pilot is seeded.</h2>
+              <p>
+                Zero live counts are not presented as headline trust metrics. They remain visible
+                here so the pilot state is transparent without overstating liquidity.
+              </p>
+            </div>
+            <div className="pilot-count-grid">
+              <article className="stat-card">
+                <strong>{formatOptionalCount(marketplaceOverview.openOfferCount)}</strong>
+                <span>Live offers</span>
               </article>
-
-              <article className="panel concept-card">
-                <h3>Concentration of power</h3>
-                <ul className="clean-list">
-                  <li>If only a few people control decisions, the right moral views may not be represented at all</li>
-                  <li>The bargaining outcome depends on who has power and what happens without agreement</li>
-                  <li>The platform should not assume that negotiation power is morally benign</li>
-                </ul>
+              <article className="stat-card">
+                <strong>{formatOptionalCount(marketplaceOverview.publicProfileCount)}</strong>
+                <span>Public profiles</span>
               </article>
-
-              <article className="panel concept-card">
-                <h3>Sealed-off futures</h3>
-                <ul className="clean-list">
-                  <li>Majority rule can ban goods or activities that minorities value highly</li>
-                  <li>Decision rules can reward signaling or coalition behavior rather than good reasons</li>
-                  <li>The same procedure can produce very different outcomes depending on when bargaining happens</li>
-                </ul>
+              <article className="stat-card">
+                <strong>{formatOptionalUsd(marketplaceOverview.redirectedOffsetCents)}</strong>
+                <span>Reviewed offsets</span>
               </article>
             </div>
-          </details>
-        </section>
-
-        <section className="section section-subtle" id="methodology">
-          <div className="section-head">
-            <p className="eyebrow">Methodology and sources</p>
-            <h2>Trade and compromise are promising, but not self-executing</h2>
-            <p>
-              Forethought sections 3.1 to 3.5 ask not only whether trade is possible, but whether
-              it is realised, whether it survives threats, and whether power and procedures leave
-              the best futures reachable at all.
-            </p>
-          </div>
-
-          <details className="home-deep-dive">
-            <summary>Open sources and methodology notes</summary>
-            <div className="editorial-grid editorial-grid-wide">
-              <article className="panel editorial-card">
-                <h3>How we reason</h3>
-                <ul className="clean-list">
-                  <li>Ask which gains from frictionless trade are merely hypothetical</li>
-                  <li>Ask which gains would actually be realised under existing institutions</li>
-                  <li>Distinguish gains for many views from gains for the correct view</li>
-                  <li>Separate voluntary trade from value-destroying threats</li>
-                  <li>Check whether power distribution and decision rules block the best futures</li>
-                </ul>
-              </article>
-
-              <article className="panel editorial-card">
-                <h3>Reference materials</h3>
-                <div className="reference-list">
-                  <a href="https://www.amirrorclear.net/files/moral-trade.pdf" rel="noreferrer" target="_blank">
-                    Toby Ord, &quot;Moral Trade&quot;
-                  </a>
-                  <a
-                    href="https://www.forethought.org/research/convergence-and-compromise#3-what-if-some-people-aim-at-the-good"
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    Forethought, &quot;Convergence and Compromise&quot;, section 3
-                  </a>
-                </div>
-                <p className="editorial-note">
-                  These sections are optimistic about trade and compromise, but only under the right
-                  conditions: realised gains, low threat risk, and procedures that do not seal off
-                  minority-valued futures.
-                </p>
-              </article>
-            </div>
-          </details>
-        </section>
-
-        <section className="section section-white exchange-section" id="workspace">
-          <div className="section-head">
-            <p className="eyebrow">Worked example</p>
-            <h2>A local example for thinking through a trade</h2>
-            <p>
-              This local example lets you state the structure of a trade. It is not yet the wider
-              market discussed in the paper.
-            </p>
-          </div>
-
-          <div className="exchange-grid">
-            <OfferComposer
-              draft={draft}
-              onFieldChange={handleDraftFieldChange}
-              onModeChange={handleModeChange}
-              onResetLocalOffers={handleResetLocalOffers}
-              onSubmit={handleSubmit}
-            />
-
-            <section className="panel market-panel">
-              <div className="panel-head market-head">
-                <div>
-                  <p className="eyebrow">Worked cases</p>
-                  <h3>Possible trades</h3>
-                </div>
-                <div className="panel-note">
-                  {visibleOffers.length} visible | {allOffers.length} total | {localOffers.length}{" "}
-                  local | {exactMatches.length} strong reciprocal fit
-                </div>
-              </div>
-
-              <div className="toolbar">
-                <label className="field compact-field">
-                  <span>Trade type</span>
-                  <select
-                    value={filters.mode}
-                    onChange={(event) =>
-                      handleFilterChange(
-                        "mode",
-                        (event.target as unknown as { value: string }).value,
-                      )
-                    }
-                  >
-                    {FILTER_MODE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field compact-field">
-                  <span>Cause area</span>
-                  <select
-                    value={filters.cause}
-                    onChange={(event) =>
-                      handleFilterChange(
-                        "cause",
-                        (event.target as unknown as { value: string }).value,
-                      )
-                    }
-                  >
-                    <option value="all">All causes</option>
-                    {CAUSE_OPTIONS.map((cause) => (
-                      <option key={cause} value={cause}>
-                        {cause}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field compact-field">
-                  <span>Ordering</span>
-                  <select
-                    value={filters.sortOrder}
-                    onChange={(event) =>
-                      handleFilterChange(
-                        "sortOrder",
-                        (event.target as unknown as { value: string }).value,
-                      )
-                    }
-                  >
-                    {SORT_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <OfferBoard
-                offers={visibleOffers}
-                selected={selectedOffer}
-                onRemoveOffer={handleRemoveOffer}
-                onSelectOffer={setSelectedOfferId}
-              />
-            </section>
-          </div>
-        </section>
-
-        <section className="section section-subtle" id="analysis">
-          <div className="section-head">
-            <p className="eyebrow">Gains from trade</p>
-            <h2>Inspect the structure of a possible exchange</h2>
-            <p>
-              This view is only a heuristic. It helps compare reciprocal terms and minimum gains,
-              but it cannot by itself tell you whether the gains will actually be realised.
-            </p>
-          </div>
-
-          <div className="analysis-grid">
-            <OfferDetails
-              matches={displayedMatches}
-              selected={selectedOffer}
-              onFocusOffer={setSelectedOfferId}
-            />
-          </div>
-
-          <ParetoChart
-            pairs={exactMatches.length ? exactMatches : scoredPairs.slice(0, 4)}
-            selected={selectedOffer}
-          />
-        </section>
-
-        <section className="section section-white" id="faq">
-          <div className="section-head">
-            <p className="eyebrow">FAQ</p>
-            <h2>Open questions</h2>
-            <p>
-              The optimistic case depends on realised trade, not just hypothetical gains, and it
-              remains vulnerable to threats, concentration of power, and poor collective procedures.
-            </p>
-          </div>
-
-          <div className="faq-list">
-            {faqItems.map((item) => (
-              <details key={item.question} className="panel faq-item">
-                <summary>{item.question}</summary>
-                <p>{item.answer}</p>
-              </details>
-            ))}
-          </div>
-        </section>
+          </section>
+        ) : null}
       </main>
 
       <SiteFooter />
-      <div aria-live="polite" className="sr-only">
-        {statusMessage}
-      </div>
     </div>
   );
 }

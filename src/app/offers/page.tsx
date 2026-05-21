@@ -4,34 +4,24 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
-import { getViewer, listOpenOffersPage, listOpenOffersPreview, OFFERS_PAGE_SIZE } from "@/lib/app-data";
-import type { OfferRecord } from "@/lib/app-data";
-import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
-import {
-  formatDonationOffsetPoolStatus,
-  formatDonationOffsetRatio,
-  formatDonationOffsetTimeHorizon,
-  formatDonationOffsetUnmatchedRule,
-  formatDonationOffsetVerificationMethod,
-} from "@/lib/donation-offsets";
-import { findEveryOrgTargetForCauseArea } from "@/lib/every-org";
-import { FILTER_MODE_OPTIONS, formatMode, formatPaymentCadence } from "@/lib/offers";
+import { getViewer, listOpenOffersPage, OFFERS_PAGE_SIZE, type OfferRecord } from "@/lib/app-data";
+import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Offers",
+  title: "Explore moral trade offers",
   description:
-    "Browse public offers for moral trade: what one side will do, what it asks in return, and how the trade is checked.",
+    "Browse live Moral Trade proposals and worked examples by cause, format, verification method, and review status.",
   alternates: {
     canonical: "/offers",
   },
   openGraph: {
-    title: "Public offers",
+    title: "Explore moral trade offers",
     description:
-      "Browse public offers for moral trade: what one side will do, what it asks in return, and how the trade is checked.",
+      "Browse live Moral Trade proposals and worked examples by cause, format, verification method, and review status.",
     url: getAbsoluteUrl("/offers"),
     type: "website",
   },
@@ -41,60 +31,36 @@ interface OffersPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-const SPOTLIGHT_CAUSES = [
-  {
-    label: "Animal welfare",
-    matches: (cause: string) => cause.includes("animal"),
-  },
-  {
-    label: "Existential risk",
-    matches: (cause: string) =>
-      cause.includes("existential") || cause.includes("x-risk") || cause.includes("xrisk"),
-  },
-  {
-    label: "Future flourishing",
-    matches: (cause: string) => cause.includes("future flourishing") || cause.includes("future"),
-  },
-  {
-    label: "Moral status of digital minds",
-    matches: (cause: string) =>
-      cause.includes("digital mind") || cause.includes("digital minds") || cause.includes("moral status"),
-  },
-  {
-    label: "Extreme power concentration",
-    matches: (cause: string) => cause.includes("power concentration") || cause.includes("concentrated power"),
-  },
-  {
-    label: "S-risks",
-    matches: (cause: string) =>
-      cause.includes("s-risk") || cause.includes("s-risks") || cause.includes("suffering risk"),
-  },
-  {
-    label: "Global poverty",
-    matches: (cause: string) => cause.includes("global poverty") || cause.includes("poverty"),
-  },
-  {
-    label: "Climate",
-    matches: (cause: string) => cause.includes("climate"),
-  },
-  {
-    label: "Public health",
-    matches: (cause: string) => cause.includes("public health") || cause.includes("health"),
-  },
-] as const;
-
 const CAUSE_FILTER_CHIPS = [
   "Global poverty",
   "Animal welfare",
   "Climate",
   "Existential risk",
   "Future flourishing",
+  "Public health",
 ] as const;
 
+const VERIFICATION_FILTERS = [
+  "Annual receipts",
+  "Peer witness",
+  "Evidence-gated",
+  "Manual review required",
+  "Payment pending verification",
+  "Public pledge",
+] as const;
+
+const DURATION_FILTERS = ["3 months", "6 months", "12 months", "Open-ended"] as const;
+
 const IMPACT_FILTER_CHIPS = [
-  { label: "Any impact", value: null },
+  { label: "Any offered impact", value: null },
   { label: "7+ offered impact", value: 7 },
   { label: "9+ offered impact", value: 9 },
+] as const;
+
+const REQUESTED_IMPACT_FILTERS = [
+  { label: "Any requested threshold", value: null },
+  { label: "6+ requested threshold", value: 6 },
+  { label: "8+ requested threshold", value: 8 },
 ] as const;
 
 const SORT_FILTER_CHIPS = [
@@ -103,10 +69,54 @@ const SORT_FILTER_CHIPS = [
   { label: "Best offered/requested ratio", value: "efficient" },
 ] as const;
 
-type DirectorySort = (typeof SORT_FILTER_CHIPS)[number]["value"];
+const DIRECTORY_TABS = [
+  { label: "Live offers", value: "live" },
+  { label: "Worked examples", value: "examples" },
+  { label: "All", value: "all" },
+] as const;
 
-function normalizeCause(cause: string) {
-  return cause.trim().toLowerCase();
+const FORMAT_FILTERS = [
+  { label: "All formats", value: "all" },
+  { label: "Pledge swap", value: "pledge" },
+  { label: "Donation offset", value: "offset" },
+  { label: "Paid action", value: "payment" },
+  { label: "Public-good contribution", value: "public-good" },
+] as const;
+
+const REVIEW_STATUS_FILTERS = [
+  { label: "Any review status", value: "all" },
+  { label: "Live offer", value: "live" },
+  { label: "Worked example", value: "worked-example" },
+  { label: "Manual review required", value: "manual-review-required" },
+] as const;
+
+type DirectoryView = (typeof DIRECTORY_TABS)[number]["value"];
+type DirectorySort = (typeof SORT_FILTER_CHIPS)[number]["value"];
+type FormatFilter = (typeof FORMAT_FILTERS)[number]["value"];
+type ReviewStatusFilter = (typeof REVIEW_STATUS_FILTERS)[number]["value"];
+
+interface MarketplaceListing {
+  id: string;
+  source: "live" | "example";
+  mode: "pledge" | "offset" | "payment" | "public-good";
+  alias: string;
+  title: string;
+  offering: string;
+  requesting: string;
+  offeredCause: string;
+  requestedCause: string;
+  verification: string;
+  duration: string;
+  reviewState: string;
+  offerImpact: number;
+  requestedImpact: number;
+  hasReciprocalMatch: boolean;
+  href: string;
+}
+
+function readParam(searchParams: Record<string, string | string[] | undefined>, key: string) {
+  const value = searchParams[key];
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
 function parsePage(value: string | string[] | undefined) {
@@ -116,252 +126,325 @@ function parsePage(value: string | string[] | undefined) {
   return Number.isFinite(page) && page > 0 ? page : 1;
 }
 
-function parseMode(value: string | string[] | undefined) {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-
-  if (rawValue === "pledge" || rawValue === "offset" || rawValue === "payment") {
-    return rawValue;
+function parseDirectoryView(value: string): DirectoryView {
+  if (value === "live" || value === "examples" || value === "all") {
+    return value;
   }
 
-  return "all" as const;
+  return "live";
 }
 
-function parseSearchQuery(value: string | string[] | undefined) {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-
-  return (rawValue ?? "").trim().slice(0, 120);
+function parseFormatFilter(value: string): FormatFilter {
+  return FORMAT_FILTERS.some((option) => option.value === value)
+    ? (value as FormatFilter)
+    : "all";
 }
 
-function parseMinimumImpact(value: string | string[] | undefined) {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-  const impact = Number.parseInt(rawValue ?? "", 10);
-
-  return impact === 7 || impact === 9 ? impact : null;
-}
-
-function parseDirectorySort(value: string | string[] | undefined): DirectorySort {
-  const rawValue = Array.isArray(value) ? value[0] : value;
-
-  if (rawValue === "impact" || rawValue === "efficient") {
-    return rawValue;
+function parseDirectorySort(value: string): DirectorySort {
+  if (value === "impact" || value === "efficient") {
+    return value;
   }
 
   return "newest";
 }
 
-function getCostEfficiencyScore(offer: OfferRecord) {
-  if (offer.min_counterparty_impact <= 0) {
-    return offer.offer_impact;
-  }
-
-  return offer.offer_impact / offer.min_counterparty_impact;
+function parseReviewStatus(value: string): ReviewStatusFilter {
+  return REVIEW_STATUS_FILTERS.some((option) => option.value === value)
+    ? (value as ReviewStatusFilter)
+    : "all";
 }
 
-function compareByCostEfficiency(left: OfferRecord, right: OfferRecord) {
-  const scoreDifference = getCostEfficiencyScore(right) - getCostEfficiencyScore(left);
-  if (Math.abs(scoreDifference) > 0.001) {
-    return scoreDifference;
-  }
-
-  if (right.offer_impact !== left.offer_impact) {
-    return right.offer_impact - left.offer_impact;
-  }
-
-  if (right.trust_level !== left.trust_level) {
-    return right.trust_level - left.trust_level;
-  }
-
-  return right.created_at.localeCompare(left.created_at);
+function parseImpact(value: string, allowed: readonly number[]) {
+  const parsed = Number.parseInt(value, 10);
+  return allowed.includes(parsed) ? parsed : null;
 }
 
-function getWorkedCaseEfficiency(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]) {
-  if (offer.minCounterpartyImpact <= 0) {
-    return offer.offerImpact;
-  }
-
-  return offer.offerImpact / offer.minCounterpartyImpact;
+function getEfficiency(listing: MarketplaceListing) {
+  return listing.requestedImpact <= 0 ? listing.offerImpact : listing.offerImpact / listing.requestedImpact;
 }
 
-function sortOfferRecords(offers: OfferRecord[], directorySort: DirectorySort) {
-  return [...offers].sort((left, right) => {
-    if (directorySort === "impact") {
-      return right.offer_impact - left.offer_impact || compareByCostEfficiency(left, right);
-    }
-
-    if (directorySort === "efficient") {
-      return compareByCostEfficiency(left, right);
-    }
-
-    return right.created_at.localeCompare(left.created_at);
-  });
+function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]): MarketplaceListing {
+  return {
+    alias: offer.alias,
+    duration: offer.duration,
+    hasReciprocalMatch: true,
+    href: `/offers?view=examples&search=${encodeURIComponent(offer.alias)}`,
+    id: offer.id,
+    mode: offer.mode,
+    offeredCause: offer.offeredCause,
+    offering: offer.offerAction,
+    offerImpact: offer.offerImpact,
+    requestedCause: offer.requestedCause,
+    requestedImpact: offer.minCounterpartyImpact,
+    requesting: offer.requestAction,
+    reviewState: "Worked example; manual review required before reliance",
+    source: "example",
+    title: `${offer.alias}: ${offer.offeredCause} for ${offer.requestedCause}`,
+    verification: offer.verification,
+  };
 }
 
-function sortWorkedCases(
-  offers: Array<(typeof CANONICAL_WORKED_CASE_OFFERS)[number]>,
-  directorySort: DirectorySort,
-) {
-  return [...offers].sort((left, right) => {
-    if (directorySort === "impact") {
-      return right.offerImpact - left.offerImpact || getWorkedCaseEfficiency(right) - getWorkedCaseEfficiency(left);
-    }
-
-    if (directorySort === "efficient") {
-      return (
-        getWorkedCaseEfficiency(right) - getWorkedCaseEfficiency(left) ||
-        right.offerImpact - left.offerImpact
-      );
-    }
-
-    return left.id.localeCompare(right.id);
-  });
+function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
+  return {
+    alias: offer.ownerProfile?.resolvedName ?? offer.owner_alias,
+    duration: offer.duration,
+    hasReciprocalMatch: offer.recommendationCount > 0,
+    href: `/offers/${offer.id}`,
+    id: offer.id,
+    mode: offer.mode,
+    offeredCause: offer.offered_cause,
+    offering: offer.offer_action,
+    offerImpact: offer.offer_impact,
+    requestedCause: offer.requested_cause,
+    requestedImpact: offer.min_counterparty_impact,
+    requesting: offer.request_action,
+    reviewState: "Live offer; evidence review required before reliance",
+    source: "live",
+    title: `${offer.offered_cause} for ${offer.requested_cause}`,
+    verification: offer.verification,
+  };
 }
 
-function buildBestOffersByCause(offers: OfferRecord[]) {
-  const normalizedOffers = offers.map((offer) => ({
-    offer,
-    normalizedCause: normalizeCause(offer.offered_cause),
-  }));
-
-  return SPOTLIGHT_CAUSES.map((cause) => {
-    const matching = normalizedOffers
-      .filter((entry) => cause.matches(entry.normalizedCause))
-      .map((entry) => entry.offer)
-      .sort(compareByCostEfficiency);
-
-    return {
-      label: cause.label,
-      offer: matching[0] ?? null,
-    };
-  });
-}
-
-function workedCaseMatchesSearch(
-  offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number],
-  searchQuery: string,
-) {
-  const normalizedSearchQuery = searchQuery.toLowerCase().trim();
-
-  if (!normalizedSearchQuery) {
+function listingMatchesSearch(listing: MarketplaceListing, query: string) {
+  const normalizedQuery = query.toLowerCase().trim();
+  if (!normalizedQuery) {
     return true;
   }
 
   const haystack = [
-    offer.alias,
-    offer.mode,
-    offer.offeredCause,
-    offer.requestedCause,
-    offer.compromiseCause,
-    offer.offerAction,
-    offer.requestAction,
-    offer.verification,
-    offer.duration,
+    listing.alias,
+    listing.title,
+    listing.offering,
+    listing.requesting,
+    listing.offeredCause,
+    listing.requestedCause,
+    listing.verification,
+    listing.duration,
+    listing.reviewState,
   ]
-    .filter(Boolean)
     .join(" ")
     .toLowerCase();
 
-  return normalizedSearchQuery
+  return normalizedQuery
     .split(/\s+/)
     .filter(Boolean)
     .every((token) => haystack.includes(token));
 }
 
-function buildOffersHref(
-  mode: ReturnType<typeof parseMode>,
-  searchQuery: string,
-  minimumImpact: number | null = null,
-  directorySort: DirectorySort = "newest",
+function listingMatchesFilters(
+  listing: MarketplaceListing,
+  filters: {
+    cause: string;
+    duration: string;
+    format: FormatFilter;
+    minImpact: number | null;
+    minRequestedImpact: number | null;
+    reciprocal: boolean;
+    reviewStatus: ReviewStatusFilter;
+    searchQuery: string;
+    verification: string;
+    view: DirectoryView;
+  },
 ) {
-  const params = new URLSearchParams();
-
-  if (mode !== "all") {
-    params.set("mode", mode);
+  if (filters.view === "live" && listing.source !== "live") {
+    return false;
   }
 
-  if (searchQuery) {
-    params.set("search", searchQuery);
+  if (filters.view === "examples" && listing.source !== "example") {
+    return false;
   }
 
-  if (minimumImpact) {
-    params.set("min_impact", String(minimumImpact));
+  if (filters.format !== "all" && listing.mode !== filters.format) {
+    return false;
   }
 
-  if (directorySort !== "newest") {
-    params.set("sort", directorySort);
+  if (
+    filters.cause &&
+    ![listing.offeredCause, listing.requestedCause].some((cause) =>
+      cause.toLowerCase().includes(filters.cause.toLowerCase()),
+    )
+  ) {
+    return false;
   }
 
-  const serialized = params.toString();
+  if (filters.verification && listing.verification !== filters.verification) {
+    return false;
+  }
+
+  if (filters.duration && listing.duration !== filters.duration) {
+    return false;
+  }
+
+  if (filters.reviewStatus === "live" && listing.source !== "live") {
+    return false;
+  }
+
+  if (filters.reviewStatus === "worked-example" && listing.source !== "example") {
+    return false;
+  }
+
+  if (
+    filters.reviewStatus === "manual-review-required" &&
+    !listing.reviewState.toLowerCase().includes("manual review")
+  ) {
+    return false;
+  }
+
+  if (filters.minImpact !== null && listing.offerImpact < filters.minImpact) {
+    return false;
+  }
+
+  if (filters.minRequestedImpact !== null && listing.requestedImpact < filters.minRequestedImpact) {
+    return false;
+  }
+
+  if (filters.reciprocal && !listing.hasReciprocalMatch) {
+    return false;
+  }
+
+  return listingMatchesSearch(listing, filters.searchQuery);
+}
+
+function sortListings(listings: MarketplaceListing[], sort: DirectorySort) {
+  return [...listings].sort((left, right) => {
+    if (sort === "impact") {
+      return right.offerImpact - left.offerImpact || getEfficiency(right) - getEfficiency(left);
+    }
+
+    if (sort === "efficient") {
+      return getEfficiency(right) - getEfficiency(left) || right.offerImpact - left.offerImpact;
+    }
+
+    return left.source === right.source ? left.title.localeCompare(right.title) : left.source === "live" ? -1 : 1;
+  });
+}
+
+function buildOffersHref(params: {
+  cause?: string;
+  duration?: string;
+  format?: FormatFilter;
+  minImpact?: number | null;
+  minRequestedImpact?: number | null;
+  reciprocal?: boolean;
+  reviewStatus?: ReviewStatusFilter;
+  searchQuery?: string;
+  sort?: DirectorySort;
+  verification?: string;
+  view?: DirectoryView;
+}) {
+  const query = new URLSearchParams();
+
+  if (params.view && params.view !== "live") query.set("view", params.view);
+  if (params.format && params.format !== "all") query.set("mode", params.format);
+  if (params.searchQuery) query.set("search", params.searchQuery);
+  if (params.cause) query.set("cause", params.cause);
+  if (params.verification) query.set("verification", params.verification);
+  if (params.duration) query.set("duration", params.duration);
+  if (params.reviewStatus && params.reviewStatus !== "all") query.set("review", params.reviewStatus);
+  if (params.minImpact) query.set("min_impact", String(params.minImpact));
+  if (params.minRequestedImpact) query.set("min_requested", String(params.minRequestedImpact));
+  if (params.reciprocal) query.set("reciprocal", "1");
+  if (params.sort && params.sort !== "newest") query.set("sort", params.sort);
+
+  const serialized = query.toString();
   return serialized ? `/offers?${serialized}` : "/offers";
 }
 
-function buildOffersPageHref(
-  mode: ReturnType<typeof parseMode>,
-  searchQuery: string,
-  minimumImpact: number | null,
-  directorySort: DirectorySort,
-  page: number,
+function createTabHref(
+  view: DirectoryView,
+  filters: Parameters<typeof buildOffersHref>[0],
 ) {
-  const href = buildOffersHref(mode, searchQuery, minimumImpact, directorySort);
-  return `${href}${href.includes("?") ? "&" : "?"}page=${page}`;
+  return buildOffersHref({ ...filters, view });
 }
 
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
-  const page = parsePage(resolvedSearchParams.page);
-  const mode = parseMode(resolvedSearchParams.mode);
-  const searchQuery = parseSearchQuery(resolvedSearchParams.search);
-  const minimumImpact = parseMinimumImpact(resolvedSearchParams.min_impact);
-  const directorySort = parseDirectorySort(resolvedSearchParams.sort);
-  const offersPage = hasSupabaseEnv()
-    ? await listOpenOffersPage(page, OFFERS_PAGE_SIZE, mode, searchQuery)
-    : { items: [], page, pageSize: OFFERS_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
-  const bestOfferCandidates = hasSupabaseEnv() ? await listOpenOffersPreview(120) : [];
-  const offers = sortOfferRecords(
-    offersPage.items.filter((offer) => minimumImpact === null || offer.offer_impact >= minimumImpact),
-    directorySort,
-  );
-  const exampleOffers = sortWorkedCases(
-    CANONICAL_WORKED_CASE_OFFERS.filter((offer) => {
-      const modeMatches = mode === "all" || offer.mode === mode;
-      const impactMatches = minimumImpact === null || offer.offerImpact >= minimumImpact;
-      return modeMatches && impactMatches && workedCaseMatchesSearch(offer, searchQuery);
-    }),
-    directorySort,
-  );
-  const bestOffersByCause = buildBestOffersByCause(bestOfferCandidates);
   const formMessage = getFormMessage(resolvedSearchParams);
+  const page = parsePage(resolvedSearchParams.page);
+  const view = parseDirectoryView(readParam(resolvedSearchParams, "view"));
+  const format = parseFormatFilter(readParam(resolvedSearchParams, "mode"));
+  const searchQuery = readParam(resolvedSearchParams, "search").trim().slice(0, 120);
+  const cause = readParam(resolvedSearchParams, "cause");
+  const verification = readParam(resolvedSearchParams, "verification");
+  const duration = readParam(resolvedSearchParams, "duration");
+  const reviewStatus = parseReviewStatus(readParam(resolvedSearchParams, "review"));
+  const minImpact = parseImpact(readParam(resolvedSearchParams, "min_impact"), [7, 9]);
+  const minRequestedImpact = parseImpact(readParam(resolvedSearchParams, "min_requested"), [6, 8]);
+  const reciprocal = readParam(resolvedSearchParams, "reciprocal") === "1";
+  const directorySort = parseDirectorySort(readParam(resolvedSearchParams, "sort"));
+  const liveMode = format === "pledge" || format === "offset" || format === "payment" ? format : "all";
+  const offersPage = hasSupabaseEnv()
+    ? await listOpenOffersPage(page, OFFERS_PAGE_SIZE, liveMode, searchQuery)
+    : { items: [], page, pageSize: OFFERS_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
+  const liveListings = offersPage.items.map(liveOfferToListing);
+  const workedExampleListings = CANONICAL_WORKED_CASE_OFFERS.map(workedCaseToListing);
+  const allListings = [...liveListings, ...workedExampleListings];
+  const activeFilters = {
+    cause,
+    duration,
+    format,
+    minImpact,
+    minRequestedImpact,
+    reciprocal,
+    reviewStatus,
+    searchQuery,
+    verification,
+    view,
+  };
+  const filteredListings = sortListings(
+    allListings.filter((listing) => listingMatchesFilters(listing, activeFilters)),
+    directorySort,
+  );
+  const filterHrefParams = {
+    cause,
+    duration,
+    format,
+    minImpact,
+    minRequestedImpact,
+    reciprocal,
+    reviewStatus,
+    searchQuery,
+    sort: directorySort,
+    verification,
+    view,
+  };
+  const exampleMatchesByCause = CAUSE_FILTER_CHIPS.map((causeLabel) => ({
+    cause: causeLabel,
+    listing: workedExampleListings.find((listing) =>
+      [listing.offeredCause, listing.requestedCause].some((candidate) =>
+        candidate.toLowerCase().includes(causeLabel.toLowerCase()),
+      ),
+    ),
+  })).filter((entry) => entry.listing);
   const offersStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "Public Moral Trade offers",
-    url: getAbsoluteUrl(page === 1 ? "/offers" : `/offers?page=${page}`),
+    name: "Explore moral trade offers",
+    url: getAbsoluteUrl("/offers"),
     description:
-      "Public offers that state proposed actions, reciprocal requests, and verification terms.",
+      "Live proposals and worked examples that state actions, reciprocal requests, and verification terms.",
     mainEntity: {
       "@type": "ItemList",
-      itemListElement: offers.slice(0, 20).map((offer, index) => ({
+      itemListElement: filteredListings.slice(0, 20).map((listing, index) => ({
         "@type": "ListItem",
         position: index + 1,
-        url: getAbsoluteUrl(`/offers/${offer.id}`),
-        name: `${offer.offered_cause} for ${offer.requested_cause}`,
-        description: truncateDescription(
-          `${offer.offer_action} Requested in return: ${offer.request_action}`,
-          140,
-        ),
+        url: getAbsoluteUrl(listing.href),
+        name: listing.title,
+        description: truncateDescription(`${listing.offering} Requested: ${listing.requesting}`, 140),
       })),
     },
   };
 
   return (
-    <div className="page-shell">
+    <div className="page-shell page-shell-focused">
       <script
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(offersStructuredData),
         }}
         type="application/ld+json"
       />
-      <header className="hero">
+      <header className="hero marketplace-hero">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
@@ -371,458 +454,323 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Public offers</p>
-            <h1>Review public offers for moral trade.</h1>
+            <h1>Explore moral trade offers</h1>
             <p className="hero-text">
-              Each listing states what one side will do, what it asks in return, and how the trade
-              is to be checked.
+              Browse live proposals and worked examples by cause, format, verification method,
+              and review status.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup"}>
-                {viewer ? "Create an offer" : "Create an account"}
+              <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
+                Create trade
               </Link>
-              <Link className="button button-secondary" href="/donation-offsets">
-                Donation offsets guide
-              </Link>
-              <Link className="button button-secondary" href={viewer ? "/dashboard" : "/login"}>
-                {viewer ? "Open dashboard" : "Log in"}
+              <Link className="button button-secondary" href="/offers?view=examples">
+                View worked examples
               </Link>
             </div>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">What an offer should show</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>The act</strong>
-                  <p>What one side will do.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>The reciprocal act</strong>
-                  <p>What is asked in return.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  <strong>The trust terms</strong>
-                  <p>How the trade is meant to be checked.</p>
-                </div>
-              </div>
-            </div>
+            <p className="eyebrow">Pilot directory</p>
+            <p className="route-text">
+              Live offers appear only after signed-in participants publish them. Worked examples
+              remain clearly labeled and never count as marketplace liquidity.
+            </p>
           </aside>
         </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-subtle">
-          <div className="section-head">
-            <p className="eyebrow">Example structures</p>
-            <h2>
-              {exampleOffers.length} worked example{exampleOffers.length === 1 ? "" : "s"} match
-              the current view
-            </h2>
-            <p>
-              These examples are not live offers. They show the level of specificity a published
-              trade should have: the action, the reciprocal request, the cause areas, and the
-              verification terms.
-            </p>
+        {formMessage ? (
+          <div
+            className={`status-banner ${
+              formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"
+            }`}
+          >
+            {formMessage.text}
+          </div>
+        ) : null}
+
+        <section className="marketplace-shell" aria-label="Offer marketplace">
+          <div className="marketplace-tabs" role="tablist" aria-label="Directory view">
+            {DIRECTORY_TABS.map((tab) => (
+              <Link
+                aria-current={view === tab.value ? "page" : undefined}
+                className={`marketplace-tab ${view === tab.value ? "is-active" : ""}`}
+                href={createTabHref(tab.value, filterHrefParams)}
+                key={tab.value}
+              >
+                {tab.label}
+              </Link>
+            ))}
           </div>
 
-          <div className="data-grid">
-            {exampleOffers.length ? (
-              exampleOffers.map((offer) => (
-                <article className="panel data-card" key={offer.id}>
-                  <p className="detail-kicker">{formatMode(offer.mode)} example</p>
-                  <h3>{offer.alias}: {offer.offeredCause} for {offer.requestedCause}</h3>
-                  <p className="route-text">{offer.offerAction}</p>
-                  <p className="route-text">Requests in return: {offer.requestAction}</p>
-                  <div className="tag-row">
-                    <span className="badge">{offer.offeredCause}</span>
-                    <span className="badge badge-secondary">{offer.requestedCause}</span>
-                    <span className="impact-pill">{offer.offerImpact}/10 offered</span>
-                    <span className="impact-pill">{offer.minCounterpartyImpact}+/10 needed</span>
-                    <span className="impact-pill">{offer.verification}</span>
-                    <span className="impact-pill">{offer.duration}</span>
-                    {formatPaymentCadence(offer) ? (
-                      <span className="impact-pill">{formatPaymentCadence(offer)}</span>
-                    ) : null}
-                  </div>
-                </article>
-              ))
-            ) : (
-              <div className="empty-state">
-                <div>
-                  <strong>No worked example matches this filter.</strong>
-                  <p>Clear the search or switch trade type to inspect the full seed set.</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="section section-white" id="best-offers">
-          <div className="section-head">
-            <p className="eyebrow">Best Offers</p>
-            <h2>Most cost-efficient published offers by cause area</h2>
-            <p>
-              This spotlight uses the fields already stored in each offer dossier: offered impact
-              divided by minimum reciprocal impact requested. It is a bounded proxy for
-              cost-efficiency, not a claim of moral truth.
-            </p>
-          </div>
-
-          {!hasSupabaseEnv() ? (
-            <div className="status-banner status-banner-error">
-              Supabase is not configured yet. Add environment variables and apply the SQL
-              schema before using live offers.
-            </div>
-          ) : null}
-
-          <div className="data-grid">
-            {bestOffersByCause.map((entry) => {
-              const donationTarget = findEveryOrgTargetForCauseArea(entry.label);
-
-              return entry.offer ? (
-                <article key={entry.label} className="panel data-card">
-                  <p className="detail-kicker">{entry.label}</p>
-                  <h3>{entry.offer.offered_cause} for {entry.offer.requested_cause}</h3>
-                  <p className="route-text">
-                    <strong>
-                      {entry.offer.ownerProfile ? (
-                        <Link href={`/people/${entry.offer.ownerProfile.id}`}>
-                          {entry.offer.ownerProfile.resolvedName}
-                        </Link>
-                      ) : (
-                        entry.offer.owner_alias
-                      )}
-                    </strong>{" "}
-                    proposes: {entry.offer.offer_action}
-                  </p>
-                  <p className="route-text">
-                    Requests in return: {entry.offer.request_action}
-                  </p>
-                  <div className="tag-row">
-                    <span className="impact-pill">
-                      {getCostEfficiencyScore(entry.offer).toFixed(2)}x offered per 1 requested
-                    </span>
-                    <span className="badge">{formatMode(entry.offer.mode)}</span>
-                    <span className="impact-pill">{entry.offer.offer_impact}/10 offered</span>
-                    <span className="impact-pill">
-                      {entry.offer.min_counterparty_impact}/10 requested
-                    </span>
-                  </div>
-                  <div className="offer-footer">
-                    <div className="tag-row">
-                      <span>{entry.offer.verification}</span>
-                      <span>{entry.offer.duration}</span>
-                      {entry.offer.mode === "payment" ? (
-                        <span>{formatPaymentCadence(entry.offer)}</span>
-                      ) : null}
-                    </div>
-                    <div className="offer-actions">
-                      {donationTarget ? (
-                        <EveryOrgDonateButton
-                          className="button button-secondary button-mini"
-                          label="Donate on Every.org"
-                          target={donationTarget}
-                        />
-                      ) : null}
-                      <Link className="text-button" href={`/offers/${entry.offer.id}`}>
-                        View offer
-                      </Link>
-                    </div>
-                  </div>
-                </article>
-              ) : (
-                <article key={entry.label} className="panel data-card">
-                  <p className="detail-kicker">{entry.label}</p>
-                  <h3>No published offer yet</h3>
-                  <p className="route-text">
-                    No live participant offer has been published in this cause area yet. The
-                    examples above show the expected shape.
-                  </p>
-                  <div className="offer-footer">
-                    <div className="offer-actions">
-                      {donationTarget ? (
-                        <EveryOrgDonateButton
-                          className="button button-secondary button-mini"
-                          label="Donate on Every.org"
-                          target={donationTarget}
-                        />
-                      ) : (
-                        <Link className="text-button" href="/donate">
-                          See donation routes
-                        </Link>
-                      )}
-                      <Link className="text-button" href={viewer ? "/offers/new" : "/signup"}>
-                        {viewer ? "Create the first offer" : "Create an account"}
-                      </Link>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="section section-white">
-          <div className="section-head">
-            <p className="eyebrow">Offer directory</p>
-            <h2>Published proposals</h2>
-            <p>
-              Each card links to a fuller dossier where visitors can inspect the terms and
-              signed-in users can register interest.
-            </p>
-          </div>
-
-          <form action="/offers" className="marketplace-search" role="search">
+          <form action="/offers" className="marketplace-search marketplace-search-wide" role="search">
             <label className="field marketplace-search-field">
               <span>Search trades</span>
               <input
                 defaultValue={searchQuery}
                 name="search"
-                placeholder="Search cause areas, actions, verification terms"
+                placeholder="Search causes, actions, aliases, verification terms"
                 type="search"
               />
             </label>
-            {mode !== "all" ? <input name="mode" type="hidden" value={mode} /> : null}
-            {minimumImpact ? (
-              <input name="min_impact" type="hidden" value={minimumImpact} />
-            ) : null}
-            {directorySort !== "newest" ? (
-              <input name="sort" type="hidden" value={directorySort} />
-            ) : null}
+            {view !== "live" ? <input name="view" type="hidden" value={view} /> : null}
+            {format !== "all" ? <input name="mode" type="hidden" value={format} /> : null}
+            {cause ? <input name="cause" type="hidden" value={cause} /> : null}
+            {verification ? <input name="verification" type="hidden" value={verification} /> : null}
+            {duration ? <input name="duration" type="hidden" value={duration} /> : null}
+            {reviewStatus !== "all" ? <input name="review" type="hidden" value={reviewStatus} /> : null}
+            {minImpact ? <input name="min_impact" type="hidden" value={minImpact} /> : null}
+            {minRequestedImpact ? <input name="min_requested" type="hidden" value={minRequestedImpact} /> : null}
+            {reciprocal ? <input name="reciprocal" type="hidden" value="1" /> : null}
+            {directorySort !== "newest" ? <input name="sort" type="hidden" value={directorySort} /> : null}
             <button className="button button-primary" type="submit">
               Search
             </button>
-            {searchQuery ? (
-              <Link className="button button-secondary" href={buildOffersHref(mode, "", minimumImpact, directorySort)}>
-                Clear search
-              </Link>
-            ) : null}
           </form>
 
-          <div className="filter-chip-row" aria-label="Popular cause filters">
-            {CAUSE_FILTER_CHIPS.map((cause) => (
-              <Link
-                className={`filter-chip ${searchQuery.toLowerCase() === cause.toLowerCase() ? "is-active" : ""}`}
-                href={buildOffersHref(mode, cause, minimumImpact, directorySort)}
-                key={cause}
-              >
-                {cause}
-              </Link>
-            ))}
-          </div>
+          <div className="marketplace-directory-layout">
+            <details className="filter-sidebar panel" open>
+              <summary className="filter-drawer-summary">Filters</summary>
+              <div className="filter-sidebar-content" aria-label="Offer filters">
+                <div className="filter-sidebar-head">
+                  <h2>Filters</h2>
+                  <Link className="text-button" href="/offers">
+                    Clear
+                  </Link>
+                </div>
 
-          <div className="filter-chip-row" aria-label="Minimum offered impact filters">
-            {IMPACT_FILTER_CHIPS.map((impact) => (
-              <Link
-                className={`filter-chip ${minimumImpact === impact.value ? "is-active" : ""}`}
-                href={buildOffersHref(mode, searchQuery, impact.value, directorySort)}
-                key={impact.label}
-              >
-                {impact.label}
-              </Link>
-            ))}
-          </div>
+                <label className="field">
+                  <span>Trade format</span>
+                  <select name="mode" defaultValue={format} form="offer-filter-form">
+                    {FORMAT_FILTERS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-          <div className="sort-tabs">
-            {FILTER_MODE_OPTIONS.map((option) => {
-              const href = buildOffersHref(option.value, searchQuery, minimumImpact, directorySort);
+                <form action="/offers" className="filter-form" id="offer-filter-form">
+                  {view !== "live" ? <input name="view" type="hidden" value={view} /> : null}
+                  {searchQuery ? <input name="search" type="hidden" value={searchQuery} /> : null}
+                  <label className="field">
+                    <span>Cause area</span>
+                    <select name="cause" defaultValue={cause}>
+                      <option value="">All causes</option>
+                      {CAUSE_FILTER_CHIPS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Verification method</span>
+                    <select name="verification" defaultValue={verification}>
+                      <option value="">Any verification method</option>
+                      {VERIFICATION_FILTERS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Duration</span>
+                    <select name="duration" defaultValue={duration}>
+                      <option value="">Any duration</option>
+                      {DURATION_FILTERS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Review status</span>
+                    <select name="review" defaultValue={reviewStatus}>
+                      {REVIEW_STATUS_FILTERS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Minimum offered-impact score</span>
+                    <select name="min_impact" defaultValue={minImpact ?? ""}>
+                      {IMPACT_FILTER_CHIPS.map((option) => (
+                        <option key={option.label} value={option.value ?? ""}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Minimum requested-impact threshold</span>
+                    <select name="min_requested" defaultValue={minRequestedImpact ?? ""}>
+                      {REQUESTED_IMPACT_FILTERS.map((option) => (
+                        <option key={option.label} value={option.value ?? ""}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="check-row">
+                    <input defaultChecked={reciprocal} name="reciprocal" type="checkbox" value="1" />
+                    <span>Has reciprocal match</span>
+                  </label>
+                  <button className="button button-secondary" type="submit">
+                    Apply filters
+                  </button>
+                </form>
+              </div>
+            </details>
 
-              return (
-                <Link
-                  key={option.value}
-                  className={`sort-tab ${mode === option.value ? "is-active" : ""}`}
-                  href={href}
-                >
-                  {option.label}
-                </Link>
-              );
-            })}
-          </div>
+            <section className="marketplace-results" aria-labelledby="results-heading">
+              <div className="marketplace-results-head">
+                <div>
+                  <p className="eyebrow">Directory</p>
+                  <h2 id="results-heading">
+                    {filteredListings.length} {filteredListings.length === 1 ? "listing" : "listings"}
+                  </h2>
+                </div>
+                <form action="/offers" className="sort-control">
+                  {view !== "live" ? <input name="view" type="hidden" value={view} /> : null}
+                  {format !== "all" ? <input name="mode" type="hidden" value={format} /> : null}
+                  {searchQuery ? <input name="search" type="hidden" value={searchQuery} /> : null}
+                  {cause ? <input name="cause" type="hidden" value={cause} /> : null}
+                  {verification ? <input name="verification" type="hidden" value={verification} /> : null}
+                  {duration ? <input name="duration" type="hidden" value={duration} /> : null}
+                  {reviewStatus !== "all" ? <input name="review" type="hidden" value={reviewStatus} /> : null}
+                  {minImpact ? <input name="min_impact" type="hidden" value={minImpact} /> : null}
+                  {minRequestedImpact ? <input name="min_requested" type="hidden" value={minRequestedImpact} /> : null}
+                  {reciprocal ? <input name="reciprocal" type="hidden" value="1" /> : null}
+                  <label className="field compact-field">
+                    <span>Sort</span>
+                    <select name="sort" defaultValue={directorySort}>
+                      {SORT_FILTER_CHIPS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button className="button button-secondary button-mini" type="submit">
+                    Sort
+                  </button>
+                </form>
+              </div>
 
-          <div className="filter-chip-row" aria-label="Offer sort options">
-            {SORT_FILTER_CHIPS.map((sort) => (
-              <Link
-                className={`filter-chip ${directorySort === sort.value ? "is-active" : ""}`}
-                href={buildOffersHref(mode, searchQuery, minimumImpact, sort.value)}
-                key={sort.value}
-              >
-                {sort.label}
-              </Link>
-            ))}
-          </div>
-
-          {formMessage ? (
-            <div
-              className={`status-banner ${
-                formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"
-              }`}
-            >
-              {formMessage.text}
-            </div>
-          ) : null}
-
-          <div className="data-grid">
-            {offers.length ? (
-              offers.map((offer) => (
-                <article key={offer.id} className="panel data-card">
-                  <p className="detail-kicker">{formatMode(offer.mode)}</p>
-                  <h3>{offer.offered_cause} for {offer.requested_cause}</h3>
-                  <p className="route-text">
-                    <strong>
-                      {offer.ownerProfile ? (
-                        <Link href={`/people/${offer.ownerProfile.id}`}>
-                          {offer.ownerProfile.resolvedName}
-                        </Link>
-                      ) : (
-                        offer.owner_alias
-                      )}
-                    </strong>{" "}
-                    proposes: {offer.offer_action}
-                  </p>
-                  <p className="route-text">Requests in return: {offer.request_action}</p>
-                  <div className="tag-row">
-                    <span className="badge">{offer.offered_cause}</span>
-                    <span className="badge badge-secondary">{offer.requested_cause}</span>
-                    <span className="impact-pill">{offer.offer_impact}/10 offered</span>
-                    <span className="impact-pill">{offer.min_counterparty_impact}+/10 needed</span>
-                    <span className="impact-pill">{offer.commentCount} comments</span>
-                    <span className="impact-pill">{offer.recommendationCount} recommendations</span>
-                  </div>
-                  <div className="offer-footer">
-                    {offer.mode === "offset" && offer.donationOffset ? (
-                      <div className="clean-stack">
-                        <p className="route-text">
-                          {offer.donationOffset.baseline_opposed_cause}: $
-                          {(offer.donationOffset.baseline_amount_cents / 100).toFixed(2)} | Requests $
-                          {(offer.donationOffset.requested_matching_amount_cents / 100).toFixed(2)} from{" "}
-                          {offer.donationOffset.requested_opposed_cause}
-                        </p>
-                        <p className="route-text">
-                          {offer.donationOffset.compromiseCharity?.name ?? offer.compromise_cause} |{" "}
-                          {formatDonationOffsetRatio(offer.donationOffset.offset_ratio)} |{" "}
-                          {formatDonationOffsetVerificationMethod(
-                            offer.donationOffset.verification_method,
-                          )}
-                        </p>
-                        <p className="route-text">
-                          {formatDonationOffsetTimeHorizon(offer.donationOffset.time_horizon)} |{" "}
-                          {formatDonationOffsetUnmatchedRule(
-                            offer.donationOffset.unmatched_surplus_rule,
-                          )}
-                        </p>
-                        {offer.donationOffset.participation_mode === "pool" &&
-                        offer.donationOffset.pool ? (
-                          <>
-                            <p className="route-text">
-                              Pool: <strong>{offer.donationOffset.pool.name}</strong> |{" "}
-                              {formatDonationOffsetPoolStatus(offer.donationOffset.pool.progress.status)}
-                            </p>
-                            <p className="route-text">
-                              Matched so far: $
-                              {(offer.donationOffset.pool.matchedCompromiseCents / 100).toFixed(2)} |{" "}
-                              {offer.donationOffset.pool.commitmentCount} commitment(s)
-                            </p>
-                          </>
-                        ) : null}
-                        {offer.donationOffset.moderation_status === "flagged" ? (
-                          <p className="route-text">
-                            Warning: baseline evidence is incomplete, so this offset is flagged for
-                            extra scrutiny.
-                          </p>
-                        ) : null}
+              <div className="listing-grid">
+                {filteredListings.length ? (
+                  filteredListings.map((listing) => (
+                    <article className="listing-card panel" key={`${listing.source}-${listing.id}`}>
+                      <div className="listing-card-head">
+                        <span className="badge">{formatMode(listing.mode === "public-good" ? "pledge" : listing.mode)}</span>
+                        <span className="badge badge-secondary">
+                          {listing.source === "live" ? "Live offer" : "Worked example"}
+                        </span>
                       </div>
-                    ) : (
+                      <h3>{listing.title}</h3>
+                      <p className="detail-kicker">{listing.alias}</p>
+                      <dl className="listing-terms">
+                        <div>
+                          <dt>Offering</dt>
+                          <dd>{listing.offering}</dd>
+                        </div>
+                        <div>
+                          <dt>Requesting</dt>
+                          <dd>{listing.requesting}</dd>
+                        </div>
+                      </dl>
                       <div className="tag-row">
-                        <span>{offer.verification}</span>
-                        <span>{offer.duration}</span>
-                        {offer.mode === "payment" ? (
-                          <span>{formatPaymentCadence(offer)}</span>
-                        ) : null}
+                        <span className="source-pill">{listing.offeredCause}</span>
+                        <span className="source-pill">{listing.requestedCause}</span>
                       </div>
-                    )}
-                    <div className="offer-actions">
-                      {offer.mode === "offset" ? (
-                        offer.donationOffset?.participation_mode === "pool" ? (
-                          <Link
-                            className="button button-secondary button-mini"
-                            href={`/offers/new?mode=offset&offset_participation_mode=pool&offset_pool_id=${
-                              offer.donationOffset.pool_id ?? ""
-                            }&offset_pool_side=${
-                              offer.donationOffset.pool_side === "side_a" ? "side_b" : "side_a"
-                            }`}
-                          >
-                            Join pool
-                          </Link>
-                        ) : (
-                          <Link className="button button-secondary button-mini" href={`/offers/${offer.id}#respond`}>
-                            Accept offset
-                          </Link>
-                        )
-                      ) : null}
-                      <Link className="text-button" href={`/offers/${offer.id}`}>
-                        View offer
+                      <div className="listing-meta">
+                        <span>{listing.verification}</span>
+                        <span>{listing.duration}</span>
+                        <span>{listing.reviewState}</span>
+                      </div>
+                      <Link className="text-button" href={listing.href}>
+                        Inspect terms
                       </Link>
+                    </article>
+                  ))
+                ) : (
+                  <div className="empty-state marketplace-empty-state">
+                    <div>
+                      <strong>No live offers yet.</strong>
+                      <p>
+                        You can inspect worked examples or create the first public offer.
+                      </p>
+                      <div className="hero-actions">
+                        <Link className="button button-secondary" href="/offers?view=examples">
+                          View worked examples
+                        </Link>
+                        <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
+                          Create trade
+                        </Link>
+                      </div>
                     </div>
                   </div>
-                </article>
-              ))
-            ) : (
-              <div className="empty-state">
-                <div>
-                  <strong>Live participant offers will appear here.</strong>
-                  <p>
-                    Until then, use the seeded examples above to inspect the expected offer
-                    structure, then create the first live offer from an account.
-                  </p>
-                </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {offersPage.hasPreviousPage || offersPage.hasNextPage ? (
-            <div className="offer-actions">
-              {offersPage.hasPreviousPage ? (
-                <Link
-                  className="button button-secondary"
-                  href={buildOffersPageHref(
-                    mode,
-                    searchQuery,
-                    minimumImpact,
-                    directorySort,
-                    offersPage.page - 1,
+              {offersPage.hasPreviousPage || offersPage.hasNextPage ? (
+                <div className="offer-actions">
+                  {offersPage.hasPreviousPage ? (
+                    <Link
+                      className="button button-secondary"
+                      href={`${buildOffersHref(filterHrefParams)}${
+                        buildOffersHref(filterHrefParams).includes("?") ? "&" : "?"
+                      }page=${offersPage.page - 1}`}
+                    >
+                      Previous page
+                    </Link>
+                  ) : (
+                    <span />
                   )}
-                >
-                  Previous page
-                </Link>
-              ) : (
-                <span />
-              )}
 
-              {offersPage.hasNextPage ? (
-                <Link
-                  className="button button-secondary"
-                  href={buildOffersPageHref(
-                    mode,
-                    searchQuery,
-                    minimumImpact,
-                    directorySort,
-                    offersPage.page + 1,
-                  )}
-                >
-                  Next page
-                </Link>
+                  {offersPage.hasNextPage ? (
+                    <Link
+                      className="button button-secondary"
+                      href={`${buildOffersHref(filterHrefParams)}${
+                        buildOffersHref(filterHrefParams).includes("?") ? "&" : "?"
+                      }page=${offersPage.page + 1}`}
+                    >
+                      Next page
+                    </Link>
+                  ) : null}
+                </div>
               ) : null}
-            </div>
-          ) : null}
+            </section>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="example-matches-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Pilot mode</p>
+            <h2 id="example-matches-heading">Example matches by cause</h2>
+            <p>
+              During the seeded pilot, these examples help visitors inspect structure without
+              implying real marketplace rankings or live cost-efficiency results.
+            </p>
+          </div>
+          <div className="data-grid">
+            {exampleMatchesByCause.map((entry) => (
+              <article className="panel data-card" key={entry.cause}>
+                <p className="detail-kicker">{entry.cause}</p>
+                <h3>{entry.listing?.title}</h3>
+                <p className="route-text">{entry.listing?.offering}</p>
+                <Link className="text-button" href={`/offers?view=examples&cause=${encodeURIComponent(entry.cause)}`}>
+                  Inspect example
+                </Link>
+              </article>
+            ))}
+          </div>
         </section>
       </main>
 

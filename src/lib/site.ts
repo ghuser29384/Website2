@@ -1,13 +1,13 @@
 export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
     {
-      label: "Marketplace",
-      summary: "Browse, compare, or create public trade proposals.",
+      label: "Explore",
+      summary: "Browse public proposals and worked examples.",
       items: [
-        { href: "/offers", label: "All trades", description: "Search public offers and worked examples." },
+        { href: "/offers", label: "All trades", description: "Live offers and worked examples." },
         { href: "/offers?mode=pledge", label: "Pledge swaps", description: "Exchange bounded commitments." },
         { href: "/donation-offsets", label: "Donation offsets", description: "Redirect matched opposed donations." },
-        { href: "/mpgf", label: "Moral Public Goods Fund", description: "Coordinate shared consensus goods." },
+        { href: "/offers?view=examples", label: "Worked examples", description: "Seeded structures, not live offers." },
         {
           href: isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new",
           label: "Create trade",
@@ -19,25 +19,31 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
       label: "Learn",
       summary: "Understand standards before proposing or accepting terms.",
       items: [
-        { href: "/reasoning-standards", label: "Tutorials", description: "Field-by-field reasoning guidance." },
+        { href: "/#how-it-works", label: "How it works", description: "Three steps from format to evidence review." },
         { href: "/methodology", label: "Methodology", description: "Moral trade sources and safeguards." },
         { href: "/safety", label: "Safety", description: "Coercion, fraud, and pressure boundaries." },
+        { href: "/reasoning-standards", label: "Reasoning standards", description: "Field-by-field guidance." },
+        { href: "/methodology#faq", label: "FAQ", description: "Common questions and limits." },
+      ],
+    },
+    { href: "/donation-offsets", label: "Donation offsets" },
+    { href: "/mpgf", label: "Public Goods Fund" },
+    { href: "/safety", label: "Safety" },
+    { href: "/#about", label: "About" },
+    {
+      label: "Advanced",
+      summary: "Prototype tools for returning users and reviewers.",
+      items: [
+        { href: "/people", label: "Profiles", description: "Privacy-limited public profiles." },
+        { href: "/wish-registry", label: "Wish registry", description: "Search broad wishes before consent gates." },
         {
           href: "/background-networking",
           label: "Background networking",
           description: "Consent-preserving discovery, not scraping.",
         },
-        { href: "/#faq", label: "FAQ", description: "Common questions and limits." },
-      ],
-    },
-    {
-      label: "Community",
-      summary: "Review public participants and coordination tools.",
-      items: [
-        { href: "/people", label: "Profiles", description: "Privacy-limited public profiles." },
-        { href: "/wish-registry", label: "Wish registry", description: "Search broad wishes before consent gates." },
         { href: "/priority-correction-fund", label: "Priority fund", description: "Inspect the correction mechanism." },
         { href: "/mpgf/pools", label: "MPGF pools", description: "Review pooled public-good proposals." },
+        { href: "/mpgf/contribute", label: "Manual evidence", description: "Submit evidence after sign-in." },
         {
           href: isAuthenticated ? "/dashboard" : "/signup",
           label: isAuthenticated ? "Dashboard" : "Create account",
@@ -45,7 +51,6 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
         },
       ],
     },
-    { href: "/#about", label: "About" },
   ];
 
   return links;
@@ -82,14 +87,14 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/methodology", label: "Methodology" },
       { href: "/reasoning-standards", label: "Reasoning standards" },
       { href: "/safety", label: "Safety" },
-      { href: "/#faq", label: "FAQ" },
+      { href: "/methodology#faq", label: "FAQ" },
       { href: "mailto:support@moraltrade.org", label: "Contact" },
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },
     ],
   },
   {
-    title: "Community",
+    title: "Advanced tools",
     links: [
       { href: "/people", label: "People" },
       { href: "/wish-registry", label: "Wish registry" },
