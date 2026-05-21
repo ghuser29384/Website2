@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { EmptyState, FilterSidebar, OfferCard } from "@/components/ui/page-primitives";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffersPage, OFFERS_PAGE_SIZE, type OfferRecord } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
@@ -12,14 +13,14 @@ import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Explore moral trade offers",
+  title: "Browse moral trade offers",
   description:
     "Browse live Moral Trade proposals and worked examples by cause, format, verification method, and review status.",
   alternates: {
     canonical: "/offers",
   },
   openGraph: {
-    title: "Explore moral trade offers",
+    title: "Browse moral trade offers",
     description:
       "Browse live Moral Trade proposals and worked examples by cause, format, verification method, and review status.",
     url: getAbsoluteUrl("/offers"),
@@ -66,7 +67,7 @@ const REQUESTED_IMPACT_FILTERS = [
 const SORT_FILTER_CHIPS = [
   { label: "Newest", value: "newest" },
   { label: "Highest offered impact", value: "impact" },
-  { label: "Best offered/requested ratio", value: "efficient" },
+  { label: "Highest example fit", value: "efficient" },
 ] as const;
 
 const DIRECTORY_TABS = [
@@ -161,6 +162,10 @@ function parseImpact(value: string, allowed: readonly number[]) {
 
 function getEfficiency(listing: MarketplaceListing) {
   return listing.requestedImpact <= 0 ? listing.offerImpact : listing.offerImpact / listing.requestedImpact;
+}
+
+function formatListingMode(mode: MarketplaceListing["mode"]) {
+  return mode === "public-good" ? "Public-good contribution" : formatMode(mode);
 }
 
 function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]): MarketplaceListing {
@@ -420,7 +425,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const offersStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "Explore moral trade offers",
+    name: "Browse moral trade offers",
     url: getAbsoluteUrl("/offers"),
     description:
       "Live proposals and worked examples that state actions, reciprocal requests, and verification terms.",
@@ -454,10 +459,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <h1>Explore moral trade offers</h1>
+            <h1>Browse moral trade offers</h1>
             <p className="hero-text">
-              Browse live proposals and worked examples by cause, format, verification method,
-              and review status.
+              Compare live offers and worked examples by cause, format, evidence rule, and review
+              status.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
@@ -530,9 +535,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </form>
 
           <div className="marketplace-directory-layout">
-            <details className="filter-sidebar panel" open>
-              <summary className="filter-drawer-summary">Filters</summary>
-              <div className="filter-sidebar-content" aria-label="Offer filters">
+            <FilterSidebar>
                 <div className="filter-sidebar-head">
                   <h2>Filters</h2>
                   <Link className="text-button" href="/offers">
@@ -625,8 +628,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     Apply filters
                   </button>
                 </form>
-              </div>
-            </details>
+            </FilterSidebar>
 
             <section className="marketplace-results" aria-labelledby="results-heading">
               <div className="marketplace-results-head">
@@ -666,56 +668,46 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <div className="listing-grid">
                 {filteredListings.length ? (
                   filteredListings.map((listing) => (
-                    <article className="listing-card panel" key={`${listing.source}-${listing.id}`}>
-                      <div className="listing-card-head">
-                        <span className="badge">{formatMode(listing.mode === "public-good" ? "pledge" : listing.mode)}</span>
-                        <span className="badge badge-secondary">
-                          {listing.source === "live" ? "Live offer" : "Worked example"}
-                        </span>
-                      </div>
-                      <h3>{listing.title}</h3>
-                      <p className="detail-kicker">{listing.alias}</p>
-                      <dl className="listing-terms">
-                        <div>
-                          <dt>Offering</dt>
-                          <dd>{listing.offering}</dd>
-                        </div>
-                        <div>
-                          <dt>Requesting</dt>
-                          <dd>{listing.requesting}</dd>
-                        </div>
-                      </dl>
-                      <div className="tag-row">
-                        <span className="source-pill">{listing.offeredCause}</span>
-                        <span className="source-pill">{listing.requestedCause}</span>
-                      </div>
-                      <div className="listing-meta">
-                        <span>{listing.verification}</span>
-                        <span>{listing.duration}</span>
-                        <span>{listing.reviewState}</span>
-                      </div>
-                      <Link className="text-button" href={listing.href}>
-                        Inspect terms
-                      </Link>
-                    </article>
+                    <OfferCard
+                      alias={listing.alias}
+                      causeExchange={`${listing.offeredCause} <-> ${listing.requestedCause}`}
+                      ctaHref={listing.href}
+                      duration={listing.duration}
+                      evidence={listing.verification}
+                      key={`${listing.source}-${listing.id}`}
+                      modeLabel={formatListingMode(listing.mode)}
+                      offeredAction={listing.offering}
+                      offeredScore={listing.offerImpact}
+                      requestedAction={listing.requesting}
+                      requestedThreshold={listing.requestedImpact}
+                      reviewState={listing.reviewState}
+                      secondaryAction={
+                        viewer ? (
+                          <Link className="button button-secondary button-mini" href={`${listing.href}#interest`}>
+                            Register interest
+                          </Link>
+                        ) : null
+                      }
+                      sourceLabel={listing.source === "live" ? "Live offer" : "Worked example"}
+                      title={listing.title}
+                    />
                   ))
                 ) : (
-                  <div className="empty-state marketplace-empty-state">
-                    <div>
-                      <strong>No live offers yet.</strong>
-                      <p>
-                        You can inspect worked examples or create the first public offer.
-                      </p>
-                      <div className="hero-actions">
+                  <EmptyState
+                    actions={
+                      <>
                         <Link className="button button-secondary" href="/offers?view=examples">
                           View worked examples
                         </Link>
                         <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
                           Create trade
                         </Link>
-                      </div>
-                    </div>
-                  </div>
+                      </>
+                    }
+                    title="No live offers yet."
+                  >
+                    Browse worked examples or create the first public offer.
+                  </EmptyState>
                 )}
               </div>
 
@@ -753,7 +745,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         <section className="section section-white" aria-labelledby="example-matches-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Pilot mode</p>
-            <h2 id="example-matches-heading">Example matches by cause</h2>
+            <h2 id="example-matches-heading">Illustrative fit ranking</h2>
             <p>
               During the seeded pilot, these examples help visitors inspect structure without
               implying real marketplace rankings or live cost-efficiency results.

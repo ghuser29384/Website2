@@ -20,7 +20,7 @@ export function MpgfPageFrame({
   actions,
   children,
   description,
-  eyebrow = "Moral Public Goods Fund",
+  eyebrow = "Public Goods Fund",
   realMoneyReadiness,
   title,
   viewerPresent,
@@ -42,10 +42,11 @@ export function MpgfPageFrame({
             <p className="eyebrow">{eyebrow}</p>
             <h1>{title}</h1>
             <p className="hero-text">{description}</p>
-            <div className="mpgf-mode-strip" aria-label="MPGF mode">
-              <span>Manual evidence first</span>
-              <span>{realMoneyReady ? "Integrated checkout available" : "External payment evidence"}</span>
+            <div className="mpgf-mode-strip" aria-label="Public Goods Fund mode">
+              <span>Manual evidence mode</span>
+              <span>External payment destination</span>
               <span>Reviewer verification</span>
+              <span>{realMoneyReady ? "Integrated checkout available" : "Integrated checkout planned, not active"}</span>
             </div>
             {actions ? <div className="hero-actions">{actions}</div> : null}
           </section>
@@ -63,7 +64,7 @@ export function MpgfPageFrame({
               </div>
               <div>
                 <dt>3. Review before counting</dt>
-                <dd>MPGF only counts reviewed evidence in contribution state.</dd>
+                <dd>The fund only counts reviewed evidence in contribution state.</dd>
               </div>
               <div>
                 <dt>Integrated checkout</dt>

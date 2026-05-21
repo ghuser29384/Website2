@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { MpgfConsole } from "@/components/mpgf/mpgf-console";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { demoAlternatives, MPGF_COPY } from "@/lib/mpgf/data";
@@ -10,7 +9,6 @@ import {
   computeExactMpgfAllocation,
   formatUsd,
 } from "@/lib/mpgf/mechanism";
-import { loadMpgfParticipantState } from "@/lib/mpgf/persistence";
 import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
 
@@ -38,10 +36,6 @@ export default async function MpgfPage() {
   const publicSummary = buildPublicSummary({ allocation });
   const manualEvidenceReadiness = await loadMpgfManualEvidenceReadiness();
   const realMoneyReadiness = await loadMpgfRealMoneyReadiness();
-  const participantState = await loadMpgfParticipantState({
-    userId: viewer?.authUser.id,
-    displayName: viewer?.displayName,
-  });
 
   return (
     <MpgfPageFrame
@@ -55,9 +49,9 @@ export default async function MpgfPage() {
           </Link>
         </>
       }
-      description={MPGF_COPY.plainLanguageSummary}
+      description="The Public Goods Fund coordinates contributions toward goods many moral views can value, with external-payment evidence and reviewer verification."
       eyebrow="Public Goods Fund"
-      title="Coordinate moral public goods with reviewed evidence."
+      title="Pool support for shared moral goods."
       realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
@@ -72,11 +66,10 @@ export default async function MpgfPage() {
       <section className="section section-white" id="overview">
         <div className="section-head section-head-compact">
           <p className="eyebrow">Overview</p>
-          <h2>A coordination mechanism for shared moral goods</h2>
+          <h2>A public fund for overlapping moral reasons</h2>
           <p>
-            The fund is for public goods that many moral views can value at once. In the current
-            pilot, participants can inspect demo pools and submit external-payment evidence for
-            review; the platform does not hold money, claim legal escrow, or provide tax advice.
+            The Moral Public Goods Fund, or MPGF, is the mechanism name. Public pages use Public
+            Goods Fund so newcomers can understand the purpose before the acronym.
           </p>
         </div>
         <div className="concept-grid">
@@ -153,22 +146,40 @@ export default async function MpgfPage() {
         </div>
       </section>
 
-      <section className="section section-white">
+      <section className="section section-white" id="participation">
         <div className="section-head">
-          <p className="eyebrow">Flagship flow</p>
-          <h2>Submit external-payment evidence, then track review state</h2>
+          <p className="eyebrow">How participation works</p>
+          <h2>Pay externally, submit evidence, then wait for review</h2>
           <p>
-            The public MPGF pilot now starts with an external payment destination and a reviewable
-            evidence record. Pledge and ballot tools remain available for understanding the
-            mechanism, but evidence review is the main participant workflow.
+            The public hub explains the workflow without embedding the full submission console.
+            Signed-in participants use the dedicated contribution page to record evidence.
           </p>
         </div>
-        <MpgfConsole
-          manualEvidenceReadiness={manualEvidenceReadiness}
-          participantState={participantState}
-          realMoneyReadiness={realMoneyReadiness}
-          viewerPresent={Boolean(viewer)}
-        />
+        <div className="step-card-grid">
+          <article className="panel step-card">
+            <span className="step-index">01</span>
+            <h3>Pay through an approved external destination</h3>
+            <p>Use the external destination named by the pilot or by the candidate pool.</p>
+          </article>
+          <article className="panel step-card">
+            <span className="step-index">02</span>
+            <h3>Submit receipt evidence</h3>
+            <p>Record the amount, reference, payment date, destination, and supporting evidence.</p>
+          </article>
+          <article className="panel step-card">
+            <span className="step-index">03</span>
+            <h3>Reviewers mark it verified or unresolved</h3>
+            <p>Evidence counts only after review accepts it; unresolved records remain pending.</p>
+          </article>
+        </div>
+        <div className="hero-actions">
+          <Link className="button button-primary" href="/mpgf/contribute">
+            Submit manual evidence
+          </Link>
+          <Link className="button button-secondary" href="/mpgf/account/contributions">
+            View contribution state
+          </Link>
+        </div>
       </section>
 
       <section className="section section-white" id="candidate-pools">
@@ -183,15 +194,28 @@ export default async function MpgfPage() {
         <div className="data-grid">
           {demoAlternatives.slice(0, 4).map((alternative) => (
             <article className="panel data-card" key={alternative.id}>
-              <p className="detail-kicker">Demo pool</p>
+              <p className="detail-kicker">Demo pool | {alternative.causeArea}</p>
               <h3>{alternative.name}</h3>
               <p className="route-text">{alternative.description}</p>
               <div className="tag-row">
-                <span className="badge">{alternative.causeArea}</span>
                 <span className="badge badge-secondary">
                   {alternative.isConsensus ? "Consensus good" : "Hybrid good"}
                 </span>
+                <span className="badge badge-secondary">Review state: demo only</span>
               </div>
+              <dl className="listing-terms">
+                <div>
+                  <dt>Amount verified</dt>
+                  <dd>{formatUsd(0)}</dd>
+                </div>
+                <div>
+                  <dt>Amount pending</dt>
+                  <dd>{formatUsd(0)}</dd>
+                </div>
+              </dl>
+              <Link className="text-button" href="/mpgf/pools">
+                Inspect pool
+              </Link>
             </article>
           ))}
         </div>

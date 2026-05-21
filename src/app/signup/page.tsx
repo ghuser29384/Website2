@@ -12,7 +12,7 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "Sign up",
   description:
-    "Create a Moral Trade account to publish offers, build a private wish profile, and use non-AI background networking tools.",
+    "Create a Moral Trade account to publish offers, build a private wish profile, and use consent-based wish matching.",
   robots: {
     index: false,
     follow: false,
@@ -45,8 +45,8 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
             <h1>Create your Moral Trade account.</h1>
             <p className="hero-text">
               Sign up with email and password so you can publish structured offers, express
-              interest in public commitments, and set up a private wish profile for background
-              networking.
+              interest in public commitments, and set up a private wish profile for consent-based
+              matching.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/login">
@@ -75,8 +75,8 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Configure background search</strong>
-                  <p>Your dashboard becomes the home for delegates, source permissions, and match alerts.</p>
+                  <strong>Configure private wish matching</strong>
+                  <p>Your dashboard keeps source permissions, broad previews, and match alerts together.</p>
                 </div>
               </div>
             </div>
@@ -87,6 +87,28 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
           <div className="auth-grid">
+            <article className="panel auth-side-card signup-benefits-card">
+              <p className="eyebrow">What happens next</p>
+              <div className="clean-stack">
+                <div>
+                  <h3>Confirm your email</h3>
+                  <p>Some deployments require email confirmation before the account is active.</p>
+                </div>
+                <div>
+                  <h3>Create your first offer</h3>
+                  <p>Publish a proposal only after the terms and evidence rule are clear.</p>
+                </div>
+                <div>
+                  <h3>Choose a participation mode</h3>
+                  <p>Set your account up as an individual, collective, or institution.</p>
+                </div>
+                <div>
+                  <h3>Keep location private</h3>
+                  <p>Location is hidden publicly by default and can stay coarse or blank.</p>
+                </div>
+              </div>
+            </article>
+
             <article className="panel auth-card">
               <div className="section-head auth-head">
                 <p className="eyebrow">Email and password</p>
@@ -124,23 +146,26 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
                   <input name="email" placeholder="you@example.com" type="email" />
                 </label>
 
-                <div className="field-grid">
-                  <label className="field">
-                    <span>City</span>
-                    <input name="city" placeholder="e.g. Boston" type="text" />
-                  </label>
+                <fieldset className="profile-location-fieldset">
+                  <legend>Optional location</legend>
+                  <p>Location is hidden publicly by default. You can leave these fields blank.</p>
+                  <div className="field-grid">
+                    <label className="field">
+                      <span>City (optional)</span>
+                      <input name="city" placeholder="e.g. Boston" type="text" />
+                    </label>
+
+                    <label className="field">
+                      <span>Region (optional)</span>
+                      <input name="region" placeholder="e.g. Massachusetts" type="text" />
+                    </label>
+                  </div>
 
                   <label className="field">
-                    <span>Region</span>
-                    <input name="region" placeholder="e.g. Massachusetts" type="text" />
+                    <span>Country (optional)</span>
+                    <input name="country" placeholder="e.g. United States" type="text" />
                   </label>
-                </div>
-
-                <label className="field">
-                  <span>Country</span>
-                  <input name="country" placeholder="e.g. United States" type="text" />
-                  <small>Location is hidden publicly by default; you can change visibility later.</small>
-                </label>
+                </fieldset>
 
                 <label className="field">
                   <span>Password</span>
@@ -156,30 +181,6 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
                   </Link>
                 </div>
               </form>
-            </article>
-
-            <article className="panel auth-side-card">
-              <p className="eyebrow">What happens next</p>
-              <div className="clean-stack">
-                <div>
-                  <h3>Confirm your email</h3>
-                  <p>
-                    Supabase can require email confirmation before the account is fully active.
-                  </p>
-                </div>
-                <div>
-                  <h3>Create your first offer</h3>
-                  <p>Once signed in, create an offer and state its terms plainly.</p>
-                </div>
-                <div>
-                  <h3>Choose a participation mode</h3>
-                  <p>Set up your private profile as an individual, collective, or institution.</p>
-                </div>
-                <div>
-                  <h3>Turn on non-AI background networking</h3>
-                  <p>Record wishes, delegate rules, and source permissions before using the registry.</p>
-                </div>
-              </div>
             </article>
           </div>
         </section>

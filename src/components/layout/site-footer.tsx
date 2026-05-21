@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { FooterLinkGroup } from "@/components/ui/page-primitives";
 import { FOOTER_LINK_GROUPS } from "@/lib/site";
 
 export function SiteFooter() {
@@ -8,33 +7,23 @@ export function SiteFooter() {
       <div className="footer-grid">
         <div className="footer-intro">
           <p className="eyebrow">Moral Trade</p>
-          <h2>A project about trade, compromise, and blocked futures.</h2>
+          <h2>Voluntary trade under disagreement.</h2>
           <p>
-            The central thought is simple: people with different moral views may be able to make
-            exchanges that each sees as morally better, but threats and decision procedures can
-            still destroy much of the value. The current prototype also tests privacy-first
-            background networking through explicit wish profiles and rule-based scans.
+            Moral Trade is a prototype marketplace for voluntary moral trade, donation offsets, and
+            shared public-good coordination. It does not provide legal, tax, escrow, or custody
+            services.
           </p>
         </div>
 
         {FOOTER_LINK_GROUPS.map((group) => (
-          <div key={group.title} className="footer-column">
-            <h3>{group.title}</h3>
-            <ul className="footer-links">
-              {group.links.map((link) => (
-                <li key={link.href}>
-                  <Link href={link.href}>{link.label}</Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <FooterLinkGroup key={group.title} links={group.links} title={group.title} />
         ))}
       </div>
 
       <div className="footer-meta">
         <p>
           Reference points include Toby Ord&apos;s paper on moral trade and Forethought&apos;s
-          discussion of trade, compromise, threats, blockers, and background networking.
+          discussion of convergence, compromise, threats, blockers, and moral public goods.
         </p>
       </div>
     </footer>

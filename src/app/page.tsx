@@ -5,7 +5,7 @@ import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, SITE_NAME, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
-  "Moral Trade helps people structure voluntary pledge swaps, donation offsets, and public-good contributions with explicit terms, evidence, and safety checks.",
+  "Create pledge swaps, donation offsets, and public-good commitments with explicit terms, evidence rules, and safety review.",
 );
 
 export const metadata: Metadata = {

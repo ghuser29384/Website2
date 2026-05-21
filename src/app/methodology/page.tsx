@@ -121,6 +121,14 @@ export default async function MethodologyPage() {
             on a trade record as fulfilled.
           </p>
         </section>
+        <section className="panel data-card data-card-wide" id="sources">
+          <h2>Sources</h2>
+          <p>
+            The public product language draws on Toby Ord&apos;s “Moral Trade” and Forethought&apos;s
+            essays on convergence, compromise, and moral public goods. The site summarizes these
+            ideas without claiming legal enforceability, custody, or evaluator status.
+          </p>
+        </section>
       </main>
       <SiteFooter />
     </div>

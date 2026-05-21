@@ -9,6 +9,7 @@ const publicRoutes = [
   "/reasoning-standards",
   "/donate",
   "/donation-offsets",
+  "/methodology",
   "/wish-registry",
   "/people",
   "/mpgf",
@@ -21,6 +22,7 @@ const publicRoutes = [
   "/privacy",
   "/terms",
   "/safety",
+  "/faq",
   "/login",
   "/signup",
 ] as const;
@@ -73,7 +75,45 @@ for (const route of publicRoutes) {
     });
     expect(landmarkOrder).toBe("main-before-footer");
 
+    const footerAfterPageHeadings = await page.evaluate(() => {
+      const footer = document.querySelector("footer");
+      const headings = [...document.querySelectorAll("main h2, main h3")];
+      if (!footer) {
+        return "missing-footer";
+      }
+
+      return headings.every(
+        (heading) => heading.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING,
+      )
+        ? "footer-after-headings"
+        : "footer-before-page-content";
+    });
+    expect(footerAfterPageHeadings).toBe("footer-after-headings");
+
     expect(consoleErrors).toEqual([]);
+  });
+}
+
+for (const route of ["/", "/offers", "/donation-offsets", "/mpgf", "/methodology", "/safety", "/people", "/signup"] as const) {
+  test(`public route ${route} uses canonical top-level navigation`, async ({ page }) => {
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+
+    const navLabels = await page.evaluate(() =>
+      [...document.querySelectorAll(".topbar-links > a, .topbar-links > details > summary")]
+        .map((item) => (item.textContent ?? "").replace(/\s+/g, " ").replace("▾", "").trim()),
+    );
+    const actionLabels = await page.evaluate(() =>
+      [...document.querySelectorAll(".topbar-actions a")]
+        .map((item) => (item.textContent ?? "").replace(/\s+/g, " ").trim()),
+    );
+
+    expect(navLabels).toEqual(["Browse", "Create", "Learn", "Community"]);
+    expect(actionLabels).toContain("Create trade");
+    expect(actionLabels).toContain("Sign in");
+    expect(navLabels).not.toContain("Marketplace");
+    expect(navLabels).not.toContain("Explore");
+    expect(navLabels).not.toContain("Advanced");
+    expect(navLabels).not.toContain("MPGF");
   });
 }
 

@@ -2,6 +2,15 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import {
+  MetricCard,
+  OfferCard,
+  PageHero,
+  SearchBar,
+  SectionHeader,
+  StepCard,
+  TrustChip,
+} from "@/components/ui/page-primitives";
 import type { MarketplaceOverview } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_COUNT, CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
@@ -12,60 +21,59 @@ interface HomePageProps {
   marketplaceOverview: MarketplaceOverview;
 }
 
-const formatCards = [
+const categoryPills = [
+  { label: "Global health", href: "/offers?search=Global%20health" },
+  { label: "Animal welfare", href: "/offers?search=Animal%20welfare" },
+  { label: "Climate", href: "/offers?search=Climate" },
+  { label: "Long-run future", href: "/offers?search=Future" },
+  { label: "Public health", href: "/offers?search=Public%20health" },
+  { label: "Financial support", href: "/offers?search=Financial%20support" },
+] as const;
+
+const formatPills = [
+  { label: "Pledge swaps", href: "/offers?mode=pledge" },
+  { label: "Donation offsets", href: "/offers?mode=offset" },
+  { label: "Paid action offers", href: "/offers?mode=payment" },
+  { label: "Public-good contributions", href: "/mpgf" },
+] as const;
+
+const productCards = [
   {
     title: "Pledge swaps",
-    href: "/offers?view=examples&mode=pledge",
-    cta: "View examples",
-    definition:
-      "Two parties exchange bounded commitments when each values the other's action more than its own cost.",
-    terms: ["Action and reciprocal action", "Duration and exit rule", "Evidence standard"],
+    href: "/offers?mode=pledge",
+    cta: "View pledge swaps",
+    explanation: "Exchange bounded commitments when each side values the other's action more.",
+    example: "I donate to your cause if you take the action I value.",
   },
   {
     title: "Donation offsets",
     href: "/donation-offsets",
-    cta: "Open guide",
-    definition:
-      "Opposed donations can be redirected toward a named compromise destination instead of cancelling out.",
-    terms: ["Matched action", "Compromise destination", "Threshold, expiry, and surplus rule"],
+    cta: "View offsets",
+    explanation: "Redirect opposed donations toward a named compromise destination.",
+    example: "Redirect opposed donations into a shared compromise destination.",
   },
   {
-    title: "Moral public goods",
+    title: "Public Goods Fund",
     href: "/mpgf",
-    cta: "Open fund",
-    definition:
-      "Shared consensus goods can coordinate funding where different moral views have overlapping reasons to contribute.",
-    terms: ["External-payment evidence", "Manual review state", "Allocation and pool records"],
+    cta: "View fund",
+    explanation: "Coordinate support for goods many moral views can value.",
+    example: "Coordinate support for goods many moral views value.",
   },
 ] as const;
 
 const howItWorksSteps = [
   {
-    title: "Choose a format.",
-    text: "Start with a pledge swap, donation offset, paid action, or public-good contribution path.",
+    title: "Choose a trade format.",
+    text: "Pick a pledge swap, donation offset, paid action, or public-good contribution.",
   },
   {
     title: "State reciprocal terms.",
-    text: "Name the action, request, threshold, duration, exit rule, and evidence standard before anyone relies on it.",
+    text: "Name the action, requested action, duration, exit rule, and evidence method.",
   },
   {
-    title: "Review evidence before relying on the trade.",
-    text: "Evidence must be checked before a proposal is counted as fulfilled, verified, or contribution-ready.",
+    title: "Publish after checks.",
+    text: "Public offers rely on explicit terms, evidence rules, and safety review.",
   },
-] as const;
-
-const trustItems = [
-  { label: "No threats or extortion", href: "/safety" },
-  { label: "No illegal or deceptive asks", href: "/safety" },
-  { label: "Evidence is reviewed before counting", href: "/methodology" },
-  { label: "Political campaign contribution offsets prohibited", href: "/safety" },
-] as const;
-
-const pilotMetrics = [
-  { label: `${CANONICAL_WORKED_CASE_COUNT} worked examples`, detail: "Seeded examples for inspection" },
-  { label: "3 trade formats", detail: "Pledge, offset, paid action" },
-  { label: "Manual review before reliance", detail: "No automatic verification claim" },
-  { label: "External-payment evidence only", detail: "No escrow or custody claim" },
 ] as const;
 
 function formatOptionalCount(value: number | null) {
@@ -86,12 +94,10 @@ function formatOptionalUsd(cents: number | null) {
 
 export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps) {
   const createTradeHref = isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new";
-  const previewOffers = CANONICAL_WORKED_CASE_OFFERS.slice(0, 6);
-  const liveCountsAreZero =
-    !marketplaceOverview.hasLiveData ||
-    (marketplaceOverview.openOfferCount === 0 &&
-      marketplaceOverview.publicProfileCount === 0 &&
-      marketplaceOverview.redirectedOffsetCents === 0);
+  const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 4);
+  const liveOfferCount = formatOptionalCount(marketplaceOverview.openOfferCount);
+  const publicProfileCount = formatOptionalCount(marketplaceOverview.publicProfileCount);
+  const reviewedOffsets = formatOptionalUsd(marketplaceOverview.redirectedOffsetCents);
 
   return (
     <div className="page-shell page-shell-focused">
@@ -103,74 +109,73 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
           showLogout={isAuthenticated}
         />
 
-        <div className="landing-hero-grid">
-          <section className="landing-hero-copy">
-            <h1>Trade across moral disagreement.</h1>
-            <p className="hero-text">
-              Moral Trade helps people structure voluntary pledge swaps, donation offsets, and
-              public-good contributions with explicit terms, evidence, and safety checks.
-            </p>
-            <div className="hero-actions">
+        <PageHero
+          eyebrow="A marketplace for voluntary moral trade"
+          title="Turn moral disagreement into mutually beneficial action."
+          description="Create pledge swaps, donation offsets, and public-good commitments with explicit terms, evidence rules, and safety review."
+          actions={
+            <>
               <Link className="button button-primary" href="/offers">
-                Explore trades
+                Browse offers
               </Link>
               <Link className="button button-secondary" href={createTradeHref}>
                 Create a trade
               </Link>
               <Link className="text-button" href="#how-it-works">
-                How it works
+                Learn how it works
               </Link>
-            </div>
-            <div className="trust-chip-row" aria-label="Operating standards">
-              <span className="trust-chip">Voluntary only</span>
-              <span className="trust-chip">Evidence-gated</span>
-              <span className="trust-chip">No escrow or custody claim</span>
-            </div>
-          </section>
-
-          <aside className="pilot-status-card panel" aria-label="Pilot status">
-            <span>Pilot status</span>
-            <strong>Worked examples first</strong>
+            </>
+          }
+        >
+          <aside className="pilot-status-card panel" aria-label="Operating standards">
+            <strong>Built for review, not hype</strong>
             <p>
-              Live participation stays modest until offers, evidence records, and review states are
-              backed by signed-in users and configured data storage.
+              Worked examples show the structure while live participation grows through signed-in
+              users and reviewable evidence.
             </p>
           </aside>
-        </div>
+        </PageHero>
 
-        <section className="pilot-metric-grid" aria-label="Pilot trust indicators">
-          {pilotMetrics.map((metric) => (
-            <article className="stat-card" key={metric.label}>
-              <strong>{metric.label}</strong>
-              <span>{metric.detail}</span>
-            </article>
-          ))}
-        </section>
+        <div className="trust-chip-row trust-chip-row-wide" aria-label="Trust standards">
+          <TrustChip>Voluntary only</TrustChip>
+          <TrustChip>Evidence-gated</TrustChip>
+          <TrustChip>Worked examples clearly labeled</TrustChip>
+          <TrustChip>No escrow or custody claim</TrustChip>
+        </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-white" aria-labelledby="formats-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Trade formats</p>
-            <h2 id="formats-heading">Choose the structure before the counterpart.</h2>
-            <p>
-              Each path starts from concrete terms and evidence rules, not vague agreement or
-              pressure to participate.
-            </p>
+        <section className="section section-white" aria-labelledby="search-strip-heading">
+          <SectionHeader eyebrow="Marketplace search" id="search-strip-heading" title="Find examples by cause or format.">
+            Start with broad categories, then inspect exact terms before relying on any proposal.
+          </SectionHeader>
+          <SearchBar placeholder="Search by cause, action, or trade type" />
+          <div className="pill-group" aria-label="Cause categories">
+            {categoryPills.map((pill) => (
+              <Link className="source-pill source-pill-link" href={pill.href} key={pill.label}>
+                {pill.label}
+              </Link>
+            ))}
           </div>
+          <div className="pill-group" aria-label="Trade formats">
+            {formatPills.map((pill) => (
+              <Link className="badge badge-secondary" href={pill.href} key={pill.label}>
+                {pill.label}
+              </Link>
+            ))}
+          </div>
+        </section>
 
+        <section className="section section-subtle" aria-labelledby="products-heading">
+          <SectionHeader eyebrow="Trade formats" id="products-heading" title="Three ways to make terms legible." />
           <div className="format-card-grid">
-            {formatCards.map((card) => (
+            {productCards.map((card) => (
               <article className="panel format-card" key={card.title}>
                 <div>
                   <h3>{card.title}</h3>
-                  <p>{card.definition}</p>
+                  <p>{card.explanation}</p>
                 </div>
-                <ul className="clean-list">
-                  {card.terms.map((term) => (
-                    <li key={term}>{term}</li>
-                  ))}
-                </ul>
+                <p className="example-line">Example: {card.example}</p>
                 <Link className="inline-link" href={card.href}>
                   {card.cta}
                 </Link>
@@ -179,127 +184,128 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
           </div>
         </section>
 
-        <section className="section section-subtle" id="how-it-works" aria-labelledby="how-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">How it works</p>
-            <h2 id="how-heading">A short path from idea to reviewable terms.</h2>
+        <section className="section section-white" aria-labelledby="snapshot-heading">
+          <SectionHeader eyebrow="Marketplace snapshot" id="snapshot-heading" title="Pilot numbers, stated plainly." />
+          <div className="pilot-metric-grid">
+            <MetricCard
+              action={
+                marketplaceOverview.openOfferCount === 0
+                  ? { href: "/offers?view=examples", label: "Inspect worked examples" }
+                  : { href: "/offers?view=live", label: "Browse live offers" }
+              }
+              detail={
+                marketplaceOverview.openOfferCount === 0
+                  ? "0 live offers — inspect worked examples or create the first offer."
+                  : "Signed-in participants have published these proposals."
+              }
+              label="Live offers"
+              value={liveOfferCount}
+            />
+            <MetricCard
+              action={{ href: "/offers?view=examples", label: "View examples" }}
+              detail="Seeded examples are not live liquidity."
+              label="Worked examples"
+              value={String(CANONICAL_WORKED_CASE_COUNT)}
+            />
+            <MetricCard
+              action={{ href: "/people", label: "View directory" }}
+              detail="Only opt-in public profiles are counted."
+              label="Public profiles"
+              value={publicProfileCount}
+            />
+            <MetricCard
+              action={{ href: "/donation-offsets", label: "Open offsets" }}
+              detail="Reviewed external evidence only."
+              label="Reviewed offsets"
+              value={reviewedOffsets}
+            />
           </div>
+        </section>
 
+        <section className="section section-subtle" aria-labelledby="featured-examples-heading">
+          <SectionHeader
+            eyebrow="Featured worked examples"
+            id="featured-examples-heading"
+            title="Worked examples, not live offers."
+          >
+            Example cards show comparable terms without implying market activity.
+          </SectionHeader>
+          <div className="listing-grid compact-listing-grid">
+            {featuredExamples.map((offer) => (
+              <OfferCard
+                alias={offer.alias}
+                causeExchange={`${offer.offeredCause} -> ${offer.requestedCause}`}
+                ctaHref={`/offers?view=examples&search=${encodeURIComponent(offer.alias)}`}
+                duration={offer.duration}
+                evidence={offer.verification}
+                key={offer.id}
+                modeLabel={formatMode(offer.mode)}
+                offeredAction={offer.offerAction}
+                offeredScore={offer.offerImpact}
+                requestedAction={offer.requestAction}
+                requestedThreshold={offer.minCounterpartyImpact}
+                reviewState="Worked example. Manual review required before reliance."
+                sourceLabel="Worked example"
+                title={`${offer.offeredCause} for ${offer.requestedCause}`}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" id="how-it-works" aria-labelledby="how-heading">
+          <SectionHeader eyebrow="How it works" id="how-heading" title="From idea to reviewable proposal." />
           <div className="step-card-grid">
             {howItWorksSteps.map((step, index) => (
-              <article className="panel step-card" key={step.title}>
-                <span className="step-index">{String(index + 1).padStart(2, "0")}</span>
-                <h3>{step.title}</h3>
-                <p>{step.text}</p>
-              </article>
+              <StepCard index={index + 1} key={step.title} title={step.title}>
+                {step.text}
+              </StepCard>
             ))}
           </div>
         </section>
 
-        <section className="section section-white" aria-labelledby="marketplace-preview-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Marketplace preview</p>
-            <h2 id="marketplace-preview-heading">Worked examples, not live offers.</h2>
-            <p>
-              These examples show how public listing cards should expose the action, reciprocal
-              request, causes, duration, verification method, and review status.
-            </p>
-          </div>
-
-          <div className="listing-grid compact-listing-grid">
-            {previewOffers.map((offer) => (
-              <article className="listing-card panel" key={offer.id}>
-                <div className="listing-card-head">
-                  <span className="badge">{formatMode(offer.mode)}</span>
-                  <span className="badge badge-secondary">Worked example</span>
-                </div>
-                <h3>{offer.alias}: {offer.offeredCause} for {offer.requestedCause}</h3>
-                <dl className="listing-terms">
-                  <div>
-                    <dt>Offering</dt>
-                    <dd>{offer.offerAction}</dd>
-                  </div>
-                  <div>
-                    <dt>Requesting</dt>
-                    <dd>{offer.requestAction}</dd>
-                  </div>
-                </dl>
-                <div className="tag-row">
-                  <span className="source-pill">{offer.offeredCause}</span>
-                  <span className="source-pill">{offer.requestedCause}</span>
-                </div>
-                <div className="listing-meta">
-                  <span>{offer.duration}</span>
-                  <span>{offer.verification}</span>
-                  <span>Manual review required</span>
-                </div>
-                <Link className="text-button" href={`/offers?view=examples&search=${encodeURIComponent(offer.alias)}`}>
-                  Inspect terms
-                </Link>
-              </article>
-            ))}
+        <section className="section section-subtle" aria-labelledby="trust-heading">
+          <SectionHeader eyebrow="Safety and trust" id="trust-heading" title="Clear boundaries protect the trade." />
+          <div className="concept-grid">
+            <article className="panel concept-card">
+              <h3>No coercive proposals</h3>
+              <p>No threats, harassment, doxxing, fraud, or pressure on vulnerable people.</p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Risky claims are reviewed</h3>
+              <p>Unverifiable baselines and risky proposals require manual review before reliance.</p>
+            </article>
+            <article className="panel concept-card">
+              <h3>No money custody claim</h3>
+              <p>External payment evidence only unless provider-approved checkout exists.</p>
+            </article>
+            <article className="panel concept-card">
+              <h3>No legal or tax services</h3>
+              <p>The prototype does not provide legal, tax, custody, or escrow services.</p>
+            </article>
           </div>
         </section>
 
-        <section className="trust-strip" aria-label="Safety and trust rules">
-          {trustItems.map((item) => (
-            <Link className="trust-strip-item" href={item.href} key={item.label}>
-              {item.label}
-            </Link>
-          ))}
-        </section>
-
-        <section className="section section-subtle" id="about" aria-labelledby="learn-more-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Learn</p>
-            <h2 id="learn-more-heading">Theory stays available without turning the homepage into a memo.</h2>
-            <p>
-              Read the method, safety rules, background networking notes, and public-goods details
-              when you need the full reasoning trail.
-            </p>
-          </div>
+        <section className="section section-white" id="about" aria-labelledby="learn-more-heading">
+          <SectionHeader eyebrow="Learn more" id="learn-more-heading" title="Keep the theory close, not crowded." />
           <div className="teaser-grid">
             <Link className="panel teaser-card" href="/methodology">
               <h3>Methodology</h3>
-              <p>Trade, compromise, threats, power, and review standards.</p>
+              <p>How trade records, evidence, and matching boundaries are structured.</p>
             </Link>
-            <Link className="panel teaser-card" href="/background-networking">
-              <h3>Background networking</h3>
-              <p>Consent-preserving discovery without private-feed ingestion or autonomous outreach.</p>
+            <Link className="panel teaser-card" href="/safety">
+              <h3>Safety</h3>
+              <p>What distinguishes voluntary trade from threats, fraud, and pressure.</p>
             </Link>
-            <Link className="panel teaser-card" href="/mpgf">
-              <h3>Public Goods Fund</h3>
-              <p>External-payment evidence, candidate pools, and allocation process notes.</p>
+            <Link className="panel teaser-card" href="/faq">
+              <h3>FAQ</h3>
+              <p>Plain-language answers about offers, examples, review, and payments.</p>
+            </Link>
+            <Link className="panel teaser-card" href="/methodology#sources">
+              <h3>Toby Ord / Forethought source notes</h3>
+              <p>Research sources for moral trade, compromise, and public goods.</p>
             </Link>
           </div>
         </section>
-
-        {liveCountsAreZero ? (
-          <section className="section section-white" aria-labelledby="pilot-counts-heading">
-            <div className="section-head section-head-compact">
-              <p className="eyebrow">Pilot status</p>
-              <h2 id="pilot-counts-heading">Live marketplace counts are intentionally quiet while the pilot is seeded.</h2>
-              <p>
-                Zero live counts are not presented as headline trust metrics. They remain visible
-                here so the pilot state is transparent without overstating liquidity.
-              </p>
-            </div>
-            <div className="pilot-count-grid">
-              <article className="stat-card">
-                <strong>{formatOptionalCount(marketplaceOverview.openOfferCount)}</strong>
-                <span>Live offers</span>
-              </article>
-              <article className="stat-card">
-                <strong>{formatOptionalCount(marketplaceOverview.publicProfileCount)}</strong>
-                <span>Public profiles</span>
-              </article>
-              <article className="stat-card">
-                <strong>{formatOptionalUsd(marketplaceOverview.redirectedOffsetCents)}</strong>
-                <span>Reviewed offsets</span>
-              </article>
-            </div>
-          </section>
-        ) : null}
       </main>
 
       <SiteFooter />
