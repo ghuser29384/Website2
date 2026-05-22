@@ -57,6 +57,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(topbarSource, /topbar-menu-heading/);
   assert.match(topbarSource, /topbar-menu-icon/);
   assert.match(topbarSource, /topbar-with-search/);
+  assert.equal(topbarSource.includes("showSearch"), false);
 });
 
 test("MPGF public copy leads with manual evidence instead of raw gate/debug wording", () => {
