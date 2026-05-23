@@ -281,6 +281,8 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(offersPage, /parseImpact/);
   assert.match(offersPage, /parseDirectorySort/);
   assert.match(offersPage, /FilterSidebar/);
+  assert.match(offersPage, /activeFilterLabels/);
+  assert.match(offersPage, /Reset filters/);
   assert.match(offersPage, /OfferCard/);
   assert.match(offersPage, /listingMatchesFilters/);
   assert.match(offersPage, /sortListings/);
@@ -310,6 +312,9 @@ test("home page is a focused landing page with pilot metrics and marketplace pre
   assert.match(homeSource, /worked examples/);
   assert.match(homeSource, /Worked examples clearly labeled/);
   assert.match(homeSource, /MoralTradeHeroVisual/);
+  assert.match(homeSource, /IconMark/);
+  assert.match(homeSource, /Credibility in pilot mode/);
+  assert.match(homeSource, /Trust signals without invented proof/);
   assert.match(homeSource, /SearchBar/);
   assert.match(homeSource, /OfferCard/);
   assert.equal(homeSource.includes("opening-sequence"), false);
@@ -318,6 +323,8 @@ test("home page is a focused landing page with pilot metrics and marketplace pre
   assert.equal(homeSource.includes("delegate heartbeats"), false);
   assert.equal(homeSource.includes("manual source consent ledger"), false);
   assert.equal(homeSource.includes("deterministic synthesis layer"), false);
+  assert.equal(homeSource.includes("As featured in"), false);
+  assert.equal(homeSource.includes("Hear their stories"), false);
 });
 
 test("homepage metrics use live counts when available and avoid fake impact totals", () => {
@@ -483,6 +490,7 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Live offers/);
   assert.match(offersPage, /Worked examples/);
   assert.match(offersPage, /No live offers yet/);
+  assert.match(offersPage, /No matching listings/);
   assert.match(offersPage, /Browse worked examples or create the first public offer/);
   assert.equal(offersPage.includes("worked example s"), false);
   assert.equal(offersPage.includes("Live participant offers will appear here"), false);

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
+  IconMark,
   MetricCard,
   MoralTradeHeroVisual,
   OfferCard,
@@ -12,6 +13,7 @@ import {
   StepCard,
   TrustChip,
 } from "@/components/ui/page-primitives";
+import type { IconName } from "@/components/ui/page-primitives";
 import type { MarketplaceOverview } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_COUNT, CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
@@ -38,10 +40,18 @@ const formatPills = [
   { label: "Public-good contributions", href: "/mpgf" },
 ] as const;
 
-const productCards = [
+const productCards: ReadonlyArray<{
+  cta: string;
+  example: string;
+  explanation: string;
+  href: string;
+  icon: IconName;
+  title: string;
+}> = [
   {
     title: "Pledge swaps",
     href: "/pledge-swaps",
+    icon: "swap",
     cta: "View pledge swaps",
     explanation: "Exchange bounded commitments when each side values the other's action more.",
     example: "I donate to your cause if you take the action I value.",
@@ -49,6 +59,7 @@ const productCards = [
   {
     title: "Donation offsets",
     href: "/donation-offsets",
+    icon: "offset",
     cta: "View offsets",
     explanation: "Redirect opposed donations toward a named compromise destination.",
     example: "Redirect opposed donations into a shared compromise destination.",
@@ -56,6 +67,7 @@ const productCards = [
   {
     title: "Public Goods Fund",
     href: "/mpgf",
+    icon: "fund",
     cta: "View fund",
     explanation: "Coordinate support for goods many moral views can value.",
     example: "Coordinate support for goods many moral views value.",
@@ -63,9 +75,43 @@ const productCards = [
   {
     title: "Paid action offers",
     href: "/paid-action-offers",
+    icon: "payment",
     cta: "Open guide",
     explanation: "Offer payment for bounded actions while keeping money outside platform custody.",
     example: "Payment pending verification, not legal escrow.",
+  },
+] as const;
+
+const credibilityCards: ReadonlyArray<{
+  description: string;
+  href: string;
+  icon: IconName;
+  linkLabel: string;
+  title: string;
+}> = [
+  {
+    title: "Research source notes",
+    href: "/methodology#sources",
+    icon: "source",
+    linkLabel: "Read sources",
+    description:
+      "The methodology page points to Toby Ord's moral trade proposal and Forethought-style work on convergence, compromise, threats, and blockers.",
+  },
+  {
+    title: "Pilot status is explicit",
+    href: "/faq",
+    icon: "pilot",
+    linkLabel: "Open FAQ",
+    description:
+      "Worked examples are separated from live offers, and zero live counts are framed as pilot status rather than marketplace liquidity.",
+  },
+  {
+    title: "Review before reliance",
+    href: "/safety",
+    icon: "safety",
+    linkLabel: "Review safety",
+    description:
+      "Risky, coercive, deceptive, or unverifiable proposals are outside the public-offer path and require review before anyone relies on them.",
   },
 ] as const;
 
@@ -173,6 +219,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
           <div className="format-card-grid">
             {productCards.map((card) => (
               <article className="panel format-card" key={card.title}>
+                <IconMark name={card.icon} />
                 <div>
                   <h3>{card.title}</h3>
                   <p>{card.explanation}</p>
@@ -187,7 +234,9 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
         </section>
 
         <section className="section section-white" aria-labelledby="snapshot-heading">
-          <SectionHeader eyebrow="Marketplace snapshot" id="snapshot-heading" title="Pilot numbers, stated plainly." />
+          <SectionHeader eyebrow="Marketplace snapshot" id="snapshot-heading" title="Pilot status at a glance.">
+            Live activity is separated from worked examples so early-stage numbers do not overstate liquidity.
+          </SectionHeader>
           <div className="pilot-metric-grid">
             <MetricCard
               action={
@@ -200,24 +249,28 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
                   ? "0 live offers — inspect worked examples or create the first offer."
                   : "Signed-in participants have published these proposals."
               }
+              icon="marketplace"
               label="Live offers"
               value={liveOfferCount}
             />
             <MetricCard
               action={{ href: "/offers?view=examples", label: "View examples" }}
               detail="Seeded examples are not live liquidity."
+              icon="example"
               label="Worked examples"
               value={String(CANONICAL_WORKED_CASE_COUNT)}
             />
             <MetricCard
               action={{ href: "/people", label: "View directory" }}
               detail="Only opt-in public profiles are counted."
+              icon="profile"
               label="Public profiles"
               value={publicProfileCount}
             />
             <MetricCard
               action={{ href: "/donation-offsets", label: "Open offsets" }}
               detail="Reviewed external evidence only."
+              icon="review"
               label="Reviewed offsets"
               value={reviewedOffsets}
             />
@@ -269,21 +322,41 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
           <SectionHeader eyebrow="Safety and trust" id="trust-heading" title="Clear boundaries protect the trade." />
           <div className="concept-grid">
             <article className="panel concept-card">
+              <IconMark name="safety" />
               <h3>No coercive proposals</h3>
               <p>No threats, harassment, doxxing, fraud, or pressure on vulnerable people.</p>
             </article>
             <article className="panel concept-card">
+              <IconMark name="review" />
               <h3>Risky claims are reviewed</h3>
               <p>Unverifiable baselines and risky proposals require manual review before reliance.</p>
             </article>
             <article className="panel concept-card">
+              <IconMark name="evidence" />
               <h3>No money custody claim</h3>
               <p>External payment evidence only unless provider-approved checkout exists.</p>
             </article>
             <article className="panel concept-card">
+              <IconMark name="source" />
               <h3>No legal or tax services</h3>
               <p>The prototype does not provide legal, tax, custody, or escrow services.</p>
             </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="credibility-heading">
+          <SectionHeader eyebrow="Credibility in pilot mode" id="credibility-heading" title="Trust signals without invented proof.">
+            Moral Trade does not show testimonials, ratings, press logos, or completed-impact claims until those records exist.
+          </SectionHeader>
+          <div className="teaser-grid credibility-grid">
+            {credibilityCards.map((card) => (
+              <Link className="panel teaser-card credibility-card" href={card.href} key={card.title}>
+                <IconMark name={card.icon} />
+                <h3>{card.title}</h3>
+                <p>{card.description}</p>
+                <span className="inline-link">{card.linkLabel}</span>
+              </Link>
+            ))}
           </div>
         </section>
 

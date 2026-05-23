@@ -4192,6 +4192,29 @@ output {
   line-height: 1.2;
 }
 
+.icon-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.45rem;
+  height: 2.45rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  flex: 0 0 auto;
+}
+
+.icon-mark svg {
+  width: 1.28rem;
+  height: 1.28rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.75;
+}
+
 .pilot-status-card {
   display: grid;
   align-content: center;
@@ -4363,6 +4386,22 @@ output {
   background: var(--surface);
 }
 
+.metric-card-head {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.metric-card-head .icon-mark {
+  width: 2rem;
+  height: 2rem;
+}
+
+.metric-card-head .icon-mark svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
 .stat-card strong {
   color: var(--ink);
   font-size: 1.02rem;
@@ -4400,6 +4439,12 @@ output {
 
 .format-card {
   min-height: 20rem;
+}
+
+.format-card .icon-mark,
+.concept-card .icon-mark,
+.credibility-card .icon-mark {
+  margin-bottom: 0.1rem;
 }
 
 .example-line,
@@ -4632,6 +4677,43 @@ output {
   margin-bottom: 0;
 }
 
+.active-filter-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.active-filter-bar > span {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.active-filter-bar > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.active-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.85rem;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.2;
+}
+
 .marketplace-directory-layout {
   display: grid;
   grid-template-columns: minmax(230px, 0.32fr) minmax(0, 1fr);
@@ -4679,6 +4761,10 @@ output {
 
 .marketplace-empty-state {
   grid-column: 1 / -1;
+}
+
+.credibility-grid .teaser-card {
+  min-height: 16rem;
 }
 
 .auth-gate-card h2 {
@@ -5156,6 +5242,7 @@ strong {
   }
 
   .marketplace-results-head,
+  .active-filter-bar,
   .filter-sidebar-head,
   .listing-card-head,
   .sort-control {

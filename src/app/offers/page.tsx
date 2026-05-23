@@ -160,6 +160,13 @@ function parseImpact(value: string, allowed: readonly number[]) {
   return allowed.includes(parsed) ? parsed : null;
 }
 
+function findLabel<TValue extends string | number | null>(
+  options: readonly { label: string; value: TValue }[],
+  value: TValue,
+) {
+  return options.find((option) => option.value === value)?.label ?? String(value);
+}
+
 function getEfficiency(listing: MarketplaceListing) {
   return listing.requestedImpact <= 0 ? listing.offerImpact : listing.offerImpact / listing.requestedImpact;
 }
@@ -362,6 +369,68 @@ function createTabHref(
   return buildOffersHref({ ...filters, view });
 }
 
+function buildActiveFilterLabels(filters: {
+  cause: string;
+  directorySort: DirectorySort;
+  duration: string;
+  format: FormatFilter;
+  minImpact: number | null;
+  minRequestedImpact: number | null;
+  reciprocal: boolean;
+  reviewStatus: ReviewStatusFilter;
+  searchQuery: string;
+  verification: string;
+  view: DirectoryView;
+}) {
+  const labels: string[] = [];
+
+  if (filters.view !== "live") {
+    labels.push(filters.view === "examples" ? "Worked examples" : "All listings");
+  }
+
+  if (filters.searchQuery) {
+    labels.push(`Search: ${filters.searchQuery}`);
+  }
+
+  if (filters.format !== "all") {
+    labels.push(findLabel(FORMAT_FILTERS, filters.format));
+  }
+
+  if (filters.cause) {
+    labels.push(filters.cause);
+  }
+
+  if (filters.verification) {
+    labels.push(`Evidence: ${filters.verification}`);
+  }
+
+  if (filters.duration) {
+    labels.push(`Duration: ${filters.duration}`);
+  }
+
+  if (filters.reviewStatus !== "all") {
+    labels.push(findLabel(REVIEW_STATUS_FILTERS, filters.reviewStatus));
+  }
+
+  if (filters.minImpact !== null) {
+    labels.push(findLabel(IMPACT_FILTER_CHIPS, filters.minImpact));
+  }
+
+  if (filters.minRequestedImpact !== null) {
+    labels.push(findLabel(REQUESTED_IMPACT_FILTERS, filters.minRequestedImpact));
+  }
+
+  if (filters.reciprocal) {
+    labels.push("Has reciprocal match");
+  }
+
+  if (filters.directorySort !== "newest") {
+    labels.push(`Sorted by ${findLabel(SORT_FILTER_CHIPS, filters.directorySort).toLowerCase()}`);
+  }
+
+  return labels;
+}
+
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
@@ -414,6 +483,19 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     verification,
     view,
   };
+  const activeFilterLabels = buildActiveFilterLabels({
+    cause,
+    directorySort,
+    duration,
+    format,
+    minImpact,
+    minRequestedImpact,
+    reciprocal,
+    reviewStatus,
+    searchQuery,
+    verification,
+    view,
+  });
   const exampleMatchesByCause = CAUSE_FILTER_CHIPS.map((causeLabel) => ({
     cause: causeLabel,
     listing: workedExampleListings.find((listing) =>
@@ -534,6 +616,22 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               Search
             </button>
           </form>
+
+          {activeFilterLabels.length ? (
+            <div className="active-filter-bar" aria-label="Active marketplace filters">
+              <span>Active filters</span>
+              <div>
+                {activeFilterLabels.map((label) => (
+                  <span className="active-filter-chip" key={label}>
+                    {label}
+                  </span>
+                ))}
+              </div>
+              <Link className="text-button" href="/offers">
+                Reset filters
+              </Link>
+            </div>
+          ) : null}
 
           <div className="marketplace-directory-layout">
             <FilterSidebar>
@@ -705,9 +803,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         </Link>
                       </>
                     }
-                    title="No live offers yet."
+                    title={view === "live" ? "No live offers yet." : "No matching listings."}
                   >
-                    Browse worked examples or create the first public offer.
+                    {view === "live"
+                      ? "Browse worked examples or create the first public offer."
+                      : "Reset filters, inspect worked examples, or create a structured proposal."}
                   </EmptyState>
                 )}
               </div>
