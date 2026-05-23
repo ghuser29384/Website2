@@ -430,6 +430,9 @@ export function OfferCard({
         <IconMark name={modeIcon} />
         <div className="listing-status-stack">
           <StatusBadge tone={sourceLabel === "Live offer" ? "default" : "secondary"}>{sourceLabel}</StatusBadge>
+          <StatusBadge tone={evidence.toLowerCase().includes("payment") ? "warning" : "secondary"}>
+            {evidence}
+          </StatusBadge>
           <StatusBadge tone="warning">Manual review required</StatusBadge>
         </div>
       </div>

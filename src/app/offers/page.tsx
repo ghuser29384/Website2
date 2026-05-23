@@ -85,6 +85,15 @@ const REVIEW_STATUS_FILTERS = [
   { label: "Manual review required", value: "manual-review-required" },
 ] as const;
 
+const CAUSE_GROUPS = [
+  { id: "global-poverty", label: "Global poverty" },
+  { id: "animal-welfare", label: "Animal welfare" },
+  { id: "climate", label: "Climate" },
+  { id: "existential-risk", label: "Existential risk" },
+  { id: "future-flourishing", label: "Future flourishing" },
+  { id: "public-health", label: "Public health" },
+] as const;
+
 type DirectoryView = (typeof DIRECTORY_TABS)[number]["value"];
 type DirectorySort = (typeof SORT_FILTER_CHIPS)[number]["value"];
 type ListingFormat = (typeof FORMAT_FILTERS)[number]["value"];
@@ -465,11 +474,24 @@ function appendUnique<T>(values: readonly T[], value: T) {
   return values.includes(value) ? values : [...values, value];
 }
 
+function toggleValue<T>(values: readonly T[], value: T) {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+}
+
 function getListingModeIcon(mode: MarketplaceListing["mode"]) {
   if (mode === "pledge") return "swap";
   if (mode === "offset") return "offset";
   if (mode === "payment") return "payment";
   return "fund";
+}
+
+function getCauseGroup(listing: MarketplaceListing) {
+  return (
+    CAUSE_GROUPS.find((group) => listingMatchesCause(listing, group.label)) ?? {
+      id: "other-causes",
+      label: "Other causes",
+    }
+  );
 }
 
 export default async function OffersPage({ searchParams }: OffersPageProps) {
@@ -577,22 +599,43 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const reciprocalCount = countBy(countScope, (listing) => listing.hasReciprocalMatch);
   const popularFilterLinks = [
     {
-      href: buildOffersHref({ ...filterHrefParams, causes: appendUnique(causes, "Animal welfare") }),
+      active: causes.includes("Animal welfare"),
+      href: buildOffersHref({ ...filterHrefParams, causes: toggleValue(causes, "Animal welfare") }),
       label: "Animal welfare",
     },
     {
-      href: buildOffersHref({ ...filterHrefParams, formats: appendUnique(formats, "offset") }),
+      active: formats.includes("offset"),
+      href: buildOffersHref({ ...filterHrefParams, formats: toggleValue(formats, "offset") }),
       label: "Donation offset",
     },
     {
-      href: createTabHref("examples", filterHrefParams),
+      active: view === "examples",
+      href: createTabHref(view === "examples" ? "live" : "examples", filterHrefParams),
       label: "Worked examples",
     },
     {
-      href: buildOffersHref({ ...filterHrefParams, reviewStatus: "manual-review-required" }),
+      active: reviewStatus === "manual-review-required",
+      href: buildOffersHref({
+        ...filterHrefParams,
+        reviewStatus: reviewStatus === "manual-review-required" ? "all" : "manual-review-required",
+      }),
       label: "Manual review required",
     },
   ];
+  const groupedListings = filteredListings.reduce<
+    Array<{ id: string; label: string; listings: MarketplaceListing[] }>
+  >((groups, listing) => {
+    const group = getCauseGroup(listing);
+    const existing = groups.find((candidate) => candidate.id === group.id);
+
+    if (existing) {
+      existing.listings.push(listing);
+    } else {
+      groups.push({ ...group, listings: [listing] });
+    }
+
+    return groups;
+  }, []);
   const exampleMatchesByCause = CAUSE_FILTER_CHIPS.map((causeLabel) => ({
     cause: causeLabel,
     listing: workedExampleListings.find((listing) =>
@@ -639,10 +682,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <h1>Browse moral trade offers</h1>
+            <h1>Discover voluntary moral trades that align with your values.</h1>
             <p className="hero-text">
-              Discover voluntary moral trades that align with your values. Compare proposals by
-              cause, impact score, verification method, and review status.
+              Compare live proposals and worked examples by cause, impact score, verification
+              method, and review status.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
@@ -742,7 +785,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <span>Popular filters</span>
             <div>
               {popularFilterLinks.map((filterLink) => (
-                <Link className="source-pill source-pill-link" href={filterLink.href} key={filterLink.label}>
+                <Link
+                  aria-current={filterLink.active ? "true" : undefined}
+                  className={`source-pill source-pill-link ${filterLink.active ? "is-active" : ""}`}
+                  href={filterLink.href}
+                  key={filterLink.label}
+                >
                   {filterLink.label}
                 </Link>
               ))}
@@ -913,50 +961,74 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   aria-current={layout === "grid" ? "page" : undefined}
                   className={layout === "grid" ? "is-active" : ""}
                   href={buildOffersHref({ ...filterHrefParams, layout: "grid" })}
+                  title="Grid view"
                 >
-                  Grid
+                  <span aria-hidden="true" className="view-toggle-icon view-toggle-icon-grid" />
+                  <span className="sr-only">Grid view</span>
                 </Link>
                 <Link
                   aria-current={layout === "list" ? "page" : undefined}
                   className={layout === "list" ? "is-active" : ""}
                   href={buildOffersHref({ ...filterHrefParams, layout: "list" })}
+                  title="List view"
                 >
-                  List
+                  <span aria-hidden="true" className="view-toggle-icon view-toggle-icon-list" />
+                  <span className="sr-only">List view</span>
                 </Link>
               </div>
 
-              <div className={`listing-grid ${layout === "list" ? "listing-grid-list" : ""}`}>
+              {groupedListings.length ? (
+                <nav aria-label="Jump to cause group" className="cause-jump-row">
+                  {groupedListings.map((group) => (
+                    <Link className="source-pill source-pill-link" href={`#${group.id}`} key={group.id}>
+                      {group.label} ({group.listings.length})
+                    </Link>
+                  ))}
+                </nav>
+              ) : null}
+
+              <div className="listing-groups">
                 {filteredListings.length ? (
-                  filteredListings.map((listing) => (
-                    <OfferCard
-                      alias={listing.alias}
-                      causeExchange={`${listing.offeredCause} <-> ${listing.requestedCause}`}
-                      ctaHref={listing.href}
-                      duration={listing.duration}
-                      evidence={listing.verification}
-                      key={`${listing.source}-${listing.id}`}
-                      modeIcon={getListingModeIcon(listing.mode)}
-                      modeLabel={formatListingMode(listing.mode)}
-                      offeredAction={listing.offering}
-                      offeredScore={listing.offerImpact}
-                      primaryActionLabel={listing.source === "example" ? "View worked example" : "Inspect terms"}
-                      requestedAction={listing.requesting}
-                      requestedThreshold={listing.requestedImpact}
-                      reviewState={listing.reviewState}
-                      secondaryAction={
-                        viewer ? (
-                          <Link className="button button-secondary button-mini" href={`${listing.href}#interest`}>
-                            Register interest
-                          </Link>
-                        ) : (
-                          <Link className="button button-secondary button-mini" href="/login?returnTo=/offers">
-                            Sign in to participate
-                          </Link>
-                        )
-                      }
-                      sourceLabel={listing.source === "live" ? "Live offer" : "Worked example"}
-                      title={listing.title}
-                    />
+                  groupedListings.map((group) => (
+                    <section className="listing-group" id={group.id} key={group.id} aria-labelledby={`${group.id}-heading`}>
+                      <div className="listing-group-head">
+                        <h3 id={`${group.id}-heading`}>{group.label}</h3>
+                        <span>{group.listings.length} {group.listings.length === 1 ? "listing" : "listings"}</span>
+                      </div>
+                      <div className={`listing-grid ${layout === "list" ? "listing-grid-list" : ""}`}>
+                        {group.listings.map((listing) => (
+                          <OfferCard
+                            alias={listing.alias}
+                            causeExchange={`${listing.offeredCause} <-> ${listing.requestedCause}`}
+                            ctaHref={listing.href}
+                            duration={listing.duration}
+                            evidence={listing.verification}
+                            key={`${listing.source}-${listing.id}`}
+                            modeIcon={getListingModeIcon(listing.mode)}
+                            modeLabel={formatListingMode(listing.mode)}
+                            offeredAction={listing.offering}
+                            offeredScore={listing.offerImpact}
+                            primaryActionLabel={listing.source === "example" ? "View worked example" : "Inspect terms"}
+                            requestedAction={listing.requesting}
+                            requestedThreshold={listing.requestedImpact}
+                            reviewState={listing.reviewState}
+                            secondaryAction={
+                              viewer ? (
+                                <Link className="button button-secondary button-mini" href={`${listing.href}#interest`}>
+                                  Register interest
+                                </Link>
+                              ) : (
+                                <Link className="button button-secondary button-mini" href="/login?returnTo=/offers">
+                                  Sign in to participate
+                                </Link>
+                              )
+                            }
+                            sourceLabel={listing.source === "live" ? "Live offer" : "Worked example"}
+                            title={listing.title}
+                          />
+                        ))}
+                      </div>
+                    </section>
                   ))
                 ) : (
                   <EmptyState
