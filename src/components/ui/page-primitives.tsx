@@ -338,11 +338,13 @@ interface EmptyStateProps {
   title: string;
   children: ReactNode;
   actions?: ReactNode;
+  icon?: IconName;
 }
 
-export function EmptyState({ actions, children, title }: EmptyStateProps) {
+export function EmptyState({ actions, children, icon, title }: EmptyStateProps) {
   return (
     <div className="empty-state marketplace-empty-state">
+      {icon ? <IconMark name={icon} /> : null}
       <div>
         <strong>{title}</strong>
         <p>{children}</p>

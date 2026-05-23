@@ -276,13 +276,15 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(topbarSource, /topbar-search-results/);
   assert.match(offersPage, /name="search"/);
   assert.match(offersPage, /CAUSE_FILTER_CHIPS/);
-  assert.match(offersPage, /IMPACT_FILTER_CHIPS/);
+  assert.match(offersPage, /type="range"/);
   assert.match(offersPage, /SORT_FILTER_CHIPS/);
-  assert.match(offersPage, /parseImpact/);
+  assert.match(offersPage, /parseMinimumScore/);
   assert.match(offersPage, /parseDirectorySort/);
   assert.match(offersPage, /FilterSidebar/);
   assert.match(offersPage, /activeFilterLabels/);
   assert.match(offersPage, /Reset filters/);
+  assert.match(offersPage, /formatCounts/);
+  assert.match(offersPage, /causeCounts/);
   assert.match(offersPage, /OfferCard/);
   assert.match(offersPage, /listingMatchesFilters/);
   assert.match(offersPage, /sortListings/);

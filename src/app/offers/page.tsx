@@ -3,7 +3,14 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { Breadcrumbs, EmptyState, FilterSidebar, OfferCard } from "@/components/ui/page-primitives";
+import {
+  Breadcrumbs,
+  EmptyState,
+  IconMark,
+  MoralTradeHeroVisual,
+  OfferCard,
+  FilterSidebar,
+} from "@/components/ui/page-primitives";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffersPage, OFFERS_PAGE_SIZE, type OfferRecord } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
@@ -52,18 +59,6 @@ const VERIFICATION_FILTERS = [
 
 const DURATION_FILTERS = ["3 months", "6 months", "12 months", "Open-ended"] as const;
 
-const IMPACT_FILTER_CHIPS = [
-  { label: "Any offered impact", value: null },
-  { label: "7+ offered impact", value: 7 },
-  { label: "9+ offered impact", value: 9 },
-] as const;
-
-const REQUESTED_IMPACT_FILTERS = [
-  { label: "Any requested threshold", value: null },
-  { label: "6+ requested threshold", value: 6 },
-  { label: "8+ requested threshold", value: 8 },
-] as const;
-
 const SORT_FILTER_CHIPS = [
   { label: "Newest", value: "newest" },
   { label: "Highest offered impact", value: "impact" },
@@ -77,7 +72,6 @@ const DIRECTORY_TABS = [
 ] as const;
 
 const FORMAT_FILTERS = [
-  { label: "All formats", value: "all" },
   { label: "Pledge swap", value: "pledge" },
   { label: "Donation offset", value: "offset" },
   { label: "Paid action", value: "payment" },
@@ -93,8 +87,9 @@ const REVIEW_STATUS_FILTERS = [
 
 type DirectoryView = (typeof DIRECTORY_TABS)[number]["value"];
 type DirectorySort = (typeof SORT_FILTER_CHIPS)[number]["value"];
-type FormatFilter = (typeof FORMAT_FILTERS)[number]["value"];
+type ListingFormat = (typeof FORMAT_FILTERS)[number]["value"];
 type ReviewStatusFilter = (typeof REVIEW_STATUS_FILTERS)[number]["value"];
+type LayoutView = "grid" | "list";
 
 interface MarketplaceListing {
   id: string;
@@ -120,6 +115,15 @@ function readParam(searchParams: Record<string, string | string[] | undefined>, 
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
 
+function readParams(searchParams: Record<string, string | string[] | undefined>, key: string) {
+  const value = searchParams[key];
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+
+  return value ? [value] : [];
+}
+
 function parsePage(value: string | string[] | undefined) {
   const rawValue = Array.isArray(value) ? value[0] : value;
   const page = Number.parseInt(rawValue ?? "1", 10);
@@ -135,10 +139,10 @@ function parseDirectoryView(value: string): DirectoryView {
   return "live";
 }
 
-function parseFormatFilter(value: string): FormatFilter {
-  return FORMAT_FILTERS.some((option) => option.value === value)
-    ? (value as FormatFilter)
-    : "all";
+function parseFormatFilters(values: readonly string[]): ListingFormat[] {
+  return values.filter((value): value is ListingFormat =>
+    FORMAT_FILTERS.some((option) => option.value === value),
+  );
 }
 
 function parseDirectorySort(value: string): DirectorySort {
@@ -155,12 +159,20 @@ function parseReviewStatus(value: string): ReviewStatusFilter {
     : "all";
 }
 
-function parseImpact(value: string, allowed: readonly number[]) {
+function parseMinimumScore(value: string) {
   const parsed = Number.parseInt(value, 10);
-  return allowed.includes(parsed) ? parsed : null;
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.min(Math.max(parsed, 1), 10);
 }
 
-function findLabel<TValue extends string | number | null>(
+function parseLayoutView(value: string): LayoutView {
+  return value === "list" ? "list" : "grid";
+}
+
+function findLabel<TValue extends string | number>(
   options: readonly { label: string; value: TValue }[],
   value: TValue,
 ) {
@@ -243,12 +255,20 @@ function listingMatchesSearch(listing: MarketplaceListing, query: string) {
     .every((token) => haystack.includes(token));
 }
 
+function listingMatchesCause(listing: MarketplaceListing, cause: string) {
+  const normalizedCause = cause.toLowerCase();
+
+  return [listing.offeredCause, listing.requestedCause].some((candidate) =>
+    candidate.toLowerCase().includes(normalizedCause),
+  );
+}
+
 function listingMatchesFilters(
   listing: MarketplaceListing,
   filters: {
-    cause: string;
+    causes: readonly string[];
     duration: string;
-    format: FormatFilter;
+    formats: readonly ListingFormat[];
     minImpact: number | null;
     minRequestedImpact: number | null;
     reciprocal: boolean;
@@ -266,16 +286,11 @@ function listingMatchesFilters(
     return false;
   }
 
-  if (filters.format !== "all" && listing.mode !== filters.format) {
+  if (filters.formats.length && !filters.formats.includes(listing.mode)) {
     return false;
   }
 
-  if (
-    filters.cause &&
-    ![listing.offeredCause, listing.requestedCause].some((cause) =>
-      cause.toLowerCase().includes(filters.cause.toLowerCase()),
-    )
-  ) {
+  if (filters.causes.length && !filters.causes.some((cause) => listingMatchesCause(listing, cause))) {
     return false;
   }
 
@@ -332,9 +347,10 @@ function sortListings(listings: MarketplaceListing[], sort: DirectorySort) {
 }
 
 function buildOffersHref(params: {
-  cause?: string;
+  causes?: readonly string[];
   duration?: string;
-  format?: FormatFilter;
+  formats?: readonly ListingFormat[];
+  layout?: LayoutView;
   minImpact?: number | null;
   minRequestedImpact?: number | null;
   reciprocal?: boolean;
@@ -347,15 +363,16 @@ function buildOffersHref(params: {
   const query = new URLSearchParams();
 
   if (params.view && params.view !== "live") query.set("view", params.view);
-  if (params.format && params.format !== "all") query.set("mode", params.format);
+  params.formats?.forEach((format) => query.append("mode", format));
   if (params.searchQuery) query.set("search", params.searchQuery);
-  if (params.cause) query.set("cause", params.cause);
+  params.causes?.forEach((cause) => query.append("cause", cause));
   if (params.verification) query.set("verification", params.verification);
   if (params.duration) query.set("duration", params.duration);
   if (params.reviewStatus && params.reviewStatus !== "all") query.set("review", params.reviewStatus);
   if (params.minImpact) query.set("min_impact", String(params.minImpact));
   if (params.minRequestedImpact) query.set("min_requested", String(params.minRequestedImpact));
   if (params.reciprocal) query.set("reciprocal", "1");
+  if (params.layout && params.layout !== "grid") query.set("layout", params.layout);
   if (params.sort && params.sort !== "newest") query.set("sort", params.sort);
 
   const serialized = query.toString();
@@ -370,10 +387,11 @@ function createTabHref(
 }
 
 function buildActiveFilterLabels(filters: {
-  cause: string;
+  causes: readonly string[];
   directorySort: DirectorySort;
   duration: string;
-  format: FormatFilter;
+  formats: readonly ListingFormat[];
+  layout: LayoutView;
   minImpact: number | null;
   minRequestedImpact: number | null;
   reciprocal: boolean;
@@ -392,12 +410,16 @@ function buildActiveFilterLabels(filters: {
     labels.push(`Search: ${filters.searchQuery}`);
   }
 
-  if (filters.format !== "all") {
-    labels.push(findLabel(FORMAT_FILTERS, filters.format));
+  filters.formats.forEach((format) => {
+    labels.push(findLabel(FORMAT_FILTERS, format));
+  });
+
+  if (filters.causes.length) {
+    labels.push(...filters.causes);
   }
 
-  if (filters.cause) {
-    labels.push(filters.cause);
+  if (filters.layout === "list") {
+    labels.push("List view");
   }
 
   if (filters.verification) {
@@ -413,11 +435,11 @@ function buildActiveFilterLabels(filters: {
   }
 
   if (filters.minImpact !== null) {
-    labels.push(findLabel(IMPACT_FILTER_CHIPS, filters.minImpact));
+    labels.push(`${filters.minImpact}+ offered impact`);
   }
 
   if (filters.minRequestedImpact !== null) {
-    labels.push(findLabel(REQUESTED_IMPACT_FILTERS, filters.minRequestedImpact));
+    labels.push(`${filters.minRequestedImpact}+ requested threshold`);
   }
 
   if (filters.reciprocal) {
@@ -431,23 +453,34 @@ function buildActiveFilterLabels(filters: {
   return labels;
 }
 
+function countBy(listings: readonly MarketplaceListing[], predicate: (listing: MarketplaceListing) => boolean) {
+  return listings.reduce((count, listing) => (predicate(listing) ? count + 1 : count), 0);
+}
+
+function withCount(label: string, count: number) {
+  return `${label} (${count})`;
+}
+
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
   const formMessage = getFormMessage(resolvedSearchParams);
   const page = parsePage(resolvedSearchParams.page);
   const view = parseDirectoryView(readParam(resolvedSearchParams, "view"));
-  const format = parseFormatFilter(readParam(resolvedSearchParams, "mode"));
+  const formats = parseFormatFilters(readParams(resolvedSearchParams, "mode"));
   const searchQuery = readParam(resolvedSearchParams, "search").trim().slice(0, 120);
-  const cause = readParam(resolvedSearchParams, "cause");
+  const causes = readParams(resolvedSearchParams, "cause").filter((value) =>
+    CAUSE_FILTER_CHIPS.includes(value as (typeof CAUSE_FILTER_CHIPS)[number]),
+  );
   const verification = readParam(resolvedSearchParams, "verification");
   const duration = readParam(resolvedSearchParams, "duration");
   const reviewStatus = parseReviewStatus(readParam(resolvedSearchParams, "review"));
-  const minImpact = parseImpact(readParam(resolvedSearchParams, "min_impact"), [7, 9]);
-  const minRequestedImpact = parseImpact(readParam(resolvedSearchParams, "min_requested"), [6, 8]);
+  const minImpact = parseMinimumScore(readParam(resolvedSearchParams, "min_impact"));
+  const minRequestedImpact = parseMinimumScore(readParam(resolvedSearchParams, "min_requested"));
   const reciprocal = readParam(resolvedSearchParams, "reciprocal") === "1";
   const directorySort = parseDirectorySort(readParam(resolvedSearchParams, "sort"));
-  const liveMode = format === "pledge" || format === "offset" || format === "payment" ? format : "all";
+  const layout = parseLayoutView(readParam(resolvedSearchParams, "layout"));
+  const liveMode = formats.length === 1 && formats[0] !== "public-good" ? formats[0] : "all";
   const offersPage = hasSupabaseEnv()
     ? await listOpenOffersPage(page, OFFERS_PAGE_SIZE, liveMode, searchQuery)
     : { items: [], page, pageSize: OFFERS_PAGE_SIZE, hasNextPage: false, hasPreviousPage: page > 1 };
@@ -455,9 +488,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const workedExampleListings = CANONICAL_WORKED_CASE_OFFERS.map(workedCaseToListing);
   const allListings = [...liveListings, ...workedExampleListings];
   const activeFilters = {
-    cause,
+    causes,
     duration,
-    format,
+    formats,
     minImpact,
     minRequestedImpact,
     reciprocal,
@@ -471,9 +504,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     directorySort,
   );
   const filterHrefParams = {
-    cause,
+    causes,
     duration,
-    format,
+    formats,
+    layout,
     minImpact,
     minRequestedImpact,
     reciprocal,
@@ -484,10 +518,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     view,
   };
   const activeFilterLabels = buildActiveFilterLabels({
-    cause,
+    causes,
     directorySort,
     duration,
-    format,
+    formats,
+    layout,
     minImpact,
     minRequestedImpact,
     reciprocal,
@@ -496,6 +531,39 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     verification,
     view,
   });
+  const countScope = allListings.filter((listing) => {
+    if (view === "live" && listing.source !== "live") return false;
+    if (view === "examples" && listing.source !== "example") return false;
+    return listingMatchesSearch(listing, searchQuery);
+  });
+  const formatCounts = FORMAT_FILTERS.map((option) => ({
+    ...option,
+    count: countBy(countScope, (listing) => listing.mode === option.value),
+  }));
+  const causeCounts = CAUSE_FILTER_CHIPS.map((option) => ({
+    label: option,
+    count: countBy(countScope, (listing) => listingMatchesCause(listing, option)),
+  }));
+  const verificationCounts = VERIFICATION_FILTERS.map((option) => ({
+    label: option,
+    count: countBy(countScope, (listing) => listing.verification === option),
+  }));
+  const durationCounts = DURATION_FILTERS.map((option) => ({
+    label: option,
+    count: countBy(countScope, (listing) => listing.duration === option),
+  }));
+  const reviewStatusCounts = REVIEW_STATUS_FILTERS.map((option) => ({
+    ...option,
+    count:
+      option.value === "all"
+        ? countScope.length
+        : countBy(countScope, (listing) => {
+            if (option.value === "live") return listing.source === "live";
+            if (option.value === "worked-example") return listing.source === "example";
+            return listing.reviewState.toLowerCase().includes("manual review");
+          }),
+  }));
+  const reciprocalCount = countBy(countScope, (listing) => listing.hasReciprocalMatch);
   const exampleMatchesByCause = CAUSE_FILTER_CHIPS.map((causeLabel) => ({
     cause: causeLabel,
     listing: workedExampleListings.find((listing) =>
@@ -544,26 +612,25 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <section className="hero-copy">
             <h1>Browse moral trade offers</h1>
             <p className="hero-text">
-              Compare live offers and worked examples by cause, format, evidence rule, and review
-              status.
+              Discover voluntary moral trades that align with your values. Compare proposals by
+              cause, impact score, verification method, and review status.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
                 Create trade
               </Link>
+              {!viewer ? (
+                <Link className="button button-secondary" href="/login?returnTo=/offers">
+                  Sign in to participate
+                </Link>
+              ) : null}
               <Link className="button button-secondary" href="/offers?view=examples">
                 View worked examples
               </Link>
             </div>
           </section>
 
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Pilot directory</p>
-            <p className="route-text">
-              Live offers appear only after signed-in participants publish them. Worked examples
-              remain clearly labeled and never count as marketplace liquidity.
-            </p>
-          </aside>
+          <MoralTradeHeroVisual />
         </div>
       </header>
 
@@ -592,7 +659,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             ))}
           </div>
 
-          <form action="/offers" className="marketplace-search marketplace-search-wide" role="search">
+          <form action="/offers" className="marketplace-search marketplace-search-wide marketplace-search-with-category" role="search">
             <label className="field marketplace-search-field">
               <span>Search trades</span>
               <input
@@ -602,15 +669,28 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 type="search"
               />
             </label>
+            <label className="field marketplace-category-field">
+              <span>Cause</span>
+              <select name="cause" defaultValue={causes[0] ?? ""}>
+                <option value="">All causes</option>
+                {causeCounts.map((option) => (
+                  <option key={option.label} value={option.label}>
+                    {withCount(option.label, option.count)}
+                  </option>
+                ))}
+              </select>
+            </label>
             {view !== "live" ? <input name="view" type="hidden" value={view} /> : null}
-            {format !== "all" ? <input name="mode" type="hidden" value={format} /> : null}
-            {cause ? <input name="cause" type="hidden" value={cause} /> : null}
+            {formats.map((selectedFormat) => (
+              <input key={selectedFormat} name="mode" type="hidden" value={selectedFormat} />
+            ))}
             {verification ? <input name="verification" type="hidden" value={verification} /> : null}
             {duration ? <input name="duration" type="hidden" value={duration} /> : null}
             {reviewStatus !== "all" ? <input name="review" type="hidden" value={reviewStatus} /> : null}
             {minImpact ? <input name="min_impact" type="hidden" value={minImpact} /> : null}
             {minRequestedImpact ? <input name="min_requested" type="hidden" value={minRequestedImpact} /> : null}
             {reciprocal ? <input name="reciprocal" type="hidden" value="1" /> : null}
+            {layout !== "grid" ? <input name="layout" type="hidden" value={layout} /> : null}
             {directorySort !== "newest" ? <input name="sort" type="hidden" value={directorySort} /> : null}
             <button className="button button-primary" type="submit">
               Search
@@ -642,88 +722,124 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   </Link>
                 </div>
 
-                <label className="field">
-                  <span>Trade format</span>
-                  <select name="mode" defaultValue={format} form="offer-filter-form">
-                    {FORMAT_FILTERS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
                 <form action="/offers" className="filter-form" id="offer-filter-form">
                   {view !== "live" ? <input name="view" type="hidden" value={view} /> : null}
                   {searchQuery ? <input name="search" type="hidden" value={searchQuery} /> : null}
-                  <label className="field">
-                    <span>Cause area</span>
-                    <select name="cause" defaultValue={cause}>
-                      <option value="">All causes</option>
-                      {CAUSE_FILTER_CHIPS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
+                  {layout !== "grid" ? <input name="layout" type="hidden" value={layout} /> : null}
+
+                  <details className="filter-group" open>
+                    <summary>Format</summary>
+                    <div className="filter-option-list">
+                      {formatCounts.map((option) => (
+                        <label className="check-row" key={option.value}>
+                          <input
+                            defaultChecked={formats.includes(option.value)}
+                            name="mode"
+                            type="checkbox"
+                            value={option.value}
+                          />
+                          <span>{withCount(option.label, option.count)}</span>
+                        </label>
                       ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Verification method</span>
-                    <select name="verification" defaultValue={verification}>
-                      <option value="">Any verification method</option>
-                      {VERIFICATION_FILTERS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
+                    </div>
+                  </details>
+
+                  <details className="filter-group" open>
+                    <summary>Cause area</summary>
+                    <div className="filter-option-list">
+                      {causeCounts.map((option) => (
+                        <label className="check-row" key={option.label}>
+                          <input
+                            defaultChecked={causes.includes(option.label)}
+                            name="cause"
+                            type="checkbox"
+                            value={option.label}
+                          />
+                          <span>{withCount(option.label, option.count)}</span>
+                        </label>
                       ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Duration</span>
-                    <select name="duration" defaultValue={duration}>
-                      <option value="">Any duration</option>
-                      {DURATION_FILTERS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Review status</span>
-                    <select name="review" defaultValue={reviewStatus}>
-                      {REVIEW_STATUS_FILTERS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Minimum offered-impact score</span>
-                    <select name="min_impact" defaultValue={minImpact ?? ""}>
-                      {IMPACT_FILTER_CHIPS.map((option) => (
-                        <option key={option.label} value={option.value ?? ""}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Minimum requested-impact threshold</span>
-                    <select name="min_requested" defaultValue={minRequestedImpact ?? ""}>
-                      {REQUESTED_IMPACT_FILTERS.map((option) => (
-                        <option key={option.label} value={option.value ?? ""}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="check-row">
-                    <input defaultChecked={reciprocal} name="reciprocal" type="checkbox" value="1" />
-                    <span>Has reciprocal match</span>
-                  </label>
-                  <button className="button button-secondary" type="submit">
+                    </div>
+                  </details>
+
+                  <details className="filter-group" open>
+                    <summary>Evidence and duration</summary>
+                    <label className="field">
+                      <span>Verification method</span>
+                      <select name="verification" defaultValue={verification}>
+                        <option value="">Any verification method</option>
+                        {verificationCounts.map((option) => (
+                          <option key={option.label} value={option.label}>
+                            {withCount(option.label, option.count)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Duration</span>
+                      <select name="duration" defaultValue={duration}>
+                        <option value="">Any duration</option>
+                        {durationCounts.map((option) => (
+                          <option key={option.label} value={option.label}>
+                            {withCount(option.label, option.count)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </details>
+
+                  <details className="filter-group">
+                    <summary>Review status</summary>
+                    <label className="field">
+                      <span>Review status</span>
+                      <select name="review" defaultValue={reviewStatus}>
+                        {reviewStatusCounts.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {withCount(option.label, option.count)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </details>
+
+                  <details className="filter-group">
+                    <summary>Impact scores</summary>
+                    <label className="field range-field">
+                      <span>Minimum offered-impact score</span>
+                      <input
+                        aria-describedby="offered-impact-help"
+                        defaultValue={minImpact ?? 0}
+                        max="10"
+                        min="0"
+                        name="min_impact"
+                        step="1"
+                        type="range"
+                      />
+                      <small id="offered-impact-help">0 keeps all listings; higher values narrow the pilot estimate.</small>
+                    </label>
+                    <label className="field range-field">
+                      <span>Minimum requested-impact threshold</span>
+                      <input
+                        aria-describedby="requested-impact-help"
+                        defaultValue={minRequestedImpact ?? 0}
+                        max="10"
+                        min="0"
+                        name="min_requested"
+                        step="1"
+                        type="range"
+                      />
+                      <small id="requested-impact-help">Internal estimate only; inspect terms before relying on it.</small>
+                    </label>
+                  </details>
+
+                  <details className="filter-group">
+                    <summary>Match state</summary>
+                    <label className="check-row">
+                      <input defaultChecked={reciprocal} name="reciprocal" type="checkbox" value="1" />
+                      <span>{withCount("Has reciprocal match", reciprocalCount)}</span>
+                    </label>
+                  </details>
+
+                  <button className="button button-secondary sticky-filter-action" type="submit">
                     Apply filters
                   </button>
                 </form>
@@ -739,15 +855,20 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 </div>
                 <form action="/offers" className="sort-control">
                   {view !== "live" ? <input name="view" type="hidden" value={view} /> : null}
-                  {format !== "all" ? <input name="mode" type="hidden" value={format} /> : null}
+                  {formats.map((selectedFormat) => (
+                    <input key={selectedFormat} name="mode" type="hidden" value={selectedFormat} />
+                  ))}
                   {searchQuery ? <input name="search" type="hidden" value={searchQuery} /> : null}
-                  {cause ? <input name="cause" type="hidden" value={cause} /> : null}
+                  {causes.map((selectedCause) => (
+                    <input key={selectedCause} name="cause" type="hidden" value={selectedCause} />
+                  ))}
                   {verification ? <input name="verification" type="hidden" value={verification} /> : null}
                   {duration ? <input name="duration" type="hidden" value={duration} /> : null}
                   {reviewStatus !== "all" ? <input name="review" type="hidden" value={reviewStatus} /> : null}
                   {minImpact ? <input name="min_impact" type="hidden" value={minImpact} /> : null}
                   {minRequestedImpact ? <input name="min_requested" type="hidden" value={minRequestedImpact} /> : null}
                   {reciprocal ? <input name="reciprocal" type="hidden" value="1" /> : null}
+                  {layout !== "grid" ? <input name="layout" type="hidden" value={layout} /> : null}
                   <label className="field compact-field">
                     <span>Sort</span>
                     <select name="sort" defaultValue={directorySort}>
@@ -757,6 +878,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         </option>
                       ))}
                     </select>
+                    <small>Example fit compares offered score with requested threshold.</small>
                   </label>
                   <button className="button button-secondary button-mini" type="submit">
                     Sort
@@ -764,7 +886,24 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 </form>
               </div>
 
-              <div className="listing-grid">
+              <div className="view-toggle" aria-label="Listing layout">
+                <Link
+                  aria-current={layout === "grid" ? "page" : undefined}
+                  className={layout === "grid" ? "is-active" : ""}
+                  href={buildOffersHref({ ...filterHrefParams, layout: "grid" })}
+                >
+                  Grid
+                </Link>
+                <Link
+                  aria-current={layout === "list" ? "page" : undefined}
+                  className={layout === "list" ? "is-active" : ""}
+                  href={buildOffersHref({ ...filterHrefParams, layout: "list" })}
+                >
+                  List
+                </Link>
+              </div>
+
+              <div className={`listing-grid ${layout === "list" ? "listing-grid-list" : ""}`}>
                 {filteredListings.length ? (
                   filteredListings.map((listing) => (
                     <OfferCard
@@ -793,6 +932,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   ))
                 ) : (
                   <EmptyState
+                    icon="marketplace"
                     actions={
                       <>
                         <Link className="button button-secondary" href="/offers?view=examples">
@@ -843,6 +983,27 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </div>
         </section>
 
+        {!viewer ? (
+          <section className="section section-subtle marketplace-participation-callout" aria-labelledby="participate-heading">
+            <div>
+              <p className="eyebrow">Account workspace</p>
+              <h2 id="participate-heading">Sign in to save interest and create proposals.</h2>
+              <p>
+                Accounts keep draft terms, saved offers, and evidence workflows separate from public
+                worked examples.
+              </p>
+            </div>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/signup?returnTo=/offers">
+                Create account
+              </Link>
+              <Link className="button button-secondary" href="/login?returnTo=/offers">
+                Sign in
+              </Link>
+            </div>
+          </section>
+        ) : null}
+
         <section className="section section-white" aria-labelledby="example-matches-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Pilot mode</p>
@@ -863,6 +1024,34 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 </Link>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle process-link-section" aria-labelledby="process-links-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Due diligence</p>
+            <h2 id="process-links-heading">Learn more about evidence and process.</h2>
+            <p>
+              Marketplace cards summarize terms for scanning. The full methodology and evidence
+              standards explain how review works before anyone relies on a proposal.
+            </p>
+          </div>
+          <div className="teaser-grid">
+            <Link className="panel teaser-card" href="/methodology">
+              <IconMark name="source" />
+              <h3>Methodology</h3>
+              <p>How Moral Trade distinguishes voluntary exchange from threats, fraud, and pressure.</p>
+            </Link>
+            <Link className="panel teaser-card" href="/reasoning-standards">
+              <IconMark name="evidence" />
+              <h3>Evidence standards</h3>
+              <p>How action records, receipts, witnesses, and manual review are presented.</p>
+            </Link>
+            <Link className="panel teaser-card" href="/safety">
+              <IconMark name="safety" />
+              <h3>Safety policy</h3>
+              <p>Boundaries for coercion, harassment, political contribution offsets, and risky asks.</p>
+            </Link>
           </div>
         </section>
       </main>
