@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { MetricCard, PageHero, SectionHeader, StepCard } from "@/components/ui/page-primitives";
+import { Breadcrumbs, MetricCard, PageHero, SectionHeader, StepCard } from "@/components/ui/page-primitives";
 import { getDonationOffsetOverview, getViewer } from "@/lib/app-data";
 import { getConsensusCharities } from "@/lib/donation-offsets";
 import { getAbsoluteUrl } from "@/lib/seo";
@@ -71,6 +71,7 @@ export default async function DonationOffsetsPage() {
           {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
+        <Breadcrumbs items={[{ href: "/donation-offsets", label: "Donation offsets" }]} />
 
         <PageHero
           eyebrow="Donation offsets"

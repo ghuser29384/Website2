@@ -5,6 +5,8 @@ const publicRoutes = [
   "/offers",
   "/offers/new",
   "/create",
+  "/pledge-swaps",
+  "/paid-action-offers",
   "/background-networking",
   "/reasoning-standards",
   "/donate",

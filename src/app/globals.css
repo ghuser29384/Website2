@@ -4096,6 +4096,42 @@ output {
   padding: 3rem 0 1.35rem;
 }
 
+.breadcrumbs {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.breadcrumbs li {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.breadcrumbs li + li::before {
+  content: "/";
+  color: var(--line-strong);
+}
+
+.breadcrumbs a {
+  color: var(--ink-muted);
+}
+
+.breadcrumbs a:hover,
+.breadcrumbs a:focus-visible {
+  color: var(--accent-deep);
+}
+
 .landing-hero,
 .marketplace-hero {
   padding-bottom: 2rem;
@@ -4182,6 +4218,134 @@ output {
 .teaser-card p {
   margin: 0;
   color: var(--ink-soft);
+}
+
+.hero-marketplace-visual {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: center;
+  min-height: 27rem;
+  padding: 1.35rem;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(248, 250, 247, 0.94)),
+    radial-gradient(circle at 20% 20%, rgba(105, 151, 202, 0.12), transparent 36%),
+    radial-gradient(circle at 85% 85%, rgba(224, 139, 76, 0.12), transparent 38%);
+}
+
+.visual-card {
+  display: grid;
+  gap: 0.45rem;
+  min-height: 11rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.visual-card span,
+.visual-review-strip span {
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.visual-card strong {
+  color: var(--ink);
+  font-size: 1.08rem;
+}
+
+.visual-card p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.visual-exchange {
+  display: grid;
+  gap: 0.7rem;
+  width: 4.6rem;
+}
+
+.visual-exchange span {
+  position: relative;
+  display: block;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.visual-exchange span::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-top: 2px solid var(--accent);
+  border-right: 2px solid var(--accent);
+}
+
+.visual-exchange span:first-child::after {
+  right: 0;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.visual-exchange span:last-child::after {
+  left: 0;
+  transform: translateY(-50%) rotate(225deg);
+}
+
+.visual-review-strip {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.visual-review-strip span {
+  display: inline-flex;
+  justify-content: center;
+  padding: 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  text-align: center;
+}
+
+.trade-flow-diagram {
+  display: grid;
+  gap: 0.75rem;
+  align-content: center;
+  min-height: 22rem;
+  padding: 1.2rem;
+  background: var(--surface-muted);
+}
+
+.trade-flow-node {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.trade-flow-node span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fffaf6;
+  font-size: 0.75rem;
 }
 
 .pilot-metric-grid,
@@ -4706,7 +4870,7 @@ output {
 
 .footer-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 0.75fr));
+  grid-template-columns: minmax(240px, 1.25fr) repeat(5, minmax(130px, 0.75fr));
   gap: 1.8rem;
 }
 
@@ -4967,6 +5131,20 @@ strong {
 
   .button-nav {
     width: 100%;
+  }
+
+  .hero-marketplace-visual {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .visual-exchange {
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .visual-review-strip {
+    grid-template-columns: 1fr;
   }
 
   .topbar-menu-panel {

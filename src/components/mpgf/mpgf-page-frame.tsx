@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { Breadcrumbs } from "@/components/ui/page-primitives";
 import type { MpgfRealMoneyReadiness } from "@/lib/mpgf/real-money-types";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -36,6 +37,7 @@ export function MpgfPageFrame({
           {...getTopbarActions(viewerPresent)}
           showLogout={viewerPresent}
         />
+        <Breadcrumbs items={[{ href: "/mpgf", label: "Public Goods Fund" }]} />
 
         <div className="mpgf-hero-grid">
           <section className="mpgf-hero-copy">

@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { EmptyState, FilterSidebar, OfferCard } from "@/components/ui/page-primitives";
+import { Breadcrumbs, EmptyState, FilterSidebar, OfferCard } from "@/components/ui/page-primitives";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffersPage, OFFERS_PAGE_SIZE, type OfferRecord } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
@@ -456,6 +456,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
+        <Breadcrumbs items={[{ href: "/offers", label: "Browse offers" }]} />
 
         <div className="hero-grid">
           <section className="hero-copy">

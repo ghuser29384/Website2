@@ -15,9 +15,9 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["offer", "trade", "marketplace", "swap", "payment", "offset"],
   },
   {
-    href: "/offers?mode=pledge",
+    href: "/pledge-swaps",
     label: "Pledge swaps",
-    summary: "Find reciprocal commitments such as donations, volunteering, or habit changes.",
+    summary: "Learn and browse reciprocal commitments such as donations, volunteering, or habit changes.",
     kind: "trade",
     keywords: ["pledge", "swap", "reciprocal", "commitment", "vegetarian"],
   },
@@ -27,6 +27,13 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     summary: "Redirect opposed donations toward a named compromise destination.",
     kind: "trade",
     keywords: ["donation", "offset", "pool", "assurance", "compromise", "matched"],
+  },
+  {
+    href: "/paid-action-offers",
+    label: "Paid action offers",
+    summary: "Structure paid actions with external-payment evidence and no escrow or custody claim.",
+    kind: "trade",
+    keywords: ["paid", "payment", "action", "verification", "escrow", "external"],
   },
   {
     href: "/mpgf",
@@ -93,10 +100,10 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   },
   {
     href: "/background-networking",
-    label: "Background networking",
+    label: "Private wish matching",
     summary: "Understand staged discovery, consent gates, and non-autonomous matching.",
     kind: "learn",
-    keywords: ["background", "networking", "consent", "privacy", "staged"],
+    keywords: ["private", "wish", "matching", "consent", "privacy", "staged"],
   },
   {
     href: "/dashboard",

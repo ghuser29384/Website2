@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
   MetricCard,
+  MoralTradeHeroVisual,
   OfferCard,
   PageHero,
   SearchBar,
@@ -31,16 +32,16 @@ const categoryPills = [
 ] as const;
 
 const formatPills = [
-  { label: "Pledge swaps", href: "/offers?mode=pledge" },
+  { label: "Pledge swaps", href: "/pledge-swaps" },
   { label: "Donation offsets", href: "/offers?mode=offset" },
-  { label: "Paid action offers", href: "/offers?mode=payment" },
+  { label: "Paid action offers", href: "/paid-action-offers" },
   { label: "Public-good contributions", href: "/mpgf" },
 ] as const;
 
 const productCards = [
   {
     title: "Pledge swaps",
-    href: "/offers?mode=pledge",
+    href: "/pledge-swaps",
     cta: "View pledge swaps",
     explanation: "Exchange bounded commitments when each side values the other's action more.",
     example: "I donate to your cause if you take the action I value.",
@@ -58,6 +59,13 @@ const productCards = [
     cta: "View fund",
     explanation: "Coordinate support for goods many moral views can value.",
     example: "Coordinate support for goods many moral views value.",
+  },
+  {
+    title: "Paid action offers",
+    href: "/paid-action-offers",
+    cta: "Open guide",
+    explanation: "Offer payment for bounded actions while keeping money outside platform custody.",
+    example: "Payment pending verification, not legal escrow.",
   },
 ] as const;
 
@@ -127,13 +135,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             </>
           }
         >
-          <aside className="pilot-status-card panel" aria-label="Operating standards">
-            <strong>Built for review, not hype</strong>
-            <p>
-              Worked examples show the structure while live participation grows through signed-in
-              users and reviewable evidence.
-            </p>
-          </aside>
+          <MoralTradeHeroVisual />
         </PageHero>
 
         <div className="trust-chip-row trust-chip-row-wide" aria-label="Trust standards">
@@ -167,7 +169,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
         </section>
 
         <section className="section section-subtle" aria-labelledby="products-heading">
-          <SectionHeader eyebrow="Trade formats" id="products-heading" title="Three ways to make terms legible." />
+          <SectionHeader eyebrow="Trade formats" id="products-heading" title="Formats with their own guidance." />
           <div className="format-card-grid">
             {productCards.map((card) => (
               <article className="panel format-card" key={card.title}>

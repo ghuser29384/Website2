@@ -6,6 +6,35 @@ type LinkLike = {
   label: string;
 };
 
+interface BreadcrumbsProps {
+  items: readonly LinkLike[];
+}
+
+export function Breadcrumbs({ items }: BreadcrumbsProps) {
+  return (
+    <nav aria-label="Breadcrumb" className="breadcrumbs">
+      <ol>
+        <li>
+          <Link href="/">Home</Link>
+        </li>
+        {items.map((item, index) => {
+          const isCurrent = index === items.length - 1;
+
+          return (
+            <li key={item.href}>
+              {isCurrent ? (
+                <span aria-current="page">{item.label}</span>
+              ) : (
+                <Link href={item.href}>{item.label}</Link>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
 interface PageHeroProps {
   actions?: ReactNode;
   children?: ReactNode;
@@ -24,6 +53,51 @@ export function PageHero({ actions, children, description, eyebrow, title }: Pag
         {actions ? <div className="hero-actions">{actions}</div> : null}
       </section>
       {children}
+    </div>
+  );
+}
+
+export function MoralTradeHeroVisual() {
+  return (
+    <aside className="hero-marketplace-visual panel" aria-label="Moral trade workflow illustration">
+      <div className="visual-card visual-card-left">
+        <span>Pledge swap</span>
+        <strong>Global health</strong>
+        <p>Offers receipt-backed donation</p>
+      </div>
+      <div className="visual-exchange" aria-hidden="true">
+        <span />
+        <span />
+      </div>
+      <div className="visual-card visual-card-right">
+        <span>Reciprocal action</span>
+        <strong>Animal welfare</strong>
+        <p>Requests 3-month diet trial</p>
+      </div>
+      <div className="visual-review-strip">
+        <span>Voluntary terms</span>
+        <span>Evidence rule</span>
+        <span>Manual review</span>
+      </div>
+    </aside>
+  );
+}
+
+export function TradeFlowDiagram({
+  steps,
+  title,
+}: {
+  steps: readonly string[];
+  title: string;
+}) {
+  return (
+    <div className="trade-flow-diagram panel" aria-label={title}>
+      {steps.map((step, index) => (
+        <div className="trade-flow-node" key={step}>
+          <span>{String(index + 1).padStart(2, "0")}</span>
+          <strong>{step}</strong>
+        </div>
+      ))}
     </div>
   );
 }

@@ -37,7 +37,8 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(browseMenu?.summary ?? "", /Compare public proposals/);
   assert.ok(browseMenu?.items?.every((item) => item.description));
   assert.ok(createMenu?.items?.some((item) => item.label === "Create donation offset"));
-  assert.ok(hrefs.includes("/offers?mode=pledge"));
+  assert.ok(hrefs.includes("/pledge-swaps"));
+  assert.ok(hrefs.includes("/paid-action-offers"));
   assert.ok(hrefs.includes("/donation-offsets"));
   assert.ok(hrefs.includes("/mpgf"));
   assert.ok(hrefs.includes("/offers"));
@@ -285,6 +286,7 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(offersPage, /sortListings/);
   assert.match(appDataSource, /offerMatchesSearchQuery/);
   assert.equal(animalResults[0]?.href, "/offers?search=Animal%20Welfare");
+  assert.equal(filterSiteSearchItems("pledge swap")[0]?.href, "/pledge-swaps");
   assert.ok(mpfgResults.some((result) => result.href === "/mpgf"));
 });
 
@@ -307,6 +309,7 @@ test("home page is a focused landing page with pilot metrics and marketplace pre
   assert.match(homeSource, /CANONICAL_WORKED_CASE_COUNT/);
   assert.match(homeSource, /worked examples/);
   assert.match(homeSource, /Worked examples clearly labeled/);
+  assert.match(homeSource, /MoralTradeHeroVisual/);
   assert.match(homeSource, /SearchBar/);
   assert.match(homeSource, /OfferCard/);
   assert.equal(homeSource.includes("opening-sequence"), false);
@@ -355,6 +358,22 @@ test("background networking and reasoning standards are distinct public routes",
   assert.match(standardsPage, /voluntary/i);
   assert.match(sitemapSource, /\/background-networking/);
   assert.match(sitemapSource, /\/reasoning-standards/);
+  assert.match(sitemapSource, /\/pledge-swaps/);
+  assert.match(sitemapSource, /\/paid-action-offers/);
+});
+
+test("trade format landing pages explain formats without payment or custody overclaims", () => {
+  const pledgePage = readRepoFile("src/app/pledge-swaps/page.tsx");
+  const paidActionPage = readRepoFile("src/app/paid-action-offers/page.tsx");
+  const primitivesSource = readRepoFile("src/components/ui/page-primitives.tsx");
+
+  assert.match(pledgePage, /Swap bounded pledges under explicit terms/);
+  assert.match(pledgePage, /Voluntary only/);
+  assert.match(paidActionPage, /payment is pending verification/);
+  assert.match(paidActionPage, /not legal escrow/i);
+  assert.match(paidActionPage, /No custody, escrow, tax, or investment claim/);
+  assert.match(primitivesSource, /Breadcrumb/);
+  assert.match(primitivesSource, /TradeFlowDiagram/);
 });
 
 test("dashboard exposes existing profile portability endpoints", () => {

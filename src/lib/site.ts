@@ -5,9 +5,10 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
       summary: "Compare public proposals and worked examples.",
       items: [
         { href: "/offers", label: "All offers", description: "Live offers and worked examples." },
-        { href: "/offers?mode=pledge", label: "Pledge swaps", description: "Exchange bounded commitments." },
+        { href: "/pledge-swaps", label: "Pledge swaps", description: "Exchange bounded commitments." },
         { href: "/donation-offsets", label: "Donation offsets", description: "Redirect matched opposed donations." },
         { href: "/mpgf", label: "Public Goods Fund", description: "Pool support for shared moral goods." },
+        { href: "/paid-action-offers", label: "Paid action offers", description: "Payment pending verification, not escrow." },
         { href: "/offers?view=examples", label: "Worked examples", description: "Seeded structures, not live offers." },
       ],
     },
@@ -74,8 +75,9 @@ export const FOOTER_LINK_GROUPS = [
     title: "Marketplace",
     links: [
       { href: "/offers", label: "Browse offers" },
-      { href: "/offers?mode=pledge", label: "Pledge swaps" },
+      { href: "/pledge-swaps", label: "Pledge swaps" },
       { href: "/donation-offsets", label: "Donation offsets" },
+      { href: "/paid-action-offers", label: "Paid action offers" },
       { href: "/mpgf", label: "Public Goods Fund" },
       { href: "/offers?view=examples", label: "Worked examples" },
     ],
@@ -87,6 +89,7 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/methodology", label: "Methodology" },
       { href: "/safety", label: "Safety" },
       { href: "/faq", label: "FAQ" },
+      { href: "/reasoning-standards", label: "Evidence standards" },
       { href: "/methodology#sources", label: "Sources" },
     ],
   },
@@ -100,15 +103,22 @@ export const FOOTER_LINK_GROUPS = [
     ],
   },
   {
-    title: "Legal / operations",
+    title: "About",
     links: [
-      { href: "/privacy", label: "Privacy" },
-      { href: "/terms", label: "Terms" },
       { href: "mailto:support@moraltrade.org", label: "Contact" },
-      { href: "/mpgf/contribute", label: "Evidence review" },
+      { href: "mailto:support@moraltrade.org?subject=Pilot%20updates", label: "Pilot updates" },
       { href: "/background-networking", label: "Private wish matching" },
       { href: "/priority-correction-fund", label: "Allocation notes" },
       { href: "/mpgf/pools", label: "Candidate pools" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { href: "/privacy", label: "Privacy" },
+      { href: "/terms", label: "Terms" },
+      { href: "/safety", label: "Safety policy" },
+      { href: "/mpgf/contribute", label: "Evidence review" },
     ],
   },
 ] as const;
