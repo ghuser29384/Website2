@@ -393,9 +393,11 @@ interface OfferCardProps {
   ctaHref: string;
   duration: string;
   evidence: string;
+  modeIcon: IconName;
   modeLabel: string;
   offeredAction: string;
   offeredScore?: number;
+  primaryActionLabel?: string;
   requestedAction: string;
   requestedThreshold?: number;
   reviewState: string;
@@ -410,9 +412,11 @@ export function OfferCard({
   ctaHref,
   duration,
   evidence,
+  modeIcon,
   modeLabel,
   offeredAction,
   offeredScore,
+  primaryActionLabel = "Inspect terms",
   requestedAction,
   requestedThreshold,
   reviewState,
@@ -421,13 +425,18 @@ export function OfferCard({
   title,
 }: OfferCardProps) {
   return (
-    <article className="listing-card offer-card panel">
+    <article className={`listing-card offer-card panel listing-card-${modeIcon}`}>
       <div className="listing-card-head">
-        <StatusBadge tone={sourceLabel === "Live offer" ? "default" : "secondary"}>{sourceLabel}</StatusBadge>
-        <StatusBadge tone="warning">Manual review required</StatusBadge>
+        <IconMark name={modeIcon} />
+        <div className="listing-status-stack">
+          <StatusBadge tone={sourceLabel === "Live offer" ? "default" : "secondary"}>{sourceLabel}</StatusBadge>
+          <StatusBadge tone="warning">Manual review required</StatusBadge>
+        </div>
       </div>
-      <p className="detail-kicker">{modeLabel}</p>
-      <h3>{title}</h3>
+      <div className="listing-title-block">
+        <p className="detail-kicker">{modeLabel}</p>
+        <h3>{title}</h3>
+      </div>
       {alias ? <p className="listing-alias">{alias}</p> : null}
       <p className="cause-exchange">{causeExchange}</p>
       <dl className="listing-terms">
@@ -441,6 +450,7 @@ export function OfferCard({
         </div>
       </dl>
       <div className="listing-meta">
+        <span>{modeLabel}</span>
         <span>{duration}</span>
         <span>{evidence}</span>
         {typeof offeredScore === "number" ? <span>Offered score {offeredScore}</span> : null}
@@ -448,8 +458,8 @@ export function OfferCard({
       </div>
       <p className="review-state">{reviewState}</p>
       <div className="offer-card-actions">
-        <Link className="text-button" href={ctaHref}>
-          Inspect terms
+        <Link className="button button-primary button-mini" href={ctaHref}>
+          {primaryActionLabel}
         </Link>
         {secondaryAction}
       </div>

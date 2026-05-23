@@ -3946,7 +3946,12 @@ output {
   color: var(--accent-deep);
 }
 
-.badge-warning {
+.badge.badge-secondary {
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+}
+
+.badge.badge-warning {
   background: var(--surface-soft);
   color: var(--ink-muted);
 }
@@ -4496,6 +4501,11 @@ output {
   min-height: 23rem;
 }
 
+.listing-title-block {
+  display: grid;
+  gap: 0.25rem;
+}
+
 .listing-card h3 {
   font-size: 1.13rem;
 }
@@ -4507,6 +4517,42 @@ output {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.listing-card-head {
+  align-items: flex-start;
+}
+
+.listing-card .icon-mark {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+.listing-status-stack {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.listing-card-swap .icon-mark {
+  background: #e8f0f8;
+  color: #4f759f;
+}
+
+.listing-card-offset .icon-mark {
+  background: #edf2ec;
+  color: #365244;
+}
+
+.listing-card-payment .icon-mark {
+  background: #f6eee4;
+  color: #8d553a;
+}
+
+.listing-card-fund .icon-mark {
+  background: #efeaf7;
+  color: #65508f;
 }
 
 .listing-terms {
@@ -4678,13 +4724,35 @@ output {
 }
 
 .marketplace-search-with-category {
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.32fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.3fr) minmax(190px, 0.34fr) auto;
   align-items: end;
 }
 
 .marketplace-category-field,
+.marketplace-sort-field,
 .marketplace-search-field {
   margin-bottom: 0;
+}
+
+.popular-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.2rem 0 0.1rem;
+}
+
+.popular-filter-row > span {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.popular-filter-row > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .active-filter-bar {
@@ -4827,6 +4895,12 @@ output {
 .sort-control {
   grid-template-columns: minmax(190px, 1fr) auto;
   align-items: end;
+}
+
+.results-sort-note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.88rem;
 }
 
 .view-toggle {

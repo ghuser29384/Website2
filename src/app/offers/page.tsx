@@ -461,6 +461,17 @@ function withCount(label: string, count: number) {
   return `${label} (${count})`;
 }
 
+function appendUnique<T>(values: readonly T[], value: T) {
+  return values.includes(value) ? values : [...values, value];
+}
+
+function getListingModeIcon(mode: MarketplaceListing["mode"]) {
+  if (mode === "pledge") return "swap";
+  if (mode === "offset") return "offset";
+  if (mode === "payment") return "payment";
+  return "fund";
+}
+
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const viewer = await getViewer();
@@ -564,6 +575,24 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           }),
   }));
   const reciprocalCount = countBy(countScope, (listing) => listing.hasReciprocalMatch);
+  const popularFilterLinks = [
+    {
+      href: buildOffersHref({ ...filterHrefParams, causes: appendUnique(causes, "Animal welfare") }),
+      label: "Animal welfare",
+    },
+    {
+      href: buildOffersHref({ ...filterHrefParams, formats: appendUnique(formats, "offset") }),
+      label: "Donation offset",
+    },
+    {
+      href: createTabHref("examples", filterHrefParams),
+      label: "Worked examples",
+    },
+    {
+      href: buildOffersHref({ ...filterHrefParams, reviewStatus: "manual-review-required" }),
+      label: "Manual review required",
+    },
+  ];
   const exampleMatchesByCause = CAUSE_FILTER_CHIPS.map((causeLabel) => ({
     cause: causeLabel,
     listing: workedExampleListings.find((listing) =>
@@ -680,9 +709,22 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 ))}
               </select>
             </label>
+            <label className="field marketplace-sort-field">
+              <span>Sort</span>
+              <select name="sort" defaultValue={directorySort}>
+                {SORT_FILTER_CHIPS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             {view !== "live" ? <input name="view" type="hidden" value={view} /> : null}
             {formats.map((selectedFormat) => (
               <input key={selectedFormat} name="mode" type="hidden" value={selectedFormat} />
+            ))}
+            {causes.slice(1).map((selectedCause) => (
+              <input key={selectedCause} name="cause" type="hidden" value={selectedCause} />
             ))}
             {verification ? <input name="verification" type="hidden" value={verification} /> : null}
             {duration ? <input name="duration" type="hidden" value={duration} /> : null}
@@ -691,11 +733,21 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             {minRequestedImpact ? <input name="min_requested" type="hidden" value={minRequestedImpact} /> : null}
             {reciprocal ? <input name="reciprocal" type="hidden" value="1" /> : null}
             {layout !== "grid" ? <input name="layout" type="hidden" value={layout} /> : null}
-            {directorySort !== "newest" ? <input name="sort" type="hidden" value={directorySort} /> : null}
             <button className="button button-primary" type="submit">
               Search
             </button>
           </form>
+
+          <div className="popular-filter-row" aria-label="Popular marketplace filters">
+            <span>Popular filters</span>
+            <div>
+              {popularFilterLinks.map((filterLink) => (
+                <Link className="source-pill source-pill-link" href={filterLink.href} key={filterLink.label}>
+                  {filterLink.label}
+                </Link>
+              ))}
+            </div>
+          </div>
 
           {activeFilterLabels.length ? (
             <div className="active-filter-bar" aria-label="Active marketplace filters">
@@ -853,37 +905,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     {filteredListings.length} {filteredListings.length === 1 ? "listing" : "listings"}
                   </h2>
                 </div>
-                <form action="/offers" className="sort-control">
-                  {view !== "live" ? <input name="view" type="hidden" value={view} /> : null}
-                  {formats.map((selectedFormat) => (
-                    <input key={selectedFormat} name="mode" type="hidden" value={selectedFormat} />
-                  ))}
-                  {searchQuery ? <input name="search" type="hidden" value={searchQuery} /> : null}
-                  {causes.map((selectedCause) => (
-                    <input key={selectedCause} name="cause" type="hidden" value={selectedCause} />
-                  ))}
-                  {verification ? <input name="verification" type="hidden" value={verification} /> : null}
-                  {duration ? <input name="duration" type="hidden" value={duration} /> : null}
-                  {reviewStatus !== "all" ? <input name="review" type="hidden" value={reviewStatus} /> : null}
-                  {minImpact ? <input name="min_impact" type="hidden" value={minImpact} /> : null}
-                  {minRequestedImpact ? <input name="min_requested" type="hidden" value={minRequestedImpact} /> : null}
-                  {reciprocal ? <input name="reciprocal" type="hidden" value="1" /> : null}
-                  {layout !== "grid" ? <input name="layout" type="hidden" value={layout} /> : null}
-                  <label className="field compact-field">
-                    <span>Sort</span>
-                    <select name="sort" defaultValue={directorySort}>
-                      {SORT_FILTER_CHIPS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <small>Example fit compares offered score with requested threshold.</small>
-                  </label>
-                  <button className="button button-secondary button-mini" type="submit">
-                    Sort
-                  </button>
-                </form>
+                <p className="results-sort-note">Sorted by {findLabel(SORT_FILTER_CHIPS, directorySort).toLowerCase()}.</p>
               </div>
 
               <div className="view-toggle" aria-label="Listing layout">
@@ -913,9 +935,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       duration={listing.duration}
                       evidence={listing.verification}
                       key={`${listing.source}-${listing.id}`}
+                      modeIcon={getListingModeIcon(listing.mode)}
                       modeLabel={formatListingMode(listing.mode)}
                       offeredAction={listing.offering}
                       offeredScore={listing.offerImpact}
+                      primaryActionLabel={listing.source === "example" ? "View worked example" : "Inspect terms"}
                       requestedAction={listing.requesting}
                       requestedThreshold={listing.requestedImpact}
                       reviewState={listing.reviewState}
@@ -924,7 +948,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                           <Link className="button button-secondary button-mini" href={`${listing.href}#interest`}>
                             Register interest
                           </Link>
-                        ) : null
+                        ) : (
+                          <Link className="button button-secondary button-mini" href="/login?returnTo=/offers">
+                            Sign in to participate
+                          </Link>
+                        )
                       }
                       sourceLabel={listing.source === "live" ? "Live offer" : "Worked example"}
                       title={listing.title}

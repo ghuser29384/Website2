@@ -146,6 +146,13 @@ function formatOptionalUsd(cents: number | null) {
   }).format(cents / 100);
 }
 
+function getOfferModeIcon(mode: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]["mode"]): IconName {
+  if (mode === "pledge") return "swap";
+  if (mode === "offset") return "offset";
+  if (mode === "payment") return "payment";
+  return "fund";
+}
+
 export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps) {
   const createTradeHref = isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new";
   const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 4);
@@ -294,9 +301,11 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
                 duration={offer.duration}
                 evidence={offer.verification}
                 key={offer.id}
+                modeIcon={getOfferModeIcon(offer.mode)}
                 modeLabel={formatMode(offer.mode)}
                 offeredAction={offer.offerAction}
                 offeredScore={offer.offerImpact}
+                primaryActionLabel="View worked example"
                 requestedAction={offer.requestAction}
                 requestedThreshold={offer.minCounterpartyImpact}
                 reviewState="Worked example. Manual review required before reliance."

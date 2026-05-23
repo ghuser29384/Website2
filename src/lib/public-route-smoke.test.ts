@@ -283,8 +283,12 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(offersPage, /FilterSidebar/);
   assert.match(offersPage, /activeFilterLabels/);
   assert.match(offersPage, /Reset filters/);
+  assert.match(offersPage, /popularFilterLinks/);
+  assert.match(offersPage, /Popular filters/);
   assert.match(offersPage, /formatCounts/);
   assert.match(offersPage, /causeCounts/);
+  assert.match(offersPage, /getListingModeIcon/);
+  assert.match(offersPage, /primaryActionLabel/);
   assert.match(offersPage, /OfferCard/);
   assert.match(offersPage, /listingMatchesFilters/);
   assert.match(offersPage, /sortListings/);
