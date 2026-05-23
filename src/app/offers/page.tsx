@@ -636,6 +636,17 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
     return groups;
   }, []);
+  const relevantWorkedExamples = workedExampleListings.filter((listing) => {
+    const matchesSelectedCause =
+      !causes.length || causes.some((cause) => listingMatchesCause(listing, cause));
+    const matchesSelectedFormat = !formats.length || formats.includes(listing.mode);
+
+    return matchesSelectedCause && matchesSelectedFormat;
+  });
+  const highlightedWorkedExamples = (relevantWorkedExamples.length
+    ? relevantWorkedExamples
+    : workedExampleListings
+  ).slice(0, 3);
   const exampleMatchesByCause = CAUSE_FILTER_CHIPS.map((causeLabel) => ({
     cause: causeLabel,
     listing: workedExampleListings.find((listing) =>
@@ -1031,24 +1042,74 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     </section>
                   ))
                 ) : (
-                  <EmptyState
-                    icon="marketplace"
-                    actions={
-                      <>
-                        <Link className="button button-secondary" href="/offers?view=examples">
-                          View worked examples
-                        </Link>
-                        <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
-                          Create trade
-                        </Link>
-                      </>
-                    }
-                    title={view === "live" ? "No live offers yet." : "No matching listings."}
-                  >
-                    {view === "live"
-                      ? "Browse worked examples or create the first public offer."
-                      : "Reset filters, inspect worked examples, or create a structured proposal."}
-                  </EmptyState>
+                  <>
+                    <EmptyState
+                      icon="marketplace"
+                      actions={
+                        <>
+                          <Link className="button button-secondary" href="/offers?view=examples">
+                            View worked examples
+                          </Link>
+                          <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
+                            Create trade
+                          </Link>
+                        </>
+                      }
+                      title={view === "live" ? "No live offers yet." : "No matching listings."}
+                    >
+                      {view === "live"
+                        ? "Browse worked examples or create the first public offer. The live directory is still in pilot mode."
+                        : "Reset filters, inspect worked examples, or create a structured proposal."}
+                    </EmptyState>
+
+                    {view === "live" ? (
+                      <section className="empty-example-preview" aria-labelledby="empty-example-preview-heading">
+                        <div className="empty-example-preview-head">
+                          <div>
+                            <p className="eyebrow">Worked examples</p>
+                            <h3 id="empty-example-preview-heading">Study the structure before live offers arrive.</h3>
+                          </div>
+                          <Link className="text-button" href="/offers?view=examples">
+                            Open all examples
+                          </Link>
+                        </div>
+                        <p>
+                          These examples are not live liquidity. They show the terms, evidence rules,
+                          and review states a public offer would need before anyone relies on it.
+                        </p>
+                        <div className="compact-listing-grid empty-example-grid">
+                          {highlightedWorkedExamples.map((listing) => (
+                            <OfferCard
+                              alias={listing.alias}
+                              causeExchange={`${listing.offeredCause} <-> ${listing.requestedCause}`}
+                              ctaHref={listing.href}
+                              duration={listing.duration}
+                              evidence={listing.verification}
+                              key={`empty-preview-${listing.id}`}
+                              modeIcon={getListingModeIcon(listing.mode)}
+                              modeLabel={formatListingMode(listing.mode)}
+                              offeredAction={listing.offering}
+                              offeredScore={listing.offerImpact}
+                              primaryActionLabel="View worked example"
+                              requestedAction={listing.requesting}
+                              requestedThreshold={listing.requestedImpact}
+                              reviewState={listing.reviewState}
+                              secondaryAction={
+                                <Link
+                                  className="button button-secondary button-mini"
+                                  href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}
+                                >
+                                  Create similar trade
+                                </Link>
+                              }
+                              sourceLabel="Worked example"
+                              title={listing.title}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    ) : null}
+                  </>
                 )}
               </div>
 
@@ -1105,26 +1166,33 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         ) : null}
 
         <section className="section section-white" aria-labelledby="example-matches-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Pilot mode</p>
-            <h2 id="example-matches-heading">Illustrative fit ranking</h2>
-            <p>
-              During the seeded pilot, these examples help visitors inspect structure without
-              implying real marketplace rankings or live cost-efficiency results.
-            </p>
-          </div>
-          <div className="data-grid">
-            {exampleMatchesByCause.map((entry) => (
-              <article className="panel data-card" key={entry.cause}>
-                <p className="detail-kicker">{entry.cause}</p>
-                <h3>{entry.listing?.title}</h3>
-                <p className="route-text">{entry.listing?.offering}</p>
-                <Link className="text-button" href={`/offers?view=examples&cause=${encodeURIComponent(entry.cause)}`}>
-                  Inspect example
-                </Link>
-              </article>
-            ))}
-          </div>
+          <details className="pilot-info-box panel">
+            <summary>
+              <span>
+                <span className="eyebrow">Pilot mode</span>
+                <strong id="example-matches-heading">Illustrative fit ranking</strong>
+              </span>
+              <span className="pilot-info-box-control">Show examples</span>
+            </summary>
+            <div className="pilot-info-box-body">
+              <p>
+                During the seeded pilot, these examples help visitors inspect structure without
+                implying real marketplace rankings or live cost-efficiency results.
+              </p>
+              <div className="data-grid">
+                {exampleMatchesByCause.map((entry) => (
+                  <article className="panel data-card" key={entry.cause}>
+                    <p className="detail-kicker">{entry.cause}</p>
+                    <h3>{entry.listing?.title}</h3>
+                    <p className="route-text">{entry.listing?.offering}</p>
+                    <Link className="text-button" href={`/offers?view=examples&cause=${encodeURIComponent(entry.cause)}`}>
+                      Inspect example
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </details>
         </section>
 
         <section className="section section-subtle process-link-section" aria-labelledby="process-links-heading">

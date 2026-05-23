@@ -288,6 +288,9 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(offersPage, /toggleValue/);
   assert.match(offersPage, /groupedListings/);
   assert.match(offersPage, /Jump to cause group/);
+  assert.match(offersPage, /highlightedWorkedExamples/);
+  assert.match(offersPage, /Study the structure before live offers arrive/);
+  assert.match(offersPage, /pilot-info-box/);
   assert.match(offersPage, /formatCounts/);
   assert.match(offersPage, /causeCounts/);
   assert.match(offersPage, /getListingModeIcon/);

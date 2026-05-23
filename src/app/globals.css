@@ -4994,6 +4994,44 @@ output {
   gap: 1.4rem;
 }
 
+.empty-example-preview {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--surface), var(--surface-muted));
+}
+
+.empty-example-preview > p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+.empty-example-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.empty-example-preview-head h3 {
+  margin: 0.15rem 0 0;
+  font-size: 1.18rem;
+}
+
+.empty-example-grid {
+  align-items: stretch;
+}
+
+.empty-example-grid .listing-card {
+  min-height: 0;
+  background: var(--surface);
+}
+
 .listing-group {
   display: grid;
   gap: 0.85rem;
@@ -5030,6 +5068,65 @@ output {
 .marketplace-empty-state .icon-mark {
   width: 3rem;
   height: 3rem;
+}
+
+.pilot-info-box {
+  padding: 1.1rem;
+}
+
+.pilot-info-box summary {
+  display: flex;
+  cursor: pointer;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+}
+
+.pilot-info-box summary::-webkit-details-marker {
+  display: none;
+}
+
+.pilot-info-box summary > span:first-child {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.pilot-info-box summary strong {
+  color: var(--ink);
+  font-size: clamp(1.25rem, 2vw, 1.7rem);
+  line-height: 1.15;
+}
+
+.pilot-info-box-control {
+  display: inline-flex;
+  min-height: 2.15rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--accent-deep);
+  font-size: 0.86rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pilot-info-box[open] .pilot-info-box-control {
+  background: var(--accent-soft);
+}
+
+.pilot-info-box-body {
+  display: grid;
+  gap: 1rem;
+  padding-top: 1rem;
+}
+
+.pilot-info-box-body > p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.6;
 }
 
 .credibility-grid .teaser-card {
