@@ -16,6 +16,7 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
+import { getDonationOffsetEvidenceState } from "@/lib/validation";
 
 export const metadata: Metadata = {
   title: "Admin Review",
@@ -301,49 +302,78 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <p className="eyebrow">Donation offsets</p>
                 <h2>Paused offset offers awaiting review</h2>
                 <p>
-                  Review baseline evidence, political-destination issues, and coercion concerns before
-                  letting an offset enter the public marketplace.
+                  Review baseline evidence, political-destination issues, duplicate proof, and
+                  coercion concerns before letting an offset enter the public marketplace.
                 </p>
               </div>
               <div className="data-grid">
                 {queues?.donationOffsetReviews.length ? (
-                  queues.donationOffsetReviews.map((review) => (
-                    <article className="panel data-card" key={review.offset.offer_id}>
-                      <p className="detail-kicker">
-                        {review.charity?.name ?? "Compromise destination"} | {review.offset.verification_method.replaceAll("_", " ")}
-                      </p>
-                      <h3>{review.offer?.offered_cause ?? "Offset"} for {review.offer?.requested_cause ?? "counterparty"}</h3>
-                      <p className="route-text">
-                        Baseline ${review.offset.baseline_amount_cents / 100} from {review.offset.baseline_opposed_cause}
-                      </p>
-                      <p className="route-text">
-                        Requests ${review.offset.requested_matching_amount_cents / 100} from {review.offset.requested_opposed_cause}
-                      </p>
-                      <p className="route-text">{review.offset.moderation_notes || "No moderation notes yet."}</p>
-                      <p className="route-text">
-                        Participation: {review.offset.participation_mode}
-                        {review.offset.pool_id ? ` | Pool ${review.offset.pool_id.slice(0, 8)}` : ""}
-                      </p>
-                      <div className="form-actions">
-                        <form action={reviewDonationOffsetOfferAction}>
-                          <input name="offer_id" type="hidden" value={review.offset.offer_id} />
-                          <input name="return_to" type="hidden" value="/admin" />
-                          <input name="moderation_status" type="hidden" value="clear" />
-                          <button className="button button-secondary button-mini" type="submit">
-                            Approve and publish
-                          </button>
-                        </form>
-                        <form action={reviewDonationOffsetOfferAction}>
-                          <input name="offer_id" type="hidden" value={review.offset.offer_id} />
-                          <input name="return_to" type="hidden" value="/admin" />
-                          <input name="moderation_status" type="hidden" value="blocked" />
-                          <button className="button button-secondary button-mini" type="submit">
-                            Block
-                          </button>
-                        </form>
-                      </div>
-                    </article>
-                  ))
+                  queues.donationOffsetReviews.map((review) => {
+                    const evidenceState = getDonationOffsetEvidenceState({
+                      moderationStatus: review.offset.moderation_status,
+                      evidenceUrl: review.offset.evidence_url,
+                      moderationReviewedAt: review.offset.moderation_reviewed_at,
+                      createdAt: review.offset.created_at,
+                    });
+
+                    return (
+                      <article className="panel data-card" key={review.offset.offer_id}>
+                        <p className="detail-kicker">
+                          {review.charity?.name ?? "Compromise destination"} |{" "}
+                          {review.offset.verification_method.replaceAll("_", " ")}
+                        </p>
+                        <h3>
+                          {review.offer?.offered_cause ?? "Offset"} for{" "}
+                          {review.offer?.requested_cause ?? "counterparty"}
+                        </h3>
+                        <p className="route-text">
+                          Baseline ${review.offset.baseline_amount_cents / 100} from{" "}
+                          {review.offset.baseline_opposed_cause}
+                        </p>
+                        <p className="route-text">
+                          Requests ${review.offset.requested_matching_amount_cents / 100} from{" "}
+                          {review.offset.requested_opposed_cause}
+                        </p>
+                        <p className="route-text">{review.offset.moderation_notes || "No moderation notes yet."}</p>
+                        <p className="route-text">
+                          Review state: {evidenceState.label}. One proof, one claim: compare this
+                          evidence against existing offset proof before approval.
+                        </p>
+                        {review.offset.evidence_url ? (
+                          <p className="route-text">
+                            Evidence:{" "}
+                            <a className="inline-link" href={review.offset.evidence_url}>
+                              open proof packet
+                            </a>
+                          </p>
+                        ) : (
+                          <p className="route-text">Evidence: missing proof packet.</p>
+                        )}
+                        <p className="route-text">
+                          Participation: {review.offset.participation_mode}
+                          {review.offset.pool_id ? ` | Pool ${review.offset.pool_id.slice(0, 8)}` : ""}
+                        </p>
+                        <div className="form-actions">
+                          <form action={reviewDonationOffsetOfferAction}>
+                            <input name="offer_id" type="hidden" value={review.offset.offer_id} />
+                            <input name="return_to" type="hidden" value="/admin" />
+                            <input name="moderation_status" type="hidden" value="clear" />
+                            <button className="button button-secondary button-mini" type="submit">
+                              Approve and publish
+                            </button>
+                          </form>
+                          <form action={reviewDonationOffsetOfferAction}>
+                            <input name="offer_id" type="hidden" value={review.offset.offer_id} />
+                            <input name="return_to" type="hidden" value="/admin" />
+                            <input name="moderation_status" type="hidden" value="blocked" />
+                            <button className="button button-secondary button-mini" type="submit">
+                              Block
+                            </button>
+                          </form>
+                        </div>
+                      </article>
+                    );
+                  })
                 ) : (
                   <div className="empty-state">
                     <div>

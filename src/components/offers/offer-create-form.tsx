@@ -634,6 +634,7 @@ export function OfferCreateForm({
           <div className="tag-row">
             <span className="badge badge-secondary">No-trade baseline</span>
             <span className="badge badge-secondary">Evidence schema</span>
+            <span className="badge badge-secondary">One proof, one claim</span>
             <span className="badge badge-secondary">Exit condition</span>
             <span className="badge badge-secondary">Challenge window</span>
             <span className="badge badge-secondary">Completion state</span>
@@ -1161,7 +1162,8 @@ export function OfferCreateForm({
                 onChange={(event) => setEvidenceUrl(readFormControlValue(event))}
               />
               <small>
-                Unverified baselines are kept out of the public marketplace until they are reviewed.
+                Evidence links must be unique to one offset claim. Unverified baselines are kept
+                out of the public marketplace until they are reviewed.
               </small>
             </label>
 

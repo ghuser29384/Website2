@@ -106,3 +106,133 @@ export const TRUST_BADGE_LADDER = [
   "Completion reviewed",
   "Repeat counterparty",
 ] as const;
+
+export const VALIDATION_CHALLENGE_WINDOW_DAYS = 7;
+
+type DonationOffsetModerationStatus = "clear" | "flagged" | "blocked";
+
+type EvidenceStateTone = "success" | "warning" | "danger";
+
+export interface DonationOffsetEvidenceState {
+  label: string;
+  summary: string;
+  tone: EvidenceStateTone;
+  challengeWindowEndsAt: string | null;
+  challengeWindowActive: boolean;
+  badgeEligible: boolean;
+}
+
+function removeTrailingSlash(value: string) {
+  return value.replace(/\/+$/, "");
+}
+
+export function normalizeEvidenceLocator(value: string) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  try {
+    const url = new URL(trimmedValue);
+    url.protocol = url.protocol.toLowerCase();
+    url.hostname = url.hostname.toLowerCase();
+    url.hash = "";
+    url.pathname = removeTrailingSlash(url.pathname) || "/";
+    url.searchParams.sort();
+
+    return url.toString();
+  } catch {
+    return removeTrailingSlash(trimmedValue.replace(/\s+/g, " ").toLowerCase());
+  }
+}
+
+export function evidenceLocatorsConflict(left: string | null | undefined, right: string | null | undefined) {
+  const normalizedLeft = normalizeEvidenceLocator(left ?? "");
+  const normalizedRight = normalizeEvidenceLocator(right ?? "");
+
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
+}
+
+function parseTimestamp(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function addDays(value: number, days: number) {
+  return new Date(value + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+export function getDonationOffsetEvidenceState({
+  moderationStatus,
+  evidenceUrl,
+  moderationReviewedAt,
+  now = new Date(),
+}: {
+  moderationStatus: DonationOffsetModerationStatus;
+  evidenceUrl: string | null | undefined;
+  moderationReviewedAt: string | null | undefined;
+  createdAt: string | null | undefined;
+  now?: Date;
+}): DonationOffsetEvidenceState {
+  const hasEvidence = Boolean(normalizeEvidenceLocator(evidenceUrl ?? ""));
+
+  if (moderationStatus === "blocked") {
+    return {
+      label: "Disputed or unresolved",
+      summary:
+        "Reviewers blocked this offset or left it unresolved. Do not treat it as a completed or review-cleared claim.",
+      tone: "danger",
+      challengeWindowEndsAt: null,
+      challengeWindowActive: false,
+      badgeEligible: false,
+    };
+  }
+
+  if (moderationStatus === "flagged" || !hasEvidence) {
+    return {
+      label: "Needs evidence",
+      summary:
+        "This offset still needs a receipt, payment record, audit link, or reviewer note before anyone should rely on it.",
+      tone: "warning",
+      challengeWindowEndsAt: null,
+      challengeWindowActive: false,
+      badgeEligible: false,
+    };
+  }
+
+  const reviewAnchor = parseTimestamp(moderationReviewedAt);
+  const challengeWindowEndsAt = reviewAnchor
+    ? addDays(reviewAnchor, VALIDATION_CHALLENGE_WINDOW_DAYS)
+    : null;
+  const challengeWindowActive = reviewAnchor
+    ? now.getTime() < Date.parse(challengeWindowEndsAt ?? "")
+    : true;
+
+  if (challengeWindowActive) {
+    return {
+      label: "Challenge window",
+      summary:
+        "Evidence is present and the claim is still inside the duplicate-proof and factual-error challenge window.",
+      tone: "warning",
+      challengeWindowEndsAt,
+      challengeWindowActive: true,
+      badgeEligible: false,
+    };
+  }
+
+  return {
+    label: "Review-cleared evidence",
+    summary:
+      "Evidence has cleared reviewer screening and the challenge window, without implying legal, tax, custody, or outcome guarantees.",
+    tone: "success",
+    challengeWindowEndsAt,
+    challengeWindowActive: false,
+    badgeEligible: true,
+  };
+}

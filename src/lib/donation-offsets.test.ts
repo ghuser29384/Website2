@@ -9,6 +9,11 @@ import {
   validateDonationOffsetSubmissionGuards,
   validateDonationOffsetFields,
 } from "@/lib/donation-offsets";
+import {
+  evidenceLocatorsConflict,
+  getDonationOffsetEvidenceState,
+  normalizeEvidenceLocator,
+} from "@/lib/validation";
 
 test("donation offset validation rejects missing required fields", () => {
   const draft = createDefaultDonationOffsetFields();
@@ -149,4 +154,61 @@ test("pool moderation flags missing deadline when pool mode is selected", () => 
 
   assert.equal(moderation.status, "flagged");
   assert.match(moderation.reasons.join(" "), /deadline/i);
+});
+
+test("evidence locators normalize URLs for one-proof-one-claim checks", () => {
+  assert.equal(
+    normalizeEvidenceLocator(" HTTPS://Example.com/receipt/?b=2&a=1#section "),
+    "https://example.com/receipt?a=1&b=2",
+  );
+  assert.equal(
+    evidenceLocatorsConflict(
+      "https://example.com/receipt/?b=2&a=1#section",
+      "https://example.com/receipt?a=1&b=2",
+    ),
+    true,
+  );
+  assert.equal(
+    evidenceLocatorsConflict("https://example.com/receipt/one", "https://example.com/receipt/two"),
+    false,
+  );
+});
+
+test("donation offset evidence states expose challenge and badge eligibility", () => {
+  const reviewedEightDaysAgo = "2026-05-15T12:00:00.000Z";
+  const now = new Date("2026-05-23T12:00:00.000Z");
+
+  const cleared = getDonationOffsetEvidenceState({
+    moderationStatus: "clear",
+    evidenceUrl: "https://example.com/receipt",
+    moderationReviewedAt: reviewedEightDaysAgo,
+    createdAt: reviewedEightDaysAgo,
+    now,
+  });
+
+  assert.equal(cleared.label, "Review-cleared evidence");
+  assert.equal(cleared.badgeEligible, true);
+  assert.equal(cleared.challengeWindowActive, false);
+
+  const flagged = getDonationOffsetEvidenceState({
+    moderationStatus: "flagged",
+    evidenceUrl: "",
+    moderationReviewedAt: null,
+    createdAt: "2026-05-23T12:00:00.000Z",
+    now,
+  });
+
+  assert.equal(flagged.label, "Needs evidence");
+  assert.equal(flagged.badgeEligible, false);
+
+  const unreviewed = getDonationOffsetEvidenceState({
+    moderationStatus: "clear",
+    evidenceUrl: "https://example.com/receipt",
+    moderationReviewedAt: null,
+    createdAt: "2026-05-01T12:00:00.000Z",
+    now,
+  });
+
+  assert.equal(unreviewed.label, "Challenge window");
+  assert.equal(unreviewed.badgeEligible, false);
 });

@@ -50,6 +50,7 @@ import {
   getStripe,
   hasStripeEnv,
 } from "@/lib/stripe";
+import { evidenceLocatorsConflict } from "@/lib/validation";
 
 type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
@@ -1502,6 +1503,41 @@ export async function createOfferAction(formData: FormData) {
         moderation.reasons[0] ??
           "This donation offset could not be published because it violates the platform safeguards.",
       );
+    }
+
+    if (donationOffsetFields.evidenceUrl) {
+      const { data: existingEvidenceRows, error: existingEvidenceError } = await supabase
+        .from("donation_offset_offers")
+        .select("offer_id, evidence_url")
+        .neq("evidence_url", "")
+        .limit(500);
+
+      if (existingEvidenceError) {
+        logSupabaseActionError(
+          "Failed to verify donation offset proof uniqueness",
+          existingEvidenceError,
+          {
+            ownerId: viewer.authUser.id,
+          },
+        );
+        redirectWithMessage(
+          newOfferReturnPath,
+          "error",
+          "Unable to verify proof uniqueness. Try again or ask an operator to review the offset.",
+        );
+      }
+
+      const duplicateEvidence = existingEvidenceRows?.find((row) =>
+        evidenceLocatorsConflict(row.evidence_url, donationOffsetFields?.evidenceUrl),
+      );
+
+      if (duplicateEvidence) {
+        redirectWithMessage(
+          newOfferReturnPath,
+          "error",
+          "That evidence link is already attached to another offset offer. Use a unique proof packet or ask an operator to review the duplicate.",
+        );
+      }
     }
   }
 

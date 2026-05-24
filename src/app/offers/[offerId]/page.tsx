@@ -32,6 +32,7 @@ import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatOffsetSummary, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
+import { getDonationOffsetEvidenceState } from "@/lib/validation";
 
 interface OfferPageProps {
   params: Promise<{ offerId: string }>;
@@ -141,6 +142,15 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           moderationStatus: offer.donationOffset.moderation_status,
           source: "Live offer",
           createdAt: Date.parse(offer.created_at),
+        })
+      : null;
+  const offsetEvidenceState =
+    offer.mode === "offset" && offer.donationOffset
+      ? getDonationOffsetEvidenceState({
+          moderationStatus: offer.donationOffset.moderation_status,
+          evidenceUrl: offer.donationOffset.evidence_url,
+          moderationReviewedAt: offer.donationOffset.moderation_reviewed_at,
+          createdAt: offer.donationOffset.created_at,
         })
       : null;
   const poolJoinHref =
@@ -316,6 +326,44 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
             yet well verified. Ask for receipts, third-party payment confirmation, or a third-party
             audit before relying on it.
           </div>
+        ) : null}
+
+        {offer.mode === "offset" && offer.donationOffset && offsetEvidenceState ? (
+          <section className="section section-subtle" aria-labelledby="offset-evidence-heading">
+            <div className="section-head">
+              <p className="eyebrow">Validation state</p>
+              <h2 id="offset-evidence-heading">Evidence review for this offset</h2>
+              <p>
+                MoralTrade treats each receipt, audit, or payment record as one proof for one
+                displayed claim, with a challenge window before durable trust badges.
+              </p>
+            </div>
+            <div className="data-grid">
+              <article className="panel data-card data-card-wide">
+                <p className="detail-kicker">{offsetEvidenceState.label}</p>
+                <h3>One proof, one claim</h3>
+                <p className="route-text">{offsetEvidenceState.summary}</p>
+                {offsetEvidenceState.challengeWindowEndsAt ? (
+                  <p className="route-text">
+                    Challenge window ends{" "}
+                    {new Date(offsetEvidenceState.challengeWindowEndsAt).toLocaleDateString()}.
+                  </p>
+                ) : null}
+                <p className="route-text">
+                  Duplicate proof, coercive baseline claims, and factual gaps should be challenged
+                  before this offset is treated as review-cleared.
+                </p>
+                <div className="tag-row">
+                  <span className="badge badge-secondary">
+                    Badge eligible: {offsetEvidenceState.badgeEligible ? "yes" : "not yet"}
+                  </span>
+                  <Link className="text-button" href="/validation">
+                    See validation rules
+                  </Link>
+                </div>
+              </article>
+            </div>
+          </section>
         ) : null}
 
         <section className="section section-white">

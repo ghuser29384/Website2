@@ -434,13 +434,21 @@ test("pooled donation offset creation has visible path and server-side guardrail
   const donationOffsetsPage = readRepoFile("src/app/donation-offsets/page.tsx");
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
   const actionsSource = readRepoFile("src/app/actions.ts");
+  const offerDetailSource = readRepoFile("src/app/offers/[offerId]/page.tsx");
+  const adminSource = readRepoFile("src/app/admin/page.tsx");
 
   assert.match(donationOffsetsPage, /Create offset/);
   assert.match(donationOffsetsPage, /Match ratio/);
   assert.match(offerForm, /offset_pool_maximum_cap_usd/);
   assert.match(offerForm, /offset_anti_threat_certification/);
   assert.match(offerForm, /offset_verification_metadata_acknowledgement/);
+  assert.match(offerForm, /One proof, one claim/);
   assert.match(actionsSource, /validateDonationOffsetSubmissionGuards/);
+  assert.match(actionsSource, /evidenceLocatorsConflict/);
+  assert.match(offerDetailSource, /getDonationOffsetEvidenceState/);
+  assert.match(offerDetailSource, /One proof, one claim/);
+  assert.match(adminSource, /duplicate proof/);
+  assert.match(adminSource, /One proof, one claim/);
 });
 
 test("offer creation form has live client validation aligned with server-required fields", () => {
