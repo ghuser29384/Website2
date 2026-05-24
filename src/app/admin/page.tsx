@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   reviewDonationOffsetOfferAction,
   suppressEmailOutboxAction,
+  updateMatchConciergeRequestAction,
   updateMatchReportStatusAction,
   updatePaymentReviewStatusAction,
 } from "@/app/actions";
@@ -35,9 +36,16 @@ type AgreementPaymentRow = Database["public"]["Tables"]["agreement_payments"]["R
 type AgreementEventRow = Database["public"]["Tables"]["agreement_events"]["Row"];
 type EmailOutboxRow = Database["public"]["Tables"]["email_outbox"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
+type MatchConciergeRequestRow = Database["public"]["Tables"]["match_concierge_requests"]["Row"];
+type MatchConciergeEventRow = Database["public"]["Tables"]["match_concierge_events"]["Row"];
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type RegisteredCharityRow = Database["public"]["Tables"]["registered_charities"]["Row"];
+
+interface MatchConciergeReviewRecord {
+  request: MatchConciergeRequestRow;
+  events: MatchConciergeEventRow[];
+}
 
 interface DonationOffsetReviewRecord {
   offset: DonationOffsetOfferRow;
@@ -52,9 +60,25 @@ function formatPaymentAmount(amountCents: number, currency: string) {
   }).format(amountCents / 100);
 }
 
+function formatSlaState(value: string | null) {
+  if (!value) {
+    return "No SLA set";
+  }
+
+  const dueAt = Date.parse(value);
+  if (Number.isNaN(dueAt)) {
+    return "SLA date unavailable";
+  }
+
+  const diffMs = dueAt - Date.now();
+  const hours = Math.max(1, Math.ceil(Math.abs(diffMs) / (60 * 60 * 1000)));
+
+  return diffMs < 0 ? `Overdue by ${hours}h` : `Due in ${hours}h`;
+}
+
 async function loadAdminQueues() {
   const supabase = createServiceClient();
-  const [reports, payments, events, emails, wishProfiles] = await Promise.all([
+  const [reports, payments, events, emails, wishProfiles, conciergeRequests] = await Promise.all([
     supabase
       .from("match_reports")
       .select("*")
@@ -85,6 +109,12 @@ async function loadAdminQueues() {
       .in("safety_status", ["flagged", "blocked"])
       .order("updated_at", { ascending: false })
       .limit(50),
+    supabase
+      .from("match_concierge_requests")
+      .select("*")
+      .in("status", ["open", "triaged", "waiting_on_requester", "waiting_on_counterparty"])
+      .order("sla_due_at", { ascending: true, nullsFirst: false })
+      .limit(50),
   ]);
 
   const flaggedOffsetsResult = await supabase
@@ -100,6 +130,7 @@ async function loadAdminQueues() {
     events.error,
     emails.error,
     wishProfiles.error,
+    conciergeRequests.error,
     flaggedOffsetsResult.error,
   ]
     .filter(Boolean)
@@ -111,6 +142,21 @@ async function loadAdminQueues() {
   }
 
   const flaggedOffsets = (flaggedOffsetsResult.data ?? []) as DonationOffsetOfferRow[];
+  const conciergeRows = (conciergeRequests.data ?? []) as MatchConciergeRequestRow[];
+  const conciergeRequestIds = conciergeRows.map((request) => request.id);
+  const conciergeEventsResult = conciergeRequestIds.length
+    ? await supabase
+        .from("match_concierge_events")
+        .select("*")
+        .in("request_id", conciergeRequestIds)
+        .order("created_at", { ascending: false })
+        .limit(150)
+    : { data: [] as MatchConciergeEventRow[], error: null };
+
+  if (conciergeEventsResult.error) {
+    throw new Error(conciergeEventsResult.error.message);
+  }
+
   const flaggedOfferIds = flaggedOffsets.map((row) => row.offer_id);
   const charityIds = [...new Set(flaggedOffsets.map((row) => row.compromise_charity_id))];
   const [flaggedOffersResult, flaggedCharitiesResult] = await Promise.all([
@@ -132,6 +178,12 @@ async function loadAdminQueues() {
   const charityMap = new Map(
     ((flaggedCharitiesResult.data ?? []) as RegisteredCharityRow[]).map((row) => [row.id, row] as const),
   );
+  const conciergeEventsByRequest = new Map<string, MatchConciergeEventRow[]>();
+  for (const event of (conciergeEventsResult.data ?? []) as MatchConciergeEventRow[]) {
+    const current = conciergeEventsByRequest.get(event.request_id) ?? [];
+    current.push(event);
+    conciergeEventsByRequest.set(event.request_id, current);
+  }
 
   return {
     reports: (reports.data ?? []) as MatchReportRow[],
@@ -139,6 +191,10 @@ async function loadAdminQueues() {
     events: (events.data ?? []) as AgreementEventRow[],
     emails: (emails.data ?? []) as EmailOutboxRow[],
     wishProfiles: (wishProfiles.data ?? []) as WishProfileRow[],
+    matchConciergeRequests: conciergeRows.map((request) => ({
+      request,
+      events: conciergeEventsByRequest.get(request.id) ?? [],
+    })) satisfies MatchConciergeReviewRecord[],
     donationOffsetReviews: flaggedOffsets.map((offset) => ({
       offset,
       offer: offerMap.get(offset.offer_id) ?? null,
@@ -204,12 +260,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
+                  <strong>{queues?.matchConciergeRequests.length ?? 0} concierge intro item(s)</strong>
+                  <p>Pending private-match triage and SLA review.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">04</span>
+                <div>
                   <strong>{queues?.payments.length ?? 0} payment issue(s)</strong>
                   <p>Refund requests, disputes, and failures.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">04</span>
+                <span className="flow-number">05</span>
                 <div>
                   <strong>{queues?.emails.length ?? 0} email item(s)</strong>
                   <p>Queued or failed outbound mail.</p>
@@ -250,6 +313,131 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           </section>
         ) : (
           <>
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Match concierge</p>
+                <h2>Private introduction requests awaiting operator review</h2>
+                <p>
+                  Triage structured intent into a safe next state: more requester detail,
+                  counterparty review, introduction, decline, or closure.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.matchConciergeRequests.length ? (
+                  queues.matchConciergeRequests.map(({ request, events }) => (
+                    <article className="panel data-card" key={request.id}>
+                      <p className="detail-kicker">
+                        {request.route.replaceAll("_", " ")} | {request.status.replaceAll("_", " ")}
+                      </p>
+                      <h3>{formatSlaState(request.sla_due_at)}</h3>
+                      <p className="route-text">{request.intent_summary}</p>
+                      {request.offer_summary ? (
+                        <p className="route-text">
+                          <strong>Offer:</strong> {request.offer_summary}
+                        </p>
+                      ) : null}
+                      {request.ask_summary ? (
+                        <p className="route-text">
+                          <strong>Ask:</strong> {request.ask_summary}
+                        </p>
+                      ) : null}
+                      {request.constraints ? (
+                        <p className="route-text">
+                          <strong>Constraints:</strong> {request.constraints}
+                        </p>
+                      ) : null}
+                      {request.target_preview ? (
+                        <p className="route-text">
+                          <strong>Target preview:</strong> {request.target_preview}
+                        </p>
+                      ) : null}
+                      <div className="tag-row">
+                        <span className="source-pill">Requester {request.requester_profile_id}</span>
+                        {request.target_profile_id ? (
+                          <span className="source-pill">Target {request.target_profile_id}</span>
+                        ) : null}
+                        {request.match_id ? (
+                          <span className="source-pill">Match {request.match_id}</span>
+                        ) : null}
+                        {request.cause_areas.slice(0, 4).map((cause) => (
+                          <span className="badge badge-secondary" key={`${request.id}-${cause}`}>
+                            {cause}
+                          </span>
+                        ))}
+                      </div>
+                      {events.length ? (
+                        <div className="mini-list">
+                          {events.slice(0, 3).map((event) => (
+                            <div className="mini-list-item" key={event.id}>
+                              <strong>{event.event_type.replaceAll("_", " ")}</strong>
+                              <span>{event.summary}</span>
+                              <span>{new Date(event.created_at).toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="route-text">No audit events recorded yet.</p>
+                      )}
+                      <form action={updateMatchConciergeRequestAction} className="compact-form">
+                        <input name="request_id" type="hidden" value={request.id} />
+                        <input name="return_to" type="hidden" value="/admin" />
+                        <div className="field-grid">
+                          <label className="field">
+                            <span>Status</span>
+                            <select name="status" defaultValue={request.status}>
+                              <option value="open">Open</option>
+                              <option value="triaged">Triaged</option>
+                              <option value="waiting_on_requester">Waiting on requester</option>
+                              <option value="waiting_on_counterparty">Waiting on counterparty</option>
+                              <option value="introduced">Introduced</option>
+                              <option value="declined">Declined</option>
+                              <option value="closed">Closed</option>
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>Match ID</span>
+                            <input
+                              defaultValue={request.match_id ?? ""}
+                              name="match_id"
+                              placeholder="Optional match_suggestions id"
+                            />
+                          </label>
+                        </div>
+                        <label className="field">
+                          <span>Operator notes</span>
+                          <textarea
+                            defaultValue={request.operator_notes ?? ""}
+                            name="operator_notes"
+                            placeholder="Next action, owner, or why this request is blocked."
+                            rows={3}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Risk notes</span>
+                          <textarea
+                            defaultValue={request.risk_notes ?? ""}
+                            name="risk_notes"
+                            placeholder="Privacy, coercion, legality, harassment, or mismatch concerns."
+                            rows={3}
+                          />
+                        </label>
+                        <button className="button button-primary button-mini" type="submit">
+                          Save triage
+                        </button>
+                      </form>
+                    </article>
+                  ))
+                ) : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No concierge introduction requests.</strong>
+                      <p>Requests from the dashboard, registry, and background-networking intake appear here.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
             <section className="section section-white">
               <div className="section-head">
                 <p className="eyebrow">Trust and safety</p>

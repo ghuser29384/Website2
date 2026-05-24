@@ -68,6 +68,10 @@ type AgreementPaymentScheduleInsert = Database["public"]["Tables"]["agreement_pa
 type PersonalDelegateInsert = Database["public"]["Tables"]["personal_delegates"]["Insert"];
 type SourceConnectionInsert = Database["public"]["Tables"]["source_connections"]["Insert"];
 type HelperStrategyInsert = Database["public"]["Tables"]["helper_strategies"]["Insert"];
+type MatchConciergeRequestInsert =
+  Database["public"]["Tables"]["match_concierge_requests"]["Insert"];
+type MatchConciergeRequestUpdate =
+  Database["public"]["Tables"]["match_concierge_requests"]["Update"];
 type MatchIntroductionPlanInsert =
   Database["public"]["Tables"]["match_introduction_plans"]["Insert"];
 type MatchIntroductionTaskInsert =
@@ -845,6 +849,38 @@ function normalizeReportReason(value: string) {
   }
 
   return "other";
+}
+
+function normalizeConciergeRoute(value: string): NonNullable<MatchConciergeRequestInsert["route"]> {
+  if (
+    value === "pledge_swap" ||
+    value === "donation_offset" ||
+    value === "mpgf" ||
+    value === "other"
+  ) {
+    return value;
+  }
+
+  return "private_match";
+}
+
+function normalizeConciergeStatus(value: string): NonNullable<MatchConciergeRequestUpdate["status"]> {
+  if (
+    value === "triaged" ||
+    value === "waiting_on_requester" ||
+    value === "waiting_on_counterparty" ||
+    value === "introduced" ||
+    value === "declined" ||
+    value === "closed"
+  ) {
+    return value;
+  }
+
+  return "open";
+}
+
+function buildSlaDueAt(hours: number) {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 }
 
 function buildIntroductionPlanPayloads({
@@ -2875,6 +2911,247 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Privacy access request recorded.");
+}
+
+export async function createMatchConciergeRequestAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/background-networking", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/background-networking");
+  const viewer = await requireViewer(returnTo);
+
+  enforceActionRateLimit({
+    key: `match-concierge-request:${viewer.authUser.id}`,
+    limit: 10,
+    message: "Too many concierge requests were created today. Try again tomorrow.",
+    returnTo,
+    windowMs: 24 * 60 * 60 * 1000,
+  });
+
+  const targetProfileId = readOptional(formData, "target_profile_id") || null;
+  if (targetProfileId === viewer.authUser.id) {
+    redirectWithMessage(returnTo, "error", "You cannot request an introduction to yourself.");
+  }
+
+  const causeAreas = readStringList(formData, "cause_areas_json");
+  const intentSummary = readRequired(formData, "intent_summary");
+  const offerSummary = readOptional(formData, "offer_summary");
+  const askSummary = readOptional(formData, "ask_summary");
+  const constraints = readOptional(formData, "constraints");
+  const targetPreview = readOptional(formData, "target_preview");
+
+  if (!intentSummary || (!targetProfileId && !targetPreview && !askSummary)) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Describe the introduction you want and either choose a target preview or state the counterparty you need.",
+    );
+  }
+
+  const safetyBlock = detectBlockedWishText([
+    ...causeAreas,
+    intentSummary,
+    offerSummary,
+    askSummary,
+    constraints,
+    targetPreview,
+  ]);
+
+  if (safetyBlock) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      `This concierge request was not saved because it appears to involve ${safetyBlock}.`,
+    );
+  }
+
+  const payload: MatchConciergeRequestInsert = {
+    requester_profile_id: viewer.authUser.id,
+    target_profile_id: targetProfileId,
+    match_id: readOptional(formData, "match_id") || null,
+    route: normalizeConciergeRoute(readOptional(formData, "route")),
+    cause_areas: causeAreas,
+    target_preview: truncateText(targetPreview, 520),
+    intent_summary: truncateText(intentSummary, 900),
+    offer_summary: truncateText(offerSummary, 900),
+    ask_summary: truncateText(askSummary, 900),
+    constraints: truncateText(constraints, 900),
+    desired_timeline: truncateText(readOptional(formData, "desired_timeline"), 240),
+    risk_notes: "",
+    status: "open",
+    operator_notes: "",
+    sla_due_at: buildSlaDueAt(24),
+  };
+
+  const supabase = await createClient();
+  const { data: requestRow, error } = await supabase
+    .from("match_concierge_requests")
+    .insert(payload)
+    .select("id, target_profile_id")
+    .single();
+
+  if (error || !requestRow) {
+    logSupabaseActionError("Failed to create match concierge request", error, {
+      userId: viewer.authUser.id,
+      targetProfileId,
+    });
+    redirectWithMessage(returnTo, "error", error?.message ?? "Unable to create concierge request.");
+  }
+
+  const serviceClient = createServiceClient();
+  const { error: eventError } = await serviceClient.from("match_concierge_events").insert({
+    request_id: requestRow.id,
+    actor_profile_id: viewer.authUser.id,
+    event_type: "request_created",
+    summary: "Participant requested concierge help moving from broad preview to introduction.",
+    metadata: {
+      route: payload.route,
+      causeAreas,
+      hasTargetProfile: Boolean(targetProfileId),
+      slaDueAt: payload.sla_due_at,
+    },
+  });
+
+  if (eventError) {
+    logSupabaseActionError("Failed to record match concierge request event", eventError, {
+      requestId: requestRow.id,
+    });
+  }
+
+  if (requestRow.target_profile_id) {
+    const { error: notificationError } = await serviceClient.from("wish_notifications").insert({
+      profile_id: requestRow.target_profile_id,
+      kind: "consent",
+      title: "Concierge introduction request",
+      body:
+        "A participant asked an operator to review whether an introduction would be appropriate. No private details were disclosed.",
+      match_id: payload.match_id,
+    });
+
+    if (notificationError) {
+      logSupabaseActionError("Failed to notify target of concierge request", notificationError, {
+        requestId: requestRow.id,
+        targetProfileId: requestRow.target_profile_id,
+      });
+    }
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  revalidatePath("/background-networking");
+  revalidatePath("/wish-registry");
+  redirectWithMessage(
+    returnTo,
+    "message",
+    "Concierge request queued. An operator can triage it before any introduction or private disclosure.",
+  );
+}
+
+export async function updateMatchConciergeRequestAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const requestId = readRequired(formData, "request_id");
+
+  if (!requestId) {
+    redirectWithMessage(returnTo, "error", "Concierge request ID is required.");
+  }
+
+  const admin = await requireAdminViewer(returnTo);
+  const supabase = createServiceClient();
+  const nextStatus = normalizeConciergeStatus(readRequired(formData, "status"));
+  const operatorNotes = readOptional(formData, "operator_notes");
+  const riskNotes = readOptional(formData, "risk_notes");
+  const matchId = readOptional(formData, "match_id") || null;
+  const reviewedAt =
+    nextStatus === "open" ? null : new Date().toISOString();
+  const updatePayload: MatchConciergeRequestUpdate = {
+    status: nextStatus,
+    operator_notes: operatorNotes,
+    risk_notes: riskNotes,
+    match_id: matchId,
+    reviewed_by: nextStatus === "open" ? null : admin.authUser.id,
+    reviewed_at: reviewedAt,
+  };
+
+  const { data: requestRow, error } = await supabase
+    .from("match_concierge_requests")
+    .update(updatePayload)
+    .eq("id", requestId)
+    .select("*")
+    .single();
+
+  if (error || !requestRow) {
+    logSupabaseActionError("Failed to update match concierge request", error, {
+      requestId,
+      nextStatus,
+    });
+    redirectWithMessage(returnTo, "error", error?.message ?? "Concierge request not found.");
+  }
+
+  const { error: eventError } = await supabase.from("match_concierge_events").insert({
+    request_id: requestId,
+    actor_profile_id: admin.authUser.id,
+    event_type: "request_triaged",
+    summary: `Operator moved concierge request to ${nextStatus}.`,
+    metadata: {
+      operatorNotes,
+      riskNotes,
+      matchId,
+    },
+  });
+
+  if (eventError) {
+    logSupabaseActionError("Failed to record match concierge triage event", eventError, {
+      requestId,
+      nextStatus,
+    });
+  }
+
+  if (nextStatus === "introduced" && matchId) {
+    const { error: matchError } = await supabase
+      .from("match_suggestions")
+      .update({
+        status: "introduced",
+        identity_revealed: true,
+      })
+      .eq("id", matchId);
+
+    if (matchError) {
+      logSupabaseActionError("Failed to mark match introduced after concierge triage", matchError, {
+        requestId,
+        matchId,
+      });
+    }
+  }
+
+  const notificationTargets = [
+    requestRow.requester_profile_id,
+    requestRow.target_profile_id,
+  ].filter((profileId): profileId is string => Boolean(profileId));
+
+  if (notificationTargets.length) {
+    const { error: notificationError } = await supabase.from("wish_notifications").insert(
+      notificationTargets.map((profileId) => ({
+        profile_id: profileId,
+        kind: "consent" as const,
+        title: "Concierge request updated",
+        body: `An operator moved the introduction request to ${nextStatus.replaceAll("_", " ")}.`,
+        match_id: matchId,
+      })),
+    );
+
+    if (notificationError) {
+      logSupabaseActionError("Failed to notify concierge request participants", notificationError, {
+        requestId,
+        nextStatus,
+      });
+    }
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  revalidatePath("/background-networking");
+  redirectWithMessage(returnTo, "message", "Concierge request updated.");
 }
 
 export async function reportMatchSuggestionAction(formData: FormData) {

@@ -384,6 +384,40 @@ test("background networking and reasoning standards are distinct public routes",
   assert.match(sitemapSource, /\/paid-action-offers/);
 });
 
+test("activation loop includes concierge intake, admin triage, SLA, and audit trail", () => {
+  const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
+  const registryPage = readRepoFile("src/app/wish-registry/page.tsx");
+  const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
+  const adminPage = readRepoFile("src/app/admin/page.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+  const appDataSource = readRepoFile("src/lib/app-data.ts");
+  const schemaSource = readRepoFile("supabase/schema.sql");
+  const migrationSource = readRepoFile(
+    "supabase/migrations/20260524_match_concierge_activation.sql",
+  );
+
+  assert.match(backgroundPage, /id="concierge-intake"/);
+  assert.match(backgroundPage, /createMatchConciergeRequestAction/);
+  assert.match(registryPage, /Request concierge intro/);
+  assert.match(dashboardPage, /Private match concierge/);
+  assert.match(dashboardPage, /matchConciergeRequests/);
+  assert.match(adminPage, /Match concierge/);
+  assert.match(adminPage, /updateMatchConciergeRequestAction/);
+  assert.match(adminPage, /formatSlaState/);
+  assert.match(adminPage, /match_concierge_events/);
+  assert.match(actionsSource, /createMatchConciergeRequestAction/);
+  assert.match(actionsSource, /updateMatchConciergeRequestAction/);
+  assert.match(actionsSource, /request_created/);
+  assert.match(actionsSource, /request_triaged/);
+  assert.match(appDataSource, /listMatchConciergeRequestsForUser/);
+  assert.match(schemaSource, /match_concierge_requests/);
+  assert.match(schemaSource, /match_concierge_events/);
+  assert.match(schemaSource, /sla_due_at/);
+  assert.match(migrationSource, /match_concierge_requests/);
+  assert.match(migrationSource, /match_concierge_events/);
+  assert.match(migrationSource, /enable row level security/);
+});
+
 test("trade format landing pages explain formats without payment or custody overclaims", () => {
   const pledgePage = readRepoFile("src/app/pledge-swaps/page.tsx");
   const paidActionPage = readRepoFile("src/app/paid-action-offers/page.tsx");

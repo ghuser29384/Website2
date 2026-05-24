@@ -1328,6 +1328,119 @@ export interface Database {
         };
         Relationships: [];
       };
+      match_concierge_requests: {
+        Row: {
+          id: string;
+          requester_profile_id: string;
+          target_profile_id: string | null;
+          match_id: string | null;
+          route: "private_match" | "pledge_swap" | "donation_offset" | "mpgf" | "other";
+          cause_areas: string[];
+          target_preview: string;
+          intent_summary: string;
+          offer_summary: string;
+          ask_summary: string;
+          constraints: string;
+          desired_timeline: string;
+          risk_notes: string;
+          status:
+            | "open"
+            | "triaged"
+            | "waiting_on_requester"
+            | "waiting_on_counterparty"
+            | "introduced"
+            | "declined"
+            | "closed";
+          operator_notes: string;
+          sla_due_at: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          requester_profile_id: string;
+          target_profile_id?: string | null;
+          match_id?: string | null;
+          route?: "private_match" | "pledge_swap" | "donation_offset" | "mpgf" | "other";
+          cause_areas?: string[];
+          target_preview?: string;
+          intent_summary?: string;
+          offer_summary?: string;
+          ask_summary?: string;
+          constraints?: string;
+          desired_timeline?: string;
+          risk_notes?: string;
+          status?:
+            | "open"
+            | "triaged"
+            | "waiting_on_requester"
+            | "waiting_on_counterparty"
+            | "introduced"
+            | "declined"
+            | "closed";
+          operator_notes?: string;
+          sla_due_at?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          target_profile_id?: string | null;
+          match_id?: string | null;
+          route?: "private_match" | "pledge_swap" | "donation_offset" | "mpgf" | "other";
+          cause_areas?: string[];
+          target_preview?: string;
+          intent_summary?: string;
+          offer_summary?: string;
+          ask_summary?: string;
+          constraints?: string;
+          desired_timeline?: string;
+          risk_notes?: string;
+          status?:
+            | "open"
+            | "triaged"
+            | "waiting_on_requester"
+            | "waiting_on_counterparty"
+            | "introduced"
+            | "declined"
+            | "closed";
+          operator_notes?: string;
+          sla_due_at?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      match_concierge_events: {
+        Row: {
+          id: string;
+          request_id: string;
+          actor_profile_id: string | null;
+          event_type: string;
+          summary: string;
+          metadata: Record<string, unknown>;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          actor_profile_id?: string | null;
+          event_type: string;
+          summary?: string;
+          metadata?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Update: {
+          event_type?: string;
+          summary?: string;
+          metadata?: Record<string, unknown>;
+        };
+        Relationships: [];
+      };
       network_invites: {
         Row: {
           id: string;

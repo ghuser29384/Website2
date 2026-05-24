@@ -38,6 +38,8 @@ type ProfileSourceRow = Database["public"]["Tables"]["profile_sources"]["Row"];
 type ClarificationQuestionRow = Database["public"]["Tables"]["clarification_questions"]["Row"];
 type BackgroundMatchRunRow = Database["public"]["Tables"]["background_match_runs"]["Row"];
 type MatchReportRow = Database["public"]["Tables"]["match_reports"]["Row"];
+type MatchConciergeRequestRow =
+  Database["public"]["Tables"]["match_concierge_requests"]["Row"];
 type NetworkInviteRow = Database["public"]["Tables"]["network_invites"]["Row"];
 type PersonalDelegateRow = Database["public"]["Tables"]["personal_delegates"]["Row"];
 type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
@@ -239,6 +241,7 @@ export interface DashboardDataResult {
   wishNotifications: WishNotificationRecord[];
   backgroundRuns: BackgroundMatchRunRow[];
   matchReports: MatchReportRow[];
+  matchConciergeRequests: MatchConciergeRequestRow[];
   networkInvites: NetworkInviteRow[];
   personalDelegate: PersonalDelegateRow | null;
   sourceConnections: SourceConnectionRow[];
@@ -271,6 +274,7 @@ export interface DashboardDataResult {
     wishNotifications: string | null;
     backgroundRuns: string | null;
     matchReports: string | null;
+    matchConciergeRequests: string | null;
     networkInvites: string | null;
     personalDelegate: string | null;
     sourceConnections: string | null;
@@ -2176,6 +2180,28 @@ async function listMatchReportsForUser(userId: string): Promise<MatchReportRow[]
   return (data ?? []) as MatchReportRow[];
 }
 
+async function listMatchConciergeRequestsForUser(
+  userId: string,
+): Promise<MatchConciergeRequestRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("match_concierge_requests")
+    .select("*")
+    .or(`requester_profile_id.eq.${userId},target_profile_id.eq.${userId}`)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as MatchConciergeRequestRow[];
+}
+
 async function listNetworkInvitesForUser(userId: string): Promise<NetworkInviteRow[]> {
   if (!hasSupabaseEnv()) {
     return [];
@@ -2626,6 +2652,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       wishNotifications: [],
       backgroundRuns: [],
       matchReports: [],
+      matchConciergeRequests: [],
       networkInvites: [],
       personalDelegate: null,
       sourceConnections: [],
@@ -2658,6 +2685,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         wishNotifications: null,
         backgroundRuns: null,
         matchReports: null,
+        matchConciergeRequests: null,
         networkInvites: null,
         personalDelegate: null,
         sourceConnections: null,
@@ -2695,6 +2723,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     wishNotifications: null,
     backgroundRuns: null,
     matchReports: null,
+    matchConciergeRequests: null,
     networkInvites: null,
     personalDelegate: null,
     sourceConnections: null,
@@ -2941,6 +2970,16 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load match reports", { message, userId });
   }
 
+  let matchConciergeRequests: MatchConciergeRequestRow[] = [];
+  try {
+    matchConciergeRequests = await listMatchConciergeRequestsForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load match concierge requests.";
+    errors.matchConciergeRequests = message;
+    console.error("[supabase] Failed to load match concierge requests", { message, userId });
+  }
+
   let networkInvites: NetworkInviteRow[] = [];
   try {
     networkInvites = await listNetworkInvitesForUser(userId);
@@ -3125,6 +3164,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     wishNotifications,
     backgroundRuns,
     matchReports,
+    matchConciergeRequests,
     networkInvites,
     personalDelegate,
     sourceConnections,

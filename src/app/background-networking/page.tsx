@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { createMatchConciergeRequestAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
+import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl } from "@/lib/seo";
 
@@ -23,7 +25,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function BackgroundNetworkingPage() {
+interface BackgroundNetworkingPageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function BackgroundNetworkingPage({
+  searchParams,
+}: BackgroundNetworkingPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const formMessage = getFormMessage(resolvedSearchParams);
   const viewer = await getViewer();
 
   return (
@@ -85,6 +95,16 @@ export default async function BackgroundNetworkingPage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        {formMessage ? (
+          <div
+            className={`status-banner ${
+              formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"
+            }`}
+          >
+            {formMessage.text}
+          </div>
+        ) : null}
+
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">How it works</p>
@@ -122,6 +142,100 @@ export default async function BackgroundNetworkingPage() {
               </p>
             </article>
           </div>
+        </section>
+
+        <section className="section section-subtle" id="concierge-intake">
+          <div className="section-head">
+            <p className="eyebrow">Concierge intake</p>
+            <h2>Turn a broad preview into a reviewed introduction request</h2>
+            <p>
+              This request goes to an operator queue first. It records intent, proposed trade
+              shape, privacy constraints, and an SLA before anyone receives contact details or
+              exact wishes.
+            </p>
+          </div>
+
+          {viewer ? (
+            <form action={createMatchConciergeRequestAction} className="panel stack-form">
+              <input name="return_to" type="hidden" value="/background-networking" />
+              <div className="field-grid">
+                <label className="field">
+                  <span>Route</span>
+                  <select name="route" defaultValue="private_match">
+                    <option value="private_match">Private counterparty search</option>
+                    <option value="pledge_swap">Bounded pledge swap</option>
+                    <option value="donation_offset">Donation offset</option>
+                    <option value="mpgf">Moral public-good cycle</option>
+                    <option value="other">Other reviewed request</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Cause areas</span>
+                  <input
+                    name="cause_areas_json"
+                    placeholder="Animal welfare, global poverty, public health"
+                  />
+                </label>
+              </div>
+              <label className="field">
+                <span>Structured intent</span>
+                <textarea
+                  name="intent_summary"
+                  placeholder="What introduction would help you decide whether a real trade is possible?"
+                  required
+                  rows={4}
+                />
+              </label>
+              <div className="field-grid">
+                <label className="field">
+                  <span>What you can offer</span>
+                  <textarea
+                    name="offer_summary"
+                    placeholder="Pledge, donation redirect, expertise, institutional access, or another bounded action."
+                    rows={3}
+                  />
+                </label>
+                <label className="field">
+                  <span>What you are asking for</span>
+                  <textarea
+                    name="ask_summary"
+                    placeholder="The counterparty action, evidence, or conversation you want."
+                    rows={3}
+                  />
+                </label>
+              </div>
+              <div className="field-grid">
+                <label className="field">
+                  <span>Privacy and safety constraints</span>
+                  <textarea
+                    name="constraints"
+                    placeholder="What should not be disclosed yet? What would make the intro unsafe or premature?"
+                    rows={3}
+                  />
+                </label>
+                <label className="field">
+                  <span>Timeline</span>
+                  <input name="desired_timeline" placeholder="e.g. Review within a week" />
+                </label>
+              </div>
+              <button className="button button-primary" type="submit">
+                Request concierge review
+              </button>
+            </form>
+          ) : (
+            <div className="empty-state">
+              <div>
+                <strong>Sign in to request concierge review.</strong>
+                <p>
+                  The operator queue needs an accountable requester before it can triage an
+                  introduction.
+                </p>
+              </div>
+              <Link className="button button-primary" href="/signup?returnTo=/background-networking">
+                Create account
+              </Link>
+            </div>
+          )}
         </section>
 
         <section className="section section-subtle">

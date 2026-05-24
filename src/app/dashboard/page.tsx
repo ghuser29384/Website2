@@ -9,6 +9,7 @@ import {
   createBrokerageBountyAction,
   createCollectiveAction,
   createCollectiveDecisionAction,
+  createMatchConciergeRequestAction,
   createNetworkInviteAction,
   createStripeConnectAccountAction,
   consentToMatchSuggestionAction,
@@ -74,6 +75,22 @@ function formatCadence(value: number, unit: string) {
   return value === 1 ? `every ${unit}` : `every ${value} ${unit}s`;
 }
 
+function formatConciergeSla(value: string | null) {
+  if (!value) {
+    return "No SLA set";
+  }
+
+  const dueAt = Date.parse(value);
+  if (Number.isNaN(dueAt)) {
+    return "SLA date unavailable";
+  }
+
+  const diffMs = dueAt - Date.now();
+  const hours = Math.max(1, Math.ceil(Math.abs(diffMs) / (60 * 60 * 1000)));
+
+  return diffMs < 0 ? `SLA overdue by ${hours}h` : `SLA due in ${hours}h`;
+}
+
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
@@ -99,6 +116,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   );
   const outgoingPrivacyAccessRequests = (dashboardData?.privacyAccessRequests ?? []).filter(
     (request) => request.requester_profile_id === viewer?.authUser.id,
+  );
+  const conciergeRequests = dashboardData?.matchConciergeRequests ?? [];
+  const activeConciergeRequests = conciergeRequests.filter(
+    (request) => !["declined", "closed"].includes(request.status),
   );
 
   return (
@@ -498,6 +519,103 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <a className="button button-secondary button-mini" href="/wish-registry">
                 Search broad registry
               </a>
+            </div>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Private match concierge</p>
+            <h3>Request operator help turning intent into an introduction path</h3>
+            <p className="route-text">
+              Use this when a broad preview, saved wish, or private counterparty idea needs human
+              triage before a mutual introduction is appropriate.
+            </p>
+            <form action={createMatchConciergeRequestAction} className="compact-form">
+              <input name="return_to" type="hidden" value="/dashboard" />
+              <div className="field-grid">
+                <label className="field">
+                  <span>Route</span>
+                  <select name="route" defaultValue="private_match">
+                    <option value="private_match">Private counterparty search</option>
+                    <option value="pledge_swap">Bounded pledge swap</option>
+                    <option value="donation_offset">Donation offset</option>
+                    <option value="mpgf">Moral public-good cycle</option>
+                    <option value="other">Other reviewed request</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Cause areas</span>
+                  <input
+                    defaultValue={dashboardData?.wishProfile?.causes.join(", ") ?? ""}
+                    name="cause_areas_json"
+                    placeholder="Animal welfare, global poverty, public health"
+                  />
+                </label>
+              </div>
+              <label className="field">
+                <span>Structured intent</span>
+                <textarea
+                  name="intent_summary"
+                  placeholder="What real introduction would help you decide whether a bounded moral trade is possible?"
+                  required
+                  rows={3}
+                />
+              </label>
+              <div className="field-grid">
+                <label className="field">
+                  <span>Offer</span>
+                  <textarea
+                    name="offer_summary"
+                    placeholder="What you can offer, pledge, donate, verify, or do."
+                    rows={3}
+                  />
+                </label>
+                <label className="field">
+                  <span>Ask</span>
+                  <textarea
+                    name="ask_summary"
+                    placeholder="The counterparty action, evidence, or conversation you want."
+                    rows={3}
+                  />
+                </label>
+              </div>
+              <div className="field-grid">
+                <label className="field">
+                  <span>Constraints</span>
+                  <textarea
+                    name="constraints"
+                    placeholder="Privacy boundaries, safety concerns, deal breakers, or needed consent steps."
+                    rows={3}
+                  />
+                </label>
+                <label className="field">
+                  <span>Timeline</span>
+                  <input name="desired_timeline" placeholder="e.g. Intro decision within a week" />
+                </label>
+              </div>
+              <button className="button button-primary button-mini" type="submit">
+                Request concierge review
+              </button>
+            </form>
+            <div className="mini-list">
+              {activeConciergeRequests.length ? (
+                activeConciergeRequests.slice(0, 5).map((request) => (
+                  <div className="mini-list-item" key={request.id}>
+                    <strong>
+                      {request.status.replaceAll("_", " ")} | {request.route.replaceAll("_", " ")}
+                    </strong>
+                    <span>{formatConciergeSla(request.sla_due_at)}</span>
+                    <span>{request.intent_summary}</span>
+                    {request.target_preview ? <span>Target: {request.target_preview}</span> : null}
+                    {request.operator_notes ? <span>Operator: {request.operator_notes}</span> : null}
+                    {request.risk_notes ? <span>Risk: {request.risk_notes}</span> : null}
+                  </div>
+                ))
+              ) : (
+                <div className="mini-list-item">
+                  <strong>No active concierge requests.</strong>
+                  <span>Requests from this form and the registry will appear here.</span>
+                </div>
+              )}
             </div>
           </div>
 

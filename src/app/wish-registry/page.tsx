@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { createMatchConciergeRequestAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
@@ -320,6 +321,43 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                       <Link className="text-button" href={`/people/${result.profileId}`}>
                         View public profile
                       </Link>
+                      {viewer && viewer.authUser.id !== result.profileId ? (
+                        <form action={createMatchConciergeRequestAction} className="compact-form">
+                          <input name="return_to" type="hidden" value="/wish-registry" />
+                          <input name="target_profile_id" type="hidden" value={result.profileId} />
+                          <input
+                            name="target_preview"
+                            type="hidden"
+                            value={result.publicPreview ?? ""}
+                          />
+                          <input
+                            name="cause_areas_json"
+                            type="hidden"
+                            value={JSON.stringify(result.causes)}
+                          />
+                          <input name="route" type="hidden" value="private_match" />
+                          <input
+                            name="intent_summary"
+                            type="hidden"
+                            value="I found this broad preview in the registry and want an operator to review whether a consent-gated introduction is appropriate."
+                          />
+                          <input
+                            name="ask_summary"
+                            type="hidden"
+                            value="Please check whether this possible counterparty is open to a bounded moral trade before any exact wishes or contact details are shared."
+                          />
+                          <button className="button button-secondary button-mini" type="submit">
+                            Request concierge intro
+                          </button>
+                        </form>
+                      ) : viewer ? null : (
+                        <Link
+                          className="button button-secondary button-mini"
+                          href="/signup?returnTo=/wish-registry"
+                        >
+                          Sign in for intro
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </article>
