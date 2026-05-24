@@ -253,14 +253,6 @@ function normalizeOfferMode(value: string) {
   return "pledge";
 }
 
-function normalizePaymentIntervalUnit(value: string) {
-  if (value === "day" || value === "month" || value === "year") {
-    return value;
-  }
-
-  return null;
-}
-
 function readBoundedInt(
   formData: FormData,
   key: string,
@@ -1338,26 +1330,32 @@ export async function createOfferAction(formData: FormData) {
 
   const mode = readRequired(formData, "mode");
   const normalizedMode = normalizeOfferMode(mode);
+  if (normalizedMode === "payment") {
+    redirectWithMessage(
+      "/offers/new?mode=payment",
+      "error",
+      "General paid action offers are deferred from the public offer wizard while review, identity, dispute, and compliance workflows mature.",
+    );
+  }
+
   const offeredCause = readRequired(formData, "offered_cause");
   const requestedCause = readRequired(formData, "requested_cause");
   const ownerAliasOverride = readOptional(formData, "owner_alias_override");
   const offerAction = readRequired(formData, "offer_action");
   const requestAction = readRequired(formData, "request_action");
+  const baselineStatement = readRequired(formData, "baseline_statement");
+  const exitCondition = readRequired(formData, "exit_condition");
   const compromiseCause = readRequired(formData, "compromise_cause") || "Not needed";
   const verification = readRequired(formData, "verification");
   const duration = readRequired(formData, "duration");
-  const paymentIntervalUnit = normalizePaymentIntervalUnit(
-    readOptional(formData, "payment_interval_unit"),
-  );
-  const paymentIntervalValue =
-    normalizedMode === "payment" && paymentIntervalUnit
-      ? readBoundedInt(formData, "payment_interval_value", {
-          fallback: 1,
-          min: 1,
-          max: 3650,
-        })
-      : null;
+  const paymentIntervalUnit = null;
+  const paymentIntervalValue = null;
   const notes = readRequired(formData, "notes");
+  const structuredNotes = [
+    notes,
+    `No-trade baseline / default: ${baselineStatement}`,
+    `Exit, pause, or expiry condition: ${exitCondition}`,
+  ].join("\n\n");
   const offerImpact = readBoundedInt(formData, "offer_impact", {
     fallback: 7,
     min: 1,
@@ -1434,7 +1432,7 @@ export async function createOfferAction(formData: FormData) {
         }`
       : "/offers/new";
 
-  if (!offerAction || !requestAction || !offeredCause || !requestedCause) {
+  if (!offerAction || !requestAction || !baselineStatement || !exitCondition || !offeredCause || !requestedCause) {
     redirectWithMessage(newOfferReturnPath, "error", "Complete all required offer fields.");
   }
 
@@ -1458,7 +1456,7 @@ export async function createOfferAction(formData: FormData) {
       assuranceMinimumUsd,
       poolMaximumCapUsd,
       assuranceDeadline,
-      description: [offerAction, requestAction, notes].filter(Boolean).join("\n"),
+      description: [offerAction, requestAction, structuredNotes].filter(Boolean).join("\n"),
       evidenceUrl,
     };
 
@@ -1566,7 +1564,7 @@ export async function createOfferAction(formData: FormData) {
       const poolInsert: DonationOffsetPoolInsert = {
         created_by: viewer.authUser.id,
         name: donationOffsetFields.poolName,
-        description: notes,
+        description: structuredNotes,
         compromise_charity_id: donationOffsetFields.compromiseDestinationId,
         offset_ratio: donationOffsetFields.offsetRatio ?? 1,
         time_horizon: donationOffsetFields.timeHorizon,
@@ -1623,10 +1621,10 @@ export async function createOfferAction(formData: FormData) {
       min_counterparty_impact: minCounterpartyImpact,
       verification,
       duration,
-      payment_interval_unit: normalizedMode === "payment" ? paymentIntervalUnit : null,
+      payment_interval_unit: paymentIntervalUnit,
       payment_interval_value: paymentIntervalValue,
       trust_level: trustLevel,
-      notes,
+      notes: structuredNotes,
       status:
         normalizedMode === "offset" && offsetModeration?.status === "flagged"
           ? "paused"

@@ -15,16 +15,16 @@ import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Paid action offers",
+  title: "Deferred paid action offers",
   description:
-    "Learn how paid moral-trade action offers can state action, payment, verification, and non-custody boundaries without claiming escrow.",
+    "Why paid moral-trade action offers are deferred until validation, identity, dispute, and compliance workflows are mature.",
   alternates: {
     canonical: "/paid-action-offers",
   },
   openGraph: {
-    title: "Paid action offers",
+    title: "Deferred paid action offers",
     description:
-      "Structure paid action offers with payment pending verification, external payment evidence, and no legal escrow claim.",
+      "Paid action offers remain outside the mainstream Moral Trade launch wedge while trust and compliance workflows mature.",
     url: getAbsoluteUrl("/paid-action-offers"),
     type: "website",
   },
@@ -32,7 +32,6 @@ export const metadata: Metadata = {
 
 export default async function PaidActionOffersPage() {
   const viewer = await getViewer();
-  const createHref = viewer ? "/offers/new?mode=payment" : "/signup?returnTo=/offers/new%3Fmode%3Dpayment";
 
   return (
     <div className="page-shell">
@@ -47,47 +46,51 @@ export default async function PaidActionOffersPage() {
 
         <PageHero
           eyebrow="Trade format"
-          title="Offer payment for bounded moral actions."
-          description="Paid action offers can help coordinate costly actions, but public copy must stay clear: payment is pending verification, external evidence is reviewed, and Moral Trade is not legal escrow."
+          title="Paid action offers are deferred."
+          description="The pilot keeps general paid action offers out of the mainstream creation path until identity, dispute, legal, and evidence workflows are strong enough for the higher trust burden."
           actions={
             <>
               <Link className="button button-primary" href="/offers?mode=payment">
-                Browse paid offers
+                View worked examples
               </Link>
-              <Link className="button button-secondary" href={createHref}>
-                Create paid offer
+              <Link className="button button-secondary" href="/validation">
+                Review validation rules
+              </Link>
+              <Link className="text-button" href={viewer ? "/offers/new?mode=offset" : "/signup?returnTo=/offers/new%3Fmode%3Doffset"}>
+                Create verified offset instead
               </Link>
             </>
           }
         >
           <TradeFlowDiagram
             title="Paid action offer flow"
-            steps={["Define the action", "State payment terms", "Verify evidence", "Resolve externally"]}
+            steps={["Defer public creation", "Design evidence rules", "Mature disputes", "Pilot by invitation"]}
           />
         </PageHero>
       </header>
 
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white" aria-labelledby="paid-required-heading">
-          <SectionHeader eyebrow="Required terms" id="paid-required-heading" title="Payment language has to be especially careful.">
-            The platform may record terms and evidence, but it should not imply custody, guaranteed payment, tax treatment, or legal enforceability.
+          <SectionHeader eyebrow="Why deferred" id="paid-required-heading" title="Payment language is not the only risk.">
+            Paid actions can drift into labor, exploitation, enforcement, AML/KYC, tax, and dispute issues faster than donation offsets or pledge swaps.
           </SectionHeader>
           <div className="step-card-grid">
             <StepCard index={1} title="Bound the action.">
-              Say what action is being requested, how it will be measured, and what does not count.
+              A paid pilot would need precise action scope, measurement rules, and exclusions.
             </StepCard>
             <StepCard index={2} title="Name the payment condition.">
-              Use payment-pending-verification language rather than escrow-backed or guaranteed payment language.
+              It must say payment is pending verification, avoid escrow-backed or guaranteed
+              payment language, and state that the record is not legal escrow.
             </StepCard>
             <StepCard index={3} title="State evidence and dispute path.">
-              Explain what evidence reviewers inspect and what happens when evidence is unresolved.
+              It needs a mature reviewer lane, challenge window, and unresolved-evidence state before launch.
             </StepCard>
           </div>
         </section>
 
         <section className="section section-subtle" aria-labelledby="paid-boundaries-heading">
           <SectionHeader eyebrow="Legal posture" id="paid-boundaries-heading" title="No custody, escrow, tax, or investment claim.">
-            Paid offers should remain external-payment records unless provider-approved checkout and reviewed legal terms explicitly support more.
+            Paid offers remain external-payment examples unless provider-approved checkout, verified counterparties, and reviewed legal terms explicitly support more.
           </SectionHeader>
           <div className="concept-grid">
             <article className="panel concept-card">

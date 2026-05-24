@@ -8,7 +8,6 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
         { href: "/pledge-swaps", label: "Pledge swaps", description: "Exchange bounded commitments." },
         { href: "/donation-offsets", label: "Donation offsets", description: "Redirect matched opposed donations." },
         { href: "/mpgf", label: "Public Goods Fund", description: "Pool support for shared moral goods." },
-        { href: "/paid-action-offers", label: "Paid action offers", description: "Payment pending verification, not escrow." },
         { href: "/offers?view=examples", label: "Worked examples", description: "Seeded structures, not live offers." },
       ],
     },
@@ -18,14 +17,14 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
       items: [
         {
           href: isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new",
-          label: "Create trade",
-          description: "Draft terms with validation and review gates.",
+          label: "Create bounded trade",
+          description: "Draft terms with baseline, exit, evidence, and review gates.",
         },
         {
           href: isAuthenticated
             ? "/offers/new?mode=offset"
             : "/signup?returnTo=/offers/new%3Fmode%3Doffset",
-          label: "Create donation offset",
+          label: "Create verified offset",
           description: "Set baseline, match, destination, surplus, and evidence rules.",
         },
         {
@@ -40,8 +39,10 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
       summary: "Understand standards before proposing or accepting terms.",
       items: [
         { href: "/#how-it-works", label: "How it works", description: "Three steps from format to evidence review." },
+        { href: "/validation", label: "Validation", description: "Evidence states, challenge windows, and review scopes." },
         { href: "/safety", label: "Safety", description: "Coercion, fraud, and pressure boundaries." },
         { href: "/methodology", label: "Methodology", description: "Moral trade sources and safeguards." },
+        { href: "/paid-action-offers", label: "Deferred paid offers", description: "Why paid actions are review-only for now." },
         { href: "/faq", label: "FAQ", description: "Common questions and operating limits." },
       ],
     },
@@ -51,6 +52,7 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
       items: [
         { href: "/people", label: "People", description: "Privacy-limited public profiles." },
         { href: "/wish-registry", label: "Wish registry", description: "Search broad wishes before consent gates." },
+        { href: "/background-networking", label: "Private matching", description: "Consent-gated counterparty discovery." },
       ],
     },
   ];
@@ -64,8 +66,8 @@ export function getTopbarActions(isAuthenticated = false) {
       ? { href: "/dashboard", label: "Dashboard" }
       : { href: "/login", label: "Sign in" },
     primaryAction: {
-      href: isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new",
-      label: "Create trade",
+      href: isAuthenticated ? "/offers/new?mode=offset" : "/signup?returnTo=/offers/new%3Fmode%3Doffset",
+      label: "Create verified offset",
     },
   };
 }
@@ -77,8 +79,8 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/offers", label: "Browse offers" },
       { href: "/pledge-swaps", label: "Pledge swaps" },
       { href: "/donation-offsets", label: "Donation offsets" },
-      { href: "/paid-action-offers", label: "Paid action offers" },
       { href: "/mpgf", label: "Public Goods Fund" },
+      { href: "/background-networking", label: "Private matching" },
       { href: "/offers?view=examples", label: "Worked examples" },
     ],
   },
@@ -88,8 +90,10 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/#how-it-works", label: "How it works" },
       { href: "/methodology", label: "Methodology" },
       { href: "/safety", label: "Safety" },
+      { href: "/validation", label: "Validation" },
       { href: "/faq", label: "FAQ" },
       { href: "/reasoning-standards", label: "Evidence standards" },
+      { href: "/paid-action-offers", label: "Deferred paid offers" },
       { href: "/methodology#sources", label: "Sources" },
     ],
   },

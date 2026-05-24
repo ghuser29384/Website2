@@ -32,19 +32,20 @@ test("public navigation exposes professional marketplace routes", () => {
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
 
   assert.deepEqual(labels, ["Browse", "Create", "Learn", "Community"]);
-  assert.equal(getTopbarActions(false).primaryAction.href, "/signup?returnTo=/offers/new");
-  assert.equal(getTopbarActions(false).primaryAction.label, "Create trade");
+  assert.equal(getTopbarActions(false).primaryAction.href, "/signup?returnTo=/offers/new%3Fmode%3Doffset");
+  assert.equal(getTopbarActions(false).primaryAction.label, "Create verified offset");
   assert.match(browseMenu?.summary ?? "", /Compare public proposals/);
   assert.ok(browseMenu?.items?.every((item) => item.description));
-  assert.ok(createMenu?.items?.some((item) => item.label === "Create donation offset"));
+  assert.ok(createMenu?.items?.some((item) => item.label === "Create verified offset"));
   assert.ok(hrefs.includes("/pledge-swaps"));
   assert.ok(hrefs.includes("/paid-action-offers"));
   assert.ok(hrefs.includes("/donation-offsets"));
   assert.ok(hrefs.includes("/mpgf"));
+  assert.ok(hrefs.includes("/validation"));
   assert.ok(hrefs.includes("/offers"));
   assert.ok(hrefs.includes("/faq"));
   assert.ok(hrefs.includes("/wish-registry"));
-  assert.ok(!hrefs.includes("/background-networking"));
+  assert.ok(hrefs.includes("/background-networking"));
   assert.ok(!hrefs.includes("/priority-correction-fund"));
   assert.ok(!hrefs.includes("/mpgf/pools"));
   assert.ok(!hrefs.includes("/mpgf/contribute"));
@@ -306,23 +307,25 @@ test("global search and offers search expose real marketplace discovery", () => 
 
 test("home page is a focused landing page with pilot metrics and marketplace preview", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
-  const heroIndex = homeSource.indexOf("Turn moral disagreement into mutually beneficial action.");
+  const heroIndex = homeSource.indexOf("Make one reviewable moral trade.");
+  const routeIndex = homeSource.indexOf("Choose your route");
   const searchIndex = homeSource.indexOf("Search by cause, action, or trade type");
   const metricsIndex = homeSource.indexOf("pilot-metric-grid");
-  const formatsIndex = homeSource.indexOf("format-card-grid");
+  const formatsIndex = homeSource.indexOf("Core formats");
   const previewIndex = homeSource.indexOf("Worked examples, not live offers.");
 
   assert.ok(heroIndex > -1);
-  assert.ok(searchIndex > heroIndex);
+  assert.ok(routeIndex > heroIndex);
+  assert.ok(searchIndex > routeIndex);
   assert.ok(formatsIndex > searchIndex);
   assert.ok(metricsIndex > formatsIndex);
   assert.ok(previewIndex > metricsIndex);
-  assert.match(homeSource, /Browse offers/);
-  assert.match(homeSource, /Create a trade/);
+  assert.match(homeSource, /Create verified offset/);
+  assert.match(homeSource, /Find counterparties privately/);
   assert.match(homeSource, /marketplaceOverview/);
   assert.match(homeSource, /CANONICAL_WORKED_CASE_COUNT/);
   assert.match(homeSource, /worked examples/);
-  assert.match(homeSource, /Worked examples clearly labeled/);
+  assert.match(homeSource, /Challenge windows/);
   assert.match(homeSource, /MoralTradeHeroVisual/);
   assert.match(homeSource, /IconMark/);
   assert.match(homeSource, /Credibility in pilot mode/);
@@ -460,12 +463,13 @@ test("offer creation form exposes preset templates without weakening validation"
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
 
   assert.match(offerForm, /OFFER_TEMPLATES/);
-  assert.match(offerForm, /Vegetarian pledge swap/);
+  assert.match(offerForm, /30-day pledge swap/);
   assert.match(offerForm, /Matched donation offset/);
-  assert.match(offerForm, /Paid action trial/);
+  assert.match(offerForm, /Threshold offset pool/);
   assert.match(offerForm, /applyOfferTemplate/);
-  assert.match(offerForm, /Templates only fill the form/);
+  assert.match(offerForm, /Templates focus on the launch wedge/);
   assert.match(offerForm, /setOfferAction\(template\.offerAction\)/);
+  assert.match(offerForm, /setBaselineStatement\(template\.baselineStatement\)/);
   assert.match(offerForm, /disabled=\{!canPublishOffer\}/);
   assert.match(offerForm, /liveOfferErrors/);
 });

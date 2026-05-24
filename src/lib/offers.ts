@@ -174,6 +174,7 @@ export const VERIFICATION_OPTIONS = [
 ] as const;
 
 export const DURATION_OPTIONS = [
+  "30 days",
   "3 months",
   "6 months",
   "12 months",

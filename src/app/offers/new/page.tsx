@@ -83,13 +83,13 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Offer creation</p>
-            <h1>Publish a structured public commitment.</h1>
+            <h1>Draft one bounded, reviewable trade.</h1>
             <p className="hero-text">
               {viewer ? (
                 <>
                   Signed in as <strong>{viewer.displayName}</strong>. This page writes to the
-                  shared record rather than browser storage and asks you to state the act, the
-                  reciprocal terms, and the trust conditions plainly.
+                  shared record and asks you to state the act, reciprocal terms, no-trade
+                  baseline, exit condition, and evidence rule plainly.
                 </>
               ) : (
                 <>Create an account to save and publish a structured trade proposal.</>
@@ -120,15 +120,15 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>State trust expectations</strong>
-                  <p>Verification, duration, and trust level should be legible to others.</p>
+                  <strong>Name the baseline</strong>
+                  <p>Explain the no-trade default so counterfactual trust can be reviewed.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
                   <strong>Keep it bounded</strong>
-                  <p>Start with offers someone else can plausibly evaluate, verify, and accept.</p>
+                  <p>State evidence, expiry, and what happens when proof remains unresolved.</p>
                 </div>
               </div>
             </div>
@@ -185,11 +185,11 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 )}
                 <div>
                   <h3>Where this appears</h3>
-                  <p>Your display name is saved as the visible alias on public offers across all three trade modes.</p>
+                  <p>Your display name is saved as the visible alias on public offsets and pledge swaps.</p>
                 </div>
                 <div>
                   <h3>Next step</h3>
-                  <p>Once published, the offer appears in the public directory and on your dashboard.</p>
+                  <p>Offsets with risk signals stay paused for review; paid action offers are deferred from the public creation path.</p>
                 </div>
               </div>
             </article>

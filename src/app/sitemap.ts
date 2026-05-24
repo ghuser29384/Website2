@@ -32,8 +32,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     {
       url: getAbsoluteUrl("/paid-action-offers"),
       lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.8,
+      changeFrequency: "monthly",
+      priority: 0.55,
+    },
+    {
+      url: getAbsoluteUrl("/validation"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.75,
     },
     {
       url: getAbsoluteUrl("/methodology"),

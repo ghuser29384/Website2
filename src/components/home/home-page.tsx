@@ -18,6 +18,11 @@ import type { MarketplaceOverview } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_COUNT, CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import {
+  LAUNCH_WEDGE_ROUTES,
+  TRUST_BADGE_LADDER,
+  VALIDATION_STATUS_STATES,
+} from "@/lib/validation";
 
 interface HomePageProps {
   isAuthenticated: boolean;
@@ -35,9 +40,9 @@ const categoryPills = [
 
 const formatPills = [
   { label: "Pledge swaps", href: "/pledge-swaps" },
-  { label: "Donation offsets", href: "/offers?mode=offset" },
-  { label: "Paid action offers", href: "/paid-action-offers" },
+  { label: "Donation offsets", href: "/donation-offsets" },
   { label: "Public-good contributions", href: "/mpgf" },
+  { label: "Private matching", href: "/background-networking" },
 ] as const;
 
 const productCards: ReadonlyArray<{
@@ -71,14 +76,6 @@ const productCards: ReadonlyArray<{
     cta: "View fund",
     explanation: "Coordinate support for goods many moral views can value.",
     example: "Coordinate support for goods many moral views value.",
-  },
-  {
-    title: "Paid action offers",
-    href: "/paid-action-offers",
-    icon: "payment",
-    cta: "Open guide",
-    explanation: "Offer payment for bounded actions while keeping money outside platform custody.",
-    example: "Payment pending verification, not legal escrow.",
   },
 ] as const;
 
@@ -117,16 +114,16 @@ const credibilityCards: ReadonlyArray<{
 
 const howItWorksSteps = [
   {
-    title: "Choose a trade format.",
-    text: "Pick a pledge swap, donation offset, paid action, or public-good contribution.",
+    title: "Choose the launch wedge.",
+    text: "Start with a verified donation offset, a threshold public-good cycle, or a bounded pledge swap.",
   },
   {
-    title: "State reciprocal terms.",
-    text: "Name the action, requested action, duration, exit rule, and evidence method.",
+    title: "State baseline and exit terms.",
+    text: "Name the no-trade default, reciprocal action, duration, exit rule, and evidence method.",
   },
   {
-    title: "Publish after checks.",
-    text: "Public offers rely on explicit terms, evidence rules, and safety review.",
+    title: "Move through validation.",
+    text: "Evidence claims get screened, challenged when needed, and completed only after review.",
   },
 ] as const;
 
@@ -155,6 +152,9 @@ function getOfferModeIcon(mode: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]["m
 
 export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps) {
   const createTradeHref = isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new";
+  const createOffsetHref = isAuthenticated
+    ? "/offers/new?mode=offset"
+    : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
   const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 4);
   const liveOfferCount = formatOptionalCount(marketplaceOverview.openOfferCount);
   const publicProfileCount = formatOptionalCount(marketplaceOverview.publicProfileCount);
@@ -171,19 +171,19 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
         />
 
         <PageHero
-          eyebrow="A marketplace for voluntary moral trade"
-          title="Turn moral disagreement into mutually beneficial action."
-          description="Create pledge swaps, donation offsets, and public-good commitments with explicit terms, evidence rules, and safety review."
+          eyebrow="A verified coordination platform for bounded moral trade"
+          title="Make one reviewable moral trade."
+          description="Start narrow: verified donation offsets, threshold public-goods commitments, and bounded pledge swaps with explicit baselines, evidence rules, and safety review."
           actions={
             <>
-              <Link className="button button-primary" href="/offers">
-                Browse offers
+              <Link className="button button-primary" href={createOffsetHref}>
+                Create verified offset
               </Link>
-              <Link className="button button-secondary" href={createTradeHref}>
-                Create a trade
+              <Link className="button button-secondary" href="/mpgf">
+                Fund a shared public good
               </Link>
-              <Link className="text-button" href="#how-it-works">
-                Learn how it works
+              <Link className="text-button" href="/background-networking">
+                Find counterparties privately
               </Link>
             </>
           }
@@ -194,15 +194,33 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
         <div className="trust-chip-row trust-chip-row-wide" aria-label="Trust standards">
           <TrustChip>Voluntary only</TrustChip>
           <TrustChip>Evidence-gated</TrustChip>
-          <TrustChip>Worked examples clearly labeled</TrustChip>
+          <TrustChip>Challenge windows</TrustChip>
           <TrustChip>No escrow or custody claim</TrustChip>
         </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <section className="section section-white" aria-labelledby="routes-heading">
+          <SectionHeader eyebrow="Choose your route" id="routes-heading" title="The pilot is intentionally narrow.">
+            The next product wedge is verified offsets, moral public goods, bounded pledge swaps, and concierge-assisted private matching. General paid action offers stay de-emphasized until review and compliance systems mature.
+          </SectionHeader>
+          <div className="format-card-grid launch-route-grid">
+            {LAUNCH_WEDGE_ROUTES.map((route) => (
+              <Link className="panel format-card" href={route.href} key={route.title}>
+                <IconMark name={route.icon as IconName} />
+                <div>
+                  <h3>{route.title}</h3>
+                  <p>{route.description}</p>
+                </div>
+                <span className="inline-link">{route.cta}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+
         <section className="section section-white" aria-labelledby="search-strip-heading">
-          <SectionHeader eyebrow="Marketplace search" id="search-strip-heading" title="Find examples by cause or format.">
-            Start with broad categories, then inspect exact terms before relying on any proposal.
+          <SectionHeader eyebrow="Marketplace search" id="search-strip-heading" title="Find reviewable examples by cause or format.">
+            Start with broad categories, then inspect exact terms, baselines, and evidence states before relying on any proposal.
           </SectionHeader>
           <SearchBar placeholder="Search by cause, action, or trade type" />
           <div className="pill-group" aria-label="Cause categories">
@@ -222,7 +240,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
         </section>
 
         <section className="section section-subtle" aria-labelledby="products-heading">
-          <SectionHeader eyebrow="Trade formats" id="products-heading" title="Formats with their own guidance." />
+          <SectionHeader eyebrow="Core formats" id="products-heading" title="Keep the public product focused." />
           <div className="format-card-grid">
             {productCards.map((card) => (
               <article className="panel format-card" key={card.title}>
@@ -317,7 +335,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
         </section>
 
         <section className="section section-white" id="how-it-works" aria-labelledby="how-heading">
-          <SectionHeader eyebrow="How it works" id="how-heading" title="From idea to reviewable proposal." />
+          <SectionHeader eyebrow="How it works" id="how-heading" title="From intention to reviewed completion." />
           <div className="step-card-grid">
             {howItWorksSteps.map((step, index) => (
               <StepCard index={index + 1} key={step.title} title={step.title}>
@@ -328,34 +346,47 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
         </section>
 
         <section className="section section-subtle" aria-labelledby="trust-heading">
-          <SectionHeader eyebrow="Safety and trust" id="trust-heading" title="Clear boundaries protect the trade." />
+          <SectionHeader eyebrow="Validation ladder" id="trust-heading" title="Trust signals are earned from evidence." />
           <div className="concept-grid">
-            <article className="panel concept-card">
-              <IconMark name="safety" />
-              <h3>No coercive proposals</h3>
-              <p>No threats, harassment, doxxing, fraud, or pressure on vulnerable people.</p>
-            </article>
-            <article className="panel concept-card">
-              <IconMark name="review" />
-              <h3>Risky claims are reviewed</h3>
-              <p>Unverifiable baselines and risky proposals require manual review before reliance.</p>
-            </article>
-            <article className="panel concept-card">
-              <IconMark name="evidence" />
-              <h3>No money custody claim</h3>
-              <p>External payment evidence only unless provider-approved checkout exists.</p>
-            </article>
-            <article className="panel concept-card">
-              <IconMark name="source" />
-              <h3>No legal or tax services</h3>
-              <p>The prototype does not provide legal, tax, custody, or escrow services.</p>
-            </article>
+            {TRUST_BADGE_LADDER.slice(0, 4).map((badge) => (
+              <article className="panel concept-card" key={badge}>
+                <IconMark name={badge.includes("Payment") ? "evidence" : "review"} />
+                <h3>{badge}</h3>
+                <p>
+                  This badge should appear only when tied to a specific transaction record, provider
+                  receipt, identity check, or reviewed evidence packet.
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="states-heading">
+          <SectionHeader eyebrow="Evidence states" id="states-heading" title="Manual review needs visible state, not vague trust.">
+            The public surface should show whether a claim is merely drafted, awaiting evidence, inside a challenge window, completed, disputed, or unresolved.
+          </SectionHeader>
+          <div className="data-grid">
+            {VALIDATION_STATUS_STATES.slice(0, 4).map((state) => (
+              <article className="panel data-card" key={state.state}>
+                <p className="detail-kicker">{state.state}</p>
+                <h3>{state.reviewerAction}</h3>
+                <p>{state.meaning}</p>
+              </article>
+            ))}
+          </div>
+          <div className="section-actions">
+            <Link className="button button-secondary" href="/validation">
+              View validation rulebook
+            </Link>
+            <Link className="text-button" href={createTradeHref}>
+              Draft a bounded pledge swap
+            </Link>
           </div>
         </section>
 
         <section className="section section-white" aria-labelledby="credibility-heading">
           <SectionHeader eyebrow="Credibility in pilot mode" id="credibility-heading" title="Trust signals without invented proof.">
-            Moral Trade does not show testimonials, ratings, press logos, or completed-impact claims until those records exist.
+            Moral Trade does not show testimonials, ratings, press logos, completed-impact claims, or decorative proof badges until those records exist.
           </SectionHeader>
           <div className="teaser-grid credibility-grid">
             {credibilityCards.map((card) => (
@@ -387,6 +418,10 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             <Link className="panel teaser-card" href="/methodology#sources">
               <h3>Toby Ord / Forethought source notes</h3>
               <p>Research sources for moral trade, compromise, and public goods.</p>
+            </Link>
+            <Link className="panel teaser-card" href="/paid-action-offers">
+              <h3>Paid action offers are deferred</h3>
+              <p>Why the pilot keeps paid action offers out of the mainstream creation path.</p>
             </Link>
           </div>
         </section>

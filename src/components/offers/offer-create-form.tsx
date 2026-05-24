@@ -83,6 +83,8 @@ interface OfferTemplate {
   compromiseCause: string;
   offerAction: string;
   requestAction: string;
+  baselineStatement: string;
+  exitCondition: string;
   notes: string;
   offerImpact: string;
   minCounterpartyImpact: string;
@@ -105,8 +107,8 @@ const defaultOffsetFields = createDefaultDonationOffsetFields();
 
 const OFFER_TEMPLATES: OfferTemplate[] = [
   {
-    title: "Vegetarian pledge swap",
-    description: "A bounded habit change in exchange for a donation or volunteer commitment.",
+    title: "30-day pledge swap",
+    description: "A short, reviewable commitment in exchange for a reciprocal action.",
     mode: "pledge",
     offeredCause: "Animal welfare",
     requestedCause: "Global poverty",
@@ -115,12 +117,16 @@ const OFFER_TEMPLATES: OfferTemplate[] = [
       "I will follow a vegetarian diet for the review period and keep a simple public log of exceptions.",
     requestAction:
       "The counterparty will donate to an evidence-focused global health or poverty charity during the same period.",
+    baselineStatement:
+      "Without this trade, I would not make this short diet commitment during the next 30 days.",
+    exitCondition:
+      "Either side can pause before the review period starts; after it starts, missed evidence creates an unresolved record rather than a completed one.",
     notes:
       "This is a voluntary pledge swap. Each side should be free to decline, pause, or renegotiate if the burden becomes materially different from what was stated.",
     offerImpact: "7",
     minCounterpartyImpact: "6",
     verification: "Public pledge",
-    duration: "6 months",
+    duration: "30 days",
     paymentIntervalUnit: "none",
     paymentIntervalValue: "1",
     trustLevel: "3",
@@ -136,6 +142,10 @@ const OFFER_TEMPLATES: OfferTemplate[] = [
       "I will redirect a real planned donation away from my baseline opposed cause and into the named compromise destination.",
     requestAction:
       "The counterparty will redirect the matched portion of their opposed donation into the same compromise destination.",
+    baselineStatement:
+      "I have a real baseline intention to make the opposed donation unless this offset clears review.",
+    exitCondition:
+      "If the match is incomplete by the deadline, the unmatched surplus rule controls and the record stays unresolved until evidence is reviewed.",
     notes:
       "This offset should only be used for a genuine baseline intention. It is not a threat, custody promise, tax claim, or legal escrow arrangement.",
     offerImpact: "7",
@@ -155,25 +165,37 @@ const OFFER_TEMPLATES: OfferTemplate[] = [
     },
   },
   {
-    title: "Paid action trial",
-    description: "A bounded action offer with payment pending verification rather than custody.",
-    mode: "payment",
-    offeredCause: "Climate",
-    requestedCause: "Financial support",
+    title: "Threshold offset pool",
+    description: "A pooled donation offset with a named threshold and review gate.",
+    mode: "offset",
+    offeredCause: "Democracy",
+    requestedCause: "Global poverty",
     compromiseCause: "Not needed",
     offerAction:
-      "I will complete a defined climate action trial and submit the agreed evidence before asking for payment.",
+      "I will join a pooled offset and redirect my baseline opposed donation if the pool reaches the assurance threshold.",
     requestAction:
-      "The counterparty will pay the stated amount only after the evidence standard is met and reviewed.",
+      "Counterparties on the other side will redirect matching opposed donations into the same compromise destination.",
+    baselineStatement:
+      "The pool only counts commitments attached to a real baseline donation intention and reviewable evidence.",
+    exitCondition:
+      "If the assurance threshold is not met by the deadline, the pool closes or follows its published unmatched-surplus rule.",
     notes:
-      "The action, payment amount, evidence standard, and exit conditions should be specific enough that both sides can judge the trade before committing.",
-    offerImpact: "6",
-    minCounterpartyImpact: "5",
-    verification: "Payment pending verification",
+      "This is a thresholded offset pool, not custody, escrow, tax advice, or a guarantee that funds have moved before evidence review.",
+    offerImpact: "7",
+    minCounterpartyImpact: "7",
+    verification: "Manual review required",
     duration: "3 months",
-    paymentIntervalUnit: "month",
+    paymentIntervalUnit: "none",
     paymentIntervalValue: "1",
-    trustLevel: "3",
+    trustLevel: "4",
+    offset: {
+      baselineAmountUsd: "500",
+      requestedMatchingAmountUsd: "500",
+      baselineOpposedCause: "Democracy",
+      requestedOpposedCause: "Gun rights",
+      participationMode: "pool",
+      offsetRatio: "1",
+    },
   },
 ];
 
@@ -224,6 +246,8 @@ export function OfferCreateForm({
   );
   const [offerAction, setOfferAction] = useState("");
   const [requestAction, setRequestAction] = useState("");
+  const [baselineStatement, setBaselineStatement] = useState("");
+  const [exitCondition, setExitCondition] = useState("");
   const [notes, setNotes] = useState("");
   const [compromiseDestinationId, setCompromiseDestinationId] = useState(
     defaultOffsetFields.compromiseDestinationId,
@@ -257,6 +281,7 @@ export function OfferCreateForm({
   const [verificationMetadataAcknowledged, setVerificationMetadataAcknowledged] = useState(false);
 
   const isOffset = mode === "offset";
+  const isPayment = mode === "payment";
   const selectableCharities = getSelectableRegisteredCharities();
   const consensusCharities = getConsensusCharities();
   const selectedPool = useMemo(
@@ -315,11 +340,14 @@ export function OfferCreateForm({
       poolMaximumCapUsd:
         effectivePoolMaximumCapUsd === "" ? null : Number(effectivePoolMaximumCapUsd),
       assuranceDeadline: effectiveAssuranceDeadline,
-      description: [offerAction, requestAction, notes].filter(Boolean).join("\n"),
+      description: [offerAction, requestAction, baselineStatement, exitCondition, notes]
+        .filter(Boolean)
+        .join("\n"),
       evidenceUrl,
     }),
     [
       baselineAmountUsd,
+      baselineStatement,
       evidenceUrl,
       effectiveAssuranceDeadline,
       effectiveAssuranceMinimumUsd,
@@ -339,6 +367,7 @@ export function OfferCreateForm({
       poolSide,
       requestAction,
       requestedMatchingAmountUsd,
+      exitCondition,
     ],
   );
 
@@ -396,12 +425,24 @@ export function OfferCreateForm({
       errors.push("Describe what you want the counterparty to do.");
     }
 
+    if (!baselineStatement.trim()) {
+      errors.push("State the no-trade baseline or default you are comparing against.");
+    }
+
+    if (!exitCondition.trim()) {
+      errors.push("State the exit, pause, expiry, or unresolved-evidence condition.");
+    }
+
     if (!notes.trim()) {
       errors.push("Add a public description covering evidence, boundaries, and why the trade is mutually beneficial.");
     }
 
+    if (isPayment) {
+      errors.push("General paid action offers are deferred and cannot be published from the public offer wizard.");
+    }
+
     return errors;
-  }, [notes, offerAction, requestAction]);
+  }, [baselineStatement, exitCondition, isPayment, notes, offerAction, requestAction]);
   const liveOfferErrors = useMemo(
     () => [...liveCoreOfferErrors, ...liveOffsetErrors],
     [liveCoreOfferErrors, liveOffsetErrors],
@@ -444,6 +485,8 @@ export function OfferCreateForm({
     setCompromiseCause(template.compromiseCause);
     setOfferAction(template.offerAction);
     setRequestAction(template.requestAction);
+    setBaselineStatement(template.baselineStatement);
+    setExitCondition(template.exitCondition);
     setNotes(template.notes);
     setOfferImpact(template.offerImpact);
     setMinCounterpartyImpact(template.minCounterpartyImpact);
@@ -535,7 +578,8 @@ export function OfferCreateForm({
           <p className="eyebrow">Start from a template</p>
           <h3 id="offer-template-heading">Prefill a common moral-trade structure</h3>
           <p>
-            Templates only fill the form. You still need to edit the terms so the offer is true,
+            Templates focus on the launch wedge: donation offsets, public-goods-style pools, and
+            bounded pledge swaps. You still need to edit the terms so the offer is true,
             voluntary, and verifiable.
           </p>
         </div>
@@ -576,7 +620,29 @@ export function OfferCreateForm({
               </option>
             ))}
           </select>
+          {isPayment ? (
+            <small>
+              Paid action offers are intentionally deferred from the public creation path. Use
+              pledge swaps, verified offsets, or the public-goods flow unless an operator invites a
+              reviewed paid-action pilot.
+            </small>
+          ) : null}
         </label>
+
+        <div className="panel subtle-panel">
+          <p className="eyebrow">Validator checklist</p>
+          <div className="tag-row">
+            <span className="badge badge-secondary">No-trade baseline</span>
+            <span className="badge badge-secondary">Evidence schema</span>
+            <span className="badge badge-secondary">Exit condition</span>
+            <span className="badge badge-secondary">Challenge window</span>
+            <span className="badge badge-secondary">Completion state</span>
+          </div>
+          <p className="panel-note">
+            A public offer should be easy for a reviewer to evaluate without guessing what would
+            have happened absent the trade.
+          </p>
+        </div>
 
         <div className="field-grid">
           <label className="field">
@@ -641,6 +707,38 @@ export function OfferCreateForm({
             rows={4}
             value={requestAction}
           />
+        </label>
+
+        <label className="field">
+          <span>No-trade baseline / default</span>
+          <textarea
+            name="baseline_statement"
+            onChange={(event) => setBaselineStatement(readFormControlValue(event))}
+            placeholder="e.g. Without this trade, I would make the opposed donation next month; I can support that baseline with past donation records."
+            required
+            rows={3}
+            value={baselineStatement}
+          />
+          <small>
+            This is the counterfactual trust field: reviewers need to know what the default would
+            have been.
+          </small>
+        </label>
+
+        <label className="field">
+          <span>Exit, pause, or expiry condition</span>
+          <textarea
+            name="exit_condition"
+            onChange={(event) => setExitCondition(readFormControlValue(event))}
+            placeholder="e.g. If evidence is missing by the deadline, the record remains unresolved and no completion badge is shown."
+            required
+            rows={3}
+            value={exitCondition}
+          />
+          <small>
+            Short, bounded trades are easier to trust than open-ended commitments with unclear exit
+            rules.
+          </small>
         </label>
 
         <label className="field">
@@ -1248,36 +1346,46 @@ export function OfferCreateForm({
           </label>
         </div>
 
-        <div className="field-grid">
-          <label className="field">
-            <span>Payment cadence (payment offers only)</span>
-            <select
-              name="payment_interval_unit"
-              value={paymentIntervalUnit}
-              onChange={(event) => setPaymentIntervalUnit(readFormControlValue(event) as PaymentIntervalUnit)}
-            >
-              {PAYMENT_INTERVAL_UNIT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+        {isPayment ? (
+          <>
+            <div className="field-grid">
+              <label className="field">
+                <span>Payment cadence (deferred paid pilots only)</span>
+                <select
+                  name="payment_interval_unit"
+                  value={paymentIntervalUnit}
+                  onChange={(event) => setPaymentIntervalUnit(readFormControlValue(event) as PaymentIntervalUnit)}
+                >
+                  {PAYMENT_INTERVAL_UNIT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <label className="field">
-            <span>Repeat every</span>
-            <input
-              min={1}
-              name="payment_interval_value"
-              type="number"
-              value={paymentIntervalValue}
-              onChange={(event) => setPaymentIntervalValue(readFormControlValue(event))}
-            />
-          </label>
-        </div>
-        <p className="panel-note">
-          For paid action offers, use 1 day, 1 month, 1 year, or a custom interval such as 40 days.
-        </p>
+              <label className="field">
+                <span>Repeat every</span>
+                <input
+                  min={1}
+                  name="payment_interval_value"
+                  type="number"
+                  value={paymentIntervalValue}
+                  onChange={(event) => setPaymentIntervalValue(readFormControlValue(event))}
+                />
+              </label>
+            </div>
+            <p className="panel-note">
+              Paid action offers are not part of the public launch wedge. Payment cadence appears
+              only for future reviewed pilots and never implies escrow or custody.
+            </p>
+          </>
+        ) : (
+          <>
+            <input name="payment_interval_unit" type="hidden" value="none" />
+            <input name="payment_interval_value" type="hidden" value="1" />
+          </>
+        )}
 
         <label className="field">
           <span>Trust intensity</span>
@@ -1305,7 +1413,7 @@ export function OfferCreateForm({
 
         <div className="form-actions">
           <button className="button button-primary" disabled={!canPublishOffer} type="submit">
-            Publish offer
+            {isPayment ? "Paid offers are deferred" : "Publish offer"}
           </button>
           <Link className="button button-secondary" href="/offers">
             Back to offers

@@ -57,7 +57,7 @@ const VERIFICATION_FILTERS = [
   "Public pledge",
 ] as const;
 
-const DURATION_FILTERS = ["3 months", "6 months", "12 months", "Open-ended"] as const;
+const DURATION_FILTERS = ["30 days", "3 months", "6 months", "12 months", "Open-ended"] as const;
 
 const SORT_FILTER_CHIPS = [
   { label: "Newest", value: "newest" },
@@ -74,7 +74,7 @@ const DIRECTORY_TABS = [
 const FORMAT_FILTERS = [
   { label: "Pledge swap", value: "pledge" },
   { label: "Donation offset", value: "offset" },
-  { label: "Paid action", value: "payment" },
+  { label: "Paid action (deferred)", value: "payment" },
   { label: "Public-good contribution", value: "public-good" },
 ] as const;
 
@@ -606,7 +606,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     {
       active: formats.includes("offset"),
       href: buildOffersHref({ ...filterHrefParams, formats: toggleValue(formats, "offset") }),
-      label: "Donation offset",
+      label: "Verified offsets",
+    },
+    {
+      active: formats.includes("pledge"),
+      href: buildOffersHref({ ...filterHrefParams, formats: toggleValue(formats, "pledge") }),
+      label: "Bounded pledge swaps",
     },
     {
       active: view === "examples",
@@ -693,14 +698,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <h1>Discover voluntary moral trades that align with your values.</h1>
+            <h1>Browse the narrow pilot wedge.</h1>
             <p className="hero-text">
-              Compare live proposals and worked examples by cause, impact score, verification
-              method, and review status.
+              Compare verified-offset, public-good, and bounded-pledge records by cause, baseline,
+              evidence method, and review status. Paid action offers are retained as deferred worked
+              examples, not the mainstream launch path.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
-                Create trade
+              <Link className="button button-primary" href={viewer ? "/offers/new?mode=offset" : "/signup?returnTo=/offers/new%3Fmode%3Doffset"}>
+                Create verified offset
               </Link>
               {!viewer ? (
                 <Link className="button button-secondary" href="/login?returnTo=/offers">
@@ -709,6 +715,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               ) : null}
               <Link className="button button-secondary" href="/offers?view=examples">
                 View worked examples
+              </Link>
+              <Link className="text-button" href="/validation">
+                Review validation rules
               </Link>
             </div>
           </section>
@@ -727,6 +736,26 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             {formMessage.text}
           </div>
         ) : null}
+
+        <section className="section section-white marketplace-participation-callout" aria-labelledby="wedge-note-heading">
+          <div>
+            <p className="eyebrow">Launch scope</p>
+            <h2 id="wedge-note-heading">Focus on liquidity that can be verified.</h2>
+            <p>
+              The directory now prioritizes donation offsets, moral public goods, and short pledge
+              swaps because they have clearer baselines, evidence, and review states. General paid
+              action offers are deferred until identity, dispute, and compliance workflows are mature.
+            </p>
+          </div>
+          <div className="hero-actions">
+            <Link className="button button-secondary" href="/donation-offsets">
+              Offset guide
+            </Link>
+            <Link className="button button-secondary" href="/validation">
+              Validation guide
+            </Link>
+          </div>
+        </section>
 
         <section className="marketplace-shell" aria-label="Offer marketplace">
           <div className="marketplace-tabs" role="tablist" aria-label="Directory view">
@@ -1214,6 +1243,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <IconMark name="evidence" />
               <h3>Evidence standards</h3>
               <p>How action records, receipts, witnesses, and manual review are presented.</p>
+            </Link>
+            <Link className="panel teaser-card" href="/validation">
+              <IconMark name="review" />
+              <h3>Validation rulebook</h3>
+              <p>Reviewer scope, evidence states, challenge windows, and proof uniqueness checks.</p>
             </Link>
             <Link className="panel teaser-card" href="/safety">
               <IconMark name="safety" />

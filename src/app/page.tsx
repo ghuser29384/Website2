@@ -5,7 +5,7 @@ import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, SITE_NAME, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
-  "Create pledge swaps, donation offsets, and public-good commitments with explicit terms, evidence rules, and safety review.",
+  "Create verified donation offsets, threshold public-good commitments, and bounded pledge swaps with explicit baselines, evidence rules, and safety review.",
 );
 
 export const metadata: Metadata = {
