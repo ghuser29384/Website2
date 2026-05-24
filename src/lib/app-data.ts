@@ -23,6 +23,10 @@ type ProfilePaymentAccountRow = Database["public"]["Tables"]["profile_payment_ac
 type AgreementPaymentRow = Database["public"]["Tables"]["agreement_payments"]["Row"];
 type AgreementPaymentScheduleRow = Database["public"]["Tables"]["agreement_payment_schedules"]["Row"];
 type AgreementEventRow = Database["public"]["Tables"]["agreement_events"]["Row"];
+type AgreementEvidenceItemRow = Database["public"]["Tables"]["agreement_evidence_items"]["Row"];
+type AgreementReviewCaseRow = Database["public"]["Tables"]["agreement_review_cases"]["Row"];
+type ProfileVerificationBadgeRow =
+  Database["public"]["Tables"]["profile_verification_badges"]["Row"];
 type SavedSearchRow = Database["public"]["Tables"]["saved_searches"]["Row"];
 type UserFollowRow = Database["public"]["Tables"]["user_follows"]["Row"];
 type OfferRecommendationRow = Database["public"]["Tables"]["offer_recommendations"]["Row"];
@@ -103,6 +107,7 @@ export interface PublicProfileSummary extends ProfileRow {
   wishParticipantKind: "individual" | "collective" | "institution" | null;
   wishCollectiveName: string | null;
   wishPrivacyStage: "strict" | "broad" | "limited" | null;
+  verificationBadges: ProfileVerificationBadgeRow[];
 }
 
 export interface DonationOffsetPoolRecord extends DonationOffsetPoolRow {
@@ -163,6 +168,8 @@ export interface AgreementRecord extends AgreementRow {
   payments: AgreementPaymentRow[];
   paymentSchedules: AgreementPaymentScheduleRow[];
   events: AgreementEventRow[];
+  evidenceItems: AgreementEvidenceItemRow[];
+  reviewCases: AgreementReviewCaseRow[];
 }
 
 export interface DonationOffsetMatchRecord extends DonationOffsetMatchRow {
@@ -626,7 +633,7 @@ async function getProfileSummaryMap(
   }
 
   const supabase = await createClient();
-  const [{ data: profiles, error: profilesError }, followsResult, previewResult] = await Promise.all([
+  const [{ data: profiles, error: profilesError }, followsResult, previewResult, badgesResult] = await Promise.all([
     supabase.from("profiles").select("*").in("id", uniqueProfileIds),
     viewerId
       ? supabase
@@ -636,6 +643,11 @@ async function getProfileSummaryMap(
           .in("followed_id", uniqueProfileIds)
       : Promise.resolve({ data: [] as Pick<UserFollowRow, "followed_id">[], error: null }),
     supabase.from("wish_profile_previews").select("*").in("profile_id", uniqueProfileIds),
+    supabase
+      .from("profile_verification_badges")
+      .select("*")
+      .in("profile_id", uniqueProfileIds)
+      .eq("status", "verified"),
   ]);
 
   if (profilesError) {
@@ -647,12 +659,23 @@ async function getProfileSummaryMap(
 
   const viewerFollowing = new Set((followsResult.data ?? []).map((row) => row.followed_id));
   const previewMap = new Map<string, WishProfilePreviewRow>();
+  const badgesByProfileId = new Map<string, ProfileVerificationBadgeRow[]>();
 
   if (previewResult.error) {
     logSupabaseError("Failed to load public wish profile previews", previewResult.error);
   } else {
     for (const preview of (previewResult.data ?? []) as WishProfilePreviewRow[]) {
       previewMap.set(preview.profile_id, preview);
+    }
+  }
+
+  if (badgesResult.error) {
+    logSupabaseError("Failed to load profile verification badges", badgesResult.error);
+  } else {
+    for (const badge of (badgesResult.data ?? []) as ProfileVerificationBadgeRow[]) {
+      const bucket = badgesByProfileId.get(badge.profile_id) ?? [];
+      bucket.push(badge);
+      badgesByProfileId.set(badge.profile_id, bucket);
     }
   }
 
@@ -686,6 +709,7 @@ async function getProfileSummaryMap(
           wishParticipantKind: preview?.participant_kind ?? null,
           wishCollectiveName: preview?.collective_name || null,
           wishPrivacyStage: preview?.privacy_stage ?? null,
+          verificationBadges: badgesByProfileId.get(profile.id) ?? [],
         } satisfies PublicProfileSummary,
       ];
     }),
@@ -1850,7 +1874,9 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
   }
 
   const supabase = await createClient();
-  const offerIds = [...new Set(agreements.map((agreement) => agreement.offer_id))];
+  const offerIds = [
+    ...new Set(agreements.map((agreement) => agreement.offer_id).filter((id): id is string => Boolean(id))),
+  ];
   const profileIds = [
     ...new Set(
       agreements.flatMap((agreement) => [agreement.proposer_id, agreement.responder_id]),
@@ -1863,10 +1889,14 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
     { data: payments, error: paymentsError },
     { data: paymentSchedules, error: paymentSchedulesError },
     { data: events, error: eventsError },
+    { data: evidenceItems, error: evidenceItemsError },
+    { data: reviewCases, error: reviewCasesError },
     profileMap,
   ] =
     await Promise.all([
-      supabase.from("offers").select("*").in("id", offerIds),
+      offerIds.length
+        ? supabase.from("offers").select("*").in("id", offerIds)
+        : Promise.resolve({ data: [] as OfferRow[], error: null }),
       supabase.from("agreement_ratings").select("*").in("agreement_id", agreementIds),
       supabase
         .from("agreement_payments")
@@ -1880,6 +1910,16 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
         .order("next_due_at", { ascending: true }),
       supabase
         .from("agreement_events")
+        .select("*")
+        .in("agreement_id", agreementIds)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("agreement_evidence_items")
+        .select("*")
+        .in("agreement_id", agreementIds)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("agreement_review_cases")
         .select("*")
         .in("agreement_id", agreementIds)
         .order("created_at", { ascending: false }),
@@ -1901,6 +1941,12 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
   if (eventsError) {
     throw new Error(eventsError.message);
   }
+  if (evidenceItemsError) {
+    throw new Error(evidenceItemsError.message);
+  }
+  if (reviewCasesError) {
+    throw new Error(reviewCasesError.message);
+  }
 
   const hydratedOffers = await hydrateOffers((offers ?? []) as OfferRow[], userId);
   const offersById = new Map(hydratedOffers.map((offer) => [offer.id, offer]));
@@ -1908,6 +1954,8 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
   const paymentsByAgreement = new Map<string, AgreementPaymentRow[]>();
   const paymentSchedulesByAgreement = new Map<string, AgreementPaymentScheduleRow[]>();
   const eventsByAgreement = new Map<string, AgreementEventRow[]>();
+  const evidenceItemsByAgreement = new Map<string, AgreementEvidenceItemRow[]>();
+  const reviewCasesByAgreement = new Map<string, AgreementReviewCaseRow[]>();
 
   for (const rating of (ratings ?? []) as AgreementRatingRow[]) {
     const bucket = ratingsByAgreement.get(rating.agreement_id) ?? [];
@@ -1937,6 +1985,18 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
     eventsByAgreement.set(event.agreement_id, bucket);
   }
 
+  for (const evidenceItem of (evidenceItems ?? []) as AgreementEvidenceItemRow[]) {
+    const bucket = evidenceItemsByAgreement.get(evidenceItem.agreement_id) ?? [];
+    bucket.push(evidenceItem);
+    evidenceItemsByAgreement.set(evidenceItem.agreement_id, bucket);
+  }
+
+  for (const reviewCase of (reviewCases ?? []) as AgreementReviewCaseRow[]) {
+    const bucket = reviewCasesByAgreement.get(reviewCase.agreement_id) ?? [];
+    bucket.push(reviewCase);
+    reviewCasesByAgreement.set(reviewCase.agreement_id, bucket);
+  }
+
   return agreements.map((agreement) => {
     const ratingsForAgreement = ratingsByAgreement.get(agreement.id) ?? [];
     const viewerRating =
@@ -1946,7 +2006,7 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
 
     return {
       ...agreement,
-      offer: offersById.get(agreement.offer_id) ?? null,
+      offer: agreement.offer_id ? offersById.get(agreement.offer_id) ?? null : null,
       proposer: profileMap.get(agreement.proposer_id) ?? null,
       responder: profileMap.get(agreement.responder_id) ?? null,
       counterparty: profileMap.get(counterpartyId) ?? null,
@@ -1954,6 +2014,8 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
       payments: paymentsByAgreement.get(agreement.id) ?? [],
       paymentSchedules: paymentSchedulesByAgreement.get(agreement.id) ?? [],
       events: eventsByAgreement.get(agreement.id) ?? [],
+      evidenceItems: evidenceItemsByAgreement.get(agreement.id) ?? [],
+      reviewCases: reviewCasesByAgreement.get(agreement.id) ?? [],
     } satisfies AgreementRecord;
   });
 }

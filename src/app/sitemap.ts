@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { getPublicSitemapEntries, getAbsoluteUrl } from "@/lib/seo";
+import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
@@ -17,6 +18,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily",
       priority: 0.9,
     },
+    ...CANONICAL_WORKED_CASE_OFFERS.map((offer) => ({
+      url: getAbsoluteUrl(`/offers/examples/${offer.id}`),
+      lastModified: now,
+      changeFrequency: "monthly" as const,
+      priority: 0.55,
+    })),
     {
       url: getAbsoluteUrl("/pledge-swaps"),
       lastModified: now,

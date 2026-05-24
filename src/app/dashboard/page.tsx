@@ -9,6 +9,7 @@ import {
   createBrokerageBountyAction,
   createCollectiveAction,
   createCollectiveDecisionAction,
+  createAgreementRoomFromIntroductionPlanAction,
   createMatchConciergeRequestAction,
   createNetworkInviteAction,
   createStripeConnectAccountAction,
@@ -968,6 +969,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <span>
                         <strong>Privacy:</strong> {plan.privacy_notes}
                       </span>
+                      <form action={createAgreementRoomFromIntroductionPlanAction} className="compact-form">
+                        <input name="plan_id" type="hidden" value={plan.id} />
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <button className="button button-primary button-mini" type="submit">
+                          Open agreement room
+                        </button>
+                      </form>
                       {introductionTasksByPlanId.get(plan.id)?.length ? (
                         <div className="mini-list">
                           {introductionTasksByPlanId.get(plan.id)?.map((task) => (
@@ -1602,7 +1610,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : null}
             </article>
 
-            <article className="panel data-card">
+            <article className="panel data-card" id="saved-searches">
               <p className="detail-kicker">Saved searches</p>
               <h3>Run durable match searches</h3>
               <p className="route-text">
@@ -2181,10 +2189,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <p className="route-text">
                     {agreement.offer
                       ? `${agreement.offer.offered_cause} for ${agreement.offer.requested_cause}`
-                      : "Offer reference unavailable"}
+                      : "Private introduction agreement room"}
                   </p>
                   <div className="tag-row">
                     <span className="badge">{agreement.status}</span>
+                    <span className="impact-pill">
+                      {agreement.completion_state.replaceAll("_", " ")}
+                    </span>
+                    <span className="source-pill">
+                      Evidence {agreement.evidenceItems.length}
+                    </span>
+                    <span className="source-pill">
+                      Review cases {agreement.reviewCases.length}
+                    </span>
                     {agreement.viewerRating ? (
                       <span className="impact-pill">Your rating: {agreement.viewerRating.score}/10</span>
                     ) : null}

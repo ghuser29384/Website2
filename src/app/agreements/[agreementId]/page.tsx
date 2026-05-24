@@ -7,7 +7,10 @@ import {
   createAgreementPaymentCheckoutAction,
   createAgreementPaymentScheduleAction,
   rateAgreementAction,
+  requestAgreementReviewAppealAction,
   requestPaymentReviewAction,
+  saveAgreementTermsAction,
+  submitAgreementEvidenceAction,
   updateAgreementStatusAction,
 } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -48,6 +51,42 @@ function formatCadence(value: number, unit: string) {
   return value === 1 ? `every ${unit}` : `every ${value} ${unit}s`;
 }
 
+const COMPLETION_STATES = [
+  "pending_evidence",
+  "under_review",
+  "challenge_window_open",
+  "reviewed_complete",
+  "disputed_unresolved",
+] as const;
+
+const VERIFICATION_BADGES = [
+  "identity_verified",
+  "organization_verified",
+  "payment_evidence_verified",
+  "completion_reviewed",
+  "repeat_counterparty",
+] as const;
+
+function formatState(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function formatSla(value: string | null) {
+  if (!value) {
+    return "No SLA set";
+  }
+
+  const dueAt = Date.parse(value);
+  if (Number.isNaN(dueAt)) {
+    return "SLA unavailable";
+  }
+
+  const diffMs = dueAt - Date.now();
+  const hours = Math.max(1, Math.ceil(Math.abs(diffMs) / (60 * 60 * 1000)));
+
+  return diffMs < 0 ? `Overdue by ${hours}h` : `Due in ${hours}h`;
+}
+
 export default async function AgreementPage({ params, searchParams }: AgreementPageProps) {
   const { agreementId } = await params;
   const resolvedSearchParams = await searchParams;
@@ -58,6 +97,25 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
   if (!agreement) {
     notFound();
   }
+
+  const proposerBadges = new Set(
+    agreement.proposer?.verificationBadges
+      .filter((badge) => badge.status === "verified")
+      .map((badge) => badge.badge_type) ?? [],
+  );
+  const responderBadges = new Set(
+    agreement.responder?.verificationBadges
+      .filter((badge) => badge.status === "verified")
+      .map((badge) => badge.badge_type) ?? [],
+  );
+  const defaultStructuredTerms =
+    agreement.structured_terms ||
+    agreement.offer?.offer_action ||
+    "State the proposed action, reciprocal action, burden, and expected moral surplus.";
+  const defaultEvidenceRule =
+    agreement.evidence_rule ||
+    agreement.offer?.verification ||
+    "Name the receipts, logs, attestations, or provider records that will count.";
 
   return (
     <div className="page-shell">
@@ -98,7 +156,7 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>{agreement.status}</strong>
+                  <strong>{formatState(agreement.completion_state)}</strong>
                   <p>Status last updated {new Date(agreement.updated_at).toLocaleDateString()}.</p>
                 </div>
               </div>
@@ -112,8 +170,8 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>{agreement.events.length} event(s)</strong>
-                  <p>Evidence, counterproposals, disputes, and status changes.</p>
+                  <strong>{agreement.reviewCases.length} review case(s)</strong>
+                  <p>{agreement.evidenceItems.length} evidence item(s) submitted.</p>
                 </div>
               </div>
             </div>
@@ -139,21 +197,237 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
             <p>
               {agreement.offer
                 ? `${agreement.offer.offered_cause} for ${agreement.offer.requested_cause}`
-                : "The original offer could not be loaded."}
+                : "Private introduction agreement room"}
             </p>
           </div>
 
           <div className="data-grid">
             <article className="panel data-card">
               <p className="detail-kicker">Offer action</p>
-              <h3>{agreement.offer?.offer_action ?? "Unavailable"}</h3>
-              <p className="route-text">{agreement.offer?.verification ?? "No verification listed."}</p>
+              <h3>{agreement.offer?.offer_action ?? (agreement.structured_terms || "Draft terms needed")}</h3>
+              <p className="route-text">{defaultEvidenceRule}</p>
             </article>
             <article className="panel data-card">
               <p className="detail-kicker">Counterparty action</p>
-              <h3>{agreement.offer?.request_action ?? "Unavailable"}</h3>
+              <h3>{agreement.offer?.request_action ?? "Confirm reciprocal action in room terms"}</h3>
               <p className="route-text">{agreement.notes || "No additional notes recorded."}</p>
             </article>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Agreement room</p>
+            <h3>Structured terms before evidence review</h3>
+            <form action={saveAgreementTermsAction} className="stack-form">
+              <input name="agreement_id" type="hidden" value={agreement.id} />
+              <input name="return_to" type="hidden" value={`/agreements/${agreement.id}`} />
+              <label className="field">
+                <span>Structured terms</span>
+                <textarea defaultValue={defaultStructuredTerms} name="structured_terms" rows={4} required />
+              </label>
+              <div className="field-grid">
+                <label className="field">
+                  <span>No-trade baseline</span>
+                  <textarea
+                    defaultValue={agreement.no_trade_baseline}
+                    name="no_trade_baseline"
+                    placeholder="What would each side likely do if this trade does not happen?"
+                    rows={3}
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Counterfactual declaration</span>
+                  <textarea
+                    defaultValue={agreement.counterfactual_declaration}
+                    name="counterfactual_declaration"
+                    placeholder="Why is this action plausibly caused by the agreement rather than already planned?"
+                    rows={3}
+                    required
+                  />
+                </label>
+              </div>
+              <div className="field-grid">
+                <label className="field">
+                  <span>Duration</span>
+                  <textarea defaultValue={agreement.duration_terms} name="duration_terms" rows={3} required />
+                </label>
+                <label className="field">
+                  <span>Exit conditions</span>
+                  <textarea defaultValue={agreement.exit_conditions} name="exit_conditions" rows={3} required />
+                </label>
+              </div>
+              <label className="field">
+                <span>Evidence rule</span>
+                <textarea defaultValue={defaultEvidenceRule} name="evidence_rule" rows={3} required />
+              </label>
+              <div className="field-grid">
+                <label className="field">
+                  <span>Privacy scope</span>
+                  <textarea defaultValue={agreement.privacy_scope} name="privacy_scope" rows={3} required />
+                </label>
+                <label className="field">
+                  <span>Disclosure scope</span>
+                  <textarea defaultValue={agreement.disclosure_scope} name="disclosure_scope" rows={3} />
+                </label>
+              </div>
+              <button className="button button-primary button-mini" type="submit">
+                Save agreement terms
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <section className="section section-subtle">
+          <div className="section-head">
+            <p className="eyebrow">Evidence review</p>
+            <h2>Completion states, evidence schemas, and challenge lane</h2>
+            <p>
+              A participant can submit evidence, then an operator reviews it with SLA, conflict
+              notes, public reasoning, and an appeal path before the room earns completion trust.
+            </p>
+          </div>
+
+          <div className="data-grid">
+            {COMPLETION_STATES.map((state) => (
+              <article className="panel data-card" key={state}>
+                <p className="detail-kicker">Completion state</p>
+                <h3>{formatState(state)}</h3>
+                <p className="route-text">
+                  {state === agreement.completion_state ? "Current room state." : "Available state in the review ladder."}
+                </p>
+              </article>
+            ))}
+          </div>
+
+          <div className="data-grid">
+            <article className="panel data-card">
+              <p className="detail-kicker">Submit evidence</p>
+              <h3>Open operator review</h3>
+              <form action={submitAgreementEvidenceAction} className="stack-form compact-form">
+                <input name="agreement_id" type="hidden" value={agreement.id} />
+                <input name="return_to" type="hidden" value={`/agreements/${agreement.id}`} />
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Trade schema</span>
+                    <select name="trade_type" defaultValue={agreement.offer?.mode === "offset" ? "donation_offset" : "pledge_swap"}>
+                      <option value="pledge_swap">Pledge swap</option>
+                      <option value="donation_offset">Donation offset</option>
+                      <option value="mpgf">Moral public goods</option>
+                      <option value="paid_action">Paid action</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Evidence type</span>
+                    <select name="evidence_type" defaultValue="manual_attestation">
+                      <option value="receipt">Receipt</option>
+                      <option value="provider_record">Provider record</option>
+                      <option value="manual_attestation">Manual attestation</option>
+                      <option value="public_log">Public log</option>
+                      <option value="timestamped_commitment">Timestamped commitment</option>
+                      <option value="third_party_review">Third-party review</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Evidence title</span>
+                  <input name="title" placeholder="Receipt, dated pledge log, provider record, or attestation" required />
+                </label>
+                <label className="field">
+                  <span>Evidence URL</span>
+                  <input name="evidence_url" placeholder="Optional link to proof packet" type="url" />
+                </label>
+                <label className="field">
+                  <span>Evidence summary</span>
+                  <textarea name="evidence_summary" placeholder="What claim does this evidence support?" required />
+                </label>
+                <label className="field">
+                  <span>Review scope</span>
+                  <textarea name="review_scope" placeholder="What should the operator verify, and what should remain out of scope?" />
+                </label>
+                <button className="button button-primary button-mini" type="submit">
+                  Submit for review
+                </button>
+              </form>
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Verification ladder</p>
+              <h3>Transaction-linked trust signals</h3>
+              <div className="mini-list">
+                {VERIFICATION_BADGES.map((badge) => (
+                  <div className="mini-list-item" key={badge}>
+                    <strong>{formatState(badge)}</strong>
+                    <span>
+                      Proposer: {proposerBadges.has(badge) ? "verified" : "not verified"} | Responder:{" "}
+                      {responderBadges.has(badge) ? "verified" : "not verified"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+
+          <div className="data-grid">
+            {agreement.evidenceItems.length ? (
+              agreement.evidenceItems.map((item) => (
+                <article className="panel data-card" key={item.id}>
+                  <p className="detail-kicker">{formatState(item.trade_type)} | {formatState(item.evidence_type)}</p>
+                  <h3>{item.title}</h3>
+                  <div className="tag-row">
+                    <span className="badge">{formatState(item.status)}</span>
+                    <span className="source-pill">{item.schema_key}</span>
+                    {item.reviewer_confidence !== null ? (
+                      <span className="source-pill">Confidence {item.reviewer_confidence}/100</span>
+                    ) : null}
+                  </div>
+                  <p className="route-text">{item.evidence_summary}</p>
+                  {item.evidence_url ? (
+                    <a className="inline-link" href={item.evidence_url}>Open evidence</a>
+                  ) : null}
+                </article>
+              ))
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No evidence submitted.</strong>
+                  <p>Submit a receipt, log, attestation, or provider record once terms are clear.</p>
+                </div>
+              </div>
+            )}
+
+            {agreement.reviewCases.length ? (
+              agreement.reviewCases.map((reviewCase) => (
+                <article className="panel data-card" key={reviewCase.id}>
+                  <p className="detail-kicker">{reviewCase.reviewer_role.replaceAll("_", " ")}</p>
+                  <h3>{formatState(reviewCase.status)}</h3>
+                  <div className="tag-row">
+                    <span className="source-pill">{formatSla(reviewCase.sla_due_at)}</span>
+                    {reviewCase.challenge_window_ends_at ? (
+                      <span className="source-pill">
+                        Challenge until {new Date(reviewCase.challenge_window_ends_at).toLocaleDateString()}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="route-text">{reviewCase.review_scope || "No review scope recorded."}</p>
+                  {reviewCase.public_reasoning_summary ? (
+                    <p className="route-text">{reviewCase.public_reasoning_summary}</p>
+                  ) : null}
+                  <form action={requestAgreementReviewAppealAction} className="compact-form">
+                    <input name="review_case_id" type="hidden" value={reviewCase.id} />
+                    <input name="return_to" type="hidden" value={`/agreements/${agreement.id}`} />
+                    <label className="field">
+                      <span>Challenge or appeal reason</span>
+                      <textarea name="appeal_reason" placeholder="What fact, duplicate proof, coercion issue, or conflict should be reviewed?" />
+                    </label>
+                    <button className="button button-secondary button-mini" type="submit">
+                      Request appeal
+                    </button>
+                  </form>
+                </article>
+              ))
+            ) : null}
           </div>
         </section>
 

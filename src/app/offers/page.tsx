@@ -7,7 +7,6 @@ import {
   Breadcrumbs,
   EmptyState,
   IconMark,
-  MoralTradeHeroVisual,
   OfferCard,
   FilterSidebar,
 } from "@/components/ui/page-primitives";
@@ -20,18 +19,24 @@ import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Browse moral trade offers",
+  title: "Browse Moral Trade Offers and Worked Examples",
   description:
-    "Browse live Moral Trade proposals and worked examples by cause, format, verification method, and review status.",
+    "Browse live moral trade offers and worked examples by cause area, format, evidence method, and review state.",
   alternates: {
     canonical: "/offers",
   },
   openGraph: {
-    title: "Browse moral trade offers",
+    title: "Browse Moral Trade Offers and Worked Examples",
     description:
-      "Browse live Moral Trade proposals and worked examples by cause, format, verification method, and review status.",
+      "Explore live offers and reviewed examples with explicit terms, evidence rules, and safety boundaries.",
     url: getAbsoluteUrl("/offers"),
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Browse Moral Trade Offers and Worked Examples",
+    description:
+      "Explore live offers and reviewed examples with explicit terms, evidence rules, and safety boundaries.",
   },
 };
 
@@ -117,6 +122,7 @@ interface MarketplaceListing {
   requestedImpact: number;
   hasReciprocalMatch: boolean;
   href: string;
+  summary: string;
 }
 
 function readParam(searchParams: Record<string, string | string[] | undefined>, key: string) {
@@ -140,12 +146,12 @@ function parsePage(value: string | string[] | undefined) {
   return Number.isFinite(page) && page > 0 ? page : 1;
 }
 
-function parseDirectoryView(value: string): DirectoryView {
+function parseDirectoryView(value: string, fallback: DirectoryView = "live"): DirectoryView {
   if (value === "live" || value === "examples" || value === "all") {
     return value;
   }
 
-  return "live";
+  return fallback;
 }
 
 function parseFormatFilters(values: readonly string[]): ListingFormat[] {
@@ -201,7 +207,7 @@ function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number
     alias: offer.alias,
     duration: offer.duration,
     hasReciprocalMatch: true,
-    href: `/offers?view=examples&search=${encodeURIComponent(offer.alias)}`,
+    href: `/offers/examples/${offer.id}`,
     id: offer.id,
     mode: offer.mode,
     offeredCause: offer.offeredCause,
@@ -212,6 +218,7 @@ function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number
     requesting: offer.requestAction,
     reviewState: "Worked example; manual review required before reliance",
     source: "example",
+    summary: `A ${offer.duration.toLowerCase()} ${formatMode(offer.mode).toLowerCase()} with ${offer.verification.toLowerCase()} evidence.`,
     title: `${offer.alias}: ${offer.offeredCause} for ${offer.requestedCause}`,
     verification: offer.verification,
   };
@@ -233,6 +240,7 @@ function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
     requesting: offer.request_action,
     reviewState: "Live offer; evidence review required before reliance",
     source: "live",
+    summary: truncateDescription(offer.notes || `${offer.duration} ${formatMode(offer.mode).toLowerCase()} with named evidence rules.`, 150),
     title: `${offer.offered_cause} for ${offer.requested_cause}`,
     verification: offer.verification,
   };
@@ -371,7 +379,7 @@ function buildOffersHref(params: {
 }) {
   const query = new URLSearchParams();
 
-  if (params.view && params.view !== "live") query.set("view", params.view);
+  if (params.view) query.set("view", params.view);
   params.formats?.forEach((format) => query.append("mode", format));
   if (params.searchQuery) query.set("search", params.searchQuery);
   params.causes?.forEach((cause) => query.append("cause", cause));
@@ -397,6 +405,7 @@ function createTabHref(
 
 function buildActiveFilterLabels(filters: {
   causes: readonly string[];
+  defaultView: DirectoryView;
   directorySort: DirectorySort;
   duration: string;
   formats: readonly ListingFormat[];
@@ -411,8 +420,14 @@ function buildActiveFilterLabels(filters: {
 }) {
   const labels: string[] = [];
 
-  if (filters.view !== "live") {
-    labels.push(filters.view === "examples" ? "Worked examples" : "All listings");
+  if (filters.view !== filters.defaultView) {
+    labels.push(
+      filters.view === "examples"
+        ? "Worked examples"
+        : filters.view === "live"
+          ? "Live offers"
+          : "All listings",
+    );
   }
 
   if (filters.searchQuery) {
@@ -485,6 +500,13 @@ function getListingModeIcon(mode: MarketplaceListing["mode"]) {
   return "fund";
 }
 
+function getCreateSimilarHref(listing: MarketplaceListing, viewerPresent: boolean) {
+  const mode = listing.mode === "public-good" ? "pledge" : listing.mode;
+  const target = `/offers/new?mode=${mode}`;
+
+  return viewerPresent ? target : `/signup?returnTo=${encodeURIComponent(target)}`;
+}
+
 function getCauseGroup(listing: MarketplaceListing) {
   return (
     CAUSE_GROUPS.find((group) => listingMatchesCause(listing, group.label)) ?? {
@@ -499,7 +521,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const viewer = await getViewer();
   const formMessage = getFormMessage(resolvedSearchParams);
   const page = parsePage(resolvedSearchParams.page);
-  const view = parseDirectoryView(readParam(resolvedSearchParams, "view"));
   const formats = parseFormatFilters(readParams(resolvedSearchParams, "mode"));
   const searchQuery = readParam(resolvedSearchParams, "search").trim().slice(0, 120);
   const causes = readParams(resolvedSearchParams, "cause").filter((value) =>
@@ -520,6 +541,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const liveListings = offersPage.items.map(liveOfferToListing);
   const workedExampleListings = CANONICAL_WORKED_CASE_OFFERS.map(workedCaseToListing);
   const allListings = [...liveListings, ...workedExampleListings];
+  const liveOfferCount = liveListings.length;
+  const workedExampleCount = workedExampleListings.length;
+  const defaultView = liveOfferCount > 0 ? "live" : "examples";
+  const view = parseDirectoryView(
+    readParam(resolvedSearchParams, "tab") || readParam(resolvedSearchParams, "view"),
+    defaultView,
+  );
+  const tabCounts: Record<DirectoryView, number> = {
+    all: allListings.length,
+    examples: workedExampleCount,
+    live: liveOfferCount,
+  };
   const activeFilters = {
     causes,
     duration,
@@ -552,6 +585,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   };
   const activeFilterLabels = buildActiveFilterLabels({
     causes,
+    defaultView,
     directorySort,
     duration,
     formats,
@@ -596,6 +630,21 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             return listing.reviewState.toLowerCase().includes("manual review");
           }),
   }));
+  const visibleFormatCounts = formatCounts.filter(
+    (option) => option.count > 0 || formats.includes(option.value),
+  );
+  const visibleCauseCounts = causeCounts.filter(
+    (option) => option.count > 0 || causes.includes(option.label),
+  );
+  const visibleVerificationCounts = verificationCounts.filter(
+    (option) => option.count > 0 || verification === option.label,
+  );
+  const visibleDurationCounts = durationCounts.filter(
+    (option) => option.count > 0 || duration === option.label,
+  );
+  const visibleReviewStatusCounts = reviewStatusCounts.filter(
+    (option) => option.value === "all" || option.count > 0 || reviewStatus === option.value,
+  );
   const reciprocalCount = countBy(countScope, (listing) => listing.hasReciprocalMatch);
   const popularFilterLinks = [
     {
@@ -663,10 +712,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const offersStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "Browse moral trade offers",
+    name: "Browse Moral Trade Offers and Worked Examples",
     url: getAbsoluteUrl("/offers"),
     description:
-      "Live proposals and worked examples that state actions, reciprocal requests, and verification terms.",
+      "Live offers and worked examples that state actions, reciprocal requests, and verification terms.",
     mainEntity: {
       "@type": "ItemList",
       itemListElement: filteredListings.slice(0, 20).map((listing, index) => ({
@@ -678,6 +727,24 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       })),
     },
   };
+  const breadcrumbStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: getAbsoluteUrl("/"),
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Browse offers",
+        item: getAbsoluteUrl("/offers"),
+      },
+    ],
+  };
 
   return (
     <div className="page-shell page-shell-focused">
@@ -687,7 +754,13 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         }}
         type="application/ld+json"
       />
-      <header className="hero marketplace-hero">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbStructuredData),
+        }}
+        type="application/ld+json"
+      />
+      <header className="collection-header offers-collection-header">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(Boolean(viewer))}
@@ -696,34 +769,60 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         />
         <Breadcrumbs items={[{ href: "/offers", label: "Browse offers" }]} />
 
-        <div className="hero-grid">
-          <section className="hero-copy">
-            <h1>Browse the narrow pilot wedge.</h1>
+        <div className="collection-header-body">
+          <section className="collection-header-copy">
+            <h1>Browse offers</h1>
             <p className="hero-text">
-              Compare verified-offset, public-good, and bounded-pledge records by cause, baseline,
-              evidence method, and review status. Paid action offers are retained as deferred worked
-              examples, not the mainstream launch path.
+              Explore live offers and worked examples by cause area, format, evidence method, and
+              review state.
             </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href={viewer ? "/offers/new?mode=offset" : "/signup?returnTo=/offers/new%3Fmode%3Doffset"}>
-                Create verified offset
-              </Link>
-              {!viewer ? (
-                <Link className="button button-secondary" href="/login?returnTo=/offers">
-                  Sign in to participate
-                </Link>
-              ) : null}
-              <Link className="button button-secondary" href="/offers?view=examples">
-                View worked examples
-              </Link>
-              <Link className="text-button" href="/validation">
-                Review validation rules
-              </Link>
+            <div className="collection-stats" aria-label="Marketplace counts">
+              <span>
+                <strong>{liveOfferCount}</strong> live {liveOfferCount === 1 ? "offer" : "offers"}
+              </span>
+              <span>
+                <strong>{workedExampleCount}</strong> worked{" "}
+                {workedExampleCount === 1 ? "example" : "examples"}
+              </span>
             </div>
           </section>
 
-          <MoralTradeHeroVisual />
+          <aside className="collection-action-panel panel" aria-label="Collection actions">
+            <div className="collection-action-copy">
+              <strong>{defaultView === "examples" ? "Examples are first today." : "Live offers are ready."}</strong>
+              <p>
+                {defaultView === "examples"
+                  ? "The live directory has no public offers yet, so this page opens on reviewed examples that show the expected structure."
+                  : "Start with live offers, then inspect examples when you want to understand the evidence model."}
+              </p>
+            </div>
+            <div className="hero-actions">
+              <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
+                Create an offer
+              </Link>
+              <Link className="button button-secondary" href={viewer ? "/dashboard#saved-searches" : "/login?returnTo=/dashboard"}>
+                Save search
+              </Link>
+            </div>
+          </aside>
         </div>
+
+        <details className="pilot-note panel">
+          <summary>About this pilot</summary>
+          <p>
+            Moral Trade currently prioritizes donation offsets, moral public goods, and bounded
+            pledge swaps because they have clearer baselines, evidence, and review states. Paid
+            action offers remain deferred while identity, dispute, and compliance workflows mature.
+          </p>
+          <div className="pilot-note-links">
+            <Link className="text-button" href="/donation-offsets">
+              Offset guide
+            </Link>
+            <Link className="text-button" href="/validation">
+              Validation rules
+            </Link>
+          </div>
+        </details>
       </header>
 
       <main id="main-content" tabIndex={-1}>
@@ -737,26 +836,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </div>
         ) : null}
 
-        <section className="section section-white marketplace-participation-callout" aria-labelledby="wedge-note-heading">
-          <div>
-            <p className="eyebrow">Launch scope</p>
-            <h2 id="wedge-note-heading">Focus on liquidity that can be verified.</h2>
-            <p>
-              The directory now prioritizes donation offsets, moral public goods, and short pledge
-              swaps because they have clearer baselines, evidence, and review states. General paid
-              action offers are deferred until identity, dispute, and compliance workflows are mature.
-            </p>
-          </div>
-          <div className="hero-actions">
-            <Link className="button button-secondary" href="/donation-offsets">
-              Offset guide
-            </Link>
-            <Link className="button button-secondary" href="/validation">
-              Validation guide
-            </Link>
-          </div>
-        </section>
-
         <section className="marketplace-shell" aria-label="Offer marketplace">
           <div className="marketplace-tabs" role="tablist" aria-label="Directory view">
             {DIRECTORY_TABS.map((tab) => (
@@ -766,18 +845,19 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 href={createTabHref(tab.value, filterHrefParams)}
                 key={tab.value}
               >
-                {tab.label}
+                <span>{tab.label}</span>
+                <strong>{tabCounts[tab.value]}</strong>
               </Link>
             ))}
           </div>
 
           <form action="/offers" className="marketplace-search marketplace-search-wide marketplace-search-with-category" role="search">
             <label className="field marketplace-search-field">
-              <span>Search trades</span>
+              <span>Search offers</span>
               <input
                 defaultValue={searchQuery}
                 name="search"
-                placeholder="Search causes, actions, aliases, verification terms"
+                placeholder="Search offers or cause areas"
                 type="search"
               />
             </label>
@@ -785,8 +865,29 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <span>Cause</span>
               <select name="cause" defaultValue={causes[0] ?? ""}>
                 <option value="">All causes</option>
-                {causeCounts.map((option) => (
+                {visibleCauseCounts.map((option) => (
                   <option key={option.label} value={option.label}>
+                    {withCount(option.label, option.count)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field marketplace-format-field">
+              <span>Format</span>
+              <select name="mode" defaultValue={formats[0] ?? ""}>
+                <option value="">All formats</option>
+                {visibleFormatCounts.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {withCount(option.label, option.count)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field marketplace-review-field">
+              <span>Review state</span>
+              <select name="review" defaultValue={reviewStatus}>
+                {visibleReviewStatusCounts.map((option) => (
+                  <option key={option.value} value={option.value}>
                     {withCount(option.label, option.count)}
                   </option>
                 ))}
@@ -802,8 +903,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 ))}
               </select>
             </label>
-            {view !== "live" ? <input name="view" type="hidden" value={view} /> : null}
-            {formats.map((selectedFormat) => (
+            <input name="view" type="hidden" value={view} />
+            {formats.slice(1).map((selectedFormat) => (
               <input key={selectedFormat} name="mode" type="hidden" value={selectedFormat} />
             ))}
             {causes.slice(1).map((selectedCause) => (
@@ -811,7 +912,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             ))}
             {verification ? <input name="verification" type="hidden" value={verification} /> : null}
             {duration ? <input name="duration" type="hidden" value={duration} /> : null}
-            {reviewStatus !== "all" ? <input name="review" type="hidden" value={reviewStatus} /> : null}
             {minImpact ? <input name="min_impact" type="hidden" value={minImpact} /> : null}
             {minRequestedImpact ? <input name="min_requested" type="hidden" value={minRequestedImpact} /> : null}
             {reciprocal ? <input name="reciprocal" type="hidden" value="1" /> : null}
@@ -819,6 +919,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <button className="button button-primary" type="submit">
               Search
             </button>
+            <p className="toolbar-result-count" role="status" aria-live="polite">
+              {filteredListings.length} {filteredListings.length === 1 ? "result" : "results"}
+            </p>
           </form>
 
           <div className="popular-filter-row" aria-label="Popular marketplace filters">
@@ -863,14 +966,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 </div>
 
                 <form action="/offers" className="filter-form" id="offer-filter-form">
-                  {view !== "live" ? <input name="view" type="hidden" value={view} /> : null}
+                  <input name="view" type="hidden" value={view} />
                   {searchQuery ? <input name="search" type="hidden" value={searchQuery} /> : null}
                   {layout !== "grid" ? <input name="layout" type="hidden" value={layout} /> : null}
 
                   <details className="filter-group" open>
                     <summary>Format</summary>
                     <div className="filter-option-list">
-                      {formatCounts.map((option) => (
+                      {visibleFormatCounts.length ? visibleFormatCounts.map((option) => (
                         <label className="check-row" key={option.value}>
                           <input
                             defaultChecked={formats.includes(option.value)}
@@ -880,14 +983,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                           />
                           <span>{withCount(option.label, option.count)}</span>
                         </label>
-                      ))}
+                      )) : <p className="filter-empty-note">No formats available for this view.</p>}
                     </div>
                   </details>
 
                   <details className="filter-group" open>
                     <summary>Cause area</summary>
                     <div className="filter-option-list">
-                      {causeCounts.map((option) => (
+                      {visibleCauseCounts.length ? visibleCauseCounts.map((option) => (
                         <label className="check-row" key={option.label}>
                           <input
                             defaultChecked={causes.includes(option.label)}
@@ -897,7 +1000,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                           />
                           <span>{withCount(option.label, option.count)}</span>
                         </label>
-                      ))}
+                      )) : <p className="filter-empty-note">No cause facets available for this view.</p>}
                     </div>
                   </details>
 
@@ -907,7 +1010,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       <span>Verification method</span>
                       <select name="verification" defaultValue={verification}>
                         <option value="">Any verification method</option>
-                        {verificationCounts.map((option) => (
+                        {visibleVerificationCounts.map((option) => (
                           <option key={option.label} value={option.label}>
                             {withCount(option.label, option.count)}
                           </option>
@@ -918,7 +1021,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       <span>Duration</span>
                       <select name="duration" defaultValue={duration}>
                         <option value="">Any duration</option>
-                        {durationCounts.map((option) => (
+                        {visibleDurationCounts.map((option) => (
                           <option key={option.label} value={option.label}>
                             {withCount(option.label, option.count)}
                           </option>
@@ -932,7 +1035,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     <label className="field">
                       <span>Review status</span>
                       <select name="review" defaultValue={reviewStatus}>
-                        {reviewStatusCounts.map((option) => (
+                        {visibleReviewStatusCounts.map((option) => (
                           <option key={option.value} value={option.value}>
                             {withCount(option.label, option.count)}
                           </option>
@@ -1048,22 +1151,17 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                             modeLabel={formatListingMode(listing.mode)}
                             offeredAction={listing.offering}
                             offeredScore={listing.offerImpact}
-                            primaryActionLabel={listing.source === "example" ? "View worked example" : "Inspect terms"}
+                            primaryActionLabel="View details"
                             requestedAction={listing.requesting}
                             requestedThreshold={listing.requestedImpact}
                             reviewState={listing.reviewState}
                             secondaryAction={
-                              viewer ? (
-                                <Link className="button button-secondary button-mini" href={`${listing.href}#interest`}>
-                                  Register interest
-                                </Link>
-                              ) : (
-                                <Link className="button button-secondary button-mini" href="/login?returnTo=/offers">
-                                  Sign in to participate
-                                </Link>
-                              )
+                              <Link className="button button-secondary button-mini" href={getCreateSimilarHref(listing, Boolean(viewer))}>
+                                Create similar
+                              </Link>
                             }
                             sourceLabel={listing.source === "live" ? "Live offer" : "Worked example"}
+                            summary={listing.summary}
                             title={listing.title}
                           />
                         ))}
@@ -1119,19 +1217,20 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                               modeLabel={formatListingMode(listing.mode)}
                               offeredAction={listing.offering}
                               offeredScore={listing.offerImpact}
-                              primaryActionLabel="View worked example"
+                              primaryActionLabel="View details"
                               requestedAction={listing.requesting}
                               requestedThreshold={listing.requestedImpact}
                               reviewState={listing.reviewState}
                               secondaryAction={
                                 <Link
                                   className="button button-secondary button-mini"
-                                  href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}
+                                  href={getCreateSimilarHref(listing, Boolean(viewer))}
                                 >
-                                  Create similar trade
+                                  Create similar
                                 </Link>
                               }
                               sourceLabel="Worked example"
+                              summary={listing.summary}
                               title={listing.title}
                             />
                           ))}
@@ -1170,6 +1269,23 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 </div>
               ) : null}
             </section>
+
+            <aside className="trust-panel collection-trust-panel panel" aria-labelledby="trust-panel-heading">
+              <p className="eyebrow">Before you rely on a listing</p>
+              <h2 id="trust-panel-heading">Evidence first, pressure never.</h2>
+              <ul className="trust-check-list">
+                <li>Voluntary terms only</li>
+                <li>Evidence must be named before reliance</li>
+                <li>Review states appear on every card</li>
+                <li>No escrow, custody, legal, or tax service</li>
+                <li>Safety boundaries apply to every proposal</li>
+              </ul>
+              <div className="trust-links">
+                <Link href="/methodology">Methodology</Link>
+                <Link href="/reasoning-standards">Evidence standards</Link>
+                <Link href="/safety">Safety policy</Link>
+              </div>
+            </aside>
           </div>
         </section>
 

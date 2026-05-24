@@ -418,6 +418,49 @@ test("activation loop includes concierge intake, admin triage, SLA, and audit tr
   assert.match(migrationSource, /enable row level security/);
 });
 
+test("accepted introductions can progress through agreement evidence review", () => {
+  const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
+  const agreementPage = readRepoFile("src/app/agreements/[agreementId]/page.tsx");
+  const adminPage = readRepoFile("src/app/admin/page.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+  const appDataSource = readRepoFile("src/lib/app-data.ts");
+  const schemaSource = readRepoFile("supabase/schema.sql");
+  const migrationSource = readRepoFile(
+    "supabase/migrations/20260524_agreement_evidence_verification_loop.sql",
+  );
+
+  assert.match(dashboardPage, /createAgreementRoomFromIntroductionPlanAction/);
+  assert.match(dashboardPage, /Open agreement room/);
+  assert.match(agreementPage, /saveAgreementTermsAction/);
+  assert.match(agreementPage, /submitAgreementEvidenceAction/);
+  assert.match(agreementPage, /requestAgreementReviewAppealAction/);
+  assert.match(agreementPage, /No-trade baseline/);
+  assert.match(agreementPage, /Counterfactual declaration/);
+  assert.match(agreementPage, /Privacy scope/);
+  assert.match(agreementPage, /pending_evidence/);
+  assert.match(agreementPage, /challenge_window_open/);
+  assert.match(agreementPage, /disputed_unresolved/);
+  assert.match(adminPage, /Evidence review/);
+  assert.match(adminPage, /Verification ladder/);
+  assert.match(adminPage, /updateAgreementReviewCaseAction/);
+  assert.match(adminPage, /updateProfileVerificationBadgeAction/);
+  assert.match(actionsSource, /createAgreementRoomFromIntroductionPlanAction/);
+  assert.match(actionsSource, /updateAgreementReviewCaseAction/);
+  assert.match(actionsSource, /completion_reviewed/);
+  assert.match(actionsSource, /repeat_counterparty/);
+  assert.match(appDataSource, /agreement_evidence_items/);
+  assert.match(appDataSource, /agreement_review_cases/);
+  assert.match(appDataSource, /profile_verification_badges/);
+  assert.match(schemaSource, /agreement_evidence_items/);
+  assert.match(schemaSource, /agreement_review_cases/);
+  assert.match(schemaSource, /profile_verification_badges/);
+  assert.match(schemaSource, /completion_state/);
+  assert.match(migrationSource, /agreement_evidence_items/);
+  assert.match(migrationSource, /reviewer_role/);
+  assert.match(migrationSource, /conflict_of_interest_notes/);
+  assert.match(migrationSource, /identity_verified/);
+});
+
 test("trade format landing pages explain formats without payment or custody overclaims", () => {
   const pledgePage = readRepoFile("src/app/pledge-swaps/page.tsx");
   const paidActionPage = readRepoFile("src/app/paid-action-offers/page.tsx");
@@ -547,9 +590,26 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
 
   assert.match(offersPage, /Live offers/);
   assert.match(offersPage, /Worked examples/);
+  assert.match(offersPage, /<h1>Browse offers<\/h1>/);
+  assert.match(offersPage, /defaultView = liveOfferCount > 0 \? "live" : "examples"/);
   assert.match(offersPage, /No live offers yet/);
   assert.match(offersPage, /No matching listings/);
   assert.match(offersPage, /Browse worked examples or create the first public offer/);
+  assert.match(offersPage, /visibleFormatCounts/);
+  assert.match(offersPage, /collection-trust-panel/);
+  assert.equal(offersPage.includes("Browse the narrow pilot wedge"), false);
   assert.equal(offersPage.includes("worked example s"), false);
   assert.equal(offersPage.includes("Live participant offers will appear here"), false);
+});
+
+test("worked examples have canonical detail pages and sitemap coverage", () => {
+  const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const exampleDetailPage = readRepoFile("src/app/offers/examples/[exampleId]/page.tsx");
+  const sitemapSource = readRepoFile("src/app/sitemap.ts");
+
+  assert.match(offersPage, /\/offers\/examples\/\$\{offer\.id\}/);
+  assert.match(exampleDetailPage, /generateStaticParams/);
+  assert.match(exampleDetailPage, /Worked example; manual review required before reliance/);
+  assert.match(exampleDetailPage, /No escrow or custody claim/);
+  assert.match(sitemapSource, /\/offers\/examples\/\$\{offer\.id\}/);
 });

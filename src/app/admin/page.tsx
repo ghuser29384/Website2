@@ -4,9 +4,11 @@ import Link from "next/link";
 import {
   reviewDonationOffsetOfferAction,
   suppressEmailOutboxAction,
+  updateAgreementReviewCaseAction,
   updateMatchConciergeRequestAction,
   updateMatchReportStatusAction,
   updatePaymentReviewStatusAction,
+  updateProfileVerificationBadgeAction,
 } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -34,10 +36,15 @@ interface AdminPageProps {
 type MatchReportRow = Database["public"]["Tables"]["match_reports"]["Row"];
 type AgreementPaymentRow = Database["public"]["Tables"]["agreement_payments"]["Row"];
 type AgreementEventRow = Database["public"]["Tables"]["agreement_events"]["Row"];
+type AgreementRow = Database["public"]["Tables"]["agreements"]["Row"];
+type AgreementEvidenceItemRow = Database["public"]["Tables"]["agreement_evidence_items"]["Row"];
+type AgreementReviewCaseRow = Database["public"]["Tables"]["agreement_review_cases"]["Row"];
 type EmailOutboxRow = Database["public"]["Tables"]["email_outbox"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
 type MatchConciergeRequestRow = Database["public"]["Tables"]["match_concierge_requests"]["Row"];
 type MatchConciergeEventRow = Database["public"]["Tables"]["match_concierge_events"]["Row"];
+type ProfileVerificationBadgeRow =
+  Database["public"]["Tables"]["profile_verification_badges"]["Row"];
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type RegisteredCharityRow = Database["public"]["Tables"]["registered_charities"]["Row"];
@@ -45,6 +52,12 @@ type RegisteredCharityRow = Database["public"]["Tables"]["registered_charities"]
 interface MatchConciergeReviewRecord {
   request: MatchConciergeRequestRow;
   events: MatchConciergeEventRow[];
+}
+
+interface AgreementEvidenceReviewRecord {
+  reviewCase: AgreementReviewCaseRow;
+  evidenceItem: AgreementEvidenceItemRow | null;
+  agreement: AgreementRow | null;
 }
 
 interface DonationOffsetReviewRecord {
@@ -78,7 +91,16 @@ function formatSlaState(value: string | null) {
 
 async function loadAdminQueues() {
   const supabase = createServiceClient();
-  const [reports, payments, events, emails, wishProfiles, conciergeRequests] = await Promise.all([
+  const [
+    reports,
+    payments,
+    events,
+    emails,
+    wishProfiles,
+    conciergeRequests,
+    agreementReviewCases,
+    verificationBadges,
+  ] = await Promise.all([
     supabase
       .from("match_reports")
       .select("*")
@@ -115,6 +137,18 @@ async function loadAdminQueues() {
       .in("status", ["open", "triaged", "waiting_on_requester", "waiting_on_counterparty"])
       .order("sla_due_at", { ascending: true, nullsFirst: false })
       .limit(50),
+    supabase
+      .from("agreement_review_cases")
+      .select("*")
+      .in("status", ["open", "under_review", "challenge_window_open", "appealed", "disputed_unresolved"])
+      .order("sla_due_at", { ascending: true, nullsFirst: false })
+      .limit(50),
+    supabase
+      .from("profile_verification_badges")
+      .select("*")
+      .in("status", ["pending", "verified"])
+      .order("updated_at", { ascending: false })
+      .limit(50),
   ]);
 
   const flaggedOffsetsResult = await supabase
@@ -131,6 +165,8 @@ async function loadAdminQueues() {
     emails.error,
     wishProfiles.error,
     conciergeRequests.error,
+    agreementReviewCases.error,
+    verificationBadges.error,
     flaggedOffsetsResult.error,
   ]
     .filter(Boolean)
@@ -143,7 +179,12 @@ async function loadAdminQueues() {
 
   const flaggedOffsets = (flaggedOffsetsResult.data ?? []) as DonationOffsetOfferRow[];
   const conciergeRows = (conciergeRequests.data ?? []) as MatchConciergeRequestRow[];
+  const reviewCaseRows = (agreementReviewCases.data ?? []) as AgreementReviewCaseRow[];
   const conciergeRequestIds = conciergeRows.map((request) => request.id);
+  const reviewAgreementIds = [...new Set(reviewCaseRows.map((reviewCase) => reviewCase.agreement_id))];
+  const reviewEvidenceIds = [
+    ...new Set(reviewCaseRows.map((reviewCase) => reviewCase.evidence_item_id).filter(Boolean)),
+  ] as string[];
   const conciergeEventsResult = conciergeRequestIds.length
     ? await supabase
         .from("match_concierge_events")
@@ -152,9 +193,24 @@ async function loadAdminQueues() {
         .order("created_at", { ascending: false })
         .limit(150)
     : { data: [] as MatchConciergeEventRow[], error: null };
+  const [reviewAgreementsResult, reviewEvidenceItemsResult] = await Promise.all([
+    reviewAgreementIds.length
+      ? supabase.from("agreements").select("*").in("id", reviewAgreementIds)
+      : Promise.resolve({ data: [] as AgreementRow[], error: null }),
+    reviewEvidenceIds.length
+      ? supabase.from("agreement_evidence_items").select("*").in("id", reviewEvidenceIds)
+      : Promise.resolve({ data: [] as AgreementEvidenceItemRow[], error: null }),
+  ]);
 
   if (conciergeEventsResult.error) {
     throw new Error(conciergeEventsResult.error.message);
+  }
+  if (reviewAgreementsResult.error || reviewEvidenceItemsResult.error) {
+    throw new Error(
+      reviewAgreementsResult.error?.message ??
+        reviewEvidenceItemsResult.error?.message ??
+        "Unable to load agreement evidence review records.",
+    );
   }
 
   const flaggedOfferIds = flaggedOffsets.map((row) => row.offer_id);
@@ -169,7 +225,11 @@ async function loadAdminQueues() {
   ]);
 
   if (flaggedOffersResult.error || flaggedCharitiesResult.error) {
-    throw new Error(flaggedOffersResult.error?.message ?? flaggedCharitiesResult.error?.message);
+    throw new Error(
+      flaggedOffersResult.error?.message ??
+        flaggedCharitiesResult.error?.message ??
+        "Unable to load donation offset review records.",
+    );
   }
 
   const offerMap = new Map(
@@ -184,6 +244,12 @@ async function loadAdminQueues() {
     current.push(event);
     conciergeEventsByRequest.set(event.request_id, current);
   }
+  const reviewAgreementMap = new Map(
+    ((reviewAgreementsResult.data ?? []) as AgreementRow[]).map((row) => [row.id, row] as const),
+  );
+  const reviewEvidenceMap = new Map(
+    ((reviewEvidenceItemsResult.data ?? []) as AgreementEvidenceItemRow[]).map((row) => [row.id, row] as const),
+  );
 
   return {
     reports: (reports.data ?? []) as MatchReportRow[],
@@ -191,6 +257,14 @@ async function loadAdminQueues() {
     events: (events.data ?? []) as AgreementEventRow[],
     emails: (emails.data ?? []) as EmailOutboxRow[],
     wishProfiles: (wishProfiles.data ?? []) as WishProfileRow[],
+    agreementEvidenceReviews: reviewCaseRows.map((reviewCase) => ({
+      reviewCase,
+      agreement: reviewAgreementMap.get(reviewCase.agreement_id) ?? null,
+      evidenceItem: reviewCase.evidence_item_id
+        ? reviewEvidenceMap.get(reviewCase.evidence_item_id) ?? null
+        : null,
+    })) satisfies AgreementEvidenceReviewRecord[],
+    verificationBadges: (verificationBadges.data ?? []) as ProfileVerificationBadgeRow[],
     matchConciergeRequests: conciergeRows.map((request) => ({
       request,
       events: conciergeEventsByRequest.get(request.id) ?? [],
@@ -267,12 +341,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">04</span>
                 <div>
+                  <strong>{queues?.agreementEvidenceReviews.length ?? 0} evidence review item(s)</strong>
+                  <p>Agreement evidence, challenge windows, and appeals.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">05</span>
+                <div>
                   <strong>{queues?.payments.length ?? 0} payment issue(s)</strong>
                   <p>Refund requests, disputes, and failures.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">05</span>
+                <span className="flow-number">06</span>
                 <div>
                   <strong>{queues?.emails.length ?? 0} email item(s)</strong>
                   <p>Queued or failed outbound mail.</p>
@@ -313,6 +394,197 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           </section>
         ) : (
           <>
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Evidence review</p>
+                <h2>Agreement completion review queue</h2>
+                <p>
+                  Review submitted evidence with schema scope, SLA aging, conflict notes, challenge
+                  windows, appeal state, and public reasoning summaries.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.agreementEvidenceReviews.length ? (
+                  queues.agreementEvidenceReviews.map(({ reviewCase, evidenceItem, agreement }) => (
+                    <article className="panel data-card" key={reviewCase.id}>
+                      <p className="detail-kicker">
+                        {reviewCase.reviewer_role.replaceAll("_", " ")} |{" "}
+                        {reviewCase.status.replaceAll("_", " ")}
+                      </p>
+                      <h3>{formatSlaState(reviewCase.sla_due_at)}</h3>
+                      <p className="route-text">
+                        Agreement {reviewCase.agreement_id}
+                        {agreement ? ` | ${agreement.source} | ${agreement.completion_state.replaceAll("_", " ")}` : ""}
+                      </p>
+                      {evidenceItem ? (
+                        <>
+                          <p className="route-text">
+                            <strong>{evidenceItem.title}</strong> ({evidenceItem.schema_key},{" "}
+                            {evidenceItem.evidence_type.replaceAll("_", " ")})
+                          </p>
+                          <p className="route-text">{evidenceItem.evidence_summary}</p>
+                          {evidenceItem.evidence_url ? (
+                            <a className="inline-link" href={evidenceItem.evidence_url}>
+                              Open evidence
+                            </a>
+                          ) : null}
+                        </>
+                      ) : (
+                        <p className="route-text">No evidence item attached.</p>
+                      )}
+                      {reviewCase.appeal_reason ? (
+                        <p className="route-text">
+                          <strong>Appeal:</strong> {reviewCase.appeal_reason}
+                        </p>
+                      ) : null}
+                      <form action={updateAgreementReviewCaseAction} className="compact-form">
+                        <input name="review_case_id" type="hidden" value={reviewCase.id} />
+                        <input name="return_to" type="hidden" value="/admin" />
+                        <div className="field-grid">
+                          <label className="field">
+                            <span>Status</span>
+                            <select name="status" defaultValue={reviewCase.status}>
+                              <option value="open">Open</option>
+                              <option value="under_review">Under review</option>
+                              <option value="challenge_window_open">Challenge window open</option>
+                              <option value="reviewed_complete">Reviewed complete</option>
+                              <option value="disputed_unresolved">Disputed / unresolved</option>
+                              <option value="appealed">Appealed</option>
+                              <option value="closed">Closed</option>
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>Reviewer role</span>
+                            <select name="reviewer_role" defaultValue={reviewCase.reviewer_role}>
+                              <option value="operator">Operator</option>
+                              <option value="validator">Validator</option>
+                              <option value="external_reviewer">External reviewer</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                          </label>
+                        </div>
+                        <div className="field-grid">
+                          <label className="field">
+                            <span>Reviewer confidence</span>
+                            <input
+                              defaultValue={evidenceItem?.reviewer_confidence ?? 70}
+                              max={100}
+                              min={0}
+                              name="reviewer_confidence"
+                              type="number"
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Review scope</span>
+                            <input
+                              defaultValue={reviewCase.review_scope}
+                              name="review_scope"
+                              placeholder="Evidence schema and exact claim under review"
+                            />
+                          </label>
+                        </div>
+                        <label className="field">
+                          <span>Conflict-of-interest notes</span>
+                          <textarea
+                            defaultValue={reviewCase.conflict_of_interest_notes}
+                            name="conflict_of_interest_notes"
+                            rows={3}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Reviewer notes</span>
+                          <textarea defaultValue={reviewCase.reviewer_notes} name="reviewer_notes" rows={3} />
+                        </label>
+                        <label className="field">
+                          <span>Public reasoning summary</span>
+                          <textarea
+                            defaultValue={reviewCase.public_reasoning_summary}
+                            name="public_reasoning_summary"
+                            rows={3}
+                          />
+                        </label>
+                        <button className="button button-primary button-mini" type="submit">
+                          Save review
+                        </button>
+                      </form>
+                    </article>
+                  ))
+                ) : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No agreement evidence reviews.</strong>
+                      <p>Evidence submitted from agreement rooms will appear here.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="section section-subtle">
+              <div className="section-head">
+                <p className="eyebrow">Verification ladder</p>
+                <h2>Profile trust badges tied to review evidence</h2>
+                <p>
+                  Identity, organization, payment/evidence, completion, and repeat-counterparty
+                  badges should be earned through reviewable records rather than generic ratings.
+                </p>
+              </div>
+              <div className="panel data-card data-card-wide">
+                <form action={updateProfileVerificationBadgeAction} className="compact-form">
+                  <input name="return_to" type="hidden" value="/admin" />
+                  <div className="field-grid">
+                    <label className="field">
+                      <span>Profile ID</span>
+                      <input name="profile_id" placeholder="Participant profile UUID" required />
+                    </label>
+                    <label className="field">
+                      <span>Badge</span>
+                      <select name="badge_type" defaultValue="identity_verified">
+                        <option value="identity_verified">Identity verified</option>
+                        <option value="organization_verified">Organization verified</option>
+                        <option value="payment_evidence_verified">Payment/evidence verified</option>
+                        <option value="completion_reviewed">Completion reviewed</option>
+                        <option value="repeat_counterparty">Repeat counterparty</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="field-grid">
+                    <label className="field">
+                      <span>Status</span>
+                      <select name="status" defaultValue="verified">
+                        <option value="pending">Pending</option>
+                        <option value="verified">Verified</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="revoked">Revoked</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Source</span>
+                      <input name="source" defaultValue="operator_review" />
+                    </label>
+                  </div>
+                  <label className="field">
+                    <span>Evidence summary</span>
+                    <textarea name="evidence_summary" placeholder="What review record justifies this badge?" />
+                  </label>
+                  <button className="button button-primary button-mini" type="submit">
+                    Save badge
+                  </button>
+                </form>
+                {queues?.verificationBadges.length ? (
+                  <div className="mini-list">
+                    {queues.verificationBadges.slice(0, 8).map((badge) => (
+                      <div className="mini-list-item" key={badge.id}>
+                        <strong>{badge.badge_type.replaceAll("_", " ")} | {badge.status}</strong>
+                        <span>{badge.profile_id}</span>
+                        <span>{badge.evidence_summary || "No summary recorded."}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
             <section className="section section-white">
               <div className="section-head">
                 <p className="eyebrow">Match concierge</p>

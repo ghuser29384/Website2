@@ -60,7 +60,20 @@ type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["R
 type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Row"];
 type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Insert"];
 type ClarificationQuestionInsert = Database["public"]["Tables"]["clarification_questions"]["Insert"];
+type AgreementRow = Database["public"]["Tables"]["agreements"]["Row"];
+type AgreementInsert = Database["public"]["Tables"]["agreements"]["Insert"];
+type AgreementUpdate = Database["public"]["Tables"]["agreements"]["Update"];
 type AgreementEventInsert = Database["public"]["Tables"]["agreement_events"]["Insert"];
+type AgreementEvidenceItemInsert =
+  Database["public"]["Tables"]["agreement_evidence_items"]["Insert"];
+type AgreementEvidenceItemUpdate =
+  Database["public"]["Tables"]["agreement_evidence_items"]["Update"];
+type AgreementReviewCaseInsert =
+  Database["public"]["Tables"]["agreement_review_cases"]["Insert"];
+type AgreementReviewCaseUpdate =
+  Database["public"]["Tables"]["agreement_review_cases"]["Update"];
+type ProfileVerificationBadgeInsert =
+  Database["public"]["Tables"]["profile_verification_badges"]["Insert"];
 type DonationOffsetOfferInsert = Database["public"]["Tables"]["donation_offset_offers"]["Insert"];
 type DonationOffsetMatchInsert = Database["public"]["Tables"]["donation_offset_matches"]["Insert"];
 type DonationOffsetPoolInsert = Database["public"]["Tables"]["donation_offset_pools"]["Insert"];
@@ -74,6 +87,8 @@ type MatchConciergeRequestUpdate =
   Database["public"]["Tables"]["match_concierge_requests"]["Update"];
 type MatchIntroductionPlanInsert =
   Database["public"]["Tables"]["match_introduction_plans"]["Insert"];
+type MatchIntroductionPlanRow =
+  Database["public"]["Tables"]["match_introduction_plans"]["Row"];
 type MatchIntroductionTaskInsert =
   Database["public"]["Tables"]["match_introduction_tasks"]["Insert"];
 type PrivacyGrantInsert = Database["public"]["Tables"]["privacy_grants"]["Insert"];
@@ -87,6 +102,7 @@ type CollectiveDecisionResponseInsert =
 type AgreementPaymentStatus = NonNullable<
   Database["public"]["Tables"]["agreement_payments"]["Update"]["status"]
 >;
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 function redirectWithMessage(
   path: string,
@@ -785,6 +801,14 @@ function computeNextDueAt({
   return baseDate.toISOString();
 }
 
+function addHours(hours: number) {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function addDaysFromNow(days: number) {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
 function normalizeAgreementEventType(value: string): AgreementEventInsert["event_type"] {
   if (
     value === "counterproposal" ||
@@ -792,7 +816,13 @@ function normalizeAgreementEventType(value: string): AgreementEventInsert["event
     value === "cancellation_requested" ||
     value === "dispute_opened" ||
     value === "status_change" ||
-    value === "payment_update"
+    value === "payment_update" ||
+    value === "terms_updated" ||
+    value === "evidence_submitted" ||
+    value === "review_status_changed" ||
+    value === "challenge_opened" ||
+    value === "appeal_requested" ||
+    value === "verification_badge_updated"
   ) {
     return value;
   }
@@ -806,6 +836,91 @@ function normalizeAgreementStatus(value: string): Database["public"]["Enums"]["a
   }
 
   return "active";
+}
+
+function normalizeAgreementCompletionState(value: string): NonNullable<AgreementUpdate["completion_state"]> {
+  if (
+    value === "under_review" ||
+    value === "challenge_window_open" ||
+    value === "reviewed_complete" ||
+    value === "disputed_unresolved"
+  ) {
+    return value;
+  }
+
+  return "pending_evidence";
+}
+
+function normalizeEvidenceTradeType(value: string): NonNullable<AgreementEvidenceItemInsert["trade_type"]> {
+  if (
+    value === "donation_offset" ||
+    value === "mpgf" ||
+    value === "paid_action" ||
+    value === "other"
+  ) {
+    return value;
+  }
+
+  return "pledge_swap";
+}
+
+function normalizeEvidenceType(value: string): NonNullable<AgreementEvidenceItemInsert["evidence_type"]> {
+  if (
+    value === "receipt" ||
+    value === "provider_record" ||
+    value === "public_log" ||
+    value === "timestamped_commitment" ||
+    value === "third_party_review" ||
+    value === "other"
+  ) {
+    return value;
+  }
+
+  return "manual_attestation";
+}
+
+function normalizeReviewCaseStatus(value: string): NonNullable<AgreementReviewCaseUpdate["status"]> {
+  if (
+    value === "under_review" ||
+    value === "challenge_window_open" ||
+    value === "reviewed_complete" ||
+    value === "disputed_unresolved" ||
+    value === "appealed" ||
+    value === "closed"
+  ) {
+    return value;
+  }
+
+  return "open";
+}
+
+function normalizeReviewerRole(value: string): NonNullable<AgreementReviewCaseUpdate["reviewer_role"]> {
+  if (value === "validator" || value === "external_reviewer" || value === "admin") {
+    return value;
+  }
+
+  return "operator";
+}
+
+function normalizeVerificationBadgeType(value: string): ProfileVerificationBadgeInsert["badge_type"] {
+  if (
+    value === "organization_verified" ||
+    value === "payment_evidence_verified" ||
+    value === "completion_reviewed" ||
+    value === "repeat_counterparty"
+  ) {
+    return value;
+  }
+
+  return "identity_verified";
+}
+
+function normalizeVerificationBadgeStatus(value: string): ProfileVerificationBadgeInsert["status"] {
+  if (value === "verified" || value === "rejected" || value === "revoked") {
+    return value;
+  }
+
+  return "pending";
 }
 
 function readMoneyCents(formData: FormData, key: string) {
@@ -825,6 +940,29 @@ function normalizeAccessLevel(value: string) {
   }
 
   return "manual_summary";
+}
+
+async function loadParticipantAgreementOrRedirect(
+  supabase: SupabaseServerClient,
+  agreementId: string,
+  userId: string,
+  returnTo: string,
+): Promise<AgreementRow> {
+  const { data: agreement, error } = await supabase
+    .from("agreements")
+    .select("*")
+    .eq("id", agreementId)
+    .maybeSingle();
+
+  if (error || !agreement) {
+    redirectWithMessage(returnTo, "error", error?.message ?? "Agreement not found.");
+  }
+
+  if (agreement.proposer_id !== userId && agreement.responder_id !== userId) {
+    redirectWithMessage(returnTo, "error", "You can only update your own agreement rooms.");
+  }
+
+  return agreement as AgreementRow;
 }
 
 function normalizeAudienceStage(
@@ -2653,6 +2791,108 @@ export async function updateIntroductionTaskAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Introduction task updated.");
+}
+
+export async function createAgreementRoomFromIntroductionPlanAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const planId = readRequired(formData, "plan_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+
+  if (!planId) {
+    redirectWithMessage(returnTo, "error", "Introduction plan ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: plan, error: planError } = await supabase
+    .from("match_introduction_plans")
+    .select("*")
+    .eq("id", planId)
+    .maybeSingle();
+
+  if (planError || !plan) {
+    redirectWithMessage(returnTo, "error", planError?.message ?? "Introduction plan not found.");
+  }
+
+  const introductionPlan = plan as MatchIntroductionPlanRow;
+  if (
+    introductionPlan.profile_id !== viewer.authUser.id &&
+    introductionPlan.counterparty_id !== viewer.authUser.id
+  ) {
+    redirectWithMessage(returnTo, "error", "You can only open rooms for your own introductions.");
+  }
+
+  const counterpartyId =
+    introductionPlan.profile_id === viewer.authUser.id
+      ? introductionPlan.counterparty_id
+      : introductionPlan.profile_id;
+
+  const { data: existingAgreement, error: existingAgreementError } = await supabase
+    .from("agreements")
+    .select("id")
+    .eq("introduction_plan_id", planId)
+    .maybeSingle();
+
+  if (existingAgreementError) {
+    redirectWithMessage(returnTo, "error", existingAgreementError.message);
+  }
+
+  if (existingAgreement?.id) {
+    redirect(`/agreements/${existingAgreement.id}`);
+  }
+
+  const agreementPayload: AgreementInsert = {
+    offer_id: null,
+    interest_id: null,
+    match_id: introductionPlan.match_id,
+    introduction_plan_id: introductionPlan.id,
+    source: "introduction",
+    proposer_id: viewer.authUser.id,
+    responder_id: counterpartyId,
+    status: "proposed",
+    notes: introductionPlan.next_actions || introductionPlan.intro_message,
+    structured_terms:
+      introductionPlan.proposal_terms ||
+      introductionPlan.proposal_outline ||
+      "Draft the bounded moral trade before either side relies on it.",
+    duration_terms: introductionPlan.timeline,
+    evidence_rule: introductionPlan.verification_plan,
+    privacy_scope: introductionPlan.privacy_notes,
+    disclosure_scope:
+      "Share only the facts both sides need for this agreement room. Keep exact wishes and contact details behind explicit consent.",
+    completion_state: "pending_evidence",
+  };
+
+  const { data: agreement, error: agreementError } = await supabase
+    .from("agreements")
+    .insert(agreementPayload)
+    .select("id")
+    .single();
+
+  if (agreementError || !agreement) {
+    logSupabaseActionError("Failed to create agreement room from introduction", agreementError, {
+      planId,
+      userId: viewer.authUser.id,
+      counterpartyId,
+    });
+    redirectWithMessage(returnTo, "error", agreementError?.message ?? "Unable to create agreement room.");
+  }
+
+  await supabase.from("agreement_events").insert({
+    agreement_id: agreement.id,
+    actor_id: viewer.authUser.id,
+    event_type: "terms_updated",
+    summary: "Agreement room opened from accepted introduction.",
+    details:
+      "The room starts with drafted terms from the introduction plan. Both parties should confirm baseline, counterfactual, evidence, exit, and privacy terms before evidence review.",
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/agreements/${agreement.id}`);
+  redirect(`/agreements/${agreement.id}`);
 }
 
 export async function refreshBackgroundMatchesAction(formData: FormData) {
@@ -4567,6 +4807,251 @@ export async function requestPaymentReviewAction(formData: FormData) {
   redirectWithMessage(returnTo, "message", "Payment review request recorded.");
 }
 
+export async function saveAgreementTermsAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const agreementId = readRequired(formData, "agreement_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+
+  if (!agreementId) {
+    redirectWithMessage(returnTo, "error", "Agreement ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  await loadParticipantAgreementOrRedirect(supabase, agreementId, viewer.authUser.id, returnTo);
+
+  const updatePayload: AgreementUpdate = {
+    structured_terms: truncateText(readRequired(formData, "structured_terms"), 1600),
+    no_trade_baseline: truncateText(readRequired(formData, "no_trade_baseline"), 1200),
+    counterfactual_declaration: truncateText(
+      readRequired(formData, "counterfactual_declaration"),
+      1200,
+    ),
+    duration_terms: truncateText(readRequired(formData, "duration_terms"), 800),
+    exit_conditions: truncateText(readRequired(formData, "exit_conditions"), 1000),
+    evidence_rule: truncateText(readRequired(formData, "evidence_rule"), 1200),
+    privacy_scope: truncateText(readRequired(formData, "privacy_scope"), 1000),
+    disclosure_scope: truncateText(readRequired(formData, "disclosure_scope"), 1000),
+    completion_state: "pending_evidence",
+  };
+
+  if (
+    !updatePayload.structured_terms ||
+    !updatePayload.no_trade_baseline ||
+    !updatePayload.counterfactual_declaration ||
+    !updatePayload.duration_terms ||
+    !updatePayload.exit_conditions ||
+    !updatePayload.evidence_rule ||
+    !updatePayload.privacy_scope
+  ) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Structured terms, baseline, counterfactual, duration, exit, evidence, and privacy fields are required.",
+    );
+  }
+
+  const { error } = await supabase
+    .from("agreements")
+    .update(updatePayload)
+    .eq("id", agreementId);
+
+  if (error) {
+    logSupabaseActionError("Failed to save agreement room terms", error, {
+      agreementId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  await supabase.from("agreement_events").insert({
+    agreement_id: agreementId,
+    actor_id: viewer.authUser.id,
+    event_type: "terms_updated",
+    summary: "Structured agreement terms updated.",
+    details:
+      "Baseline, counterfactual declaration, duration, exit conditions, evidence rule, and privacy/disclosure scope were saved.",
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/agreements/${agreementId}`);
+  redirectWithMessage(returnTo, "message", "Agreement room terms saved.");
+}
+
+export async function submitAgreementEvidenceAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const agreementId = readRequired(formData, "agreement_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+
+  if (!agreementId) {
+    redirectWithMessage(returnTo, "error", "Agreement ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  await loadParticipantAgreementOrRedirect(supabase, agreementId, viewer.authUser.id, returnTo);
+
+  const tradeType = normalizeEvidenceTradeType(readOptional(formData, "trade_type"));
+  const evidenceType = normalizeEvidenceType(readOptional(formData, "evidence_type"));
+  const title = truncateText(readRequired(formData, "title"), 160);
+  const evidenceUrl = truncateText(readOptional(formData, "evidence_url"), 900);
+  const evidenceSummary = truncateText(readRequired(formData, "evidence_summary"), 1400);
+  const reviewScope = truncateText(readOptional(formData, "review_scope"), 900);
+
+  if (!title || !evidenceSummary) {
+    redirectWithMessage(returnTo, "error", "Evidence title and summary are required.");
+  }
+
+  const evidencePayload: AgreementEvidenceItemInsert = {
+    agreement_id: agreementId,
+    uploader_id: viewer.authUser.id,
+    trade_type: tradeType,
+    evidence_type: evidenceType,
+    schema_key: `${tradeType}_v1`,
+    title,
+    evidence_url: evidenceUrl,
+    evidence_summary: evidenceSummary,
+    status: "under_review",
+  };
+
+  const { data: evidenceItem, error: evidenceError } = await supabase
+    .from("agreement_evidence_items")
+    .insert(evidencePayload)
+    .select("id")
+    .single();
+
+  if (evidenceError || !evidenceItem) {
+    logSupabaseActionError("Failed to submit agreement evidence", evidenceError, {
+      agreementId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", evidenceError?.message ?? "Unable to submit evidence.");
+  }
+
+  const reviewPayload: AgreementReviewCaseInsert = {
+    agreement_id: agreementId,
+    evidence_item_id: evidenceItem.id,
+    opened_by: viewer.authUser.id,
+    reviewer_role: "operator",
+    review_scope:
+      reviewScope ||
+      `Review ${tradeType.replaceAll("_", " ")} evidence using schema ${tradeType}_v1.`,
+    status: "under_review",
+    sla_due_at: addHours(72),
+  };
+
+  const { error: reviewError } = await supabase.from("agreement_review_cases").insert(reviewPayload);
+
+  if (reviewError) {
+    logSupabaseActionError("Failed to open agreement review case", reviewError, {
+      agreementId,
+      evidenceItemId: evidenceItem.id,
+    });
+    redirectWithMessage(returnTo, "error", reviewError.message);
+  }
+
+  await supabase
+    .from("agreements")
+    .update({ completion_state: "under_review" })
+    .eq("id", agreementId);
+
+  await supabase.from("agreement_events").insert({
+    agreement_id: agreementId,
+    actor_id: viewer.authUser.id,
+    event_type: "evidence_submitted",
+    summary: `Evidence submitted: ${title}`,
+    details: evidenceSummary,
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  revalidatePath(`/agreements/${agreementId}`);
+  redirectWithMessage(returnTo, "message", "Evidence submitted for review.");
+}
+
+export async function requestAgreementReviewAppealAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const reviewCaseId = readRequired(formData, "review_case_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const appealReason = truncateText(readRequired(formData, "appeal_reason"), 1400);
+
+  if (!reviewCaseId || !appealReason) {
+    redirectWithMessage(returnTo, "error", "Review case and appeal reason are required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: reviewCase, error: reviewCaseError } = await supabase
+    .from("agreement_review_cases")
+    .select("*")
+    .eq("id", reviewCaseId)
+    .maybeSingle();
+
+  if (reviewCaseError || !reviewCase) {
+    redirectWithMessage(returnTo, "error", reviewCaseError?.message ?? "Review case not found.");
+  }
+
+  await loadParticipantAgreementOrRedirect(
+    supabase,
+    reviewCase.agreement_id,
+    viewer.authUser.id,
+    returnTo,
+  );
+
+  const appealedAt = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("agreement_review_cases")
+    .update({
+      status: "appealed",
+      appeal_requested_by: viewer.authUser.id,
+      appeal_reason: appealReason,
+      appealed_at: appealedAt,
+    })
+    .eq("id", reviewCaseId);
+
+  if (updateError) {
+    logSupabaseActionError("Failed to request review appeal", updateError, {
+      reviewCaseId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", updateError.message);
+  }
+
+  await supabase
+    .from("agreements")
+    .update({ completion_state: "disputed_unresolved" })
+    .eq("id", reviewCase.agreement_id);
+
+  if (reviewCase.evidence_item_id) {
+    await supabase
+      .from("agreement_evidence_items")
+      .update({ status: "disputed_unresolved" })
+      .eq("id", reviewCase.evidence_item_id);
+  }
+
+  await supabase.from("agreement_events").insert({
+    agreement_id: reviewCase.agreement_id,
+    actor_id: viewer.authUser.id,
+    event_type: "appeal_requested",
+    summary: "Review appeal requested.",
+    details: appealReason,
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  revalidatePath(`/agreements/${reviewCase.agreement_id}`);
+  redirectWithMessage(returnTo, "message", "Appeal requested.");
+}
+
 export async function addAgreementEventAction(formData: FormData) {
   if (!hasSupabaseEnv()) {
     redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
@@ -4616,6 +5101,7 @@ export async function addAgreementEventAction(formData: FormData) {
   }
 
   revalidatePath("/dashboard");
+  revalidatePath(`/agreements/${agreementId}`);
   redirectWithMessage(returnTo, "message", "Agreement update recorded.");
 }
 
@@ -4678,6 +5164,7 @@ export async function updateAgreementStatusAction(formData: FormData) {
   }
 
   revalidatePath("/dashboard");
+  revalidatePath(`/agreements/${agreementId}`);
   redirectWithMessage(returnTo, "message", "Agreement status updated.");
 }
 
@@ -4755,6 +5242,283 @@ export async function updateMatchReportStatusAction(formData: FormData) {
 
   revalidatePath("/admin");
   redirectWithMessage(returnTo, "message", "Report status updated.");
+}
+
+async function upsertVerificationBadgeForProfile({
+  badgeType,
+  evidenceSummary,
+  profileId,
+  reviewedBy,
+  source = "agreement_review",
+  status = "verified",
+  supabase,
+}: {
+  badgeType: ProfileVerificationBadgeInsert["badge_type"];
+  evidenceSummary: string;
+  profileId: string;
+  reviewedBy: string;
+  source?: string;
+  status?: ProfileVerificationBadgeInsert["status"];
+  supabase: ReturnType<typeof createServiceClient>;
+}) {
+  const { error } = await supabase.from("profile_verification_badges").upsert(
+    {
+      profile_id: profileId,
+      badge_type: badgeType,
+      status,
+      evidence_summary: evidenceSummary,
+      source,
+      reviewed_by: reviewedBy,
+      reviewed_at: new Date().toISOString(),
+    },
+    {
+      onConflict: "profile_id,badge_type",
+    },
+  );
+
+  if (error) {
+    logSupabaseActionError("Failed to upsert verification badge", error, {
+      badgeType,
+      profileId,
+      status,
+    });
+  }
+}
+
+async function refreshRepeatCounterpartyBadge({
+  profileId,
+  reviewedBy,
+  supabase,
+}: {
+  profileId: string;
+  reviewedBy: string;
+  supabase: ReturnType<typeof createServiceClient>;
+}) {
+  const { data, error } = await supabase
+    .from("agreements")
+    .select("id")
+    .or(`proposer_id.eq.${profileId},responder_id.eq.${profileId}`)
+    .eq("completion_state", "reviewed_complete")
+    .limit(2);
+
+  if (error) {
+    logSupabaseActionError("Failed to count reviewed completions for repeat badge", error, {
+      profileId,
+    });
+    return;
+  }
+
+  if ((data ?? []).length >= 2) {
+    await upsertVerificationBadgeForProfile({
+      badgeType: "repeat_counterparty",
+      evidenceSummary: "At least two agreement rooms have reached reviewed-complete state.",
+      profileId,
+      reviewedBy,
+      source: "automatic_review_count",
+      supabase,
+    });
+  }
+}
+
+export async function updateAgreementReviewCaseAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const reviewCaseId = readRequired(formData, "review_case_id");
+
+  if (!reviewCaseId) {
+    redirectWithMessage(returnTo, "error", "Review case ID is required.");
+  }
+
+  const admin = await requireAdminViewer(returnTo);
+  const supabase = createServiceClient();
+  const nextStatus = normalizeReviewCaseStatus(readRequired(formData, "status"));
+  const reviewerRole = normalizeReviewerRole(readOptional(formData, "reviewer_role"));
+  const reviewerConfidence = readBoundedInt(formData, "reviewer_confidence", {
+    fallback: 0,
+    min: 0,
+    max: 100,
+  });
+  const challengeWindowEndsAt =
+    nextStatus === "challenge_window_open" ? addDaysFromNow(7) : null;
+  const reviewedAt =
+    nextStatus === "open" || nextStatus === "under_review" ? null : new Date().toISOString();
+
+  const updatePayload: AgreementReviewCaseUpdate = {
+    status: nextStatus,
+    reviewer_role: reviewerRole,
+    assigned_reviewer_id: admin.authUser.id,
+    review_scope: truncateText(readOptional(formData, "review_scope"), 900),
+    conflict_of_interest_notes: truncateText(
+      readOptional(formData, "conflict_of_interest_notes"),
+      1000,
+    ),
+    reviewer_notes: truncateText(readOptional(formData, "reviewer_notes"), 1400),
+    public_reasoning_summary: truncateText(
+      readOptional(formData, "public_reasoning_summary"),
+      1400,
+    ),
+    reviewed_by: reviewedAt ? admin.authUser.id : null,
+    reviewed_at: reviewedAt,
+    challenge_window_ends_at: challengeWindowEndsAt,
+  };
+
+  const { data: reviewCase, error } = await supabase
+    .from("agreement_review_cases")
+    .update(updatePayload)
+    .eq("id", reviewCaseId)
+    .select("*")
+    .single();
+
+  if (error || !reviewCase) {
+    logSupabaseActionError("Failed to update agreement review case", error, {
+      reviewCaseId,
+      nextStatus,
+    });
+    redirectWithMessage(returnTo, "error", error?.message ?? "Review case not found.");
+  }
+
+  const evidenceStatus: NonNullable<AgreementEvidenceItemUpdate["status"]> =
+    nextStatus === "reviewed_complete"
+      ? "reviewed_complete"
+      : nextStatus === "challenge_window_open"
+        ? "challenge_window_open"
+        : nextStatus === "disputed_unresolved" || nextStatus === "appealed"
+          ? "disputed_unresolved"
+          : "under_review";
+  const agreementCompletionState: NonNullable<AgreementUpdate["completion_state"]> =
+    evidenceStatus === "reviewed_complete"
+      ? "reviewed_complete"
+      : evidenceStatus === "challenge_window_open"
+        ? "challenge_window_open"
+        : evidenceStatus === "disputed_unresolved"
+          ? "disputed_unresolved"
+          : "under_review";
+
+  let evidenceItem:
+    | Database["public"]["Tables"]["agreement_evidence_items"]["Row"]
+    | null = null;
+
+  if (reviewCase.evidence_item_id) {
+    const { data: updatedEvidenceItem, error: evidenceError } = await supabase
+      .from("agreement_evidence_items")
+      .update({
+        status: evidenceStatus,
+        reviewer_confidence: reviewerConfidence || null,
+      })
+      .eq("id", reviewCase.evidence_item_id)
+      .select("*")
+      .maybeSingle();
+
+    if (evidenceError) {
+      logSupabaseActionError("Failed to update evidence item review status", evidenceError, {
+        reviewCaseId,
+        evidenceItemId: reviewCase.evidence_item_id,
+      });
+    }
+
+    evidenceItem = updatedEvidenceItem;
+  }
+
+  const agreementUpdatePayload: AgreementUpdate = {
+    completion_state: agreementCompletionState,
+    challenge_window_ends_at: challengeWindowEndsAt,
+  };
+
+  if (agreementCompletionState === "reviewed_complete") {
+    agreementUpdatePayload.status = "completed";
+  }
+
+  const { data: agreement, error: agreementError } = await supabase
+    .from("agreements")
+    .update(agreementUpdatePayload)
+    .eq("id", reviewCase.agreement_id)
+    .select("*")
+    .maybeSingle();
+
+  if (agreementError || !agreement) {
+    logSupabaseActionError("Failed to update agreement completion state", agreementError, {
+      reviewCaseId,
+      agreementId: reviewCase.agreement_id,
+    });
+  }
+
+  await supabase.from("agreement_events").insert({
+    agreement_id: reviewCase.agreement_id,
+    actor_id: admin.authUser.id,
+    event_type:
+      nextStatus === "challenge_window_open"
+        ? "challenge_opened"
+        : "review_status_changed",
+    summary: `Review case moved to ${nextStatus.replaceAll("_", " ")}.`,
+    details: updatePayload.public_reasoning_summary || updatePayload.reviewer_notes || "",
+  });
+
+  if (nextStatus === "reviewed_complete" && agreement) {
+    const badgeSummary =
+      updatePayload.public_reasoning_summary ||
+      "An agreement room reached reviewed-complete state after evidence review.";
+    for (const profileId of [agreement.proposer_id, agreement.responder_id]) {
+      await upsertVerificationBadgeForProfile({
+        badgeType: "completion_reviewed",
+        evidenceSummary: badgeSummary,
+        profileId,
+        reviewedBy: admin.authUser.id,
+        supabase,
+      });
+
+      if (
+        evidenceItem &&
+        ["receipt", "provider_record", "third_party_review"].includes(evidenceItem.evidence_type)
+      ) {
+        await upsertVerificationBadgeForProfile({
+          badgeType: "payment_evidence_verified",
+          evidenceSummary: `Evidence item reviewed: ${evidenceItem.title}`,
+          profileId,
+          reviewedBy: admin.authUser.id,
+          supabase,
+        });
+      }
+
+      await refreshRepeatCounterpartyBadge({
+        profileId,
+        reviewedBy: admin.authUser.id,
+        supabase,
+      });
+    }
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  revalidatePath(`/agreements/${reviewCase.agreement_id}`);
+  redirectWithMessage(returnTo, "message", "Evidence review case updated.");
+}
+
+export async function updateProfileVerificationBadgeAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const profileId = readRequired(formData, "profile_id");
+
+  if (!profileId) {
+    redirectWithMessage(returnTo, "error", "Profile ID is required.");
+  }
+
+  const admin = await requireAdminViewer(returnTo);
+  const supabase = createServiceClient();
+  const badgeType = normalizeVerificationBadgeType(readRequired(formData, "badge_type"));
+  const status = normalizeVerificationBadgeStatus(readRequired(formData, "status"));
+
+  await upsertVerificationBadgeForProfile({
+    badgeType,
+    evidenceSummary: truncateText(readOptional(formData, "evidence_summary"), 1200),
+    profileId,
+    reviewedBy: admin.authUser.id,
+    source: truncateText(readOptional(formData, "source") || "operator_review", 120),
+    status,
+    supabase,
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  revalidatePath(`/people/${profileId}`);
+  redirectWithMessage(returnTo, "message", "Verification badge updated.");
 }
 
 export async function updatePaymentReviewStatusAction(formData: FormData) {
@@ -5480,6 +6244,13 @@ export async function acceptInterestAction(formData: FormData) {
       responder_id: interest.user_id,
       status: "active",
       notes,
+      source: "offer",
+      structured_terms: `${offer.offer_action} for ${offer.request_action}`,
+      duration_terms: offer.duration,
+      evidence_rule: offer.verification,
+      privacy_scope: "Agreement participants can see this room. Broader publication waits for reviewed completion.",
+      disclosure_scope: "Share only the details needed to verify this agreement and resolve disputes.",
+      completion_state: "pending_evidence",
     },
     {
       onConflict: "interest_id",
@@ -5711,6 +6482,13 @@ export async function acceptGuestInterestAction(formData: FormData) {
     responder_id: guestInterest.claimed_by_profile_id,
     status: "active",
     notes,
+    source: "offer",
+    structured_terms: `${offer.offer_action} for ${offer.request_action}`,
+    duration_terms: offer.duration,
+    evidence_rule: offer.verification,
+    privacy_scope: "Agreement participants can see this room. Broader publication waits for reviewed completion.",
+    disclosure_scope: "Share only the details needed to verify this agreement and resolve disputes.",
+    completion_state: "pending_evidence",
   });
 
   if (agreementError) {

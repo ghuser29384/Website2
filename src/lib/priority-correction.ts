@@ -190,7 +190,7 @@ interface AgreementPaymentLike {
 
 interface AgreementLike {
   id: string;
-  offer_id: string;
+  offer_id: string | null;
   proposer_id: string;
   responder_id: string;
 }
@@ -299,7 +299,7 @@ function getPayerCauseForPayment(
     return "";
   }
 
-  const offer = offersById.get(agreement.offer_id);
+  const offer = agreement.offer_id ? offersById.get(agreement.offer_id) : null;
 
   if (!offer) {
     return "";

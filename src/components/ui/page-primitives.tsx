@@ -403,6 +403,7 @@ interface OfferCardProps {
   reviewState: string;
   secondaryAction?: ReactNode;
   sourceLabel: "Live offer" | "Worked example";
+  summary?: string;
   title: string;
 }
 
@@ -422,6 +423,7 @@ export function OfferCard({
   reviewState,
   secondaryAction,
   sourceLabel,
+  summary,
   title,
 }: OfferCardProps) {
   return (
@@ -438,9 +440,12 @@ export function OfferCard({
       </div>
       <div className="listing-title-block">
         <p className="detail-kicker">{modeLabel}</p>
-        <h3>{title}</h3>
+        <h3>
+          <Link href={ctaHref}>{title}</Link>
+        </h3>
       </div>
       {alias ? <p className="listing-alias">{alias}</p> : null}
+      {summary ? <p className="listing-summary">{summary}</p> : null}
       <p className="cause-exchange">{causeExchange}</p>
       <dl className="listing-terms">
         <div>

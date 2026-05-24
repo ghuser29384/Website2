@@ -496,29 +496,70 @@ export interface Database {
       agreements: {
         Row: {
           id: string;
-          offer_id: string;
+          offer_id: string | null;
           interest_id: string | null;
+          match_id: string | null;
+          introduction_plan_id: string | null;
+          source: "offer" | "introduction" | "manual";
           proposer_id: string;
           responder_id: string;
           status: "proposed" | "active" | "completed" | "cancelled";
           notes: string;
+          structured_terms: string;
+          no_trade_baseline: string;
+          counterfactual_declaration: string;
+          duration_terms: string;
+          exit_conditions: string;
+          evidence_rule: string;
+          privacy_scope: string;
+          disclosure_scope: string;
+          completion_state: "pending_evidence" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved";
+          challenge_window_ends_at: string | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
-          offer_id: string;
+          offer_id?: string | null;
           interest_id?: string | null;
+          match_id?: string | null;
+          introduction_plan_id?: string | null;
+          source?: "offer" | "introduction" | "manual";
           proposer_id: string;
           responder_id: string;
           status?: "proposed" | "active" | "completed" | "cancelled";
           notes?: string;
+          structured_terms?: string;
+          no_trade_baseline?: string;
+          counterfactual_declaration?: string;
+          duration_terms?: string;
+          exit_conditions?: string;
+          evidence_rule?: string;
+          privacy_scope?: string;
+          disclosure_scope?: string;
+          completion_state?: "pending_evidence" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved";
+          challenge_window_ends_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
+          offer_id?: string | null;
+          interest_id?: string | null;
+          match_id?: string | null;
+          introduction_plan_id?: string | null;
+          source?: "offer" | "introduction" | "manual";
           status?: "proposed" | "active" | "completed" | "cancelled";
           notes?: string;
+          structured_terms?: string;
+          no_trade_baseline?: string;
+          counterfactual_declaration?: string;
+          duration_terms?: string;
+          exit_conditions?: string;
+          evidence_rule?: string;
+          privacy_scope?: string;
+          disclosure_scope?: string;
+          completion_state?: "pending_evidence" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved";
+          challenge_window_ends_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -689,7 +730,13 @@ export interface Database {
             | "cancellation_requested"
             | "dispute_opened"
             | "status_change"
-            | "payment_update";
+            | "payment_update"
+            | "terms_updated"
+            | "evidence_submitted"
+            | "review_status_changed"
+            | "challenge_opened"
+            | "appeal_requested"
+            | "verification_badge_updated";
           summary: string;
           details: string;
           created_at: string;
@@ -705,7 +752,13 @@ export interface Database {
             | "cancellation_requested"
             | "dispute_opened"
             | "status_change"
-            | "payment_update";
+            | "payment_update"
+            | "terms_updated"
+            | "evidence_submitted"
+            | "review_status_changed"
+            | "challenge_opened"
+            | "appeal_requested"
+            | "verification_badge_updated";
           summary: string;
           details?: string;
           created_at?: string;
@@ -718,9 +771,162 @@ export interface Database {
             | "cancellation_requested"
             | "dispute_opened"
             | "status_change"
-            | "payment_update";
+            | "payment_update"
+            | "terms_updated"
+            | "evidence_submitted"
+            | "review_status_changed"
+            | "challenge_opened"
+            | "appeal_requested"
+            | "verification_badge_updated";
           summary?: string;
           details?: string;
+        };
+        Relationships: [];
+      };
+      agreement_evidence_items: {
+        Row: {
+          id: string;
+          agreement_id: string;
+          uploader_id: string;
+          trade_type: "pledge_swap" | "donation_offset" | "mpgf" | "paid_action" | "other";
+          evidence_type: "receipt" | "provider_record" | "manual_attestation" | "public_log" | "timestamped_commitment" | "third_party_review" | "other";
+          schema_key: string;
+          title: string;
+          evidence_url: string;
+          evidence_summary: string;
+          status: "pending_evidence" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved";
+          reviewer_confidence: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agreement_id: string;
+          uploader_id: string;
+          trade_type?: "pledge_swap" | "donation_offset" | "mpgf" | "paid_action" | "other";
+          evidence_type?: "receipt" | "provider_record" | "manual_attestation" | "public_log" | "timestamped_commitment" | "third_party_review" | "other";
+          schema_key?: string;
+          title: string;
+          evidence_url?: string;
+          evidence_summary?: string;
+          status?: "pending_evidence" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved";
+          reviewer_confidence?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          trade_type?: "pledge_swap" | "donation_offset" | "mpgf" | "paid_action" | "other";
+          evidence_type?: "receipt" | "provider_record" | "manual_attestation" | "public_log" | "timestamped_commitment" | "third_party_review" | "other";
+          schema_key?: string;
+          title?: string;
+          evidence_url?: string;
+          evidence_summary?: string;
+          status?: "pending_evidence" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved";
+          reviewer_confidence?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      agreement_review_cases: {
+        Row: {
+          id: string;
+          agreement_id: string;
+          evidence_item_id: string | null;
+          opened_by: string;
+          assigned_reviewer_id: string | null;
+          reviewer_role: "operator" | "validator" | "external_reviewer" | "admin";
+          review_scope: string;
+          status: "open" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved" | "appealed" | "closed";
+          conflict_of_interest_notes: string;
+          reviewer_notes: string;
+          public_reasoning_summary: string;
+          sla_due_at: string;
+          challenge_window_ends_at: string | null;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          appeal_requested_by: string | null;
+          appeal_reason: string;
+          appealed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agreement_id: string;
+          evidence_item_id?: string | null;
+          opened_by: string;
+          assigned_reviewer_id?: string | null;
+          reviewer_role?: "operator" | "validator" | "external_reviewer" | "admin";
+          review_scope?: string;
+          status?: "open" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved" | "appealed" | "closed";
+          conflict_of_interest_notes?: string;
+          reviewer_notes?: string;
+          public_reasoning_summary?: string;
+          sla_due_at?: string;
+          challenge_window_ends_at?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          appeal_requested_by?: string | null;
+          appeal_reason?: string;
+          appealed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          evidence_item_id?: string | null;
+          assigned_reviewer_id?: string | null;
+          reviewer_role?: "operator" | "validator" | "external_reviewer" | "admin";
+          review_scope?: string;
+          status?: "open" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved" | "appealed" | "closed";
+          conflict_of_interest_notes?: string;
+          reviewer_notes?: string;
+          public_reasoning_summary?: string;
+          sla_due_at?: string;
+          challenge_window_ends_at?: string | null;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          appeal_requested_by?: string | null;
+          appeal_reason?: string;
+          appealed_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      profile_verification_badges: {
+        Row: {
+          id: string;
+          profile_id: string;
+          badge_type: "identity_verified" | "organization_verified" | "payment_evidence_verified" | "completion_reviewed" | "repeat_counterparty";
+          status: "pending" | "verified" | "rejected" | "revoked";
+          evidence_summary: string;
+          source: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          badge_type: "identity_verified" | "organization_verified" | "payment_evidence_verified" | "completion_reviewed" | "repeat_counterparty";
+          status?: "pending" | "verified" | "rejected" | "revoked";
+          evidence_summary?: string;
+          source?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: "pending" | "verified" | "rejected" | "revoked";
+          evidence_summary?: string;
+          source?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          updated_at?: string;
         };
         Relationships: [];
       };

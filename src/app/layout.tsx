@@ -74,6 +74,11 @@ const websiteStructuredData = {
   name: SITE_NAME,
   alternateName: SITE_NAME,
   url: SITE_URL,
+  potentialAction: {
+    "@type": "SearchAction",
+    target: getAbsoluteUrl("/offers?search={search_term_string}"),
+    "query-input": "required name=search_term_string",
+  },
 };
 
 const organizationStructuredData = {
