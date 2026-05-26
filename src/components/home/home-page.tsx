@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
   IconMark,
+  MoralTradeHeroVisual,
   OfferCard,
   TrustChip,
 } from "@/components/ui/page-primitives";
@@ -33,10 +34,10 @@ const startPaths: ReadonlyArray<{
 }> = [
   {
     title: "Learn the idea",
-    description: "Read the core concept, examples, boundaries, and the counterfactual trust problem.",
-    href: "/moral-trade",
+    description: "Use the short guide to see who the pilot is for and what action to take first.",
+    href: "/how-it-works",
     icon: "source",
-    actionLabel: "Read the moral trade primer",
+    actionLabel: "See how it works",
   },
   {
     title: "Test an example",
@@ -122,25 +123,25 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
 
         <div className="growth-hero-inner">
           <section className="growth-hero-copy">
-            <h1>Can people with different moral views make each other better off?</h1>
+            <h1>Make clear, voluntary deals across moral disagreement.</h1>
             <p className="hero-text">
-              Moral Trade is a pilot for voluntary, evidence-reviewed cooperation across moral
-              disagreement. It helps people test low-risk pledge swaps, donation offsets, and
-              shared public-good commitments without escrow, custody, legal advice, or hidden
-              automation.
+              Create a pledge swap, donation offset, or public-good commitment with written
+              terms, evidence rules, and manual review before anyone relies on it.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href={cohortHref}>
-                Join the founding cohort
+              <Link className="button button-primary" href="/how-it-works">
+                See how it works
               </Link>
-              <Link className="button button-secondary" href="/moral-trade">
-                Read the moral trade primer
-              </Link>
-              <Link className="button button-secondary" href="/offers?view=examples">
-                Browse worked examples
+              <Link className="button button-secondary" href={cohortHref}>
+                Join the pilot
               </Link>
             </div>
+            <p className="growth-hero-trust-note">
+              Prototype only. No custody or escrow. External payments and evidence review.
+            </p>
           </section>
+
+          <MoralTradeHeroVisual />
 
           <aside className="growth-progress-card panel" aria-label="Founding progress">
             <div className="growth-progress-stat">

@@ -24,6 +24,27 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["primer", "moral trade", "ord", "voluntary", "disagreement", "vegetarian"],
   },
   {
+    href: "/how-it-works",
+    label: "How it works",
+    summary: "A one-screen guide to the current pilot workflow and recommended first action.",
+    kind: "learn",
+    keywords: ["how it works", "guide", "first action", "workflow", "new visitor", "what it is"],
+  },
+  {
+    href: "/sources",
+    label: "Sources",
+    summary: "Conceptual sources and internal reference pages for the Moral Trade pilot.",
+    kind: "learn",
+    keywords: ["sources", "references", "toby ord", "forethought", "methodology", "bibliography"],
+  },
+  {
+    href: "/about",
+    label: "About Moral Trade",
+    summary: "Pilot stewardship, operator commitments, review posture, and trust roadmap.",
+    kind: "learn",
+    keywords: ["about", "operators", "stewards", "governance", "team", "advisor", "trust"],
+  },
+  {
     href: "/anti-threat-baseline",
     label: "Anti-threat and baseline integrity",
     summary: "Rules for threat rejection, no-trade baselines, cooling-off periods, and externality review.",
@@ -61,6 +82,13 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["status", "roadmap", "pilot updates", "live offers", "prototype", "liquidity"],
   },
   {
+    href: "/updates",
+    label: "Pilot updates",
+    summary: "Subscribe for founding cohort, reviewer governance, and public-goods pilot updates.",
+    kind: "community",
+    keywords: ["updates", "subscribe", "newsletter", "digest", "cohort", "governance", "transparency"],
+  },
+  {
     href: "/trust",
     label: "What you can rely on",
     summary: "Review current guarantees, non-guarantees, review states, and recourse routes.",
@@ -80,6 +108,13 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     summary: "Save your role, cause areas, attribution, and first action after signup.",
     kind: "account",
     keywords: ["onboarding", "role", "cause", "first action", "activation", "wizard"],
+  },
+  {
+    href: "/password-reset",
+    label: "Password reset",
+    summary: "Request an email link to reset your Moral Trade account password.",
+    kind: "account",
+    keywords: ["password", "reset", "forgot", "login", "account", "recovery"],
   },
   ...PARTNER_COHORTS.map((partner) => ({
     href: `/cohort/${partner.slug}`,

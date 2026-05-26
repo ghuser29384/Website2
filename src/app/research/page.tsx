@@ -138,9 +138,9 @@ export default async function ResearchPage() {
             Follow the cohort, reviewer governance, and public-goods pilot without treating the
             site as a liquid marketplace before the trust problem is solved.
           </p>
-          <a className="button button-primary" href="mailto:support@moraltrade.org?subject=Pilot%20updates">
+          <Link className="button button-primary" href="/updates">
             Subscribe for pilot updates
-          </a>
+          </Link>
         </section>
       </main>
       <SiteFooter />

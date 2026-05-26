@@ -32,27 +32,32 @@ test("public navigation exposes pilot institution routes", () => {
 
   assert.deepEqual(labels, [
     "Start",
-    "What is Moral Trade?",
-    "Examples",
-    "Public Goods",
-    "Safety & Review",
-    "Research",
-    "Cohort",
+    "Understand",
+    "Explore",
+    "Join",
+    "Trust",
   ]);
-  assert.equal(getTopbarActions(false).primaryAction, undefined);
+  assert.equal(getTopbarActions(false).primaryAction?.label, "Join pilot");
   assert.equal(getTopbarActions(false).authLink.label, "Sign in");
+  assert.ok(hrefs.includes("/how-it-works"));
   assert.ok(hrefs.includes("/moral-trade"));
+  assert.ok(hrefs.includes("/sources"));
   assert.ok(hrefs.includes("/offers?view=examples"));
   assert.ok(hrefs.includes("/mpgf"));
+  assert.ok(hrefs.includes("/donate"));
   assert.ok(hrefs.includes("/safety"));
   assert.ok(hrefs.includes("/research"));
+  assert.ok(hrefs.includes("/about"));
   assert.ok(hrefs.includes("/cohort"));
-  assert.equal(hrefs.length, 7);
+  assert.ok(hrefs.includes("/updates"));
+  assert.equal(hrefs.length, 17);
   assert.equal(siteSource.includes("label: \"MPGF\""), false);
   assert.equal(siteSource.includes("label: \"Advanced\""), false);
   assert.match(siteSource, /\/contact/);
   assert.match(siteSource, /\/status/);
   assert.match(siteSource, /\/trust/);
+  assert.match(siteSource, /\/how-it-works/);
+  assert.match(siteSource, /\/updates/);
   assert.match(topbarSource, /topbar-menu-heading/);
   assert.match(topbarSource, /topbar-menu-icon/);
   assert.match(topbarSource, /topbar-with-search/);
@@ -308,7 +313,7 @@ test("global search and registry search expose proposal discovery", () => {
 
 test("home page is a founding-cohort landing page with pilot metrics and first actions", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
-  const heroIndex = homeSource.indexOf("Can people with different moral views make each other better off?");
+  const heroIndex = homeSource.indexOf("Make clear, voluntary deals across moral disagreement.");
   const metricsIndex = homeSource.indexOf("growth-progress-card");
   const routeIndex = homeSource.indexOf("Choose the right first path");
   const activationIndex = homeSource.indexOf("Start with one low-risk action");
@@ -319,8 +324,8 @@ test("home page is a founding-cohort landing page with pilot metrics and first a
   assert.ok(routeIndex > metricsIndex);
   assert.ok(activationIndex > routeIndex);
   assert.ok(previewIndex > activationIndex);
-  assert.match(homeSource, /Join the founding cohort/);
-  assert.match(homeSource, /Read the moral trade primer/);
+  assert.match(homeSource, /See how it works/);
+  assert.match(homeSource, /Join the pilot/);
   assert.match(homeSource, /Browse worked examples/);
   assert.match(homeSource, /Open donation routes/);
   assert.match(homeSource, /Invite one serious counterparty/);
@@ -332,11 +337,11 @@ test("home page is a founding-cohort landing page with pilot metrics and first a
   assert.match(homeSource, /No escrow or custody claim/);
   assert.match(homeSource, /IconMark/);
   assert.match(homeSource, /OfferCard/);
+  assert.match(homeSource, /MoralTradeHeroVisual/);
   assert.equal(homeSource.includes("opening-sequence"), false);
   assert.equal(homeSource.includes("OfferComposer"), false);
   assert.equal(homeSource.includes("ParetoChart"), false);
   assert.equal(homeSource.includes("SearchBar"), false);
-  assert.equal(homeSource.includes("MoralTradeHeroVisual"), false);
   assert.equal(homeSource.includes("delegate heartbeats"), false);
   assert.equal(homeSource.includes("manual source consent ledger"), false);
   assert.equal(homeSource.includes("deterministic synthesis layer"), false);
@@ -537,16 +542,26 @@ test("trade format landing pages explain formats without payment or custody over
 });
 
 test("primer, anti-threat, and research pages frame the public pilot", () => {
+  const howItWorksPage = readRepoFile("src/app/how-it-works/page.tsx");
   const primerPage = readRepoFile("src/app/moral-trade/page.tsx");
   const antiThreatPage = readRepoFile("src/app/anti-threat-baseline/page.tsx");
   const researchPage = readRepoFile("src/app/research/page.tsx");
   const trustPage = readRepoFile("src/app/trust/page.tsx");
   const contactPage = readRepoFile("src/app/contact/page.tsx");
   const statusPage = readRepoFile("src/app/status/page.tsx");
+  const aboutPage = readRepoFile("src/app/about/page.tsx");
+  const sourcesPage = readRepoFile("src/app/sources/page.tsx");
+  const updatesPage = readRepoFile("src/app/updates/page.tsx");
+  const loginPage = readRepoFile("src/app/login/page.tsx");
+  const passwordResetPage = readRepoFile("src/app/password-reset/page.tsx");
+  const passwordUpdatePage = readRepoFile("src/app/password-update/page.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
   const siteSearchSource = readRepoFile("src/lib/site-search.ts");
 
+  assert.match(howItWorksPage, /Start with one clear, reviewable trade/);
+  assert.match(howItWorksPage, /TradeFlowDiagram/);
   assert.match(primerPage, /What is moral trade/);
   assert.match(primerPage, /What it is not/);
   assert.match(primerPage, /Why it is hard/);
@@ -563,7 +578,20 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(trustPage, /No custody, escrow, tax, legal, investment, or payment-protection service/);
   assert.match(contactPage, /Reach the pilot operators/);
   assert.match(statusPage, /What is real on Moral Trade today/);
+  assert.match(aboutPage, /A pilot institution for cooperation under disagreement/);
+  assert.match(sourcesPage, /Reference points for the pilot/);
+  assert.match(updatesPage, /Subscribe for pilot updates/);
+  assert.match(loginPage, /Forgot your password/);
+  assert.match(passwordResetPage, /requestPasswordResetAction/);
+  assert.match(passwordUpdatePage, /updatePasswordAction/);
+  assert.match(actionsSource, /subscribePilotUpdatesAction/);
+  assert.match(actionsSource, /requestPasswordResetAction/);
+  assert.match(actionsSource, /resetPasswordForEmail/);
   assert.match(sitemapSource, /\/moral-trade/);
+  assert.match(sitemapSource, /\/how-it-works/);
+  assert.match(sitemapSource, /\/sources/);
+  assert.match(sitemapSource, /\/about/);
+  assert.match(sitemapSource, /\/updates/);
   assert.match(sitemapSource, /\/anti-threat-baseline/);
   assert.match(sitemapSource, /\/research/);
   assert.match(sitemapSource, /\/trust/);
@@ -571,6 +599,8 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(sitemapSource, /\/status/);
   assert.match(siteSearchSource, /Anti-threat and baseline integrity/);
   assert.match(siteSearchSource, /What you can rely on/);
+  assert.match(siteSearchSource, /How it works/);
+  assert.match(siteSearchSource, /Pilot updates/);
 });
 
 test("dashboard exposes existing profile portability endpoints", () => {

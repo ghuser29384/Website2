@@ -20,10 +20,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.92,
     },
     {
+      url: getAbsoluteUrl("/how-it-works"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.9,
+    },
+    {
+      url: getAbsoluteUrl("/sources"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.62,
+    },
+    {
       url: getAbsoluteUrl("/anti-threat-baseline"),
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.82,
+    },
+    {
+      url: getAbsoluteUrl("/about"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.72,
     },
     {
       url: getAbsoluteUrl("/research"),
@@ -48,6 +66,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.78,
+    },
+    {
+      url: getAbsoluteUrl("/updates"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.7,
     },
     {
       url: getAbsoluteUrl("/trust"),

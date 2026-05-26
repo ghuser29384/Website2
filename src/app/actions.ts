@@ -1794,6 +1794,131 @@ export async function createWebinarRsvpAction(formData: FormData) {
   redirectWithMessage(returnTo, "message", "RSVP saved. We will follow up with a small-group demo slot.");
 }
 
+export async function subscribePilotUpdatesAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/updates");
+  const email = readRequired(formData, "email").toLowerCase();
+  const segment = readOptional(formData, "segment") || "pilot_updates";
+  const nextStep = readOptional(formData, "next_step") || "Receive pilot updates";
+
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage(returnTo, "error", "Supabase is not configured yet.");
+  }
+
+  if (!email) {
+    redirectWithMessage(returnTo, "error", "Email is required.");
+  }
+
+  enforceActionRateLimit({
+    key: `pilot-updates:${email}`,
+    limit: 4,
+    message: "Too many update subscription attempts. Wait a few minutes before trying again.",
+    returnTo,
+    windowMs: 15 * 60 * 1000,
+  });
+
+  const supabase = await createClient();
+  const viewer = await getViewer();
+
+  await subscribeEmailNurture({
+    email,
+    nextStep,
+    profileId: viewer?.authUser.id ?? null,
+    segment,
+    source: "pilot_updates",
+    supabase,
+  });
+
+  await recordServerFunnelEvent({
+    eventType: "email_nurture_subscribed",
+    metadata: { segment },
+    path: returnTo,
+    profileId: viewer?.authUser.id ?? null,
+    supabase,
+  });
+
+  redirectWithMessage(returnTo, "message", "Subscribed. We will send pilot updates to that email.");
+}
+
+export async function requestPasswordResetAction(formData: FormData) {
+  const email = readRequired(formData, "email").toLowerCase();
+  const returnTo = "/password-reset";
+
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage(returnTo, "error", "Supabase is not configured yet.");
+  }
+
+  if (!email) {
+    redirectWithMessage(returnTo, "error", "Email is required.");
+  }
+
+  enforceActionRateLimit({
+    key: `password-reset:${email}`,
+    limit: 4,
+    message: "Too many password reset attempts. Wait a few minutes before trying again.",
+    returnTo,
+    windowMs: 15 * 60 * 1000,
+  });
+
+  const supabase = await createClient();
+  const headerStore = await headers();
+  const origin = headerStore.get("origin") ?? getSiteUrl();
+  const confirmationUrl = new URL("/auth/confirm", origin);
+  confirmationUrl.searchParams.set("next", "/password-update");
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: confirmationUrl.toString(),
+  });
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  redirectWithMessage(
+    "/login",
+    "message",
+    "Password reset email sent. Use the link in your email to choose a new password.",
+  );
+}
+
+export async function updatePasswordAction(formData: FormData) {
+  const password = readRequired(formData, "password");
+  const confirmPassword = readRequired(formData, "confirm_password");
+
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/password-update", "error", "Supabase is not configured yet.");
+  }
+
+  if (password.length < 12) {
+    redirectWithMessage("/password-update", "error", "Use at least 12 characters.");
+  }
+
+  if (password !== confirmPassword) {
+    redirectWithMessage("/password-update", "error", "Passwords do not match.");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    redirectWithMessage(
+      "/password-reset",
+      "error",
+      "Use the reset link from your email before choosing a new password.",
+    );
+  }
+
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    redirectWithMessage("/password-update", "error", error.message);
+  }
+
+  redirectWithMessage("/dashboard", "message", "Password updated.");
+}
+
 export async function signInAction(formData: FormData) {
   if (!hasSupabaseEnv()) {
     redirectWithMessage("/login", "error", "Supabase is not configured yet.");
