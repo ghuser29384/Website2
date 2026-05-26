@@ -8,6 +8,14 @@ import { Breadcrumbs, IconMark } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
+import {
+  THIRD_PARTY_EXTERNALITY_PROMPTS,
+  getActionEvidenceSummary,
+  getBaselineConfidence,
+  getBaselineEvidenceSummary,
+  getExternalityReviewSummary,
+  getScoreConfidence,
+} from "@/lib/proposal-review";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -68,9 +76,15 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
 
   const canonicalPath = `/offers/examples/${offer.id}`;
   const title = `${offer.alias}: ${offer.offeredCause} for ${offer.requestedCause}`;
+  const cloneTarget = `/offers/new?mode=${offer.mode}&example=${offer.id}`;
   const createHref = viewer
-    ? `/offers/new?mode=${offer.mode}`
-    : `/signup?returnTo=${encodeURIComponent(`/offers/new?mode=${offer.mode}`)}`;
+    ? cloneTarget
+    : `/signup?returnTo=${encodeURIComponent(cloneTarget)}`;
+  const actionEvidence = getActionEvidenceSummary(offer);
+  const baselineConfidence = getBaselineConfidence(offer);
+  const baselineEvidence = getBaselineEvidenceSummary(offer);
+  const externalityReview = getExternalityReviewSummary(offer);
+  const scoreConfidence = getScoreConfidence(offer);
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -92,7 +106,7 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
       {
         "@type": "ListItem",
         position: 2,
-        name: "Browse offers",
+        name: "Worked examples",
         item: getAbsoluteUrl("/offers"),
       },
       {
@@ -127,7 +141,7 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
         />
         <Breadcrumbs
           items={[
-            { href: "/offers", label: "Browse offers" },
+            { href: "/offers?view=examples", label: "Worked examples" },
             { href: canonicalPath, label: title },
           ]}
         />
@@ -146,6 +160,9 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
               </Link>
               <Link className="button button-secondary" href="/offers?view=examples">
                 Back to examples
+              </Link>
+              <Link className="button button-secondary" href="/moral-trade">
+                Read primer
               </Link>
             </div>
           </section>
@@ -211,20 +228,53 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
           </div>
           <div className="data-grid">
             <article className="panel data-card">
-              <p className="detail-kicker">Offered score</p>
+              <p className="detail-kicker">Participant-stated importance</p>
               <h3>{offer.offerImpact}/10</h3>
-              <p className="route-text">Internal illustrative estimate; inspect actual evidence before relying on it.</p>
+              <p className="route-text">
+                Not a platform moral ranking. This score reflects the participant&apos;s stated
+                view, not Moral Trade&apos;s assessment of moral value.
+              </p>
             </article>
             <article className="panel data-card">
-              <p className="detail-kicker">Requested threshold</p>
+              <p className="detail-kicker">Counterparty minimum acceptable importance</p>
               <h3>{offer.minCounterpartyImpact}/10</h3>
               <p className="route-text">A counterparty would still need to agree this threshold is adequate.</p>
+            </article>
+            <article className="panel data-card">
+              <p className="detail-kicker">Confidence</p>
+              <h3>{scoreConfidence}</h3>
+              <p className="route-text">Confidence is about the stated score and review context, not objective moral value.</p>
+            </article>
+          </div>
+          <div className="data-grid">
+            <article className="panel data-card">
+              <p className="detail-kicker">Action evidence</p>
+              <h3>{offer.verification}</h3>
+              <p className="route-text">{actionEvidence}</p>
+            </article>
+            <article className="panel data-card">
+              <p className="detail-kicker">Baseline confidence</p>
+              <h3>{baselineConfidence}</h3>
+              <p className="route-text">{baselineEvidence}</p>
+            </article>
+            <article className="panel data-card">
+              <p className="detail-kicker">Third-party externality review</p>
+              <h3>Required before reliance</h3>
+              <p className="route-text">{externalityReview}</p>
             </article>
             <article className="panel data-card">
               <p className="detail-kicker">Safety boundary</p>
               <h3>No escrow or custody claim</h3>
               <p className="route-text">Moral Trade records terms and evidence; it is not legal, tax, custody, or escrow service.</p>
             </article>
+          </div>
+          <div className="panel data-card data-card-wide">
+            <h3>Externality questions</h3>
+            <ul className="trust-check-list">
+              {THIRD_PARTY_EXTERNALITY_PROMPTS.map((prompt) => (
+                <li key={prompt}>{prompt}</li>
+              ))}
+            </ul>
           </div>
         </section>
       </main>

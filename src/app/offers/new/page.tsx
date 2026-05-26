@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
-import { OfferCreateForm } from "@/components/offers/offer-create-form";
+import { OfferCreateForm, type OfferTemplate } from "@/components/offers/offer-create-form";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
 import { getDonationOffsetOverview, getViewer } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 
 export const metadata: Metadata = {
   title: "New offer",
@@ -15,6 +16,58 @@ export const metadata: Metadata = {
     follow: false,
   },
 };
+
+function getWorkedExampleTemplate(exampleId: string | undefined): OfferTemplate | null {
+  if (!exampleId) {
+    return null;
+  }
+
+  const offer = CANONICAL_WORKED_CASE_OFFERS.find((entry) => entry.id === exampleId);
+
+  if (!offer) {
+    return null;
+  }
+
+  return {
+    title: `Clone ${offer.alias}`,
+    description: `Prefilled from worked example ${offer.id}.`,
+    mode: offer.mode,
+    offeredCause: offer.offeredCause,
+    requestedCause: offer.requestedCause,
+    compromiseCause: offer.compromiseCause,
+    offerAction: offer.offerAction,
+    requestAction: offer.requestAction,
+    baselineStatement:
+      offer.mode === "offset"
+        ? "I have a real baseline intention matching the opposed donation described below; this clone must be edited before publication."
+        : "Without this trade, I would not expect this specific reciprocal action to happen on the stated timeline.",
+    exitCondition:
+      "If evidence is missing, either side declines, or the facts differ from the worked example, the proposal stays unresolved until edited or reviewed.",
+    notes: `${offer.notes}\n\nCloned from worked example ${offer.id}. Edit amounts, dates, evidence, and counterparties before publishing.`,
+    offerImpact: String(offer.offerImpact),
+    minCounterpartyImpact: String(offer.minCounterpartyImpact),
+    verification: offer.verification,
+    duration: offer.duration,
+    paymentIntervalUnit: offer.paymentIntervalUnit,
+    paymentIntervalValue: String(offer.paymentIntervalValue ?? 1),
+    trustLevel: String(offer.trustLevel),
+    offset:
+      offer.mode === "offset"
+        ? {
+            baselineAmountUsd: String(offer.baselineAmountUsd ?? 1000),
+            requestedMatchingAmountUsd: String(offer.requestedMatchingAmountUsd ?? 1000),
+            baselineOpposedCause: offer.baselineOpposedCause,
+            requestedOpposedCause: offer.requestedOpposedCause,
+            participationMode: offer.offsetParticipationMode,
+            compromiseDestinationId: offer.compromiseDestinationId,
+            offsetRatio: String(offer.offsetRatio ?? 1),
+            timeHorizon: offer.offsetTimeHorizon,
+            verificationMethod: offer.offsetVerificationMethod,
+            unmatchedSurplusRule: offer.unmatchedSurplusRule,
+          }
+        : undefined,
+  };
+}
 
 interface NewOfferPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -46,6 +99,9 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
       resolvedSearchParams.offset_pool_side === "side_b")
       ? resolvedSearchParams.offset_pool_side
       : "";
+  const requestedExampleId =
+    typeof resolvedSearchParams.example === "string" ? resolvedSearchParams.example : undefined;
+  const initialExampleTemplate = getWorkedExampleTemplate(requestedExampleId);
   const supabaseReady = hasSupabaseEnv();
   const viewer = supabaseReady ? await getViewer() : null;
   const donationOffsetOverview = supabaseReady && viewer ? await getDonationOffsetOverview() : null;
@@ -143,7 +199,8 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
               <OfferCreateForm
                 availablePools={availablePools}
                 formMessage={formMessage}
-                initialMode={initialMode}
+                initialMode={initialExampleTemplate?.mode ?? initialMode}
+                initialTemplate={initialExampleTemplate}
                 initialOffsetParticipationMode={initialOffsetParticipationMode}
                 initialOffsetPoolId={initialOffsetPoolId}
                 initialOffsetPoolSide={initialOffsetPoolSide}

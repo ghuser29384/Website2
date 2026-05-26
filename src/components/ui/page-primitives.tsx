@@ -393,6 +393,9 @@ interface OfferCardProps {
   ctaHref: string;
   duration: string;
   evidence: string;
+  actionEvidence?: string;
+  baselineConfidence?: string;
+  externalityReview?: string;
   modeIcon: IconName;
   modeLabel: string;
   offeredAction: string;
@@ -401,18 +404,22 @@ interface OfferCardProps {
   requestedAction: string;
   requestedThreshold?: number;
   reviewState: string;
+  scoreConfidence?: string;
   secondaryAction?: ReactNode;
-  sourceLabel: "Live offer" | "Worked example";
+  sourceLabel: "Live proposal" | "Worked example";
   summary?: string;
   title: string;
 }
 
 export function OfferCard({
+  actionEvidence,
   alias,
+  baselineConfidence,
   causeExchange,
   ctaHref,
   duration,
   evidence,
+  externalityReview,
   modeIcon,
   modeLabel,
   offeredAction,
@@ -421,6 +428,7 @@ export function OfferCard({
   requestedAction,
   requestedThreshold,
   reviewState,
+  scoreConfidence,
   secondaryAction,
   sourceLabel,
   summary,
@@ -431,7 +439,7 @@ export function OfferCard({
       <div className="listing-card-head">
         <IconMark name={modeIcon} />
         <div className="listing-status-stack">
-          <StatusBadge tone={sourceLabel === "Live offer" ? "default" : "secondary"}>{sourceLabel}</StatusBadge>
+          <StatusBadge tone={sourceLabel === "Worked example" ? "secondary" : "default"}>{sourceLabel}</StatusBadge>
           <StatusBadge tone={evidence.toLowerCase().includes("payment") ? "warning" : "secondary"}>
             {evidence}
           </StatusBadge>
@@ -461,9 +469,42 @@ export function OfferCard({
         <span>{modeLabel}</span>
         <span>{duration}</span>
         <span>{evidence}</span>
-        {typeof offeredScore === "number" ? <span>Offered score {offeredScore}</span> : null}
-        {typeof requestedThreshold === "number" ? <span>Requested threshold {requestedThreshold}</span> : null}
+        {typeof offeredScore === "number" ? (
+          <span>Participant-stated importance {offeredScore}/10</span>
+        ) : null}
+        {typeof requestedThreshold === "number" ? (
+          <span>Counterparty minimum acceptable importance {requestedThreshold}/10</span>
+        ) : null}
+        {scoreConfidence ? <span>Confidence: {scoreConfidence}</span> : null}
       </div>
+      {typeof offeredScore === "number" || typeof requestedThreshold === "number" ? (
+        <p className="score-disclaimer">
+          Not a platform moral ranking. This score reflects the participant&apos;s stated view, not
+          Moral Trade&apos;s assessment of moral value.
+        </p>
+      ) : null}
+      {actionEvidence || baselineConfidence || externalityReview ? (
+        <div className="listing-review-fields" aria-label="Review fields">
+          {actionEvidence ? (
+            <div>
+              <strong>Action evidence</strong>
+              <span>{actionEvidence}</span>
+            </div>
+          ) : null}
+          {baselineConfidence ? (
+            <div>
+              <strong>Baseline confidence</strong>
+              <span>{baselineConfidence}</span>
+            </div>
+          ) : null}
+          {externalityReview ? (
+            <div>
+              <strong>Externality review</strong>
+              <span>{externalityReview}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <p className="review-state">{reviewState}</p>
       <div className="offer-card-actions">
         <Link className="button button-primary button-mini" href={ctaHref}>

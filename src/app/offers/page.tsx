@@ -13,29 +13,36 @@ import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffersPage, OFFERS_PAGE_SIZE, type OfferRecord } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
+import {
+  getActionEvidenceSummary,
+  getBaselineConfidence,
+  getExternalityReviewSummary,
+  getScoreConfidence,
+  getWorkedExampleLaunchOrder,
+} from "@/lib/proposal-review";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Browse Moral Trade Offers and Worked Examples",
+  title: "Moral Trade Proposal Registry and Worked Examples",
   description:
-    "Browse live moral trade offers and worked examples by cause area, format, evidence method, and review state.",
+    "Browse moral trade proposals and worked examples by cause area, format, evidence method, baseline confidence, and review state.",
   alternates: {
     canonical: "/offers",
   },
   openGraph: {
-    title: "Browse Moral Trade Offers and Worked Examples",
+    title: "Moral Trade Proposal Registry and Worked Examples",
     description:
-      "Explore live offers and reviewed examples with explicit terms, evidence rules, and safety boundaries.",
+      "Explore proposals and worked examples with explicit terms, evidence rules, baseline review, and safety boundaries.",
     url: getAbsoluteUrl("/offers"),
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Browse Moral Trade Offers and Worked Examples",
+    title: "Moral Trade Proposal Registry and Worked Examples",
     description:
-      "Explore live offers and reviewed examples with explicit terms, evidence rules, and safety boundaries.",
+      "Explore proposals and worked examples with explicit terms, evidence rules, baseline review, and safety boundaries.",
   },
 };
 
@@ -65,12 +72,12 @@ const DURATION_FILTERS = ["30 days", "3 months", "6 months", "12 months", "Open-
 
 const SORT_FILTER_CHIPS = [
   { label: "Newest", value: "newest" },
-  { label: "Highest offered impact", value: "impact" },
-  { label: "Highest example fit", value: "efficient" },
+  { label: "Highest participant-stated importance", value: "impact" },
+  { label: "Highest illustrative fit", value: "efficient" },
 ] as const;
 
 const DIRECTORY_TABS = [
-  { label: "Live offers", value: "live" },
+  { label: "Live proposals", value: "live" },
   { label: "Worked examples", value: "examples" },
 ] satisfies ReadonlyArray<{ label: string; value: DirectoryView }>;
 
@@ -83,7 +90,7 @@ const FORMAT_FILTERS = [
 
 const REVIEW_STATUS_FILTERS = [
   { label: "Any review status", value: "all" },
-  { label: "Live offer", value: "live" },
+  { label: "Live proposal", value: "live" },
   { label: "Worked example", value: "worked-example" },
   { label: "Manual review required", value: "manual-review-required" },
 ] as const;
@@ -110,6 +117,10 @@ interface MarketplaceListing {
   alias: string;
   title: string;
   offering: string;
+  actionEvidence: string;
+  baselineConfidence: string;
+  externalityReview: string;
+  scoreConfidence: string;
   requesting: string;
   offeredCause: string;
   requestedCause: string;
@@ -120,6 +131,7 @@ interface MarketplaceListing {
   requestedImpact: number;
   hasReciprocalMatch: boolean;
   href: string;
+  launchOrder: number;
   summary: string;
 }
 
@@ -201,12 +213,18 @@ function formatListingMode(mode: MarketplaceListing["mode"]) {
 }
 
 function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]): MarketplaceListing {
+  const baselineConfidence = getBaselineConfidence(offer);
+
   return {
+    actionEvidence: getActionEvidenceSummary(offer),
     alias: offer.alias,
+    baselineConfidence,
     duration: offer.duration,
+    externalityReview: getExternalityReviewSummary(offer),
     hasReciprocalMatch: true,
     href: `/offers/examples/${offer.id}`,
     id: offer.id,
+    launchOrder: getWorkedExampleLaunchOrder(offer.id),
     mode: offer.mode,
     offeredCause: offer.offeredCause,
     offering: offer.offerAction,
@@ -215,20 +233,38 @@ function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number
     requestedImpact: offer.minCounterpartyImpact,
     requesting: offer.requestAction,
     reviewState: "Worked example; manual review required before reliance",
+    scoreConfidence: getScoreConfidence(offer),
     source: "example",
-    summary: `A ${offer.duration.toLowerCase()} ${formatMode(offer.mode).toLowerCase()} with ${offer.verification.toLowerCase()} evidence.`,
+    summary: `A ${offer.duration.toLowerCase()} ${formatMode(offer.mode).toLowerCase()} with ${offer.verification.toLowerCase()} evidence and ${baselineConfidence.toLowerCase()} baseline confidence.`,
     title: `${offer.alias}: ${offer.offeredCause} for ${offer.requestedCause}`,
     verification: offer.verification,
   };
 }
 
 function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
+  const reviewInput = {
+    mode: offer.mode,
+    verification: offer.verification,
+    trustLevel: offer.trust_level,
+    baselineAmountUsd: offer.donationOffset ? offer.donationOffset.baseline_amount_cents / 100 : null,
+    baselineOpposedCause: offer.donationOffset?.baseline_opposed_cause ?? "",
+    evidenceUrl: offer.donationOffset?.evidence_url ?? "",
+    moderationStatus: offer.donationOffset?.moderation_status ?? null,
+    offeredCause: offer.offered_cause,
+    requestedCause: offer.requested_cause,
+  };
+  const baselineConfidence = getBaselineConfidence(reviewInput);
+
   return {
+    actionEvidence: getActionEvidenceSummary(reviewInput),
     alias: offer.ownerProfile?.resolvedName ?? offer.owner_alias,
+    baselineConfidence,
     duration: offer.duration,
+    externalityReview: getExternalityReviewSummary(reviewInput),
     hasReciprocalMatch: offer.recommendationCount > 0,
     href: `/offers/${offer.id}`,
     id: offer.id,
+    launchOrder: -1,
     mode: offer.mode,
     offeredCause: offer.offered_cause,
     offering: offer.offer_action,
@@ -236,9 +272,10 @@ function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
     requestedCause: offer.requested_cause,
     requestedImpact: offer.min_counterparty_impact,
     requesting: offer.request_action,
-    reviewState: "Live offer; evidence review required before reliance",
+    reviewState: "Live proposal; evidence and baseline review required before reliance",
+    scoreConfidence: getScoreConfidence(reviewInput),
     source: "live",
-    summary: truncateDescription(offer.notes || `${offer.duration} ${formatMode(offer.mode).toLowerCase()} with named evidence rules.`, 150),
+    summary: truncateDescription(offer.notes || `${offer.duration} ${formatMode(offer.mode).toLowerCase()} with named evidence rules and ${baselineConfidence.toLowerCase()} baseline confidence.`, 150),
     title: `${offer.offered_cause} for ${offer.requested_cause}`,
     verification: offer.verification,
   };
@@ -357,7 +394,15 @@ function sortListings(listings: MarketplaceListing[], sort: DirectorySort) {
       return getEfficiency(right) - getEfficiency(left) || right.offerImpact - left.offerImpact;
     }
 
-    return left.source === right.source ? left.title.localeCompare(right.title) : left.source === "live" ? -1 : 1;
+    if (left.source !== right.source) {
+      return left.source === "live" ? -1 : 1;
+    }
+
+    if (left.source === "example" && right.source === "example") {
+      return left.launchOrder - right.launchOrder || left.title.localeCompare(right.title);
+    }
+
+    return left.title.localeCompare(right.title);
   });
 }
 
@@ -423,7 +468,7 @@ function buildActiveFilterLabels(filters: {
       filters.view === "examples"
         ? "Worked examples"
         : filters.view === "live"
-          ? "Live offers"
+          ? "Live proposals"
           : "All listings",
     );
   }
@@ -457,11 +502,11 @@ function buildActiveFilterLabels(filters: {
   }
 
   if (filters.minImpact !== null) {
-    labels.push(`${filters.minImpact}+ offered impact`);
+    labels.push(`${filters.minImpact}+ participant-stated importance`);
   }
 
   if (filters.minRequestedImpact !== null) {
-    labels.push(`${filters.minRequestedImpact}+ requested threshold`);
+    labels.push(`${filters.minRequestedImpact}+ counterparty minimum`);
   }
 
   if (filters.reciprocal) {
@@ -500,7 +545,8 @@ function getListingModeIcon(mode: MarketplaceListing["mode"]) {
 
 function getCreateSimilarHref(listing: MarketplaceListing, viewerPresent: boolean) {
   const mode = listing.mode === "public-good" ? "pledge" : listing.mode;
-  const target = `/offers/new?mode=${mode}`;
+  const exampleParam = listing.source === "example" ? `&example=${listing.id}` : "";
+  const target = `/offers/new?mode=${mode}${exampleParam}`;
 
   return viewerPresent ? target : `/signup?returnTo=${encodeURIComponent(target)}`;
 }
@@ -599,8 +645,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const activeViewLabel = DIRECTORY_TABS.find((tab) => tab.value === view)?.label ?? "Listings";
   const isExampleView = view === "examples";
   const browseLead = isExampleView
-    ? "Learn from worked examples. These are not live offers."
-    : "Explore live offers and worked examples by cause area, format, evidence method, and review state.";
+    ? "Learn from worked examples. These are not live proposals."
+    : "Explore reviewed proposals and worked examples by cause area, format, evidence method, baseline confidence, and review state.";
   const countScope = allListings.filter((listing) => {
     if (view === "live" && listing.source !== "live") return false;
     if (view === "examples" && listing.source !== "example") return false;
@@ -715,10 +761,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const offersStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "Browse Moral Trade Offers and Worked Examples",
+    name: "Moral Trade Proposal Registry and Worked Examples",
     url: getAbsoluteUrl("/offers"),
     description:
-      "Live offers and worked examples that state actions, reciprocal requests, and verification terms.",
+      "Reviewed proposals and worked examples that state actions, reciprocal requests, evidence, and baseline confidence.",
     mainEntity: {
       "@type": "ItemList",
       itemListElement: filteredListings.slice(0, 20).map((listing, index) => ({
@@ -743,7 +789,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       {
         "@type": "ListItem",
         position: 2,
-        name: "Browse offers",
+        name: "Proposal registry",
         item: getAbsoluteUrl("/offers"),
       },
     ],
@@ -775,9 +821,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <section className="collection-header-copy">
             <h1>Browse</h1>
             <p className="hero-text">{browseLead}</p>
-            <div className="collection-stats" aria-label="Marketplace counts">
+            <div className="collection-stats" aria-label="Registry counts">
               <span>
-                <strong>{liveOfferCount}</strong> live {liveOfferCount === 1 ? "offer" : "offers"}
+                <strong>{liveOfferCount}</strong> live {liveOfferCount === 1 ? "proposal" : "proposals"}
               </span>
               <span>
                 <strong>{workedExampleCount}</strong> worked{" "}
@@ -799,7 +845,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </div>
         ) : null}
 
-        <section className="marketplace-shell" aria-label="Offer marketplace">
+        <section className="marketplace-shell" aria-label="Proposal registry">
           <nav className="marketplace-tabs" aria-label="Directory view">
             {DIRECTORY_TABS.map((tab) => (
               <Link
@@ -823,7 +869,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 placeholder={
                   isExampleView
                     ? "Search examples by title, cause, or keyword..."
-                    : "Search offers by title, cause, or keyword..."
+                    : "Search proposals by title, cause, or keyword..."
                 }
                 type="search"
               />
@@ -932,7 +978,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             </div>
           </div>
 
-          <div className="popular-filter-row" aria-label="Popular marketplace filters">
+          <div className="popular-filter-row" aria-label="Popular registry filters">
             <span>Popular filters</span>
             <div>
               {popularFilterLinks.map((filterLink) => (
@@ -949,7 +995,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </div>
 
           {activeFilterLabels.length ? (
-            <div className="active-filter-bar" aria-label="Active marketplace filters">
+            <div className="active-filter-bar" aria-label="Active registry filters">
               <span>Active filters</span>
               <div>
                 {activeFilterLabels.map((label) => (
@@ -1053,9 +1099,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   </details>
 
                   <details className="filter-group">
-                    <summary>Impact scores</summary>
+                    <summary>Party-relative importance</summary>
                     <label className="field range-field">
-                      <span>Minimum offered-impact score</span>
+                      <span>Minimum participant-stated importance</span>
                       <input
                         aria-describedby="offered-impact-help"
                         defaultValue={minImpact ?? 0}
@@ -1065,10 +1111,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         step="1"
                         type="range"
                       />
-                      <small id="offered-impact-help">0 keeps all listings; higher values narrow the pilot estimate.</small>
+                      <small id="offered-impact-help">0 keeps all listings; scores are participant-stated, not platform moral rankings.</small>
                     </label>
                     <label className="field range-field">
-                      <span>Minimum requested-impact threshold</span>
+                      <span>Minimum counterparty acceptable importance</span>
                       <input
                         aria-describedby="requested-impact-help"
                         defaultValue={minRequestedImpact ?? 0}
@@ -1078,7 +1124,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         step="1"
                         type="range"
                       />
-                      <small id="requested-impact-help">Internal estimate only; inspect terms before relying on it.</small>
+                      <small id="requested-impact-help">Counterparty threshold only; inspect terms and baseline evidence before relying on it.</small>
                     </label>
                   </details>
 
@@ -1133,6 +1179,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                             ctaHref={listing.href}
                             duration={listing.duration}
                             evidence={listing.verification}
+                            actionEvidence={listing.actionEvidence}
+                            baselineConfidence={listing.baselineConfidence}
+                            externalityReview={listing.externalityReview}
                             key={`${listing.source}-${listing.id}`}
                             modeIcon={getListingModeIcon(listing.mode)}
                             modeLabel={formatListingMode(listing.mode)}
@@ -1142,12 +1191,13 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                             requestedAction={listing.requesting}
                             requestedThreshold={listing.requestedImpact}
                             reviewState={listing.reviewState}
+                            scoreConfidence={listing.scoreConfidence}
                             secondaryAction={
                               <Link className="button button-secondary button-mini" href={getCreateSimilarHref(listing, Boolean(viewer))}>
                                 Create similar
                               </Link>
                             }
-                            sourceLabel={listing.source === "live" ? "Live offer" : "Worked example"}
+                            sourceLabel={listing.source === "live" ? "Live proposal" : "Worked example"}
                             summary={listing.summary}
                             title={listing.title}
                           />
@@ -1169,10 +1219,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                           </Link>
                         </>
                       }
-                      title={view === "live" ? "No live offers yet." : "No matching listings."}
+                      title={view === "live" ? "No live proposals yet." : "No matching listings."}
                     >
                       {view === "live"
-                        ? "Browse worked examples or create the first public offer. The live directory is still in pilot mode."
+                        ? "Browse worked examples or create the first public proposal. The live registry is still in pilot mode."
                         : "Reset filters, inspect worked examples, or create a structured proposal."}
                     </EmptyState>
 
@@ -1181,7 +1231,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         <div className="empty-example-preview-head">
                           <div>
                             <p className="eyebrow">Worked examples</p>
-                            <h3 id="empty-example-preview-heading">Study the structure before live offers arrive.</h3>
+                            <h3 id="empty-example-preview-heading">Study the structure before live proposals arrive.</h3>
                           </div>
                           <Link className="text-button" href="/offers?view=examples">
                             Open all examples
@@ -1189,7 +1239,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         </div>
                         <p>
                           These examples are not live liquidity. They show the terms, evidence rules,
-                          and review states a public offer would need before anyone relies on it.
+                          baseline checks, and review states a public proposal would need before anyone relies on it.
                         </p>
                         <div className="compact-listing-grid empty-example-grid">
                           {highlightedWorkedExamples.map((listing) => (
@@ -1199,6 +1249,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                               ctaHref={listing.href}
                               duration={listing.duration}
                               evidence={listing.verification}
+                              actionEvidence={listing.actionEvidence}
+                              baselineConfidence={listing.baselineConfidence}
+                              externalityReview={listing.externalityReview}
                               key={`empty-preview-${listing.id}`}
                               modeIcon={getListingModeIcon(listing.mode)}
                               modeLabel={formatListingMode(listing.mode)}
@@ -1208,6 +1261,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                               requestedAction={listing.requesting}
                               requestedThreshold={listing.requestedImpact}
                               reviewState={listing.reviewState}
+                              scoreConfidence={listing.scoreConfidence}
                               secondaryAction={
                                 <Link
                                   className="button button-secondary button-mini"
@@ -1263,14 +1317,16 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <ul className="trust-check-list">
                 <li>Voluntary terms only</li>
                 <li>Evidence must be named before reliance</li>
+                <li>Baseline confidence is separate from action evidence</li>
+                <li>Third-party objections can trigger external review</li>
                 <li>Review states appear on every card</li>
                 <li>No escrow, custody, legal, or tax service</li>
                 <li>Safety boundaries apply to every proposal</li>
               </ul>
               <div className="trust-links">
-                <Link href="/methodology">Methodology</Link>
+                <Link href="/moral-trade">Primer</Link>
                 <Link href="/reasoning-standards">Evidence standards</Link>
-                <Link href="/safety">Safety policy</Link>
+                <Link href="/anti-threat-baseline">Anti-threat rules</Link>
               </div>
             </aside>
           </div>
@@ -1282,7 +1338,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <p className="eyebrow">Account workspace</p>
               <h2 id="participate-heading">Sign in to save interest and create proposals.</h2>
               <p>
-                Accounts keep draft terms, saved offers, and evidence workflows separate from public
+                Accounts keep draft terms, saved proposals, and evidence workflows separate from public
                 worked examples.
               </p>
             </div>
@@ -1309,7 +1365,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <div className="pilot-info-box-body">
               <p>
                 During the seeded pilot, these examples help visitors inspect structure without
-                implying real marketplace rankings or live cost-efficiency results.
+                implying platform moral rankings or live cost-efficiency results.
               </p>
               <div className="data-grid">
                 {exampleMatchesByCause.map((entry) => (
@@ -1332,15 +1388,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <p className="eyebrow">Due diligence</p>
             <h2 id="process-links-heading">Learn more about evidence and process.</h2>
             <p>
-              Marketplace cards summarize terms for scanning. The full methodology and evidence
+              Registry cards summarize terms for scanning. The primer, safety rules, and evidence
               standards explain how review works before anyone relies on a proposal.
             </p>
           </div>
           <div className="teaser-grid">
-            <Link className="panel teaser-card" href="/methodology">
+            <Link className="panel teaser-card" href="/moral-trade">
               <IconMark name="source" />
-              <h3>Methodology</h3>
-              <p>How Moral Trade distinguishes voluntary exchange from threats, fraud, and pressure.</p>
+              <h3>What is moral trade?</h3>
+              <p>A short primer before the registry and worked examples.</p>
             </Link>
             <Link className="panel teaser-card" href="/reasoning-standards">
               <IconMark name="evidence" />
@@ -1351,6 +1407,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <IconMark name="review" />
               <h3>Validation rulebook</h3>
               <p>Reviewer scope, evidence states, challenge windows, and proof uniqueness checks.</p>
+            </Link>
+            <Link className="panel teaser-card" href="/anti-threat-baseline">
+              <IconMark name="safety" />
+              <h3>Anti-threat baseline rules</h3>
+              <p>No threat creation, no compensation for newly escalated harmful behavior, and third-party externality review.</p>
             </Link>
             <Link className="panel teaser-card" href="/safety">
               <IconMark name="safety" />

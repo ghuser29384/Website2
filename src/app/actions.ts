@@ -1,6 +1,6 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
@@ -25,6 +25,15 @@ import {
   normalizeBackgroundToken,
 } from "@/lib/background-networking";
 import { getSafeInternalPath } from "@/lib/paths";
+import {
+  ATTRIBUTION_COOKIE_NAME,
+  getFirstActionHref,
+  normalizeFirstAction,
+  normalizeOnboardingGoal,
+  normalizeParticipantKind as normalizeCohortParticipantKind,
+  parseAttributionCookie,
+  type FunnelEventType,
+} from "@/lib/growth";
 import {
   assessDonationOffsetModeration,
   calculateDonationOffsetPreview,
@@ -187,6 +196,15 @@ function readStringList(formData: FormData, key: string) {
   }
 }
 
+function readRepeatedStrings(formData: FormData, key: string, limit = 12) {
+  return formData
+    .getAll(key)
+    .map((entry) => String(entry ?? "").trim())
+    .filter(Boolean)
+    .filter((entry, index, entries) => entries.indexOf(entry) === index)
+    .slice(0, limit);
+}
+
 function logSupabaseActionError(
   context: string,
   error: PostgrestError | Error | null | undefined,
@@ -203,6 +221,135 @@ function logSupabaseActionError(
     message: error.message,
     ...metadata,
   });
+}
+
+async function readAttributionPayload() {
+  const cookieStore = await cookies();
+  return parseAttributionCookie(cookieStore.get(ATTRIBUTION_COOKIE_NAME)?.value);
+}
+
+async function recordServerFunnelEvent({
+  eventType,
+  metadata = {},
+  path,
+  profileId,
+  supabase,
+}: {
+  eventType: FunnelEventType;
+  metadata?: Record<string, unknown>;
+  path: string;
+  profileId: string | null;
+  supabase: SupabaseServerClient;
+}) {
+  const attribution = await readAttributionPayload();
+  const { error } = await (supabase as any).from("funnel_events").insert({
+    anonymous_id: attribution?.anonymousId ?? "",
+    event_type: eventType,
+    metadata,
+    partner_slug: attribution?.partnerSlug ?? "",
+    path,
+    profile_id: profileId,
+    referral_code: attribution?.referralCode ?? "",
+    referrer: attribution?.referrer ?? "",
+    utm_campaign: attribution?.utmCampaign ?? "",
+    utm_content: attribution?.utmContent ?? "",
+    utm_medium: attribution?.utmMedium ?? "",
+    utm_source: attribution?.utmSource ?? "",
+    utm_term: attribution?.utmTerm ?? "",
+  });
+
+  if (error) {
+    logSupabaseActionError("Failed to record funnel event", error, {
+      eventType,
+      profileId,
+    });
+  }
+}
+
+async function persistCohortAttribution({
+  lastPath,
+  profileId,
+  supabase,
+}: {
+  lastPath: string;
+  profileId: string;
+  supabase: SupabaseServerClient;
+}) {
+  const attribution = await readAttributionPayload();
+
+  if (!attribution) {
+    return;
+  }
+
+  const { error } = await (supabase as any)
+    .from("cohort_attributions")
+    .upsert(
+      {
+        anonymous_id: attribution.anonymousId,
+        first_path: attribution.firstPath,
+        first_seen_at: attribution.firstSeenAt || new Date().toISOString(),
+        last_path: lastPath || attribution.lastPath,
+        partner_slug: attribution.partnerSlug,
+        profile_id: profileId,
+        referral_code: attribution.referralCode,
+        referrer: attribution.referrer,
+        utm_campaign: attribution.utmCampaign,
+        utm_content: attribution.utmContent,
+        utm_medium: attribution.utmMedium,
+        utm_source: attribution.utmSource,
+        utm_term: attribution.utmTerm,
+      },
+      { onConflict: "profile_id" },
+    );
+
+  if (error) {
+    logSupabaseActionError("Failed to persist cohort attribution", error, {
+      profileId,
+    });
+  }
+}
+
+async function subscribeEmailNurture({
+  email,
+  nextStep,
+  profileId,
+  segment,
+  source,
+  supabase,
+}: {
+  email: string;
+  nextStep: string;
+  profileId: string | null;
+  segment: string;
+  source: string;
+  supabase: SupabaseServerClient;
+}) {
+  if (!email) {
+    return;
+  }
+
+  const attribution = await readAttributionPayload();
+  const { error } = await (supabase as any)
+    .from("email_nurture_subscriptions")
+    .upsert(
+      {
+        attribution: attribution ?? {},
+        email,
+        next_step: nextStep,
+        profile_id: profileId,
+        segment,
+        source,
+        status: "subscribed",
+      },
+      { ignoreDuplicates: true, onConflict: "email,segment" },
+    );
+
+  if (error) {
+    logSupabaseActionError("Failed to save email nurture subscription", error, {
+      email,
+      segment,
+    });
+  }
 }
 
 function enforceActionRateLimit({
@@ -1381,8 +1528,8 @@ async function generateWishMatchSuggestions({
 }
 
 export async function signUpAction(formData: FormData) {
-  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
-  const signupPath = returnTo === "/dashboard" ? "/signup" : `/signup?returnTo=${encodeURIComponent(returnTo)}`;
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/onboarding");
+  const signupPath = returnTo === "/onboarding" ? "/signup" : `/signup?returnTo=${encodeURIComponent(returnTo)}`;
 
   if (!hasSupabaseEnv()) {
     redirectWithMessage(signupPath, "error", "Supabase is not configured yet.");
@@ -1433,14 +1580,218 @@ export async function signUpAction(formData: FormData) {
 
   if (data.user && data.session) {
     await ensureAccountRowsForUser(data.user, supabase);
+    await persistCohortAttribution({
+      lastPath: returnTo,
+      profileId: data.user.id,
+      supabase,
+    });
+    await recordServerFunnelEvent({
+      eventType: "signup_complete",
+      metadata: { hasSession: true },
+      path: returnTo,
+      profileId: data.user.id,
+      supabase,
+    });
+    await subscribeEmailNurture({
+      email,
+      nextStep: "Complete onboarding wizard",
+      profileId: data.user.id,
+      segment: "signed_up_not_activated",
+      source: "signup",
+      supabase,
+    });
     redirectWithMessage(returnTo, "message", "Account created. Choose one low-risk first action.");
   }
+
+  await subscribeEmailNurture({
+    email,
+    nextStep: "Confirm email and complete onboarding",
+    profileId: null,
+    segment: "lead",
+    source: "signup",
+    supabase,
+  });
 
   redirectWithMessage(
     `/login?returnTo=${encodeURIComponent(returnTo)}`,
     "message",
     "Account created. Check your email to confirm your address, then sign in.",
   );
+}
+
+export async function saveOnboardingAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/onboarding");
+
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage(returnTo, "error", "Supabase is not configured yet.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const primaryGoal = normalizeOnboardingGoal(readRequired(formData, "primary_goal"));
+  const participantKind = normalizeCohortParticipantKind(readRequired(formData, "participant_kind"));
+  const firstAction = normalizeFirstAction(readRequired(formData, "first_action"));
+  const causeAreas = readRepeatedStrings(formData, "cause_area", 6);
+  const inviteTarget = readOptional(formData, "invite_target");
+  const referralSource = readOptional(formData, "referral_source");
+
+  if (!causeAreas.length) {
+    redirectWithMessage(returnTo, "error", "Choose at least one cause area.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await (supabase as any)
+    .from("cohort_onboarding_profiles")
+    .upsert(
+      {
+        cause_areas: causeAreas,
+        completed_at: new Date().toISOString(),
+        first_action: firstAction,
+        invite_target: inviteTarget,
+        participant_kind: participantKind,
+        primary_goal: primaryGoal,
+        profile_id: viewer.authUser.id,
+        referral_source: referralSource,
+        status: "completed",
+      },
+      { onConflict: "profile_id" },
+    );
+
+  if (error) {
+    logSupabaseActionError("Failed to save cohort onboarding", error, {
+      profileId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  await persistCohortAttribution({
+    lastPath: returnTo,
+    profileId: viewer.authUser.id,
+    supabase,
+  });
+  await recordServerFunnelEvent({
+    eventType: "role_selected",
+    metadata: { participantKind },
+    path: returnTo,
+    profileId: viewer.authUser.id,
+    supabase,
+  });
+  await recordServerFunnelEvent({
+    eventType: "cause_selected",
+    metadata: { causeAreas },
+    path: returnTo,
+    profileId: viewer.authUser.id,
+    supabase,
+  });
+  await recordServerFunnelEvent({
+    eventType: "first_action_selected",
+    metadata: {
+      firstAction,
+      primaryGoal,
+    },
+    path: returnTo,
+    profileId: viewer.authUser.id,
+    supabase,
+  });
+  await recordServerFunnelEvent({
+    eventType: "onboarding_complete",
+    metadata: {
+      causeAreaCount: causeAreas.length,
+      firstAction,
+      participantKind,
+      primaryGoal,
+    },
+    path: returnTo,
+    profileId: viewer.authUser.id,
+    supabase,
+  });
+  await subscribeEmailNurture({
+    email: viewer.profile.email,
+    nextStep:
+      firstAction === "invite_counterparty"
+        ? "Send one counterparty invite"
+        : "Complete selected first action",
+    profileId: viewer.authUser.id,
+    segment: "signed_up_not_activated",
+    source: "onboarding",
+    supabase,
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/onboarding");
+  redirectWithMessage(getFirstActionHref(firstAction), "message", "Onboarding saved. Start with this action.");
+}
+
+export async function createWebinarRsvpAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/cohort");
+
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage(returnTo, "error", "Supabase is not configured yet.");
+  }
+
+  const email = readRequired(formData, "email").toLowerCase();
+  const displayName = readOptional(formData, "display_name");
+  const role = readOptional(formData, "role");
+  const community = readOptional(formData, "community");
+  const sessionPreference = readOptional(formData, "session_preference") || "next_available";
+  const notes = readOptional(formData, "notes");
+
+  if (!email) {
+    redirectWithMessage(returnTo, "error", "Email is required for demo RSVP.");
+  }
+
+  enforceActionRateLimit({
+    key: `webinar-rsvp:${email}`,
+    limit: 4,
+    message: "Too many RSVP attempts. Wait a few minutes before trying again.",
+    returnTo,
+    windowMs: 15 * 60 * 1000,
+  });
+
+  const supabase = await createClient();
+  const viewer = await getViewer();
+  const attribution = await readAttributionPayload();
+  const profileId = viewer?.authUser.id ?? null;
+  const { error } = await (supabase as any).from("webinar_rsvps").insert({
+    attribution: attribution ?? {},
+    community,
+    display_name: displayName || viewer?.displayName || "",
+    email,
+    notes,
+    profile_id: profileId,
+    role,
+    session_preference: sessionPreference,
+  });
+
+  if (error) {
+    logSupabaseActionError("Failed to save webinar RSVP", error, {
+      email,
+      profileId,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  await recordServerFunnelEvent({
+    eventType: "webinar_rsvp",
+    metadata: {
+      community,
+      role,
+      sessionPreference,
+    },
+    path: returnTo,
+    profileId,
+    supabase,
+  });
+  await subscribeEmailNurture({
+    email,
+    nextStep: "Attend founding cohort demo",
+    profileId,
+    segment: "lead",
+    source: "webinar_rsvp",
+    supabase,
+  });
+
+  revalidatePath("/cohort");
+  redirectWithMessage(returnTo, "message", "RSVP saved. We will follow up with a small-group demo slot.");
 }
 
 export async function signInAction(formData: FormData) {
@@ -3534,6 +3885,17 @@ export async function createNetworkInviteAction(formData: FormData) {
     });
     redirectWithMessage(returnTo, "error", error.message);
   }
+
+  await recordServerFunnelEvent({
+    eventType: "referral_invite_drafted",
+    metadata: {
+      hasTargetUrl: Boolean(readOptional(formData, "target_url")),
+      targetKind: readOptional(formData, "target_kind") || "person",
+    },
+    path: returnTo,
+    profileId: viewer.authUser.id,
+    supabase,
+  });
 
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Network expansion draft saved.");

@@ -313,6 +313,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               Review unsafe matches, payment problems, queued email, and blocked wish profiles.
               This page is gated by the `ADMIN_EMAILS` environment variable.
             </p>
+            <div className="hero-actions">
+              <Link className="button button-secondary" href="/admin/growth">
+                View growth dashboard
+              </Link>
+            </div>
           </section>
           <aside className="hero-panel panel">
             <p className="eyebrow">Queue counts</p>

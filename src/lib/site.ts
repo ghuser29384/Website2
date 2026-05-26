@@ -1,20 +1,32 @@
 export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
     {
-      label: "Browse",
-      href: "/offers",
+      label: "Start",
+      href: "/",
+    },
+    {
+      label: "What is Moral Trade?",
+      href: "/moral-trade",
     },
     {
       label: "Examples",
       href: "/offers?view=examples",
     },
     {
-      label: "Cohort",
-      href: "/cohort",
+      label: "Public Goods",
+      href: "/mpgf",
     },
     {
-      label: "Learn",
-      href: "/methodology",
+      label: "Safety & Review",
+      href: "/safety",
+    },
+    {
+      label: "Research",
+      href: "/research",
+    },
+    {
+      label: "Cohort",
+      href: "/cohort",
     },
   ];
 
@@ -32,46 +44,56 @@ export function getTopbarActions(isAuthenticated = false) {
 
 export const FOOTER_LINK_GROUPS = [
   {
-    title: "Marketplace",
+    title: "Start",
     links: [
-      { href: "/offers", label: "Browse offers" },
-      { href: "/pledge-swaps", label: "Pledge swaps" },
-      { href: "/donation-offsets", label: "Donation offsets" },
-      { href: "/mpgf", label: "Public Goods Fund" },
-      { href: "/background-networking", label: "Private matching" },
-      { href: "/offers?view=examples", label: "Worked examples" },
-    ],
-  },
-  {
-    title: "Learn",
-    links: [
-      { href: "/#how-it-works", label: "How it works" },
-      { href: "/methodology", label: "Methodology" },
-      { href: "/safety", label: "Safety" },
-      { href: "/validation", label: "Validation" },
-      { href: "/faq", label: "FAQ" },
-      { href: "/reasoning-standards", label: "Evidence standards" },
-      { href: "/paid-action-offers", label: "Deferred paid offers" },
-      { href: "/methodology#sources", label: "Sources" },
-    ],
-  },
-  {
-    title: "Community",
-    links: [
-      { href: "/people", label: "People" },
-      { href: "/wish-registry", label: "Wish registry" },
+      { href: "/", label: "Home" },
+      { href: "/cohort", label: "Founding cohort" },
+      { href: "/onboarding", label: "Post-signup wizard" },
       { href: "/signup", label: "Create account" },
       { href: "/login", label: "Sign in" },
     ],
   },
   {
-    title: "About",
+    title: "Moral Trade",
     links: [
+      { href: "/moral-trade", label: "What is moral trade?" },
+      { href: "/offers?view=examples", label: "Worked examples" },
+      { href: "/pledge-swaps", label: "Pledge swaps" },
+      { href: "/donation-offsets", label: "Donation offsets" },
+      { href: "/paid-action-offers", label: "Deferred paid offers" },
+      { href: "/background-networking", label: "Private discovery" },
+    ],
+  },
+  {
+    title: "Public Goods",
+    links: [
+      { href: "/mpgf", label: "Public Goods Fund" },
+      { href: "/mpgf/contribute", label: "Evidence review" },
+      { href: "/mpgf/pools", label: "Candidate pools" },
+      { href: "/mpgf/technical-spec", label: "Technical notes" },
+      { href: "/priority-correction-fund", label: "Allocation notes" },
+    ],
+  },
+  {
+    title: "Safety & Review",
+    links: [
+      { href: "/safety", label: "Safety policy" },
+      { href: "/anti-threat-baseline", label: "Anti-threat rules" },
+      { href: "/validation", label: "Validation" },
+      { href: "/reasoning-standards", label: "Evidence standards" },
+      { href: "/faq", label: "FAQ" },
+    ],
+  },
+  {
+    title: "Research",
+    links: [
+      { href: "/research", label: "Research and governance" },
+      { href: "/methodology", label: "Methodology" },
+      { href: "/methodology#sources", label: "Sources" },
+      { href: "/people", label: "People" },
+      { href: "/wish-registry", label: "Wish registry" },
       { href: "mailto:support@moraltrade.org", label: "Contact" },
       { href: "mailto:support@moraltrade.org?subject=Pilot%20updates", label: "Pilot updates" },
-      { href: "/background-networking", label: "Private wish matching" },
-      { href: "/priority-correction-fund", label: "Allocation notes" },
-      { href: "/mpgf/pools", label: "Candidate pools" },
     ],
   },
   {

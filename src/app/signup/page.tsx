@@ -52,7 +52,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
   const requestedReturnTo = Array.isArray(resolvedSearchParams.returnTo)
     ? resolvedSearchParams.returnTo[0]
     : resolvedSearchParams.returnTo;
-  const returnTo = getSafeInternalPath(requestedReturnTo, "/dashboard");
+  const returnTo = getSafeInternalPath(requestedReturnTo, "/onboarding");
   const supabaseReady = hasSupabaseEnv();
   const viewer = await getViewer();
 

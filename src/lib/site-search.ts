@@ -1,3 +1,5 @@
+import { PARTNER_COHORTS } from "@/lib/growth";
+
 export interface SiteSearchItem {
   href: string;
   label: string;
@@ -9,10 +11,33 @@ export interface SiteSearchItem {
 export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   {
     href: "/offers",
-    label: "All public offers",
-    summary: "Browse pledge swaps, donation offsets, and payment-mediated offers.",
+    label: "Proposal registry",
+    summary: "Browse reviewed proposals and worked examples by cause, format, evidence method, and review state.",
     kind: "trade",
-    keywords: ["offer", "trade", "marketplace", "swap", "payment", "offset"],
+    keywords: ["offer", "trade", "registry", "proposal", "swap", "payment", "offset"],
+  },
+  {
+    href: "/moral-trade",
+    label: "What is moral trade?",
+    summary: "A short primer on voluntary cooperation across moral disagreement.",
+    kind: "learn",
+    keywords: ["primer", "moral trade", "ord", "voluntary", "disagreement", "vegetarian"],
+  },
+  {
+    href: "/anti-threat-baseline",
+    label: "Anti-threat and baseline integrity",
+    summary: "Rules for threat rejection, no-trade baselines, cooling-off periods, and externality review.",
+    kind: "learn",
+    keywords: [
+      "threat", "baseline", "counterfactual", "coercion", "cooling-off", "externality", "review",
+    ],
+  },
+  {
+    href: "/research",
+    label: "Research and governance",
+    summary: "What the pilot is testing, what would make it unsafe, and reviewer governance links.",
+    kind: "learn",
+    keywords: ["research", "governance", "reviewer", "rulebook", "transparency", "operators"],
   },
   {
     href: "/offers?view=examples",
@@ -28,6 +53,20 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     kind: "community",
     keywords: ["cohort", "founding", "signup", "invite", "referral", "demo", "activation"],
   },
+  {
+    href: "/onboarding",
+    label: "Cohort onboarding",
+    summary: "Save your role, cause areas, attribution, and first action after signup.",
+    kind: "account",
+    keywords: ["onboarding", "role", "cause", "first action", "activation", "wizard"],
+  },
+  ...PARTNER_COHORTS.map((partner) => ({
+    href: `/cohort/${partner.slug}`,
+    label: partner.name,
+    summary: `Partner landing page for ${partner.audience}.`,
+    kind: "community" as const,
+    keywords: ["partner", "cohort", partner.primaryCause, partner.slug, partner.useCase],
+  })),
   {
     href: "/pledge-swaps",
     label: "Pledge swaps",

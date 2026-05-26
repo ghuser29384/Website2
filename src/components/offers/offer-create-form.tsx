@@ -72,9 +72,10 @@ interface OfferCreateFormProps {
   initialOffsetParticipationMode?: "direct" | "pool";
   initialOffsetPoolId?: string;
   initialOffsetPoolSide?: "side_a" | "side_b" | "";
+  initialTemplate?: OfferTemplate | null;
 }
 
-interface OfferTemplate {
+export interface OfferTemplate {
   title: string;
   description: string;
   mode: OfferMode;
@@ -99,7 +100,11 @@ interface OfferTemplate {
     baselineOpposedCause: string;
     requestedOpposedCause: string;
     participationMode: "direct" | "pool";
+    compromiseDestinationId?: string;
     offsetRatio: string;
+    timeHorizon?: "one_off" | "recurring";
+    verificationMethod?: "proof_of_past_donations" | "receipts_uploaded" | "funds_in_escrow" | "third_party_audit";
+    unmatchedSurplusRule?: "return_to_donors" | "donate_to_compromise_destination" | "donate_to_original_cause" | "split_evenly";
   };
 }
 
@@ -239,40 +244,48 @@ export function OfferCreateForm({
   initialOffsetParticipationMode = defaultOffsetFields.participationMode,
   initialOffsetPoolId = "",
   initialOffsetPoolSide = "",
+  initialTemplate = null,
 }: OfferCreateFormProps) {
-  const [mode, setMode] = useState<OfferMode>(initialMode);
-  const [offeredCause, setOfferedCause] = useState("Animal welfare");
-  const [requestedCause, setRequestedCause] = useState("Global poverty");
-  const [compromiseCause, setCompromiseCause] = useState("Not needed");
+  const [mode, setMode] = useState<OfferMode>(initialTemplate?.mode ?? initialMode);
+  const [offeredCause, setOfferedCause] = useState(initialTemplate?.offeredCause ?? "Animal welfare");
+  const [requestedCause, setRequestedCause] = useState(initialTemplate?.requestedCause ?? "Global poverty");
+  const [compromiseCause, setCompromiseCause] = useState(initialTemplate?.compromiseCause ?? "Not needed");
   const [baselineAmountUsd, setBaselineAmountUsd] = useState(
-    String(defaultOffsetFields.baselineAmountUsd ?? 1000),
+    initialTemplate?.offset?.baselineAmountUsd ?? String(defaultOffsetFields.baselineAmountUsd ?? 1000),
   );
   const [baselineOpposedCause, setBaselineOpposedCause] = useState(
-    defaultOffsetFields.baselineOpposedCause,
+    initialTemplate?.offset?.baselineOpposedCause ?? defaultOffsetFields.baselineOpposedCause,
   );
   const [requestedMatchingAmountUsd, setRequestedMatchingAmountUsd] = useState(
-    String(defaultOffsetFields.requestedMatchingAmountUsd ?? 1000),
+    initialTemplate?.offset?.requestedMatchingAmountUsd ??
+      String(defaultOffsetFields.requestedMatchingAmountUsd ?? 1000),
   );
   const [requestedOpposedCause, setRequestedOpposedCause] = useState(
-    defaultOffsetFields.requestedOpposedCause,
+    initialTemplate?.offset?.requestedOpposedCause ?? defaultOffsetFields.requestedOpposedCause,
   );
-  const [offerAction, setOfferAction] = useState("");
-  const [requestAction, setRequestAction] = useState("");
-  const [baselineStatement, setBaselineStatement] = useState("");
-  const [exitCondition, setExitCondition] = useState("");
-  const [notes, setNotes] = useState("");
+  const [offerAction, setOfferAction] = useState(initialTemplate?.offerAction ?? "");
+  const [requestAction, setRequestAction] = useState(initialTemplate?.requestAction ?? "");
+  const [baselineStatement, setBaselineStatement] = useState(initialTemplate?.baselineStatement ?? "");
+  const [exitCondition, setExitCondition] = useState(initialTemplate?.exitCondition ?? "");
+  const [notes, setNotes] = useState(initialTemplate?.notes ?? "");
   const [compromiseDestinationId, setCompromiseDestinationId] = useState(
-    defaultOffsetFields.compromiseDestinationId,
+    initialTemplate?.offset?.compromiseDestinationId ?? defaultOffsetFields.compromiseDestinationId,
   );
-  const [offsetRatio, setOffsetRatio] = useState(String(defaultOffsetFields.offsetRatio ?? 1));
-  const [timeHorizon, setTimeHorizon] = useState(defaultOffsetFields.timeHorizon);
+  const [offsetRatio, setOffsetRatio] = useState(
+    initialTemplate?.offset?.offsetRatio ?? String(defaultOffsetFields.offsetRatio ?? 1),
+  );
+  const [timeHorizon, setTimeHorizon] = useState(
+    initialTemplate?.offset?.timeHorizon ?? defaultOffsetFields.timeHorizon,
+  );
   const [verificationMethod, setVerificationMethod] = useState(
-    defaultOffsetFields.verificationMethod,
+    initialTemplate?.offset?.verificationMethod ?? defaultOffsetFields.verificationMethod,
   );
   const [unmatchedSurplusRule, setUnmatchedSurplusRule] = useState(
-    defaultOffsetFields.unmatchedSurplusRule,
+    initialTemplate?.offset?.unmatchedSurplusRule ?? defaultOffsetFields.unmatchedSurplusRule,
   );
-  const [participationMode, setParticipationMode] = useState(initialOffsetParticipationMode);
+  const [participationMode, setParticipationMode] = useState(
+    initialTemplate?.offset?.participationMode ?? initialOffsetParticipationMode,
+  );
   const [poolId, setPoolId] = useState(initialOffsetPoolId);
   const [poolName, setPoolName] = useState("");
   const [poolSide, setPoolSide] = useState<"side_a" | "side_b" | "">(initialOffsetPoolSide);
@@ -282,13 +295,13 @@ export function OfferCreateForm({
   );
   const [assuranceDeadline, setAssuranceDeadline] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
-  const [offerImpact, setOfferImpact] = useState("7");
-  const [minCounterpartyImpact, setMinCounterpartyImpact] = useState("6");
-  const [verificationPreference, setVerificationPreference] = useState("Annual receipts");
-  const [reviewPeriod, setReviewPeriod] = useState("6 months");
-  const [paymentIntervalUnit, setPaymentIntervalUnit] = useState<PaymentIntervalUnit>("none");
-  const [paymentIntervalValue, setPaymentIntervalValue] = useState("1");
-  const [trustLevel, setTrustLevel] = useState("3");
+  const [offerImpact, setOfferImpact] = useState(initialTemplate?.offerImpact ?? "7");
+  const [minCounterpartyImpact, setMinCounterpartyImpact] = useState(initialTemplate?.minCounterpartyImpact ?? "6");
+  const [verificationPreference, setVerificationPreference] = useState(initialTemplate?.verification ?? "Annual receipts");
+  const [reviewPeriod, setReviewPeriod] = useState(initialTemplate?.duration ?? "6 months");
+  const [paymentIntervalUnit, setPaymentIntervalUnit] = useState<PaymentIntervalUnit>(initialTemplate?.paymentIntervalUnit ?? "none");
+  const [paymentIntervalValue, setPaymentIntervalValue] = useState(initialTemplate?.paymentIntervalValue ?? "1");
+  const [trustLevel, setTrustLevel] = useState(initialTemplate?.trustLevel ?? "3");
   const [antiThreatCertified, setAntiThreatCertified] = useState(false);
   const [verificationMetadataAcknowledged, setVerificationMetadataAcknowledged] = useState(false);
 
@@ -572,7 +585,17 @@ export function OfferCreateForm({
       setBaselineOpposedCause(template.offset.baselineOpposedCause);
       setRequestedOpposedCause(template.offset.requestedOpposedCause);
       setParticipationMode(template.offset.participationMode);
+      setCompromiseDestinationId(
+        template.offset.compromiseDestinationId ?? defaultOffsetFields.compromiseDestinationId,
+      );
       setOffsetRatio(template.offset.offsetRatio);
+      setTimeHorizon(template.offset.timeHorizon ?? defaultOffsetFields.timeHorizon);
+      setVerificationMethod(
+        template.offset.verificationMethod ?? defaultOffsetFields.verificationMethod,
+      );
+      setUnmatchedSurplusRule(
+        template.offset.unmatchedSurplusRule ?? defaultOffsetFields.unmatchedSurplusRule,
+      );
       setPoolId("");
       setPoolSide("");
     }

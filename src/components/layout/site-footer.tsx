@@ -7,11 +7,11 @@ export function SiteFooter() {
       <div className="footer-grid">
         <div className="footer-intro">
           <p className="eyebrow">Moral Trade</p>
-          <h2>Voluntary trade under disagreement.</h2>
+          <h2>A pilot institution for cooperation under disagreement.</h2>
           <p>
-            Moral Trade is a prototype marketplace for voluntary moral trade, donation offsets, and
-            shared public-good coordination. It does not provide legal, tax, escrow, or custody
-            services.
+            Moral Trade is a pilot for evidence-reviewed moral trade, private counterparty
+            discovery, and moral public-good coordination. It does not provide legal, tax, escrow,
+            or custody services.
           </p>
         </div>
 

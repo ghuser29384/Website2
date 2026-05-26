@@ -31,6 +31,14 @@ import { findEveryOrgTargetForCauseArea } from "@/lib/every-org";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatOffsetSummary, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import {
+  THIRD_PARTY_EXTERNALITY_PROMPTS,
+  getActionEvidenceSummary,
+  getBaselineConfidence,
+  getBaselineEvidenceSummary,
+  getExternalityReviewSummary,
+  getScoreConfidence,
+} from "@/lib/proposal-review";
 import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getDonationOffsetEvidenceState } from "@/lib/validation";
 
@@ -140,7 +148,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           assuranceDeadline: offer.donationOffset.assurance_deadline_at ?? "",
           evidenceUrl: offer.donationOffset.evidence_url,
           moderationStatus: offer.donationOffset.moderation_status,
-          source: "Live offer",
+          source: "Live proposal",
           createdAt: Date.parse(offer.created_at),
         })
       : null;
@@ -161,6 +169,26 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           offer.donationOffset.pool_id
         }&offset_pool_side=${offer.donationOffset.pool_side === "side_a" ? "side_b" : "side_a"}`
       : null;
+  const reviewInput = {
+    mode: offer.mode,
+    verification: offer.verification,
+    trustLevel: offer.trust_level,
+    baselineAmountUsd: offer.donationOffset ? offer.donationOffset.baseline_amount_cents / 100 : null,
+    baselineOpposedCause: offer.donationOffset?.baseline_opposed_cause ?? "",
+    requestedMatchingAmountUsd: offer.donationOffset
+      ? offer.donationOffset.requested_matching_amount_cents / 100
+      : null,
+    requestedOpposedCause: offer.donationOffset?.requested_opposed_cause ?? "",
+    evidenceUrl: offer.donationOffset?.evidence_url ?? "",
+    moderationStatus: offer.donationOffset?.moderation_status ?? null,
+    offeredCause: offer.offered_cause,
+    requestedCause: offer.requested_cause,
+  };
+  const actionEvidence = getActionEvidenceSummary(reviewInput);
+  const baselineConfidence = getBaselineConfidence(reviewInput);
+  const baselineEvidence = getBaselineEvidenceSummary(reviewInput);
+  const externalityReview = getExternalityReviewSummary(reviewInput);
+  const scoreConfidence = getScoreConfidence(reviewInput);
   const offerStructuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -213,7 +241,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/offers">
-                Back to public offers
+                Back to proposal registry
               </Link>
               {viewer && !isOwner ? (
                 <form action={toggleCartAction}>
@@ -383,9 +411,16 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               <div className="tag-row">
                 <span className="badge">{offer.offered_cause}</span>
                 <span className="badge badge-secondary">{offer.requested_cause}</span>
-                <span className="impact-pill">{offer.offer_impact}/10 offered</span>
-                <span className="impact-pill">{offer.min_counterparty_impact}+/10 needed</span>
+                <span className="impact-pill">Participant-stated importance {offer.offer_impact}/10</span>
+                <span className="impact-pill">
+                  Counterparty minimum acceptable importance {offer.min_counterparty_impact}+/10
+                </span>
+                <span className="impact-pill">Confidence: {scoreConfidence}</span>
               </div>
+              <p className="route-text">
+                Not a platform moral ranking. These scores reflect participant-stated views, not
+                Moral Trade&apos;s assessment of moral value.
+              </p>
               <div className="clean-stack">
                 <div>
                   <h3>Proposed action</h3>
@@ -479,6 +514,25 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                     {offer.verification} | {offer.duration} | trust level {offer.trust_level}/5
                   </p>
                   {offer.mode === "payment" ? <p>{formatPaymentCadence(offer)}</p> : null}
+                </div>
+                <div>
+                  <h3>Action evidence</h3>
+                  <p>{actionEvidence}</p>
+                </div>
+                <div>
+                  <h3>Baseline confidence</h3>
+                  <p>
+                    <strong>{baselineConfidence}</strong>: {baselineEvidence}
+                  </p>
+                </div>
+                <div>
+                  <h3>Third-party externality review</h3>
+                  <p>{externalityReview}</p>
+                  <ul className="trust-check-list">
+                    {THIRD_PARTY_EXTERNALITY_PROMPTS.map((prompt) => (
+                      <li key={prompt}>{prompt}</li>
+                    ))}
+                  </ul>
                 </div>
                 <div>
                   <h3>Current status</h3>

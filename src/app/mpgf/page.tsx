@@ -49,14 +49,17 @@ export default async function MpgfPage() {
           </Link>
         </>
       }
-      description="The Public Goods Fund coordinates contributions toward goods many moral views can value, with external-payment evidence and reviewer verification."
+      description="The Public Goods Fund is the pilot's main test of moral-public-goods coordination: threshold commitments, external-payment evidence, dissent notes, and reviewer verification for goods many moral views can value."
       eyebrow="Public Goods Fund"
-      title="Pool support for shared moral goods."
+      title="Coordinate around moral public goods."
       realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
       <nav className="hub-tabs" aria-label="Public Goods Fund sections">
         <a href="#overview">Overview</a>
+        <a href="#why-this-matters">Why this matters</a>
+        <a href="#why-this-is-hard">Why this is hard</a>
+        <a href="#what-this-pilot-tests">What this pilot tests</a>
         <a href="#evidence-review">Evidence review</a>
         <a href="#candidate-pools">Candidate pools</a>
         <a href="#allocation-process">Allocation process</a>
@@ -87,6 +90,70 @@ export default async function MpgfPage() {
               {MPGF_COPY.not_escrow} {MPGF_COPY.not_tax_advice}
             </p>
           </article>
+        </div>
+      </section>
+
+      <section className="section section-subtle" id="why-this-matters">
+        <div className="section-head section-head-compact">
+          <p className="eyebrow">Why this matters</p>
+          <h2>Many moral views overlap on some public goods</h2>
+          <p>
+            People may value global health, animal welfare, existential-risk reduction,
+            public-interest knowledge, or climate resilience somewhat, even when they prioritize
+            different idiosyncratic goals. That overlap can create gains from coordination.
+          </p>
+        </div>
+        <div className="concept-grid">
+          <article className="panel concept-card">
+            <h3>Overlapping reasons</h3>
+            <p>Participants do not need one shared moral theory to value a public good enough to coordinate.</p>
+          </article>
+          <article className="panel concept-card">
+            <h3>Distributed power</h3>
+            <p>Candidate pools, dissent notes, and public review make coordination legible without central moral ranking.</p>
+          </article>
+          <article className="panel concept-card">
+            <h3>Scalable wedge</h3>
+            <p>Threshold commitments are easier to review publicly than many private bilateral trades.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className="section section-white" id="why-this-is-hard">
+        <div className="section-head section-head-compact">
+          <p className="eyebrow">Why this is hard</p>
+          <h2>Moral public goods still face a free-rider problem</h2>
+          <p>
+            Voluntary contracts alone may not solve public-good underprovision. The pilot therefore
+            treats public-goods coordination as mechanism research, not proof that a fund exists or
+            that all contributions will be counterfactually caused by the site.
+          </p>
+        </div>
+        <div className="concept-grid">
+          <article className="panel concept-card">
+            <h3>Counterfactual uncertainty</h3>
+            <p>External payment evidence shows an action happened, but not always why it happened.</p>
+          </article>
+          <article className="panel concept-card">
+            <h3>Dissent and externalities</h3>
+            <p>Some groups may object to candidate pools, measurement choices, or incentive effects.</p>
+          </article>
+          <article className="panel concept-card">
+            <h3>No custody shortcut</h3>
+            <p>Non-custodial coordination preserves posture but makes verification and reporting more important.</p>
+          </article>
+        </div>
+      </section>
+
+      <section className="section section-subtle" id="what-this-pilot-tests">
+        <div className="section-head section-head-compact">
+          <p className="eyebrow">What this pilot tests</p>
+          <h2>Threshold commitments before broad marketplace mechanics</h2>
+          <p>
+            The Fund tests threshold commitments, external-payment evidence, dissent notes,
+            candidate pools, reviewer verification, and non-custodial coordination in one public
+            workflow.
+          </p>
         </div>
       </section>
 

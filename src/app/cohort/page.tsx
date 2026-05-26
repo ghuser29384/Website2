@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { createNetworkInviteAction } from "@/app/actions";
+import { createNetworkInviteAction, createWebinarRsvpAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { IconMark } from "@/components/ui/page-primitives";
@@ -82,7 +82,7 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
   const [viewer, overview] = await Promise.all([getViewer(), getMarketplaceOverview()]);
-  const signupHref = viewer ? "/dashboard" : "/signup?returnTo=/dashboard";
+  const signupHref = viewer ? "/onboarding" : "/signup?returnTo=/onboarding";
 
   return (
     <div className="page-shell page-shell-focused cohort-shell">
@@ -117,7 +117,7 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
             <div className="hero-actions">
               <a
                 className="button button-primary"
-                href="mailto:support@moraltrade.org?subject=Founding%20cohort%20demo%20RSVP"
+                href="#demo-rsvp"
               >
                 RSVP for live demo
               </a>
@@ -140,12 +140,30 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
               <span>Weekly by request</span>
               <span>45 min</span>
             </div>
-            <a
-              className="button button-primary"
-              href="mailto:support@moraltrade.org?subject=Founding%20cohort%20demo%20RSVP"
-            >
-              RSVP now
-            </a>
+            <form action={createWebinarRsvpAction} className="compact-form" id="demo-rsvp">
+              <input name="return_to" type="hidden" value="/cohort" />
+              <label className="field">
+                <span>Email</span>
+                <input
+                  defaultValue={viewer?.profile.email ?? ""}
+                  name="email"
+                  placeholder="you@example.com"
+                  required
+                  type="email"
+                />
+              </label>
+              <label className="field">
+                <span>Role or community</span>
+                <input
+                  name="role"
+                  placeholder="Organizer, donor, researcher, builder"
+                />
+              </label>
+              <input name="session_preference" type="hidden" value="next_available" />
+              <button className="button button-primary" type="submit">
+                RSVP now
+              </button>
+            </form>
           </aside>
         </section>
 
@@ -241,7 +259,7 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
             <div className="cohort-progress-list">
               <div>
                 <IconMark name="marketplace" />
-                <span>Live offers</span>
+                <span>Live proposals</span>
                 <strong>{formatOptionalCount(overview.openOfferCount)}</strong>
               </div>
               <div>

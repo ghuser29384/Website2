@@ -4689,6 +4689,7 @@ output {
 .example-line,
 .listing-alias,
 .listing-summary,
+.score-disclaimer,
 .review-state,
 .cause-exchange {
   margin: 0;
@@ -4709,6 +4710,33 @@ output {
 .cause-exchange {
   color: var(--accent-deep);
   font-weight: 700;
+}
+
+.score-disclaimer {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  font-size: 0.82rem;
+}
+
+.listing-review-fields {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.listing-review-fields div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.listing-review-fields strong {
+  color: var(--ink);
+  font-size: 0.82rem;
 }
 
 .format-card .inline-link,
@@ -5827,9 +5855,13 @@ output {
 }
 
 .growth-start-grid,
-.growth-activation-grid {
+.growth-activation-grid,
+.growth-no-automation-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.growth-start-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
 }
 
@@ -5860,6 +5892,22 @@ output {
 .growth-activation-card {
   min-height: 13rem;
   align-content: start;
+}
+
+.growth-activation-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.growth-no-automation-strip {
+  gap: 0.35rem;
+  width: min(100%, 880px);
+  margin: 0 auto 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  text-align: center;
 }
 
 .growth-cohort-callout {
@@ -6142,6 +6190,107 @@ output {
 .cohort-target-card p {
   margin: 0;
   color: var(--ink-soft);
+}
+
+.onboarding-hero {
+  margin-bottom: 1rem;
+}
+
+.onboarding-grid {
+  align-items: start;
+}
+
+.onboarding-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.onboarding-fieldset {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.onboarding-fieldset legend {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.onboarding-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.onboarding-choice,
+.onboarding-radio {
+  cursor: pointer;
+}
+
+.onboarding-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: start;
+  min-height: 8.5rem;
+  padding: 0.95rem;
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+
+.onboarding-choice input,
+.onboarding-radio input {
+  margin-top: 0.18rem;
+  accent-color: var(--accent-deep);
+}
+
+.onboarding-choice span {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.onboarding-choice small {
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.onboarding-inline-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.onboarding-radio {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  min-height: 2.75rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.admin-growth-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.admin-growth-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.admin-growth-list div {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 3rem;
 }
 
 .cohort-card {
@@ -6555,6 +6704,9 @@ strong {
   .cohort-hero,
   .cohort-target-grid,
   .cohort-grid,
+  .onboarding-choice-grid,
+  .onboarding-inline-grid,
+  .admin-growth-grid,
   .footer-grid,
   .detail-grid-wide {
     grid-template-columns: 1fr;

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -33,6 +34,17 @@ export default async function SafetyPage() {
           manipulation, or unsafe background networking.
         </p>
         <section className="panel data-card data-card-wide">
+          <h2>Anti-threat and baseline integrity</h2>
+          <p>
+            Safety review starts with the no-trade baseline: what would each participant do absent
+            the trade? Proposals involving threat creation, newly escalated harmful behavior, or
+            coercive compensation requests should be rejected or sent to challenge review.
+          </p>
+          <Link className="text-button" href="/anti-threat-baseline">
+            Read anti-threat baseline rules
+          </Link>
+        </section>
+        <section className="panel data-card data-card-wide">
           <h2>Blocked proposal classes</h2>
           <p>
             The platform should reject or review proposals involving violence, illegal acts, fraud,
@@ -46,6 +58,7 @@ export default async function SafetyPage() {
             private-feed search. Matching is limited to explicit fields, broad previews, saved
             searches, and manual source notes so the first version stays legible enough to audit.
           </p>
+          <p>No surprise exposure. No autonomous outreach. No private-feed mining.</p>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Collusion, secrecy, and review</h2>

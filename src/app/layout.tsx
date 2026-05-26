@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import localFont from "next/font/local";
 
+import { FunnelTracker } from "@/components/analytics/funnel-tracker";
 import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 import "./globals.css";
@@ -112,6 +114,9 @@ export default function RootLayout({
         <a className="skip-link" href="#main-content">
           Skip to main content
         </a>
+        <Suspense fallback={null}>
+          <FunnelTracker />
+        </Suspense>
         {children}
       </body>
     </html>

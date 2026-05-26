@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { getPublicSitemapEntries, getAbsoluteUrl } from "@/lib/seo";
+import { PARTNER_COHORTS } from "@/lib/growth";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -11,6 +12,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "weekly",
       priority: 1,
+    },
+    {
+      url: getAbsoluteUrl("/moral-trade"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.92,
+    },
+    {
+      url: getAbsoluteUrl("/anti-threat-baseline"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.82,
+    },
+    {
+      url: getAbsoluteUrl("/research"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.82,
     },
     {
       url: getAbsoluteUrl("/offers"),
@@ -24,6 +43,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly",
       priority: 0.85,
     },
+    ...PARTNER_COHORTS.map((partner) => ({
+      url: getAbsoluteUrl(`/cohort/${partner.slug}`),
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.65,
+    })),
     ...CANONICAL_WORKED_CASE_OFFERS.map((offer) => ({
       url: getAbsoluteUrl(`/offers/examples/${offer.id}`),
       lastModified: now,
