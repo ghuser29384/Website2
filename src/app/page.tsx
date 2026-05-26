@@ -5,7 +5,7 @@ import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, SITE_NAME, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
-  "Create verified donation offsets, threshold public-good commitments, and bounded pledge swaps with explicit baselines, evidence rules, and safety review.",
+  "Join the Moral Trade founding cohort to explore pledge swaps, donation offsets, and shared public-good commitments with privacy-first matching and evidence review.",
 );
 
 export const metadata: Metadata = {

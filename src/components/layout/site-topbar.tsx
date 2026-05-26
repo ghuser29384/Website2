@@ -26,6 +26,7 @@ interface SiteTopbarProps {
   links: NavLinkItem[];
   authLink?: NavRouteItem;
   primaryAction?: NavRouteItem;
+  showSearch?: boolean;
   showLogout?: boolean;
   logoutRedirectTo?: string;
 }
@@ -100,6 +101,7 @@ export function SiteTopbar({
   links,
   authLink,
   primaryAction,
+  showSearch = false,
   showLogout = false,
   logoutRedirectTo = "/",
 }: SiteTopbarProps) {
@@ -133,7 +135,7 @@ export function SiteTopbar({
   }
 
   return (
-    <nav aria-label="Primary" className="topbar topbar-with-search">
+    <nav aria-label="Primary" className={showSearch ? "topbar topbar-with-search" : "topbar"}>
       <Link aria-label="Moral Trade" className="brand" href={brandHref}>
         <Image
           alt="Moral Trade mark"
@@ -154,69 +156,71 @@ export function SiteTopbar({
           ) : null,
         )}
       </div>
-      <form className="topbar-search" role="search" onSubmit={handleSearchSubmit}>
-        <label className="sr-only" htmlFor={searchInputId}>
-          Search trades
-        </label>
-        <div className="topbar-search-box">
-          <span aria-hidden="true" className="topbar-search-icon">
-            Search
-          </span>
-          <input
-            id={searchInputId}
-            name="search"
-            placeholder="Search trades"
-            type="search"
-            value={searchQuery}
-            onBlur={() => {
-              globalThis.setTimeout(() => setSearchOpen(false), 120);
-            }}
-            onChange={(event) => {
-              setSearchQuery(event.target.value);
-              setSearchOpen(true);
-            }}
-            onFocus={() => setSearchOpen(true)}
-          />
-          {searchQuery ? (
-            <button
-              aria-label="Clear search"
-              className="topbar-search-clear"
-              type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setSearchOpen(false);
+      {showSearch ? (
+        <form className="topbar-search" role="search" onSubmit={handleSearchSubmit}>
+          <label className="sr-only" htmlFor={searchInputId}>
+            Search trades
+          </label>
+          <div className="topbar-search-box">
+            <span aria-hidden="true" className="topbar-search-icon">
+              Search
+            </span>
+            <input
+              id={searchInputId}
+              name="search"
+              placeholder="Search trades"
+              type="search"
+              value={searchQuery}
+              onBlur={() => {
+                globalThis.setTimeout(() => setSearchOpen(false), 120);
               }}
-            >
-              Clear
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+            />
+            {searchQuery ? (
+              <button
+                aria-label="Clear search"
+                className="topbar-search-clear"
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSearchOpen(false);
+                }}
+              >
+                Clear
+              </button>
+            ) : null}
+            <button className="topbar-search-submit" type="submit">
+              Go
             </button>
-          ) : null}
-          <button className="topbar-search-submit" type="submit">
-            Go
-          </button>
-        </div>
-        {searchOpen && searchQuery.trim() ? (
-          <div className="topbar-search-results" role="listbox" aria-label="Search suggestions">
-            {searchResults.length ? (
-              searchResults.map((result) => (
-                <Link
-                  className="topbar-search-result"
-                  href={result.href}
-                  key={`${result.kind}-${result.href}`}
-                  role="option"
-                  onClick={() => setSearchOpen(false)}
-                >
-                  <span>{result.label}</span>
-                  <small>{result.summary}</small>
-                </Link>
-              ))
-            ) : (
-              <div className="topbar-search-empty" role="status">
-                No matching routes yet. Press Go to search offers.
-              </div>
-            )}
           </div>
-        ) : null}
-      </form>
+          {searchOpen && searchQuery.trim() ? (
+            <div className="topbar-search-results" role="listbox" aria-label="Search suggestions">
+              {searchResults.length ? (
+                searchResults.map((result) => (
+                  <Link
+                    className="topbar-search-result"
+                    href={result.href}
+                    key={`${result.kind}-${result.href}`}
+                    role="option"
+                    onClick={() => setSearchOpen(false)}
+                  >
+                    <span>{result.label}</span>
+                    <small>{result.summary}</small>
+                  </Link>
+                ))
+              ) : (
+                <div className="topbar-search-empty" role="status">
+                  No matching routes yet. Press Go to search offers.
+                </div>
+              )}
+            </div>
+          ) : null}
+        </form>
+      ) : null}
       {showLogout || authLink || primaryAction ? (
         <div className="topbar-actions">
           {showLogout ? (

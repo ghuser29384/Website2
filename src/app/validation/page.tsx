@@ -17,6 +17,9 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import {
   TRUST_BADGE_LADDER,
   VALIDATION_STATUS_STATES,
+  VALIDATOR_OPERATION_STANDARDS,
+  VALIDATOR_QUALITY_METRICS,
+  VALIDATOR_REVIEW_ROLES,
   VALIDATOR_SCOPES,
 } from "@/lib/validation";
 
@@ -97,6 +100,53 @@ export default async function ValidationPage() {
                 <h3>{state.state}</h3>
                 <p>{state.meaning}</p>
                 <p className="panel-note">{state.reviewerAction}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="reviewer-roles-heading">
+          <SectionHeader eyebrow="Reviewer roles" id="reviewer-roles-heading" title="Manual review has named responsibilities.">
+            Each role certifies a narrow operational question so users can tell whether a record is complete, evidenced, appealed, or still unresolved.
+          </SectionHeader>
+          <div className="concept-grid">
+            {VALIDATOR_REVIEW_ROLES.map((role) => (
+              <article className="panel concept-card" key={role.title}>
+                <IconMark name="review" />
+                <h3>{role.title}</h3>
+                <p>{role.scope}</p>
+                <p className="panel-note">
+                  <strong>Publishes:</strong> {role.publishes}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="operations-heading">
+          <SectionHeader eyebrow="Operating targets" id="operations-heading" title="Review needs SLAs, conflict rules, and appeals.">
+            These targets turn the trust problem from a site-wide disclaimer into a visible operating promise that can be audited over time.
+          </SectionHeader>
+          <div className="data-grid">
+            {VALIDATOR_OPERATION_STANDARDS.map((standard) => (
+              <article className="panel data-card" key={standard.title}>
+                <p className="detail-kicker">{standard.target}</p>
+                <h3>{standard.title}</h3>
+                <p>{standard.detail}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="quality-heading">
+          <SectionHeader eyebrow="Reviewer quality" id="quality-heading" title="Trust metrics should be published before trust badges scale.">
+            The pilot should track reviewer performance and failure modes before expanding reputation or paid-action volume.
+          </SectionHeader>
+          <div className="checklist-card-grid">
+            {VALIDATOR_QUALITY_METRICS.map((metric) => (
+              <article className="panel checklist-card" key={metric}>
+                <span aria-hidden="true">Track</span>
+                <h3>{metric}</h3>
               </article>
             ))}
           </div>

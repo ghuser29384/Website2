@@ -4,13 +4,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
   IconMark,
-  MetricCard,
-  MoralTradeHeroVisual,
   OfferCard,
-  PageHero,
-  SearchBar,
-  SectionHeader,
-  StepCard,
   TrustChip,
 } from "@/components/ui/page-primitives";
 import type { IconName } from "@/components/ui/page-primitives";
@@ -18,129 +12,62 @@ import type { MarketplaceOverview } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_COUNT, CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import {
-  LAUNCH_WEDGE_ROUTES,
-  TRUST_BADGE_LADDER,
-  VALIDATION_STATUS_STATES,
-} from "@/lib/validation";
 
 interface HomePageProps {
   isAuthenticated: boolean;
   marketplaceOverview: MarketplaceOverview;
 }
 
-const categoryPills = [
-  { label: "Global health", href: "/offers?search=Global%20health" },
-  { label: "Animal welfare", href: "/offers?search=Animal%20welfare" },
-  { label: "Climate", href: "/offers?search=Climate" },
-  { label: "Long-run future", href: "/offers?search=Future" },
-  { label: "Public health", href: "/offers?search=Public%20health" },
-  { label: "Financial support", href: "/offers?search=Financial%20support" },
-] as const;
-
-const formatPills = [
-  { label: "Pledge swaps", href: "/pledge-swaps" },
-  { label: "Donation offsets", href: "/donation-offsets" },
-  { label: "Public-good contributions", href: "/mpgf" },
-  { label: "Private matching", href: "/background-networking" },
-] as const;
-
-const productCards: ReadonlyArray<{
-  cta: string;
-  example: string;
-  explanation: string;
-  href: string;
-  icon: IconName;
-  title: string;
-}> = [
-  {
-    title: "Pledge swaps",
-    href: "/pledge-swaps",
-    icon: "swap",
-    cta: "View pledge swaps",
-    explanation: "Exchange bounded commitments when each side values the other's action more.",
-    example: "I donate to your cause if you take the action I value.",
-  },
-  {
-    title: "Donation offsets",
-    href: "/donation-offsets",
-    icon: "offset",
-    cta: "View offsets",
-    explanation: "Redirect opposed donations toward a named compromise destination.",
-    example: "Redirect opposed donations into a shared compromise destination.",
-  },
-  {
-    title: "Public Goods Fund",
-    href: "/mpgf",
-    icon: "fund",
-    cta: "View fund",
-    explanation: "Coordinate support for goods many moral views can value.",
-    example: "Coordinate support for goods many moral views value.",
-  },
-] as const;
-
-const credibilityCards: ReadonlyArray<{
+const startPaths: ReadonlyArray<{
   description: string;
   href: string;
   icon: IconName;
-  linkLabel: string;
   title: string;
 }> = [
   {
-    title: "Research source notes",
-    href: "/methodology#sources",
-    icon: "source",
-    linkLabel: "Read sources",
-    description:
-      "The methodology page points to Toby Ord's moral trade proposal and Forethought-style work on convergence, compromise, threats, and blockers.",
+    title: "Find a counterparty",
+    description: "Invite one serious counterparty and explore a private match.",
+    href: "/background-networking",
+    icon: "profile",
   },
   {
-    title: "Pilot status is explicit",
-    href: "/faq",
-    icon: "pilot",
-    linkLabel: "Open FAQ",
-    description:
-      "Worked examples are separated from live offers, and zero live counts are framed as pilot status rather than marketplace liquidity.",
+    title: "Support a public good",
+    description: "Propose or join a public-good commitment with clear terms.",
+    href: "/mpgf",
+    icon: "fund",
   },
   {
-    title: "Review before reliance",
-    href: "/safety",
-    icon: "safety",
-    linkLabel: "Review safety",
-    description:
-      "Risky, coercive, deceptive, or unverifiable proposals are outside the public-offer path and require review before anyone relies on them.",
+    title: "Start from an example",
+    description: "Clone a worked example and adapt it to your context.",
+    href: "/offers?view=examples",
+    icon: "example",
   },
 ] as const;
 
-const howItWorksSteps = [
+const activationCards: ReadonlyArray<{
+  description: string;
+  href: string;
+  title: string;
+}> = [
   {
-    title: "Choose the launch wedge.",
-    text: "Start with a verified donation offset, a threshold public-good cycle, or a bounded pledge swap.",
+    title: "Clone a worked example",
+    description: "Use a seeded pledge swap or offset as the first draft, then edit the terms.",
+    href: "/offers?view=examples",
   },
   {
-    title: "State baseline and exit terms.",
-    text: "Name the no-trade default, reciprocal action, duration, exit rule, and evidence method.",
+    title: "Create a broad wish preview",
+    description: "Describe the kind of trade you would consider before revealing specifics.",
+    href: "/signup?returnTo=/dashboard%23wish-profile",
   },
   {
-    title: "Move through validation.",
-    text: "Evidence claims get screened, challenged when needed, and completed only after review.",
+    title: "Invite one serious counterparty",
+    description: "The fastest early loop is one thoughtful invite, not a generic referral blast.",
+    href: "/cohort",
   },
 ] as const;
 
 function formatOptionalCount(value: number | null) {
-  return value === null ? "Unavailable" : new Intl.NumberFormat("en-US").format(value);
-}
-
-function formatOptionalUsd(cents: number | null) {
-  if (cents === null) {
-    return "Unavailable";
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    currency: "USD",
-    maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
-    style: "currency",
-  }).format(cents / 100);
+  return value === null ? "Pending" : new Intl.NumberFormat("en-US").format(value);
 }
 
 function getOfferModeIcon(mode: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]["mode"]): IconName {
@@ -151,18 +78,14 @@ function getOfferModeIcon(mode: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]["m
 }
 
 export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps) {
-  const createTradeHref = isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new";
-  const createOffsetHref = isAuthenticated
-    ? "/offers/new?mode=offset"
-    : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
-  const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 4);
+  const cohortHref = isAuthenticated ? "/dashboard" : "/cohort";
+  const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 3);
   const liveOfferCount = formatOptionalCount(marketplaceOverview.openOfferCount);
   const publicProfileCount = formatOptionalCount(marketplaceOverview.publicProfileCount);
-  const reviewedOffsets = formatOptionalUsd(marketplaceOverview.redirectedOffsetCents);
 
   return (
-    <div className="page-shell page-shell-focused">
-      <header className="hero landing-hero">
+    <div className="page-shell page-shell-focused growth-shell">
+      <header className="growth-hero">
         <SiteTopbar
           brandHref="/"
           links={getPrimaryNavLinks(isAuthenticated)}
@@ -170,152 +93,101 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
           showLogout={isAuthenticated}
         />
 
-        <PageHero
-          eyebrow="A verified coordination platform for bounded moral trade"
-          title="Make one reviewable moral trade."
-          description="Start narrow: verified donation offsets, threshold public-goods commitments, and bounded pledge swaps with explicit baselines, evidence rules, and safety review."
-          actions={
-            <>
-              <Link className="button button-primary" href={createOffsetHref}>
-                Create verified offset
+        <div className="growth-hero-inner">
+          <section className="growth-hero-copy">
+            <h1>Cooperate across moral disagreement</h1>
+            <p className="hero-text">
+              A privacy-first place for pledge swaps, donation offsets, and shared public-good
+              commitments with explicit terms, evidence review, and no escrow or custody claim.
+            </p>
+            <div className="hero-actions">
+              <Link className="button button-primary" href={cohortHref}>
+                Join the founding cohort
               </Link>
-              <Link className="button button-secondary" href="/mpgf">
-                Fund a shared public good
+              <Link className="button button-secondary" href="/offers?view=examples">
+                Browse worked examples
               </Link>
-              <Link className="text-button" href="/background-networking">
-                Find counterparties privately
-              </Link>
-            </>
-          }
-        >
-          <MoralTradeHeroVisual />
-        </PageHero>
+            </div>
+          </section>
 
-        <div className="trust-chip-row trust-chip-row-wide" aria-label="Trust standards">
-          <TrustChip>Voluntary only</TrustChip>
-          <TrustChip>Evidence-gated</TrustChip>
-          <TrustChip>Challenge windows</TrustChip>
+          <aside className="growth-progress-card panel" aria-label="Founding progress">
+            <div className="growth-progress-stat">
+              <IconMark name="marketplace" />
+              <span>Live offers</span>
+              <strong>{liveOfferCount}</strong>
+            </div>
+            <div className="growth-progress-stat">
+              <IconMark name="example" />
+              <span>Worked examples</span>
+              <strong>{CANONICAL_WORKED_CASE_COUNT}</strong>
+            </div>
+            <div className="growth-progress-stat">
+              <IconMark name="profile" />
+              <span>Public profiles</span>
+              <strong>{publicProfileCount}</strong>
+            </div>
+          </aside>
+        </div>
+
+        <div className="growth-trust-row" aria-label="Trust standards">
+          <TrustChip>Privacy-first matching</TrustChip>
           <TrustChip>No escrow or custody claim</TrustChip>
+          <TrustChip>Explicit terms and evidence review</TrustChip>
         </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-white" aria-labelledby="routes-heading">
-          <SectionHeader eyebrow="Choose your route" id="routes-heading" title="The pilot is intentionally narrow.">
-            The next product wedge is verified offsets, moral public goods, bounded pledge swaps, and concierge-assisted private matching. General paid action offers stay de-emphasized until review and compliance systems mature.
-          </SectionHeader>
-          <div className="format-card-grid launch-route-grid">
-            {LAUNCH_WEDGE_ROUTES.map((route) => (
-              <Link className="panel format-card" href={route.href} key={route.title}>
-                <IconMark name={route.icon as IconName} />
+        <section className="growth-start-section section section-white" aria-labelledby="start-heading">
+          <div className="section-head section-head-compact">
+            <h2 id="start-heading">Three paths to start</h2>
+          </div>
+          <div className="growth-start-grid">
+            {startPaths.map((path) => (
+              <Link className="growth-path-card panel" href={path.href} key={path.title}>
+                <IconMark name={path.icon} />
                 <div>
-                  <h3>{route.title}</h3>
-                  <p>{route.description}</p>
+                  <h3>{path.title}</h3>
+                  <p>{path.description}</p>
                 </div>
-                <span className="inline-link">{route.cta}</span>
+                <span className="inline-link">Learn more</span>
               </Link>
             ))}
           </div>
         </section>
 
-        <section className="section section-white" aria-labelledby="search-strip-heading">
-          <SectionHeader eyebrow="Marketplace search" id="search-strip-heading" title="Find reviewable examples by cause or format.">
-            Start with broad categories, then inspect exact terms, baselines, and evidence states before relying on any proposal.
-          </SectionHeader>
-          <SearchBar placeholder="Search by cause, action, or trade type" />
-          <div className="pill-group" aria-label="Cause categories">
-            {categoryPills.map((pill) => (
-              <Link className="source-pill source-pill-link" href={pill.href} key={pill.label}>
-                {pill.label}
+        <section className="section section-subtle" aria-labelledby="activation-heading">
+          <div className="section-head section-head-compact">
+            <h2 id="activation-heading">Start with one low-risk action</h2>
+            <p>
+              The founding cohort is designed for early users who want to learn by doing one small,
+              reviewable thing before publishing a full trade.
+            </p>
+          </div>
+          <div className="growth-activation-grid">
+            {activationCards.map((card) => (
+              <Link className="growth-activation-card panel" href={card.href} key={card.title}>
+                <h3>{card.title}</h3>
+                <p>{card.description}</p>
+                <span className="inline-link">Start here</span>
               </Link>
             ))}
           </div>
-          <div className="pill-group" aria-label="Trade formats">
-            {formatPills.map((pill) => (
-              <Link className="badge badge-secondary" href={pill.href} key={pill.label}>
-                {pill.label}
-              </Link>
-            ))}
-          </div>
         </section>
 
-        <section className="section section-subtle" aria-labelledby="products-heading">
-          <SectionHeader eyebrow="Core formats" id="products-heading" title="Keep the public product focused." />
-          <div className="format-card-grid">
-            {productCards.map((card) => (
-              <article className="panel format-card" key={card.title}>
-                <IconMark name={card.icon} />
-                <div>
-                  <h3>{card.title}</h3>
-                  <p>{card.explanation}</p>
-                </div>
-                <p className="example-line">Example: {card.example}</p>
-                <Link className="inline-link" href={card.href}>
-                  {card.cta}
-                </Link>
-              </article>
-            ))}
+        <section className="section section-white" aria-labelledby="featured-examples-heading">
+          <div className="section-head section-head-compact">
+            <h2 id="featured-examples-heading">Worked examples, not live liquidity</h2>
+            <p>
+              Examples show the terms, evidence rules, and review states a real proposal should
+              expose before anyone relies on it.
+            </p>
           </div>
-        </section>
-
-        <section className="section section-white" aria-labelledby="snapshot-heading">
-          <SectionHeader eyebrow="Marketplace snapshot" id="snapshot-heading" title="Pilot status at a glance.">
-            Live activity is separated from worked examples so early-stage numbers do not overstate liquidity.
-          </SectionHeader>
-          <div className="pilot-metric-grid">
-            <MetricCard
-              action={
-                marketplaceOverview.openOfferCount === 0
-                  ? { href: "/offers?view=examples", label: "Inspect worked examples" }
-                  : { href: "/offers?view=live", label: "Browse live offers" }
-              }
-              detail={
-                marketplaceOverview.openOfferCount === 0
-                  ? "0 live offers — inspect worked examples or create the first offer."
-                  : "Signed-in participants have published these proposals."
-              }
-              icon="marketplace"
-              label="Live offers"
-              value={liveOfferCount}
-            />
-            <MetricCard
-              action={{ href: "/offers?view=examples", label: "View examples" }}
-              detail="Seeded examples are not live liquidity."
-              icon="example"
-              label="Worked examples"
-              value={String(CANONICAL_WORKED_CASE_COUNT)}
-            />
-            <MetricCard
-              action={{ href: "/people", label: "View directory" }}
-              detail="Only opt-in public profiles are counted."
-              icon="profile"
-              label="Public profiles"
-              value={publicProfileCount}
-            />
-            <MetricCard
-              action={{ href: "/donation-offsets", label: "Open offsets" }}
-              detail="Reviewed external evidence only."
-              icon="review"
-              label="Reviewed offsets"
-              value={reviewedOffsets}
-            />
-          </div>
-        </section>
-
-        <section className="section section-subtle" aria-labelledby="featured-examples-heading">
-          <SectionHeader
-            eyebrow="Featured worked examples"
-            id="featured-examples-heading"
-            title="Worked examples, not live offers."
-          >
-            Example cards show comparable terms without implying market activity.
-          </SectionHeader>
           <div className="listing-grid compact-listing-grid">
             {featuredExamples.map((offer) => (
               <OfferCard
                 alias={offer.alias}
                 causeExchange={`${offer.offeredCause} -> ${offer.requestedCause}`}
-                ctaHref={`/offers?view=examples&search=${encodeURIComponent(offer.alias)}`}
+                ctaHref={`/offers/examples/${offer.id}`}
                 duration={offer.duration}
                 evidence={offer.verification}
                 key={offer.id}
@@ -323,105 +195,52 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
                 modeLabel={formatMode(offer.mode)}
                 offeredAction={offer.offerAction}
                 offeredScore={offer.offerImpact}
-                primaryActionLabel="View worked example"
+                primaryActionLabel="View example"
                 requestedAction={offer.requestAction}
                 requestedThreshold={offer.minCounterpartyImpact}
                 reviewState="Worked example. Manual review required before reliance."
+                secondaryAction={
+                  <Link
+                    className="button button-secondary button-mini"
+                    href={
+                      isAuthenticated
+                        ? `/offers/new?mode=${offer.mode}`
+                        : `/signup?returnTo=${encodeURIComponent(`/offers/new?mode=${offer.mode}`)}`
+                    }
+                  >
+                    Create similar
+                  </Link>
+                }
                 sourceLabel="Worked example"
                 title={`${offer.offeredCause} for ${offer.requestedCause}`}
               />
             ))}
           </div>
-        </section>
-
-        <section className="section section-white" id="how-it-works" aria-labelledby="how-heading">
-          <SectionHeader eyebrow="How it works" id="how-heading" title="From intention to reviewed completion." />
-          <div className="step-card-grid">
-            {howItWorksSteps.map((step, index) => (
-              <StepCard index={index + 1} key={step.title} title={step.title}>
-                {step.text}
-              </StepCard>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-subtle" aria-labelledby="trust-heading">
-          <SectionHeader eyebrow="Validation ladder" id="trust-heading" title="Trust signals are earned from evidence." />
-          <div className="concept-grid">
-            {TRUST_BADGE_LADDER.slice(0, 4).map((badge) => (
-              <article className="panel concept-card" key={badge}>
-                <IconMark name={badge.includes("Payment") ? "evidence" : "review"} />
-                <h3>{badge}</h3>
-                <p>
-                  This badge should appear only when tied to a specific transaction record, provider
-                  receipt, identity check, or reviewed evidence packet.
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="section section-white" aria-labelledby="states-heading">
-          <SectionHeader eyebrow="Evidence states" id="states-heading" title="Manual review needs visible state, not vague trust.">
-            The public surface should show whether a claim is merely drafted, awaiting evidence, inside a challenge window, completed, disputed, or unresolved.
-          </SectionHeader>
-          <div className="data-grid">
-            {VALIDATION_STATUS_STATES.slice(0, 4).map((state) => (
-              <article className="panel data-card" key={state.state}>
-                <p className="detail-kicker">{state.state}</p>
-                <h3>{state.reviewerAction}</h3>
-                <p>{state.meaning}</p>
-              </article>
-            ))}
-          </div>
           <div className="section-actions">
-            <Link className="button button-secondary" href="/validation">
-              View validation rulebook
+            <Link className="button button-primary" href="/offers?view=examples">
+              Browse all worked examples
             </Link>
-            <Link className="text-button" href={createTradeHref}>
-              Draft a bounded pledge swap
+            <Link className="button button-secondary" href="/cohort">
+              Open cohort guide
             </Link>
           </div>
         </section>
 
-        <section className="section section-white" aria-labelledby="credibility-heading">
-          <SectionHeader eyebrow="Credibility in pilot mode" id="credibility-heading" title="Trust signals without invented proof.">
-            Moral Trade does not show testimonials, ratings, press logos, completed-impact claims, or decorative proof badges until those records exist.
-          </SectionHeader>
-          <div className="teaser-grid credibility-grid">
-            {credibilityCards.map((card) => (
-              <Link className="panel teaser-card credibility-card" href={card.href} key={card.title}>
-                <IconMark name={card.icon} />
-                <h3>{card.title}</h3>
-                <p>{card.description}</p>
-                <span className="inline-link">{card.linkLabel}</span>
-              </Link>
-            ))}
+        <section className="section section-subtle growth-cohort-callout" aria-labelledby="cohort-heading">
+          <div>
+            <h2 id="cohort-heading">Build the first market through trust distribution</h2>
+            <p>
+              Moral Trade is early. The strongest path is a founding cohort of effective givers,
+              organizers, founders, and serious counterparties who can test low-risk examples and
+              invite one relevant person at a time.
+            </p>
           </div>
-        </section>
-
-        <section className="section section-white" id="about" aria-labelledby="learn-more-heading">
-          <SectionHeader eyebrow="Learn more" id="learn-more-heading" title="Keep the theory close, not crowded." />
-          <div className="teaser-grid">
-            <Link className="panel teaser-card" href="/methodology">
-              <h3>Methodology</h3>
-              <p>How trade records, evidence, and matching boundaries are structured.</p>
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/cohort">
+              Join the founding cohort
             </Link>
-            <Link className="panel teaser-card" href="/safety">
-              <h3>Safety</h3>
-              <p>What distinguishes voluntary trade from threats, fraud, and pressure.</p>
-            </Link>
-            <Link className="panel teaser-card" href="/faq">
-              <h3>FAQ</h3>
-              <p>Plain-language answers about offers, examples, review, and payments.</p>
-            </Link>
-            <Link className="panel teaser-card" href="/methodology#sources">
-              <h3>Toby Ord / Forethought source notes</h3>
-              <p>Research sources for moral trade, compromise, and public goods.</p>
-            </Link>
-            <Link className="panel teaser-card" href="/paid-action-offers">
-              <h3>Paid action offers are deferred</h3>
-              <p>Why the pilot keeps paid action offers out of the mainstream creation path.</p>
+            <Link className="button button-secondary" href="/safety">
+              Review safety policy
             </Link>
           </div>
         </section>

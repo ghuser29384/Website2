@@ -4,7 +4,6 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
-  Breadcrumbs,
   EmptyState,
   IconMark,
   OfferCard,
@@ -73,8 +72,7 @@ const SORT_FILTER_CHIPS = [
 const DIRECTORY_TABS = [
   { label: "Live offers", value: "live" },
   { label: "Worked examples", value: "examples" },
-  { label: "All", value: "all" },
-] as const;
+] satisfies ReadonlyArray<{ label: string; value: DirectoryView }>;
 
 const FORMAT_FILTERS = [
   { label: "Pledge swap", value: "pledge" },
@@ -99,7 +97,7 @@ const CAUSE_GROUPS = [
   { id: "public-health", label: "Public health" },
 ] as const;
 
-type DirectoryView = (typeof DIRECTORY_TABS)[number]["value"];
+type DirectoryView = "live" | "examples" | "all";
 type DirectorySort = (typeof SORT_FILTER_CHIPS)[number]["value"];
 type ListingFormat = (typeof FORMAT_FILTERS)[number]["value"];
 type ReviewStatusFilter = (typeof REVIEW_STATUS_FILTERS)[number]["value"];
@@ -598,6 +596,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     verification,
     view,
   });
+  const activeViewLabel = DIRECTORY_TABS.find((tab) => tab.value === view)?.label ?? "Listings";
+  const isExampleView = view === "examples";
+  const browseLead = isExampleView
+    ? "Learn from worked examples. These are not live offers."
+    : "Explore live offers and worked examples by cause area, format, evidence method, and review state.";
   const countScope = allListings.filter((listing) => {
     if (view === "live" && listing.source !== "live") return false;
     if (view === "examples" && listing.source !== "example") return false;
@@ -747,7 +750,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   };
 
   return (
-    <div className="page-shell page-shell-focused">
+    <div className="page-shell page-shell-focused offers-redesign-shell">
       <script
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(offersStructuredData),
@@ -767,15 +770,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
-        <Breadcrumbs items={[{ href: "/offers", label: "Browse offers" }]} />
 
         <div className="collection-header-body">
           <section className="collection-header-copy">
-            <h1>Browse offers</h1>
-            <p className="hero-text">
-              Explore live offers and worked examples by cause area, format, evidence method, and
-              review state.
-            </p>
+            <h1>Browse</h1>
+            <p className="hero-text">{browseLead}</p>
             <div className="collection-stats" aria-label="Marketplace counts">
               <span>
                 <strong>{liveOfferCount}</strong> live {liveOfferCount === 1 ? "offer" : "offers"}
@@ -786,43 +785,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </span>
             </div>
           </section>
-
-          <aside className="collection-action-panel panel" aria-label="Collection actions">
-            <div className="collection-action-copy">
-              <strong>{defaultView === "examples" ? "Examples are first today." : "Live offers are ready."}</strong>
-              <p>
-                {defaultView === "examples"
-                  ? "The live directory has no public offers yet, so this page opens on reviewed examples that show the expected structure."
-                  : "Start with live offers, then inspect examples when you want to understand the evidence model."}
-              </p>
-            </div>
-            <div className="hero-actions">
-              <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
-                Create an offer
-              </Link>
-              <Link className="button button-secondary" href={viewer ? "/dashboard#saved-searches" : "/login?returnTo=/dashboard"}>
-                Save search
-              </Link>
-            </div>
-          </aside>
         </div>
-
-        <details className="pilot-note panel">
-          <summary>About this pilot</summary>
-          <p>
-            Moral Trade currently prioritizes donation offsets, moral public goods, and bounded
-            pledge swaps because they have clearer baselines, evidence, and review states. Paid
-            action offers remain deferred while identity, dispute, and compliance workflows mature.
-          </p>
-          <div className="pilot-note-links">
-            <Link className="text-button" href="/donation-offsets">
-              Offset guide
-            </Link>
-            <Link className="text-button" href="/validation">
-              Validation rules
-            </Link>
-          </div>
-        </details>
       </header>
 
       <main id="main-content" tabIndex={-1}>
@@ -837,7 +800,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         ) : null}
 
         <section className="marketplace-shell" aria-label="Offer marketplace">
-          <div className="marketplace-tabs" role="tablist" aria-label="Directory view">
+          <nav className="marketplace-tabs" aria-label="Directory view">
             {DIRECTORY_TABS.map((tab) => (
               <Link
                 aria-current={view === tab.value ? "page" : undefined}
@@ -849,15 +812,19 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <strong>{tabCounts[tab.value]}</strong>
               </Link>
             ))}
-          </div>
+          </nav>
 
           <form action="/offers" className="marketplace-search marketplace-search-wide marketplace-search-with-category" role="search">
             <label className="field marketplace-search-field">
-              <span>Search offers</span>
+              <span>Search</span>
               <input
                 defaultValue={searchQuery}
                 name="search"
-                placeholder="Search offers or cause areas"
+                placeholder={
+                  isExampleView
+                    ? "Search examples by title, cause, or keyword..."
+                    : "Search offers by title, cause, or keyword..."
+                }
                 type="search"
               />
             </label>
@@ -884,7 +851,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </select>
             </label>
             <label className="field marketplace-review-field">
-              <span>Review state</span>
+              <span>Verification</span>
               <select name="review" defaultValue={reviewStatus}>
                 {visibleReviewStatusCounts.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -919,10 +886,51 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <button className="button button-primary" type="submit">
               Search
             </button>
-            <p className="toolbar-result-count" role="status" aria-live="polite">
-              {filteredListings.length} {filteredListings.length === 1 ? "result" : "results"}
-            </p>
           </form>
+
+          <div className="marketplace-reliance-strip" aria-label="Worked example reliance guidance">
+            <div>
+              <IconMark name="safety" />
+              <span>
+                <strong>Worked example, not live liquidity</strong>
+                <small>These are past or simulated agreements for learning.</small>
+              </span>
+            </div>
+            <div>
+              <IconMark name="review" />
+              <span>
+                <strong>Manual review before reliance</strong>
+                <small>Review terms and evidence before adapting an example.</small>
+              </span>
+            </div>
+          </div>
+
+          <div className="toolbar-utility-row" aria-label="Result display controls">
+            <p className="toolbar-result-count" role="status" aria-live="polite">
+              Showing {filteredListings.length} {filteredListings.length === 1 ? "result" : "results"} in{" "}
+              {activeViewLabel.toLowerCase()}.
+            </p>
+            <div className="view-toggle" aria-label="Listing layout">
+              <Link
+                aria-current={layout === "grid" ? "page" : undefined}
+                className={layout === "grid" ? "is-active" : ""}
+                href={buildOffersHref({ ...filterHrefParams, layout: "grid" })}
+                title="Grid view"
+              >
+                <span aria-hidden="true" className="view-toggle-icon view-toggle-icon-grid" />
+                <span className="sr-only">Grid view</span>
+              </Link>
+              <Link
+                aria-current={layout === "list" ? "page" : undefined}
+                className={layout === "list" ? "is-active" : ""}
+                href={buildOffersHref({ ...filterHrefParams, layout: "list" })}
+                title="List view"
+              >
+                <span aria-hidden="true" className="view-toggle-icon view-toggle-icon-list" />
+                <span className="sr-only">List view</span>
+              </Link>
+            </div>
+          </div>
 
           <div className="popular-filter-row" aria-label="Popular marketplace filters">
             <span>Popular filters</span>
@@ -971,23 +979,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   {layout !== "grid" ? <input name="layout" type="hidden" value={layout} /> : null}
 
                   <details className="filter-group" open>
-                    <summary>Format</summary>
-                    <div className="filter-option-list">
-                      {visibleFormatCounts.length ? visibleFormatCounts.map((option) => (
-                        <label className="check-row" key={option.value}>
-                          <input
-                            defaultChecked={formats.includes(option.value)}
-                            name="mode"
-                            type="checkbox"
-                            value={option.value}
-                          />
-                          <span>{withCount(option.label, option.count)}</span>
-                        </label>
-                      )) : <p className="filter-empty-note">No formats available for this view.</p>}
-                    </div>
-                  </details>
-
-                  <details className="filter-group" open>
                     <summary>Cause area</summary>
                     <div className="filter-option-list">
                       {visibleCauseCounts.length ? visibleCauseCounts.map((option) => (
@@ -1001,6 +992,23 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                           <span>{withCount(option.label, option.count)}</span>
                         </label>
                       )) : <p className="filter-empty-note">No cause facets available for this view.</p>}
+                    </div>
+                  </details>
+
+                  <details className="filter-group" open>
+                    <summary>Format</summary>
+                    <div className="filter-option-list">
+                      {visibleFormatCounts.length ? visibleFormatCounts.map((option) => (
+                        <label className="check-row" key={option.value}>
+                          <input
+                            defaultChecked={formats.includes(option.value)}
+                            name="mode"
+                            type="checkbox"
+                            value={option.value}
+                          />
+                          <span>{withCount(option.label, option.count)}</span>
+                        </label>
+                      )) : <p className="filter-empty-note">No formats available for this view.</p>}
                     </div>
                   </details>
 
@@ -1097,27 +1105,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   </h2>
                 </div>
                 <p className="results-sort-note">Sorted by {findLabel(SORT_FILTER_CHIPS, directorySort).toLowerCase()}.</p>
-              </div>
-
-              <div className="view-toggle" aria-label="Listing layout">
-                <Link
-                  aria-current={layout === "grid" ? "page" : undefined}
-                  className={layout === "grid" ? "is-active" : ""}
-                  href={buildOffersHref({ ...filterHrefParams, layout: "grid" })}
-                  title="Grid view"
-                >
-                  <span aria-hidden="true" className="view-toggle-icon view-toggle-icon-grid" />
-                  <span className="sr-only">Grid view</span>
-                </Link>
-                <Link
-                  aria-current={layout === "list" ? "page" : undefined}
-                  className={layout === "list" ? "is-active" : ""}
-                  href={buildOffersHref({ ...filterHrefParams, layout: "list" })}
-                  title="List view"
-                >
-                  <span aria-hidden="true" className="view-toggle-icon view-toggle-icon-list" />
-                  <span className="sr-only">List view</span>
-                </Link>
               </div>
 
               {groupedListings.length ? (

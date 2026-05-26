@@ -15,6 +15,20 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["offer", "trade", "marketplace", "swap", "payment", "offset"],
   },
   {
+    href: "/offers?view=examples",
+    label: "Worked examples",
+    summary: "Clone or inspect seeded examples before publishing a live trade.",
+    kind: "trade",
+    keywords: ["example", "worked", "clone", "template", "first action"],
+  },
+  {
+    href: "/cohort",
+    label: "Founding cohort",
+    summary: "Join the founding cohort, invite one serious counterparty, and start with one low-risk action.",
+    kind: "community",
+    keywords: ["cohort", "founding", "signup", "invite", "referral", "demo", "activation"],
+  },
+  {
     href: "/pledge-swaps",
     label: "Pledge swaps",
     summary: "Learn and browse reciprocal commitments such as donations, volunteering, or habit changes.",
@@ -97,6 +111,13 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     summary: "Learn how the platform separates voluntary trade from threats and coercion.",
     kind: "learn",
     keywords: ["learn", "standards", "threat", "coercion", "verification", "escrow"],
+  },
+  {
+    href: "/validation",
+    label: "Validation and evidence",
+    summary: "Review validator scopes, evidence states, challenge windows, and trust badges.",
+    kind: "learn",
+    keywords: ["validation", "evidence", "review", "rulebook", "appeal", "badge", "governance"],
   },
   {
     href: "/background-networking",

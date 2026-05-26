@@ -18,6 +18,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily",
       priority: 0.9,
     },
+    {
+      url: getAbsoluteUrl("/cohort"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.85,
+    },
     ...CANONICAL_WORKED_CASE_OFFERS.map((offer) => ({
       url: getAbsoluteUrl(`/offers/examples/${offer.id}`),
       lastModified: now,

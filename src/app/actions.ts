@@ -1381,8 +1381,11 @@ async function generateWishMatchSuggestions({
 }
 
 export async function signUpAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const signupPath = returnTo === "/dashboard" ? "/signup" : `/signup?returnTo=${encodeURIComponent(returnTo)}`;
+
   if (!hasSupabaseEnv()) {
-    redirectWithMessage("/signup", "error", "Supabase is not configured yet.");
+    redirectWithMessage(signupPath, "error", "Supabase is not configured yet.");
   }
 
   const email = readRequired(formData, "email").toLowerCase();
@@ -1393,14 +1396,14 @@ export async function signUpAction(formData: FormData) {
   const country = readOptional(formData, "country");
 
   if (!email || !password) {
-    redirectWithMessage("/signup", "error", "Email and password are required.");
+    redirectWithMessage(signupPath, "error", "Email and password are required.");
   }
 
   enforceActionRateLimit({
     key: `signup:${email}`,
     limit: 5,
     message: "Too many signup attempts. Wait a few minutes before trying again.",
-    returnTo: "/signup",
+    returnTo: signupPath,
     windowMs: 15 * 60 * 1000,
   });
 
@@ -1425,15 +1428,16 @@ export async function signUpAction(formData: FormData) {
   });
 
   if (error) {
-    redirectWithMessage("/signup", "error", error.message);
+    redirectWithMessage(signupPath, "error", error.message);
   }
 
   if (data.user && data.session) {
     await ensureAccountRowsForUser(data.user, supabase);
+    redirectWithMessage(returnTo, "message", "Account created. Choose one low-risk first action.");
   }
 
   redirectWithMessage(
-    "/login",
+    `/login?returnTo=${encodeURIComponent(returnTo)}`,
     "message",
     "Account created. Check your email to confirm your address, then sign in.",
   );

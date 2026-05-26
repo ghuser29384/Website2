@@ -99,6 +99,66 @@ export const VALIDATOR_SCOPES = [
   },
 ] as const;
 
+export const VALIDATOR_REVIEW_ROLES = [
+  {
+    title: "Intake reviewer",
+    scope:
+      "Checks completeness, prohibited categories, baseline clarity, evidence method, and whether the proposal belongs in the public launch wedge.",
+    publishes:
+      "A submitted, paused, or blocked intake state with the narrow reason safe to disclose.",
+  },
+  {
+    title: "Evidence reviewer",
+    scope:
+      "Checks receipts, public logs, attestations, provider records, proof uniqueness, and challenge-window readiness.",
+    publishes:
+      "A needs-evidence, challenge-window, completion-reviewed, or disputed/unresolved state.",
+  },
+  {
+    title: "Appeal reviewer",
+    scope:
+      "Reviews challenged decisions when new evidence, conflict concerns, duplicate proof, or coercive-baseline claims are raised.",
+    publishes:
+      "A short reasoning summary, outcome, and any changed evidence state when disclosure is safe.",
+  },
+] as const;
+
+export const VALIDATOR_OPERATION_STANDARDS = [
+  {
+    title: "Conflict rule",
+    target: "Before assignment",
+    detail:
+      "Reviewers should not validate records where they are a party, beneficiary, funder, close counterparty, or institutional sponsor.",
+  },
+  {
+    title: "Intake SLA",
+    target: "2 business days",
+    detail:
+      "New public offers should receive a completeness and safety screen before they are treated as live marketplace supply.",
+  },
+  {
+    title: "Evidence SLA",
+    target: "5 business days",
+    detail:
+      "Submitted evidence should be marked as missing, in challenge window, review-cleared, or unresolved within a visible timeframe.",
+  },
+  {
+    title: "Appeal lane",
+    target: "7 business days",
+    detail:
+      "Appeals should preserve the original decision, challenger claim, reviewer response, and final state in the audit log.",
+  },
+] as const;
+
+export const VALIDATOR_QUALITY_METRICS = [
+  "Median intake time",
+  "Median evidence-review time",
+  "Challenge rate",
+  "Appeal overturn rate",
+  "Duplicate-proof misses",
+  "Unresolved dispute share",
+] as const;
+
 export const TRUST_BADGE_LADDER = [
   "Identity verified",
   "Organization verified",

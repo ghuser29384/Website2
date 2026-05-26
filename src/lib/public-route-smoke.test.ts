@@ -26,40 +26,24 @@ function flattenPrimaryNavHrefs() {
 test("public navigation exposes professional marketplace routes", () => {
   const labels = getPrimaryNavLinks(false).map((link) => link.label);
   const hrefs = flattenPrimaryNavHrefs();
-  const browseMenu = getPrimaryNavLinks(false).find((link) => link.label === "Browse");
-  const createMenu = getPrimaryNavLinks(false).find((link) => link.label === "Create");
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
 
-  assert.deepEqual(labels, ["Browse", "Create", "Learn", "Community"]);
-  assert.equal(getTopbarActions(false).primaryAction.href, "/signup?returnTo=/offers/new%3Fmode%3Doffset");
-  assert.equal(getTopbarActions(false).primaryAction.label, "Create verified offset");
-  assert.match(browseMenu?.summary ?? "", /Compare public proposals/);
-  assert.ok(browseMenu?.items?.every((item) => item.description));
-  assert.ok(createMenu?.items?.some((item) => item.label === "Create verified offset"));
-  assert.ok(hrefs.includes("/pledge-swaps"));
-  assert.ok(hrefs.includes("/paid-action-offers"));
-  assert.ok(hrefs.includes("/donation-offsets"));
-  assert.ok(hrefs.includes("/mpgf"));
-  assert.ok(hrefs.includes("/validation"));
+  assert.deepEqual(labels, ["Browse", "Examples", "Cohort", "Learn"]);
+  assert.equal(getTopbarActions(false).primaryAction, undefined);
+  assert.equal(getTopbarActions(false).authLink.label, "Sign in");
   assert.ok(hrefs.includes("/offers"));
-  assert.ok(hrefs.includes("/faq"));
-  assert.ok(hrefs.includes("/wish-registry"));
-  assert.ok(hrefs.includes("/background-networking"));
-  assert.ok(!hrefs.includes("/priority-correction-fund"));
-  assert.ok(!hrefs.includes("/mpgf/pools"));
-  assert.ok(!hrefs.includes("/mpgf/contribute"));
-  assert.ok(!hrefs.includes("/#background-networking"));
-  assert.ok(!hrefs.includes("/#standards"));
-  assert.ok(!hrefs.includes("/cart"));
-  assert.ok(!hrefs.includes("/offers#best-offers"));
+  assert.ok(hrefs.includes("/offers?view=examples"));
+  assert.ok(hrefs.includes("/cohort"));
+  assert.ok(hrefs.includes("/methodology"));
+  assert.equal(hrefs.length, 4);
   assert.equal(siteSource.includes("label: \"MPGF\""), false);
   assert.equal(siteSource.includes("label: \"Advanced\""), false);
   assert.match(siteSource, /mailto:support@moraltrade\.org/);
   assert.match(topbarSource, /topbar-menu-heading/);
   assert.match(topbarSource, /topbar-menu-icon/);
   assert.match(topbarSource, /topbar-with-search/);
-  assert.equal(topbarSource.includes("showSearch"), false);
+  assert.match(topbarSource, /showSearch = false/);
 });
 
 test("MPGF public copy leads with manual evidence instead of raw gate/debug wording", () => {
@@ -271,6 +255,8 @@ test("global search and offers search expose real marketplace discovery", () => 
   const appDataSource = readRepoFile("src/lib/app-data.ts");
   const animalResults = filterSiteSearchItems("animal welfare");
   const mpfgResults = filterSiteSearchItems("manual evidence");
+  const cohortResults = filterSiteSearchItems("founding cohort");
+  const validationResults = filterSiteSearchItems("appeal rulebook");
 
   assert.match(topbarSource, /placeholder="Search trades"/);
   assert.match(topbarSource, /filterSiteSearchItems/);
@@ -303,38 +289,37 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.equal(animalResults[0]?.href, "/offers?search=Animal%20Welfare");
   assert.equal(filterSiteSearchItems("pledge swap")[0]?.href, "/pledge-swaps");
   assert.ok(mpfgResults.some((result) => result.href === "/mpgf"));
+  assert.equal(cohortResults[0]?.href, "/cohort");
+  assert.ok(validationResults.some((result) => result.href === "/validation"));
 });
 
-test("home page is a focused landing page with pilot metrics and marketplace preview", () => {
+test("home page is a founding-cohort landing page with pilot metrics and first actions", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
-  const heroIndex = homeSource.indexOf("Make one reviewable moral trade.");
-  const routeIndex = homeSource.indexOf("Choose your route");
-  const searchIndex = homeSource.indexOf("Search by cause, action, or trade type");
-  const metricsIndex = homeSource.indexOf("pilot-metric-grid");
-  const formatsIndex = homeSource.indexOf("Core formats");
-  const previewIndex = homeSource.indexOf("Worked examples, not live offers.");
+  const heroIndex = homeSource.indexOf("Cooperate across moral disagreement");
+  const metricsIndex = homeSource.indexOf("growth-progress-card");
+  const routeIndex = homeSource.indexOf("Three paths to start");
+  const activationIndex = homeSource.indexOf("Start with one low-risk action");
+  const previewIndex = homeSource.indexOf("Worked examples, not live liquidity");
 
   assert.ok(heroIndex > -1);
-  assert.ok(routeIndex > heroIndex);
-  assert.ok(searchIndex > routeIndex);
-  assert.ok(formatsIndex > searchIndex);
-  assert.ok(metricsIndex > formatsIndex);
-  assert.ok(previewIndex > metricsIndex);
-  assert.match(homeSource, /Create verified offset/);
-  assert.match(homeSource, /Find counterparties privately/);
+  assert.ok(metricsIndex > heroIndex);
+  assert.ok(routeIndex > metricsIndex);
+  assert.ok(activationIndex > routeIndex);
+  assert.ok(previewIndex > activationIndex);
+  assert.match(homeSource, /Join the founding cohort/);
+  assert.match(homeSource, /Browse worked examples/);
+  assert.match(homeSource, /Invite one serious counterparty/);
   assert.match(homeSource, /marketplaceOverview/);
   assert.match(homeSource, /CANONICAL_WORKED_CASE_COUNT/);
   assert.match(homeSource, /worked examples/);
-  assert.match(homeSource, /Challenge windows/);
-  assert.match(homeSource, /MoralTradeHeroVisual/);
+  assert.match(homeSource, /No escrow or custody claim/);
   assert.match(homeSource, /IconMark/);
-  assert.match(homeSource, /Credibility in pilot mode/);
-  assert.match(homeSource, /Trust signals without invented proof/);
-  assert.match(homeSource, /SearchBar/);
   assert.match(homeSource, /OfferCard/);
   assert.equal(homeSource.includes("opening-sequence"), false);
   assert.equal(homeSource.includes("OfferComposer"), false);
   assert.equal(homeSource.includes("ParetoChart"), false);
+  assert.equal(homeSource.includes("SearchBar"), false);
+  assert.equal(homeSource.includes("MoralTradeHeroVisual"), false);
   assert.equal(homeSource.includes("delegate heartbeats"), false);
   assert.equal(homeSource.includes("manual source consent ledger"), false);
   assert.equal(homeSource.includes("deterministic synthesis layer"), false);
@@ -350,7 +335,6 @@ test("homepage metrics use live counts when available and avoid fake impact tota
   assert.match(pageSource, /getMarketplaceOverview/);
   assert.match(homeSource, /Live offers/);
   assert.match(homeSource, /Public profiles/);
-  assert.match(homeSource, /Reviewed offsets/);
   assert.match(homeSource, /No escrow or custody claim/);
   assert.match(appDataSource, /openOfferCount/);
   assert.match(appDataSource, /completedAgreementCount/);
@@ -381,7 +365,31 @@ test("background networking and reasoning standards are distinct public routes",
   assert.match(sitemapSource, /\/background-networking/);
   assert.match(sitemapSource, /\/reasoning-standards/);
   assert.match(sitemapSource, /\/pledge-swaps/);
+  assert.match(sitemapSource, /\/cohort/);
   assert.match(sitemapSource, /\/paid-action-offers/);
+});
+
+test("cohort page exposes founding progress, referral, and one-counterparty invite loop", () => {
+  const cohortPage = readRepoFile("src/app/cohort/page.tsx");
+  const signupPage = readRepoFile("src/app/signup/page.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+
+  assert.match(cohortPage, /Grow cooperative impact in your community/);
+  assert.match(cohortPage, /Start with one concrete action/);
+  assert.match(cohortPage, /What counts as progress/);
+  assert.match(cohortPage, /Activated account/);
+  assert.match(cohortPage, /Invite one serious counterparty/);
+  assert.match(cohortPage, /Your referral link/);
+  assert.match(cohortPage, /Founding progress/);
+  assert.match(cohortPage, /Safety and privacy/);
+  assert.match(cohortPage, /createNetworkInviteAction/);
+  assert.match(cohortPage, /CANONICAL_WORKED_CASE_COUNT/);
+  assert.match(signupPage, /Start with one low-risk action/);
+  assert.match(signupPage, /Clone a worked example/);
+  assert.match(signupPage, /Create broad wish preview/);
+  assert.match(signupPage, /Log public-good action/);
+  assert.match(actionsSource, /return_to/);
+  assert.match(actionsSource, /Choose one low-risk first action/);
 });
 
 test("activation loop includes concierge intake, admin triage, SLA, and audit trail", () => {
@@ -507,6 +515,26 @@ test("public guidance describes verification pipelines without custody overclaim
   assert.equal(joinedSources.includes("guaranteed custody"), false);
 });
 
+test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality metrics", () => {
+  const validationPage = readRepoFile("src/app/validation/page.tsx");
+  const validationSource = readRepoFile("src/lib/validation.ts");
+
+  assert.match(validationPage, /VALIDATOR_REVIEW_ROLES/);
+  assert.match(validationPage, /VALIDATOR_OPERATION_STANDARDS/);
+  assert.match(validationPage, /VALIDATOR_QUALITY_METRICS/);
+  assert.match(validationPage, /Manual review has named responsibilities/);
+  assert.match(validationPage, /Review needs SLAs, conflict rules, and appeals/);
+  assert.match(validationPage, /Trust metrics should be published/);
+  assert.match(validationSource, /Intake reviewer/);
+  assert.match(validationSource, /Evidence reviewer/);
+  assert.match(validationSource, /Appeal reviewer/);
+  assert.match(validationSource, /Conflict rule/);
+  assert.match(validationSource, /2 business days/);
+  assert.match(validationSource, /5 business days/);
+  assert.match(validationSource, /Appeal overturn rate/);
+  assert.match(validationSource, /Duplicate-proof misses/);
+});
+
 test("pooled donation offset creation has visible path and server-side guardrails", () => {
   const donationOffsetsPage = readRepoFile("src/app/donation-offsets/page.tsx");
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
@@ -559,6 +587,28 @@ test("offer creation form exposes preset templates without weakening validation"
   assert.match(offerForm, /liveOfferErrors/);
 });
 
+test("offer creation form exposes a guided reviewable-trade wizard", () => {
+  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+  const globalCss = readRepoFile("src/app/globals.css");
+
+  assert.match(offerForm, /OfferWizardStep/);
+  assert.match(offerForm, /Guided offer wizard/);
+  assert.match(offerForm, /Choose a launch route/);
+  assert.match(offerForm, /State reciprocal terms/);
+  assert.match(offerForm, /Explain baseline and exit/);
+  assert.match(offerForm, /Set evidence rules/);
+  assert.match(offerForm, /Ready for review/);
+  assert.match(offerForm, /completedWizardSteps/);
+  assert.match(offerForm, /wizardProgressPercent/);
+  assert.match(offerForm, /href: "#offer-route"/);
+  assert.match(offerForm, /id="offer-terms"/);
+  assert.match(offerForm, /id="offer-boundaries"/);
+  assert.match(offerForm, /id="offer-evidence"/);
+  assert.match(offerForm, /id="offer-publish"/);
+  assert.match(globalCss, /offer-wizard-panel/);
+  assert.match(globalCss, /offer-wizard-steps/);
+});
+
 test("offers page keeps content before the footer in source order", () => {
   const offersPage = readRepoFile("src/app/offers/page.tsx");
   const mainIndex = offersPage.indexOf("<main");
@@ -590,7 +640,10 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
 
   assert.match(offersPage, /Live offers/);
   assert.match(offersPage, /Worked examples/);
-  assert.match(offersPage, /<h1>Browse offers<\/h1>/);
+  assert.match(offersPage, /<h1>Browse<\/h1>/);
+  assert.match(offersPage, /Learn from worked examples\. These are not live offers/);
+  assert.match(offersPage, /Worked example, not live liquidity/);
+  assert.match(offersPage, /Manual review before reliance/);
   assert.match(offersPage, /defaultView = liveOfferCount > 0 \? "live" : "examples"/);
   assert.match(offersPage, /No live offers yet/);
   assert.match(offersPage, /No matching listings/);

@@ -103,6 +103,14 @@ interface OfferTemplate {
   };
 }
 
+interface OfferWizardStep {
+  id: string;
+  title: string;
+  detail: string;
+  href: string;
+  complete: boolean;
+}
+
 const defaultOffsetFields = createDefaultDonationOffsetFields();
 
 const OFFER_TEMPLATES: OfferTemplate[] = [
@@ -217,6 +225,10 @@ function toDateInputValue(value: string | null) {
 
 function readFormControlValue(event: { currentTarget: EventTarget }) {
   return (event.currentTarget as unknown as { value: string }).value;
+}
+
+function formatOfferModeLabel(mode: OfferMode) {
+  return OFFER_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? mode;
 }
 
 export function OfferCreateForm({
@@ -448,6 +460,64 @@ export function OfferCreateForm({
     [liveCoreOfferErrors, liveOffsetErrors],
   );
   const canPublishOffer = supabaseReady && liveOfferErrors.length === 0;
+  const wizardSteps: OfferWizardStep[] = useMemo(
+    () => [
+      {
+        id: "route",
+        title: "Choose a launch route",
+        detail: isPayment
+          ? "Paid action offers are paused for operator-reviewed pilots."
+          : `${formatOfferModeLabel(mode)} is inside the current launch wedge.`,
+        href: "#offer-route",
+        complete: !isPayment,
+      },
+      {
+        id: "terms",
+        title: "State reciprocal terms",
+        detail: "Name what you will do and what the counterparty should do.",
+        href: "#offer-terms",
+        complete: Boolean(offerAction.trim() && requestAction.trim()),
+      },
+      {
+        id: "baseline",
+        title: "Explain baseline and exit",
+        detail: "Make the no-trade default, expiry, and unresolved-evidence path reviewable.",
+        href: "#offer-boundaries",
+        complete: Boolean(baselineStatement.trim() && exitCondition.trim()),
+      },
+      {
+        id: "evidence",
+        title: "Set evidence rules",
+        detail: isOffset
+          ? "Offset fields, evidence method, surplus rule, and pool safeguards must pass checks."
+          : `${verificationPreference} over ${reviewPeriod}.`,
+        href: "#offer-evidence",
+        complete: isOffset ? liveOffsetErrors.length === 0 : Boolean(verificationPreference && reviewPeriod),
+      },
+      {
+        id: "publish",
+        title: "Ready for review",
+        detail: "A public description and all required safeguards are complete.",
+        href: "#offer-publish",
+        complete: canPublishOffer,
+      },
+    ],
+    [
+      baselineStatement,
+      canPublishOffer,
+      exitCondition,
+      isOffset,
+      isPayment,
+      liveOffsetErrors.length,
+      mode,
+      offerAction,
+      requestAction,
+      reviewPeriod,
+      verificationPreference,
+    ],
+  );
+  const completedWizardSteps = wizardSteps.filter((step) => step.complete).length;
+  const wizardProgressPercent = Math.round((completedWizardSteps / wizardSteps.length) * 100);
 
   const joinedPoolProgress = useMemo(() => {
     if (!selectedPool || participationMode !== "pool" || !poolSide) {
@@ -573,6 +643,39 @@ export function OfferCreateForm({
         </div>
       ) : null}
 
+      <section className="offer-wizard-panel" aria-labelledby="offer-wizard-heading">
+        <div className="offer-wizard-summary">
+          <div>
+            <p className="eyebrow">Guided offer wizard</p>
+            <h3 id="offer-wizard-heading">Turn intent into a reviewable record</h3>
+            <p>
+              The report recommends short, bounded trades with explicit baselines, evidence, and
+              completion states. Use this progress rail to keep the proposal inside that shape.
+            </p>
+          </div>
+          <div className="offer-wizard-meter" aria-label={`${completedWizardSteps} of ${wizardSteps.length} steps complete`}>
+            <span>{completedWizardSteps}/{wizardSteps.length} complete</span>
+            <div className="offset-progress-track" aria-hidden="true">
+              <span
+                className="offset-progress-fill"
+                style={{ width: `${wizardProgressPercent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+        <ol className="offer-wizard-steps">
+          {wizardSteps.map((step) => (
+            <li className={step.complete ? "is-complete" : ""} key={step.id}>
+              <a href={step.href}>
+                <span aria-hidden="true">{step.complete ? "OK" : "--"}</span>
+                <strong>{step.title}</strong>
+                <small>{step.detail}</small>
+              </a>
+            </li>
+          ))}
+        </ol>
+      </section>
+
       <section className="panel offer-template-panel" aria-labelledby="offer-template-heading">
         <div>
           <p className="eyebrow">Start from a template</p>
@@ -607,7 +710,7 @@ export function OfferCreateForm({
           }
         }}
       >
-        <label className="field">
+        <label className="field" id="offer-route">
           <span>Exchange mode</span>
           <select
             value={mode}
@@ -645,7 +748,7 @@ export function OfferCreateForm({
           </p>
         </div>
 
-        <div className="field-grid">
+        <div className="field-grid" id="offer-terms">
           <label className="field">
             <span>What you&apos;re offering</span>
             <select
@@ -710,7 +813,7 @@ export function OfferCreateForm({
           />
         </label>
 
-        <label className="field">
+        <label className="field" id="offer-boundaries">
           <span>No-trade baseline / default</span>
           <textarea
             name="baseline_statement"
@@ -1316,7 +1419,7 @@ export function OfferCreateForm({
           </label>
         </div>
 
-        <div className="field-grid">
+        <div className="field-grid" id="offer-evidence">
           <label className="field">
             <span>Verification preference</span>
             <select
@@ -1401,7 +1504,7 @@ export function OfferCreateForm({
           />
         </label>
 
-        <label className="field">
+        <label className="field" id="offer-publish">
           <span>Description</span>
           <textarea
             name="notes"

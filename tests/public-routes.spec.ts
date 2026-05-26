@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 const publicRoutes = [
   "/",
   "/offers",
+  "/cohort",
   "/offers/new",
   "/create",
   "/pledge-swaps",
@@ -109,8 +110,7 @@ for (const route of ["/", "/offers", "/donation-offsets", "/mpgf", "/methodology
         .map((item) => (item.textContent ?? "").replace(/\s+/g, " ").trim()),
     );
 
-    expect(navLabels).toEqual(["Browse", "Create", "Learn", "Community"]);
-    expect(actionLabels).toContain("Create trade");
+    expect(navLabels).toEqual(["Browse", "Examples", "Cohort", "Learn"]);
     expect(actionLabels).toContain("Sign in");
     expect(navLabels).not.toContain("Marketplace");
     expect(navLabels).not.toContain("Explore");

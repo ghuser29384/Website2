@@ -2,58 +2,19 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
     {
       label: "Browse",
-      summary: "Compare public proposals and worked examples.",
-      items: [
-        { href: "/offers", label: "All offers", description: "Live offers and worked examples." },
-        { href: "/pledge-swaps", label: "Pledge swaps", description: "Exchange bounded commitments." },
-        { href: "/donation-offsets", label: "Donation offsets", description: "Redirect matched opposed donations." },
-        { href: "/mpgf", label: "Public Goods Fund", description: "Pool support for shared moral goods." },
-        { href: "/offers?view=examples", label: "Worked examples", description: "Seeded structures, not live offers." },
-      ],
+      href: "/offers",
     },
     {
-      label: "Create",
-      summary: "Start with structured terms and review gates.",
-      items: [
-        {
-          href: isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new",
-          label: "Create bounded trade",
-          description: "Draft terms with baseline, exit, evidence, and review gates.",
-        },
-        {
-          href: isAuthenticated
-            ? "/offers/new?mode=offset"
-            : "/signup?returnTo=/offers/new%3Fmode%3Doffset",
-          label: "Create verified offset",
-          description: "Set baseline, match, destination, surplus, and evidence rules.",
-        },
-        {
-          href: isAuthenticated ? "/dashboard#wish-profile" : "/signup?returnTo=/dashboard%23wish-profile",
-          label: "Create wish profile",
-          description: "Describe broad wishes before mutual disclosure.",
-        },
-      ],
+      label: "Examples",
+      href: "/offers?view=examples",
+    },
+    {
+      label: "Cohort",
+      href: "/cohort",
     },
     {
       label: "Learn",
-      summary: "Understand standards before proposing or accepting terms.",
-      items: [
-        { href: "/#how-it-works", label: "How it works", description: "Three steps from format to evidence review." },
-        { href: "/validation", label: "Validation", description: "Evidence states, challenge windows, and review scopes." },
-        { href: "/safety", label: "Safety", description: "Coercion, fraud, and pressure boundaries." },
-        { href: "/methodology", label: "Methodology", description: "Moral trade sources and safeguards." },
-        { href: "/paid-action-offers", label: "Deferred paid offers", description: "Why paid actions are review-only for now." },
-        { href: "/faq", label: "FAQ", description: "Common questions and operating limits." },
-      ],
-    },
-    {
-      label: "Community",
-      summary: "Browse opt-in public participants and broad wishes.",
-      items: [
-        { href: "/people", label: "People", description: "Privacy-limited public profiles." },
-        { href: "/wish-registry", label: "Wish registry", description: "Search broad wishes before consent gates." },
-        { href: "/background-networking", label: "Private matching", description: "Consent-gated counterparty discovery." },
-      ],
+      href: "/methodology",
     },
   ];
 
@@ -65,10 +26,7 @@ export function getTopbarActions(isAuthenticated = false) {
     authLink: isAuthenticated
       ? { href: "/dashboard", label: "Dashboard" }
       : { href: "/login", label: "Sign in" },
-    primaryAction: {
-      href: isAuthenticated ? "/offers/new?mode=offset" : "/signup?returnTo=/offers/new%3Fmode%3Doffset",
-      label: "Create verified offset",
-    },
+    primaryAction: undefined,
   };
 }
 
