@@ -50,6 +50,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(hrefs.includes("/wish-registry"));
   assert.ok(hrefs.includes("/background-networking"));
   assert.ok(hrefs.includes("/research"));
+  assert.ok(hrefs.includes("/reasoning-center"));
   assert.ok(hrefs.includes("/cohort"));
   assert.ok(!hrefs.includes("/cart"));
   assert.equal(siteSource.includes("label: \"MPGF\""), false);
@@ -373,9 +374,10 @@ test("MPGF signed-out manual evidence copy and controls are gated", () => {
   assert.match(consoleSource, /if \(!viewerPresent\)/);
 });
 
-test("background networking and reasoning standards are distinct public routes", () => {
+test("background networking, reasoning standards, and reasoning center are distinct public routes", () => {
   const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
   const standardsPage = readRepoFile("src/app/reasoning-standards/page.tsx");
+  const reasoningCenterPage = readRepoFile("src/app/reasoning-center/page.tsx");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
   assert.match(backgroundPage, /Find possible trades without turning people into targets/);
@@ -384,8 +386,12 @@ test("background networking and reasoning standards are distinct public routes",
   assert.match(standardsPage, /Make trade records specific enough to judge/);
   assert.match(standardsPage, /not legal escrow/i);
   assert.match(standardsPage, /voluntary/i);
+  assert.match(reasoningCenterPage, /Forum index/);
+  assert.match(reasoningCenterPage, /Quick takes/);
+  assert.match(reasoningCenterPage, /Open questions/);
   assert.match(sitemapSource, /\/background-networking/);
   assert.match(sitemapSource, /\/reasoning-standards/);
+  assert.match(sitemapSource, /\/reasoning-center/);
   assert.match(sitemapSource, /\/pledge-swaps/);
   assert.match(sitemapSource, /\/cohort/);
   assert.match(sitemapSource, /\/paid-action-offers/);
@@ -571,10 +577,12 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(sitemapSource, /\/moral-trade/);
   assert.match(sitemapSource, /\/anti-threat-baseline/);
   assert.match(sitemapSource, /\/research/);
+  assert.match(sitemapSource, /\/reasoning-center/);
   assert.match(sitemapSource, /\/trust/);
   assert.match(sitemapSource, /\/contact/);
   assert.match(sitemapSource, /\/status/);
   assert.match(siteSearchSource, /Anti-threat and baseline integrity/);
+  assert.match(siteSearchSource, /Reasoning Center/);
   assert.match(siteSearchSource, /What you can rely on/);
 });
 
