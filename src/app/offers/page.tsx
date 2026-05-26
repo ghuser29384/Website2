@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
+  Breadcrumbs,
   EmptyState,
   IconMark,
   OfferCard,
@@ -25,24 +26,24 @@ import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Moral Trade Proposal Registry and Worked Examples",
+  title: "Browse Moral Trade Offers and Worked Examples",
   description:
-    "Browse moral trade proposals and worked examples by cause area, format, evidence method, baseline confidence, and review state.",
+    "Browse live moral trade offers and worked examples by cause area, format, evidence method, and review state.",
   alternates: {
     canonical: "/offers",
   },
   openGraph: {
-    title: "Moral Trade Proposal Registry and Worked Examples",
+    title: "Browse Moral Trade Offers and Worked Examples",
     description:
-      "Explore proposals and worked examples with explicit terms, evidence rules, baseline review, and safety boundaries.",
+      "Explore live offers and reviewed examples with explicit terms, evidence rules, and safety boundaries.",
     url: getAbsoluteUrl("/offers"),
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Moral Trade Proposal Registry and Worked Examples",
+    title: "Browse Moral Trade Offers and Worked Examples",
     description:
-      "Explore proposals and worked examples with explicit terms, evidence rules, baseline review, and safety boundaries.",
+      "Explore live offers and reviewed examples with explicit terms, evidence rules, and safety boundaries.",
   },
 };
 
@@ -72,14 +73,15 @@ const DURATION_FILTERS = ["30 days", "3 months", "6 months", "12 months", "Open-
 
 const SORT_FILTER_CHIPS = [
   { label: "Newest", value: "newest" },
-  { label: "Highest participant-stated importance", value: "impact" },
-  { label: "Highest illustrative fit", value: "efficient" },
+  { label: "Highest offered impact", value: "impact" },
+  { label: "Highest example fit", value: "efficient" },
 ] as const;
 
 const DIRECTORY_TABS = [
-  { label: "Live proposals", value: "live" },
+  { label: "Live offers", value: "live" },
   { label: "Worked examples", value: "examples" },
-] satisfies ReadonlyArray<{ label: string; value: DirectoryView }>;
+  { label: "All", value: "all" },
+] as const;
 
 const FORMAT_FILTERS = [
   { label: "Pledge swap", value: "pledge" },
@@ -90,7 +92,7 @@ const FORMAT_FILTERS = [
 
 const REVIEW_STATUS_FILTERS = [
   { label: "Any review status", value: "all" },
-  { label: "Live proposal", value: "live" },
+  { label: "Live offer", value: "live" },
   { label: "Worked example", value: "worked-example" },
   { label: "Manual review required", value: "manual-review-required" },
 ] as const;
@@ -104,7 +106,7 @@ const CAUSE_GROUPS = [
   { id: "public-health", label: "Public health" },
 ] as const;
 
-type DirectoryView = "live" | "examples" | "all";
+type DirectoryView = (typeof DIRECTORY_TABS)[number]["value"];
 type DirectorySort = (typeof SORT_FILTER_CHIPS)[number]["value"];
 type ListingFormat = (typeof FORMAT_FILTERS)[number]["value"];
 type ReviewStatusFilter = (typeof REVIEW_STATUS_FILTERS)[number]["value"];
@@ -272,7 +274,7 @@ function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
     requestedCause: offer.requested_cause,
     requestedImpact: offer.min_counterparty_impact,
     requesting: offer.request_action,
-    reviewState: "Live proposal; evidence and baseline review required before reliance",
+    reviewState: "Live offer; evidence and baseline review required before reliance",
     scoreConfidence: getScoreConfidence(reviewInput),
     source: "live",
     summary: truncateDescription(offer.notes || `${offer.duration} ${formatMode(offer.mode).toLowerCase()} with named evidence rules and ${baselineConfidence.toLowerCase()} baseline confidence.`, 150),
@@ -468,7 +470,7 @@ function buildActiveFilterLabels(filters: {
       filters.view === "examples"
         ? "Worked examples"
         : filters.view === "live"
-          ? "Live proposals"
+          ? "Live offers"
           : "All listings",
     );
   }
@@ -502,11 +504,11 @@ function buildActiveFilterLabels(filters: {
   }
 
   if (filters.minImpact !== null) {
-    labels.push(`${filters.minImpact}+ participant-stated importance`);
+    labels.push(`${filters.minImpact}+ offered impact`);
   }
 
   if (filters.minRequestedImpact !== null) {
-    labels.push(`${filters.minRequestedImpact}+ counterparty minimum`);
+    labels.push(`${filters.minRequestedImpact}+ requested threshold`);
   }
 
   if (filters.reciprocal) {
@@ -643,10 +645,6 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     view,
   });
   const activeViewLabel = DIRECTORY_TABS.find((tab) => tab.value === view)?.label ?? "Listings";
-  const isExampleView = view === "examples";
-  const browseLead = isExampleView
-    ? "Learn from worked examples. These are not live proposals."
-    : "Explore reviewed proposals and worked examples by cause area, format, evidence method, baseline confidence, and review state.";
   const countScope = allListings.filter((listing) => {
     if (view === "live" && listing.source !== "live") return false;
     if (view === "examples" && listing.source !== "example") return false;
@@ -761,10 +759,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const offersStructuredData = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
-    name: "Moral Trade Proposal Registry and Worked Examples",
+    name: "Browse Moral Trade Offers and Worked Examples",
     url: getAbsoluteUrl("/offers"),
     description:
-      "Reviewed proposals and worked examples that state actions, reciprocal requests, evidence, and baseline confidence.",
+      "Live offers and worked examples that state actions, reciprocal requests, evidence, and baseline confidence.",
     mainEntity: {
       "@type": "ItemList",
       itemListElement: filteredListings.slice(0, 20).map((listing, index) => ({
@@ -789,14 +787,14 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       {
         "@type": "ListItem",
         position: 2,
-        name: "Proposal registry",
+        name: "Browse offers",
         item: getAbsoluteUrl("/offers"),
       },
     ],
   };
 
   return (
-    <div className="page-shell page-shell-focused offers-redesign-shell">
+    <div className="page-shell page-shell-focused">
       <script
         dangerouslySetInnerHTML={{
           __html: JSON.stringify(offersStructuredData),
@@ -816,14 +814,18 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
+        <Breadcrumbs items={[{ href: "/offers", label: "Browse offers" }]} />
 
         <div className="collection-header-body">
           <section className="collection-header-copy">
-            <h1>Browse</h1>
-            <p className="hero-text">{browseLead}</p>
-            <div className="collection-stats" aria-label="Registry counts">
+            <h1>Browse offers</h1>
+            <p className="hero-text">
+              Explore live offers and worked examples by cause area, format, evidence method, and
+              review state.
+            </p>
+            <div className="collection-stats" aria-label="Marketplace counts">
               <span>
-                <strong>{liveOfferCount}</strong> live {liveOfferCount === 1 ? "proposal" : "proposals"}
+                <strong>{liveOfferCount}</strong> live {liveOfferCount === 1 ? "offer" : "offers"}
               </span>
               <span>
                 <strong>{workedExampleCount}</strong> worked{" "}
@@ -831,7 +833,43 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </span>
             </div>
           </section>
+
+          <aside className="collection-action-panel panel" aria-label="Collection actions">
+            <div className="collection-action-copy">
+              <strong>{defaultView === "examples" ? "Examples are first today." : "Live offers are ready."}</strong>
+              <p>
+                {defaultView === "examples"
+                  ? "The live directory has no public offers yet, so this page opens on reviewed examples that show the expected structure."
+                  : "Start with live offers, then inspect examples when you want to understand the evidence model."}
+              </p>
+            </div>
+            <div className="hero-actions">
+              <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
+                Create an offer
+              </Link>
+              <Link className="button button-secondary" href={viewer ? "/dashboard#saved-searches" : "/login?returnTo=/dashboard"}>
+                Save search
+              </Link>
+            </div>
+          </aside>
         </div>
+
+        <details className="pilot-note panel">
+          <summary>About this pilot</summary>
+          <p>
+            Moral Trade currently prioritizes donation offsets, moral public goods, and bounded
+            pledge swaps because they have clearer baselines, evidence, and review states. Paid
+            action offers remain deferred while identity, dispute, and compliance workflows mature.
+          </p>
+          <div className="pilot-note-links">
+            <Link className="text-button" href="/donation-offsets">
+              Offset guide
+            </Link>
+            <Link className="text-button" href="/validation">
+              Validation rules
+            </Link>
+          </div>
+        </details>
       </header>
 
       <main id="main-content" tabIndex={-1}>
@@ -845,8 +883,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </div>
         ) : null}
 
-        <section className="marketplace-shell" aria-label="Proposal registry">
-          <nav className="marketplace-tabs" aria-label="Directory view">
+        <section className="marketplace-shell" aria-label="Offer marketplace">
+          <div className="marketplace-tabs" role="tablist" aria-label="Directory view">
             {DIRECTORY_TABS.map((tab) => (
               <Link
                 aria-current={view === tab.value ? "page" : undefined}
@@ -858,19 +896,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <strong>{tabCounts[tab.value]}</strong>
               </Link>
             ))}
-          </nav>
+          </div>
 
           <form action="/offers" className="marketplace-search marketplace-search-wide marketplace-search-with-category" role="search">
             <label className="field marketplace-search-field">
-              <span>Search</span>
+              <span>Search offers</span>
               <input
                 defaultValue={searchQuery}
                 name="search"
-                placeholder={
-                  isExampleView
-                    ? "Search examples by title, cause, or keyword..."
-                    : "Search proposals by title, cause, or keyword..."
-                }
+                placeholder="Search offers or cause areas"
                 type="search"
               />
             </label>
@@ -897,7 +931,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               </select>
             </label>
             <label className="field marketplace-review-field">
-              <span>Verification</span>
+              <span>Review state</span>
               <select name="review" defaultValue={reviewStatus}>
                 {visibleReviewStatusCounts.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -978,7 +1012,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             </div>
           </div>
 
-          <div className="popular-filter-row" aria-label="Popular registry filters">
+          <div className="popular-filter-row" aria-label="Popular marketplace filters">
             <span>Popular filters</span>
             <div>
               {popularFilterLinks.map((filterLink) => (
@@ -995,7 +1029,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           </div>
 
           {activeFilterLabels.length ? (
-            <div className="active-filter-bar" aria-label="Active registry filters">
+            <div className="active-filter-bar" aria-label="Active marketplace filters">
               <span>Active filters</span>
               <div>
                 {activeFilterLabels.map((label) => (
@@ -1099,9 +1133,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   </details>
 
                   <details className="filter-group">
-                    <summary>Party-relative importance</summary>
+                    <summary>Impact scores</summary>
                     <label className="field range-field">
-                      <span>Minimum participant-stated importance</span>
+                      <span>Minimum offered-impact score</span>
                       <input
                         aria-describedby="offered-impact-help"
                         defaultValue={minImpact ?? 0}
@@ -1111,10 +1145,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         step="1"
                         type="range"
                       />
-                      <small id="offered-impact-help">0 keeps all listings; scores are participant-stated, not platform moral rankings.</small>
+                      <small id="offered-impact-help">0 keeps all listings; higher values narrow the pilot estimate.</small>
                     </label>
                     <label className="field range-field">
-                      <span>Minimum counterparty acceptable importance</span>
+                      <span>Minimum requested-impact threshold</span>
                       <input
                         aria-describedby="requested-impact-help"
                         defaultValue={minRequestedImpact ?? 0}
@@ -1124,7 +1158,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         step="1"
                         type="range"
                       />
-                      <small id="requested-impact-help">Counterparty threshold only; inspect terms and baseline evidence before relying on it.</small>
+                      <small id="requested-impact-help">Internal estimate only; inspect terms before relying on it.</small>
                     </label>
                   </details>
 
@@ -1197,7 +1231,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                                 Create similar
                               </Link>
                             }
-                            sourceLabel={listing.source === "live" ? "Live proposal" : "Worked example"}
+                            sourceLabel={listing.source === "live" ? "Live offer" : "Worked example"}
                             summary={listing.summary}
                             title={listing.title}
                           />
@@ -1219,11 +1253,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                           </Link>
                         </>
                       }
-                      title={view === "live" ? "No live proposals yet." : "No matching listings."}
+                      title={view === "live" ? "No live offers yet." : "No matching listings."}
                     >
                       {view === "live"
-                        ? "Browse worked examples or create the first public proposal. The live registry is still in pilot mode."
-                        : "Reset filters, inspect worked examples, or create a structured proposal."}
+                        ? "Browse worked examples or create the first public offer. The live directory is still in pilot mode."
+                        : "Reset filters, inspect worked examples, or create a structured offer."}
                     </EmptyState>
 
                     {view === "live" ? (
@@ -1231,7 +1265,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         <div className="empty-example-preview-head">
                           <div>
                             <p className="eyebrow">Worked examples</p>
-                            <h3 id="empty-example-preview-heading">Study the structure before live proposals arrive.</h3>
+                            <h3 id="empty-example-preview-heading">Study the structure before live offers arrive.</h3>
                           </div>
                           <Link className="text-button" href="/offers?view=examples">
                             Open all examples
@@ -1239,7 +1273,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                         </div>
                         <p>
                           These examples are not live liquidity. They show the terms, evidence rules,
-                          baseline checks, and review states a public proposal would need before anyone relies on it.
+                          baseline checks, and review states a public offer would need before anyone relies on it.
                         </p>
                         <div className="compact-listing-grid empty-example-grid">
                           {highlightedWorkedExamples.map((listing) => (
@@ -1321,12 +1355,12 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <li>Third-party objections can trigger external review</li>
                 <li>Review states appear on every card</li>
                 <li>No escrow, custody, legal, or tax service</li>
-                <li>Safety boundaries apply to every proposal</li>
+                <li>Safety boundaries apply to every offer</li>
               </ul>
               <div className="trust-links">
-                <Link href="/moral-trade">Primer</Link>
+                <Link href="/methodology">Methodology</Link>
                 <Link href="/reasoning-standards">Evidence standards</Link>
-                <Link href="/anti-threat-baseline">Anti-threat rules</Link>
+                <Link href="/safety">Safety policy</Link>
               </div>
             </aside>
           </div>
@@ -1336,9 +1370,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <section className="section section-subtle marketplace-participation-callout" aria-labelledby="participate-heading">
             <div>
               <p className="eyebrow">Account workspace</p>
-              <h2 id="participate-heading">Sign in to save interest and create proposals.</h2>
+              <h2 id="participate-heading">Sign in to save interest and create offers.</h2>
               <p>
-                Accounts keep draft terms, saved proposals, and evidence workflows separate from public
+                Accounts keep draft terms, saved offers, and evidence workflows separate from public
                 worked examples.
               </p>
             </div>
@@ -1365,7 +1399,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <div className="pilot-info-box-body">
               <p>
                 During the seeded pilot, these examples help visitors inspect structure without
-                implying platform moral rankings or live cost-efficiency results.
+                implying real marketplace rankings or live cost-efficiency results.
               </p>
               <div className="data-grid">
                 {exampleMatchesByCause.map((entry) => (
@@ -1388,15 +1422,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <p className="eyebrow">Due diligence</p>
             <h2 id="process-links-heading">Learn more about evidence and process.</h2>
             <p>
-              Registry cards summarize terms for scanning. The primer, safety rules, and evidence
-              standards explain how review works before anyone relies on a proposal.
+              Marketplace cards summarize terms for scanning. The full methodology and evidence
+              standards explain how review works before anyone relies on an offer.
             </p>
           </div>
           <div className="teaser-grid">
-            <Link className="panel teaser-card" href="/moral-trade">
+            <Link className="panel teaser-card" href="/methodology">
               <IconMark name="source" />
-              <h3>What is moral trade?</h3>
-              <p>A short primer before the registry and worked examples.</p>
+              <h3>Methodology</h3>
+              <p>How Moral Trade distinguishes voluntary exchange from threats, fraud, and pressure.</p>
             </Link>
             <Link className="panel teaser-card" href="/reasoning-standards">
               <IconMark name="evidence" />

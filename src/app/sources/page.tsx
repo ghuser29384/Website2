@@ -95,7 +95,7 @@ export default async function SourcesPage() {
           <h2>Boundary</h2>
           <p>
             Source references do not make the site a charity evaluator, legal advisor, escrow
-            service, or objective moral ranking system. They explain the pilot's research lineage
+            service, or objective moral ranking system. They explain the pilot&apos;s research lineage
             and the safety problems its product design tries to address.
           </p>
         </section>

@@ -4,8 +4,8 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
   IconMark,
-  MoralTradeHeroVisual,
   OfferCard,
+  SearchBar,
   TrustChip,
 } from "@/components/ui/page-primitives";
 import type { IconName } from "@/components/ui/page-primitives";
@@ -34,17 +34,17 @@ const startPaths: ReadonlyArray<{
 }> = [
   {
     title: "Learn the idea",
-    description: "Use the short guide to see who the pilot is for and what action to take first.",
-    href: "/how-it-works",
+    description: "Read the core concept, examples, boundaries, and the counterfactual trust problem.",
+    href: "/moral-trade",
     icon: "source",
-    actionLabel: "See how it works",
+    actionLabel: "Read the moral trade primer",
   },
   {
-    title: "Test an example",
-    description: "Inspect and clone a seeded pledge swap or offset before publishing anything live.",
-    href: "/offers?view=examples",
+    title: "Browse offers",
+    description: "Search live listings and worked examples before publishing anything live.",
+    href: "/offers",
     icon: "example",
-    actionLabel: "Browse worked examples",
+    actionLabel: "Open offer marketplace",
   },
   {
     title: "Donate through a route",
@@ -60,6 +60,22 @@ const startPaths: ReadonlyArray<{
     icon: "profile",
     actionLabel: "Join the founding cohort",
   },
+] as const;
+
+const categoryPills = [
+  { label: "Global health", href: "/offers?search=Global%20health" },
+  { label: "Animal welfare", href: "/offers?search=Animal%20welfare" },
+  { label: "Climate", href: "/offers?search=Climate" },
+  { label: "Long-run future", href: "/offers?search=Future" },
+  { label: "Public health", href: "/offers?search=Public%20health" },
+  { label: "Financial support", href: "/offers?search=Financial%20support" },
+] as const;
+
+const formatPills = [
+  { label: "Pledge swaps", href: "/pledge-swaps" },
+  { label: "Donation offsets", href: "/donation-offsets" },
+  { label: "Public-good contributions", href: "/mpgf" },
+  { label: "Private matching", href: "/background-networking" },
 ] as const;
 
 const activationCards: ReadonlyArray<{
@@ -107,6 +123,9 @@ function getOfferModeIcon(mode: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]["m
 
 export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps) {
   const cohortHref = isAuthenticated ? "/dashboard" : "/cohort";
+  const createOffsetHref = isAuthenticated
+    ? "/offers/new?mode=offset"
+    : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
   const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 3);
   const liveOfferCount = formatOptionalCount(marketplaceOverview.openOfferCount);
   const publicProfileCount = formatOptionalCount(marketplaceOverview.publicProfileCount);
@@ -123,30 +142,29 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
 
         <div className="growth-hero-inner">
           <section className="growth-hero-copy">
-            <h1>Make clear, voluntary deals across moral disagreement.</h1>
+            <h1>Make one reviewable moral trade.</h1>
             <p className="hero-text">
-              Create a pledge swap, donation offset, or public-good commitment with written
-              terms, evidence rules, and manual review before anyone relies on it.
+              Browse offers, compare worked examples, and create bounded pledge swaps, donation
+              offsets, or shared public-good commitments with explicit baselines and evidence
+              rules.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/how-it-works">
-                See how it works
+              <Link className="button button-primary" href="/offers">
+                Browse marketplace
+              </Link>
+              <Link className="button button-secondary" href={createOffsetHref}>
+                Create verified offset
               </Link>
               <Link className="button button-secondary" href={cohortHref}>
-                Join the pilot
+                Join the founding cohort
               </Link>
             </div>
-            <p className="growth-hero-trust-note">
-              Prototype only. No custody or escrow. External payments and evidence review.
-            </p>
           </section>
-
-          <MoralTradeHeroVisual />
 
           <aside className="growth-progress-card panel" aria-label="Founding progress">
             <div className="growth-progress-stat">
               <IconMark name="marketplace" />
-              <span>Live proposals</span>
+              <span>Live offers</span>
               <strong>{liveOfferCount}</strong>
             </div>
             <div className="growth-progress-stat">
@@ -175,6 +193,31 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <section className="section section-white" aria-labelledby="marketplace-search-heading">
+          <div className="section-head section-head-compact">
+            <h2 id="marketplace-search-heading">Search the marketplace</h2>
+            <p>
+              Start with broad categories, then inspect exact terms, baselines, and evidence states
+              before relying on any offer.
+            </p>
+          </div>
+          <SearchBar placeholder="Search by cause, action, or trade type" />
+          <div className="pill-group" aria-label="Cause categories">
+            {categoryPills.map((pill) => (
+              <Link className="source-pill source-pill-link" href={pill.href} key={pill.label}>
+                {pill.label}
+              </Link>
+            ))}
+          </div>
+          <div className="pill-group" aria-label="Trade formats">
+            {formatPills.map((pill) => (
+              <Link className="badge badge-secondary" href={pill.href} key={pill.label}>
+                {pill.label}
+              </Link>
+            ))}
+          </div>
+        </section>
+
         <section className="growth-start-section section section-white" aria-labelledby="start-heading">
           <div className="section-head section-head-compact">
             <h2 id="start-heading">Choose the right first path</h2>
@@ -202,7 +245,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             <h2 id="activation-heading">Start with one low-risk action</h2>
             <p>
               The founding cohort is designed for early users who want to learn by doing one small,
-              reviewable thing before publishing a full proposal.
+              reviewable thing before publishing a full offer.
             </p>
           </div>
           <div className="growth-activation-grid">
@@ -218,9 +261,9 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
 
         <section className="section section-white" aria-labelledby="featured-examples-heading">
           <div className="section-head section-head-compact">
-            <h2 id="featured-examples-heading">Worked examples, not live liquidity</h2>
+            <h2 id="featured-examples-heading">Marketplace preview</h2>
             <p>
-              Examples show the terms, evidence rules, and review states a real proposal should
+              Examples show the terms, evidence rules, and review states a real offer should
               expose before anyone relies on it.
             </p>
           </div>

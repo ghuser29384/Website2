@@ -148,7 +148,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           assuranceDeadline: offer.donationOffset.assurance_deadline_at ?? "",
           evidenceUrl: offer.donationOffset.evidence_url,
           moderationStatus: offer.donationOffset.moderation_status,
-          source: "Live proposal",
+          source: "Live offer",
           createdAt: Date.parse(offer.created_at),
         })
       : null;
@@ -241,7 +241,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/offers">
-                Back to proposal registry
+                Back to offer marketplace
               </Link>
               {viewer && !isOwner ? (
                 <form action={toggleCartAction}>

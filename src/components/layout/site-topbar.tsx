@@ -40,7 +40,7 @@ function isHrefActive(pathname: string | null, href: string) {
   const targetPath = getHrefPath(href);
 
   if (targetPath === "/") {
-    return pathname === "/";
+    return href === "/" && pathname === "/";
   }
 
   return pathname === targetPath || pathname?.startsWith(`${targetPath}/`);
@@ -101,7 +101,7 @@ export function SiteTopbar({
   links,
   authLink,
   primaryAction,
-  showSearch = false,
+  showSearch = true,
   showLogout = false,
   logoutRedirectTo = "/",
 }: SiteTopbarProps) {

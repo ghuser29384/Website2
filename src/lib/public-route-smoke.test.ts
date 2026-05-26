@@ -24,44 +24,43 @@ function flattenPrimaryNavHrefs() {
   ]);
 }
 
-test("public navigation exposes pilot institution routes", () => {
+test("public navigation exposes professional marketplace routes", () => {
   const labels = getPrimaryNavLinks(false).map((link) => link.label);
   const hrefs = flattenPrimaryNavHrefs();
+  const browseMenu = getPrimaryNavLinks(false).find((link) => link.label === "Browse");
+  const createMenu = getPrimaryNavLinks(false).find((link) => link.label === "Create");
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
 
-  assert.deepEqual(labels, [
-    "Start",
-    "Understand",
-    "Explore",
-    "Join",
-    "Trust",
-  ]);
-  assert.equal(getTopbarActions(false).primaryAction?.label, "Join pilot");
+  assert.deepEqual(labels, ["Browse", "Create", "Learn", "Community"]);
+  assert.equal(getTopbarActions(false).primaryAction.href, "/signup?returnTo=/offers/new%3Fmode%3Doffset");
+  assert.equal(getTopbarActions(false).primaryAction.label, "Create verified offset");
   assert.equal(getTopbarActions(false).authLink.label, "Sign in");
-  assert.ok(hrefs.includes("/how-it-works"));
-  assert.ok(hrefs.includes("/moral-trade"));
-  assert.ok(hrefs.includes("/sources"));
-  assert.ok(hrefs.includes("/offers?view=examples"));
+  assert.match(browseMenu?.summary ?? "", /Compare public offers/);
+  assert.ok(browseMenu?.items?.every((item) => item.description));
+  assert.ok(createMenu?.items?.some((item) => item.label === "Create verified offset"));
+  assert.ok(hrefs.includes("/offers"));
+  assert.ok(hrefs.includes("/pledge-swaps"));
+  assert.ok(hrefs.includes("/paid-action-offers"));
+  assert.ok(hrefs.includes("/donation-offsets"));
   assert.ok(hrefs.includes("/mpgf"));
-  assert.ok(hrefs.includes("/donate"));
-  assert.ok(hrefs.includes("/safety"));
+  assert.ok(hrefs.includes("/validation"));
+  assert.ok(hrefs.includes("/offers?view=examples"));
+  assert.ok(hrefs.includes("/faq"));
+  assert.ok(hrefs.includes("/wish-registry"));
+  assert.ok(hrefs.includes("/background-networking"));
   assert.ok(hrefs.includes("/research"));
-  assert.ok(hrefs.includes("/about"));
   assert.ok(hrefs.includes("/cohort"));
-  assert.ok(hrefs.includes("/updates"));
-  assert.equal(hrefs.length, 17);
+  assert.ok(!hrefs.includes("/cart"));
   assert.equal(siteSource.includes("label: \"MPGF\""), false);
   assert.equal(siteSource.includes("label: \"Advanced\""), false);
   assert.match(siteSource, /\/contact/);
   assert.match(siteSource, /\/status/);
   assert.match(siteSource, /\/trust/);
-  assert.match(siteSource, /\/how-it-works/);
-  assert.match(siteSource, /\/updates/);
   assert.match(topbarSource, /topbar-menu-heading/);
   assert.match(topbarSource, /topbar-menu-icon/);
   assert.match(topbarSource, /topbar-with-search/);
-  assert.match(topbarSource, /showSearch = false/);
+  assert.match(topbarSource, /showSearch = true/);
 });
 
 test("MPGF public copy leads with manual evidence instead of raw gate/debug wording", () => {
@@ -267,13 +266,12 @@ test("home page exposes a single primary nav source", () => {
   assert.equal(homeSource.includes("topbar-floating-shell"), false);
 });
 
-test("global search and registry search expose proposal discovery", () => {
+test("global search and offers search expose real marketplace discovery", () => {
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const offersPage = readRepoFile("src/app/offers/page.tsx");
   const appDataSource = readRepoFile("src/lib/app-data.ts");
   const animalResults = filterSiteSearchItems("animal welfare");
   const mpfgResults = filterSiteSearchItems("manual evidence");
-  const cohortResults = filterSiteSearchItems("founding cohort");
   const validationResults = filterSiteSearchItems("appeal rulebook");
 
   assert.match(topbarSource, /placeholder="Search trades"/);
@@ -294,7 +292,7 @@ test("global search and registry search expose proposal discovery", () => {
   assert.match(offersPage, /groupedListings/);
   assert.match(offersPage, /Jump to cause group/);
   assert.match(offersPage, /highlightedWorkedExamples/);
-  assert.match(offersPage, /Study the structure before live proposals arrive/);
+  assert.match(offersPage, /Study the structure before live offers arrive/);
   assert.match(offersPage, /pilot-info-box/);
   assert.match(offersPage, /formatCounts/);
   assert.match(offersPage, /causeCounts/);
@@ -307,27 +305,30 @@ test("global search and registry search expose proposal discovery", () => {
   assert.equal(animalResults[0]?.href, "/offers?search=Animal%20Welfare");
   assert.equal(filterSiteSearchItems("pledge swap")[0]?.href, "/pledge-swaps");
   assert.ok(mpfgResults.some((result) => result.href === "/mpgf"));
-  assert.equal(cohortResults[0]?.href, "/cohort");
   assert.ok(validationResults.some((result) => result.href === "/validation"));
 });
 
-test("home page is a founding-cohort landing page with pilot metrics and first actions", () => {
+test("home page is a focused marketplace landing page with pilot metrics and marketplace preview", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
-  const heroIndex = homeSource.indexOf("Make clear, voluntary deals across moral disagreement.");
+  const heroIndex = homeSource.indexOf("Make one reviewable moral trade.");
   const metricsIndex = homeSource.indexOf("growth-progress-card");
+  const searchIndex = homeSource.indexOf("Search the marketplace");
   const routeIndex = homeSource.indexOf("Choose the right first path");
   const activationIndex = homeSource.indexOf("Start with one low-risk action");
-  const previewIndex = homeSource.indexOf("Worked examples, not live liquidity");
+  const previewIndex = homeSource.indexOf("Marketplace preview");
 
   assert.ok(heroIndex > -1);
   assert.ok(metricsIndex > heroIndex);
-  assert.ok(routeIndex > metricsIndex);
+  assert.ok(searchIndex > metricsIndex);
+  assert.ok(routeIndex > searchIndex);
   assert.ok(activationIndex > routeIndex);
   assert.ok(previewIndex > activationIndex);
-  assert.match(homeSource, /See how it works/);
-  assert.match(homeSource, /Join the pilot/);
-  assert.match(homeSource, /Browse worked examples/);
-  assert.match(homeSource, /Open donation routes/);
+  assert.match(homeSource, /Browse marketplace/);
+  assert.match(homeSource, /Create verified offset/);
+  assert.match(homeSource, /Join the founding cohort/);
+  assert.match(homeSource, /Open offer marketplace/);
+  assert.match(homeSource, /SearchBar/);
+  assert.match(homeSource, /Search by cause, action, or trade type/);
   assert.match(homeSource, /Invite one serious counterparty/);
   assert.match(homeSource, /Submit one reviewable proof artifact/);
   assert.match(homeSource, /No autonomous outreach/);
@@ -337,11 +338,10 @@ test("home page is a founding-cohort landing page with pilot metrics and first a
   assert.match(homeSource, /No escrow or custody claim/);
   assert.match(homeSource, /IconMark/);
   assert.match(homeSource, /OfferCard/);
-  assert.match(homeSource, /MoralTradeHeroVisual/);
   assert.equal(homeSource.includes("opening-sequence"), false);
   assert.equal(homeSource.includes("OfferComposer"), false);
   assert.equal(homeSource.includes("ParetoChart"), false);
-  assert.equal(homeSource.includes("SearchBar"), false);
+  assert.equal(homeSource.includes("MoralTradeHeroVisual"), false);
   assert.equal(homeSource.includes("delegate heartbeats"), false);
   assert.equal(homeSource.includes("manual source consent ledger"), false);
   assert.equal(homeSource.includes("deterministic synthesis layer"), false);
@@ -355,7 +355,7 @@ test("homepage metrics use live counts when available and avoid fake impact tota
   const appDataSource = readRepoFile("src/lib/app-data.ts");
 
   assert.match(pageSource, /getMarketplaceOverview/);
-  assert.match(homeSource, /Live proposals/);
+  assert.match(homeSource, /Live offers/);
   assert.match(homeSource, /Public profiles/);
   assert.match(homeSource, /No escrow or custody claim/);
   assert.match(appDataSource, /openOfferCount/);
@@ -542,26 +542,16 @@ test("trade format landing pages explain formats without payment or custody over
 });
 
 test("primer, anti-threat, and research pages frame the public pilot", () => {
-  const howItWorksPage = readRepoFile("src/app/how-it-works/page.tsx");
   const primerPage = readRepoFile("src/app/moral-trade/page.tsx");
   const antiThreatPage = readRepoFile("src/app/anti-threat-baseline/page.tsx");
   const researchPage = readRepoFile("src/app/research/page.tsx");
   const trustPage = readRepoFile("src/app/trust/page.tsx");
   const contactPage = readRepoFile("src/app/contact/page.tsx");
   const statusPage = readRepoFile("src/app/status/page.tsx");
-  const aboutPage = readRepoFile("src/app/about/page.tsx");
-  const sourcesPage = readRepoFile("src/app/sources/page.tsx");
-  const updatesPage = readRepoFile("src/app/updates/page.tsx");
-  const loginPage = readRepoFile("src/app/login/page.tsx");
-  const passwordResetPage = readRepoFile("src/app/password-reset/page.tsx");
-  const passwordUpdatePage = readRepoFile("src/app/password-update/page.tsx");
-  const actionsSource = readRepoFile("src/app/actions.ts");
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
   const siteSearchSource = readRepoFile("src/lib/site-search.ts");
 
-  assert.match(howItWorksPage, /Start with one clear, reviewable trade/);
-  assert.match(howItWorksPage, /TradeFlowDiagram/);
   assert.match(primerPage, /What is moral trade/);
   assert.match(primerPage, /What it is not/);
   assert.match(primerPage, /Why it is hard/);
@@ -578,20 +568,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(trustPage, /No custody, escrow, tax, legal, investment, or payment-protection service/);
   assert.match(contactPage, /Reach the pilot operators/);
   assert.match(statusPage, /What is real on Moral Trade today/);
-  assert.match(aboutPage, /A pilot institution for cooperation under disagreement/);
-  assert.match(sourcesPage, /Reference points for the pilot/);
-  assert.match(updatesPage, /Subscribe for pilot updates/);
-  assert.match(loginPage, /Forgot your password/);
-  assert.match(passwordResetPage, /requestPasswordResetAction/);
-  assert.match(passwordUpdatePage, /updatePasswordAction/);
-  assert.match(actionsSource, /subscribePilotUpdatesAction/);
-  assert.match(actionsSource, /requestPasswordResetAction/);
-  assert.match(actionsSource, /resetPasswordForEmail/);
   assert.match(sitemapSource, /\/moral-trade/);
-  assert.match(sitemapSource, /\/how-it-works/);
-  assert.match(sitemapSource, /\/sources/);
-  assert.match(sitemapSource, /\/about/);
-  assert.match(sitemapSource, /\/updates/);
   assert.match(sitemapSource, /\/anti-threat-baseline/);
   assert.match(sitemapSource, /\/research/);
   assert.match(sitemapSource, /\/trust/);
@@ -599,8 +576,6 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(sitemapSource, /\/status/);
   assert.match(siteSearchSource, /Anti-threat and baseline integrity/);
   assert.match(siteSearchSource, /What you can rely on/);
-  assert.match(siteSearchSource, /How it works/);
-  assert.match(siteSearchSource, /Pilot updates/);
 });
 
 test("dashboard exposes existing profile portability endpoints", () => {
@@ -732,7 +707,7 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
 test("offers page keeps content before the footer in source order", () => {
   const offersPage = readRepoFile("src/app/offers/page.tsx");
   const mainIndex = offersPage.indexOf("<main");
-  const directoryIndex = offersPage.indexOf('aria-label="Proposal registry"');
+  const directoryIndex = offersPage.indexOf("Offer marketplace");
   const exampleIndex = offersPage.indexOf("Illustrative fit ranking");
   const footerIndex = offersPage.indexOf("<SiteFooter />");
 
@@ -755,19 +730,21 @@ test("create trade route family has stable signed-out entry points", () => {
   assert.equal(newOfferPage.includes("requireViewer"), false);
 });
 
-test("proposal registry copy separates live proposals from worked examples", () => {
+test("marketplace pilot copy separates live offers from worked examples", () => {
   const offersPage = readRepoFile("src/app/offers/page.tsx");
 
-  assert.match(offersPage, /Live proposals/);
+  assert.match(offersPage, /Live offers/);
   assert.match(offersPage, /Worked examples/);
-  assert.match(offersPage, /<h1>Browse<\/h1>/);
-  assert.match(offersPage, /Learn from worked examples\. These are not live proposals/);
+  assert.match(offersPage, /<h1>Browse offers<\/h1>/);
+  assert.match(offersPage, /Explore live offers and worked examples/);
+  assert.match(offersPage, /Create an offer/);
+  assert.match(offersPage, /Save search/);
   assert.match(offersPage, /Worked example, not live liquidity/);
   assert.match(offersPage, /Manual review before reliance/);
   assert.match(offersPage, /defaultView = liveOfferCount > 0 \? "live" : "examples"/);
-  assert.match(offersPage, /No live proposals yet/);
+  assert.match(offersPage, /No live offers yet/);
   assert.match(offersPage, /No matching listings/);
-  assert.match(offersPage, /Browse worked examples or create the first public proposal/);
+  assert.match(offersPage, /Browse worked examples or create the first public offer/);
   assert.match(offersPage, /Baseline confidence is separate from action evidence/);
   assert.match(offersPage, /visibleFormatCounts/);
   assert.match(offersPage, /collection-trust-panel/);

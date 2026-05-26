@@ -406,7 +406,7 @@ interface OfferCardProps {
   reviewState: string;
   scoreConfidence?: string;
   secondaryAction?: ReactNode;
-  sourceLabel: "Live proposal" | "Worked example";
+  sourceLabel: "Live offer" | "Live proposal" | "Worked example";
   summary?: string;
   title: string;
 }

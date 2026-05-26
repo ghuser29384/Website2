@@ -11,10 +11,10 @@ export interface SiteSearchItem {
 export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   {
     href: "/offers",
-    label: "Proposal registry",
-    summary: "Browse reviewed proposals and worked examples by cause, format, evidence method, and review state.",
+    label: "All public offers",
+    summary: "Browse pledge swaps, donation offsets, public-good commitments, and worked examples.",
     kind: "trade",
-    keywords: ["offer", "trade", "registry", "proposal", "swap", "payment", "offset"],
+    keywords: ["offer", "trade", "marketplace", "listing", "registry", "proposal", "swap", "payment", "offset"],
   },
   {
     href: "/moral-trade",
@@ -22,27 +22,6 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     summary: "A short primer on voluntary cooperation across moral disagreement.",
     kind: "learn",
     keywords: ["primer", "moral trade", "ord", "voluntary", "disagreement", "vegetarian"],
-  },
-  {
-    href: "/how-it-works",
-    label: "How it works",
-    summary: "A one-screen guide to the current pilot workflow and recommended first action.",
-    kind: "learn",
-    keywords: ["how it works", "guide", "first action", "workflow", "new visitor", "what it is"],
-  },
-  {
-    href: "/sources",
-    label: "Sources",
-    summary: "Conceptual sources and internal reference pages for the Moral Trade pilot.",
-    kind: "learn",
-    keywords: ["sources", "references", "toby ord", "forethought", "methodology", "bibliography"],
-  },
-  {
-    href: "/about",
-    label: "About Moral Trade",
-    summary: "Pilot stewardship, operator commitments, review posture, and trust roadmap.",
-    kind: "learn",
-    keywords: ["about", "operators", "stewards", "governance", "team", "advisor", "trust"],
   },
   {
     href: "/anti-threat-baseline",
@@ -59,6 +38,22 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     summary: "What the pilot is testing, what would make it unsafe, and reviewer governance links.",
     kind: "learn",
     keywords: ["research", "governance", "reviewer", "rulebook", "transparency", "operators"],
+  },
+  {
+    href: "/reasoning-center",
+    label: "Reasoning Center",
+    summary: "Forum-style essays, quick takes, questions, and reviewer notes for moral trade design.",
+    kind: "learn",
+    keywords: [
+      "forum",
+      "reasoning",
+      "essay",
+      "quick takes",
+      "questions",
+      "debate",
+      "governance",
+      "review notes",
+    ],
   },
   {
     href: "/offers?view=examples",
@@ -82,13 +77,6 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["status", "roadmap", "pilot updates", "live offers", "prototype", "liquidity"],
   },
   {
-    href: "/updates",
-    label: "Pilot updates",
-    summary: "Subscribe for founding cohort, reviewer governance, and public-goods pilot updates.",
-    kind: "community",
-    keywords: ["updates", "subscribe", "newsletter", "digest", "cohort", "governance", "transparency"],
-  },
-  {
     href: "/trust",
     label: "What you can rely on",
     summary: "Review current guarantees, non-guarantees, review states, and recourse routes.",
@@ -108,13 +96,6 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     summary: "Save your role, cause areas, attribution, and first action after signup.",
     kind: "account",
     keywords: ["onboarding", "role", "cause", "first action", "activation", "wizard"],
-  },
-  {
-    href: "/password-reset",
-    label: "Password reset",
-    summary: "Request an email link to reset your Moral Trade account password.",
-    kind: "account",
-    keywords: ["password", "reset", "forgot", "login", "account", "recovery"],
   },
   ...PARTNER_COHORTS.map((partner) => ({
     href: `/cohort/${partner.slug}`,
