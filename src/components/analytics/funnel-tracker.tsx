@@ -5,12 +5,24 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 import type { FunnelEventType } from "@/lib/growth";
 
-function inferClickEvent(href: string): FunnelEventType | null {
+function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
+  const href = target.href;
+
+  if (target.closest(".growth-hero") && target.classList.contains("button-primary")) {
+    return "hero_primary_cta_clicked";
+  }
+
+  if (href.includes("every.org")) return "donation_route_clicked";
+  if (href.includes("/login")) return "sign_in_started";
   if (href.includes("/signup")) return "signup_start";
-  if (href.includes("/cohort")) return "landing_cta_click";
-  if (href.includes("/offers?view=examples")) return "worked_example_view";
+  if (href.includes("/cohort")) return "cohort_interest_started";
+  if (href.includes("/offers?view=examples")) return "worked_example_opened";
   if (href.includes("/offers/new") && href.includes("example=")) return "clone_example_action";
+  if (href.includes("/offers/new")) return "create_trade_started";
+  if (href.includes("/dashboard#wish-profile")) return "wish_profile_started";
   if (href.includes("/background-networking#concierge-intake")) return "intro_requested";
+  if (href.includes("/priority-correction-fund")) return "donation_logged";
+  if (href.includes("/mpgf/contribute")) return "evidence_submission_started";
   if (href.includes("/mpgf")) return "public_good_action_logged";
 
   return null;
@@ -50,8 +62,20 @@ export function FunnelTracker() {
     });
 
     if (pathname.startsWith("/offers/examples/")) {
-      postFunnelEvent("worked_example_view", {
+      postFunnelEvent("worked_example_opened", {
         exampleId: pathname.split("/").pop() ?? "",
+      });
+    }
+
+    if (pathname === "/login") {
+      postFunnelEvent("sign_in_started", {
+        search: searchParams.toString(),
+      });
+    }
+
+    if ((pathname === "/offers" || pathname === "/wish-registry") && searchParams.get("search")) {
+      postFunnelEvent("registry_search_executed", {
+        query: searchParams.get("search"),
       });
     }
 
@@ -69,7 +93,7 @@ export function FunnelTracker() {
         return;
       }
 
-      const inferredEvent = inferClickEvent(target.href);
+      const inferredEvent = inferClickEvent(target);
       if (!inferredEvent) {
         return;
       }

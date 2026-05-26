@@ -30,8 +30,38 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function DonatePage() {
+interface DonatePageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+function getDonationLogHref(targetId: string, causeAreas: readonly string[]) {
+  const params = new URLSearchParams({
+    source: "every.org",
+    target: targetId,
+    cause: causeAreas[0] ?? "Donation",
+  });
+
+  return `/priority-correction-fund?${params.toString()}#record-gift`;
+}
+
+function getSignedDonationLogHref(
+  targetId: string,
+  causeAreas: readonly string[],
+  isAuthenticated: boolean,
+) {
+  const logHref = getDonationLogHref(targetId, causeAreas);
+
+  return isAuthenticated ? logHref : `/login?returnTo=${encodeURIComponent(logHref)}`;
+}
+
+function readParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function DonatePage({ searchParams }: DonatePageProps) {
+  const resolvedSearchParams = await searchParams;
   const viewer = hasSupabaseEnv() ? await getViewer() : null;
+  const returnedTarget = readParam(resolvedSearchParams.target);
 
   return (
     <div className="page-shell">
@@ -64,8 +94,8 @@ export default async function DonatePage() {
               <Link className="button button-primary" href="/priority-correction-fund">
                 Open Priority Fund
               </Link>
-              <Link className="button button-secondary" href="/offers#best-offers">
-                See best offers
+              <Link className="button button-secondary" href="/donation-offsets">
+                Review donation offsets
               </Link>
             </div>
           </section>
@@ -100,6 +130,13 @@ export default async function DonatePage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        {returnedTarget ? (
+          <div className="status-banner status-banner-success">
+            Ready to log a donation route for {returnedTarget}. Use the matching record link below
+            if this gift should count toward a Moral Trade workflow.
+          </div>
+        ) : null}
+
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Direct routes</p>
@@ -131,13 +168,23 @@ export default async function DonatePage() {
                       label="Donate on Every.org"
                       target={target}
                     />
-                    <a
+                    <Link
                       className="button button-secondary"
+                      href={getSignedDonationLogHref(
+                        target.id,
+                        target.causeAreas,
+                        Boolean(viewer),
+                      )}
+                    >
+                      Log this gift afterward
+                    </Link>
+                    <a
+                      className="text-button"
                       href={getEveryOrgLearnMoreHref(target)}
                       rel="noopener noreferrer"
                       target="_blank"
                     >
-                      Learn more
+                      Read the Every.org recipient page
                     </a>
                   </div>
                 </div>
@@ -177,6 +224,9 @@ export default async function DonatePage() {
               >
                 Browse Every.org
               </a>
+              <Link className="button button-primary" href="/contact">
+                Suggest a direct route
+              </Link>
             </div>
           </div>
         </section>

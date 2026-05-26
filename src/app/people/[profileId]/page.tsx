@@ -44,7 +44,7 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
     title: data.profile ? data.profile.resolvedName : "Profile",
     description: data.profile
       ? truncateDescription(
-          `${data.profile.resolvedName}${formatPublicProfileLocation(data.profile) ? ` from ${formatPublicProfileLocation(data.profile)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers, ${data.profile.followerCount} followers, and ${data.authoredCommentCount} comments.`,
+          `${data.profile.resolvedName}${formatPublicProfileLocation(data.profile) ? ` from ${formatPublicProfileLocation(data.profile)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers and ${data.profile.verificationBadges.length} reviewed proof badges.`,
         )
       : "Public Moral Trade member profile.",
     alternates: {
@@ -54,13 +54,20 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
       title: data.profile ? data.profile.resolvedName : "Profile",
       description: data.profile
         ? truncateDescription(
-            `${data.profile.resolvedName}${formatPublicProfileLocation(data.profile) ? ` from ${formatPublicProfileLocation(data.profile)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers, ${data.profile.followerCount} followers, and ${data.authoredCommentCount} comments.`,
+            `${data.profile.resolvedName}${formatPublicProfileLocation(data.profile) ? ` from ${formatPublicProfileLocation(data.profile)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers and ${data.profile.verificationBadges.length} reviewed proof badges.`,
           )
         : "Public Moral Trade member profile.",
       url: getAbsoluteUrl(`/people/${profileId}`),
       type: "profile",
     },
   };
+}
+
+function formatBadgeType(value: string) {
+  return value
+    .split("_")
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 export default async function ProfilePage({ params, searchParams }: ProfilePageProps) {
@@ -118,8 +125,8 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
             <p className="hero-text">
               {publicLocation || "Location not listed"}.
               {" "}
-              This public profile aggregates open offers, transaction ratings, followers, karma, and
-              public recommendations.
+              This public profile aggregates only opt-in trust signals: open offers, reviewed proof
+              badges, broad wish previews, and public recommendations.
             </p>
             {!isOwnProfile && viewer ? (
               <div className="hero-actions">
@@ -135,27 +142,39 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Public reputation summary</p>
-            <dl className="profile-stats profile-stats-hero">
-              <div>
-                <dt>Rating</dt>
-                <dd>{profile.rating ? `${profile.rating.toFixed(1)}/10` : "None yet"}</dd>
-              </div>
-              <div>
-                <dt>Followers</dt>
-                <dd>{profile.followerCount}</dd>
-              </div>
-              <div>
-                <dt>Karma</dt>
-                <dd>{profile.karma}</dd>
-              </div>
-              <div>
-                <dt>Comments</dt>
-                <dd>{data.authoredCommentCount}</dd>
-              </div>
-            </dl>
+            <p className="eyebrow">Visible trust summary</p>
+            <div className="tag-row" aria-label="Visible trust signals">
+              {profile.verificationBadges.slice(0, 4).map((badge) => (
+                <span className="impact-pill" key={badge.id}>
+                  {formatBadgeType(badge.badge_type)}
+                </span>
+              ))}
+              {profile.offerCount > 0 ? (
+                <span className="source-pill">{profile.offerCount} open offer(s)</span>
+              ) : null}
+              {profile.ratingCount > 0 ? (
+                <span className="source-pill">
+                  {(profile.rating ?? 0).toFixed(1)}/10 from {profile.ratingCount} reviewed rating(s)
+                </span>
+              ) : null}
+              {data.authoredCommentCount > 0 ? (
+                <span className="source-pill">{data.authoredCommentCount} public comment(s)</span>
+              ) : null}
+              {profile.wishPreview || profile.wishCauses.length ? (
+                <span className="source-pill">Broad wish preview visible</span>
+              ) : null}
+              {!profile.verificationBadges.length &&
+              profile.offerCount === 0 &&
+              profile.ratingCount === 0 &&
+              data.authoredCommentCount === 0 &&
+              !profile.wishPreview &&
+              !profile.wishCauses.length ? (
+                <span className="badge badge-secondary">No reviewed public record yet</span>
+              ) : null}
+            </div>
             <p className="route-text">
-              {profile.bio || "No public bio has been added yet."}
+              {profile.bio ||
+                "No additional public profile note yet. Exact wishes and contact details remain private until consent."}
             </p>
           </aside>
         </div>
@@ -315,7 +334,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
                     </div>
                     <div className="offer-actions">
                       <Link className="text-button" href={`/offers/${offer.id}`}>
-                        View offer
+                        View member offer
                       </Link>
                     </div>
                   </div>
@@ -394,7 +413,7 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
                           className="text-button"
                           href={`/offers/${recommendation.recommendedOffer.id}`}
                         >
-                          View offer
+                          View recommended offer
                         </Link>
                         {isOwnProfile ? (
                           <form action={removeOfferRecommendationAction}>

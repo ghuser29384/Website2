@@ -89,20 +89,37 @@ export const EVERY_ORG_UNCURATED_CAUSES = [
   "Scientific progress",
 ] as const;
 
+function addMoralTradeAttribution(href: string, target: EveryOrgDonationTarget) {
+  const [base, hash] = href.split("#");
+  const url = new URL(base);
+  url.searchParams.set("utm_source", "moraltrade");
+  url.searchParams.set("utm_medium", "donation_route");
+  url.searchParams.set("utm_campaign", "curated_donation");
+  url.searchParams.set("mt_target", target.id);
+
+  return hash ? `${url.toString()}#${hash}` : url.toString();
+}
+
 export function getEveryOrgDonationHref(target: EveryOrgDonationTarget) {
   if (target.fundraiserSlug) {
-    return `https://www.every.org/${target.nonprofitSlug}/f/${target.fundraiserSlug}#/donate`;
+    return addMoralTradeAttribution(
+      `https://www.every.org/${target.nonprofitSlug}/f/${target.fundraiserSlug}#/donate`,
+      target,
+    );
   }
 
-  return `https://www.every.org/${target.nonprofitSlug}#/donate`;
+  return addMoralTradeAttribution(`https://www.every.org/${target.nonprofitSlug}#/donate`, target);
 }
 
 export function getEveryOrgLearnMoreHref(target: EveryOrgDonationTarget) {
   if (target.fundraiserSlug) {
-    return `https://www.every.org/${target.nonprofitSlug}/f/${target.fundraiserSlug}`;
+    return addMoralTradeAttribution(
+      `https://www.every.org/${target.nonprofitSlug}/f/${target.fundraiserSlug}`,
+      target,
+    );
   }
 
-  return `https://www.every.org/${target.nonprofitSlug}`;
+  return addMoralTradeAttribution(`https://www.every.org/${target.nonprofitSlug}`, target);
 }
 
 export function findEveryOrgTargetForCauseArea(causeArea: string | null | undefined) {

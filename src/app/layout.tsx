@@ -76,6 +76,7 @@ const websiteStructuredData = {
   name: SITE_NAME,
   alternateName: SITE_NAME,
   url: SITE_URL,
+  description: SITE_DESCRIPTION,
   potentialAction: {
     "@type": "SearchAction",
     target: getAbsoluteUrl("/offers?search={search_term_string}"),
@@ -89,6 +90,15 @@ const organizationStructuredData = {
   name: SITE_NAME,
   url: SITE_URL,
   logo: getAbsoluteUrl("/O%20(8).png"),
+  description: SITE_DESCRIPTION,
+  contactPoint: [
+    {
+      "@type": "ContactPoint",
+      contactType: "safety and pilot support",
+      email: "support@moraltrade.org",
+      url: getAbsoluteUrl("/contact"),
+    },
+  ],
 };
 
 export default function RootLayout({

@@ -69,6 +69,10 @@ function formatDateTime(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
+function readParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 interface PriorityCorrectionFundPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
@@ -88,6 +92,12 @@ export default async function PriorityCorrectionFundPage({
   const viewerSnapshot = pageData?.viewerSnapshot ?? null;
   const viewerAssignments = pageData?.viewerAssignments ?? [];
   const latestAllocation = pageData?.latestAllocation ?? null;
+  const defaultContributionCause = readParam(resolvedSearchParams.cause) ?? "";
+  const defaultContributionTarget = readParam(resolvedSearchParams.target) ?? "";
+  const defaultContributionSource = readParam(resolvedSearchParams.source) ?? "";
+  const defaultContributionTargetLabel =
+    EVERY_ORG_CURATED_TARGETS.find((target) => target.id === defaultContributionTarget)?.title ??
+    defaultContributionTarget;
   const causeAreaAssignmentSet = new Set(
     viewerAssignments
       .filter((assignment) => assignment.role === "specific_action_arbiter" && assignment.cause_area)
@@ -337,7 +347,7 @@ export default async function PriorityCorrectionFundPage({
                 )}
               </article>
 
-              <article className="panel data-card">
+              <article className="panel data-card" id="record-gift">
                 <div className="section-head auth-head">
                   <p className="eyebrow">Contribution log</p>
                   <h3>Add a donation or money-equivalent contribution</h3>
@@ -377,7 +387,11 @@ export default async function PriorityCorrectionFundPage({
                     </label>
                     <label className="field">
                       <span>Cause area</span>
-                      <input name="cause_area" placeholder="Animal welfare, S-risks, global poverty" />
+                      <input
+                        defaultValue={defaultContributionCause}
+                        name="cause_area"
+                        placeholder="Animal welfare, S-risks, global poverty"
+                      />
                     </label>
                   </div>
                   <div className="field-grid">
@@ -393,6 +407,7 @@ export default async function PriorityCorrectionFundPage({
                   <label className="field">
                     <span>Specific action or recipient</span>
                     <input
+                      defaultValue={defaultContributionTargetLabel}
                       name="action_label"
                       placeholder="GiveWell top charity, humane pesticides pilot, cage-free policy work"
                     />
@@ -400,6 +415,11 @@ export default async function PriorityCorrectionFundPage({
                   <label className="field">
                     <span>Evidence notes</span>
                     <textarea
+                      defaultValue={
+                        defaultContributionSource
+                          ? `Donation route source: ${defaultContributionSource}. Add receipt, transfer note, or Every.org confirmation details here.`
+                          : undefined
+                      }
                       name="evidence_note"
                       placeholder="Receipt, transfer note, public post, or other corroborating record."
                       rows={3}

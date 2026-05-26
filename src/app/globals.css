@@ -4006,6 +4006,16 @@ output {
   line-height: 1.7;
 }
 
+.compact-list {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink-soft);
+  font-family: var(--font-body-loaded);
+  line-height: 1.65;
+}
+
 .offer-route {
   display: grid;
   gap: 0.5rem;
@@ -6911,6 +6921,44 @@ strong {
     width: auto;
     margin-top: 0.45rem;
     box-shadow: none;
+  }
+
+  .topbar-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .topbar-links a,
+  .topbar-menu-trigger {
+    justify-content: center;
+    min-height: 2.15rem;
+    padding: 0.45rem 0.5rem;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .topbar-actions {
+    align-items: center;
+  }
+
+  .button-nav {
+    width: min(100%, 14rem);
+  }
+
+  .growth-hero {
+    min-height: auto;
+  }
+
+  .growth-hero-inner {
+    padding: 2rem 0.5rem 1.25rem;
+  }
+
+  .growth-hero-copy h1 {
+    max-width: 12ch;
+    font-size: 3rem;
+    line-height: 0.98;
   }
 
   .marketplace-results-head,

@@ -43,6 +43,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly",
       priority: 0.85,
     },
+    {
+      url: getAbsoluteUrl("/status"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.78,
+    },
+    {
+      url: getAbsoluteUrl("/trust"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.78,
+    },
+    {
+      url: getAbsoluteUrl("/contact"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.55,
+    },
     ...PARTNER_COHORTS.map((partner) => ({
       url: getAbsoluteUrl(`/cohort/${partner.slug}`),
       lastModified: now,
@@ -120,6 +138,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: now,
       changeFrequency: "daily",
       priority: 0.8,
+    },
+    {
+      url: getAbsoluteUrl("/donate"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.72,
     },
     {
       url: getAbsoluteUrl("/mpgf"),

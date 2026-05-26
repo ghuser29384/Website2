@@ -48,6 +48,7 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/", label: "Home" },
       { href: "/cohort", label: "Founding cohort" },
+      { href: "/status", label: "Pilot status" },
       { href: "/onboarding", label: "Post-signup wizard" },
       { href: "/signup", label: "Create account" },
       { href: "/login", label: "Sign in" },
@@ -79,6 +80,7 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/safety", label: "Safety policy" },
       { href: "/anti-threat-baseline", label: "Anti-threat rules" },
+      { href: "/trust", label: "What you can rely on" },
       { href: "/validation", label: "Validation" },
       { href: "/reasoning-standards", label: "Evidence standards" },
       { href: "/faq", label: "FAQ" },
@@ -92,8 +94,8 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/methodology#sources", label: "Sources" },
       { href: "/people", label: "People" },
       { href: "/wish-registry", label: "Wish registry" },
-      { href: "mailto:support@moraltrade.org", label: "Contact" },
-      { href: "mailto:support@moraltrade.org?subject=Pilot%20updates", label: "Pilot updates" },
+      { href: "/contact", label: "Contact" },
+      { href: "/status", label: "Pilot updates" },
     ],
   },
   {

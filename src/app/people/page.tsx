@@ -26,17 +26,17 @@ export const metadata: Metadata = {
   openGraph: {
     title: "People directory",
     description:
-      "Browse public Moral Trade member profiles, visible reputation signals, open offers, followers, comments, and karma.",
+      "Browse opt-in Moral Trade member profiles, reviewed proof badges, public offers, and broad wish previews.",
     url: getAbsoluteUrl("/people"),
     type: "website",
   },
 };
 
 const SORT_OPTIONS: Array<{ value: PeopleSort; label: string }> = [
-  { value: "rating", label: "User rating" },
-  { value: "followers", label: "Followers" },
-  { value: "karma", label: "Karma" },
-  { value: "comments", label: "Comments" },
+  { value: "rating", label: "Reviewed trust" },
+  { value: "followers", label: "Counterparty interest" },
+  { value: "karma", label: "Reviewer karma" },
+  { value: "comments", label: "Public discussion" },
 ];
 
 interface PeoplePageProps {
@@ -64,6 +64,13 @@ function buildPeopleHref(sort: PeopleSort, page: number) {
   }
 
   return page === 1 ? `/people?sort=${sort}` : `/people?sort=${sort}&page=${page}`;
+}
+
+function formatBadgeType(value: string) {
+  return value
+    .split("_")
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 export default async function PeoplePage({ searchParams }: PeoplePageProps) {
@@ -99,7 +106,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
         url: getAbsoluteUrl(`/people/${profile.id}`),
         name: profile.resolvedName,
         description: truncateDescription(
-          `${formatPublicProfileLocation(profile) || "Location not listed"}. ${profile.offerCount} open offers. ${profile.followerCount} followers. ${profile.commentCount} comments.`,
+          `${formatPublicProfileLocation(profile) || "Location not listed"}. ${profile.offerCount} open offers. ${profile.verificationBadges.length} reviewed proof badges.`,
           140,
         ),
       })),
@@ -128,7 +135,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             <h1>Public member records and visible reputation signals.</h1>
             <p className="hero-text">
               Public profiles appear after participants publish offers or explicitly opt into
-              visibility. The goal is accountability around trades, not social-feed growth.
+              visibility. The goal is accountability around reviewable trades, not social-feed growth.
             </p>
           </section>
 
@@ -138,15 +145,15 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>User rating</strong>
-                  <p>Average transaction ratings received across past agreements.</p>
+                  <strong>Reviewed trust</strong>
+                  <p>Ratings and proof badges matter only after there is a reviewable record.</p>
                 </div>
               </div>
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Followers, karma, comments</strong>
-                  <p>Alternative views for social proof, writing activity, and public responses.</p>
+                  <strong>Visible signals only</strong>
+                  <p>Empty social counters are hidden until they carry real trust value.</p>
                 </div>
               </div>
             </div>
@@ -207,13 +214,15 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                       </p>
                     </div>
                     <span className="badge">
-                      {profile.rating ? `${profile.rating.toFixed(1)}/10` : "No rating yet"}
+                      {profile.ratingCount
+                        ? `${(profile.rating ?? 0).toFixed(1)}/10 reviewed`
+                        : profile.verificationBadges.length
+                          ? "Reviewed proof"
+                          : "Pilot profile"}
                     </span>
                   </div>
 
-                  <p className="profile-bio">
-                    {profile.bio || "No public bio has been added yet."}
-                  </p>
+                  {profile.bio ? <p className="profile-bio">{profile.bio}</p> : null}
 
                   {profile.wishPreview || profile.wishCauses.length ? (
                     <div className="profile-preview-block">
@@ -237,32 +246,43 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                     </div>
                   ) : null}
 
-                  <dl className="profile-stats">
-                    <div>
-                      <dt>Followers</dt>
-                      <dd>{profile.followerCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Karma</dt>
-                      <dd>{profile.karma}</dd>
-                    </div>
-                    <div>
-                      <dt>Comments</dt>
-                      <dd>{profile.commentCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Open offers</dt>
-                      <dd>{profile.offerCount}</dd>
-                    </div>
-                  </dl>
+                  <div className="tag-row" aria-label="Visible trust signals">
+                    {profile.verificationBadges.slice(0, 3).map((badge) => (
+                      <span className="impact-pill" key={badge.id}>
+                        {formatBadgeType(badge.badge_type)}
+                      </span>
+                    ))}
+                    {profile.offerCount > 0 ? (
+                      <span className="source-pill">{profile.offerCount} open offer(s)</span>
+                    ) : null}
+                    {profile.ratingCount > 0 ? (
+                      <span className="source-pill">{profile.ratingCount} reviewed rating(s)</span>
+                    ) : null}
+                    {profile.wishPreview || profile.wishCauses.length ? (
+                      <span className="source-pill">Broad wish preview visible</span>
+                    ) : null}
+                    {!profile.verificationBadges.length &&
+                    profile.offerCount === 0 &&
+                    profile.ratingCount === 0 &&
+                    !profile.wishPreview &&
+                    !profile.wishCauses.length ? (
+                      <span className="badge badge-secondary">No reviewed public record yet</span>
+                    ) : null}
+                  </div>
 
                   <div className="offer-footer">
                     <div className="tag-row">
-                      <span>{profile.ratingCount} rating(s)</span>
+                      {profile.verificationBadges.length ? (
+                        <span>{profile.verificationBadges.length} reviewed badge(s)</span>
+                      ) : profile.ratingCount ? (
+                        <span>{profile.ratingCount} rating(s)</span>
+                      ) : (
+                        <span>Opt-in profile</span>
+                      )}
                     </div>
                     <div className="offer-actions">
                       <Link className="text-button" href={`/people/${profile.id}`}>
-                        View profile
+                        View public profile
                       </Link>
                       {viewer && viewer.authUser.id !== profile.id ? (
                         <form action={toggleFollowAction}>
@@ -282,7 +302,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                 <div>
                   <strong>Public member records will appear after participants publish offers or opt into public profiles.</strong>
                   <p>
-                    Until then, browse worked examples in the marketplace or create an account to
+                    Until then, browse worked examples in the proposal registry or create an account to
                     control your profile privacy before publishing.
                   </p>
                   <div className="hero-actions">

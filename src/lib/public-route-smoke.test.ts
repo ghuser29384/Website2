@@ -50,7 +50,9 @@ test("public navigation exposes pilot institution routes", () => {
   assert.equal(hrefs.length, 7);
   assert.equal(siteSource.includes("label: \"MPGF\""), false);
   assert.equal(siteSource.includes("label: \"Advanced\""), false);
-  assert.match(siteSource, /mailto:support@moraltrade\.org/);
+  assert.match(siteSource, /\/contact/);
+  assert.match(siteSource, /\/status/);
+  assert.match(siteSource, /\/trust/);
   assert.match(topbarSource, /topbar-menu-heading/);
   assert.match(topbarSource, /topbar-menu-icon/);
   assert.match(topbarSource, /topbar-with-search/);
@@ -308,7 +310,7 @@ test("home page is a founding-cohort landing page with pilot metrics and first a
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
   const heroIndex = homeSource.indexOf("Can people with different moral views make each other better off?");
   const metricsIndex = homeSource.indexOf("growth-progress-card");
-  const routeIndex = homeSource.indexOf("Start with the trust problem");
+  const routeIndex = homeSource.indexOf("Choose the right first path");
   const activationIndex = homeSource.indexOf("Start with one low-risk action");
   const previewIndex = homeSource.indexOf("Worked examples, not live liquidity");
 
@@ -320,6 +322,7 @@ test("home page is a founding-cohort landing page with pilot metrics and first a
   assert.match(homeSource, /Join the founding cohort/);
   assert.match(homeSource, /Read the moral trade primer/);
   assert.match(homeSource, /Browse worked examples/);
+  assert.match(homeSource, /Open donation routes/);
   assert.match(homeSource, /Invite one serious counterparty/);
   assert.match(homeSource, /Submit one reviewable proof artifact/);
   assert.match(homeSource, /No autonomous outreach/);
@@ -419,6 +422,10 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
 
   assert.ok(PARTNER_COHORTS.length >= 10);
   assert.match(growthSource, /FUNNEL_EVENT_TYPES/);
+  assert.match(growthSource, /hero_primary_cta_clicked/);
+  assert.match(growthSource, /worked_example_opened/);
+  assert.match(growthSource, /donation_route_clicked/);
+  assert.match(growthSource, /registry_search_executed/);
   assert.match(growthSource, /PARTNER_COHORTS/);
   assert.match(migrationSource, /funnel_events/);
   assert.match(migrationSource, /cohort_attributions/);
@@ -533,6 +540,9 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   const primerPage = readRepoFile("src/app/moral-trade/page.tsx");
   const antiThreatPage = readRepoFile("src/app/anti-threat-baseline/page.tsx");
   const researchPage = readRepoFile("src/app/research/page.tsx");
+  const trustPage = readRepoFile("src/app/trust/page.tsx");
+  const contactPage = readRepoFile("src/app/contact/page.tsx");
+  const statusPage = readRepoFile("src/app/status/page.tsx");
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
   const siteSearchSource = readRepoFile("src/lib/site-search.ts");
@@ -549,10 +559,18 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(researchPage, /What would make this unsafe/);
   assert.match(researchPage, /Open mechanism-design questions/);
   assert.match(researchPage, /Transparency reports/);
+  assert.match(trustPage, /What you can rely on today/);
+  assert.match(trustPage, /No custody, escrow, tax, legal, investment, or payment-protection service/);
+  assert.match(contactPage, /Reach the pilot operators/);
+  assert.match(statusPage, /What is real on Moral Trade today/);
   assert.match(sitemapSource, /\/moral-trade/);
   assert.match(sitemapSource, /\/anti-threat-baseline/);
   assert.match(sitemapSource, /\/research/);
+  assert.match(sitemapSource, /\/trust/);
+  assert.match(sitemapSource, /\/contact/);
+  assert.match(sitemapSource, /\/status/);
   assert.match(siteSearchSource, /Anti-threat and baseline integrity/);
+  assert.match(siteSearchSource, /What you can rely on/);
 });
 
 test("dashboard exposes existing profile portability endpoints", () => {

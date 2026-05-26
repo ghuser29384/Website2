@@ -25,38 +25,44 @@ interface HomePageProps {
 }
 
 const startPaths: ReadonlyArray<{
+  actionLabel: string;
   description: string;
   href: string;
   icon: IconName;
   title: string;
 }> = [
   {
-    title: "Read the primer",
-    description: "Start with the core concept, examples, and the trust problem.",
+    title: "Learn the idea",
+    description: "Read the core concept, examples, boundaries, and the counterfactual trust problem.",
     href: "/moral-trade",
     icon: "source",
+    actionLabel: "Read the moral trade primer",
   },
   {
-    title: "Join a small cohort",
-    description: "Begin with a serious group that can test low-risk, reviewable proposals.",
-    href: "/cohort",
-    icon: "profile",
-  },
-  {
-    title: "Clone one worked example",
-    description: "Use a seeded pledge swap or offset as a draft before publishing anything live.",
+    title: "Test an example",
+    description: "Inspect and clone a seeded pledge swap or offset before publishing anything live.",
     href: "/offers?view=examples",
     icon: "example",
+    actionLabel: "Browse worked examples",
   },
   {
-    title: "Review the public-good thesis",
-    description: "See why moral public goods are the main scalable coordination test.",
-    href: "/mpgf",
+    title: "Donate through a route",
+    description: "Use a verified Every.org path, then log the gift when it belongs in a site workflow.",
+    href: "/donate",
     icon: "fund",
+    actionLabel: "Open donation routes",
+  },
+  {
+    title: "Join or build",
+    description: "Enter the founding cohort, invite one serious counterparty, and start small.",
+    href: "/cohort",
+    icon: "profile",
+    actionLabel: "Join the founding cohort",
   },
 ] as const;
 
 const activationCards: ReadonlyArray<{
+  actionLabel: string;
   description: string;
   href: string;
   title: string;
@@ -65,21 +71,25 @@ const activationCards: ReadonlyArray<{
     title: "Join a small cohort",
     description: "Start with a group small enough for review, baseline checks, and human introductions.",
     href: "/cohort",
+    actionLabel: "Open the cohort guide",
   },
   {
     title: "Clone a worked example",
     description: "Prefill a low-risk case, adjust terms, and keep scores party-relative.",
     href: "/offers?view=examples",
+    actionLabel: "Choose a worked example",
   },
   {
     title: "Invite one serious counterparty",
     description: "The fastest early loop is one thoughtful invite, not a generic referral blast.",
     href: "/cohort",
+    actionLabel: "Draft a cohort invite",
   },
   {
     title: "Submit one reviewable proof artifact",
     description: "Use receipts, logs, attestations, or public statements before anyone relies on a claim.",
     href: "/validation",
+    actionLabel: "Review evidence standards",
   },
 ] as const;
 
@@ -166,8 +176,11 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
       <main id="main-content" tabIndex={-1}>
         <section className="growth-start-section section section-white" aria-labelledby="start-heading">
           <div className="section-head section-head-compact">
-            <h2 id="start-heading">Start with the trust problem</h2>
-            <p>Education, cohort formation, and reviewable examples come before broad marketplace mechanics.</p>
+            <h2 id="start-heading">Choose the right first path</h2>
+            <p>
+              The pilot routes visitors by intent before exposing deeper marketplace mechanics:
+              learn, test, donate, or join/build.
+            </p>
           </div>
           <div className="growth-start-grid">
             {startPaths.map((path) => (
@@ -177,7 +190,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
                   <h3>{path.title}</h3>
                   <p>{path.description}</p>
                 </div>
-                <span className="inline-link">Learn more</span>
+                <span className="inline-link">{path.actionLabel}</span>
               </Link>
             ))}
           </div>
@@ -196,7 +209,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
               <Link className="growth-activation-card panel" href={card.href} key={card.title}>
                 <h3>{card.title}</h3>
                 <p>{card.description}</p>
-                <span className="inline-link">Start here</span>
+                <span className="inline-link">{card.actionLabel}</span>
               </Link>
             ))}
           </div>
@@ -253,7 +266,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
               Browse all worked examples
             </Link>
             <Link className="button button-secondary" href="/cohort">
-              Open cohort guide
+              Read the cohort guide
             </Link>
           </div>
         </section>

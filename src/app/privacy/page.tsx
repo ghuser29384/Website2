@@ -78,6 +78,46 @@ export default async function PrivacyPage() {
           </p>
         </section>
         <section className="panel data-card data-card-wide">
+          <h2>Analytics and attribution</h2>
+          <p>
+            Moral Trade may record lightweight product events such as page views, worked-example
+            opens, cohort interest, donation-route clicks, onboarding steps, and invite actions.
+            The purpose is to understand whether visitors find the right pilot path, not to score
+            moral value or automate outreach. UTM parameters, referral codes, partner cohort
+            slugs, first path, last path, and referrer may be stored in a short-lived attribution
+            cookie and copied into internal funnel records.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Cookies and local state</h2>
+          <p>
+            The app uses authentication cookies through Supabase, an attribution cookie for cohort
+            and campaign measurement, and ordinary browser state needed for interactive forms. The
+            public pilot should not use cookies to mine private feeds, infer exact wishes, or send
+            surprise counterparty exposure.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Processors and external services</h2>
+          <p>
+            Supabase supports authentication and database storage. Stripe handles card, payout, and
+            payment objects when payment workflows are enabled. Every.org handles direct donation
+            routes opened from the donation page. Email delivery may use an external provider for
+            queued notifications. Those services have their own security and privacy obligations
+            outside Moral Trade&apos;s direct control.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Retention and deletion</h2>
+          <p>
+            Pilot records are retained while they are needed for account access, safety review,
+            evidence reconciliation, disputes, legal compliance, and abuse prevention. Participants
+            can contact operators to ask for export, correction, or deletion of profile data, with
+            the caveat that some public records, audit events, payment references, or safety records
+            may need to be retained to preserve review integrity.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
           <h2>Notifications</h2>
           <p>
             The app can queue notification records for email delivery through an external provider.
@@ -91,6 +131,15 @@ export default async function PrivacyPage() {
             Admin review should be limited to safety, abuse, payment, and delivery operations.
             Private wish details should not be disclosed to other participants unless the product
             has a consent gate for that disclosure.
+          </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Contact and recourse</h2>
+          <p>
+            For privacy, safety, or processor questions, use the contact page or email
+            support@moraltrade.org with the relevant page, proposal, or workflow reference. Safety
+            and coercive-baseline concerns should be routed as review issues rather than ordinary
+            support questions.
           </p>
         </section>
       </main>

@@ -54,6 +54,27 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["cohort", "founding", "signup", "invite", "referral", "demo", "activation"],
   },
   {
+    href: "/status",
+    label: "Pilot status",
+    summary: "See what is live, what is prototype-stage, and what visitors can rely on today.",
+    kind: "learn",
+    keywords: ["status", "roadmap", "pilot updates", "live offers", "prototype", "liquidity"],
+  },
+  {
+    href: "/trust",
+    label: "What you can rely on",
+    summary: "Review current guarantees, non-guarantees, review states, and recourse routes.",
+    kind: "learn",
+    keywords: ["trust", "guarantees", "non-guarantees", "review states", "recourse", "rely"],
+  },
+  {
+    href: "/contact",
+    label: "Contact Moral Trade",
+    summary: "Reach operators about safety concerns, reviewer questions, partnerships, and cohort inquiries.",
+    kind: "learn",
+    keywords: ["contact", "support", "safety concern", "operator", "partnership", "recourse"],
+  },
+  {
     href: "/onboarding",
     label: "Cohort onboarding",
     summary: "Save your role, cause areas, attribution, and first action after signup.",
@@ -94,6 +115,13 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     summary: "Review external-payment evidence submission, candidate pools, and allocation workflow.",
     kind: "fund",
     keywords: ["mpgf", "fund", "public goods", "evidence", "contribution", "pool"],
+  },
+  {
+    href: "/donate",
+    label: "Donation routes",
+    summary: "Use verified Every.org routes and return to log gifts when they matter for a workflow.",
+    kind: "fund",
+    keywords: ["donate", "donation", "every.org", "gift", "route", "log gift", "reconciliation"],
   },
   {
     href: "/priority-correction-fund",

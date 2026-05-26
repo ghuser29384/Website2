@@ -2,27 +2,27 @@ import type { Metadata } from "next";
 
 import { HomePage } from "@/components/home/home-page";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
-import { getAbsoluteUrl, SITE_NAME, truncateDescription } from "@/lib/seo";
+import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
-  "Join the Moral Trade founding cohort to explore pledge swaps, donation offsets, and shared public-good commitments with privacy-first matching and evidence review.",
+  "Moral Trade is a reviewed pilot for low-risk cooperation across moral disagreement: pledge swaps, donation offsets, and shared public-good commitments without escrow or hidden automation.",
 );
 
 export const metadata: Metadata = {
-  title: SITE_NAME,
+  title: "Moral Trade pilot for cooperation under disagreement",
   description: homeDescription,
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: SITE_NAME,
+    title: "Moral Trade pilot for cooperation under disagreement",
     description: homeDescription,
     url: getAbsoluteUrl("/"),
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: SITE_NAME,
+    title: "Moral Trade pilot for cooperation under disagreement",
     description: homeDescription,
   },
 };
