@@ -11,6 +11,7 @@ import {
   updateProfileVerificationBadgeAction,
   updateRiskSignalStatusAction,
 } from "@/app/actions";
+import { updateProfileDataRightRequestAction } from "@/app/background-networking/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { isAdminEmail } from "@/lib/admin";
@@ -48,6 +49,8 @@ type RiskSignalRow = Database["public"]["Tables"]["risk_signals"]["Row"];
 type MatchExplanationSnapshotRow =
   Database["public"]["Tables"]["match_explanation_snapshots"]["Row"];
 type BackgroundQueryEventRow = Database["public"]["Tables"]["background_query_events"]["Row"];
+type ProfileDataRightRequestRow =
+  Database["public"]["Tables"]["profile_data_right_requests"]["Row"];
 type ProfileVerificationBadgeRow =
   Database["public"]["Tables"]["profile_verification_badges"]["Row"];
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
@@ -106,6 +109,7 @@ async function loadAdminQueues() {
     riskSignals,
     matchExplanationSnapshots,
     backgroundQueryEvents,
+    profileDataRightRequests,
     agreementReviewCases,
     verificationBadges,
   ] = await Promise.all([
@@ -163,6 +167,12 @@ async function loadAdminQueues() {
       .order("created_at", { ascending: false })
       .limit(50),
     supabase
+      .from("profile_data_right_requests")
+      .select("*")
+      .in("status", ["open", "in_review"])
+      .order("due_at", { ascending: true })
+      .limit(50),
+    supabase
       .from("agreement_review_cases")
       .select("*")
       .in("status", ["open", "under_review", "challenge_window_open", "appealed", "disputed_unresolved"])
@@ -193,6 +203,7 @@ async function loadAdminQueues() {
     riskSignals.error,
     matchExplanationSnapshots.error,
     backgroundQueryEvents.error,
+    profileDataRightRequests.error,
     agreementReviewCases.error,
     verificationBadges.error,
     flaggedOffsetsResult.error,
@@ -300,6 +311,7 @@ async function loadAdminQueues() {
     riskSignals: (riskSignals.data ?? []) as RiskSignalRow[],
     matchExplanationSnapshots: (matchExplanationSnapshots.data ?? []) as MatchExplanationSnapshotRow[],
     backgroundQueryEvents: (backgroundQueryEvents.data ?? []) as BackgroundQueryEventRow[],
+    profileDataRightRequests: (profileDataRightRequests.data ?? []) as ProfileDataRightRequestRow[],
     donationOffsetReviews: flaggedOffsets.map((offset) => ({
       offset,
       offer: offerMap.get(offset.offer_id) ?? null,
@@ -400,26 +412,33 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">06</span>
                 <div>
+                  <strong>{queues?.profileDataRightRequests.length ?? 0} data-right item(s)</strong>
+                  <p>Export, correction, deletion, and restriction requests.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">07</span>
+                <div>
                   <strong>{queues?.agreementEvidenceReviews.length ?? 0} evidence review item(s)</strong>
                   <p>Agreement evidence, challenge windows, and appeals.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">07</span>
+                <span className="flow-number">08</span>
                 <div>
                   <strong>{queues?.donationOffsetReviews.length ?? 0} offset review item(s)</strong>
                   <p>Paused donation offsets needing baseline or legality review.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">08</span>
+                <span className="flow-number">09</span>
                 <div>
                   <strong>{queues?.payments.length ?? 0} payment issue(s)</strong>
                   <p>Refund requests, disputes, and failures.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">09</span>
+                <span className="flow-number">10</span>
                 <div>
                   <strong>{queues?.emails.length ?? 0} email item(s)</strong>
                   <p>Queued or failed outbound mail.</p>
@@ -460,6 +479,75 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           </section>
         ) : (
           <>
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Privacy operations</p>
+                <h2>Data-right requests and disclosure controls</h2>
+                <p>
+                  Track export, correction, deletion, and restriction requests alongside the
+                  background-networking operator queues.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.profileDataRightRequests.length ? (
+                  queues.profileDataRightRequests.map((request) => (
+                    <article className="panel data-card" key={request.id}>
+                      <p className="detail-kicker">
+                        {request.request_type.replaceAll("_", " ")} |{" "}
+                        {request.status.replaceAll("_", " ")}
+                      </p>
+                      <h3>{request.scope.replaceAll("_", " ")}</h3>
+                      <p className="route-text">
+                        Profile {request.profile_id} · due{" "}
+                        {new Date(request.due_at).toLocaleDateString()}
+                      </p>
+                      {request.request_details ? (
+                        <p className="route-text">{request.request_details}</p>
+                      ) : null}
+                      {request.operator_note ? (
+                        <p className="route-text">
+                          <strong>Operator note:</strong> {request.operator_note}
+                        </p>
+                      ) : null}
+                      <form action={updateProfileDataRightRequestAction} className="compact-form">
+                        <input name="request_id" type="hidden" value={request.id} />
+                        <input name="return_to" type="hidden" value="/admin" />
+                        <label className="field">
+                          <span>Status</span>
+                          <select name="status" defaultValue={request.status}>
+                            <option value="open">Open</option>
+                            <option value="in_review">In review</option>
+                            <option value="fulfilled">Fulfilled</option>
+                            <option value="denied">Denied</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        </label>
+                        <label className="field">
+                          <span>Operator note</span>
+                          <textarea
+                            defaultValue={request.operator_note}
+                            name="operator_note"
+                            placeholder="Resolution, exception, hold, or next action."
+                            rows={3}
+                          />
+                        </label>
+                        <button className="button button-secondary button-mini" type="submit">
+                          Update request
+                        </button>
+                      </form>
+                    </article>
+                  ))
+                ) : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No open data-right requests.</strong>
+                      <p>Participant privacy requests will appear here with due dates.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
             <section className="section section-white">
               <div className="section-head">
                 <p className="eyebrow">Evidence review</p>

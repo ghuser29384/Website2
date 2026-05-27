@@ -15,7 +15,10 @@ type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Inse
 type HelperStrategyInsert = Database["public"]["Tables"]["helper_strategies"]["Insert"];
 type SavedSearchInsert = Database["public"]["Tables"]["saved_searches"]["Insert"];
 type BrokerageBountyInsert = Database["public"]["Tables"]["brokerage_bounties"]["Insert"];
+type BackgroundNotificationPreferenceInsert =
+  Database["public"]["Tables"]["background_notification_preferences"]["Insert"];
 type ImportTableMap = {
+  background_notification_preferences: BackgroundNotificationPreferenceInsert;
   brokerage_bounties: BrokerageBountyInsert;
   helper_strategies: HelperStrategyInsert;
   profile_sources: ProfileSourceInsert;
@@ -47,6 +50,7 @@ export async function POST(request: Request) {
   const replaceExisting = body.replaceExisting === true;
   const profileId = user.id;
   const importedCounts = {
+    backgroundNotificationPreferences: 0,
     brokerageBounties: 0,
     helperStrategies: 0,
     personalDelegate: 0,
@@ -60,6 +64,7 @@ export async function POST(request: Request) {
   if (replaceExisting) {
     await Promise.all([
       supabase.from("brokerage_bounties").delete().eq("profile_id", profileId),
+      supabase.from("background_notification_preferences").delete().eq("profile_id", profileId),
       supabase.from("helper_strategies").delete().eq("profile_id", profileId),
       supabase.from("profile_sources").delete().eq("profile_id", profileId),
       supabase.from("saved_searches").delete().eq("profile_id", profileId),
@@ -233,6 +238,13 @@ export async function POST(request: Request) {
           .from("brokerage_bounties")
           .insert(payload as BrokerageBountyInsert[]));
         break;
+      case "background_notification_preferences":
+        ({ error } = await supabase
+          .from("background_notification_preferences")
+          .upsert(payload as BackgroundNotificationPreferenceInsert[], {
+            onConflict: "profile_id,event_kind,channel",
+          }));
+        break;
       default:
         error = { message: "Unsupported import table." };
     }
@@ -374,6 +386,36 @@ export async function POST(request: Request) {
             : "manual",
         min_score: Math.max(0, Math.min(100, Number(row.min_score ?? 50) || 50)),
         status: row.status === "paused" ? "paused" : "active",
+      }),
+    });
+
+    await importRows({
+      rows: Array.isArray(body.backgroundNotificationPreferences)
+        ? body.backgroundNotificationPreferences
+        : [],
+      table: "background_notification_preferences",
+      countKey: "backgroundNotificationPreferences",
+      mapRow: (row) => ({
+        profile_id: profileId,
+        event_kind:
+          row.event_kind === "consent_decisions" ||
+          row.event_kind === "introduction_updates" ||
+          row.event_kind === "grant_activity" ||
+          row.event_kind === "operator_review" ||
+          row.event_kind === "safety_review"
+            ? (row.event_kind as BackgroundNotificationPreferenceInsert["event_kind"])
+            : "match_suggestions",
+        channel:
+          row.channel === "email_digest" || row.channel === "web_push"
+            ? (row.channel as BackgroundNotificationPreferenceInsert["channel"])
+            : "in_app",
+        enabled: row.enabled !== false,
+        digest_cadence:
+          row.digest_cadence === "immediate" ||
+          row.digest_cadence === "weekly" ||
+          row.digest_cadence === "none"
+            ? (row.digest_cadence as BackgroundNotificationPreferenceInsert["digest_cadence"])
+            : "daily",
       }),
     });
 

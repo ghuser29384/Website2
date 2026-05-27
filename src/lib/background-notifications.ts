@@ -1,5 +1,6 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 
+import { getBackgroundNotificationEventKindForWishNotification } from "@/lib/background-privacy-controls";
 import { getSiteUrl } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -85,8 +86,35 @@ export async function queueSafeWishNotificationEmails({
       .filter((profile) => profile.notification_email_enabled)
       .map((profile) => profile.profile_id),
   );
+  const { data: channelPrefs, error: channelPrefsError } = await supabase
+    .from("background_notification_preferences")
+    .select("profile_id, event_kind, channel, enabled, digest_cadence")
+    .in("profile_id", profileIds)
+    .eq("channel", "email_digest");
+
+  if (channelPrefsError) {
+    return {
+      emailError: channelPrefsError,
+      emailsQueued: 0,
+    };
+  }
+
+  const profilesWithEmailPrefs = new Set((channelPrefs ?? []).map((preference) => preference.profile_id));
+  const enabledEmailPreferenceKeys = new Set(
+    (channelPrefs ?? [])
+      .filter((preference) => preference.enabled && preference.digest_cadence !== "none")
+      .map((preference) => `${preference.profile_id}:${preference.event_kind}`),
+  );
   const emailRows: EmailOutboxInsert[] = notifications
-    .filter((notification) => emailEnabledProfileIds.has(notification.profile_id))
+    .filter((notification) => {
+      const eventKind = getBackgroundNotificationEventKindForWishNotification(notification.kind);
+
+      if (profilesWithEmailPrefs.has(notification.profile_id)) {
+        return enabledEmailPreferenceKeys.has(`${notification.profile_id}:${eventKind}`);
+      }
+
+      return emailEnabledProfileIds.has(notification.profile_id);
+    })
     .map((notification) => {
       const recipientEmail = emailByProfileId.get(notification.profile_id) ?? "";
       const copy = buildSafeWishNotificationEmailCopy(notification, siteUrl);

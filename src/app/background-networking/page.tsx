@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createMatchConciergeRequestAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { BACKGROUND_DATA_INVENTORY } from "@/lib/background-privacy-controls";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -172,6 +173,33 @@ export default async function BackgroundNetworkingPage({
                 registry searches are withheld until the user broadens the query.
               </p>
             </article>
+          </div>
+        </section>
+
+        <section className="section section-white">
+          <div className="section-head">
+            <p className="eyebrow">Privacy controls</p>
+            <h2>What the current pilot stores and how it is bounded</h2>
+            <p>
+              The signed-in dashboard now exposes the background-networking data map, active
+              grants, notification channel choices, local drafts, and data-right requests.
+            </p>
+          </div>
+
+          <div className="data-grid">
+            {BACKGROUND_DATA_INVENTORY.map((item) => (
+              <article className="panel data-card" key={item.surface}>
+                <p className="detail-kicker">{item.classification}</p>
+                <h3>{item.label}</h3>
+                <p className="route-text">{item.use}</p>
+                <p className="route-text">
+                  <strong>Retention:</strong> {item.retention}
+                </p>
+                <p className="route-text">
+                  <strong>Control:</strong> {item.control}
+                </p>
+              </article>
+            ))}
           </div>
         </section>
 

@@ -34,6 +34,11 @@ import {
   updateIntroductionTaskAction,
   updateAgreementStatusAction,
 } from "@/app/actions";
+import {
+  createProfileDataRightRequestAction,
+  saveBackgroundNotificationPreferencesAction,
+} from "@/app/background-networking/actions";
+import { BackgroundLocalDraftsPanel } from "@/components/dashboard/background-local-drafts-panel";
 import { ProfilePortabilityPanel } from "@/components/dashboard/profile-portability-panel";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -47,6 +52,17 @@ import {
   formatDisclosureFieldLabel,
   getDefaultGrantExpiryDays,
 } from "@/lib/background-disclosure";
+import {
+  BACKGROUND_DATA_INVENTORY,
+  BACKGROUND_NOTIFICATION_CHANNEL_OPTIONS,
+  BACKGROUND_NOTIFICATION_EVENT_KIND_OPTIONS,
+  PROFILE_DATA_RIGHT_REQUEST_TYPE_OPTIONS,
+  PROFILE_DATA_RIGHT_SCOPE_OPTIONS,
+  createDefaultBackgroundNotificationPreferences,
+  formatBackgroundNotificationChannel,
+  formatBackgroundNotificationEventKind,
+  getBackgroundNotificationPreferenceKey,
+} from "@/lib/background-privacy-controls";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
@@ -193,6 +209,33 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     0,
     profileCompletenessTotal - profileMissingFields.length,
   );
+  const notificationPreferenceRows =
+    dashboardData?.backgroundNotificationPreferences.length || !viewer
+      ? (dashboardData?.backgroundNotificationPreferences ?? []).map((preference) => ({
+          channel: preference.channel,
+          digestCadence: preference.digest_cadence,
+          enabled: preference.enabled,
+          eventKind: preference.event_kind,
+          profileId: preference.profile_id,
+        }))
+      : createDefaultBackgroundNotificationPreferences(viewer.authUser.id);
+  const enabledNotificationPreferenceKeys = new Set(
+    notificationPreferenceRows
+      .filter((preference) => preference.enabled)
+      .map((preference) =>
+        getBackgroundNotificationPreferenceKey(preference.eventKind, preference.channel),
+      ),
+  );
+  const activePrivacyGrantCount =
+    dashboardData?.privacyGrants.filter((grant) => grant.status === "granted").length ?? 0;
+  const openDataRightRequestCount =
+    dashboardData?.profileDataRightRequests.filter((request) =>
+      ["open", "in_review"].includes(request.status),
+    ).length ?? 0;
+  const operatorVisibleDisclosureCount =
+    (dashboardData?.matchReports.length ?? 0) +
+    (dashboardData?.matchConciergeRequests.length ?? 0) +
+    (dashboardData?.riskSignals.filter((signal) => signal.status === "open").length ?? 0);
 
   return (
     <div className="page-shell">
@@ -610,6 +653,159 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </dd>
               </div>
             </dl>
+          </div>
+
+          <div className="data-grid">
+            <article className="panel data-card">
+              <p className="detail-kicker">Privacy dashboard</p>
+              <h3>Data map and active controls</h3>
+              <dl className="values-summary compact-summary">
+                <div>
+                  <dt>Inventory</dt>
+                  <dd>{BACKGROUND_DATA_INVENTORY.length} surfaces mapped</dd>
+                </div>
+                <div>
+                  <dt>Active grants</dt>
+                  <dd>{activePrivacyGrantCount}</dd>
+                </div>
+                <div>
+                  <dt>Data-right requests</dt>
+                  <dd>
+                    {openDataRightRequestCount} open;{" "}
+                    {dashboardData?.profileDataRightRequests.length ?? 0} recent
+                  </dd>
+                </div>
+                <div>
+                  <dt>Operator-visible</dt>
+                  <dd>{operatorVisibleDisclosureCount} review item(s)</dd>
+                </div>
+                <div>
+                  <dt>Authenticated cache</dt>
+                  <dd>Private, no-store</dd>
+                </div>
+              </dl>
+              <div className="mini-list">
+                {BACKGROUND_DATA_INVENTORY.map((item) => (
+                  <div className="mini-list-item" key={item.surface}>
+                    <strong>{item.label}</strong>
+                    <span>{item.classification}</span>
+                    <span>{item.retention}</span>
+                    <span>{item.control}</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Notification controls</p>
+              <h3>Inbox plus digest defaults</h3>
+              <form action={saveBackgroundNotificationPreferencesAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <div className="mini-list">
+                  {BACKGROUND_NOTIFICATION_EVENT_KIND_OPTIONS.map((eventKind) => (
+                    <div className="mini-list-item" key={eventKind.value}>
+                      <strong>{eventKind.label}</strong>
+                      <span>{eventKind.description}</span>
+                      <div className="filter-option-list">
+                        {BACKGROUND_NOTIFICATION_CHANNEL_OPTIONS.map((channel) => {
+                          const key = getBackgroundNotificationPreferenceKey(
+                            eventKind.value,
+                            channel.value,
+                          );
+
+                          return (
+                            <label className="check-row" key={key}>
+                              <input
+                                defaultChecked={enabledNotificationPreferenceKeys.has(key)}
+                                name="enabled_preferences"
+                                type="checkbox"
+                                value={key}
+                              />
+                              <span>{channel.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save notification settings
+                </button>
+              </form>
+              {dashboardData?.errors.backgroundNotificationPreferences ? (
+                <p className="route-text">Could not load notification preferences.</p>
+              ) : notificationPreferenceRows.length ? (
+                <p className="route-text">
+                  Enabled:{" "}
+                  {notificationPreferenceRows
+                    .filter((preference) => preference.enabled)
+                    .slice(0, 4)
+                    .map(
+                      (preference) =>
+                        `${formatBackgroundNotificationEventKind(preference.eventKind)} via ${formatBackgroundNotificationChannel(preference.channel)}`,
+                    )
+                    .join("; ") || "none"}
+                </p>
+              ) : null}
+            </article>
+
+            <article className="panel data-card">
+              <p className="detail-kicker">Data rights</p>
+              <h3>Export, correction, deletion, and restriction</h3>
+              <div className="offer-actions">
+                <Link className="button button-secondary button-mini" href="/api/profile/export">
+                  Download export
+                </Link>
+              </div>
+              <form action={createProfileDataRightRequestAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Request</span>
+                    <select name="request_type" defaultValue="export">
+                      {PROFILE_DATA_RIGHT_REQUEST_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Scope</span>
+                    <select name="scope" defaultValue="background_networking">
+                      {PROFILE_DATA_RIGHT_SCOPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Details</span>
+                  <textarea
+                    name="request_details"
+                    placeholder="Records to correct, delete, restrict, or include in operator review."
+                  />
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Record request
+                </button>
+              </form>
+              {dashboardData?.errors.profileDataRightRequests ? (
+                <p className="route-text">Could not load data-right requests.</p>
+              ) : dashboardData?.profileDataRightRequests.length ? (
+                <ul className="clean-list">
+                  {dashboardData.profileDataRightRequests.slice(0, 4).map((request) => (
+                    <li key={request.id}>
+                      {request.request_type} ({request.scope}) · {request.status} · due{" "}
+                      {new Date(request.due_at).toLocaleDateString()}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </article>
           </div>
 
           <div className="panel data-card data-card-wide">
@@ -1762,6 +1958,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
 
           <div className="data-grid">
+            <BackgroundLocalDraftsPanel />
+
             <article className="panel data-card">
               <p className="detail-kicker">Manual sources</p>
               <h3>Source consent without automatic ingestion</h3>

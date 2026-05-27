@@ -1611,6 +1611,102 @@ export interface Database {
         };
         Relationships: [];
       };
+      background_notification_preferences: {
+        Row: {
+          id: string;
+          profile_id: string;
+          event_kind:
+            | "match_suggestions"
+            | "consent_decisions"
+            | "introduction_updates"
+            | "grant_activity"
+            | "operator_review"
+            | "safety_review";
+          channel: "in_app" | "email_digest" | "web_push";
+          enabled: boolean;
+          digest_cadence: "immediate" | "daily" | "weekly" | "none";
+          quiet_until: string | null;
+          last_digest_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          event_kind:
+            | "match_suggestions"
+            | "consent_decisions"
+            | "introduction_updates"
+            | "grant_activity"
+            | "operator_review"
+            | "safety_review";
+          channel: "in_app" | "email_digest" | "web_push";
+          enabled?: boolean;
+          digest_cadence?: "immediate" | "daily" | "weekly" | "none";
+          quiet_until?: string | null;
+          last_digest_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          event_kind?:
+            | "match_suggestions"
+            | "consent_decisions"
+            | "introduction_updates"
+            | "grant_activity"
+            | "operator_review"
+            | "safety_review";
+          channel?: "in_app" | "email_digest" | "web_push";
+          enabled?: boolean;
+          digest_cadence?: "immediate" | "daily" | "weekly" | "none";
+          quiet_until?: string | null;
+          last_digest_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      profile_data_right_requests: {
+        Row: {
+          id: string;
+          profile_id: string;
+          request_type: "export" | "correction" | "deletion" | "restriction";
+          scope: "background_networking" | "profile" | "full_account";
+          status: "open" | "in_review" | "fulfilled" | "denied" | "cancelled";
+          request_details: string;
+          operator_note: string;
+          due_at: string;
+          reviewed_by: string | null;
+          resolved_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          request_type: "export" | "correction" | "deletion" | "restriction";
+          scope?: "background_networking" | "profile" | "full_account";
+          status?: "open" | "in_review" | "fulfilled" | "denied" | "cancelled";
+          request_details?: string;
+          operator_note?: string;
+          due_at?: string;
+          reviewed_by?: string | null;
+          resolved_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          request_type?: "export" | "correction" | "deletion" | "restriction";
+          scope?: "background_networking" | "profile" | "full_account";
+          status?: "open" | "in_review" | "fulfilled" | "denied" | "cancelled";
+          request_details?: string;
+          operator_note?: string;
+          due_at?: string;
+          reviewed_by?: string | null;
+          resolved_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       match_audit_events: {
         Row: {
           id: string;

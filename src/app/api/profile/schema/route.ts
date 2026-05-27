@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   return NextResponse.json({
-    exportVersion: "background-networking-v3",
+    exportVersion: "background-networking-v4",
     importableCollections: [
       "wishProfile",
       "wishEntries",
@@ -13,6 +13,7 @@ export async function GET() {
       "profileSources",
       "helperStrategies",
       "savedSearches",
+      "backgroundNotificationPreferences",
       "brokerageBounties",
     ],
     notes: [

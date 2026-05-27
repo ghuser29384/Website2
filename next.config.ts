@@ -8,11 +8,42 @@ const mpgfRuntimeArtifacts = [
   "./tests/fixtures/mpgf/**/*",
 ];
 
+const privateNoStoreHeaders = [
+  {
+    key: "Cache-Control",
+    value: "private, no-store, max-age=0",
+  },
+  {
+    key: "Pragma",
+    value: "no-cache",
+  },
+  {
+    key: "Expires",
+    value: "0",
+  },
+];
+
 const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/(.*)",
+        source: "/dashboard/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/admin/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/api/profile/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/api/jobs/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/:path*",
         headers: [
           {
             key: "Strict-Transport-Security",

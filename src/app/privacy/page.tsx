@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { BACKGROUND_DATA_INVENTORY } from "@/lib/background-privacy-controls";
 import { getViewer } from "@/lib/app-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -110,21 +111,32 @@ export default async function PrivacyPage() {
           </p>
         </section>
         <section className="panel data-card data-card-wide">
+          <h2>Background networking data inventory</h2>
+          <ul className="clean-list">
+            {BACKGROUND_DATA_INVENTORY.map((item) => (
+              <li key={item.surface}>
+                <strong>{item.label}:</strong> {item.classification}; {item.retention}
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="panel data-card data-card-wide">
           <h2>Retention and deletion</h2>
           <p>
             Pilot records are retained while they are needed for account access, safety review,
             evidence reconciliation, disputes, legal compliance, and abuse prevention. Participants
-            can contact operators to ask for export, correction, or deletion of profile data, with
-            the caveat that some public records, audit events, payment references, or safety records
-            may need to be retained to preserve review integrity.
+            can use the dashboard to export profile data or record export, correction, deletion,
+            and restriction requests, with the caveat that some public records, audit events,
+            payment references, or safety records may need to be retained to preserve review
+            integrity.
           </p>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Notifications</h2>
           <p>
-            The app can queue notification records for email delivery through an external provider.
-            Operators may see queued, failed, or suppressed email records in order to diagnose
-            delivery problems and prevent unsafe notifications.
+            The dashboard exposes in-app, digest email, and web-push preference rows by event type.
+            Email copy for background networking stays generic and leaves exact wishes, contact
+            details, private asks, source notes, and sensitive constraints in the dashboard.
           </p>
         </section>
         <section className="panel data-card data-card-wide">
