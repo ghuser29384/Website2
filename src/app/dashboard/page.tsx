@@ -1305,16 +1305,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     placeholder="Which counterparty controls the private fields you want?"
                   />
                 </label>
-                <label className="field">
+                <div className="field">
                   <span>Requested fields</span>
-                  <select name="requested_fields" defaultValue="exact_wish">
+                  <div className="filter-option-list">
                     {BACKGROUND_DISCLOSURE_FIELDS.map((field) => (
-                      <option key={field.key} value={field.key}>
-                        {field.label}
-                      </option>
+                      <label className="check-row" key={field.key}>
+                        <input
+                          defaultChecked={field.key === "exact_wish"}
+                          name="requested_fields"
+                          type="checkbox"
+                          value={field.key}
+                        />
+                        <span>{field.label}</span>
+                      </label>
                     ))}
-                  </select>
-                </label>
+                  </div>
+                </div>
                 <label className="field">
                   <span>Stage</span>
                   <select name="requested_stage" defaultValue="consent">
@@ -2083,18 +2089,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <input name="match_id" type="hidden" value={match.id} />
                       <input name="return_to" type="hidden" value="/dashboard" />
                       <input name="requested_stage" type="hidden" value="consent" />
-                      <label className="field">
-                        <span>Ask for a specific private field</span>
-                        <select name="requested_fields" defaultValue="exact_wish">
+                      <div className="field">
+                        <span>Ask for specific private fields</span>
+                        <div className="filter-option-list">
                           {BACKGROUND_DISCLOSURE_FIELDS.filter(
                             (field) => field.minStage !== "introduced",
                           ).map((field) => (
-                            <option key={field.key} value={field.key}>
-                              {field.label}
-                            </option>
+                            <label className="check-row" key={field.key}>
+                              <input
+                                defaultChecked={field.key === "exact_wish"}
+                                name="requested_fields"
+                                type="checkbox"
+                                value={field.key}
+                              />
+                              <span>{field.label}</span>
+                            </label>
                           ))}
-                        </select>
-                      </label>
+                        </div>
+                      </div>
                       <label className="field">
                         <span>Why this helps</span>
                         <input
