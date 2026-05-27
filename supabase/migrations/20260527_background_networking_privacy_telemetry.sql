@@ -1,0 +1,47 @@
+alter table public.funnel_events drop constraint if exists funnel_events_event_type_check;
+
+alter table public.funnel_events
+add constraint funnel_events_event_type_check check (
+  event_type in (
+    'page_view',
+    'hero_primary_cta_clicked',
+    'landing_cta_click',
+    'signup_start',
+    'sign_in_started',
+    'sign_in_completed',
+    'signup_complete',
+    'email_confirm_complete',
+    'role_selected',
+    'cause_selected',
+    'onboarding_complete',
+    'first_action_selected',
+    'worked_example_opened',
+    'worked_example_view',
+    'create_trade_started',
+    'clone_example_action',
+    'wish_profile_started',
+    'wish_profile_completion',
+    'referral_invite_drafted',
+    'invite_sent',
+    'invite_accepted',
+    'pair_completed',
+    'cohort_interest_started',
+    'intro_requested',
+    'registry_search_executed',
+    'donation_route_clicked',
+    'donation_logged',
+    'evidence_submission_started',
+    'public_good_action_logged',
+    'privacy_grant_changed',
+    'background_scan_run',
+    'match_consent_recorded',
+    'detail_request_submitted',
+    'detail_request_resolved',
+    'safety_report_submitted',
+    'webinar_rsvp',
+    'partner_page_view',
+    'email_nurture_subscribed',
+    'day_one_return',
+    'day_seven_return'
+  )
+);

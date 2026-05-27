@@ -141,6 +141,29 @@ export default async function BackgroundNetworkingPage({
                 after staged disclosure and mutual consent.
               </p>
             </article>
+            <article className="panel concept-card">
+              <h3>Match explanations</h3>
+              <p>
+                Match cards show coarse factor codes, confidence bands, scanned surfaces, and
+                redacted surfaces. They explain why a suggestion exists without exposing raw wish
+                text, contact details, or source notes.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Purpose-bound grants</h3>
+              <p>
+                Private facts should be shared for a narrow decision and, by default, a time box.
+                Grants can expire or be revoked instead of becoming permanent background access.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Minimal telemetry</h3>
+              <p>
+                Operational metrics use buckets and counts, such as scan runs and request states.
+                Analytics should not store exact wishes, private constraints, report bodies, or
+                message text.
+              </p>
+            </article>
           </div>
         </section>
 

@@ -85,7 +85,9 @@ export default async function PrivacyPage() {
             The purpose is to understand whether visitors find the right pilot path, not to score
             moral value or automate outreach. UTM parameters, referral codes, partner cohort
             slugs, first path, last path, and referrer may be stored in a short-lived attribution
-            cookie and copied into internal funnel records.
+            cookie and copied into internal funnel records. Background networking events should use
+            counts, buckets, and state labels; they should not copy exact wish text, private
+            constraints, report bodies, source notes, or notification message text into analytics.
           </p>
         </section>
         <section className="panel data-card data-card-wide">

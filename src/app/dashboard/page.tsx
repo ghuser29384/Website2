@@ -37,6 +37,11 @@ import {
 import { ProfilePortabilityPanel } from "@/components/dashboard/profile-portability-panel";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import {
+  buildMatchExplanation,
+  formatFactorCode,
+  formatGrantExpiry,
+} from "@/lib/background-explanations";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
@@ -553,6 +558,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </dd>
               </div>
             </dl>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">State machine</p>
+            <h3>Suggestions move through explicit consent stages</h3>
+            <p className="route-text">
+              A match can move from broad suggestion to opt-in, narrow detail request, operator
+              review, introduction plan, and agreement room. Each transition is reversible until
+              both parties deliberately continue.
+            </p>
+            <div className="tag-row">
+              {[
+                "Suggested",
+                "Opt-in",
+                "Detail request",
+                "Operator review",
+                "Intro ready",
+                "Agreement room",
+              ].map((stage) => (
+                <span className="source-pill" key={stage}>
+                  {stage}
+                </span>
+              ))}
+            </div>
           </div>
 
           <div className="panel data-card data-card-wide">
@@ -1096,10 +1125,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
             <article className="panel data-card">
               <p className="detail-kicker">Field-level privacy</p>
-              <h3>Grant specific facts in stages</h3>
+              <h3>Grant specific facts for a purpose and time box</h3>
               <p className="route-text">
                 Use grants to decide which facts can move from hidden to broad, specific, or
-                contact-level visibility for a match or counterparty.
+                contact-level visibility for a match or counterparty. Prefer intro-specific grants
+                that expire, then renew only if both sides still need the detail.
               </p>
               <form action={savePrivacyGrantAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -1137,7 +1167,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </label>
                   <label className="field">
                     <span>Expires in days</span>
-                    <input name="expires_in_days" placeholder="0" type="number" min="0" max="3650" />
+                    <input defaultValue={30} name="expires_in_days" type="number" min="0" max="3650" />
                   </label>
                 </div>
                 <label className="field">
@@ -1149,8 +1179,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <input name="counterparty_id" placeholder="Optional" />
                 </label>
                 <label className="field">
-                  <span>Notes</span>
-                  <textarea name="notes" placeholder="What becomes visible at this stage, and why?" />
+                  <span>Purpose and limits</span>
+                  <textarea
+                    name="notes"
+                    placeholder="Purpose: decide whether this specific intro is safe. Limits: no onward sharing, no contact use outside this request."
+                  />
                 </label>
                 <button className="button button-secondary button-mini" type="submit">
                   Save grant
@@ -1160,7 +1193,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ul className="clean-list">
                   {dashboardData.privacyGrants.slice(0, 5).map((grant) => (
                     <li key={grant.id}>
-                      {grant.field_key}: {grant.access_level} at {grant.audience_stage} ({grant.status})
+                      {grant.field_key}: {grant.access_level} at {grant.audience_stage} ({grant.status},{" "}
+                      {formatGrantExpiry(grant.expires_at)})
                     </li>
                   ))}
                 </ul>
@@ -1202,6 +1236,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <input
                     name="purpose"
                     placeholder="What bounded decision would this disclosure help you make?"
+                    required
                   />
                 </label>
                 <label className="field">
@@ -1244,13 +1279,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                               <option value="contact">Contact</option>
                             </select>
                           </label>
+                          <label className="field">
+                            <span>Expires in days</span>
+                            <input defaultValue={30} min={1} max={3650} name="expires_in_days" type="number" />
+                          </label>
                         </div>
                         <label className="field">
-                          <span>Owner note</span>
+                          <span>Purpose limits</span>
                           <input
                             defaultValue={request.owner_note}
                             name="owner_note"
-                            placeholder="Conditions or limits on what this disclosure means."
+                            placeholder="Conditions, scope, and no-onward-sharing limits for this request."
                           />
                         </label>
                         <button className="button button-secondary button-mini" type="submit">
@@ -1843,7 +1882,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </div>
               </div>
             ) : dashboardData?.matchSuggestions.length ? (
-              dashboardData.matchSuggestions.map((match) => (
+              dashboardData.matchSuggestions.map((match) => {
+                const explanation = buildMatchExplanation({
+                  canRevealIdentity: match.canRevealIdentity,
+                  counterpartyConsented: match.counterpartyConsented,
+                  generatedBy: match.generatedBy,
+                  matchBasis: match.matchBasis,
+                  riskNotes: match.riskNotes,
+                  score: match.score,
+                  sharedCauses: match.sharedCauses,
+                  status: match.status,
+                  suggestedFirstStep: match.suggestedFirstStep,
+                  viewerConsented: match.viewerConsented,
+                });
+
+                return (
                 <article key={match.id} className="panel data-card">
                   <p className="detail-kicker">Possible counterparty</p>
                   <h3>
@@ -1863,7 +1916,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   ) : null}
                   <div className="tag-row">
                     <span className="badge">{match.status}</span>
+                    <span className="source-pill">{explanation.workflowStage.label}</span>
                     <span className="impact-pill">Fit score {match.score}/100</span>
+                    <span className="source-pill">{explanation.confidenceBand} confidence</span>
                     <span className="source-pill">{match.generatedBy}</span>
                     {match.counterpartyPreview?.causes?.slice(0, 3).map((cause) => (
                       <span className="source-pill" key={`${match.id}-${cause}`}>
@@ -1871,13 +1926,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       </span>
                     ))}
                   </div>
-                  {match.matchBasis.length ? (
-                    <ul className="clean-list">
-                      {match.matchBasis.slice(0, 4).map((basis) => (
-                        <li key={`${match.id}-${basis}`}>{basis}</li>
-                      ))}
-                    </ul>
-                  ) : null}
+                  <div className="mini-list">
+                    <div className="mini-list-item">
+                      <strong>Why you are seeing this</strong>
+                      <span>{explanation.summary}</span>
+                      <span>{explanation.workflowStage.description}</span>
+                    </div>
+                    <div className="mini-list-item">
+                      <strong>Factors</strong>
+                      <span>
+                        {explanation.factorCodes.length
+                          ? explanation.factorCodes.map(formatFactorCode).join(", ")
+                          : "Broad preview compatibility"}
+                      </span>
+                    </div>
+                    <div className="mini-list-item">
+                      <strong>What was scanned</strong>
+                      <span>{explanation.scannedSurfaces.join(", ")}</span>
+                      <span>Redacted here: {explanation.redactedSurfaces.join(", ")}</span>
+                    </div>
+                  </div>
                   {match.suggestedFirstStep ? (
                     <p className="route-text">
                       <strong>Suggested first step:</strong> {match.suggestedFirstStep}
@@ -1902,6 +1970,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <input
                           name="purpose"
                           placeholder="What narrow decision would this disclosure enable?"
+                          required
                         />
                       </label>
                       <input
@@ -1963,7 +2032,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </div>
                   </div>
                 </article>
-              ))
+                );
+              })
             ) : (
               <div className="empty-state">
                 <div>
