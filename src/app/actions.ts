@@ -1539,15 +1539,19 @@ async function generateWishMatchSuggestions({
       profileId,
       preview.profile_id,
     );
+    const dedupeSignal = normalizeBackgroundToken(
+      sharedCause ??
+        evaluation.sharedTokens[0] ??
+        evaluation.compatibilityTags[0] ??
+        "general",
+    );
     const dedupeKey = [
       profileAId,
       profileBId,
-      normalizeBackgroundToken(
-        sharedCause ??
-          evaluation.sharedTokens[0] ??
-          evaluation.compatibilityTags[0] ??
-          "general",
-      ),
+      getBackgroundQueryFingerprint({
+        signal: dedupeSignal,
+        version: "background-match-dedupe-v1",
+      }),
     ].join(":");
     const matchBasis = [
       ...evaluation.compatibilityTags.map((tag) => `Compatibility tag: ${tag}`),

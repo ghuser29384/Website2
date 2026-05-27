@@ -16,6 +16,17 @@ type BackgroundQueryEventInsert = Database["public"]["Tables"]["background_query
 type MatchExplanationSnapshotInsert =
   Database["public"]["Tables"]["match_explanation_snapshots"]["Insert"];
 
+export const MATCH_EXPLANATION_SNAPSHOT_DEDUPE_COLUMNS = [
+  "match_id",
+  "profile_id",
+  "explanation_version",
+  "workflow_stage",
+  "confidence_band",
+  "score_bucket",
+  "source_run_kind",
+  "source_run_id",
+].join(",");
+
 export interface BackgroundBudgetReservation {
   error: PostgrestError | Error | null;
   eventId: string | null;
@@ -181,7 +192,10 @@ export async function insertMatchExplanationSnapshots({
   }
 
   const rows = snapshots.map((snapshot) => snapshot satisfies MatchExplanationSnapshotInsert);
-  const { error } = await supabase.from("match_explanation_snapshots").insert(rows);
+  const { error } = await supabase.from("match_explanation_snapshots").upsert(rows, {
+    ignoreDuplicates: true,
+    onConflict: MATCH_EXPLANATION_SNAPSHOT_DEDUPE_COLUMNS,
+  });
 
   return error;
 }

@@ -1459,6 +1459,16 @@ create index if not exists background_match_runs_profile_created_idx on public.b
 create index if not exists match_explanation_snapshots_profile_created_idx on public.match_explanation_snapshots (profile_id, created_at desc);
 create index if not exists match_explanation_snapshots_match_profile_idx on public.match_explanation_snapshots (match_id, profile_id, created_at desc);
 create index if not exists match_explanation_snapshots_stage_idx on public.match_explanation_snapshots (workflow_stage, created_at desc);
+create unique index if not exists match_explanation_snapshots_dedupe_idx on public.match_explanation_snapshots (
+  match_id,
+  profile_id,
+  explanation_version,
+  workflow_stage,
+  confidence_band,
+  score_bucket,
+  source_run_kind,
+  source_run_id
+);
 create index if not exists background_query_events_profile_scope_created_idx on public.background_query_events (profile_id, scope, created_at desc);
 create index if not exists background_query_events_limited_idx on public.background_query_events (was_limited, created_at desc);
 create index if not exists background_query_events_fingerprint_idx on public.background_query_events (query_fingerprint, created_at desc);
