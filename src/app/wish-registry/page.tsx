@@ -8,6 +8,17 @@ import { getViewer } from "@/lib/app-data";
 import { formatLocation, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import {
+  countRegistrySearchSpecificity,
+  getBackgroundQueryFingerprint,
+  shouldApplySparseResultPrivacyFloor,
+} from "@/lib/background-query-budget";
+import {
+  completeBackgroundQueryEvent,
+  recordBackgroundQueryRiskSignal,
+  reserveBackgroundQueryBudget,
+} from "@/lib/background-operations";
+import { createServiceClient } from "@/lib/supabase/server";
 import { filterWishRegistryExamplePreviews, searchWishRegistryPreviews } from "@/lib/wish-registry";
 import type { WishRegistrySearchResult } from "@/lib/wish-registry";
 
@@ -94,7 +105,14 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
   const hasFilters = Boolean(query || cause || opennessToPayment || opennessToPledges);
   let results: WishRegistrySearchResult[] = [];
   let searchError = "";
+  let sparsePrivacyFloorApplied = false;
   const examplePreviews = filterWishRegistryExamplePreviews(EXAMPLE_WISH_PREVIEWS, {
+    cause,
+    opennessToPayment,
+    opennessToPledges,
+    query,
+  });
+  const registrySpecificity = countRegistrySearchSpecificity({
     cause,
     opennessToPayment,
     opennessToPledges,
@@ -103,13 +121,98 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
 
   if (hasSupabaseEnv()) {
     try {
-      results = await searchWishRegistryPreviews({
-        cause,
-        limit: 24,
-        opennessToPayment,
-        opennessToPledges,
-        query,
+      let serviceClient: ReturnType<typeof createServiceClient> | null = null;
+      let budgetReservation:
+        | Awaited<ReturnType<typeof reserveBackgroundQueryBudget>>
+        | null = null;
+
+      if (viewer) {
+        try {
+          serviceClient = createServiceClient();
+          budgetReservation = await reserveBackgroundQueryBudget({
+            metadata: { route: "/wish-registry" },
+            profileId: viewer.authUser.id,
+            queryFingerprint: getBackgroundQueryFingerprint({
+              cause,
+              opennessToPayment,
+              opennessToPledges,
+              query,
+              route: "/wish-registry",
+            }),
+            scope: "registry_search",
+            supabase: serviceClient,
+          });
+
+          if (budgetReservation.limited) {
+            await recordBackgroundQueryRiskSignal({
+              eventId: budgetReservation.eventId,
+              metadata: {
+                limit: budgetReservation.limit,
+                route: "/wish-registry",
+                used: budgetReservation.used,
+              },
+              profileId: viewer.authUser.id,
+              signalType: "background_query_budget_pressure",
+              summary:
+                "Registry page search was blocked because this profile reached its daily background query budget.",
+              supabase: serviceClient,
+            });
+            searchError =
+              "Daily registry search budget reached. Try again after the budget window resets.";
+          }
+        } catch {
+          serviceClient = null;
+        }
+      }
+
+      if (!budgetReservation?.limited) {
+        results = await searchWishRegistryPreviews({
+          cause,
+          limit: 24,
+          opennessToPayment,
+          opennessToPledges,
+          query,
+        });
+      }
+      sparsePrivacyFloorApplied = shouldApplySparseResultPrivacyFloor({
+        resultCount: results.length,
+        specificity: registrySpecificity,
       });
+
+      if (serviceClient && budgetReservation) {
+        await completeBackgroundQueryEvent({
+          candidateCount: results.length,
+          eventId: budgetReservation.eventId,
+          metadata: {
+            floorApplied: sparsePrivacyFloorApplied,
+            resultBucket: results.length >= 10 ? "10+" : String(results.length),
+            route: "/wish-registry",
+            specificity: registrySpecificity,
+          },
+          resultCount: sparsePrivacyFloorApplied ? 0 : results.length,
+          supabase: serviceClient,
+        });
+
+        if (sparsePrivacyFloorApplied && viewer) {
+          await recordBackgroundQueryRiskSignal({
+            eventId: budgetReservation.eventId,
+            metadata: {
+              route: "/wish-registry",
+              specificity: registrySpecificity,
+            },
+            profileId: viewer.authUser.id,
+            severity: "low",
+            signalType: "sparse_registry_search",
+            summary:
+              "A highly specific registry page search returned too few broad previews, so results were withheld to reduce enumeration risk.",
+            supabase: serviceClient,
+          });
+        }
+      }
+
+      if (sparsePrivacyFloorApplied) {
+        results = [];
+      }
     } catch (error) {
       searchError = error instanceof Error ? error.message : "Registry search failed.";
     }
@@ -273,8 +376,9 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
             <p className="eyebrow">Results</p>
             <h2>{hasFilters ? "Matching broad previews" : "Recent broad previews"}</h2>
             <p>
-              Each card links to the public profile. Private details remain hidden until both
-              sides consent to an introduction.
+              {sparsePrivacyFloorApplied
+                ? "That search was too specific for the current registry size, so results are withheld until the query is broader."
+                : "Each card links to the public profile. Private details remain hidden until both sides consent to an introduction."}
             </p>
           </div>
 
@@ -313,7 +417,7 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                   ) : null}
                   {result.sharedTokens.length ? (
                     <p className="panel-note">
-                      Shared search terms: {result.sharedTokens.join(", ")}
+                      Broad language overlap count: {result.sharedTokens.length}
                     </p>
                   ) : null}
                   <div className="offer-footer">

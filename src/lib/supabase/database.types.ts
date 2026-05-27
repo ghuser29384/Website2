@@ -1479,6 +1479,138 @@ export interface Database {
         };
         Relationships: [];
       };
+      match_explanation_snapshots: {
+        Row: {
+          id: string;
+          match_id: string;
+          profile_id: string;
+          explanation_version: string;
+          workflow_stage:
+            | "suggested"
+            | "detail_requested"
+            | "grant_pending"
+            | "intro_review"
+            | "intro_ready"
+            | "introduced"
+            | "archived"
+            | "reported";
+          confidence_band: "High" | "Moderate" | "Tentative" | "Exploratory";
+          score_bucket: "0-24" | "25-44" | "45-59" | "60-74" | "75-100";
+          factor_codes: string[];
+          scanned_surfaces: string[];
+          redacted_surfaces: string[];
+          provenance: string;
+          summary: string;
+          privacy_note: string;
+          source_run_kind: string;
+          source_run_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          match_id: string;
+          profile_id: string;
+          explanation_version?: string;
+          workflow_stage:
+            | "suggested"
+            | "detail_requested"
+            | "grant_pending"
+            | "intro_review"
+            | "intro_ready"
+            | "introduced"
+            | "archived"
+            | "reported";
+          confidence_band: "High" | "Moderate" | "Tentative" | "Exploratory";
+          score_bucket: "0-24" | "25-44" | "45-59" | "60-74" | "75-100";
+          factor_codes?: string[];
+          scanned_surfaces?: string[];
+          redacted_surfaces?: string[];
+          provenance?: string;
+          summary?: string;
+          privacy_note?: string;
+          source_run_kind?: string;
+          source_run_id?: string;
+          created_at?: string;
+        };
+        Update: {
+          workflow_stage?:
+            | "suggested"
+            | "detail_requested"
+            | "grant_pending"
+            | "intro_review"
+            | "intro_ready"
+            | "introduced"
+            | "archived"
+            | "reported";
+          confidence_band?: "High" | "Moderate" | "Tentative" | "Exploratory";
+          score_bucket?: "0-24" | "25-44" | "45-59" | "60-74" | "75-100";
+          factor_codes?: string[];
+          scanned_surfaces?: string[];
+          redacted_surfaces?: string[];
+          provenance?: string;
+          summary?: string;
+          privacy_note?: string;
+          source_run_kind?: string;
+          source_run_id?: string;
+        };
+        Relationships: [];
+      };
+      background_query_events: {
+        Row: {
+          id: string;
+          profile_id: string | null;
+          scope:
+            | "manual_scan"
+            | "profile_save_scan"
+            | "saved_search_scan"
+            | "delegate_scan"
+            | "registry_search";
+          query_fingerprint: string;
+          cost: number;
+          daily_limit: number;
+          used_before: number;
+          remaining_after: number;
+          candidate_count: number;
+          result_count: number;
+          was_limited: boolean;
+          risk_signal_id: string | null;
+          metadata: Record<string, unknown>;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id?: string | null;
+          scope:
+            | "manual_scan"
+            | "profile_save_scan"
+            | "saved_search_scan"
+            | "delegate_scan"
+            | "registry_search";
+          query_fingerprint?: string;
+          cost?: number;
+          daily_limit?: number;
+          used_before?: number;
+          remaining_after?: number;
+          candidate_count?: number;
+          result_count?: number;
+          was_limited?: boolean;
+          risk_signal_id?: string | null;
+          metadata?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Update: {
+          cost?: number;
+          daily_limit?: number;
+          used_before?: number;
+          remaining_after?: number;
+          candidate_count?: number;
+          result_count?: number;
+          was_limited?: boolean;
+          risk_signal_id?: string | null;
+          metadata?: Record<string, unknown>;
+        };
+        Relationships: [];
+      };
       match_audit_events: {
         Row: {
           id: string;

@@ -41,6 +41,9 @@ type WishNotificationRow = Database["public"]["Tables"]["wish_notifications"]["R
 type ProfileSourceRow = Database["public"]["Tables"]["profile_sources"]["Row"];
 type ClarificationQuestionRow = Database["public"]["Tables"]["clarification_questions"]["Row"];
 type BackgroundMatchRunRow = Database["public"]["Tables"]["background_match_runs"]["Row"];
+type MatchExplanationSnapshotRow =
+  Database["public"]["Tables"]["match_explanation_snapshots"]["Row"];
+type BackgroundQueryEventRow = Database["public"]["Tables"]["background_query_events"]["Row"];
 type MatchReportRow = Database["public"]["Tables"]["match_reports"]["Row"];
 type MatchConciergeRequestRow =
   Database["public"]["Tables"]["match_concierge_requests"]["Row"];
@@ -247,6 +250,8 @@ export interface DashboardDataResult {
   matchSuggestions: MatchSuggestionRecord[];
   wishNotifications: WishNotificationRecord[];
   backgroundRuns: BackgroundMatchRunRow[];
+  matchExplanationSnapshots: MatchExplanationSnapshotRow[];
+  backgroundQueryEvents: BackgroundQueryEventRow[];
   matchReports: MatchReportRow[];
   matchConciergeRequests: MatchConciergeRequestRow[];
   networkInvites: NetworkInviteRow[];
@@ -280,6 +285,8 @@ export interface DashboardDataResult {
     matchSuggestions: string | null;
     wishNotifications: string | null;
     backgroundRuns: string | null;
+    matchExplanationSnapshots: string | null;
+    backgroundQueryEvents: string | null;
     matchReports: string | null;
     matchConciergeRequests: string | null;
     networkInvites: string | null;
@@ -2222,6 +2229,50 @@ async function listBackgroundMatchRunsForUser(userId: string): Promise<Backgroun
   return (data ?? []) as BackgroundMatchRunRow[];
 }
 
+async function listMatchExplanationSnapshotsForUser(
+  userId: string,
+): Promise<MatchExplanationSnapshotRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("match_explanation_snapshots")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(24);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as MatchExplanationSnapshotRow[];
+}
+
+async function listBackgroundQueryEventsForUser(
+  userId: string,
+): Promise<BackgroundQueryEventRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_query_events")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(24);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundQueryEventRow[];
+}
+
 async function listMatchReportsForUser(userId: string): Promise<MatchReportRow[]> {
   if (!hasSupabaseEnv()) {
     return [];
@@ -2713,6 +2764,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       matchSuggestions: [],
       wishNotifications: [],
       backgroundRuns: [],
+      matchExplanationSnapshots: [],
+      backgroundQueryEvents: [],
       matchReports: [],
       matchConciergeRequests: [],
       networkInvites: [],
@@ -2746,6 +2799,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         matchSuggestions: null,
         wishNotifications: null,
         backgroundRuns: null,
+        matchExplanationSnapshots: null,
+        backgroundQueryEvents: null,
         matchReports: null,
         matchConciergeRequests: null,
         networkInvites: null,
@@ -2784,6 +2839,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     matchSuggestions: null,
     wishNotifications: null,
     backgroundRuns: null,
+    matchExplanationSnapshots: null,
+    backgroundQueryEvents: null,
     matchReports: null,
     matchConciergeRequests: null,
     networkInvites: null,
@@ -3023,6 +3080,26 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load background match runs", { message, userId });
   }
 
+  let matchExplanationSnapshots: MatchExplanationSnapshotRow[] = [];
+  try {
+    matchExplanationSnapshots = await listMatchExplanationSnapshotsForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load match explanation snapshots.";
+    errors.matchExplanationSnapshots = message;
+    console.error("[supabase] Failed to load match explanation snapshots", { message, userId });
+  }
+
+  let backgroundQueryEvents: BackgroundQueryEventRow[] = [];
+  try {
+    backgroundQueryEvents = await listBackgroundQueryEventsForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load background query events.";
+    errors.backgroundQueryEvents = message;
+    console.error("[supabase] Failed to load background query events", { message, userId });
+  }
+
   let matchReports: MatchReportRow[] = [];
   try {
     matchReports = await listMatchReportsForUser(userId);
@@ -3225,6 +3302,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     matchSuggestions,
     wishNotifications,
     backgroundRuns,
+    matchExplanationSnapshots,
+    backgroundQueryEvents,
     matchReports,
     matchConciergeRequests,
     networkInvites,

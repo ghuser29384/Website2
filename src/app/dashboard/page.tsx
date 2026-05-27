@@ -42,6 +42,11 @@ import {
   formatFactorCode,
   formatGrantExpiry,
 } from "@/lib/background-explanations";
+import {
+  BACKGROUND_DISCLOSURE_FIELDS,
+  formatDisclosureFieldLabel,
+  getDefaultGrantExpiryDays,
+} from "@/lib/background-disclosure";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
@@ -153,6 +158,41 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     dashboardData?.savedSearches.filter(
       (search) => search.status === "active" && search.cadence !== "manual",
     ).length ?? 0;
+  const pendingDetailRequestMatchIds = new Set(
+    (dashboardData?.privacyAccessRequests ?? [])
+      .filter((request) => request.status === "pending" && request.match_id)
+      .map((request) => request.match_id as string),
+  );
+  const conciergeReviewMatchIds = new Set(
+    activeConciergeRequests
+      .filter((request) => request.match_id)
+      .map((request) => request.match_id as string),
+  );
+  const reportedMatchIds = new Set(
+    (dashboardData?.matchReports ?? [])
+      .filter((report) => report.status === "open")
+      .map((report) => report.match_id),
+  );
+  const latestSnapshotByMatchId = new Map<
+    string,
+    NonNullable<typeof dashboardData>["matchExplanationSnapshots"][number]
+  >();
+  for (const snapshot of dashboardData?.matchExplanationSnapshots ?? []) {
+    if (!latestSnapshotByMatchId.has(snapshot.match_id)) {
+      latestSnapshotByMatchId.set(snapshot.match_id, snapshot);
+    }
+  }
+  const queryBudgetEvents = dashboardData?.backgroundQueryEvents ?? [];
+  const limitedQueryEventCount = queryBudgetEvents.filter((event) => event.was_limited).length;
+  const queryCostUsed = queryBudgetEvents
+    .filter((event) => !event.was_limited)
+    .reduce((total, event) => total + event.cost, 0);
+  const profileMissingFields = dashboardData?.profileSynthesis?.missing_fields ?? [];
+  const profileCompletenessTotal = 9;
+  const profileCompletenessDone = Math.max(
+    0,
+    profileCompletenessTotal - profileMissingFields.length,
+  );
 
   return (
     <div className="page-shell">
@@ -557,6 +597,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {activeSavedSearchCount} active; {scheduledSavedSearchCount} scheduled
                 </dd>
               </div>
+              <div>
+                <dt>Query budget</dt>
+                <dd>
+                  {queryCostUsed} cost unit(s) used; {limitedQueryEventCount} limited event(s)
+                </dd>
+              </div>
+              <div>
+                <dt>Provenance</dt>
+                <dd>
+                  {dashboardData?.matchExplanationSnapshots.length ?? 0} explanation snapshot(s)
+                </dd>
+              </div>
             </dl>
           </div>
 
@@ -571,16 +623,37 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <div className="tag-row">
               {[
                 "Suggested",
-                "Opt-in",
-                "Detail request",
+                "Detail requested",
+                "Grant pending",
                 "Operator review",
                 "Intro ready",
-                "Agreement room",
+                "Introduced",
+                "Archived/reported",
               ].map((stage) => (
                 <span className="source-pill" key={stage}>
                   {stage}
                 </span>
               ))}
+            </div>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Profile completeness</p>
+            <h3>Structured elicitation for better matches</h3>
+            <p className="route-text">
+              {profileCompletenessDone}/{profileCompletenessTotal} profile surfaces are filled in.
+              Open prompts are generated from missing explicit fields, not private-feed inference.
+            </p>
+            <div className="tag-row">
+              {profileMissingFields.length ? (
+                profileMissingFields.slice(0, 8).map((field) => (
+                  <span className="source-pill" key={field}>
+                    Missing {field.replaceAll("_", " ")}
+                  </span>
+                ))
+              ) : (
+                <span className="source-pill">No missing synthesis fields</span>
+              )}
             </div>
           </div>
 
@@ -1135,12 +1208,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <input name="return_to" type="hidden" value="/dashboard" />
                 <label className="field">
                   <span>Field</span>
-                  <input name="field_key" placeholder="location, exact_wish, email, constraints" />
+                  <select name="field_key" defaultValue="exact_wish">
+                    {BACKGROUND_DISCLOSURE_FIELDS.map((field) => (
+                      <option key={field.key} value={field.key}>
+                        {field.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <div className="field-grid">
                   <label className="field">
                     <span>Access</span>
-                    <select name="access_level" defaultValue="broad">
+                    <select name="access_level" defaultValue="specific">
                       <option value="hidden">Hidden</option>
                       <option value="broad">Broad</option>
                       <option value="specific">Specific</option>
@@ -1159,7 +1238,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div className="field-grid">
                   <label className="field">
                     <span>Stage</span>
-                    <select name="audience_stage" defaultValue="registry">
+                    <select name="audience_stage" defaultValue="consent">
                       <option value="registry">Registry</option>
                       <option value="consent">After consent</option>
                       <option value="introduced">After introduction</option>
@@ -1167,9 +1246,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </label>
                   <label className="field">
                     <span>Expires in days</span>
-                    <input defaultValue={30} name="expires_in_days" type="number" min="0" max="3650" />
+                    <input
+                      defaultValue={getDefaultGrantExpiryDays("consent")}
+                      name="expires_in_days"
+                      type="number"
+                      min="0"
+                      max="3650"
+                    />
                   </label>
                 </div>
+                <label className="field">
+                  <span>Purpose</span>
+                  <input
+                    name="purpose"
+                    placeholder="Which bounded intro decision needs this fact?"
+                    required
+                  />
+                </label>
                 <label className="field">
                   <span>Match ID</span>
                   <input name="match_id" placeholder="Optional" />
@@ -1193,8 +1286,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ul className="clean-list">
                   {dashboardData.privacyGrants.slice(0, 5).map((grant) => (
                     <li key={grant.id}>
-                      {grant.field_key}: {grant.access_level} at {grant.audience_stage} ({grant.status},{" "}
-                      {formatGrantExpiry(grant.expires_at)})
+                      {formatDisclosureFieldLabel(grant.field_key)}: {grant.access_level} at{" "}
+                      {grant.audience_stage} ({grant.status}, {formatGrantExpiry(grant.expires_at)})
                     </li>
                   ))}
                 </ul>
@@ -1214,10 +1307,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </label>
                 <label className="field">
                   <span>Requested fields</span>
-                  <input
-                    name="requested_fields_json"
-                    placeholder="exact_wish, contact_email, constraints, verification_notes"
-                  />
+                  <select name="requested_fields" defaultValue="exact_wish">
+                    {BACKGROUND_DISCLOSURE_FIELDS.map((field) => (
+                      <option key={field.key} value={field.key}>
+                        {field.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="field">
                   <span>Stage</span>
@@ -1254,7 +1350,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div className="mini-list">
                   {incomingPrivacyAccessRequests.slice(0, 4).map((request) => (
                     <div className="mini-list-item" key={request.id}>
-                      <strong>Incoming request: {request.requested_fields.join(", ")}</strong>
+                      <strong>
+                        Incoming request:{" "}
+                        {request.requested_fields.map(formatDisclosureFieldLabel).join(", ")}
+                      </strong>
                       <span>
                         Stage {request.requested_stage} · {request.status}
                       </span>
@@ -1281,7 +1380,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           </label>
                           <label className="field">
                             <span>Expires in days</span>
-                            <input defaultValue={30} min={1} max={3650} name="expires_in_days" type="number" />
+                            <input
+                              defaultValue={getDefaultGrantExpiryDays(request.requested_stage)}
+                              min={1}
+                              max={3650}
+                              name="expires_in_days"
+                              type="number"
+                            />
                           </label>
                         </div>
                         <label className="field">
@@ -1304,7 +1409,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div className="mini-list">
                   {outgoingPrivacyAccessRequests.slice(0, 4).map((request) => (
                     <div className="mini-list-item" key={request.id}>
-                      <strong>Outgoing request: {request.requested_fields.join(", ")}</strong>
+                      <strong>
+                        Outgoing request:{" "}
+                        {request.requested_fields.map(formatDisclosureFieldLabel).join(", ")}
+                      </strong>
                       <span>
                         Stage {request.requested_stage} · {request.status}
                       </span>
@@ -1883,10 +1991,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             ) : dashboardData?.matchSuggestions.length ? (
               dashboardData.matchSuggestions.map((match) => {
+                const latestSnapshot = latestSnapshotByMatchId.get(match.id) ?? null;
                 const explanation = buildMatchExplanation({
                   canRevealIdentity: match.canRevealIdentity,
                   counterpartyConsented: match.counterpartyConsented,
                   generatedBy: match.generatedBy,
+                  hasConciergeReview: conciergeReviewMatchIds.has(match.id),
+                  hasOpenDetailRequest: pendingDetailRequestMatchIds.has(match.id),
+                  hasOpenReport: reportedMatchIds.has(match.id),
                   matchBasis: match.matchBasis,
                   riskNotes: match.riskNotes,
                   score: match.score,
@@ -1945,6 +2057,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <span>{explanation.scannedSurfaces.join(", ")}</span>
                       <span>Redacted here: {explanation.redactedSurfaces.join(", ")}</span>
                     </div>
+                    {latestSnapshot ? (
+                      <div className="mini-list-item">
+                        <strong>Stored provenance snapshot</strong>
+                        <span>
+                          {latestSnapshot.explanation_version} · {latestSnapshot.workflow_stage} ·{" "}
+                          score bucket {latestSnapshot.score_bucket}
+                        </span>
+                        <span>
+                          Source: {latestSnapshot.source_run_kind}
+                          {latestSnapshot.source_run_id ? `/${latestSnapshot.source_run_id.slice(0, 8)}` : ""}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                   {match.suggestedFirstStep ? (
                     <p className="route-text">
@@ -1960,10 +2085,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <input name="requested_stage" type="hidden" value="consent" />
                       <label className="field">
                         <span>Ask for a specific private field</span>
-                        <input
-                          name="requested_fields_json"
-                          placeholder="exact_wish, contact_email, verification_notes"
-                        />
+                        <select name="requested_fields" defaultValue="exact_wish">
+                          {BACKGROUND_DISCLOSURE_FIELDS.filter(
+                            (field) => field.minStage !== "introduced",
+                          ).map((field) => (
+                            <option key={field.key} value={field.key}>
+                              {field.label}
+                            </option>
+                          ))}
+                        </select>
                       </label>
                       <label className="field">
                         <span>Why this helps</span>

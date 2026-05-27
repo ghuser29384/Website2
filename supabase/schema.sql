@@ -824,6 +824,25 @@ create table if not exists public.background_match_runs (
   completed_at timestamptz
 );
 
+create table if not exists public.match_explanation_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references public.match_suggestions (id) on delete cascade,
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  explanation_version text not null default 'background-explanation-v1',
+  workflow_stage text not null check (workflow_stage in ('suggested', 'detail_requested', 'grant_pending', 'intro_review', 'intro_ready', 'introduced', 'archived', 'reported')),
+  confidence_band text not null check (confidence_band in ('High', 'Moderate', 'Tentative', 'Exploratory')),
+  score_bucket text not null check (score_bucket in ('0-24', '25-44', '45-59', '60-74', '75-100')),
+  factor_codes text[] not null default '{}',
+  scanned_surfaces text[] not null default '{}',
+  redacted_surfaces text[] not null default '{}',
+  provenance text not null default '',
+  summary text not null default '',
+  privacy_note text not null default '',
+  source_run_kind text not null default 'unknown',
+  source_run_id text not null default '',
+  created_at timestamptz not null default timezone('utc', now())
+);
+
 create table if not exists public.match_audit_events (
   id uuid primary key default gen_random_uuid(),
   match_id uuid references public.match_suggestions (id) on delete cascade,
@@ -1057,6 +1076,23 @@ create table if not exists public.risk_signals (
   status text not null default 'open' check (status in ('open', 'reviewed', 'dismissed')),
   created_at timestamptz not null default timezone('utc', now()),
   reviewed_at timestamptz
+);
+
+create table if not exists public.background_query_events (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete cascade,
+  scope text not null check (scope in ('manual_scan', 'profile_save_scan', 'saved_search_scan', 'delegate_scan', 'registry_search')),
+  query_fingerprint text not null default '',
+  cost integer not null default 1 check (cost >= 0),
+  daily_limit integer not null default 0 check (daily_limit >= 0),
+  used_before integer not null default 0 check (used_before >= 0),
+  remaining_after integer not null default 0 check (remaining_after >= 0),
+  candidate_count integer not null default 0 check (candidate_count >= 0),
+  result_count integer not null default 0 check (result_count >= 0),
+  was_limited boolean not null default false,
+  risk_signal_id uuid references public.risk_signals (id) on delete set null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now())
 );
 
 create table if not exists public.brokerage_bounties (
@@ -1420,6 +1456,12 @@ create index if not exists profile_sources_profile_active_idx on public.profile_
 create index if not exists profile_sources_profile_review_idx on public.profile_sources (profile_id, needs_review, updated_at desc);
 create index if not exists clarification_questions_profile_status_idx on public.clarification_questions (profile_id, status, created_at desc);
 create index if not exists background_match_runs_profile_created_idx on public.background_match_runs (profile_id, created_at desc);
+create index if not exists match_explanation_snapshots_profile_created_idx on public.match_explanation_snapshots (profile_id, created_at desc);
+create index if not exists match_explanation_snapshots_match_profile_idx on public.match_explanation_snapshots (match_id, profile_id, created_at desc);
+create index if not exists match_explanation_snapshots_stage_idx on public.match_explanation_snapshots (workflow_stage, created_at desc);
+create index if not exists background_query_events_profile_scope_created_idx on public.background_query_events (profile_id, scope, created_at desc);
+create index if not exists background_query_events_limited_idx on public.background_query_events (was_limited, created_at desc);
+create index if not exists background_query_events_fingerprint_idx on public.background_query_events (query_fingerprint, created_at desc);
 create index if not exists match_audit_events_match_created_idx on public.match_audit_events (match_id, created_at desc);
 create index if not exists match_reports_match_status_idx on public.match_reports (match_id, status, created_at desc);
 create index if not exists match_concierge_requests_status_sla_idx on public.match_concierge_requests (status, sla_due_at asc, created_at desc);
@@ -2560,6 +2602,8 @@ alter table public.clarification_questions enable row level security;
 alter table public.background_match_runs enable row level security;
 alter table public.match_audit_events enable row level security;
 alter table public.match_reports enable row level security;
+alter table public.match_explanation_snapshots enable row level security;
+alter table public.background_query_events enable row level security;
 alter table public.match_concierge_requests enable row level security;
 alter table public.match_concierge_events enable row level security;
 alter table public.network_invites enable row level security;
@@ -3655,6 +3699,40 @@ on public.background_match_runs
 for update
 to authenticated
 using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "match_explanation_snapshots_select_own" on public.match_explanation_snapshots;
+create policy "match_explanation_snapshots_select_own"
+on public.match_explanation_snapshots
+for select
+to authenticated
+using (
+  profile_id = (select auth.uid())
+  and public.viewer_participates_in_match(match_id)
+);
+
+drop policy if exists "match_explanation_snapshots_insert_own" on public.match_explanation_snapshots;
+create policy "match_explanation_snapshots_insert_own"
+on public.match_explanation_snapshots
+for insert
+to authenticated
+with check (
+  profile_id = (select auth.uid())
+  and public.viewer_participates_in_match(match_id)
+);
+
+drop policy if exists "background_query_events_select_own" on public.background_query_events;
+create policy "background_query_events_select_own"
+on public.background_query_events
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_query_events_insert_own" on public.background_query_events;
+create policy "background_query_events_insert_own"
+on public.background_query_events
+for insert
+to authenticated
 with check (profile_id = (select auth.uid()));
 
 drop policy if exists "match_audit_events_select_participants" on public.match_audit_events;

@@ -45,6 +45,9 @@ type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
 type MatchConciergeRequestRow = Database["public"]["Tables"]["match_concierge_requests"]["Row"];
 type MatchConciergeEventRow = Database["public"]["Tables"]["match_concierge_events"]["Row"];
 type RiskSignalRow = Database["public"]["Tables"]["risk_signals"]["Row"];
+type MatchExplanationSnapshotRow =
+  Database["public"]["Tables"]["match_explanation_snapshots"]["Row"];
+type BackgroundQueryEventRow = Database["public"]["Tables"]["background_query_events"]["Row"];
 type ProfileVerificationBadgeRow =
   Database["public"]["Tables"]["profile_verification_badges"]["Row"];
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
@@ -101,6 +104,8 @@ async function loadAdminQueues() {
     wishProfiles,
     conciergeRequests,
     riskSignals,
+    matchExplanationSnapshots,
+    backgroundQueryEvents,
     agreementReviewCases,
     verificationBadges,
   ] = await Promise.all([
@@ -148,6 +153,16 @@ async function loadAdminQueues() {
       .order("created_at", { ascending: false })
       .limit(50),
     supabase
+      .from("match_explanation_snapshots")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("background_query_events")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
       .from("agreement_review_cases")
       .select("*")
       .in("status", ["open", "under_review", "challenge_window_open", "appealed", "disputed_unresolved"])
@@ -176,6 +191,8 @@ async function loadAdminQueues() {
     wishProfiles.error,
     conciergeRequests.error,
     riskSignals.error,
+    matchExplanationSnapshots.error,
+    backgroundQueryEvents.error,
     agreementReviewCases.error,
     verificationBadges.error,
     flaggedOffsetsResult.error,
@@ -281,6 +298,8 @@ async function loadAdminQueues() {
       events: conciergeEventsByRequest.get(request.id) ?? [],
     })) satisfies MatchConciergeReviewRecord[],
     riskSignals: (riskSignals.data ?? []) as RiskSignalRow[],
+    matchExplanationSnapshots: (matchExplanationSnapshots.data ?? []) as MatchExplanationSnapshotRow[],
+    backgroundQueryEvents: (backgroundQueryEvents.data ?? []) as BackgroundQueryEventRow[],
     donationOffsetReviews: flaggedOffsets.map((offset) => ({
       offset,
       offer: offerMap.get(offset.offer_id) ?? null,
@@ -306,6 +325,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       loadError = error instanceof Error ? error.message : "Unable to load admin queues.";
     }
   }
+  const workflowStageCounts = new Map<string, number>();
+  for (const snapshot of queues?.matchExplanationSnapshots ?? []) {
+    workflowStageCounts.set(
+      snapshot.workflow_stage,
+      (workflowStageCounts.get(snapshot.workflow_stage) ?? 0) + 1,
+    );
+  }
+  const limitedQueryEvents =
+    queues?.backgroundQueryEvents.filter((event) => event.was_limited).length ?? 0;
 
   return (
     <div className="page-shell">
@@ -358,26 +386,40 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">04</span>
                 <div>
+                  <strong>{queues?.matchExplanationSnapshots.length ?? 0} provenance snapshot(s)</strong>
+                  <p>Recent privacy-safe match explanation records.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">05</span>
+                <div>
+                  <strong>{limitedQueryEvents} limited query event(s)</strong>
+                  <p>Budget pressure and sparse-search audit records.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">06</span>
+                <div>
                   <strong>{queues?.agreementEvidenceReviews.length ?? 0} evidence review item(s)</strong>
                   <p>Agreement evidence, challenge windows, and appeals.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">05</span>
+                <span className="flow-number">07</span>
                 <div>
                   <strong>{queues?.donationOffsetReviews.length ?? 0} offset review item(s)</strong>
                   <p>Paused donation offsets needing baseline or legality review.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">06</span>
+                <span className="flow-number">08</span>
                 <div>
                   <strong>{queues?.payments.length ?? 0} payment issue(s)</strong>
                   <p>Refund requests, disputes, and failures.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">07</span>
+                <span className="flow-number">09</span>
                 <div>
                   <strong>{queues?.emails.length ?? 0} email item(s)</strong>
                   <p>Queued or failed outbound mail.</p>
@@ -791,6 +833,69 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     </div>
                   </div>
                 )}
+              </div>
+            </section>
+
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Background provenance</p>
+                <h2>Explanation snapshots and query budgets</h2>
+                <p>
+                  Inspect coarse reason codes, workflow stages, and query-budget pressure without
+                  opening raw wishes, source notes, or private search text.
+                </p>
+              </div>
+              <div className="panel data-card data-card-wide">
+                <p className="detail-kicker">Workflow stage counts</p>
+                <div className="tag-row">
+                  {[...workflowStageCounts.entries()].length ? (
+                    [...workflowStageCounts.entries()].map(([stage, count]) => (
+                      <span className="source-pill" key={stage}>
+                        {stage.replaceAll("_", " ")}: {count}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="source-pill">No snapshots yet</span>
+                  )}
+                </div>
+              </div>
+              <div className="data-grid">
+                {queues?.matchExplanationSnapshots.slice(0, 6).map((snapshot) => (
+                  <article className="panel data-card" key={snapshot.id}>
+                    <p className="detail-kicker">
+                      {snapshot.workflow_stage.replaceAll("_", " ")} | {snapshot.confidence_band}
+                    </p>
+                    <h3>Snapshot {snapshot.id.slice(0, 8)}</h3>
+                    <p className="route-text">{snapshot.summary}</p>
+                    <div className="tag-row">
+                      <span className="source-pill">Match {snapshot.match_id.slice(0, 8)}</span>
+                      <span className="source-pill">Profile {snapshot.profile_id.slice(0, 8)}</span>
+                      <span className="source-pill">Score {snapshot.score_bucket}</span>
+                    </div>
+                    <p className="panel-note">
+                      Factors: {snapshot.factor_codes.join(", ") || "broad preview compatibility"}
+                    </p>
+                  </article>
+                ))}
+                {queues?.backgroundQueryEvents.slice(0, 6).map((event) => (
+                  <article className="panel data-card" key={event.id}>
+                    <p className="detail-kicker">
+                      {event.scope.replaceAll("_", " ")} | {event.was_limited ? "limited" : "logged"}
+                    </p>
+                    <h3>Query event {event.id.slice(0, 8)}</h3>
+                    <p className="route-text">
+                      Used {event.used_before}/{event.daily_limit} before this event; remaining{" "}
+                      {event.remaining_after}.
+                    </p>
+                    <div className="tag-row">
+                      <span className="source-pill">Candidates {event.candidate_count}</span>
+                      <span className="source-pill">Results {event.result_count}</span>
+                      {event.risk_signal_id ? (
+                        <span className="source-pill">Risk {event.risk_signal_id.slice(0, 8)}</span>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
               </div>
             </section>
 

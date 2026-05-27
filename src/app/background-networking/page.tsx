@@ -164,6 +164,14 @@ export default async function BackgroundNetworkingPage({
                 message text.
               </p>
             </article>
+            <article className="panel concept-card">
+              <h3>Anti-enumeration budgets</h3>
+              <p>
+                Manual scans, helper jobs, saved searches, and signed-in registry searches are
+                budgeted and logged with hashed query fingerprints. Highly specific sparse
+                registry searches are withheld until the user broadens the query.
+              </p>
+            </article>
           </div>
         </section>
 

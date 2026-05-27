@@ -5,7 +5,18 @@ import {
   getDeterministicSignalsFromSynthesis,
   normalizeBackgroundToken,
 } from "@/lib/background-networking";
+import {
+  buildMatchExplanationSnapshot,
+  buildPrivacySafeMatchAuditMetadata,
+} from "@/lib/background-explanations";
 import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
+import {
+  completeBackgroundQueryEvent,
+  insertMatchExplanationSnapshots,
+  recordBackgroundQueryRiskSignal,
+  reserveBackgroundQueryBudget,
+} from "@/lib/background-operations";
+import { getBackgroundQueryFingerprint } from "@/lib/background-query-budget";
 import { isCronRequestAuthorized } from "@/lib/cron";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -25,6 +36,7 @@ type MatchIntroductionPlanRow =
   Database["public"]["Tables"]["match_introduction_plans"]["Row"];
 type MatchIntroductionTaskRow =
   Database["public"]["Tables"]["match_introduction_tasks"]["Row"];
+type MatchSuggestionInsert = Database["public"]["Tables"]["match_suggestions"]["Insert"];
 
 function isDue(delegate: PersonalDelegateRow, now: Date) {
   if (delegate.status !== "active" || delegate.operating_mode === "paused") {
@@ -63,6 +75,12 @@ function toNumber(value: unknown, fallback: number) {
 function includesNormalized(values: string[], target: string) {
   const normalizedTarget = normalizeBackgroundToken(target);
   return values.some((value) => normalizeBackgroundToken(value) === normalizedTarget);
+}
+
+function getOrderedProfilePair(profileId: string, counterpartyId: string) {
+  return profileId < counterpartyId
+    ? { profileAId: profileId, profileBId: counterpartyId, viewerIsProfileA: true }
+    : { profileAId: counterpartyId, profileBId: profileId, viewerIsProfileA: false };
 }
 
 async function processDelegates(request: Request) {
@@ -489,8 +507,57 @@ async function processDelegates(request: Request) {
         continue;
       }
 
+      const budgetReservation = await reserveBackgroundQueryBudget({
+        metadata: {
+          delegateId: delegate.profile_id,
+          strategyId: strategy.id,
+          strategyKind: strategy.helper_kind,
+        },
+        profileId: delegate.profile_id,
+        queryFingerprint: getBackgroundQueryFingerprint({
+          delegateId: delegate.profile_id,
+          focusCauses,
+          helperKind: strategy.helper_kind,
+          requiredTerms,
+          strategyId: strategy.id,
+        }),
+        scope: "delegate_scan",
+        supabase,
+      });
+
+      if (budgetReservation.limited) {
+        await recordBackgroundQueryRiskSignal({
+          eventId: budgetReservation.eventId,
+          metadata: {
+            limit: budgetReservation.limit,
+            scope: "delegate_scan",
+            strategyId: strategy.id,
+            used: budgetReservation.used,
+          },
+          profileId: delegate.profile_id,
+          signalType: "background_query_budget_pressure",
+          summary:
+            "A delegate helper scan was skipped because this profile reached its daily background query budget.",
+          supabase,
+        });
+        await supabase.from("helper_runs").insert({
+          strategy_id: strategy.id,
+          profile_id: delegate.profile_id,
+          status: "failed",
+          candidates_scanned: 0,
+          suggestions_created: 0,
+          notes: "Daily background query budget reached before this helper scan.",
+          completed_at: now.toISOString(),
+        });
+        continue;
+      }
+
       let candidatesScanned = 0;
-      const compatibleSummaries: string[] = [];
+      const compatibleMatches: Array<{
+        evaluation: ReturnType<typeof evaluateDeterministicMatch>;
+        preview: WishProfilePreviewRow;
+        summary: string;
+      }> = [];
 
       for (const preview of previewRows) {
         if (preview.profile_id === delegate.profile_id) {
@@ -621,19 +688,190 @@ async function processDelegates(request: Request) {
           continue;
         }
 
-        compatibleSummaries.push(
-          `${preview.public_preview || "Broad preview only"} (${evaluation.score}/100)`,
-        );
+        compatibleMatches.push({
+          evaluation,
+          preview,
+          summary: `${preview.public_preview || "Broad preview only"} (${evaluation.score}/100)`,
+        });
       }
 
-      const summary = compatibleSummaries.slice(0, delegate.max_weekly_suggestions);
+      const selectedMatches = compatibleMatches.slice(0, delegate.max_weekly_suggestions);
+      const summary = selectedMatches.map((match) => match.summary);
+      let matchSuggestionsCreated = 0;
+      let matchSuggestionsRefreshed = 0;
+      const explanationSnapshots: ReturnType<typeof buildMatchExplanationSnapshot>[] = [];
+
+      for (const { evaluation, preview } of selectedMatches) {
+        const { profileAId, profileBId, viewerIsProfileA } = getOrderedProfilePair(
+          delegate.profile_id,
+          preview.profile_id,
+        );
+        const dedupeKey = [profileAId, profileBId, `delegate:${strategy.id}`].join(":");
+        const { data: existingMatch } = await supabase
+          .from("match_suggestions")
+          .select("id, status")
+          .eq("dedupe_key", dedupeKey)
+          .maybeSingle();
+
+        if (existingMatch?.status === "dismissed" || existingMatch?.status === "archived") {
+          continue;
+        }
+
+        const reasonForDelegateOwner = `${evaluation.viewerReason} This came from your ${strategy.label} helper.`;
+        const reasonForCounterparty =
+          "A possible counterparty matched one of your broad registry previews through a helper scan. No exact wishes, helper labels, private query text, or contact details were disclosed.";
+        const matchBasis = [
+          ...evaluation.compatibilityTags.map((tag) => `Compatibility tag: ${tag}`),
+          "Delegate helper hit",
+          `Generated by deterministic scan: delegate:${strategy.helper_kind}`,
+        ];
+        const matchPayload: MatchSuggestionInsert = {
+          dedupe_key: dedupeKey,
+          generated_by: "delegate-cron",
+          last_scored_at: now.toISOString(),
+          match_basis: matchBasis,
+          profile_a_entry_id: null,
+          profile_a_id: profileAId,
+          profile_b_entry_id: null,
+          profile_b_id: profileBId,
+          reason_for_a: viewerIsProfileA ? reasonForDelegateOwner : reasonForCounterparty,
+          reason_for_b: viewerIsProfileA ? reasonForCounterparty : reasonForDelegateOwner,
+          risk_notes: evaluation.riskNotes,
+          score: evaluation.score,
+          shared_causes: evaluation.sharedCauses,
+          status: existingMatch?.status ?? "suggested",
+          suggested_first_step: evaluation.suggestedFirstStep,
+        };
+        const { data: upsertedMatch, error: upsertError } = await supabase
+          .from("match_suggestions")
+          .upsert(matchPayload, { onConflict: "dedupe_key" })
+          .select("id, status")
+          .maybeSingle();
+
+        if (upsertError || !upsertedMatch) {
+          continue;
+        }
+
+        if (existingMatch) {
+          matchSuggestionsRefreshed += 1;
+        } else {
+          matchSuggestionsCreated += 1;
+          const notificationResult = await insertWishNotificationsWithSafeEmail({
+            notifications: [
+              {
+                profile_id: delegate.profile_id,
+                kind: "match",
+                title: "A potential moral trade was found",
+                body: reasonForDelegateOwner,
+                match_id: upsertedMatch.id,
+              },
+              {
+                profile_id: preview.profile_id,
+                kind: "match",
+                title: "A potential moral trade was found",
+                body: reasonForCounterparty,
+                match_id: upsertedMatch.id,
+              },
+            ],
+            supabase,
+          });
+
+          if (notificationResult.notificationError || notificationResult.emailError) {
+            console.error("[background-networking] Failed to notify delegate match participants", {
+              emailError: notificationResult.emailError?.message ?? null,
+              matchDedupeKey: dedupeKey,
+              notificationError: notificationResult.notificationError?.message ?? null,
+            });
+          }
+        }
+
+        explanationSnapshots.push(
+          buildMatchExplanationSnapshot({
+            canRevealIdentity: false,
+            counterpartyConsented: false,
+            generatedBy: "delegate-cron",
+            matchBasis,
+            matchId: upsertedMatch.id,
+            profileId: delegate.profile_id,
+            riskNotes: evaluation.riskNotes,
+            score: evaluation.score,
+            sharedCauses: evaluation.sharedCauses,
+            sourceRunId: strategy.id,
+            sourceRunKind: "delegate_scan",
+            status: upsertedMatch.status,
+            suggestedFirstStep: evaluation.suggestedFirstStep,
+            viewerConsented: false,
+          }),
+          buildMatchExplanationSnapshot({
+            canRevealIdentity: false,
+            counterpartyConsented: false,
+            generatedBy: "delegate-cron",
+            matchBasis,
+            matchId: upsertedMatch.id,
+            profileId: preview.profile_id,
+            riskNotes: evaluation.riskNotes,
+            score: evaluation.score,
+            sharedCauses: evaluation.sharedCauses,
+            sourceRunId: strategy.id,
+            sourceRunKind: "delegate_scan",
+            status: upsertedMatch.status,
+            suggestedFirstStep: evaluation.suggestedFirstStep,
+            viewerConsented: false,
+          }),
+        );
+
+        await supabase.from("match_audit_events").insert({
+          match_id: upsertedMatch.id,
+          actor_profile_id: delegate.profile_id,
+          event_type: existingMatch ? "match_refreshed" : "match_created",
+          summary: `Delegate helper scan found compatibility with score ${evaluation.score}.`,
+          metadata: buildPrivacySafeMatchAuditMetadata({
+            compatibilityTags: evaluation.compatibilityTags,
+            runReason: "delegate-cron",
+            sharedCauseCount: evaluation.sharedCauses.length,
+            sharedTokenCount: evaluation.sharedTokens.length,
+          }),
+        });
+      }
+
+      const snapshotError = await insertMatchExplanationSnapshots({
+        snapshots: explanationSnapshots,
+        supabase,
+      });
+
+      if (snapshotError) {
+        console.error("[background-networking] Failed to save delegate explanation snapshots", {
+          error: snapshotError.message,
+          strategyId: strategy.id,
+        });
+      }
+
+      const budgetCompletionError = await completeBackgroundQueryEvent({
+        candidateCount: candidatesScanned,
+        eventId: budgetReservation.eventId,
+        metadata: {
+          matchesCreated: matchSuggestionsCreated,
+          matchesRefreshed: matchSuggestionsRefreshed,
+          strategyId: strategy.id,
+        },
+        resultCount: matchSuggestionsCreated + matchSuggestionsRefreshed,
+        supabase,
+      });
+
+      if (budgetCompletionError) {
+        console.error("[background-networking] Failed to complete delegate budget event", {
+          error: budgetCompletionError.message,
+          strategyId: strategy.id,
+        });
+      }
+
       if (summary.length) {
         const notificationResult = await insertWishNotificationsWithSafeEmail({
           notifications: {
             profile_id: delegate.profile_id,
             kind: "system",
             title: `Helper scan: ${strategy.label}`,
-            body: `The ${strategy.helper_kind} helper found ${compatibleSummaries.length} promising broad previews. Top examples: ${summary.join(" | ")}`,
+            body: `The ${strategy.helper_kind} helper found ${compatibleMatches.length} promising broad previews. Top examples: ${summary.join(" | ")}`,
           },
           supabase,
         });
@@ -657,7 +895,7 @@ async function processDelegates(request: Request) {
         profile_id: delegate.profile_id,
         status: "completed",
         candidates_scanned: candidatesScanned,
-        suggestions_created: compatibleSummaries.length,
+        suggestions_created: matchSuggestionsCreated + matchSuggestionsRefreshed,
         notes: summary.length
           ? `Top deterministic hits: ${summary.join(" | ")}`
           : "No candidates cleared the deterministic threshold for this helper.",

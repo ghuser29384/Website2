@@ -2,9 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildMatchExplanationSnapshot,
+  buildPrivacySafeMatchAuditMetadata,
   buildMatchExplanation,
   formatGrantExpiry,
   getMatchWorkflowStage,
+  getMatchScoreBucket,
   getPrivacySafeFactorCodes,
 } from "@/lib/background-explanations";
 
@@ -56,7 +59,7 @@ test("workflow stages reflect consent state", () => {
       status: "suggested",
       viewerConsented: true,
     }).key,
-    "waiting_for_counterparty",
+    "grant_pending",
   );
 
   assert.equal(
@@ -68,9 +71,61 @@ test("workflow stages reflect consent state", () => {
     }).key,
     "intro_ready",
   );
+
+  assert.equal(
+    getMatchWorkflowStage({
+      canRevealIdentity: false,
+      counterpartyConsented: false,
+      hasOpenDetailRequest: true,
+      status: "suggested",
+      viewerConsented: false,
+    }).key,
+    "detail_requested",
+  );
 });
 
 test("grant expiry text distinguishes expiring grants from revocation-only grants", () => {
   assert.equal(formatGrantExpiry(null), "until revoked");
   assert.match(formatGrantExpiry("2030-01-02T00:00:00.000Z"), /expires/);
+});
+
+test("match explanation snapshots use buckets and durable version labels", () => {
+  const snapshot = buildMatchExplanationSnapshot({
+    canRevealIdentity: false,
+    counterpartyConsented: false,
+    generatedBy: "saved-search-cron",
+    matchBasis: ["Saved search hit", "Compatibility tag: cause_overlap"],
+    matchId: "match-1",
+    profileId: "profile-1",
+    riskNotes: "",
+    score: 77,
+    sharedCauses: ["Private cause name"],
+    sourceRunKind: "saved_search_scan",
+    status: "suggested",
+    suggestedFirstStep: "Compare a bounded proposal.",
+    viewerConsented: false,
+  });
+
+  assert.equal(snapshot.explanation_version, "background-explanation-v1");
+  assert.equal(snapshot.score_bucket, "75-100");
+  assert.equal(snapshot.workflow_stage, "suggested");
+  assert.deepEqual(snapshot.factor_codes.sort(), [
+    "cause_overlap",
+    "deterministic_scan",
+    "saved_search_hit",
+  ]);
+});
+
+test("privacy-safe audit metadata keeps counts instead of raw shared terms", () => {
+  const metadata = buildPrivacySafeMatchAuditMetadata({
+    compatibilityTags: ["cause_overlap", "source_supported"],
+    runReason: "manual-refresh",
+    sharedCauseCount: 2,
+    sharedTokenCount: 4,
+  });
+
+  assert.deepEqual(metadata.compatibilityTags.sort(), ["cause_overlap", "source_supported"]);
+  assert.equal(metadata.sharedCauseCount, 2);
+  assert.equal(metadata.sharedTokenCount, 4);
+  assert.equal(getMatchScoreBucket(30), "25-44");
 });

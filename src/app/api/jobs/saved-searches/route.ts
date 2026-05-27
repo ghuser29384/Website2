@@ -4,7 +4,18 @@ import {
   evaluateDeterministicMatch,
   getDeterministicSignalsFromSynthesis,
 } from "@/lib/background-networking";
+import {
+  buildMatchExplanationSnapshot,
+  buildPrivacySafeMatchAuditMetadata,
+} from "@/lib/background-explanations";
 import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
+import {
+  completeBackgroundQueryEvent,
+  insertMatchExplanationSnapshots,
+  recordBackgroundQueryRiskSignal,
+  reserveBackgroundQueryBudget,
+} from "@/lib/background-operations";
+import { getBackgroundQueryFingerprint } from "@/lib/background-query-budget";
 import { isCronRequestAuthorized } from "@/lib/cron";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -15,6 +26,7 @@ type SavedSearchRow = Database["public"]["Tables"]["saved_searches"]["Row"];
 type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
 type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Row"];
+type MatchSuggestionInsert = Database["public"]["Tables"]["match_suggestions"]["Insert"];
 
 function isSearchDue(search: SavedSearchRow, now: Date) {
   if (search.cadence === "manual") {
@@ -147,9 +159,49 @@ async function processSavedSearches(request: Request) {
     const ownerSignals = getDeterministicSignalsFromSynthesis(
       ownerSynthesisById.get(search.profile_id) ?? null,
     );
+    const budgetReservation = await reserveBackgroundQueryBudget({
+      metadata: {
+        cadence: search.cadence,
+        searchId: search.id,
+      },
+      profileId: search.profile_id,
+      queryFingerprint: getBackgroundQueryFingerprint({
+        causes: search.causes,
+        minScore: search.min_score,
+        query: search.query,
+        searchId: search.id,
+      }),
+      scope: "saved_search_scan",
+      supabase,
+    });
+
+    if (budgetReservation.limited) {
+      await recordBackgroundQueryRiskSignal({
+        eventId: budgetReservation.eventId,
+        metadata: {
+          limit: budgetReservation.limit,
+          scope: "saved_search_scan",
+          searchId: search.id,
+          used: budgetReservation.used,
+        },
+        profileId: search.profile_id,
+        signalType: "background_query_budget_pressure",
+        summary:
+          "A saved-search scan was skipped because this profile reached its daily background query budget.",
+        supabase,
+      });
+      await supabase
+        .from("saved_searches")
+        .update({ last_scanned_at: now.toISOString() })
+        .eq("id", search.id);
+      searchesProcessed += 1;
+      continue;
+    }
+
     let runCreated = 0;
     let runRefreshed = 0;
     let runCandidates = 0;
+    const explanationSnapshots: ReturnType<typeof buildMatchExplanationSnapshot>[] = [];
 
     for (const preview of previewRows) {
       if (preview.profile_id === search.profile_id || !preview.background_search_enabled) {
@@ -212,33 +264,85 @@ async function processSavedSearches(request: Request) {
       const reasonForSearchOwner = `${evaluation.viewerReason} This came from one of your saved searches.`;
       const reasonForCounterparty =
         "A possible counterparty matched one of your broad registry previews through a saved-search scan. No exact wishes, private search text, or contact details were disclosed.";
-      const { error: upsertError } = await supabase.from("match_suggestions").upsert(
-        {
-          profile_a_id: profileAId,
-          profile_b_id: profileBId,
-          profile_a_entry_id: null,
-          profile_b_entry_id: null,
-          reason_for_a: viewerIsProfileA ? reasonForSearchOwner : reasonForCounterparty,
-          reason_for_b: viewerIsProfileA ? reasonForCounterparty : reasonForSearchOwner,
-          score: evaluation.score,
-          match_basis: [
-            ...evaluation.compatibilityTags.map((tag) => `Compatibility tag: ${tag}`),
-            "Saved search hit",
-          ],
-          shared_causes: evaluation.sharedCauses,
-          suggested_first_step: evaluation.suggestedFirstStep,
-          risk_notes: evaluation.riskNotes,
-          generated_by: "saved-search-cron",
-          status: "suggested",
-          dedupe_key: dedupeKey,
-          last_scored_at: now.toISOString(),
-        },
-        { onConflict: "dedupe_key" },
-      );
+      const matchBasis = [
+        ...evaluation.compatibilityTags.map((tag) => `Compatibility tag: ${tag}`),
+        "Saved search hit",
+      ];
+      const matchPayload: MatchSuggestionInsert = {
+        profile_a_id: profileAId,
+        profile_b_id: profileBId,
+        profile_a_entry_id: null,
+        profile_b_entry_id: null,
+        reason_for_a: viewerIsProfileA ? reasonForSearchOwner : reasonForCounterparty,
+        reason_for_b: viewerIsProfileA ? reasonForCounterparty : reasonForSearchOwner,
+        score: evaluation.score,
+        match_basis: matchBasis,
+        shared_causes: evaluation.sharedCauses,
+        suggested_first_step: evaluation.suggestedFirstStep,
+        risk_notes: evaluation.riskNotes,
+        generated_by: "saved-search-cron",
+        status: "suggested",
+        dedupe_key: dedupeKey,
+        last_scored_at: now.toISOString(),
+      };
+      const { data: upsertedMatch, error: upsertError } = await supabase
+        .from("match_suggestions")
+        .upsert(matchPayload, { onConflict: "dedupe_key" })
+        .select("id, status")
+        .maybeSingle();
 
-      if (upsertError) {
+      if (upsertError || !upsertedMatch) {
         continue;
       }
+
+      const matchId = upsertedMatch.id;
+      explanationSnapshots.push(
+        buildMatchExplanationSnapshot({
+          canRevealIdentity: false,
+          counterpartyConsented: false,
+          generatedBy: "saved-search-cron",
+          matchBasis,
+          matchId,
+          profileId: search.profile_id,
+          riskNotes: evaluation.riskNotes,
+          score: evaluation.score,
+          sharedCauses: evaluation.sharedCauses,
+          sourceRunId: search.id,
+          sourceRunKind: "saved_search_scan",
+          status: upsertedMatch.status,
+          suggestedFirstStep: evaluation.suggestedFirstStep,
+          viewerConsented: false,
+        }),
+        buildMatchExplanationSnapshot({
+          canRevealIdentity: false,
+          counterpartyConsented: false,
+          generatedBy: "saved-search-cron",
+          matchBasis,
+          matchId,
+          profileId: preview.profile_id,
+          riskNotes: evaluation.riskNotes,
+          score: evaluation.score,
+          sharedCauses: evaluation.sharedCauses,
+          sourceRunId: search.id,
+          sourceRunKind: "saved_search_scan",
+          status: upsertedMatch.status,
+          suggestedFirstStep: evaluation.suggestedFirstStep,
+          viewerConsented: false,
+        }),
+      );
+
+      await supabase.from("match_audit_events").insert({
+        match_id: matchId,
+        actor_profile_id: search.profile_id,
+        event_type: existingMatch ? "match_refreshed" : "match_created",
+        summary: `Saved-search scan found compatibility with score ${evaluation.score}.`,
+        metadata: buildPrivacySafeMatchAuditMetadata({
+          compatibilityTags: evaluation.compatibilityTags,
+          runReason: "saved-search-cron",
+          sharedCauseCount: evaluation.sharedCauses.length,
+          sharedTokenCount: evaluation.sharedTokens.length,
+        }),
+      });
 
       if (existingMatch) {
         runRefreshed += 1;
@@ -251,12 +355,14 @@ async function processSavedSearches(request: Request) {
               kind: "match",
               title: "A potential moral trade was found",
               body: reasonForSearchOwner,
+              match_id: matchId,
             },
             {
               profile_id: preview.profile_id,
               kind: "match",
               title: "A potential moral trade was found",
               body: reasonForCounterparty,
+              match_id: matchId,
             },
           ],
           supabase,
@@ -270,6 +376,37 @@ async function processSavedSearches(request: Request) {
           });
         }
       }
+    }
+
+    const snapshotError = await insertMatchExplanationSnapshots({
+      snapshots: explanationSnapshots,
+      supabase,
+    });
+
+    if (snapshotError) {
+      console.error("[background-networking] Failed to save saved-search explanation snapshots", {
+        error: snapshotError.message,
+        searchId: search.id,
+      });
+    }
+
+    const budgetCompletionError = await completeBackgroundQueryEvent({
+      candidateCount: runCandidates,
+      eventId: budgetReservation.eventId,
+      metadata: {
+        matchesCreated: runCreated,
+        matchesRefreshed: runRefreshed,
+        searchId: search.id,
+      },
+      resultCount: runCreated + runRefreshed,
+      supabase,
+    });
+
+    if (budgetCompletionError) {
+      console.error("[background-networking] Failed to complete saved-search budget event", {
+        error: budgetCompletionError.message,
+        searchId: search.id,
+      });
     }
 
     await supabase.from("background_match_runs").insert({

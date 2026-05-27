@@ -24,7 +24,29 @@ import {
   getDeterministicSignalsFromSynthesis,
   normalizeBackgroundToken,
 } from "@/lib/background-networking";
+import {
+  buildMatchExplanationSnapshot,
+  buildPrivacySafeMatchAuditMetadata,
+  type MatchExplanationSnapshotPayload,
+} from "@/lib/background-explanations";
 import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
+import {
+  buildDisclosureGrantNotes,
+  getDefaultGrantExpiryDays,
+  validateDisclosureRequest,
+  type DisclosureAccessLevel,
+  type DisclosureAudienceStage,
+} from "@/lib/background-disclosure";
+import {
+  completeBackgroundQueryEvent,
+  insertMatchExplanationSnapshots,
+  recordBackgroundQueryRiskSignal,
+  reserveBackgroundQueryBudget,
+} from "@/lib/background-operations";
+import {
+  getBackgroundQueryFingerprint,
+  type BackgroundQueryScope,
+} from "@/lib/background-query-budget";
 import { getSafeInternalPath } from "@/lib/paths";
 import {
   ATTRIBUTION_COOKIE_NAME,
@@ -205,6 +227,48 @@ function readRepeatedStrings(formData: FormData, key: string, limit = 12) {
     .filter(Boolean)
     .filter((entry, index, entries) => entries.indexOf(entry) === index)
     .slice(0, limit);
+}
+
+function normalizeDisclosureStage(value: string): DisclosureAudienceStage {
+  if (value === "registry" || value === "introduced") {
+    return value;
+  }
+
+  return "consent";
+}
+
+function normalizeDisclosureAccess(value: string): DisclosureAccessLevel {
+  if (value === "hidden" || value === "broad" || value === "contact") {
+    return value;
+  }
+
+  return "specific";
+}
+
+function readDisclosureFieldKeys(
+  formData: FormData,
+  {
+    jsonKey = "requested_fields_json",
+    repeatedKey = "requested_fields",
+    singleKey = "field_key",
+  }: {
+    jsonKey?: string;
+    repeatedKey?: string;
+    singleKey?: string;
+  } = {},
+) {
+  return [
+    ...readStringList(formData, jsonKey),
+    ...readRepeatedStrings(formData, repeatedKey),
+    readOptional(formData, singleKey),
+  ]
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .filter((entry, index, entries) => entries.indexOf(entry) === index);
+}
+
+function disclosureErrorsToMessage(errors: string[]) {
+  return errors.join(" ");
 }
 
 function logSupabaseActionError(
@@ -699,24 +763,6 @@ function normalizeHelperKind(value: string): HelperStrategyInsert["helper_kind"]
   return "cause_overlap";
 }
 
-function normalizePrivacyAudienceStage(
-  value: string,
-): PrivacyGrantInsert["audience_stage"] {
-  if (value === "consent" || value === "introduced") {
-    return value;
-  }
-
-  return "registry";
-}
-
-function normalizePrivacyAccessLevel(value: string): PrivacyGrantInsert["access_level"] {
-  if (value === "hidden" || value === "specific" || value === "contact") {
-    return value;
-  }
-
-  return "broad";
-}
-
 function normalizePrivacyGrantStatus(value: string): PrivacyGrantInsert["status"] {
   if (value === "granted" || value === "revoked") {
     return value;
@@ -1143,16 +1189,6 @@ async function loadParticipantAgreementOrRedirect(
   return agreement as AgreementRow;
 }
 
-function normalizeAudienceStage(
-  value: string,
-): PrivacyGrantInsert["audience_stage"] | PrivacyAccessRequestInsert["requested_stage"] {
-  if (value === "registry" || value === "introduced") {
-    return value;
-  }
-
-  return "consent";
-}
-
 function normalizeReportReason(value: string) {
   if (
     value === "unsafe" ||
@@ -1366,6 +1402,55 @@ async function generateWishMatchSuggestions({
 }) {
   const supabase = await createClient();
   const serviceSupabase = createServiceClient();
+  const scope: BackgroundQueryScope =
+    runReason === "manual-refresh" ? "manual_scan" : "profile_save_scan";
+  const budgetReservation = await reserveBackgroundQueryBudget({
+    metadata: { runReason },
+    profileId,
+    queryFingerprint: getBackgroundQueryFingerprint({
+      askText,
+      causes,
+      offerText,
+      openToPayment,
+      openToPledges,
+      runReason,
+      wishText,
+    }),
+    scope,
+    supabase: serviceSupabase,
+  });
+
+  if (budgetReservation.error) {
+    logSupabaseActionError("Failed to reserve background query budget", budgetReservation.error, {
+      profileId,
+      runReason,
+    });
+  }
+
+  if (budgetReservation.limited) {
+    await recordBackgroundQueryRiskSignal({
+      eventId: budgetReservation.eventId,
+      metadata: {
+        limit: budgetReservation.limit,
+        runReason,
+        scope,
+        used: budgetReservation.used,
+      },
+      profileId,
+      signalType: "background_query_budget_pressure",
+      summary:
+        "Background networking scan was skipped because this profile reached its daily query budget.",
+      supabase: serviceSupabase,
+    });
+
+    return {
+      budgetLimited: true,
+      candidatesScanned: 0,
+      matchesCreated: 0,
+      matchesRefreshed: 0,
+    };
+  }
+
   const [{ data: previews, error }, { data: viewerProfile }, { data: viewerSynthesis }] =
     await Promise.all([
       supabase
@@ -1382,7 +1467,12 @@ async function generateWishMatchSuggestions({
     logSupabaseActionError("Failed to load wish previews for match generation", error, {
       profileId,
     });
-    return { candidatesScanned: 0, matchesCreated: 0, matchesRefreshed: 0 };
+    return {
+      budgetLimited: false,
+      candidatesScanned: 0,
+      matchesCreated: 0,
+      matchesRefreshed: 0,
+    };
   }
 
   const previewRows = (previews ?? []) as WishProfilePreviewRow[];
@@ -1410,6 +1500,7 @@ async function generateWishMatchSuggestions({
   let matchesCreated = 0;
   let matchesRefreshed = 0;
   const generatedNotifications: Database["public"]["Tables"]["wish_notifications"]["Insert"][] = [];
+  const explanationSnapshots: MatchExplanationSnapshotPayload[] = [];
 
   for (const preview of previewRows) {
     const evaluation = evaluateDeterministicMatch({
@@ -1516,17 +1607,52 @@ async function generateWishMatchSuggestions({
       matchesRefreshed += 1;
     }
 
+    explanationSnapshots.push(
+      buildMatchExplanationSnapshot({
+        canRevealIdentity: false,
+        counterpartyConsented: false,
+        generatedBy: "rule-based",
+        matchBasis,
+        matchId: match.match_id,
+        profileId,
+        riskNotes: evaluation.riskNotes,
+        score: evaluation.score,
+        sharedCauses: evaluation.sharedCauses,
+        sourceRunId: runReason,
+        sourceRunKind: scope,
+        status: "suggested",
+        suggestedFirstStep: evaluation.suggestedFirstStep,
+        viewerConsented: false,
+      }),
+      buildMatchExplanationSnapshot({
+        canRevealIdentity: false,
+        counterpartyConsented: false,
+        generatedBy: "rule-based",
+        matchBasis,
+        matchId: match.match_id,
+        profileId: preview.profile_id,
+        riskNotes: evaluation.riskNotes,
+        score: evaluation.score,
+        sharedCauses: evaluation.sharedCauses,
+        sourceRunId: runReason,
+        sourceRunKind: scope,
+        status: "suggested",
+        suggestedFirstStep: evaluation.suggestedFirstStep,
+        viewerConsented: false,
+      }),
+    );
+
     const { error: auditError } = await supabase.from("match_audit_events").insert({
       match_id: match.match_id,
       actor_profile_id: profileId,
       event_type: match.was_created ? "match_created" : "match_refreshed",
       summary: `Deterministic scan found compatibility with score ${evaluation.score}.`,
-      metadata: {
+      metadata: buildPrivacySafeMatchAuditMetadata({
         compatibilityTags: evaluation.compatibilityTags,
         runReason,
-        sharedCauses: evaluation.sharedCauses,
-        sharedTokens: evaluation.sharedTokens,
-      },
+        sharedCauseCount: evaluation.sharedCauses.length,
+        sharedTokenCount: evaluation.sharedTokens.length,
+      }),
     });
 
     if (auditError) {
@@ -1535,6 +1661,18 @@ async function generateWishMatchSuggestions({
         matchId: match.match_id,
       });
     }
+  }
+
+  const snapshotError = await insertMatchExplanationSnapshots({
+    snapshots: explanationSnapshots,
+    supabase: serviceSupabase,
+  });
+
+  if (snapshotError) {
+    logSupabaseActionError("Failed to save match explanation snapshots", snapshotError, {
+      profileId,
+      runReason,
+    });
   }
 
   if (generatedNotifications.length) {
@@ -1557,7 +1695,28 @@ async function generateWishMatchSuggestions({
     }
   }
 
+  const budgetCompletionError = await completeBackgroundQueryEvent({
+    candidateCount: previewRows.length,
+    eventId: budgetReservation.eventId,
+    metadata: {
+      matchesCreated,
+      matchesRefreshed,
+      runReason,
+      scope,
+    },
+    resultCount: matchesCreated + matchesRefreshed,
+    supabase: serviceSupabase,
+  });
+
+  if (budgetCompletionError) {
+    logSupabaseActionError("Failed to complete background query budget event", budgetCompletionError, {
+      profileId,
+      runReason,
+    });
+  }
+
   return {
+    budgetLimited: false,
     candidatesScanned: previewRows.length,
     matchesCreated,
     matchesRefreshed,
@@ -2980,11 +3139,14 @@ export async function saveWishProfileAction(formData: FormData) {
 
     const { error: runError } = await supabase.from("background_match_runs").insert({
       profile_id: viewer.authUser.id,
-      status: "completed",
+      status: runResult.budgetLimited ? "failed" : "completed",
       run_reason: "profile-save",
       candidates_scanned: runResult.candidatesScanned,
       matches_created: runResult.matchesCreated,
       matches_refreshed: runResult.matchesRefreshed,
+      error_message: runResult.budgetLimited
+        ? "Daily background query budget reached. Profile was saved without running a scan."
+        : "",
       completed_at: new Date().toISOString(),
     });
 
@@ -3092,6 +3254,28 @@ export async function consentToMatchSuggestionAction(formData: FormData) {
       if (matchError || !match) {
         throw new Error(matchError?.message ?? "Match suggestion not found.");
       }
+
+      await insertMatchExplanationSnapshots({
+        snapshots: [match.profile_a_id, match.profile_b_id].map((profileId) =>
+          buildMatchExplanationSnapshot({
+            canRevealIdentity: true,
+            counterpartyConsented: true,
+            generatedBy: match.generated_by,
+            matchBasis: match.match_basis,
+            matchId,
+            profileId,
+            riskNotes: match.risk_notes,
+            score: match.score,
+            sharedCauses: match.shared_causes,
+            sourceRunId: "mutual-consent",
+            sourceRunKind: "manual_scan",
+            status: match.status,
+            suggestedFirstStep: match.suggested_first_step,
+            viewerConsented: true,
+          }),
+        ),
+        supabase: serviceClient,
+      });
 
       const { error: planError } = await serviceClient
         .from("match_introduction_plans")
@@ -3506,6 +3690,23 @@ export async function refreshBackgroundMatchesAction(formData: FormData) {
     runReason: "manual-refresh",
   });
 
+  if (runResult.budgetLimited) {
+    await supabase.from("background_match_runs").insert({
+      profile_id: viewer.authUser.id,
+      status: "failed",
+      run_reason: "manual-refresh",
+      error_message:
+        "Daily background query budget reached. Try again after the budget window resets.",
+      completed_at: new Date().toISOString(),
+    });
+
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Daily background query budget reached. Try again after the budget window resets.",
+    );
+  }
+
   const { error: runError } = await supabase.from("background_match_runs").insert({
     profile_id: viewer.authUser.id,
     status: "completed",
@@ -3621,8 +3822,9 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
 
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const ownerProfileId = readRequired(formData, "owner_profile_id");
-  const requestedFields = readStringList(formData, "requested_fields_json");
+  const requestedFields = readDisclosureFieldKeys(formData);
   const purpose = readOptional(formData, "purpose");
+  const requestedStage = normalizeDisclosureStage(readOptional(formData, "requested_stage"));
 
   if (!ownerProfileId || !requestedFields.length) {
     redirectWithMessage(
@@ -3654,12 +3856,24 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
     );
   }
 
+  const disclosureValidation = validateDisclosureRequest({
+    accessLevel: "broad",
+    fieldKeys: requestedFields,
+    purpose,
+    stage: requestedStage,
+  });
+
+  if (disclosureValidation.errors.length) {
+    redirectWithMessage(returnTo, "error", disclosureErrorsToMessage(disclosureValidation.errors));
+  }
+  const allowedFields = disclosureValidation.allowedFields;
+
   const payload: PrivacyAccessRequestInsert = {
     owner_profile_id: ownerProfileId,
     requester_profile_id: viewer.authUser.id,
     match_id: readOptional(formData, "match_id") || null,
-    requested_fields: requestedFields,
-    requested_stage: normalizeAudienceStage(readOptional(formData, "requested_stage")),
+    requested_fields: allowedFields,
+    requested_stage: requestedStage,
     purpose,
     justification: readOptional(formData, "justification"),
     status: "pending",
@@ -3690,7 +3904,7 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
       profile_id: ownerProfileId,
       kind: "consent",
       title: "Privacy access request",
-      body: `${viewer.displayName} requested access to ${requestedFields.join(", ")} for ${payload.requested_stage}-stage discussion.`,
+      body: `${viewer.displayName} requested a purpose-bound disclosure for ${payload.requested_stage}-stage discussion.`,
       match_id: payload.match_id,
     },
     supabase: serviceClient,
@@ -3717,10 +3931,10 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
       match_id: payload.match_id,
       actor_profile_id: viewer.authUser.id,
       event_type: "privacy_access_requested",
-      summary: `Requested access to: ${requestedFields.join(", ")}.`,
+      summary: `Privacy access requested for ${allowedFields.length} field(s).`,
       metadata: {
         requestId: requestRow.id,
-        requestedFieldCount: requestedFields.length,
+        requestedFieldCount: allowedFields.length,
         requestedStage: payload.requested_stage,
       },
     });
@@ -3736,7 +3950,7 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
   await recordServerFunnelEvent({
     eventType: "detail_request_submitted",
     metadata: {
-      fieldCount: requestedFields.length,
+      fieldCount: allowedFields.length,
       hasMatch: Boolean(payload.match_id),
       requestedStage: payload.requested_stage,
     },
@@ -4427,23 +4641,48 @@ export async function savePrivacyGrantAction(formData: FormData) {
   }
 
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
-  const fieldKey = readRequired(formData, "field_key");
+  const requestedFields = readDisclosureFieldKeys(formData);
 
-  if (!fieldKey) {
+  if (!requestedFields.length) {
     redirectWithMessage(returnTo, "error", "Privacy field key is required.");
   }
 
   const viewer = await requireViewer(returnTo);
+  const audienceStage = normalizeDisclosureStage(readOptional(formData, "audience_stage"));
+  const accessLevel = normalizeDisclosureAccess(readOptional(formData, "access_level"));
+  const purpose = readOptional(formData, "purpose") || readOptional(formData, "notes");
+  const disclosureValidation = validateDisclosureRequest({
+    accessLevel,
+    fieldKeys: requestedFields,
+    purpose,
+    stage: audienceStage,
+  });
+
+  if (disclosureValidation.errors.length) {
+    redirectWithMessage(returnTo, "error", disclosureErrorsToMessage(disclosureValidation.errors));
+  }
+
+  const fieldKey = disclosureValidation.allowedFields[0] ?? "";
+
+  if (!fieldKey) {
+    redirectWithMessage(returnTo, "error", "Choose a supported privacy field.");
+  }
+
   const payload: PrivacyGrantInsert = {
     profile_id: viewer.authUser.id,
     counterparty_id: readOptional(formData, "counterparty_id") || null,
     match_id: readOptional(formData, "match_id") || null,
     field_key: fieldKey,
-    access_level: normalizePrivacyAccessLevel(readOptional(formData, "access_level")),
-    audience_stage: normalizePrivacyAudienceStage(readOptional(formData, "audience_stage")),
+    access_level: accessLevel,
+    audience_stage: audienceStage,
     status: normalizePrivacyGrantStatus(readOptional(formData, "status")),
-    notes: readOptional(formData, "notes"),
-    expires_at: readOptionalExpiryTimestamp(formData),
+    notes: buildDisclosureGrantNotes({
+      ownerNote: readOptional(formData, "notes"),
+      purpose,
+    }),
+    expires_at: readOptionalExpiryTimestamp(formData, {
+      fallbackDays: getDefaultGrantExpiryDays(audienceStage),
+    }),
   };
 
   const supabase = await createClient();
@@ -4511,8 +4750,11 @@ export async function respondPrivacyAccessRequestAction(formData: FormData) {
 
   const action = readOptional(formData, "status");
   const ownerNote = readOptional(formData, "owner_note");
-  const accessLevel = normalizePrivacyAccessLevel(readOptional(formData, "access_level"));
-  const expiresAt = readOptionalExpiryTimestamp(formData, { fallbackDays: 30 });
+  const accessLevel = normalizeDisclosureAccess(readOptional(formData, "access_level"));
+  const requestedStage = normalizeDisclosureStage(requestRow.requested_stage);
+  const expiresAt = readOptionalExpiryTimestamp(formData, {
+    fallbackDays: getDefaultGrantExpiryDays(requestedStage),
+  });
   const isOwner = requestRow.owner_profile_id === viewer.authUser.id;
   const isRequester = requestRow.requester_profile_id === viewer.authUser.id;
 
@@ -4531,6 +4773,17 @@ export async function respondPrivacyAccessRequestAction(formData: FormData) {
 
   if (!nextStatus) {
     redirectWithMessage(returnTo, "error", "Unsupported privacy access request update.");
+  }
+
+  const disclosureValidation = validateDisclosureRequest({
+    accessLevel,
+    fieldKeys: requestRow.requested_fields ?? [],
+    purpose: requestRow.purpose,
+    stage: requestedStage,
+  });
+
+  if (nextStatus === "approved" && disclosureValidation.errors.length) {
+    redirectWithMessage(returnTo, "error", disclosureErrorsToMessage(disclosureValidation.errors));
   }
 
   const resolvedAt =
@@ -4556,14 +4809,14 @@ export async function respondPrivacyAccessRequestAction(formData: FormData) {
   }
 
   if (nextStatus === "approved" && isOwner) {
-    for (const fieldKey of requestRow.requested_fields ?? []) {
+    for (const fieldKey of disclosureValidation.allowedFields) {
       let grantQuery = supabase
         .from("privacy_grants")
         .select("id")
         .eq("profile_id", requestRow.owner_profile_id)
         .eq("counterparty_id", requestRow.requester_profile_id)
         .eq("field_key", fieldKey)
-        .eq("audience_stage", requestRow.requested_stage);
+        .eq("audience_stage", requestedStage);
 
       grantQuery = requestRow.match_id
         ? grantQuery.eq("match_id", requestRow.match_id)
@@ -4586,15 +4839,13 @@ export async function respondPrivacyAccessRequestAction(formData: FormData) {
         match_id: requestRow.match_id,
         field_key: fieldKey,
         access_level: accessLevel,
-        audience_stage: requestRow.requested_stage,
+        audience_stage: requestedStage,
         status: "granted" as const,
-        notes: [
-          requestRow.purpose ? `Purpose: ${requestRow.purpose}` : "",
-          ownerNote ? `Owner limits: ${ownerNote}` : "",
-          !ownerNote && requestRow.justification ? `Requester rationale: ${requestRow.justification}` : "",
-        ]
-          .filter(Boolean)
-          .join(" "),
+        notes: buildDisclosureGrantNotes({
+          justification: requestRow.justification,
+          ownerNote,
+          purpose: requestRow.purpose,
+        }),
         expires_at: expiresAt,
       };
 
@@ -4638,7 +4889,7 @@ export async function respondPrivacyAccessRequestAction(formData: FormData) {
       profile_id: notificationTarget,
       kind: "consent",
       title: "Privacy access request updated",
-      body: `${actorLabel} ${statusLabel} a request covering ${requestRow.requested_fields.join(", ")}.`,
+      body: `${actorLabel} ${statusLabel} a purpose-bound disclosure request.`,
       match_id: requestRow.match_id,
     },
     supabase: serviceClient,
@@ -4663,7 +4914,7 @@ export async function respondPrivacyAccessRequestAction(formData: FormData) {
       match_id: requestRow.match_id,
       actor_profile_id: viewer.authUser.id,
       event_type: "privacy_access_updated",
-      summary: `Privacy access request ${nextStatus} for ${requestRow.requested_fields.join(", ")}.`,
+      summary: `Privacy access request ${nextStatus} for ${requestRow.requested_fields.length} field(s).`,
       metadata: {
         requestId,
         accessLevel: nextStatus === "approved" ? accessLevel : null,
@@ -4687,7 +4938,7 @@ export async function respondPrivacyAccessRequestAction(formData: FormData) {
       fieldCount: requestRow.requested_fields.length,
       hasExpiry: nextStatus === "approved" && Boolean(expiresAt),
       hasMatch: Boolean(requestRow.match_id),
-      requestedStage: requestRow.requested_stage,
+      requestedStage,
     },
     path: returnTo,
     profileId: viewer.authUser.id,
