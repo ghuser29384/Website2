@@ -5,6 +5,7 @@ import {
   getDeterministicSignalsFromSynthesis,
   normalizeBackgroundToken,
 } from "@/lib/background-networking";
+import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
 import { isCronRequestAuthorized } from "@/lib/cron";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -627,14 +628,26 @@ async function processDelegates(request: Request) {
 
       const summary = compatibleSummaries.slice(0, delegate.max_weekly_suggestions);
       if (summary.length) {
-        const { error } = await supabase.from("wish_notifications").insert({
-          profile_id: delegate.profile_id,
-          kind: "system",
-          title: `Helper scan: ${strategy.label}`,
-          body: `The ${strategy.helper_kind} helper found ${compatibleSummaries.length} promising broad previews. Top examples: ${summary.join(" | ")}`,
+        const notificationResult = await insertWishNotificationsWithSafeEmail({
+          notifications: {
+            profile_id: delegate.profile_id,
+            kind: "system",
+            title: `Helper scan: ${strategy.label}`,
+            body: `The ${strategy.helper_kind} helper found ${compatibleSummaries.length} promising broad previews. Top examples: ${summary.join(" | ")}`,
+          },
+          supabase,
         });
 
-        if (!error) {
+        if (notificationResult.notificationError || notificationResult.emailError) {
+          console.error("[background-networking] Failed to notify delegate helper scan", {
+            delegateProfileId: delegate.profile_id,
+            emailError: notificationResult.emailError?.message ?? null,
+            notificationError: notificationResult.notificationError?.message ?? null,
+            strategyId: strategy.id,
+          });
+        }
+
+        if (!notificationResult.notificationError) {
           notificationsCreated += 1;
         }
       }

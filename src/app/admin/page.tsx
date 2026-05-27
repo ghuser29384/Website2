@@ -9,6 +9,7 @@ import {
   updateMatchReportStatusAction,
   updatePaymentReviewStatusAction,
   updateProfileVerificationBadgeAction,
+  updateRiskSignalStatusAction,
 } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -43,6 +44,7 @@ type EmailOutboxRow = Database["public"]["Tables"]["email_outbox"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
 type MatchConciergeRequestRow = Database["public"]["Tables"]["match_concierge_requests"]["Row"];
 type MatchConciergeEventRow = Database["public"]["Tables"]["match_concierge_events"]["Row"];
+type RiskSignalRow = Database["public"]["Tables"]["risk_signals"]["Row"];
 type ProfileVerificationBadgeRow =
   Database["public"]["Tables"]["profile_verification_badges"]["Row"];
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
@@ -98,6 +100,7 @@ async function loadAdminQueues() {
     emails,
     wishProfiles,
     conciergeRequests,
+    riskSignals,
     agreementReviewCases,
     verificationBadges,
   ] = await Promise.all([
@@ -138,6 +141,13 @@ async function loadAdminQueues() {
       .order("sla_due_at", { ascending: true, nullsFirst: false })
       .limit(50),
     supabase
+      .from("risk_signals")
+      .select("*")
+      .eq("status", "open")
+      .order("severity", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
       .from("agreement_review_cases")
       .select("*")
       .in("status", ["open", "under_review", "challenge_window_open", "appealed", "disputed_unresolved"])
@@ -165,6 +175,7 @@ async function loadAdminQueues() {
     emails.error,
     wishProfiles.error,
     conciergeRequests.error,
+    riskSignals.error,
     agreementReviewCases.error,
     verificationBadges.error,
     flaggedOffsetsResult.error,
@@ -269,6 +280,7 @@ async function loadAdminQueues() {
       request,
       events: conciergeEventsByRequest.get(request.id) ?? [],
     })) satisfies MatchConciergeReviewRecord[],
+    riskSignals: (riskSignals.data ?? []) as RiskSignalRow[],
     donationOffsetReviews: flaggedOffsets.map((offset) => ({
       offset,
       offer: offerMap.get(offset.offer_id) ?? null,
@@ -332,8 +344,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>{queues?.donationOffsetReviews.length ?? 0} offset review item(s)</strong>
-                  <p>Paused donation offsets needing baseline or legality review.</p>
+                  <strong>{queues?.riskSignals.length ?? 0} risk signal(s)</strong>
+                  <p>Background networking prompts needing operator review.</p>
                 </div>
               </div>
               <div className="flow-step">
@@ -353,12 +365,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">05</span>
                 <div>
+                  <strong>{queues?.donationOffsetReviews.length ?? 0} offset review item(s)</strong>
+                  <p>Paused donation offsets needing baseline or legality review.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">06</span>
+                <div>
                   <strong>{queues?.payments.length ?? 0} payment issue(s)</strong>
                   <p>Refund requests, disputes, and failures.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">06</span>
+                <span className="flow-number">07</span>
                 <div>
                   <strong>{queues?.emails.length ?? 0} email item(s)</strong>
                   <p>Queued or failed outbound mail.</p>
@@ -718,7 +737,67 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <section className="section section-white">
               <div className="section-head">
                 <p className="eyebrow">Trust and safety</p>
-                <h2>Open match reports</h2>
+                <h2>Open background networking risk signals</h2>
+                <p>Review deterministic helper prompts before they become stale operational debt.</p>
+              </div>
+              <div className="data-grid">
+                {queues?.riskSignals.length ? (
+                  queues.riskSignals.map((signal) => (
+                    <article className="panel data-card" key={signal.id}>
+                      <p className="detail-kicker">
+                        {signal.severity} | {signal.signal_type.replaceAll("_", " ")}
+                      </p>
+                      <h3>Risk signal {signal.id.slice(0, 8)}</h3>
+                      <p className="route-text">{signal.summary || "No summary recorded."}</p>
+                      <div className="tag-row">
+                        {signal.profile_id ? (
+                          <span className="source-pill">Profile {signal.profile_id}</span>
+                        ) : null}
+                        {signal.match_id ? (
+                          <span className="source-pill">Match {signal.match_id}</span>
+                        ) : null}
+                        <span className="badge">{signal.status}</span>
+                      </div>
+                      {Object.keys(signal.metadata ?? {}).length ? (
+                        <p className="panel-note">
+                          Metadata: {JSON.stringify(signal.metadata).slice(0, 260)}
+                        </p>
+                      ) : null}
+                      <div className="form-actions">
+                        <form action={updateRiskSignalStatusAction}>
+                          <input name="risk_signal_id" type="hidden" value={signal.id} />
+                          <input name="return_to" type="hidden" value="/admin" />
+                          <input name="status" type="hidden" value="reviewed" />
+                          <button className="button button-secondary button-mini" type="submit">
+                            Mark reviewed
+                          </button>
+                        </form>
+                        <form action={updateRiskSignalStatusAction}>
+                          <input name="risk_signal_id" type="hidden" value={signal.id} />
+                          <input name="return_to" type="hidden" value="/admin" />
+                          <input name="status" type="hidden" value="dismissed" />
+                          <button className="button button-secondary button-mini" type="submit">
+                            Dismiss
+                          </button>
+                        </form>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No open background networking risk signals.</strong>
+                      <p>Delegate scans and profile checks will appear here when review is needed.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Match reports</p>
+                <h2>Participant-submitted safety reports</h2>
                 <p>Review reports for coercion, spam, privacy risk, illegal asks, or other abuse.</p>
               </div>
               <div className="data-grid">

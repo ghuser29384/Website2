@@ -4,6 +4,7 @@ import {
   evaluateDeterministicMatch,
   getDeterministicSignalsFromSynthesis,
 } from "@/lib/background-networking";
+import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
 import { isCronRequestAuthorized } from "@/lib/cron";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -208,8 +209,9 @@ async function processSavedSearches(request: Request) {
         continue;
       }
 
-      const reasonForSearchOwner = `${evaluation.viewerReason} Saved search: ${search.label}.`;
-      const reasonForCounterparty = `${evaluation.counterpartyReason} Saved search label: ${search.label}.`;
+      const reasonForSearchOwner = `${evaluation.viewerReason} This came from one of your saved searches.`;
+      const reasonForCounterparty =
+        "A possible counterparty matched one of your broad registry previews through a saved-search scan. No exact wishes, private search text, or contact details were disclosed.";
       const { error: upsertError } = await supabase.from("match_suggestions").upsert(
         {
           profile_a_id: profileAId,
@@ -221,7 +223,7 @@ async function processSavedSearches(request: Request) {
           score: evaluation.score,
           match_basis: [
             ...evaluation.compatibilityTags.map((tag) => `Compatibility tag: ${tag}`),
-            `Saved search: ${search.label}`,
+            "Saved search hit",
           ],
           shared_causes: evaluation.sharedCauses,
           suggested_first_step: evaluation.suggestedFirstStep,
@@ -242,20 +244,31 @@ async function processSavedSearches(request: Request) {
         runRefreshed += 1;
       } else {
         runCreated += 1;
-        await supabase.from("wish_notifications").insert([
-          {
-            profile_id: search.profile_id,
-            kind: "match",
-            title: "A potential moral trade was found",
-            body: reasonForSearchOwner,
-          },
-          {
-            profile_id: preview.profile_id,
-            kind: "match",
-            title: "A potential moral trade was found",
-            body: reasonForCounterparty,
-          },
-        ]);
+        const notificationResult = await insertWishNotificationsWithSafeEmail({
+          notifications: [
+            {
+              profile_id: search.profile_id,
+              kind: "match",
+              title: "A potential moral trade was found",
+              body: reasonForSearchOwner,
+            },
+            {
+              profile_id: preview.profile_id,
+              kind: "match",
+              title: "A potential moral trade was found",
+              body: reasonForCounterparty,
+            },
+          ],
+          supabase,
+        });
+
+        if (notificationResult.notificationError || notificationResult.emailError) {
+          console.error("[background-networking] Failed to notify saved-search match participants", {
+            emailError: notificationResult.emailError?.message ?? null,
+            matchDedupeKey: dedupeKey,
+            notificationError: notificationResult.notificationError?.message ?? null,
+          });
+        }
       }
     }
 

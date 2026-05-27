@@ -24,6 +24,7 @@ import {
   getDeterministicSignalsFromSynthesis,
   normalizeBackgroundToken,
 } from "@/lib/background-networking";
+import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
 import { getSafeInternalPath } from "@/lib/paths";
 import {
   ATTRIBUTION_COOKIE_NAME,
@@ -104,6 +105,7 @@ type PrivacyGrantInsert = Database["public"]["Tables"]["privacy_grants"]["Insert
 type PrivacyGrantUpdate = Database["public"]["Tables"]["privacy_grants"]["Update"];
 type PrivacyAccessRequestInsert =
   Database["public"]["Tables"]["privacy_access_requests"]["Insert"];
+type RiskSignalUpdate = Database["public"]["Tables"]["risk_signals"]["Update"];
 type CollectiveMemberInsert = Database["public"]["Tables"]["collective_members"]["Insert"];
 type CollectiveDecisionInsert = Database["public"]["Tables"]["collective_decisions"]["Insert"];
 type CollectiveDecisionResponseInsert =
@@ -1509,12 +1511,20 @@ async function generateWishMatchSuggestions({
   }
 
   if (generatedNotifications.length) {
-    const { error: notificationError } = await supabase
-      .from("wish_notifications")
-      .insert(generatedNotifications);
+    const notificationResult = await insertWishNotificationsWithSafeEmail({
+      emailSupabase: serviceSupabase,
+      notifications: generatedNotifications,
+      supabase: serviceSupabase,
+    });
 
-    if (notificationError) {
-      logSupabaseActionError("Failed to create wish match notifications", notificationError, {
+    if (notificationResult.notificationError) {
+      logSupabaseActionError("Failed to create wish match notifications", notificationResult.notificationError, {
+        profileId,
+      });
+    }
+
+    if (notificationResult.emailError) {
+      logSupabaseActionError("Failed to queue wish match email notifications", notificationResult.emailError, {
         profileId,
       });
     }
@@ -2999,31 +3009,40 @@ export async function consentToMatchSuggestionAction(formData: FormData) {
   const bothConsented = Boolean(consentState?.both_consented);
 
   if (bothConsented && consentState) {
-    const { error: notificationError } = await supabase.from("wish_notifications").insert([
-      {
-        profile_id: viewer.authUser.id,
-        match_id: matchId,
-        kind: "consent",
-        title: "Both sides opted in",
-        body: "Identity details can now be shown for this possible moral trade.",
-      },
-      {
-        profile_id: consentState.counterparty_id,
-        match_id: matchId,
-        kind: "consent",
-        title: "Both sides opted in",
-        body: "Identity details can now be shown for this possible moral trade.",
-      },
-    ]);
+    const serviceClient = createServiceClient();
+    const notificationResult = await insertWishNotificationsWithSafeEmail({
+      notifications: [
+        {
+          profile_id: viewer.authUser.id,
+          match_id: matchId,
+          kind: "consent",
+          title: "Both sides opted in",
+          body: "Identity details can now be shown for this possible moral trade.",
+        },
+        {
+          profile_id: consentState.counterparty_id,
+          match_id: matchId,
+          kind: "consent",
+          title: "Both sides opted in",
+          body: "Identity details can now be shown for this possible moral trade.",
+        },
+      ],
+      supabase: serviceClient,
+    });
 
-    if (notificationError) {
-      logSupabaseActionError("Failed to create match consent notifications", notificationError, {
+    if (notificationResult.notificationError) {
+      logSupabaseActionError("Failed to create match consent notifications", notificationResult.notificationError, {
+        matchId,
+      });
+    }
+
+    if (notificationResult.emailError) {
+      logSupabaseActionError("Failed to queue match consent email notifications", notificationResult.emailError, {
         matchId,
       });
     }
 
     try {
-      const serviceClient = createServiceClient();
       const { data: match, error: matchError } = await serviceClient
         .from("match_suggestions")
         .select("*")
@@ -3593,16 +3612,27 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
   }
 
   const serviceClient = createServiceClient();
-  const { error: notificationError } = await serviceClient.from("wish_notifications").insert({
-    profile_id: ownerProfileId,
-    kind: "consent",
-    title: "Privacy access request",
-    body: `${viewer.displayName} requested access to ${requestedFields.join(", ")} for ${payload.requested_stage}-stage discussion.`,
-    match_id: payload.match_id,
+  const notificationResult = await insertWishNotificationsWithSafeEmail({
+    notifications: {
+      profile_id: ownerProfileId,
+      kind: "consent",
+      title: "Privacy access request",
+      body: `${viewer.displayName} requested access to ${requestedFields.join(", ")} for ${payload.requested_stage}-stage discussion.`,
+      match_id: payload.match_id,
+    },
+    supabase: serviceClient,
   });
 
-  if (notificationError) {
-    logSupabaseActionError("Failed to create privacy access request notification", notificationError, {
+  if (notificationResult.notificationError) {
+    logSupabaseActionError("Failed to create privacy access request notification", notificationResult.notificationError, {
+      ownerProfileId,
+      requesterProfileId: viewer.authUser.id,
+      requestId: requestRow.id,
+    });
+  }
+
+  if (notificationResult.emailError) {
+    logSupabaseActionError("Failed to queue privacy access request email notification", notificationResult.emailError, {
       ownerProfileId,
       requesterProfileId: viewer.authUser.id,
       requestId: requestRow.id,
@@ -3740,17 +3770,27 @@ export async function createMatchConciergeRequestAction(formData: FormData) {
   }
 
   if (requestRow.target_profile_id) {
-    const { error: notificationError } = await serviceClient.from("wish_notifications").insert({
-      profile_id: requestRow.target_profile_id,
-      kind: "consent",
-      title: "Concierge introduction request",
-      body:
-        "A participant asked an operator to review whether an introduction would be appropriate. No private details were disclosed.",
-      match_id: payload.match_id,
+    const notificationResult = await insertWishNotificationsWithSafeEmail({
+      notifications: {
+        profile_id: requestRow.target_profile_id,
+        kind: "consent",
+        title: "Concierge introduction request",
+        body:
+          "A participant asked an operator to review whether an introduction would be appropriate. No private details were disclosed.",
+        match_id: payload.match_id,
+      },
+      supabase: serviceClient,
     });
 
-    if (notificationError) {
-      logSupabaseActionError("Failed to notify target of concierge request", notificationError, {
+    if (notificationResult.notificationError) {
+      logSupabaseActionError("Failed to notify target of concierge request", notificationResult.notificationError, {
+        requestId: requestRow.id,
+        targetProfileId: requestRow.target_profile_id,
+      });
+    }
+
+    if (notificationResult.emailError) {
+      logSupabaseActionError("Failed to queue target concierge request email", notificationResult.emailError, {
         requestId: requestRow.id,
         targetProfileId: requestRow.target_profile_id,
       });
@@ -3850,18 +3890,26 @@ export async function updateMatchConciergeRequestAction(formData: FormData) {
   ].filter((profileId): profileId is string => Boolean(profileId));
 
   if (notificationTargets.length) {
-    const { error: notificationError } = await supabase.from("wish_notifications").insert(
-      notificationTargets.map((profileId) => ({
+    const notificationResult = await insertWishNotificationsWithSafeEmail({
+      notifications: notificationTargets.map((profileId) => ({
         profile_id: profileId,
         kind: "consent" as const,
         title: "Concierge request updated",
         body: `An operator moved the introduction request to ${nextStatus.replaceAll("_", " ")}.`,
         match_id: matchId,
       })),
-    );
+      supabase,
+    });
 
-    if (notificationError) {
-      logSupabaseActionError("Failed to notify concierge request participants", notificationError, {
+    if (notificationResult.notificationError) {
+      logSupabaseActionError("Failed to notify concierge request participants", notificationResult.notificationError, {
+        requestId,
+        nextStatus,
+      });
+    }
+
+    if (notificationResult.emailError) {
+      logSupabaseActionError("Failed to queue concierge request update emails", notificationResult.emailError, {
         requestId,
         nextStatus,
       });
@@ -4489,16 +4537,26 @@ export async function respondPrivacyAccessRequestAction(formData: FormData) {
       : nextStatus === "denied"
         ? "declined"
         : "withdrew";
-  const { error: notificationError } = await serviceClient.from("wish_notifications").insert({
-    profile_id: notificationTarget,
-    kind: "consent",
-    title: "Privacy access request updated",
-    body: `${actorLabel} ${statusLabel} a request covering ${requestRow.requested_fields.join(", ")}.`,
-    match_id: requestRow.match_id,
+  const notificationResult = await insertWishNotificationsWithSafeEmail({
+    notifications: {
+      profile_id: notificationTarget,
+      kind: "consent",
+      title: "Privacy access request updated",
+      body: `${actorLabel} ${statusLabel} a request covering ${requestRow.requested_fields.join(", ")}.`,
+      match_id: requestRow.match_id,
+    },
+    supabase: serviceClient,
   });
 
-  if (notificationError) {
-    logSupabaseActionError("Failed to notify about privacy access request update", notificationError, {
+  if (notificationResult.notificationError) {
+    logSupabaseActionError("Failed to notify about privacy access request update", notificationResult.notificationError, {
+      requestId,
+      userId: viewer.authUser.id,
+    });
+  }
+
+  if (notificationResult.emailError) {
+    logSupabaseActionError("Failed to queue privacy access request update email", notificationResult.emailError, {
       requestId,
       userId: viewer.authUser.id,
     });
@@ -5733,6 +5791,40 @@ export async function updateMatchReportStatusAction(formData: FormData) {
 
   revalidatePath("/admin");
   redirectWithMessage(returnTo, "message", "Report status updated.");
+}
+
+export async function updateRiskSignalStatusAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const signalId = readRequired(formData, "risk_signal_id");
+  const rawStatus = readRequired(formData, "status");
+  const status =
+    rawStatus === "reviewed" || rawStatus === "dismissed" ? rawStatus : "open";
+
+  if (!signalId) {
+    redirectWithMessage(returnTo, "error", "Risk signal ID is required.");
+  }
+
+  await requireAdminViewer(returnTo);
+  const updatePayload: RiskSignalUpdate = {
+    status,
+    reviewed_at: status === "open" ? null : new Date().toISOString(),
+  };
+  const supabase = createServiceClient();
+  const { error } = await supabase
+    .from("risk_signals")
+    .update(updatePayload)
+    .eq("id", signalId);
+
+  if (error) {
+    logSupabaseActionError("Failed to update risk signal status", error, {
+      signalId,
+      status,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/admin");
+  redirectWithMessage(returnTo, "message", "Risk signal status updated.");
 }
 
 async function upsertVerificationBadgeForProfile({

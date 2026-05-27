@@ -92,6 +92,19 @@ function formatConciergeSla(value: string | null) {
   return diffMs < 0 ? `SLA overdue by ${hours}h` : `SLA due in ${hours}h`;
 }
 
+function formatDashboardDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "Not run yet";
+  }
+
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) {
+    return "Date unavailable";
+  }
+
+  return new Date(timestamp).toLocaleString();
+}
+
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
@@ -122,6 +135,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const activeConciergeRequests = conciergeRequests.filter(
     (request) => !["declined", "closed"].includes(request.status),
   );
+  const latestBackgroundRun = dashboardData?.backgroundRuns[0] ?? null;
+  const unreadWishNotificationCount =
+    dashboardData?.wishNotifications.filter((notification) => !notification.read_at).length ?? 0;
+  const suggestedMatchCount =
+    dashboardData?.matchSuggestions.filter((match) => match.status === "suggested").length ?? 0;
+  const consentedMatchCount =
+    dashboardData?.matchSuggestions.filter((match) => match.viewerConsented).length ?? 0;
+  const activeSavedSearchCount =
+    dashboardData?.savedSearches.filter((search) => search.status === "active").length ?? 0;
+  const scheduledSavedSearchCount =
+    dashboardData?.savedSearches.filter(
+      (search) => search.status === "active" && search.cadence !== "manual",
+    ).length ?? 0;
 
   return (
     <div className="page-shell">
@@ -483,6 +509,50 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               Suggestions show only enough information to decide whether an introduction is worth
               exploring. Identity details remain gated until both sides opt in.
             </p>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Match inbox</p>
+            <h3>Background networking status</h3>
+            <p className="route-text">
+              Scans use only your saved wish profile, broad registry previews, saved searches, and
+              manual source summaries. They do not read private feeds, send outreach, or reveal
+              exact wishes without consent.
+            </p>
+            <dl className="values-summary compact-summary">
+              <div>
+                <dt>Last scan</dt>
+                <dd>
+                  {formatDashboardDateTime(
+                    latestBackgroundRun?.completed_at ?? latestBackgroundRun?.created_at,
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Last result</dt>
+                <dd>
+                  {latestBackgroundRun
+                    ? `${latestBackgroundRun.status}; ${latestBackgroundRun.matches_created} new, ${latestBackgroundRun.matches_refreshed} refreshed, ${latestBackgroundRun.candidates_scanned} scanned`
+                    : "Run a scan after saving a discoverable wish profile."}
+                </dd>
+              </div>
+              <div>
+                <dt>Open matches</dt>
+                <dd>
+                  {suggestedMatchCount} suggested; {consentedMatchCount} with your opt-in
+                </dd>
+              </div>
+              <div>
+                <dt>Unread alerts</dt>
+                <dd>{unreadWishNotificationCount}</dd>
+              </div>
+              <div>
+                <dt>Saved searches</dt>
+                <dd>
+                  {activeSavedSearchCount} active; {scheduledSavedSearchCount} scheduled
+                </dd>
+              </div>
+            </dl>
           </div>
 
           <div className="panel data-card data-card-wide">
