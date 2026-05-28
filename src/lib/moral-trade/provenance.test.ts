@@ -5,7 +5,10 @@ import {
   createMoralTradeExternalEntityReference,
   createMoralTradeEvidenceArtifact,
   createMoralTradeTraceabilityEvent,
+  getMoralTradeProvenanceContract,
+  getMoralTradeProvenanceSampleBundle,
   MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS,
+  validateMoralTradeProvenanceContract,
   validateMoralTradeProvenanceBundle,
   type MoralTradeEvidenceArtifact,
   type MoralTradeEvidenceClaim,
@@ -160,6 +163,24 @@ test("provenance bundles pass with entity/activity/agent links", () => {
   assert.ok(MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.some((schema) => schema.key === "traceability_event"));
 });
 
+test("provenance contract publishes validator-backed sample bundle coverage", () => {
+  const contract = getMoralTradeProvenanceContract();
+  const validation = validateMoralTradeProvenanceContract(contract);
+  const sampleValidation = validateMoralTradeProvenanceBundle(
+    getMoralTradeProvenanceSampleBundle(),
+    { now: new Date("2026-05-28T12:00:00.000Z") },
+  );
+
+  assert.equal(validation.status, "pass");
+  assert.equal(sampleValidation.status, "pass");
+  assert.ok(contract.validationRules.some((rule) => rule.key === "one-proof-one-claim"));
+  assert.ok(contract.validationRules.some((rule) => rule.key === "traceability-events"));
+  assert.ok(contract.validationRules.some((rule) => rule.key === "external-entity-references"));
+  assert.equal(contract.sampleBundleSummary.validationStatus, "pass");
+  assert.ok(contract.sampleBundleSummary.reviewDecisionCount > 0);
+  assert.ok(contract.contractTests.includes("technical_spec_provenance_contract_smoke"));
+});
+
 test("external entity references normalize identifiers and produce stable dedupe keys", () => {
   const first = externalEntity();
   const second = createMoralTradeExternalEntityReference({
@@ -253,6 +274,28 @@ test("charity traceability events require verified external entity references", 
   assert.ok(unverifiedEntity.blockers.some((blocker) => blocker.includes("external-entity-references")));
   assert.equal(duplicateEntity.status, "fail");
   assert.ok(duplicateEntity.blockers.some((blocker) => blocker.includes("external-entity-references")));
+});
+
+test("review decisions must name a known reviewer agent", () => {
+  const result = validateMoralTradeProvenanceBundle(
+    bundle({
+      reviewDecisions: [
+        {
+          id: "review-decision-1",
+          proposalId: "proposal-1",
+          outcome: "needs_more",
+          reasonCodes: ["evidence_sufficiency"],
+          summary: "Reviewer identity is missing from the provenance bundle.",
+          reviewerId: "missing-reviewer",
+          createdAt: submittedAt,
+        },
+      ],
+    }),
+    { now },
+  );
+
+  assert.equal(result.status, "fail");
+  assert.ok(result.blockers.some((blocker) => blocker.includes("agent-links")));
 });
 
 test("wrong-scope evidence cannot satisfy a claim", () => {

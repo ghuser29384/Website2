@@ -4,7 +4,16 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
+import { getMoralTradeProvenanceContract } from "@/lib/moral-trade/provenance";
+import {
+  evaluateMoralTradeProtocolDraft,
+  formatProtocolReviewStatus,
+  getOfferReviewCardInstrumentation,
+  getOfferReviewWorkflowContract,
+  type ProtocolReviewStatus,
+} from "@/lib/proposal-review";
 import { getAbsoluteUrl } from "@/lib/seo";
+import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -43,63 +52,75 @@ const topics = [
   "Moral uncertainty",
 ] as const;
 
-const reviewRecords = [
-  {
-    status: "Needs evidence",
-    statusTone: "needs-input",
-    scope: "Worked-example draft",
-    title: "Donation offset baseline credibility",
-    factorCodes: ["baseline_credibility", "evidence_sufficiency", "match_explanation"],
-    summary:
-      "A draft can describe the matched redirection and compromise destination, but it cannot become matchable until the evidence object names a receipt, public log, audit, or reviewer-verifiable record.",
-    nextStep:
-      "Attach a specific evidence source and state why the action was not already planned without the trade.",
-  },
-  {
-    status: "Blocked",
-    statusTone: "blocked",
-    scope: "Safety gate",
-    title: "Threat or coercive baseline",
-    factorCodes: ["anti_threat", "human_review_routing"],
-    summary:
-      "Records that rely on threats, retaliation, harassment, doxxing, fake evidence, or vulnerable-person pressure are refused instead of routed into matching or outreach.",
-    nextStep:
-      "Rewrite the proposal around a voluntary action both parties can decline, or keep it out of the marketplace.",
-  },
-  {
-    status: "Human review",
-    statusTone: "human-review",
-    scope: "Externality trigger",
-    title: "Third-party standing and dissent",
-    factorCodes: ["externality_trigger", "human_review_routing", "privacy_redaction"],
-    summary:
-      "A proposal that could materially affect non-participants needs reviewer routing before publication, with private details redacted and dissent summarized when safe.",
-    nextStep:
-      "Name the potentially affected group, the harm pathway, and what public summary can be disclosed without exposing private parties.",
-  },
-  {
-    status: "Pass with limits",
-    statusTone: "pass",
-    scope: "Explanation record",
-    title: "Privacy-safe match explanation",
-    factorCodes: ["privacy_redaction", "match_explanation", "schema_completeness"],
-    summary:
-      "A match explanation can expose compatible cause areas, action types, and review state while keeping counterparties hidden until both sides consent.",
-    nextStep:
-      "Publish only redacted factor codes and confidence bands; do not reveal identities, private wishes, or autonomous contact suggestions.",
-  },
-  {
-    status: "Needs evidence",
-    statusTone: "needs-input",
-    scope: "Draft completeness",
-    title: "Required fields before reliance",
-    factorCodes: ["schema_completeness", "evidence_sufficiency", "baseline_credibility"],
-    summary:
-      "A draft may be saved as a private checklist, but public reliance requires action terms, reciprocal request, exit rule, evidence standard, and anti-threat certification.",
-    nextStep:
-      "Complete the missing fields before asking reviewers or counterparties to rely on the record.",
-  },
-] as const;
+function getReasoningStatusTone(status: ProtocolReviewStatus) {
+  switch (status) {
+    case "blocked":
+      return "blocked";
+    case "matchable":
+      return "pass";
+    case "needs_human_review":
+      return "human-review";
+    default:
+      return "needs-input";
+  }
+}
+
+function getWorkedCaseBaselineStatement(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]) {
+  if (offer.mode === "offset" && offer.baselineAmountUsd) {
+    return `Without this trade, ${offer.alias} reports a baseline intention to direct $${offer.baselineAmountUsd.toLocaleString()} toward ${offer.baselineOpposedCause}.`;
+  }
+
+  return `Without this trade, ${offer.alias} would not expect this reciprocal ${offer.mode} to happen during ${offer.duration}.`;
+}
+
+function getReasoningReviewRecords() {
+  return CANONICAL_WORKED_CASE_OFFERS.slice(0, 5).map((offer, index) => {
+    const protocolReview = evaluateMoralTradeProtocolDraft({
+      format: offer.mode,
+      offeredCause: offer.offeredCause,
+      requestedCause: offer.requestedCause,
+      offeredAction: offer.offerAction,
+      requestedAction: offer.requestAction,
+      baselineStatement: getWorkedCaseBaselineStatement(offer),
+      duration: offer.duration,
+      exitConditions:
+        "If evidence is missing, disputed, stale, or outside the agreed scope, this worked example stays unresolved until a reviewer records a scoped decision.",
+      verificationMethod: offer.verification,
+      publicDescription: offer.notes,
+      evidenceUrl: offer.evidenceUrl,
+      participantImportance: offer.offerImpact,
+      counterpartyThreshold: offer.minCounterpartyImpact,
+    });
+    const marketplaceInstrumentation = getOfferReviewCardInstrumentation({
+      ...offer,
+      currentStatus: "Worked example; manual review required before reliance",
+      offerImpact: offer.offerImpact,
+      minCounterpartyImpact: offer.minCounterpartyImpact,
+    });
+    const factorCodes = Array.from(
+      new Set([...marketplaceInstrumentation.factorCodes, ...protocolReview.factorCodes]),
+    ).slice(0, 7);
+
+    return {
+      status: formatProtocolReviewStatus(protocolReview.status),
+      statusTone: getReasoningStatusTone(protocolReview.status),
+      scope: `Worked example ${offer.id}`,
+      title: `${offer.alias}: ${offer.offeredCause} for ${offer.requestedCause}`,
+      factorCodes,
+      summary: protocolReview.summary,
+      nextStep: protocolReview.nextStepChecklist[0] ?? marketplaceInstrumentation.nextStep,
+      evidenceRows: protocolReview.citedEvidenceTable.slice(0, 3),
+      uncertaintyFlags: protocolReview.uncertaintyFlags.slice(0, 4),
+      reviewScope: protocolReview.reviewInstructions.reviewScope.slice(0, 3),
+      href: `/offers/examples/${offer.id}`,
+      rank: index + 1,
+    };
+  });
+}
+
+const reviewRecords = getReasoningReviewRecords();
+const provenanceContract = getMoralTradeProvenanceContract();
+const reviewWorkflowContract = getOfferReviewWorkflowContract();
 
 const reviewNotes = [
   {
@@ -208,8 +229,26 @@ export default async function ReasoningCenterPage() {
             ))}
           </div>
 
+          <section className="reasoning-contract-strip" aria-label="Published review contracts">
+            <article>
+              <span>Review workflow</span>
+              <strong>{reviewWorkflowContract.detailWorkflowCards.length} cards</strong>
+              <small>{reviewWorkflowContract.marketplaceFactorPriority.length} marketplace factors</small>
+            </article>
+            <article>
+              <span>Provenance contract</span>
+              <strong>{provenanceContract.validationRules.length} rules</strong>
+              <small>{provenanceContract.sampleBundleSummary.validationStatus} sample bundle</small>
+            </article>
+            <article>
+              <span>Public packet source</span>
+              <strong>{reviewRecords.length} worked examples</strong>
+              <small>deterministic review output only</small>
+            </article>
+          </section>
+
           <div className="reasoning-post-list" aria-label="Public review records">
-            {reviewRecords.map((record, index) => (
+            {reviewRecords.map((record) => (
               <article className="reasoning-post-row" key={record.title}>
                 <div
                   className={`reasoning-status-box reasoning-status-${record.statusTone}`}
@@ -219,9 +258,9 @@ export default async function ReasoningCenterPage() {
                   <small>state</small>
                 </div>
                 <div className="reasoning-post-main">
-                  <div className="reasoning-post-rank">#{index + 1}</div>
+                  <div className="reasoning-post-rank">#{record.rank}</div>
                   <h2>
-                    <Link href="/reasoning-center">{record.title}</Link>
+                    <Link href={record.href}>{record.title}</Link>
                   </h2>
                   <p>{record.summary}</p>
                   <div className="reasoning-factor-list" aria-label="Factor codes">
@@ -234,9 +273,43 @@ export default async function ReasoningCenterPage() {
                   <p className="reasoning-next-step">
                     <strong>Next step:</strong> {record.nextStep}
                   </p>
+                  <div className="reasoning-packet-grid">
+                    <div>
+                      <strong>Cited evidence rows</strong>
+                      <ul>
+                        {record.evidenceRows.map((row) => (
+                          <li key={`${record.title}:${row.citation}:${row.claim}`}>
+                            {row.status}: {row.claim}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <strong>Uncertainty flags</strong>
+                      {record.uncertaintyFlags.length ? (
+                        <ul>
+                          {record.uncertaintyFlags.map((flag) => (
+                            <li key={`${record.title}:${flag}`}>{flag}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>No public uncertainty flags beyond ordinary reviewer scope.</p>
+                      )}
+                    </div>
+                    <div>
+                      <strong>Reviewer scope</strong>
+                      <ul>
+                        {record.reviewScope.map((scope) => (
+                          <li key={`${record.title}:${scope}`}>{scope}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                   <div className="reasoning-post-meta">
                     <span>{record.scope}</span>
                     <Link href="/moral-trade/technical-spec">Protocol spec</Link>
+                    <Link href="/api/moral-trade/review-workflow/contract">Review contract</Link>
+                    <Link href="/api/moral-trade/provenance/schema">Provenance schema</Link>
                     <Link href="/reasoning-standards">Evidence standards</Link>
                   </div>
                 </div>
@@ -259,6 +332,21 @@ export default async function ReasoningCenterPage() {
                 </article>
               ))}
             </div>
+          </section>
+
+          <section className="reasoning-widget">
+            <div className="reasoning-widget-head">
+              <h2>Contract rules</h2>
+              <Link href="/api/moral-trade/provenance/schema">JSON</Link>
+            </div>
+            <ul className="reasoning-contract-rule-list">
+              {provenanceContract.validationRules.slice(0, 5).map((rule) => (
+                <li key={rule.key}>
+                  <strong>{rule.key}</strong>
+                  <span>{rule.label}</span>
+                </li>
+              ))}
+            </ul>
           </section>
 
           <section className="reasoning-widget">

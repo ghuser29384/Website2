@@ -232,6 +232,43 @@ export interface MoralTradeProvenanceValidation {
   blockers: string[];
 }
 
+export interface MoralTradeProvenanceValidationRule {
+  key: string;
+  label: string;
+  rule: string;
+}
+
+export interface MoralTradeProvenanceContract {
+  schemaVersion: string;
+  purpose: string;
+  objectSchemas: readonly {
+    key: string;
+    label: string;
+    required: readonly string[];
+  }[];
+  validationRules: readonly MoralTradeProvenanceValidationRule[];
+  sampleBundleSummary: {
+    artifactCount: number;
+    claimCount: number;
+    reviewDecisionCount: number;
+    activityCount: number;
+    agentCount: number;
+    externalEntityReferenceCount: number;
+    traceabilityEventCount: number;
+    validationStatus: MoralTradeProvenanceValidation["status"];
+  };
+  contractTests: string[];
+}
+
+export interface MoralTradeProvenanceContractValidation {
+  status: "pass" | "fail";
+  validatorName: "moral-trade-provenance-contract";
+  validatorVersion: string;
+  schemaVersion: string;
+  checks: MoralTradeProvenanceCheck[];
+  blockers: string[];
+}
+
 export const MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS = [
   {
     key: "evidence_artifact",
@@ -325,6 +362,57 @@ export const MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS = [
     required: ["id", "kind", "label"],
   },
 ] as const;
+
+export const MORAL_TRADE_PROVENANCE_VALIDATION_RULES: MoralTradeProvenanceValidationRule[] = [
+  {
+    key: "artifact-hashes",
+    label: "Artifacts are content-addressed",
+    rule: "Evidence artifacts and traceability events must carry stable sha256 digests.",
+  },
+  {
+    key: "claim-artifact-links",
+    label: "Claims link to existing artifacts",
+    rule: "Every evidence claim must link to existing artifacts.",
+  },
+  {
+    key: "scope-alignment",
+    label: "Artifact scopes match claims",
+    rule: "Artifact claim scopes must match the claim being reviewed.",
+  },
+  {
+    key: "one-proof-one-claim",
+    label: "Duplicate proof is explicit",
+    rule: "Duplicate proof reuse must be explicit, not silent.",
+  },
+  {
+    key: "freshness-window",
+    label: "Artifact timestamps are reviewable",
+    rule: "Evidence timestamps must be fresh enough for the review context or flagged.",
+  },
+  {
+    key: "agent-links",
+    label: "Artifacts, decisions, and activities name agents",
+    rule: "Artifacts, reviewer decisions, traceability events, and activities must name provenance agents.",
+  },
+  {
+    key: "traceability-events",
+    label: "Traceability records link what, where, and why",
+    rule: "External payment or charity-routing events must link what happened, where it was recorded, why it matters, and which agents touched it.",
+  },
+  {
+    key: "external-entity-references",
+    label: "External entities have stable identifiers",
+    rule: "External charities, providers, and supplier-like entities need stable identifier references, dedupe keys, and verified registry or reviewer status before traceability reliance.",
+  },
+  {
+    key: "prov-triplets",
+    label: "Bundle has entity/activity/agent structure",
+    rule: "Every reviewed evidence bundle must keep W3C PROV-style entities, activities, and agents distinct.",
+  },
+];
+
+export const MORAL_TRADE_PROVENANCE_CONTRACT_VALIDATOR_VERSION =
+  "moral-trade-provenance-contract-validator-v0.1";
 
 function sortObjectKeys(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -483,6 +571,120 @@ export function createMoralTradeTraceabilityEvent(
   };
 }
 
+export function getMoralTradeProvenanceSampleBundle(): MoralTradeProvenanceBundle {
+  const submittedAt = "2026-05-01T12:00:00.000Z";
+  const participant: MoralTradeProvenanceAgent = {
+    id: "agent-participant-sample",
+    kind: "participant",
+    label: "Sample submitting participant",
+  };
+  const reviewer: MoralTradeProvenanceAgent = {
+    id: "agent-reviewer-sample",
+    kind: "external_reviewer",
+    label: "Sample evidence reviewer",
+  };
+  const provider: MoralTradeProvenanceAgent = {
+    id: "agent-provider-sample",
+    kind: "payment_or_evidence_provider",
+    label: "Sample receipt provider",
+  };
+  const externalEntity = createMoralTradeExternalEntityReference({
+    id: "entity-charity-sample",
+    entityType: "charity",
+    label: "Sample Global Health Charity",
+    identifierSystem: "every_org_slug",
+    identifier: "sample-global-health",
+    sourceLocator: "https://www.every.org/sample-global-health",
+    verificationStatus: "external_registry_matched",
+    redactionLevel: "public",
+  });
+  const artifact = createMoralTradeEvidenceArtifact({
+    id: "artifact-receipt-sample",
+    kind: "receipt",
+    locator: "https://evidence.example.org/receipts/sample-donation",
+    mediaType: "text/html",
+    claimScopes: ["payment_or_donation_record", "factual_action"],
+    submittedAt,
+    submittedByAgentId: participant.id,
+    redactionLevel: "reviewer_only",
+  });
+  const claim: MoralTradeEvidenceClaim = {
+    id: "claim-donation-sample",
+    proposalId: "proposal-sample",
+    claimType: "receipt",
+    artifactIds: [artifact.id],
+    claimScope: "payment_or_donation_record",
+    reviewerConfidence: "medium",
+    uniquenessChecked: true,
+    createdAt: submittedAt,
+  };
+  const uploadActivity: MoralTradeProvenanceActivity = {
+    id: "activity-upload-sample",
+    kind: "evidence_submitted",
+    at: submittedAt,
+    usedEntityIds: [],
+    generatedEntityIds: [artifact.id, claim.id],
+    agentIds: [participant.id, provider.id],
+  };
+  const reviewDecision: MoralTradeReviewDecision = {
+    id: "review-decision-sample",
+    proposalId: "proposal-sample",
+    outcome: "needs_more",
+    reasonCodes: ["evidence_sufficiency", "payment_or_donation_record"],
+    summary:
+      "Sample receipt locator is present; scope, freshness, and uniqueness remain reviewer-scoped before reliance.",
+    reviewerId: reviewer.id,
+    createdAt: submittedAt,
+  };
+  const reviewActivity: MoralTradeProvenanceActivity = {
+    id: "activity-review-sample",
+    kind: "review_completed",
+    at: submittedAt,
+    usedEntityIds: [artifact.id, claim.id],
+    generatedEntityIds: [reviewDecision.id],
+    agentIds: [reviewer.id],
+  };
+  const traceabilityEvent = createMoralTradeTraceabilityEvent({
+    id: "trace-event-sample",
+    eventTime: submittedAt,
+    recordedAt: submittedAt,
+    action: "OBSERVE",
+    businessStep: "payment_recorded",
+    disposition: "in_review",
+    what: {
+      proposalId: "proposal-sample",
+      artifactIds: [artifact.id],
+      claimIds: [claim.id],
+      amountCents: 2500,
+      currency: "USD",
+    },
+    where: {
+      locationType: "charity",
+      locator: "https://payments.example.org/receipts/sample-donation",
+      provider: "sample payment provider",
+      externalEntityId: externalEntity.id,
+    },
+    why: {
+      reasonCodes: ["payment_or_donation_record"],
+      sourceActivityId: uploadActivity.id,
+      relatedReviewDecisionId: reviewDecision.id,
+    },
+    agentIds: [participant.id, provider.id],
+    redactionLevel: "reviewer_only",
+  });
+
+  return {
+    proposalId: "proposal-sample",
+    artifacts: [artifact],
+    claims: [claim],
+    reviewDecisions: [reviewDecision],
+    activities: [uploadActivity, reviewActivity],
+    agents: [participant, reviewer, provider],
+    externalEntityReferences: [externalEntity],
+    traceabilityEvents: [traceabilityEvent],
+  };
+}
+
 function check(
   id: string,
   label: string,
@@ -579,6 +781,9 @@ export function validateMoralTradeProvenanceBundle(
     ...bundle.artifacts
       .filter((artifact) => !agentsById.has(artifact.submittedByAgentId))
       .map((artifact) => `${artifact.id}:${artifact.submittedByAgentId}`),
+    ...bundle.reviewDecisions
+      .filter((decision) => !agentsById.has(decision.reviewerId))
+      .map((decision) => `${decision.id}:${decision.reviewerId}`),
     ...bundle.activities.flatMap((activity) =>
       activity.agentIds.filter((agentId) => !agentsById.has(agentId)).map((agentId) => `${activity.id}:${agentId}`),
     ),
@@ -706,6 +911,116 @@ export function validateMoralTradeProvenanceBundle(
   return {
     status: blockers.length ? "fail" : "pass",
     schemaVersion: MORAL_TRADE_PROVENANCE_SCHEMA_VERSION,
+    checks,
+    blockers,
+  };
+}
+
+export function getMoralTradeProvenanceContract(): MoralTradeProvenanceContract {
+  const sampleBundle = getMoralTradeProvenanceSampleBundle();
+  const sampleValidation = validateMoralTradeProvenanceBundle(sampleBundle, {
+    now: new Date("2026-05-28T12:00:00.000Z"),
+  });
+
+  return {
+    schemaVersion: MORAL_TRADE_PROVENANCE_SCHEMA_VERSION,
+    purpose:
+      "Public validator contract for provenance-first Moral Trade evidence objects, review decisions, external entity references, traceability events, activities, and agents.",
+    objectSchemas: MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS,
+    validationRules: MORAL_TRADE_PROVENANCE_VALIDATION_RULES,
+    sampleBundleSummary: {
+      artifactCount: sampleBundle.artifacts.length,
+      claimCount: sampleBundle.claims.length,
+      reviewDecisionCount: sampleBundle.reviewDecisions.length,
+      activityCount: sampleBundle.activities.length,
+      agentCount: sampleBundle.agents.length,
+      externalEntityReferenceCount: sampleBundle.externalEntityReferences?.length ?? 0,
+      traceabilityEventCount: sampleBundle.traceabilityEvents?.length ?? 0,
+      validationStatus: sampleValidation.status,
+    },
+    contractTests: [
+      "provenance_contract_validator",
+      "provenance_sample_bundle_smoke",
+      "traceability_event_contract_smoke",
+      "technical_spec_provenance_contract_smoke",
+    ],
+  };
+}
+
+export function validateMoralTradeProvenanceContract(
+  contract: MoralTradeProvenanceContract = getMoralTradeProvenanceContract(),
+): MoralTradeProvenanceContractValidation {
+  const schemaKeys = contract.objectSchemas.map((schema) => schema.key);
+  const ruleKeys = contract.validationRules.map((rule) => rule.key);
+  const sampleBundle = getMoralTradeProvenanceSampleBundle();
+  const sampleValidation = validateMoralTradeProvenanceBundle(sampleBundle, {
+    now: new Date("2026-05-28T12:00:00.000Z"),
+  });
+  const requiredSchemaKeys = [
+    "evidence_artifact",
+    "evidence_claim",
+    "external_entity_reference",
+    "review_decision",
+    "match_signal",
+    "traceability_event",
+    "provenance_activity",
+    "provenance_agent",
+  ];
+  const requiredRuleKeys = MORAL_TRADE_PROVENANCE_VALIDATION_RULES.map((rule) => rule.key);
+  const checks = [
+    check(
+      "object-schema-coverage",
+      "Evidence, decision, traceability, activity, and agent schemas are public",
+      requiredSchemaKeys.every((key) => schemaKeys.includes(key)) &&
+        contract.objectSchemas.every((schema) => schema.required.length >= 3),
+      schemaKeys.join(", "),
+    ),
+    check(
+      "validation-rule-coverage",
+      "Published provenance rules match the bundle validator checks",
+      requiredRuleKeys.every((key) => ruleKeys.includes(key)),
+      ruleKeys.join(", "),
+    ),
+    check(
+      "sample-bundle-validation",
+      "Synthetic evidence bundle proves the contract is executable",
+      sampleValidation.status === "pass" &&
+        contract.sampleBundleSummary.validationStatus === "pass" &&
+        contract.sampleBundleSummary.artifactCount > 0 &&
+        contract.sampleBundleSummary.claimCount > 0 &&
+        contract.sampleBundleSummary.reviewDecisionCount > 0 &&
+        contract.sampleBundleSummary.traceabilityEventCount > 0,
+      `${contract.sampleBundleSummary.artifactCount} artifact(s), ${contract.sampleBundleSummary.claimCount} claim(s), ${contract.sampleBundleSummary.traceabilityEventCount} traceability event(s), ${sampleValidation.blockers.length} blocker(s).`,
+    ),
+    check(
+      "agent-reviewed-decisions",
+      "Reviewer decisions name provenance agents",
+      sampleBundle.reviewDecisions.every((decision) =>
+        sampleBundle.agents.some((agent) => agent.id === decision.reviewerId),
+      ),
+      sampleBundle.reviewDecisions.map((decision) => `${decision.id}:${decision.reviewerId}`).join(", "),
+    ),
+    check(
+      "contract-tests",
+      "Provenance contract test hooks are named",
+      [
+        "provenance_contract_validator",
+        "provenance_sample_bundle_smoke",
+        "traceability_event_contract_smoke",
+        "technical_spec_provenance_contract_smoke",
+      ].every((hook) => contract.contractTests.includes(hook)),
+      contract.contractTests.join(", "),
+    ),
+  ];
+  const blockers = checks
+    .filter((entry) => entry.status === "fail")
+    .map((entry) => `${entry.id}: ${entry.label}`);
+
+  return {
+    status: blockers.length ? "fail" : "pass",
+    validatorName: "moral-trade-provenance-contract",
+    validatorVersion: MORAL_TRADE_PROVENANCE_CONTRACT_VALIDATOR_VERSION,
+    schemaVersion: contract.schemaVersion,
     checks,
     blockers,
   };

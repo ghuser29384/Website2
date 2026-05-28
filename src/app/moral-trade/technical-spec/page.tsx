@@ -18,6 +18,10 @@ import {
   validateMoralTradeProtocolProfile,
 } from "@/lib/moral-trade/protocol";
 import {
+  getMoralTradeProvenanceContract,
+  validateMoralTradeProvenanceContract,
+} from "@/lib/moral-trade/provenance";
+import {
   getMoralTradeOperationsProfile,
   validateMoralTradeOperationsProfile,
 } from "@/lib/moral-trade/operations";
@@ -69,6 +73,8 @@ export default async function MoralTradeTechnicalSpecPage() {
   const viewer = await getViewer();
   const profile = getMoralTradeProtocolProfile();
   const validation = validateMoralTradeProtocolProfile();
+  const provenanceContract = getMoralTradeProvenanceContract();
+  const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
   const reviewWorkflowContract = getOfferReviewWorkflowContract();
@@ -971,6 +977,48 @@ export default async function MoralTradeTechnicalSpecPage() {
               external payment or charity-routing events without what/where/why links can be caught
               before any reviewed completion claim is published.
             </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Provenance contract {provenanceContract.schemaVersion}</p>
+              <h3>Status {provenanceValidation.status}</h3>
+              <p>
+                {provenanceValidation.checks.length} check(s),{" "}
+                {provenanceValidation.blockers.length} blocker(s),{" "}
+                {provenanceContract.sampleBundleSummary.traceabilityEventCount} synthetic
+                traceability event(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/provenance/schema">
+              Open provenance JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Validator rules</h3>
+              <ul className="clean-list">
+                {provenanceContract.validationRules.slice(0, 5).map((rule) => (
+                  <li key={rule.key}>{rule.key}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Sample bundle</h3>
+              <p>
+                {provenanceContract.sampleBundleSummary.artifactCount} artifact,{" "}
+                {provenanceContract.sampleBundleSummary.claimCount} claim,{" "}
+                {provenanceContract.sampleBundleSummary.reviewDecisionCount} review decision,{" "}
+                {provenanceContract.sampleBundleSummary.agentCount} agents.
+              </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Contract tests</h3>
+              <ul className="clean-list">
+                {provenanceContract.contractTests.map((hook) => (
+                  <li key={hook}>{hook.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
           </div>
           <div className="protocol-contract-grid">
             {profile.provenanceObjectSchemas.map((schema) => (

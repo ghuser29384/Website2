@@ -13,6 +13,7 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
 
   assert.equal(validation.status, "pass");
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_health"));
+  assert.ok(profile.routes.some((route) => route.key === "moral_trade_provenance_schema"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_security_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_copilot_review"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_review_workflow_evaluate"));
@@ -26,6 +27,11 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_export_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "empty_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_import_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "provenance_schema_response")
+      ?.fields.some((field) => field.key === "sampleBundleSummary"),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "copilot_review_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "copilot_review_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_request"));
@@ -80,6 +86,10 @@ test("api contract validation fails when private or sparse-preview protections a
         return { ...route, rateLimitSurface: "public_contract_read", fallback: "Return all rows." };
       }
 
+      if (route.key === "moral_trade_provenance_schema") {
+        return { ...route, cacheControl: "public_contract_static", fallback: "Return schemas." };
+      }
+
       if (route.key === "moral_trade_copilot_review") {
         return { ...route, cacheControl: "public_cache", fallback: "Return generated output." };
       }
@@ -96,6 +106,7 @@ test("api contract validation fails when private or sparse-preview protections a
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("private-cache-controls")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("privacy-thresholded-search")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("provenance-schema-validator")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("copilot-review-nonmutating")));
   assert.ok(
     validation.blockers.some((blocker) =>

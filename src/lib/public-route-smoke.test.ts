@@ -410,14 +410,25 @@ test("background networking and reasoning routes are distinct resilient public r
   assert.match(reasoningCenterPage, /getOptionalViewerForReasoningCenter/);
   assert.match(reasoningCenterPage, /Rendering signed-out state after viewer lookup failed/);
   assert.match(reasoningCenterPage, /not a live forum or autonomous moral-ranking system/);
-  assert.match(reasoningCenterPage, /baseline_credibility/);
-  assert.match(reasoningCenterPage, /evidence_sufficiency/);
-  assert.match(reasoningCenterPage, /human_review_routing/);
+  assert.match(reasoningCenterPage, /getReasoningReviewRecords/);
+  assert.match(reasoningCenterPage, /CANONICAL_WORKED_CASE_OFFERS/);
+  assert.match(reasoningCenterPage, /evaluateMoralTradeProtocolDraft/);
+  assert.match(reasoningCenterPage, /getOfferReviewCardInstrumentation/);
+  assert.match(reasoningCenterPage, /getMoralTradeProvenanceContract/);
+  assert.match(reasoningCenterPage, /getOfferReviewWorkflowContract/);
+  assert.match(reasoningCenterPage, /Cited evidence rows/);
+  assert.match(reasoningCenterPage, /Uncertainty flags/);
+  assert.match(reasoningCenterPage, /Reviewer scope/);
+  assert.match(reasoningCenterPage, /\/api\/moral-trade\/provenance\/schema/);
+  assert.match(reasoningCenterPage, /\/api\/moral-trade\/review-workflow\/contract/);
   assert.equal(reasoningCenterPage.includes("Mira Chen"), false);
   assert.equal(reasoningCenterPage.includes("karma"), false);
   assert.equal(reasoningCenterPage.includes("New & upvoted"), false);
   assert.match(globalCss, /reasoning-status-box/);
   assert.match(globalCss, /reasoning-factor-list/);
+  assert.match(globalCss, /reasoning-contract-strip/);
+  assert.match(globalCss, /reasoning-packet-grid/);
+  assert.match(globalCss, /reasoning-contract-rule-list/);
   assert.match(standardsPage, /Make trade records specific enough to judge/);
   assert.match(standardsPage, /not legal escrow/i);
   assert.match(standardsPage, /voluntary/i);
@@ -810,8 +821,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(protocolProfile, /evidence_artifact/);
   assert.match(protocolProfile, /provenanceObjectSchemas/);
   assert.match(provenanceSource, /validateMoralTradeProvenanceBundle/);
+  assert.match(provenanceSource, /getMoralTradeProvenanceContract/);
+  assert.match(provenanceSource, /validateMoralTradeProvenanceContract/);
+  assert.match(provenanceSource, /getMoralTradeProvenanceSampleBundle/);
   assert.match(provenanceSource, /createMoralTradeTraceabilityEvent/);
   assert.match(provenanceSource, /createMoralTradeExternalEntityReference/);
+  assert.match(provenanceSource, /provenance_contract_validator/);
   assert.match(provenanceSource, /external-entity-references/);
   assert.match(provenanceSource, /open_supply_hub_id/);
   assert.match(provenanceSource, /traceability-events/);
@@ -919,6 +934,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiGovernanceProfile, /raw_private_feed_training/);
   assert.match(aiGovernanceProfile, /no_undocumented_ml_gate/);
   assert.match(apiContractSource, /validateMoralTradeApiContractProfile/);
+  assert.match(apiContractSource, /provenance-schema-validator/);
   assert.match(apiContractSource, /moral_trade_copilot_review/);
   assert.match(apiContractSource, /moral_trade_review_workflow_contract/);
   assert.match(apiContractSource, /moral_trade_review_workflow_evaluate/);
@@ -956,6 +972,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /ai_governance_health_response/);
   assert.match(apiContractProfile, /external entity reference/);
   assert.match(apiContractProfile, /external entity dedupe/);
+  assert.match(apiContractProfile, /Provenance object contract validator result/);
+  assert.match(apiContractProfile, /sample-bundle summary/);
   assert.match(apiContractProfile, /undocumented ML cannot rank/);
   assert.match(apiContractProfile, /private_no_store/);
   assert.match(apiContractProfile, /query strings and hashes are stripped/);
@@ -966,6 +984,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Evidence object contract/);
   assert.match(technicalSpecPage, /traceability events/);
   assert.match(technicalSpecPage, /external entity dedupe failures/);
+  assert.match(technicalSpecPage, /Provenance contract/);
+  assert.match(technicalSpecPage, /provenanceContract\.validationRules/);
+  assert.match(technicalSpecPage, /provenanceContract\.contractTests/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/provenance\/schema/);
   assert.match(technicalSpecPage, /Copilot contract/);
   assert.match(technicalSpecPage, /schema-bound and reversible/);
@@ -1017,6 +1038,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /publicContract/);
   assert.match(healthRoute, /stateTransitionRules/);
   assert.match(healthRoute, /provenanceObjectSchemas/);
+  assert.match(healthRoute, /provenanceValidation/);
+  assert.match(healthRoute, /provenanceValidationRules/);
+  assert.match(healthRoute, /provenanceSampleBundleSummary/);
   assert.match(healthRoute, /copilotValidation/);
   assert.match(healthRoute, /copilotOutputSections/);
   assert.match(healthRoute, /reviewWorkflowValidation/);
@@ -1075,9 +1099,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiGovernanceHealthRoute, /prohibitedUses/);
   assert.match(apiContractRoute, /validateMoralTradeApiContractProfile/);
   assert.match(apiContractRoute, /requestSchema/);
-  assert.match(provenanceSchemaRoute, /MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS/);
-  assert.match(provenanceSchemaRoute, /external entity references/);
-  assert.match(provenanceSchemaRoute, /dedupe keys/);
+  assert.match(provenanceSchemaRoute, /validateMoralTradeProvenanceContract/);
+  assert.match(provenanceSchemaRoute, /publicContract/);
+  assert.match(provenanceSchemaRoute, /validationRuleCodes/);
+  assert.match(provenanceSchemaRoute, /sampleBundleSummary/);
 });
 
 test("pooled donation offset creation has visible path and server-side guardrails", () => {
@@ -1168,6 +1193,7 @@ test("offer creation form exposes preset templates without weakening validation"
 
 test("offer creation form exposes a guided reviewable-trade wizard", () => {
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+  const offerNewPage = readRepoFile("src/app/offers/new/page.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
 
   assert.match(offerForm, /OfferWizardStep/);
@@ -1180,6 +1206,13 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(offerForm, /Protocol review preview/);
   assert.match(offerForm, /Fixed verification loop/);
   assert.match(offerForm, /protocolReview\.verificationLoop/);
+  assert.match(offerForm, /buildEvidenceProvenancePreflight/);
+  assert.match(offerForm, /provenanceValidationRules/);
+  assert.match(offerForm, /Evidence object preflight/);
+  assert.match(offerForm, /\/api\/moral-trade\/provenance\/schema/);
+  assert.match(offerForm, /one-proof-one-claim/);
+  assert.match(offerForm, /claim-artifact-links/);
+  assert.match(offerForm, /scope-alignment/);
   assert.match(offerForm, /formatVerificationStepStatus/);
   assert.match(offerForm, /evaluateMoralTradeProtocolDraft/);
   assert.match(offerForm, /formatProtocolReviewStatus/);
@@ -1191,6 +1224,8 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(offerForm, /Reviewer summary/);
   assert.match(offerForm, /protocolReview\.clarificationQuestions/);
   assert.match(offerForm, /protocolReview\.reviewerSummary/);
+  assert.match(offerNewPage, /getMoralTradeProvenanceContract/);
+  assert.match(offerNewPage, /provenanceValidationRules=\{provenanceValidationRules\}/);
   assert.match(offerForm, /completedWizardSteps/);
   assert.match(offerForm, /wizardProgressPercent/);
   assert.match(offerForm, /href: "#offer-route"/);
@@ -1202,6 +1237,8 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(globalCss, /offer-wizard-steps/);
   assert.match(globalCss, /protocol-review-panel/);
   assert.match(globalCss, /protocol-verification-list/);
+  assert.match(globalCss, /protocol-provenance-preflight/);
+  assert.match(globalCss, /protocol-provenance-list/);
   assert.match(globalCss, /protocol-verification-step/);
   assert.match(globalCss, /protocol-workflow-card/);
   assert.match(globalCss, /protocol-factor-list/);

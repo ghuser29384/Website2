@@ -37,6 +37,7 @@ import {
 import {
   evaluateMoralTradeProtocolDraft,
   formatProtocolReviewStatus,
+  type MoralTradeProtocolDraftReview,
   type MoralTradeVerificationStepStatus,
 } from "@/lib/proposal-review";
 
@@ -78,6 +79,13 @@ interface OfferCreateFormProps {
   initialOffsetPoolId?: string;
   initialOffsetPoolSide?: "side_a" | "side_b" | "";
   initialTemplate?: OfferTemplate | null;
+  provenanceValidationRules: ProvenanceValidationRuleOption[];
+}
+
+interface ProvenanceValidationRuleOption {
+  key: string;
+  label: string;
+  rule: string;
 }
 
 export interface OfferTemplate {
@@ -119,6 +127,14 @@ interface OfferWizardStep {
   detail: string;
   href: string;
   complete: boolean;
+}
+
+interface EvidenceProvenancePreflightItem {
+  detail: string;
+  key: string;
+  label: string;
+  rule: string;
+  status: MoralTradeVerificationStepStatus;
 }
 
 const defaultOffsetFields = createDefaultDonationOffsetFields();
@@ -254,6 +270,109 @@ function formatVerificationStepStatus(status: MoralTradeVerificationStepStatus) 
   }
 }
 
+function getProvenanceRule(
+  rulesByKey: Map<string, ProvenanceValidationRuleOption>,
+  key: string,
+  fallbackLabel: string,
+  fallbackRule: string,
+) {
+  return rulesByKey.get(key) ?? { key, label: fallbackLabel, rule: fallbackRule };
+}
+
+function buildEvidenceProvenancePreflight(
+  review: MoralTradeProtocolDraftReview,
+  provenanceValidationRules: readonly ProvenanceValidationRuleOption[],
+): EvidenceProvenancePreflightItem[] {
+  const rulesByKey = new Map(provenanceValidationRules.map((rule) => [rule.key, rule]));
+  const evidenceRows = review.citedEvidenceTable;
+  const evidenceLocatorRows = evidenceRows.filter((row) => row.evidenceType === "evidence_locator");
+  const artifactRequestRows = evidenceRows.filter((row) => row.evidenceType === "artifact_request");
+  const hasEvidenceLocator = evidenceLocatorRows.length > 0;
+  const requestedArtifacts = review.reviewInstructions.artifactsToRequest;
+  const artifactNeedCount = Math.max(requestedArtifacts.length, artifactRequestRows.length);
+  const evidenceMentionsExternalEntity = [...requestedArtifacts, ...evidenceRows.map((row) => row.claim)]
+    .join(" ")
+    .toLowerCase()
+    .match(/charity|donation|payment|provider|receipt|external/);
+
+  return [
+    {
+      ...getProvenanceRule(
+        rulesByKey,
+        "claim-artifact-links",
+        "Claims link to existing artifacts",
+        "Every evidence claim must link to existing artifacts.",
+      ),
+      status: hasEvidenceLocator ? "human_review" : "needs_input",
+      detail: hasEvidenceLocator
+        ? `${evidenceLocatorRows.length} evidence locator(s) can be turned into artifact links during review.`
+        : `${artifactNeedCount || 1} scoped artifact request(s) remain before reviewer reliance.`,
+    },
+    {
+      ...getProvenanceRule(
+        rulesByKey,
+        "scope-alignment",
+        "Artifact scopes match claims",
+        "Artifact claim scopes must match the claim being reviewed.",
+      ),
+      status: artifactNeedCount ? "needs_input" : "human_review",
+      detail: artifactNeedCount
+        ? "Each requested artifact needs one claim scope before it can support completion."
+        : "Draft claims are present; reviewer scope still controls whether evidence fits the claim.",
+    },
+    {
+      ...getProvenanceRule(
+        rulesByKey,
+        "one-proof-one-claim",
+        "Duplicate proof is explicit",
+        "Duplicate proof reuse must be explicit, not silent.",
+      ),
+      status: "human_review",
+      detail:
+        "Duplicate-proof checks run when artifact hashes and normalized locators are submitted.",
+    },
+    {
+      ...getProvenanceRule(
+        rulesByKey,
+        "freshness-window",
+        "Artifact timestamps are reviewable",
+        "Evidence timestamps must be fresh enough for the review context or flagged.",
+      ),
+      status: hasEvidenceLocator ? "human_review" : "needs_input",
+      detail: hasEvidenceLocator
+        ? "Review should confirm the locator date and whether the record is fresh enough."
+        : "Attach dated receipts, logs, attestations, or prior-intent records for freshness review.",
+    },
+    {
+      ...getProvenanceRule(
+        rulesByKey,
+        "agent-links",
+        "Artifacts, decisions, and activities name agents",
+        "Artifacts, reviewer decisions, traceability events, and activities must name provenance agents.",
+      ),
+      status: "human_review",
+      detail:
+        "Saved evidence should name the participant, reviewer, and any payment or evidence provider involved.",
+    },
+    {
+      ...getProvenanceRule(
+        rulesByKey,
+        evidenceMentionsExternalEntity ? "external-entity-references" : "traceability-events",
+        evidenceMentionsExternalEntity
+          ? "External entities have stable identifiers"
+          : "Traceability records link what, where, and why",
+        evidenceMentionsExternalEntity
+          ? "External charities, providers, and supplier-like entities need stable identifier references."
+          : "External payment or charity-routing events must link what happened, where, and why.",
+      ),
+      status: "human_review",
+      detail: evidenceMentionsExternalEntity
+        ? "External charities, payment providers, or public registries need dedupe-ready identifiers."
+        : "Any later payment, donation, or completion event must name what, where, why, and agents.",
+    },
+  ];
+}
+
 export function OfferCreateForm({
   formMessage,
   supabaseReady,
@@ -263,6 +382,7 @@ export function OfferCreateForm({
   initialOffsetPoolId = "",
   initialOffsetPoolSide = "",
   initialTemplate = null,
+  provenanceValidationRules,
 }: OfferCreateFormProps) {
   const [mode, setMode] = useState<OfferMode>(initialTemplate?.mode ?? initialMode);
   const [offeredCause, setOfferedCause] = useState(initialTemplate?.offeredCause ?? "Animal welfare");
@@ -526,6 +646,10 @@ export function OfferCreateForm({
       reviewPeriod,
       verificationPreference,
     ],
+  );
+  const evidenceProvenancePreflight = useMemo(
+    () => buildEvidenceProvenancePreflight(protocolReview, provenanceValidationRules),
+    [protocolReview, provenanceValidationRules],
   );
   const canPublishOffer = supabaseReady && liveOfferErrors.length === 0;
   const wizardSteps: OfferWizardStep[] = useMemo(
@@ -908,6 +1032,38 @@ export function OfferCreateForm({
               ))}
             </ul>
           </div>
+        </div>
+
+        <div className="protocol-provenance-preflight">
+          <div className="protocol-provenance-head">
+            <div>
+              <strong>Evidence object preflight</strong>
+              <p>
+                Uses the public provenance contract to show which evidence checks can only be
+                completed after scoped artifacts, agents, and traceability records exist.
+              </p>
+            </div>
+            <Link className="inline-link" href="/api/moral-trade/provenance/schema">
+              View contract
+            </Link>
+          </div>
+          <ol className="protocol-provenance-list">
+            {evidenceProvenancePreflight.map((item) => (
+              <li
+                className={`protocol-provenance-item protocol-provenance-item-${item.status}`}
+                key={item.key}
+              >
+                <span className="protocol-step-status">
+                  {formatVerificationStepStatus(item.status)}
+                </span>
+                <div>
+                  <strong>{item.label}</strong>
+                  <p>{item.detail}</p>
+                  <small>{item.rule}</small>
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
 
         <div className="protocol-review-grid">

@@ -5,6 +5,10 @@ import {
   validateMoralTradeProtocolProfile,
 } from "@/lib/moral-trade/protocol";
 import {
+  getMoralTradeProvenanceContract,
+  validateMoralTradeProvenanceContract,
+} from "@/lib/moral-trade/provenance";
+import {
   getMoralTradeOperationsProfile,
   validateMoralTradeOperationsProfile,
 } from "@/lib/moral-trade/operations";
@@ -46,6 +50,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const profile = getMoralTradeProtocolProfile();
   const validation = validateMoralTradeProtocolProfile();
+  const provenanceContract = getMoralTradeProvenanceContract();
+  const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
   const reviewWorkflowContract = getOfferReviewWorkflowContract();
@@ -69,6 +75,7 @@ export async function GET() {
   return NextResponse.json({
     ok:
       validation.status === "pass" &&
+      provenanceValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
       reviewWorkflowValidation.status === "pass" &&
       operationsValidation.status === "pass" &&
@@ -82,6 +89,7 @@ export async function GET() {
     profileVersion: profile.version,
     purpose: profile.purpose,
     validation,
+    provenanceValidation,
     copilotValidation,
     reviewWorkflowValidation,
     operationsValidation,
@@ -105,6 +113,10 @@ export async function GET() {
       factorCodes: profile.factorCodes.map((factor) => factor.code),
       evidenceSchemas: profile.evidenceSchemas.map((schema) => schema.key),
       provenanceObjectSchemas: profile.provenanceObjectSchemas.map((schema) => schema.key),
+      provenanceSchemaVersion: provenanceContract.schemaVersion,
+      provenanceValidationRules: provenanceContract.validationRules.map((rule) => rule.key),
+      provenanceSampleBundleSummary: provenanceContract.sampleBundleSummary,
+      provenanceContractTests: provenanceContract.contractTests,
       copilotContractVersion: copilotContract.version,
       copilotInputBundle: copilotContract.strictInputBundle,
       copilotOutputSections: copilotContract.approvedOutputSections,
@@ -166,6 +178,7 @@ export async function GET() {
     },
     blockers: [
       ...validation.blockers,
+      ...provenanceValidation.blockers,
       ...copilotValidation.blockers,
       ...reviewWorkflowValidation.blockers,
       ...operationsValidation.blockers,

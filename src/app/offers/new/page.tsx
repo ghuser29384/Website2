@@ -5,6 +5,7 @@ import { OfferCreateForm, type OfferTemplate } from "@/components/offers/offer-c
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
 import { getDonationOffsetOverview, getViewer } from "@/lib/app-data";
+import { getMoralTradeProvenanceContract } from "@/lib/moral-trade/provenance";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
@@ -103,6 +104,12 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
     typeof resolvedSearchParams.example === "string" ? resolvedSearchParams.example : undefined;
   const initialExampleTemplate = getWorkedExampleTemplate(requestedExampleId);
   const supabaseReady = hasSupabaseEnv();
+  const provenanceContract = getMoralTradeProvenanceContract();
+  const provenanceValidationRules = provenanceContract.validationRules.map((rule) => ({
+    key: rule.key,
+    label: rule.label,
+    rule: rule.rule,
+  }));
   const viewer = supabaseReady ? await getViewer() : null;
   const donationOffsetOverview = supabaseReady && viewer ? await getDonationOffsetOverview() : null;
   const availablePools =
@@ -205,6 +212,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 initialOffsetPoolId={initialOffsetPoolId}
                 initialOffsetPoolSide={initialOffsetPoolSide}
                 supabaseReady={supabaseReady}
+                provenanceValidationRules={provenanceValidationRules}
               />
             ) : (
               <article className="panel auth-side-card auth-gate-card">

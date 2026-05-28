@@ -121,6 +121,12 @@ export function validateMoralTradeApiContractProfile(
   const publicPreviewRoutes = profile.routes.filter(
     (route) => route.privacyClass === "privacy_thresholded_public_preview",
   );
+  const provenanceSchemaRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_provenance_schema",
+  );
+  const provenanceSchemaResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "provenance_schema_response",
+  );
   const draftReviewRoutes = profile.routes.filter(
     (route) => route.privacyClass === "ephemeral_private_draft_review",
   );
@@ -192,6 +198,25 @@ export function validateMoralTradeApiContractProfile(
           /suppress|sparse|broad previews/i.test(route.fallback),
       ),
       publicPreviewRoutes.map((route) => `${route.key}:${route.rateLimitSurface}`).join(", "),
+    ),
+    check(
+      "provenance-schema-validator",
+      "Provenance schema route is validator-backed",
+      provenanceSchemaRoute?.cacheControl === "no_store_dynamic" &&
+        /validator|blockers/i.test(provenanceSchemaRoute.fallback) &&
+        Boolean(
+          provenanceSchemaResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          provenanceSchemaResponse?.fields.some(
+            (field) => field.key === "sampleBundleSummary" && field.type === "object",
+          ),
+        ),
+      provenanceSchemaRoute
+        ? `${provenanceSchemaRoute.key}:${provenanceSchemaRoute.cacheControl}`
+        : "missing",
     ),
     check(
       "copilot-review-nonmutating",
