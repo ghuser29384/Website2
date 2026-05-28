@@ -46,6 +46,14 @@ import {
   validateMoralTradeMatchSignalContract,
 } from "@/lib/moral-trade/match-signal";
 import {
+  getMoralTradeChallengeAppealContract,
+  validateMoralTradeChallengeAppealContract,
+} from "@/lib/moral-trade/challenge-appeal";
+import {
+  getMoralTradeDisclosureContract,
+  validateMoralTradeDisclosureContract,
+} from "@/lib/moral-trade/disclosure";
+import {
   getMoralTradeCopilotContract,
   validateMoralTradeCopilotContract,
 } from "@/lib/moral-trade/copilot";
@@ -66,6 +74,12 @@ export async function GET() {
   const matchSignalContract = getMoralTradeMatchSignalContract();
   const matchSignalValidation =
     validateMoralTradeMatchSignalContract(matchSignalContract);
+  const challengeAppealContract = getMoralTradeChallengeAppealContract();
+  const challengeAppealValidation =
+    validateMoralTradeChallengeAppealContract(challengeAppealContract);
+  const disclosureContract = getMoralTradeDisclosureContract();
+  const disclosureValidation =
+    validateMoralTradeDisclosureContract(disclosureContract);
   const reviewWorkflowContract = getOfferReviewWorkflowContract();
   const reviewWorkflowValidation =
     validateOfferReviewWorkflowContract(reviewWorkflowContract);
@@ -98,6 +112,8 @@ export async function GET() {
       provenanceValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
       matchSignalValidation.status === "pass" &&
+      challengeAppealValidation.status === "pass" &&
+      disclosureValidation.status === "pass" &&
       reviewWorkflowValidation.status === "pass" &&
       reasoningPacketValidation.status === "pass" &&
       operationsValidation.status === "pass" &&
@@ -114,6 +130,8 @@ export async function GET() {
     provenanceValidation,
     copilotValidation,
     matchSignalValidation,
+    challengeAppealValidation,
+    disclosureValidation,
     reviewWorkflowValidation,
     reasoningPacketValidation,
     operationsValidation,
@@ -152,6 +170,25 @@ export async function GET() {
       matchSignalFactorCodes: matchSignalContract.approvedFactorCodes,
       matchSignalRedactedFields: matchSignalContract.redactedFields,
       matchSignalContractTests: matchSignalContract.contractTests,
+      challengeAppealContractVersion: challengeAppealContract.version,
+      challengeAppealDecisioningMode: challengeAppealContract.decisioningMode,
+      challengeAppealStateMutation: challengeAppealContract.stateMutation,
+      challengeAppealSubjects: challengeAppealContract.subjects,
+      challengeAppealStandingCategories: challengeAppealContract.standingCategories,
+      challengeAppealTriggers: challengeAppealContract.appealTriggers,
+      challengeAppealAllowedOutcomes: challengeAppealContract.allowedOutcomes,
+      challengeAppealFactorCodes: challengeAppealContract.approvedFactorCodes,
+      challengeAppealContractTests: challengeAppealContract.contractTests,
+      disclosureContractVersion: disclosureContract.version,
+      disclosureDecisioningMode: disclosureContract.decisioningMode,
+      disclosureStateMutation: disclosureContract.stateMutation,
+      disclosureAccessLevels: disclosureContract.accessLevels,
+      disclosureAudienceStages: disclosureContract.audienceStages,
+      disclosureGrantStatuses: disclosureContract.grantStatuses,
+      disclosureFieldKeys: disclosureContract.disclosureFields.map((field) => field.key),
+      disclosureRedactedFields: disclosureContract.redactedFields,
+      disclosureFactorCodes: disclosureContract.approvedFactorCodes,
+      disclosureContractTests: disclosureContract.contractTests,
       reviewWorkflowContractVersion: reviewWorkflowContract.version,
       reviewWorkflowCardKeys: reviewWorkflowContract.detailWorkflowCards.map((card) => card.key),
       reviewWorkflowMarketplaceFactorPriority:
@@ -218,6 +255,8 @@ export async function GET() {
       ...provenanceValidation.blockers,
       ...copilotValidation.blockers,
       ...matchSignalValidation.blockers,
+      ...challengeAppealValidation.blockers,
+      ...disclosureValidation.blockers,
       ...reviewWorkflowValidation.blockers,
       ...reasoningPacketValidation.blockers,
       ...operationsValidation.blockers,

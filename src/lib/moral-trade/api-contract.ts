@@ -62,6 +62,10 @@ const REQUIRED_ROUTES = [
   "moral_trade_copilot_review",
   "moral_trade_match_signal_contract",
   "moral_trade_match_signal_evaluate",
+  "moral_trade_challenge_appeal_contract",
+  "moral_trade_challenge_appeal_evaluate",
+  "moral_trade_disclosure_contract",
+  "moral_trade_disclosure_evaluate",
   "moral_trade_review_workflow_contract",
   "moral_trade_reasoning_packets",
   "moral_trade_review_workflow_evaluate",
@@ -144,6 +148,30 @@ export function validateMoralTradeApiContractProfile(
   );
   const matchSignalEvaluateResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "match_signal_evaluate_response",
+  );
+  const challengeAppealContractRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_challenge_appeal_contract",
+  );
+  const challengeAppealEvaluateRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_challenge_appeal_evaluate",
+  );
+  const challengeAppealContractResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "challenge_appeal_contract_response",
+  );
+  const challengeAppealEvaluateResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "challenge_appeal_evaluate_response",
+  );
+  const disclosureContractRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_disclosure_contract",
+  );
+  const disclosureEvaluateRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_disclosure_evaluate",
+  );
+  const disclosureContractResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "disclosure_contract_response",
+  );
+  const disclosureEvaluateResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "disclosure_evaluate_response",
   );
   const reviewWorkflowEvaluateRoute = profile.routes.find(
     (route) => route.key === "moral_trade_review_workflow_evaluate",
@@ -289,6 +317,62 @@ export function validateMoralTradeApiContractProfile(
         ),
       matchSignalEvaluateRoute
         ? `${matchSignalEvaluateRoute.key}:${matchSignalEvaluateRoute.cacheControl}:${matchSignalEvaluateRoute.rateLimitSurface}`
+        : "missing",
+    ),
+    check(
+      "challenge-appeal-routes",
+      "Challenge appeal contract and evaluate routes are validator-backed, scoped, and non-mutating",
+      challengeAppealContractRoute?.method === "GET" &&
+        challengeAppealContractRoute.cacheControl === "no_store_dynamic" &&
+        /validation blockers|unrelated moral disagreements|human review/i.test(
+          challengeAppealContractRoute.fallback,
+        ) &&
+        challengeAppealEvaluateRoute?.method === "POST" &&
+        challengeAppealEvaluateRoute.cacheControl === "private_no_store" &&
+        challengeAppealEvaluateRoute.rateLimitSurface === "challenge_appeal_evaluate" &&
+        /never store|private details|broaden appeal scope|resolve disputes without human review/i.test(
+          challengeAppealEvaluateRoute.fallback,
+        ) &&
+        Boolean(
+          challengeAppealContractResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          challengeAppealEvaluateResponse?.fields.some(
+            (field) => field.key === "stateMutation" && /Always false/i.test(field.description),
+          ),
+        ),
+      challengeAppealEvaluateRoute
+        ? `${challengeAppealEvaluateRoute.key}:${challengeAppealEvaluateRoute.cacheControl}:${challengeAppealEvaluateRoute.rateLimitSurface}`
+        : "missing",
+    ),
+    check(
+      "disclosure-grant-routes",
+      "Disclosure grant contract and evaluate routes are validator-backed, staged, and non-mutating",
+      disclosureContractRoute?.method === "GET" &&
+        disclosureContractRoute.cacheControl === "no_store_dynamic" &&
+        /validation blockers|exact wishes|source notes|contact details|field-level stage grants/i.test(
+          disclosureContractRoute.fallback,
+        ) &&
+        disclosureEvaluateRoute?.method === "POST" &&
+        disclosureEvaluateRoute.cacheControl === "private_no_store" &&
+        disclosureEvaluateRoute.rateLimitSurface === "disclosure_evaluate" &&
+        /never store|reveal exact wishes|mine private feeds|introduce counterparties|mutate privacy grants/i.test(
+          disclosureEvaluateRoute.fallback,
+        ) &&
+        Boolean(
+          disclosureContractResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          disclosureEvaluateResponse?.fields.some(
+            (field) => field.key === "stateMutation" && /Always false/i.test(field.description),
+          ),
+        ),
+      disclosureEvaluateRoute
+        ? `${disclosureEvaluateRoute.key}:${disclosureEvaluateRoute.cacheControl}:${disclosureEvaluateRoute.rateLimitSurface}`
         : "missing",
     ),
     check(

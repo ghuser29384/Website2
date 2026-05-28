@@ -18,6 +18,10 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_copilot_review"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_match_signal_contract"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_match_signal_evaluate"));
+  assert.ok(profile.routes.some((route) => route.key === "moral_trade_challenge_appeal_contract"));
+  assert.ok(profile.routes.some((route) => route.key === "moral_trade_challenge_appeal_evaluate"));
+  assert.ok(profile.routes.some((route) => route.key === "moral_trade_disclosure_contract"));
+  assert.ok(profile.routes.some((route) => route.key === "moral_trade_disclosure_evaluate"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_review_workflow_evaluate"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_reasoning_packets"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_performance_health"));
@@ -40,6 +44,12 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_evaluate_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_evaluate_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_contract_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_evaluate_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_evaluate_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_contract_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_evaluate_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_evaluate_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "reasoning_packets_response"));
@@ -109,6 +119,14 @@ test("api contract validation fails when private or sparse-preview protections a
         return { ...route, cacheControl: "public_cache", fallback: "Rank all profiles." };
       }
 
+      if (route.key === "moral_trade_challenge_appeal_evaluate") {
+        return { ...route, cacheControl: "public_cache", fallback: "Resolve every dispute." };
+      }
+
+      if (route.key === "moral_trade_disclosure_evaluate") {
+        return { ...route, cacheControl: "public_cache", fallback: "Reveal exact wishes." };
+      }
+
       if (route.key === "moral_trade_reasoning_packets") {
         return { ...route, cacheControl: "public_cache", fallback: "Return all reasoning." };
       }
@@ -129,6 +147,8 @@ test("api contract validation fails when private or sparse-preview protections a
     ),
   );
   assert.ok(validation.blockers.some((blocker) => blocker.includes("match-signal-routes")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("challenge-appeal-routes")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("disclosure-grant-routes")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("reasoning-packets-validator")));
 });
 

@@ -14,6 +14,14 @@ import {
   validateMoralTradeMatchSignalContract,
 } from "@/lib/moral-trade/match-signal";
 import {
+  getMoralTradeChallengeAppealContract,
+  validateMoralTradeChallengeAppealContract,
+} from "@/lib/moral-trade/challenge-appeal";
+import {
+  getMoralTradeDisclosureContract,
+  validateMoralTradeDisclosureContract,
+} from "@/lib/moral-trade/disclosure";
+import {
   getOfferReviewWorkflowContract,
   validateOfferReviewWorkflowContract,
 } from "@/lib/proposal-review";
@@ -89,6 +97,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const matchSignalContract = getMoralTradeMatchSignalContract();
   const matchSignalValidation =
     validateMoralTradeMatchSignalContract(matchSignalContract);
+  const challengeAppealContract = getMoralTradeChallengeAppealContract();
+  const challengeAppealValidation =
+    validateMoralTradeChallengeAppealContract(challengeAppealContract);
+  const disclosureContract = getMoralTradeDisclosureContract();
+  const disclosureValidation =
+    validateMoralTradeDisclosureContract(disclosureContract);
   const reviewWorkflowContract = getOfferReviewWorkflowContract();
   const reviewWorkflowValidation =
     validateOfferReviewWorkflowContract(reviewWorkflowContract);
@@ -154,6 +168,12 @@ export default async function MoralTradeTechnicalSpecPage() {
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/match-signal/contract">
                 View match contract
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
+                View appeal contract
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/disclosure/contract">
+                View disclosure contract
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/review-workflow/contract">
                 View review workflow
@@ -364,6 +384,153 @@ export default async function MoralTradeTechnicalSpecPage() {
               <article className="panel data-card" key={invariant}>
                 <p className="detail-kicker">Match invariant</p>
                 <p>{invariant}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="challenge-appeal-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Challenge appeal contract</p>
+            <h2 id="challenge-appeal-contract-heading">
+              Appeals are scoped to reviewed claims, standing, and remedy paths.
+            </h2>
+            <p>
+              The challenge lane is now a validator-backed contract. It separates affected-party
+              standing, duplicate proof, coercive baselines, wrong-scope evidence, privacy
+              disclosure errors, externality remedy gaps, reviewer conflicts, and policy flags
+              before any human-controlled state change.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Challenge appeal {challengeAppealContract.version}
+              </p>
+              <h3>Status {challengeAppealValidation.status}</h3>
+              <p>
+                {challengeAppealValidation.checks.length} check(s),{" "}
+                {challengeAppealValidation.blockers.length} blocker(s),{" "}
+                {challengeAppealContract.appealTriggers.length} trigger(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
+              Open appeal contract JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Subjects</h3>
+              <ul className="clean-list">
+                {challengeAppealContract.subjects.map((subject) => (
+                  <li key={subject}>{subject.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Standing categories</h3>
+              <ul className="clean-list">
+                {challengeAppealContract.standingCategories.map((standing) => (
+                  <li key={standing}>{standing.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Evaluation route</h3>
+              <p>
+                POST /api/moral-trade/challenge-appeal/evaluate returns scoped factor codes,
+                standing checks, required artifacts, privacy actions, provenance activity, and
+                stateMutation false.
+              </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Contract tests</h3>
+              <ul className="clean-list">
+                {challengeAppealContract.contractTests.map((hook) => (
+                  <li key={hook}>{hook.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="data-grid">
+            {challengeAppealContract.invariants.map((invariant) => (
+              <article className="panel data-card" key={invariant}>
+                <p className="detail-kicker">Appeal invariant</p>
+                <p>{invariant}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="disclosure-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Disclosure grant contract</p>
+            <h2 id="disclosure-contract-heading">
+              Privacy grants now have a staged, field-level contract.
+            </h2>
+            <p>
+              The privacy model is no longer only dashboard prose. Broad previews, exact wishes,
+              source summaries, constraints, verification preferences, and contact details are
+              mapped to explicit access levels, audience stages, redactions, owner approval, and
+              non-mutating evaluation.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Disclosure grants {disclosureContract.version}</p>
+              <h3>Status {disclosureValidation.status}</h3>
+              <p>
+                {disclosureValidation.checks.length} check(s),{" "}
+                {disclosureValidation.blockers.length} blocker(s),{" "}
+                {disclosureContract.disclosureFields.length} field boundary(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/disclosure/contract">
+              Open disclosure contract JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Audience stages</h3>
+              <ul className="clean-list">
+                {disclosureContract.audienceStages.map((stage) => (
+                  <li key={stage}>{stage.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Access levels</h3>
+              <ul className="clean-list">
+                {disclosureContract.accessLevels.map((level) => (
+                  <li key={level}>{level.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Evaluation route</h3>
+              <p>
+                POST /api/moral-trade/disclosure/evaluate returns allowed fields, denied fields,
+                privacy actions, expiry window, ownerApprovalRequired, and stateMutation false.
+              </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Redacted fields</h3>
+              <ul className="clean-list">
+                {disclosureContract.redactedFields.map((field) => (
+                  <li key={field}>{field.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="data-grid">
+            {disclosureContract.disclosureFields.map((field) => (
+              <article className="panel data-card" key={field.key}>
+                <p className="detail-kicker">{field.key}</p>
+                <h3>{field.label}</h3>
+                <p>{field.description}</p>
+                <p>
+                  {field.minStage} stage, max {field.maxLevel} access.
+                </p>
               </article>
             ))}
           </div>
