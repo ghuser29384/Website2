@@ -13,6 +13,8 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
 
   assert.equal(validation.status, "pass");
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_health"));
+  assert.ok(profile.routes.some((route) => route.key === "moral_trade_data_model_contract"));
+  assert.ok(profile.routes.some((route) => route.key === "moral_trade_policy_bundle_contract"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_provenance_schema"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_security_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_copilot_review"));
@@ -34,6 +36,8 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_export_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "empty_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_import_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "data_model_contract_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "policy_bundle_contract_response"));
   assert.ok(
     profile.schemaDefinitions
       .find((schema) => schema.key === "provenance_schema_response")
@@ -107,6 +111,14 @@ test("api contract validation fails when private or sparse-preview protections a
         return { ...route, cacheControl: "public_contract_static", fallback: "Return schemas." };
       }
 
+      if (route.key === "moral_trade_data_model_contract") {
+        return { ...route, cacheControl: "public_contract_static", fallback: "Expose all records." };
+      }
+
+      if (route.key === "moral_trade_policy_bundle_contract") {
+        return { ...route, cacheControl: "public_contract_static", fallback: "Use hidden context." };
+      }
+
       if (route.key === "moral_trade_copilot_review") {
         return { ...route, cacheControl: "public_cache", fallback: "Return generated output." };
       }
@@ -140,6 +152,8 @@ test("api contract validation fails when private or sparse-preview protections a
   assert.ok(validation.blockers.some((blocker) => blocker.includes("private-cache-controls")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("privacy-thresholded-search")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("provenance-schema-validator")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("data-model-contract-route")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("policy-bundle-contract-route")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("copilot-review-nonmutating")));
   assert.ok(
     validation.blockers.some((blocker) =>

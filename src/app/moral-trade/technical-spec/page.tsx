@@ -30,6 +30,14 @@ import {
   validateMoralTradeProtocolProfile,
 } from "@/lib/moral-trade/protocol";
 import {
+  getMoralTradeDataModelProfile,
+  validateMoralTradeDataModelProfile,
+} from "@/lib/moral-trade/data-model";
+import {
+  getMoralTradePolicyBundleContract,
+  validateMoralTradePolicyBundleContract,
+} from "@/lib/moral-trade/policy-bundle";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -90,6 +98,11 @@ export default async function MoralTradeTechnicalSpecPage() {
   const viewer = await getViewer();
   const profile = getMoralTradeProtocolProfile();
   const validation = validateMoralTradeProtocolProfile();
+  const dataModelProfile = getMoralTradeDataModelProfile();
+  const dataModelValidation = validateMoralTradeDataModelProfile(dataModelProfile);
+  const policyBundleContract = getMoralTradePolicyBundleContract();
+  const policyBundleValidation =
+    validateMoralTradePolicyBundleContract(policyBundleContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const copilotContract = getMoralTradeCopilotContract();
@@ -162,6 +175,12 @@ export default async function MoralTradeTechnicalSpecPage() {
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/provenance/schema">
                 View provenance schema
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/data-model/contract">
+                View data model
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/policy-bundle/contract">
+                View policy bundle
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/copilot/contract">
                 View copilot contract
@@ -278,6 +297,156 @@ export default async function MoralTradeTechnicalSpecPage() {
                 ))}
               </ul>
             </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="data-model-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Data model contract</p>
+            <h2 id="data-model-contract-heading">
+              Core entities, privacy classes, and relationships are validator-backed.
+            </h2>
+            <p>
+              The audit named the core Moral Trade objects explicitly: participants, profiles,
+              offers, source notes, saved searches, privacy grants, evidence records, disputes,
+              payment updates, notifications, and agreement events. This contract makes those
+              entities inspectable and binds them to public privacy and relationship boundaries.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Data model {dataModelProfile.version}</p>
+              <h3>Status {dataModelValidation.status}</h3>
+              <p>
+                {dataModelValidation.checks.length} check(s),{" "}
+                {dataModelValidation.blockers.length} blocker(s),{" "}
+                {dataModelProfile.entities.length} entity contract(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/data-model/contract">
+              Open data model JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Offer fields</h3>
+              <ul className="clean-list">
+                {dataModelProfile.offerRequiredFields.map((field) => (
+                  <li key={field}>{field.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Privacy classes</h3>
+              <ul className="clean-list">
+                {dataModelProfile.privacyClasses.slice(0, 6).map((privacyClass) => (
+                  <li key={privacyClass.key}>{privacyClass.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Relationship boundaries</h3>
+              <ul className="clean-list">
+                {dataModelProfile.relationshipBoundaries.map((boundary) => (
+                  <li key={boundary.key}>{boundary.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Contract tests</h3>
+              <ul className="clean-list">
+                {dataModelProfile.contractTests.map((hook) => (
+                  <li key={hook}>{hook.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="data-grid">
+            {dataModelProfile.entities.map((entity) => (
+              <article className="panel data-card" key={entity.key}>
+                <p className="detail-kicker">{entity.category}</p>
+                <h3>{entity.label}</h3>
+                <p>{entity.publicExposure}</p>
+                <p>{entity.requiredFields.length} required field(s).</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="policy-bundle-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Policy bundle contract</p>
+            <h2 id="policy-bundle-contract-heading">
+              Copilot inputs are concrete registries, not broad application context.
+            </h2>
+            <p>
+              The audit recommends a strict input bundle for any drafting or reviewer-summary
+              assistance. This contract publishes the policy registry, prohibited-pattern registry,
+              factor-code dictionary, verification-method taxonomy, redaction policy, and fixed
+              verification loop used before any draft can be treated as matchable.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Policy bundle {policyBundleContract.version}</p>
+              <h3>Status {policyBundleValidation.status}</h3>
+              <p>
+                {policyBundleValidation.checks.length} check(s),{" "}
+                {policyBundleValidation.blockers.length} blocker(s),{" "}
+                {policyBundleContract.prohibitedPatternRegistry.length} prohibited pattern
+                code(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/policy-bundle/contract">
+              Open policy bundle JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Strict input bundle</h3>
+              <ul className="clean-list">
+                {policyBundleContract.strictInputBundle.slice(0, 8).map((entry) => (
+                  <li key={entry}>{entry.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Prohibited patterns</h3>
+              <ul className="clean-list">
+                {policyBundleContract.prohibitedPatternRegistry.map((entry) => (
+                  <li key={entry.code}>{entry.code.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Verification methods</h3>
+              <ul className="clean-list">
+                {policyBundleContract.verificationMethodTaxonomy.map((entry) => (
+                  <li key={entry.key}>{entry.label}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Redaction policy</h3>
+              <ul className="clean-list">
+                {policyBundleContract.redactionPolicy.slice(0, 6).map((entry) => (
+                  <li key={entry.key}>{entry.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="data-grid">
+            {policyBundleContract.verificationLoop.map((step) => (
+              <article className="panel data-card" key={step.key}>
+                <p className="detail-kicker">{step.key}</p>
+                <h3>{step.label}</h3>
+                <p>
+                  {step.blocksMatchable
+                    ? "Blocks matchable status until resolved."
+                    : "Routes, explains, or records without granting reliance."}
+                </p>
+              </article>
+            ))}
           </div>
         </section>
 

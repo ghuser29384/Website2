@@ -1,0 +1,291 @@
+{
+  "version": "moral-trade-data-model-v0.1-2026-05",
+  "purpose": "Public contract for the core Moral Trade domain entities, required fields, privacy classes, relationship boundaries, and non-claims named by the product audit.",
+  "entities": [
+    {
+      "key": "participant",
+      "label": "Participant",
+      "category": "identity",
+      "privacyClass": "authenticated_private",
+      "requiredFields": ["id", "display_name", "roles", "created_at"],
+      "relationships": ["public_profile", "private_wish_profile", "offer", "privacy_grant"],
+      "publicExposure": "A participant appears publicly only through opted-in profile or offer preview fields."
+    },
+    {
+      "key": "public_profile",
+      "label": "Public profile",
+      "category": "profile",
+      "privacyClass": "public_preview",
+      "requiredFields": ["profile_id", "display_name", "cause_area_previews", "trade_mode_previews", "visibility_control_id"],
+      "relationships": ["participant", "profile_visibility_control"],
+      "publicExposure": "Shows broad previews and chosen visibility only; exact wishes, contact details, private source notes, and sensitive constraints stay out."
+    },
+    {
+      "key": "private_wish_profile",
+      "label": "Private wish profile",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["profile_id", "owner_id", "exact_wishes", "constraints", "verification_preferences", "updated_at"],
+      "relationships": ["participant", "source_note", "saved_search", "privacy_grant"],
+      "publicExposure": "Never public by default; fields can be summarized only through broad previews or explicit privacy grants."
+    },
+    {
+      "key": "profile_visibility_control",
+      "label": "Profile visibility control",
+      "category": "privacy",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "owner_id", "public_profile_id", "location_visibility", "profile_visibility", "updated_at"],
+      "relationships": ["participant", "public_profile"],
+      "publicExposure": "Publishes only the selected visibility level, not the hidden profile fields behind it."
+    },
+    {
+      "key": "source_connection",
+      "label": "Source connection",
+      "category": "privacy",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "owner_id", "source_kind", "consent_scope", "import_mode", "manual_summary", "updated_at"],
+      "relationships": ["participant", "source_note", "private_wish_profile"],
+      "publicExposure": "Stores consent scope, import mode, and manual summaries only; raw private feeds are not ingested or searched."
+    },
+    {
+      "key": "source_note",
+      "label": "Source note",
+      "category": "privacy",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "owner_id", "source_connection_id", "summary", "redaction_level", "created_at"],
+      "relationships": ["source_connection", "private_wish_profile", "evidence_claim"],
+      "publicExposure": "Only coarse source summaries may be disclosed through a valid purpose-bound grant; raw notes remain private."
+    },
+    {
+      "key": "saved_search",
+      "label": "Saved search",
+      "category": "matching",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "owner_id", "query_scope", "cause_filters", "privacy_threshold", "created_at"],
+      "relationships": ["participant", "private_wish_profile", "match_suggestion", "notification"],
+      "publicExposure": "Search terms and private query text remain viewer-owned; public search returns broad previews only."
+    },
+    {
+      "key": "trade_format",
+      "label": "Trade format",
+      "category": "proposal",
+      "privacyClass": "public_contract",
+      "requiredFields": ["key", "label", "evidence_schema_key", "allowed_statuses"],
+      "relationships": ["offer", "evidence_claim"],
+      "publicExposure": "A public taxonomy for pledge swaps, donation offsets, paid actions, and public-good commitments."
+    },
+    {
+      "key": "offer",
+      "label": "Offer",
+      "category": "proposal",
+      "privacyClass": "public_or_private_by_status",
+      "requiredFields": ["id", "participant_id", "format", "cause_areas", "offered_action", "requested_action", "expected_impact", "verification_method", "duration", "exit_conditions", "baseline_statement", "status"],
+      "relationships": ["participant", "trade_format", "baseline_statement", "evidence_claim", "reviewer_decision", "challenge", "appeal"],
+      "publicExposure": "Public offers expose only reviewed or preview-safe terms and must not imply escrow, legal enforceability, tax treatment, or objective moral endorsement."
+    },
+    {
+      "key": "baseline_statement",
+      "label": "Baseline statement",
+      "category": "proposal",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "offer_id", "no_trade_default", "prior_intent_evidence", "credibility_status", "review_scope"],
+      "relationships": ["offer", "evidence_claim", "challenge"],
+      "publicExposure": "The no-trade baseline is reviewable and challengeable; sensitive details can be summarized or redacted."
+    },
+    {
+      "key": "evidence_claim",
+      "label": "Evidence claim",
+      "category": "evidence",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "proposal_id", "claim_type", "artifact_ids", "claim_scope", "reviewer_confidence", "uniqueness_checked"],
+      "relationships": ["offer", "evidence_artifact", "reviewer_decision"],
+      "publicExposure": "Claims disclose only scoped summaries and confidence; artifacts and private locators stay behind review controls."
+    },
+    {
+      "key": "evidence_artifact",
+      "label": "Artifact",
+      "category": "evidence",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "kind", "normalized_locator", "claim_scopes", "submitted_at", "redaction_level", "sha256"],
+      "relationships": ["evidence_claim", "agreement_event"],
+      "publicExposure": "Artifacts require hashes, scope alignment, and redaction levels before any public reasoning summary references them."
+    },
+    {
+      "key": "reviewer_decision",
+      "label": "Reviewer decision",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "proposal_id", "outcome", "reason_codes", "summary", "reviewer_id", "created_at"],
+      "relationships": ["offer", "evidence_claim", "challenge", "appeal", "agreement_event"],
+      "publicExposure": "Only a narrow public reasoning summary is exposed when safe; private notes and source notes are redacted."
+    },
+    {
+      "key": "challenge",
+      "label": "Challenge",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "subject", "standing_category", "trigger", "scoped_claim_ids", "status", "created_at"],
+      "relationships": ["offer", "baseline_statement", "reviewer_decision", "dispute"],
+      "publicExposure": "Challenges target specific claims, evidence rows, baselines, disclosure decisions, or policy flags."
+    },
+    {
+      "key": "appeal",
+      "label": "Appeal",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "challenge_id", "appeal_trigger", "remedy_request", "standing_category", "status", "created_at"],
+      "relationships": ["challenge", "reviewer_decision", "dispute"],
+      "publicExposure": "Appeals do not reopen unrelated moral disagreements and cannot resolve disputes without human review."
+    },
+    {
+      "key": "dispute",
+      "label": "Dispute",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "proposal_id", "dispute_scope", "status", "human_review_state", "created_at"],
+      "relationships": ["offer", "challenge", "appeal", "agreement_event"],
+      "publicExposure": "Dispute status may be public; private evidence and affected-party details remain review-scoped."
+    },
+    {
+      "key": "privacy_grant",
+      "label": "Privacy grant",
+      "category": "privacy",
+      "privacyClass": "consent_granted",
+      "requiredFields": ["id", "owner_id", "counterparty_id", "field_keys", "purpose", "audience_stage", "access_level", "status", "expires_at"],
+      "relationships": ["participant", "private_wish_profile", "match_suggestion"],
+      "publicExposure": "Field-level, purpose-bound, stage-bound grants disclose only approved fields and never mutate from public contract reads."
+    },
+    {
+      "key": "match_suggestion",
+      "label": "Match suggestion",
+      "category": "matching",
+      "privacyClass": "privacy_thresholded_public_preview",
+      "requiredFields": ["id", "left_profile_id", "right_profile_id", "factor_codes", "confidence_band", "redacted_fields", "disclosure_stage", "human_review_required"],
+      "relationships": ["public_profile", "private_wish_profile", "privacy_grant", "notification"],
+      "publicExposure": "Uses broad previews and factor codes; exact wishes, source notes, and contact details stay hidden until consent."
+    },
+    {
+      "key": "notification",
+      "label": "Notification",
+      "category": "operations",
+      "privacyClass": "operational_private",
+      "requiredFields": ["id", "recipient_id", "notification_kind", "subject_id", "redaction_template", "created_at"],
+      "relationships": ["participant", "match_suggestion", "saved_search", "agreement_event"],
+      "publicExposure": "Notification copy remains generic and omits exact wishes, contact details, source notes, and sensitive constraints."
+    },
+    {
+      "key": "payment_record",
+      "label": "Payment record",
+      "category": "payment",
+      "privacyClass": "operational_private",
+      "requiredFields": ["id", "proposal_id", "provider", "external_reference", "amount_or_unit", "status", "created_at"],
+      "relationships": ["offer", "payment_update", "evidence_claim", "agreement_event"],
+      "publicExposure": "Records can reference provider events but do not claim escrow, custody, tax, investment, or legal advice."
+    },
+    {
+      "key": "payment_update",
+      "label": "Payment update",
+      "category": "payment",
+      "privacyClass": "operational_private",
+      "requiredFields": ["id", "payment_record_id", "update_kind", "provider_timestamp", "review_status", "created_at"],
+      "relationships": ["payment_record", "evidence_claim", "agreement_event"],
+      "publicExposure": "Status updates are evidence inputs, not automatic reviewed completion or custody guarantees."
+    },
+    {
+      "key": "agreement_event",
+      "label": "Agreement event",
+      "category": "provenance",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "agreement_id", "event_kind", "actor_id", "entity_ids", "created_at", "previous_event_hash"],
+      "relationships": ["offer", "reviewer_decision", "payment_record", "notification", "dispute"],
+      "publicExposure": "Immutable event records support auditability; public summaries are redacted and status-scoped."
+    }
+  ],
+  "privacyClasses": [
+    {
+      "key": "public_contract",
+      "rule": "Validator metadata, taxonomies, and route contracts can be public."
+    },
+    {
+      "key": "public_preview",
+      "rule": "Broad opted-in profile fields can be public without exact wishes, contacts, private source notes, or sensitive constraints."
+    },
+    {
+      "key": "privacy_thresholded_public_preview",
+      "rule": "Search and match previews must suppress sparse or sensitive result sets and return broad fields only."
+    },
+    {
+      "key": "public_or_private_by_status",
+      "rule": "Offer visibility depends on review status and redaction checks."
+    },
+    {
+      "key": "private_authenticated",
+      "rule": "Viewer-owned private records require authentication and must not be exposed through public route contracts."
+    },
+    {
+      "key": "authenticated_private",
+      "rule": "Identity and ownership records require authenticated viewer context."
+    },
+    {
+      "key": "review_scoped",
+      "rule": "Evidence, baseline, challenge, appeal, dispute, and reviewer records are visible only to allowed review contexts or redacted summaries."
+    },
+    {
+      "key": "consent_granted",
+      "rule": "Field-level disclosures require owner approval, purpose, audience stage, access level, expiry, and counterparty scope."
+    },
+    {
+      "key": "operational_private",
+      "rule": "Notifications, payment references, and provider updates are private operating records with redacted public summaries only."
+    }
+  ],
+  "offerRequiredFields": [
+    "cause_areas",
+    "offered_action",
+    "requested_action",
+    "expected_impact",
+    "verification_method",
+    "duration",
+    "exit_conditions",
+    "baseline_statement"
+  ],
+  "relationshipBoundaries": [
+    {
+      "key": "profile_privacy_boundary",
+      "rule": "Public profiles link to private wish profiles only through redacted previews, saved searches, match suggestions, or explicit privacy grants."
+    },
+    {
+      "key": "source_note_boundary",
+      "rule": "Source connections and source notes store consent scope, import mode, and manual summaries; raw private feeds are not mined, trained on, or exposed."
+    },
+    {
+      "key": "match_disclosure_boundary",
+      "rule": "Match suggestions can cite broad factor codes, but exact wishes, source notes, contacts, and private query text require staged disclosure grants."
+    },
+    {
+      "key": "review_state_boundary",
+      "rule": "Reviewer decisions, challenges, appeals, disputes, payment updates, and agreement events cannot produce reliance states without human review and provenance activity."
+    },
+    {
+      "key": "payment_non_custody_boundary",
+      "rule": "Payment records and updates are external references and evidence inputs; they are not custody, escrow, legal, tax, or investment claims."
+    }
+  ],
+  "nonClaims": [
+    "The data model does not create objective platform moral rankings.",
+    "The data model does not authorize autonomous outreach or surprise disclosure.",
+    "The data model does not ingest, scrape, mine, train on, or expose raw private feeds.",
+    "The data model does not treat payment references as escrow, custody, tax, legal, or investment advice.",
+    "The data model does not make reviewed completion durable without scoped evidence, human review, and provenance events."
+  ],
+  "contractTests": [
+    "data_model_profile_validator",
+    "data_model_entity_coverage",
+    "offer_required_field_contract",
+    "source_note_privacy_boundary",
+    "public_data_model_contract_route",
+    "api_contract_data_model_route",
+    "health_data_model_smoke",
+    "technical_spec_data_model_smoke"
+  ]
+}

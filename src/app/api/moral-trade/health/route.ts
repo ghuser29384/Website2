@@ -5,6 +5,14 @@ import {
   validateMoralTradeProtocolProfile,
 } from "@/lib/moral-trade/protocol";
 import {
+  getMoralTradeDataModelProfile,
+  validateMoralTradeDataModelProfile,
+} from "@/lib/moral-trade/data-model";
+import {
+  getMoralTradePolicyBundleContract,
+  validateMoralTradePolicyBundleContract,
+} from "@/lib/moral-trade/policy-bundle";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -67,6 +75,11 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const profile = getMoralTradeProtocolProfile();
   const validation = validateMoralTradeProtocolProfile();
+  const dataModelProfile = getMoralTradeDataModelProfile();
+  const dataModelValidation = validateMoralTradeDataModelProfile(dataModelProfile);
+  const policyBundleContract = getMoralTradePolicyBundleContract();
+  const policyBundleValidation =
+    validateMoralTradePolicyBundleContract(policyBundleContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const copilotContract = getMoralTradeCopilotContract();
@@ -109,6 +122,8 @@ export async function GET() {
   return NextResponse.json({
     ok:
       validation.status === "pass" &&
+      dataModelValidation.status === "pass" &&
+      policyBundleValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
       matchSignalValidation.status === "pass" &&
@@ -127,6 +142,8 @@ export async function GET() {
     profileVersion: profile.version,
     purpose: profile.purpose,
     validation,
+    dataModelValidation,
+    policyBundleValidation,
     provenanceValidation,
     copilotValidation,
     matchSignalValidation,
@@ -143,6 +160,26 @@ export async function GET() {
     aiGovernanceValidation,
     publicContract: {
       requiredProposalFields: profile.requiredProposalFields,
+      dataModelProfileVersion: dataModelProfile.version,
+      dataModelEntities: dataModelProfile.entities.map((entity) => entity.key),
+      dataModelPrivacyClasses: dataModelProfile.privacyClasses.map(
+        (privacyClass) => privacyClass.key,
+      ),
+      dataModelOfferRequiredFields: dataModelProfile.offerRequiredFields,
+      dataModelRelationshipBoundaries: dataModelProfile.relationshipBoundaries.map(
+        (boundary) => boundary.key,
+      ),
+      dataModelContractTests: dataModelProfile.contractTests,
+      policyBundleContractVersion: policyBundleContract.version,
+      policyBundleStrictInputBundle: policyBundleContract.strictInputBundle,
+      policyBundlePolicyCodes: policyBundleContract.policyRegistry.map((entry) => entry.key),
+      policyBundleProhibitedPatternCodes:
+        policyBundleContract.prohibitedPatternRegistry.map((entry) => entry.code),
+      policyBundleFactorCodeCount: policyBundleContract.factorCodeDictionary.length,
+      policyBundleVerificationMethods:
+        policyBundleContract.verificationMethodTaxonomy.map((entry) => entry.key),
+      policyBundleRedactions: policyBundleContract.redactionPolicy.map((entry) => entry.key),
+      policyBundleContractTests: policyBundleContract.contractTests,
       statusValues: profile.statusValues,
       stateTransitionRules: profile.stateTransitionRules.map((rule) => ({
         key: rule.key,
@@ -252,6 +289,8 @@ export async function GET() {
     },
     blockers: [
       ...validation.blockers,
+      ...dataModelValidation.blockers,
+      ...policyBundleValidation.blockers,
       ...provenanceValidation.blockers,
       ...copilotValidation.blockers,
       ...matchSignalValidation.blockers,

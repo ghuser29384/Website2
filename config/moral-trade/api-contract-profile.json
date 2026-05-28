@@ -15,6 +15,30 @@
       "fallback": "Return ok:false with validator blockers; never silently claim readiness."
     },
     {
+      "key": "moral_trade_data_model_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/data-model/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "data_model_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return data-model contract validation blockers; never expose private wishes, source notes, saved searches, privacy grants, payment records, or raw feeds."
+    },
+    {
+      "key": "moral_trade_policy_bundle_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/policy-bundle/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "policy_bundle_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return policy-bundle validation blockers; never use broad app context, hidden reasoning, private feeds, unlisted factor codes, or unseeded prohibited patterns."
+    },
+    {
       "key": "moral_trade_provenance_schema",
       "method": "GET",
       "path": "/api/moral-trade/provenance/schema",
@@ -299,11 +323,13 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, evaluation, and API-contract validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, evaluation, and API-contract validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Core protocol validator result." },
+        { "key": "dataModelValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Core data model entity and privacy-boundary validator result." },
+        { "key": "policyBundleValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Strict copilot input bundle, policy registry, prohibited-pattern, factor-code, verification-method, and redaction-policy validator result." },
         { "key": "provenanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Provenance object contract validator result." },
         { "key": "copilotValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Copilot contract validator result." },
         { "key": "matchSignalValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Redacted match-signal contract validator result." },
@@ -320,6 +346,32 @@
         { "key": "aiGovernanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validator result for documentation, fairness, and human-control gates." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published codes, route keys, schema keys, transition rules, and metric names." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Validator blockers that prevent readiness claims." }
+      ]
+    },
+    {
+      "key": "data_model_contract_response",
+      "purpose": "Public validator-backed data model contract for core Moral Trade entities, required fields, privacy classes, relationship boundaries, non-claims, and test hooks.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the data-model contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the data-model validation run." },
+        { "key": "profileVersion", "type": "string", "required": true, "privacy": "public", "description": "Core data-model profile version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for entity coverage, offer fields, privacy classes, relationship boundaries, non-claims, and test hooks." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Entity keys, categories, privacy classes, required fields, relationships, offer fields, boundaries, non-claims, and contract-test hooks." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Data-model blockers that prevent relying on entity contract coverage." }
+      ]
+    },
+    {
+      "key": "policy_bundle_contract_response",
+      "purpose": "Public validator-backed policy bundle contract for strict copilot input sources, prohibited patterns, factor codes, verification methods, redactions, anti-threat rules, and verification loop.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the policy-bundle contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the policy-bundle validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Policy bundle contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for strict bundle sources, policy registry, seeded prohibited patterns, factor-code dictionary, verification taxonomy, redaction policy, and verification loop." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Policy codes, prohibited-pattern codes, factor-code counts, verification methods, redactions, anti-threat rules, and contract-test hooks." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Policy-bundle blockers that prevent relying on the copilot input contract." }
       ]
     },
     {
@@ -726,6 +778,8 @@
     "performance_route_contract",
     "externality_route_contract",
     "ai_governance_route_contract",
+    "data_model_contract_route",
+    "policy_bundle_contract_route",
     "reasoning_packet_route_contract",
     "match_signal_route_contract",
     "challenge_appeal_route_contract",

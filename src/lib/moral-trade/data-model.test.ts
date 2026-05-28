@@ -1,0 +1,98 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  getMoralTradeDataModelProfile,
+  validateMoralTradeDataModelProfile,
+  type MoralTradeDataModelProfile,
+} from "./data-model";
+
+test("data model profile covers the audit-named core Moral Trade entities", () => {
+  const profile = getMoralTradeDataModelProfile();
+  const validation = validateMoralTradeDataModelProfile(profile);
+  const entityKeys = profile.entities.map((entity) => entity.key);
+
+  assert.equal(validation.status, "pass");
+  assert.equal(validation.blockers.length, 0);
+  assert.ok(entityKeys.includes("participant"));
+  assert.ok(entityKeys.includes("public_profile"));
+  assert.ok(entityKeys.includes("private_wish_profile"));
+  assert.ok(entityKeys.includes("offer"));
+  assert.ok(entityKeys.includes("trade_format"));
+  assert.ok(entityKeys.includes("baseline_statement"));
+  assert.ok(entityKeys.includes("evidence_claim"));
+  assert.ok(entityKeys.includes("evidence_artifact"));
+  assert.ok(entityKeys.includes("reviewer_decision"));
+  assert.ok(entityKeys.includes("challenge"));
+  assert.ok(entityKeys.includes("appeal"));
+  assert.ok(entityKeys.includes("privacy_grant"));
+  assert.ok(entityKeys.includes("match_suggestion"));
+  assert.ok(entityKeys.includes("notification"));
+  assert.ok(entityKeys.includes("payment_record"));
+  assert.ok(entityKeys.includes("agreement_event"));
+  assert.ok(entityKeys.includes("source_note"));
+  assert.ok(entityKeys.includes("saved_search"));
+  assert.ok(entityKeys.includes("profile_visibility_control"));
+  assert.ok(entityKeys.includes("dispute"));
+  assert.ok(entityKeys.includes("payment_update"));
+});
+
+test("data model profile publishes offer fields and privacy boundaries from the report", () => {
+  const profile = getMoralTradeDataModelProfile();
+  const offer = profile.entities.find((entity) => entity.key === "offer");
+  const sourceBoundary = profile.relationshipBoundaries.find(
+    (boundary) => boundary.key === "source_note_boundary",
+  );
+  const matchBoundary = profile.relationshipBoundaries.find(
+    (boundary) => boundary.key === "match_disclosure_boundary",
+  );
+
+  assert.ok(offer);
+  assert.ok(offer.requiredFields.includes("cause_areas"));
+  assert.ok(offer.requiredFields.includes("offered_action"));
+  assert.ok(offer.requiredFields.includes("requested_action"));
+  assert.ok(offer.requiredFields.includes("expected_impact"));
+  assert.ok(offer.requiredFields.includes("verification_method"));
+  assert.ok(offer.requiredFields.includes("duration"));
+  assert.ok(offer.requiredFields.includes("exit_conditions"));
+  assert.ok(offer.requiredFields.includes("baseline_statement"));
+  assert.match(sourceBoundary?.rule ?? "", /manual summaries/);
+  assert.match(sourceBoundary?.rule ?? "", /raw private feeds/);
+  assert.match(matchBoundary?.rule ?? "", /exact wishes/);
+  assert.match(matchBoundary?.rule ?? "", /staged disclosure grants/);
+});
+
+test("data model validation fails when entity coverage or source-note privacy weakens", () => {
+  const profile = getMoralTradeDataModelProfile();
+  const weakened: MoralTradeDataModelProfile = {
+    ...profile,
+    entities: profile.entities
+      .filter((entity) => entity.key !== "source_note")
+      .map((entity) =>
+        entity.key === "private_wish_profile"
+          ? {
+              ...entity,
+              privacyClass: "public_preview",
+              publicExposure: "Publish all exact wishes and source notes.",
+            }
+          : entity,
+      ),
+    relationshipBoundaries: profile.relationshipBoundaries.map((boundary) =>
+      boundary.key === "source_note_boundary"
+        ? { ...boundary, rule: "Import raw private feeds and expose source notes." }
+        : boundary,
+    ),
+    nonClaims: profile.nonClaims.filter((nonClaim) => !/raw private feeds/i.test(nonClaim)),
+    contractTests: profile.contractTests.filter(
+      (hook) => hook !== "source_note_privacy_boundary",
+    ),
+  };
+  const validation = validateMoralTradeDataModelProfile(weakened);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("entity-coverage")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("private-entity-boundaries")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("relationship-boundaries")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("non-claims")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("contract-tests")));
+});

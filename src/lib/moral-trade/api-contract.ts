@@ -57,6 +57,8 @@ const apiContractProfile = apiContractProfileJson as MoralTradeApiContractProfil
 
 const REQUIRED_ROUTES = [
   "moral_trade_health",
+  "moral_trade_data_model_contract",
+  "moral_trade_policy_bundle_contract",
   "moral_trade_provenance_schema",
   "moral_trade_copilot_contract",
   "moral_trade_copilot_review",
@@ -133,6 +135,18 @@ export function validateMoralTradeApiContractProfile(
   );
   const provenanceSchemaResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "provenance_schema_response",
+  );
+  const dataModelContractRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_data_model_contract",
+  );
+  const dataModelContractResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "data_model_contract_response",
+  );
+  const policyBundleContractRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_policy_bundle_contract",
+  );
+  const policyBundleContractResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "policy_bundle_contract_response",
   );
   const draftReviewRoutes = profile.routes.filter(
     (route) => route.privacyClass === "ephemeral_private_draft_review",
@@ -265,6 +279,54 @@ export function validateMoralTradeApiContractProfile(
         ),
       provenanceSchemaRoute
         ? `${provenanceSchemaRoute.key}:${provenanceSchemaRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
+      "data-model-contract-route",
+      "Data model contract route is validator-backed and privacy-preserving",
+      dataModelContractRoute?.method === "GET" &&
+        dataModelContractRoute.cacheControl === "no_store_dynamic" &&
+        dataModelContractRoute.privacyClass === "public_contract" &&
+        /validation blockers|private wishes|source notes|saved searches|privacy grants|payment records|raw feeds/i.test(
+          dataModelContractRoute.fallback,
+        ) &&
+        Boolean(
+          dataModelContractResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          dataModelContractResponse?.fields.some(
+            (field) =>
+              field.key === "publicContract" && field.privacy === "public_contract",
+          ),
+        ),
+      dataModelContractRoute
+        ? `${dataModelContractRoute.key}:${dataModelContractRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
+      "policy-bundle-contract-route",
+      "Policy bundle contract route is validator-backed and strict-bundle scoped",
+      policyBundleContractRoute?.method === "GET" &&
+        policyBundleContractRoute.cacheControl === "no_store_dynamic" &&
+        policyBundleContractRoute.privacyClass === "public_contract" &&
+        /validation blockers|broad app context|hidden reasoning|private feeds|unlisted factor codes|unseeded prohibited patterns/i.test(
+          policyBundleContractRoute.fallback,
+        ) &&
+        Boolean(
+          policyBundleContractResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          policyBundleContractResponse?.fields.some(
+            (field) =>
+              field.key === "publicContract" && field.privacy === "public_contract",
+          ),
+        ),
+      policyBundleContractRoute
+        ? `${policyBundleContractRoute.key}:${policyBundleContractRoute.cacheControl}`
         : "missing",
     ),
     check(
@@ -430,6 +492,8 @@ export function validateMoralTradeApiContractProfile(
       profile.apiTests.includes("api_contract_profile_validator") &&
         profile.apiTests.includes("health_route_contract_smoke") &&
         profile.apiTests.includes("technical_spec_api_contract_smoke") &&
+        profile.apiTests.includes("data_model_contract_route") &&
+        profile.apiTests.includes("policy_bundle_contract_route") &&
         profile.apiTests.includes("performance_route_contract"),
       profile.apiTests.join(", "),
     ),
