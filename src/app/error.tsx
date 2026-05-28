@@ -3,10 +3,31 @@
 import Link from "next/link";
 import { useEffect } from "react";
 
+import { SiteTopbar } from "@/components/layout/site-topbar";
+import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+
 interface ErrorPageProps {
   error: Error & { digest?: string };
   reset: () => void;
 }
+
+const recoveryRoutes = [
+  {
+    href: "/moral-trade/technical-spec",
+    label: "Protocol spec",
+    text: "Open the public validator contract and health links.",
+  },
+  {
+    href: "/offers?view=examples",
+    label: "Worked examples",
+    text: "Browse static examples while live data recovers.",
+  },
+  {
+    href: "/reasoning-standards",
+    label: "Evidence standards",
+    text: "Review safety, evidence, and reliance standards.",
+  },
+] as const;
 
 export default function ErrorPage({ error, reset }: ErrorPageProps) {
   useEffect(() => {
@@ -18,13 +39,25 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
 
   return (
     <div className="page-shell">
-      <main className="section section-white state-page" id="main-content" tabIndex={-1}>
+      <SiteTopbar
+        brandHref="/"
+        links={getPrimaryNavLinks(false)}
+        {...getTopbarActions(false)}
+        showSearch
+      />
+
+      <main
+        className="section section-white state-page route-state-page"
+        id="main-content"
+        tabIndex={-1}
+      >
         <div className="section-head">
-          <p className="eyebrow">Something failed</p>
-          <h1>The site could not finish loading this page.</h1>
+          <p className="eyebrow">Recoverable route error</p>
+          <h1>This page did not finish rendering.</h1>
           <p>
-            You can retry the request, return to the public directories, or come back through the
-            dashboard if the page depends on private account data.
+            Retry the current request, or move to a public contract surface that does not depend on
+            private account data. No proposal status, match disclosure, or evidence decision is
+            changed by this recovery screen.
           </p>
         </div>
 
@@ -38,6 +71,20 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
           <Link className="button button-secondary" href="/dashboard">
             Open dashboard
           </Link>
+        </div>
+
+        <div aria-label="Safe recovery routes" className="route-state-grid">
+          {recoveryRoutes.map((route) => (
+            <Link className="route-state-card route-state-link" href={route.href} key={route.href}>
+              <span className="route-state-number" aria-hidden="true">
+                Go
+              </span>
+              <span>
+                <strong>{route.label}</strong>
+                <small>{route.text}</small>
+              </span>
+            </Link>
+          ))}
         </div>
       </main>
     </div>

@@ -29,6 +29,27 @@ export interface ProposalReviewInput {
   requestedCause?: string | null;
 }
 
+export interface OfferReviewWorkflowInput extends ProposalReviewInput {
+  currentStatus?: string | null;
+  offerImpact?: number | null;
+  minCounterpartyImpact?: number | null;
+}
+
+export interface OfferReviewWorkflowCard {
+  key:
+    | "current_status"
+    | "action_evidence"
+    | "baseline_confidence"
+    | "externality_review"
+    | "participant_relative_scores"
+    | "appeal_scope";
+  label: string;
+  status: MoralTradeVerificationStepStatus;
+  factorCodes: string[];
+  summary: string;
+  nextStep: string;
+}
+
 export interface MoralTradeProtocolDraftInput {
   format: string;
   offeredCause?: string | null;
@@ -1310,4 +1331,137 @@ export function getExternalityReviewSummary(input: ProposalReviewInput) {
   }
 
   return "Review whether the trade creates third-party harms, bad incentives, or objections from moral views not present in the match.";
+}
+
+function workflowStatusFromCurrentStatus(status: string | null | undefined): MoralTradeVerificationStepStatus {
+  const normalized = String(status ?? "").toLowerCase();
+
+  if (/(blocked|flagged|rejected)/.test(normalized)) {
+    return "blocked";
+  }
+
+  if (/(review|challenge|pending|worked example|submitted)/.test(normalized)) {
+    return "human_review";
+  }
+
+  if (/(needs|missing|unresolved)/.test(normalized)) {
+    return "needs_input";
+  }
+
+  return "human_review";
+}
+
+function workflowStatusFromBaseline(confidence: BaselineConfidence): MoralTradeVerificationStepStatus {
+  if (confidence === "Strong" || confidence === "Moderate") {
+    return "pass";
+  }
+
+  if (confidence === "Weak") {
+    return "needs_input";
+  }
+
+  return "human_review";
+}
+
+function workflowStatusFromEvidence(input: ProposalReviewInput): MoralTradeVerificationStepStatus {
+  const verification = input.verification.trim().toLowerCase();
+
+  if (!verification) {
+    return "needs_input";
+  }
+
+  if (input.evidenceUrl && input.moderationStatus === "clear") {
+    return "pass";
+  }
+
+  if (/(receipt|audit|payment|pledge|witness|manual review|evidence-gated)/.test(verification)) {
+    return "human_review";
+  }
+
+  return "needs_input";
+}
+
+function workflowStatusFromExternality(input: ProposalReviewInput): MoralTradeVerificationStepStatus {
+  const causes = [input.offeredCause, input.requestedCause].filter(Boolean).join(" ").toLowerCase();
+
+  if (POLITICAL_ADJACENT_CAUSES.some((cause) => causes.includes(cause))) {
+    return "human_review";
+  }
+
+  if (input.mode === "offset" || input.mode === "payment") {
+    return "human_review";
+  }
+
+  return "pass";
+}
+
+export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): OfferReviewWorkflowCard[] {
+  const currentStatus = input.currentStatus?.trim() || "Manual review required before reliance";
+  const actionEvidence = getActionEvidenceSummary(input);
+  const baselineConfidence = getBaselineConfidence(input);
+  const baselineEvidence = getBaselineEvidenceSummary(input);
+  const externalityReview = getExternalityReviewSummary(input);
+  const scoreConfidence = getScoreConfidence(input);
+  const scoreSummary =
+    input.offerImpact && input.minCounterpartyImpact
+      ? `Participant-stated importance ${input.offerImpact}/10; counterparty minimum ${input.minCounterpartyImpact}/10. Confidence: ${scoreConfidence}.`
+      : `Participant-stated scores are review context only. Confidence: ${scoreConfidence}.`;
+
+  return [
+    {
+      key: "current_status",
+      label: "Status card",
+      status: workflowStatusFromCurrentStatus(currentStatus),
+      factorCodes: ["status_visible", "human_review_required"],
+      summary: `Status: ${currentStatus}.`,
+      nextStep:
+        "Treat this as a review state, not a claim of completion, legal enforceability, custody, or moral endorsement.",
+    },
+    {
+      key: "action_evidence",
+      label: "Action evidence",
+      status: workflowStatusFromEvidence(input),
+      factorCodes: ["evidence_rule_named", "evidence_sufficiency"],
+      summary: actionEvidence,
+      nextStep:
+        "Attach or inspect one scoped artifact for each factual action claim before relying on the record.",
+    },
+    {
+      key: "baseline_confidence",
+      label: "Counterfactual baseline",
+      status: workflowStatusFromBaseline(baselineConfidence),
+      factorCodes: ["baseline_stated", "baseline_credibility"],
+      summary: `${baselineConfidence}: ${baselineEvidence}`,
+      nextStep:
+        "State what would happen without the trade, then support it with prior intent, past behavior, or a dated baseline record.",
+    },
+    {
+      key: "externality_review",
+      label: "Externality review",
+      status: workflowStatusFromExternality(input),
+      factorCodes: ["externality_review_required", "human_review_required"],
+      summary: externalityReview,
+      nextStep:
+        "Ask who is affected outside the two parties, what harm pathway exists, and what remedy or challenge window is available.",
+    },
+    {
+      key: "participant_relative_scores",
+      label: "Participant-relative scores",
+      status: "pass",
+      factorCodes: ["participant_relative_scores", "no_global_moral_ranking"],
+      summary: scoreSummary,
+      nextStep:
+        "Use these scores only as participant-stated priorities; do not treat them as a platform ranking of moral value.",
+    },
+    {
+      key: "appeal_scope",
+      label: "Appeal scope",
+      status: "human_review",
+      factorCodes: ["appealable_review_scope", "reviewer_summary"],
+      summary:
+        "Appeals should target the specific reviewed claim, evidence row, baseline concern, disclosure decision, or policy flag.",
+      nextStep:
+        "Do not reopen unrelated moral disagreements by default; route the appealed claim with reason codes and redacted evidence scope.",
+    },
+  ];
 }

@@ -37,6 +37,7 @@ import {
   getBaselineConfidence,
   getBaselineEvidenceSummary,
   getExternalityReviewSummary,
+  getOfferReviewWorkflowCards,
   getScoreConfidence,
 } from "@/lib/proposal-review";
 import { formatLocation, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
@@ -189,6 +190,12 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const baselineEvidence = getBaselineEvidenceSummary(reviewInput);
   const externalityReview = getExternalityReviewSummary(reviewInput);
   const scoreConfidence = getScoreConfidence(reviewInput);
+  const reviewWorkflowCards = getOfferReviewWorkflowCards({
+    ...reviewInput,
+    currentStatus: offer.status,
+    offerImpact: offer.offer_impact,
+    minCounterpartyImpact: offer.min_counterparty_impact,
+  });
   const offerStructuredData = {
     "@context": "https://schema.org",
     "@type": "WebPage",
@@ -393,6 +400,40 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
             </div>
           </section>
         ) : null}
+
+        <section className="section section-white" aria-labelledby="review-workflow-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Review workflow</p>
+            <h2 id="review-workflow-heading">Why this record can or cannot be relied on yet</h2>
+            <p>
+              Each card exposes the current review state, factor codes, and the next human-controlled
+              step before matching, disclosure, or completion trust.
+            </p>
+          </div>
+          <div className="review-workflow-grid">
+            {reviewWorkflowCards.map((card) => (
+              <article
+                className={`panel review-workflow-card review-workflow-card-${card.status}`}
+                key={card.key}
+              >
+                <div className="review-workflow-card-head">
+                  <p className="detail-kicker">{card.key.replaceAll("_", " ")}</p>
+                  <span className="review-workflow-status">{card.status.replaceAll("_", " ")}</span>
+                </div>
+                <h3>{card.label}</h3>
+                <p className="route-text">{card.summary}</p>
+                <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
+                  {card.factorCodes.map((factorCode) => (
+                    <span key={factorCode}>{factorCode}</span>
+                  ))}
+                </div>
+                <p className="review-next-step">
+                  <strong>Next step:</strong> {card.nextStep}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
 
         <section className="section section-white">
           <div className="detail-grid detail-grid-wide">

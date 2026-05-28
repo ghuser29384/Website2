@@ -14,6 +14,7 @@ import {
   getBaselineConfidence,
   getBaselineEvidenceSummary,
   getExternalityReviewSummary,
+  getOfferReviewWorkflowCards,
   getScoreConfidence,
 } from "@/lib/proposal-review";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
@@ -85,6 +86,12 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
   const baselineEvidence = getBaselineEvidenceSummary(offer);
   const externalityReview = getExternalityReviewSummary(offer);
   const scoreConfidence = getScoreConfidence(offer);
+  const reviewWorkflowCards = getOfferReviewWorkflowCards({
+    ...offer,
+    currentStatus: "Worked example; manual review required before reliance",
+    offerImpact: offer.offerImpact,
+    minCounterpartyImpact: offer.minCounterpartyImpact,
+  });
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -225,6 +232,29 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
               identity checks, evidence review, challenge windows, and an agreement room after a
               mutual introduction.
             </p>
+          </div>
+          <div className="review-workflow-grid">
+            {reviewWorkflowCards.map((card) => (
+              <article
+                className={`panel review-workflow-card review-workflow-card-${card.status}`}
+                key={card.key}
+              >
+                <div className="review-workflow-card-head">
+                  <p className="detail-kicker">{card.key.replaceAll("_", " ")}</p>
+                  <span className="review-workflow-status">{card.status.replaceAll("_", " ")}</span>
+                </div>
+                <h3>{card.label}</h3>
+                <p className="route-text">{card.summary}</p>
+                <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
+                  {card.factorCodes.map((factorCode) => (
+                    <span key={factorCode}>{factorCode}</span>
+                  ))}
+                </div>
+                <p className="review-next-step">
+                  <strong>Next step:</strong> {card.nextStep}
+                </p>
+              </article>
+            ))}
           </div>
           <div className="data-grid">
             <article className="panel data-card">

@@ -384,22 +384,63 @@ test("MPGF signed-out manual evidence copy and controls are gated", () => {
   assert.match(consoleSource, /if \(!viewerPresent\)/);
 });
 
-test("background networking and reasoning standards are distinct public routes", () => {
+test("background networking and reasoning routes are distinct resilient public routes", () => {
   const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
+  const reasoningCenterPage = readRepoFile("src/app/reasoning-center/page.tsx");
   const standardsPage = readRepoFile("src/app/reasoning-standards/page.tsx");
+  const globalCss = readRepoFile("src/app/globals.css");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
   assert.match(backgroundPage, /Find possible trades without turning people into targets/);
   assert.match(backgroundPage, /does not ingest private feeds/);
   assert.match(backgroundPage, /No autonomous outreach/);
+  assert.match(reasoningCenterPage, /Pilot reasoning index/);
+  assert.match(reasoningCenterPage, /getOptionalViewerForReasoningCenter/);
+  assert.match(reasoningCenterPage, /Rendering signed-out state after viewer lookup failed/);
+  assert.match(reasoningCenterPage, /not a live forum or autonomous moral-ranking system/);
+  assert.match(reasoningCenterPage, /baseline_credibility/);
+  assert.match(reasoningCenterPage, /evidence_sufficiency/);
+  assert.match(reasoningCenterPage, /human_review_routing/);
+  assert.equal(reasoningCenterPage.includes("Mira Chen"), false);
+  assert.equal(reasoningCenterPage.includes("karma"), false);
+  assert.equal(reasoningCenterPage.includes("New & upvoted"), false);
+  assert.match(globalCss, /reasoning-status-box/);
+  assert.match(globalCss, /reasoning-factor-list/);
   assert.match(standardsPage, /Make trade records specific enough to judge/);
   assert.match(standardsPage, /not legal escrow/i);
   assert.match(standardsPage, /voluntary/i);
   assert.match(sitemapSource, /\/background-networking/);
+  assert.match(sitemapSource, /\/reasoning-center/);
   assert.match(sitemapSource, /\/reasoning-standards/);
   assert.match(sitemapSource, /\/pledge-swaps/);
   assert.match(sitemapSource, /\/cohort/);
   assert.match(sitemapSource, /\/paid-action-offers/);
+});
+
+test("global loading and error states expose route-specific recovery instead of generic dead ends", () => {
+  const loadingPage = readRepoFile("src/app/loading.tsx");
+  const errorPage = readRepoFile("src/app/error.tsx");
+  const globalCss = readRepoFile("src/app/globals.css");
+  const performanceProfile = readRepoFile("config/moral-trade/performance-profile.json");
+
+  assert.match(loadingPage, /Preparing route/);
+  assert.match(loadingPage, /No state change/);
+  assert.match(loadingPage, /Route loading safeguards/);
+  assert.match(loadingPage, /does not submit drafts, disclose counterparties, or change review status/);
+  assert.equal(loadingPage.includes("Loading Moral Trade."), false);
+  assert.match(errorPage, /Recoverable route error/);
+  assert.match(errorPage, /This page did not finish rendering/);
+  assert.match(errorPage, /No proposal status, match disclosure, or evidence decision is/);
+  assert.match(errorPage, /\/moral-trade\/technical-spec/);
+  assert.match(errorPage, /\/offers\?view=examples/);
+  assert.match(errorPage, /\/reasoning-standards/);
+  assert.match(errorPage, /SiteTopbar/);
+  assert.equal(errorPage.includes("Something failed"), false);
+  assert.match(globalCss, /route-state-grid/);
+  assert.match(globalCss, /route-state-link/);
+  assert.match(performanceProfile, /route_error_boundary/);
+  assert.match(performanceProfile, /loading_state_inventory/);
+  assert.match(performanceProfile, /loading_error_boundary_smoke/);
 });
 
 test("cohort page exposes founding progress, referral, and one-counterparty invite loop", () => {
@@ -1013,6 +1054,31 @@ test("pooled donation offset creation has visible path and server-side guardrail
   assert.match(offerDetailSource, /One proof, one claim/);
   assert.match(adminSource, /duplicate proof/);
   assert.match(adminSource, /One proof, one claim/);
+});
+
+test("offer detail and worked examples expose instrumented review workflow cards", () => {
+  const offerDetailSource = readRepoFile("src/app/offers/[offerId]/page.tsx");
+  const workedExampleSource = readRepoFile("src/app/offers/examples/[exampleId]/page.tsx");
+  const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
+  const globalCss = readRepoFile("src/app/globals.css");
+
+  assert.match(proposalReviewSource, /getOfferReviewWorkflowCards/);
+  assert.match(proposalReviewSource, /current_status/);
+  assert.match(proposalReviewSource, /baseline_credibility/);
+  assert.match(proposalReviewSource, /no_global_moral_ranking/);
+  assert.match(proposalReviewSource, /appealable_review_scope/);
+  assert.match(proposalReviewSource, /specific reviewed claim/);
+  assert.match(offerDetailSource, /Review workflow/);
+  assert.match(offerDetailSource, /Why this record can or cannot be relied on yet/);
+  assert.match(offerDetailSource, /reviewWorkflowCards\.map/);
+  assert.match(offerDetailSource, /review-factor-list/);
+  assert.match(workedExampleSource, /getOfferReviewWorkflowCards/);
+  assert.match(workedExampleSource, /Worked example; manual review required before reliance/);
+  assert.match(workedExampleSource, /reviewWorkflowCards\.map/);
+  assert.match(globalCss, /review-workflow-grid/);
+  assert.match(globalCss, /review-workflow-card-human_review/);
+  assert.match(globalCss, /review-factor-list/);
+  assert.match(globalCss, /review-next-step/);
 });
 
 test("offer creation form has live client validation aligned with server-required fields", () => {

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   evaluateMoralTradeProtocolDraft,
   formatProtocolReviewStatus,
+  getOfferReviewWorkflowCards,
   MORAL_TRADE_VERIFICATION_LOOP_STEPS,
   PROHIBITED_MORAL_TRADE_PATTERNS,
   PROHIBITED_PROPOSAL_FIXTURES,
@@ -219,4 +220,46 @@ test("protocol draft review separates factual trust, baseline confidence, and ex
       (row) => row.citation === "https://example.com/audit" && row.status === "evidence_locator",
     ),
   );
+});
+
+test("offer review workflow cards expose status, factor codes, next steps, and appeal scope", () => {
+  const cards = getOfferReviewWorkflowCards({
+    mode: "offset",
+    verification: "Manual review required",
+    trustLevel: 4,
+    baselineAmountUsd: 1000,
+    baselineOpposedCause: "Gun rights",
+    requestedMatchingAmountUsd: 1000,
+    requestedOpposedCause: "Gun control",
+    evidenceUrl: "https://example.com/audit",
+    moderationStatus: "clear",
+    offeredCause: "Gun rights",
+    requestedCause: "Gun control",
+    currentStatus: "Live offer; evidence and baseline review required before reliance",
+    offerImpact: 8,
+    minCounterpartyImpact: 7,
+  });
+
+  assert.deepEqual(
+    cards.map((card) => card.key),
+    [
+      "current_status",
+      "action_evidence",
+      "baseline_confidence",
+      "externality_review",
+      "participant_relative_scores",
+      "appeal_scope",
+    ],
+  );
+  assert.ok(cards.every((card) => card.factorCodes.length > 0));
+  assert.ok(cards.every((card) => /Next step|Treat|Attach|State|Ask|Use|Do not/.test(card.nextStep)));
+  assert.equal(cards.find((card) => card.key === "action_evidence")?.status, "pass");
+  assert.equal(cards.find((card) => card.key === "baseline_confidence")?.status, "pass");
+  assert.equal(cards.find((card) => card.key === "externality_review")?.status, "human_review");
+  assert.ok(
+    cards
+      .find((card) => card.key === "participant_relative_scores")
+      ?.factorCodes.includes("no_global_moral_ranking"),
+  );
+  assert.match(cards.find((card) => card.key === "appeal_scope")?.summary ?? "", /specific reviewed claim/);
 });
