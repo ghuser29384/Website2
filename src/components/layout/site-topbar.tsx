@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useId, useMemo, useState, useTransition, type FormEvent } from "react";
@@ -137,14 +136,7 @@ export function SiteTopbar({
   return (
     <nav aria-label="Primary" className={showSearch ? "topbar topbar-with-search" : "topbar"}>
       <Link aria-label="Moral Trade" className="brand" href={brandHref}>
-        <Image
-          alt="Moral Trade mark"
-          className="brand-logo"
-          height={44}
-          priority
-          src="/O%20(8).png"
-          width={44}
-        />
+        <span aria-hidden="true" className="brand-logo" />
         <span className="brand-name">Moral Trade</span>
       </Link>
       <div className="topbar-links">

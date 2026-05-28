@@ -1,0 +1,275 @@
+{
+  "version": "moral-trade-core-v0.1-2026-05",
+  "purpose": "Public contract for core Moral Trade proposal review, matching explanations, evidence states, and provenance.",
+  "requiredProposalFields": [
+    { "key": "format", "label": "Trade format" },
+    { "key": "cause_areas", "label": "Offered and requested cause areas" },
+    { "key": "offered_action", "label": "Offered action" },
+    { "key": "requested_action", "label": "Requested action" },
+    { "key": "baseline_statement", "label": "No-trade baseline" },
+    { "key": "duration", "label": "Duration or review period" },
+    { "key": "exit_conditions", "label": "Exit, pause, expiry, or unresolved-evidence rule" },
+    { "key": "verification_method", "label": "Verification method" },
+    { "key": "public_description", "label": "Public description and boundaries" }
+  ],
+  "statusValues": [
+    "draft",
+    "submitted",
+    "needs_clarification",
+    "needs_evidence",
+    "needs_human_review",
+    "challenge_window",
+    "completion_reviewed",
+    "disputed_unresolved",
+    "blocked",
+    "matchable"
+  ],
+  "stateTransitionRules": [
+    {
+      "key": "draft_intake",
+      "from": "draft",
+      "allowedTo": ["needs_clarification", "submitted", "blocked"],
+      "requires": ["required_fields_before_submitted", "policy_screen_before_blocked", "transition_event_recorded"],
+      "provenanceActivity": "draft_created"
+    },
+    {
+      "key": "clarification_resubmission",
+      "from": "needs_clarification",
+      "allowedTo": ["draft", "submitted", "blocked"],
+      "requires": ["required_fields_before_submitted", "transition_event_recorded"],
+      "provenanceActivity": "draft_updated"
+    },
+    {
+      "key": "submitted_triage",
+      "from": "submitted",
+      "allowedTo": ["needs_evidence", "needs_human_review", "challenge_window", "matchable", "blocked"],
+      "requires": ["required_fields_before_reliance", "human_review_before_matchable", "transition_event_recorded"],
+      "provenanceActivity": "risk_screened"
+    },
+    {
+      "key": "evidence_review",
+      "from": "needs_evidence",
+      "allowedTo": ["submitted", "needs_human_review", "challenge_window", "blocked"],
+      "requires": ["evidence_metadata_reviewed", "transition_event_recorded"],
+      "provenanceActivity": "evidence_submitted"
+    },
+    {
+      "key": "human_review_routing",
+      "from": "needs_human_review",
+      "allowedTo": ["needs_evidence", "challenge_window", "matchable", "blocked"],
+      "requires": ["human_review_before_matchable", "transition_event_recorded"],
+      "provenanceActivity": "risk_screened"
+    },
+    {
+      "key": "challenge_window_resolution",
+      "from": "challenge_window",
+      "allowedTo": ["needs_evidence", "completion_reviewed", "disputed_unresolved", "blocked"],
+      "requires": ["evidence_metadata_reviewed", "human_review_before_completion", "transition_event_recorded"],
+      "provenanceActivity": "challenge_window_opened"
+    },
+    {
+      "key": "dispute_resolution",
+      "from": "disputed_unresolved",
+      "allowedTo": ["challenge_window", "completion_reviewed", "blocked"],
+      "requires": ["dispute_record_before_unresolved", "human_review_before_completion", "transition_event_recorded"],
+      "provenanceActivity": "review_completed"
+    },
+    {
+      "key": "match_recheck",
+      "from": "matchable",
+      "allowedTo": ["needs_evidence", "challenge_window", "blocked"],
+      "requires": ["transition_event_recorded"],
+      "provenanceActivity": "risk_screened"
+    },
+    {
+      "key": "completion_challenge",
+      "from": "completion_reviewed",
+      "allowedTo": ["disputed_unresolved", "blocked"],
+      "requires": ["dispute_record_before_unresolved", "transition_event_recorded"],
+      "provenanceActivity": "review_completed"
+    }
+  ],
+  "guardrails": [
+    {
+      "code": "no_global_moral_ranking",
+      "label": "No global moral ranking",
+      "rule": "Scores are participant-relative and must not be described as Moral Trade's objective moral valuation."
+    },
+    {
+      "code": "anti_threat_baseline",
+      "label": "Anti-threat baseline",
+      "rule": "Block threats, coercion, harassment, doxxing, fraud, newly escalated harmful behavior, and pay-me-or-I-will-X framing."
+    },
+    {
+      "code": "no_autonomous_outreach",
+      "label": "No autonomous outreach",
+      "rule": "Matching can draft explanations and introduction plans but must not contact counterparties without consent."
+    },
+    {
+      "code": "privacy_redaction_required",
+      "label": "Privacy redaction required",
+      "rule": "Exact wishes, identity details, contact data, and sensitive constraints remain hidden until the proper disclosure stage."
+    },
+    {
+      "code": "separate_trust_axes",
+      "label": "Separate trust axes",
+      "rule": "Factual evidence, counterfactual baseline confidence, and externality review must remain distinct."
+    }
+  ],
+  "factorCodes": [
+    {
+      "code": "terms_complete",
+      "label": "Terms complete",
+      "description": "The action, reciprocal request, duration, exit rule, and verification method are present."
+    },
+    {
+      "code": "baseline_stated",
+      "label": "Baseline stated",
+      "description": "The no-trade default is explicit enough for counterfactual review."
+    },
+    {
+      "code": "evidence_rule_named",
+      "label": "Evidence rule named",
+      "description": "The draft names the receipt, log, attestation, provider record, audit, or manual review path."
+    },
+    {
+      "code": "participant_relative_scores",
+      "label": "Participant-relative scores",
+      "description": "Importance scores are treated as user-stated thresholds, not platform rankings."
+    },
+    {
+      "code": "party_relative_benefit",
+      "label": "Party-relative benefit",
+      "description": "The draft explains why each side is better off than the no-trade baseline using participant-relative priorities."
+    },
+    {
+      "code": "externality_review_required",
+      "label": "Externality review required",
+      "description": "The draft may affect unrepresented people, political-adjacent claims, incentives, or vulnerable parties."
+    },
+    {
+      "code": "privacy_safe_preview",
+      "label": "Privacy-safe preview",
+      "description": "Match explanations can use broad cause areas, format, verification preferences, and redaction notes."
+    },
+    {
+      "code": "human_review_required",
+      "label": "Human review required",
+      "description": "A reviewer must inspect safety, evidence, baseline, externality, or disclosure concerns before reliance."
+    },
+    {
+      "code": "cause_area_overlap",
+      "label": "Cause-area overlap",
+      "description": "A redacted match signal found broad cause-area overlap without exposing exact wishes or private text."
+    },
+    {
+      "code": "cause_area_complementarity",
+      "label": "Cause-area complementarity",
+      "description": "One side's broad offered cause area can satisfy the other side's broad requested cause area without exposing exact wishes."
+    },
+    {
+      "code": "trade_mode_compatible",
+      "label": "Trade-mode compatible",
+      "description": "Both redacted profiles support at least one compatible trade format."
+    },
+    {
+      "code": "verification_preference_compatible",
+      "label": "Verification preference compatible",
+      "description": "Both redacted profiles support at least one compatible evidence or verification preference."
+    },
+    {
+      "code": "location_constraint_satisfied",
+      "label": "Location constraint satisfied",
+      "description": "Any declared city or region sensitivity is satisfied at a coarse, privacy-safe level."
+    },
+    {
+      "code": "privacy_stage_compatible",
+      "label": "Privacy stage compatible",
+      "description": "Both sides are still inside the same consent-gated disclosure stage."
+    },
+    {
+      "code": "stated_exclusions_clear",
+      "label": "Stated exclusions clear",
+      "description": "The redacted match signal did not find a conflict with either side's stated exclusions."
+    }
+  ],
+  "evidenceSchemas": [
+    {
+      "key": "pledge_swap_v1",
+      "label": "Pledge swap evidence",
+      "required": ["dated pledge", "review period", "check-in rule", "no-trade baseline"]
+    },
+    {
+      "key": "donation_offset_v1",
+      "label": "Donation offset evidence",
+      "required": ["baseline donation claim", "compromise destination", "match ratio", "unmatched surplus rule", "receipt or audit path"]
+    },
+    {
+      "key": "paid_action_v1",
+      "label": "Paid action evidence",
+      "required": ["external payment record", "action log or attestation", "counterfactual baseline", "dispute route"]
+    },
+    {
+      "key": "public_good_commitment_v1",
+      "label": "Public-good commitment evidence",
+      "required": ["threshold rule", "recipient or implementation record", "external contribution evidence", "reviewed completion state"]
+    }
+  ],
+  "provenanceModel": {
+    "entities": ["proposal_record", "evidence_artifact", "external_entity_reference", "review_decision", "match_explanation", "match_signal", "traceability_event"],
+    "activities": ["draft_created", "draft_updated", "evidence_submitted", "traceability_event_recorded", "risk_screened", "challenge_window_opened", "review_completed"],
+    "agents": ["participant", "counterparty", "operator", "external_reviewer", "payment_or_evidence_provider"]
+  },
+  "provenanceObjectSchemas": [
+    {
+      "key": "evidence_artifact",
+      "label": "Evidence artifact entity",
+      "required": ["id", "kind", "normalizedLocator", "mediaType", "claimScopes", "submittedAt", "submittedByAgentId", "redactionLevel", "sha256"]
+    },
+    {
+      "key": "evidence_claim",
+      "label": "Evidence claim",
+      "required": ["id", "proposalId", "claimType", "artifactIds", "claimScope", "reviewerConfidence", "uniquenessChecked"]
+    },
+    {
+      "key": "external_entity_reference",
+      "label": "External entity reference",
+      "required": ["id", "entityType", "label", "identifierSystem", "normalizedIdentifier", "dedupeKey", "verificationStatus", "redactionLevel", "sha256"]
+    },
+    {
+      "key": "review_decision",
+      "label": "Reviewer decision",
+      "required": ["id", "proposalId", "outcome", "reasonCodes", "summary", "reviewerId", "createdAt"]
+    },
+    {
+      "key": "match_signal",
+      "label": "Privacy-safe match signal",
+      "required": ["id", "leftProfileId", "rightProfileId", "status", "factorCodes", "confidenceBand", "redactedFields", "humanReviewRequired", "createdAt"]
+    },
+    {
+      "key": "traceability_event",
+      "label": "Interoperable traceability event",
+      "required": ["id", "eventTime", "recordedAt", "action", "businessStep", "disposition", "what", "where", "why", "agentIds", "redactionLevel", "sha256"]
+    },
+    {
+      "key": "provenance_activity",
+      "label": "Provenance activity",
+      "required": ["id", "kind", "at", "usedEntityIds", "generatedEntityIds", "agentIds"]
+    },
+    {
+      "key": "provenance_agent",
+      "label": "Provenance agent",
+      "required": ["id", "kind", "label"]
+    }
+  ],
+  "qualityMetrics": [
+    "draft_completion_rate",
+    "blocked_proposal_precision",
+    "privacy_leakage_incidents",
+    "explanation_helpfulness",
+    "false_match_rate",
+    "subgroup_surfacing_parity",
+    "human_overrule_rate",
+    "appeal_overturn_rate"
+  ]
+}

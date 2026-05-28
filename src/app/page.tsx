@@ -5,24 +5,24 @@ import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 
 const homeDescription = truncateDescription(
-  "Browse and create reviewable moral trade offers: pledge swaps, donation offsets, and shared public-good commitments with explicit baselines, evidence rules, and no escrow claim.",
+  "Moral Trade helps serious participants test one small, reviewable commitment across moral disagreement with explicit baselines, evidence rules, and no custody or escrow.",
 );
 
 export const metadata: Metadata = {
-  title: "Moral Trade marketplace for reviewable moral trades",
+  title: "Cooperate across deep value differences",
   description: homeDescription,
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Moral Trade marketplace for reviewable moral trades",
+    title: "Cooperate across deep value differences",
     description: homeDescription,
     url: getAbsoluteUrl("/"),
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Moral Trade marketplace for reviewable moral trades",
+    title: "Cooperate across deep value differences",
     description: homeDescription,
   },
 };

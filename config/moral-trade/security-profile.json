@@ -1,0 +1,133 @@
+{
+  "version": "moral-trade-security-v0.1-2026-05",
+  "purpose": "Public security posture contract for Moral Trade headers, session boundaries, provider encryption assumptions, secret/key management, abuse throttling, and scale gates.",
+  "controls": [
+    {
+      "key": "hsts_csp_headers",
+      "label": "HSTS, CSP, and browser security headers",
+      "status": "implemented",
+      "evidence": "next.config.ts sets HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, and CSP report-only headers.",
+      "publicClaim": "Security headers are configured at the app edge; CSP is currently report-only."
+    },
+    {
+      "key": "private_no_store_cache",
+      "label": "Private no-store cache policy",
+      "status": "implemented",
+      "evidence": "next.config.ts and background privacy controls mark dashboard, admin, profile, and job API routes private no-store.",
+      "publicClaim": "Authenticated and sensitive routes should not be cached as public pages."
+    },
+    {
+      "key": "supabase_auth_cookies",
+      "label": "Supabase auth cookies",
+      "status": "implemented",
+      "evidence": "src/lib/supabase/proxy.ts and src/lib/supabase/server.ts refresh auth through server-side cookies.",
+      "publicClaim": "Authentication is cookie-backed through Supabase."
+    },
+    {
+      "key": "provider_encryption_at_rest",
+      "label": "Provider encryption at rest",
+      "status": "provider_boundary",
+      "evidence": "Supabase, Vercel, Stripe, Every.org, and email providers are treated as processor/provider boundaries; Moral Trade does not claim custom field-level encryption for every table.",
+      "publicClaim": "Encryption-at-rest is a provider-boundary control unless a field-level encryption control is explicitly published."
+    },
+    {
+      "key": "field_level_encryption_not_claimed",
+      "label": "Field-level encryption is not claimed",
+      "status": "not_claimed",
+      "evidence": "background-privacy-controls marks field-encryption work as tracked separately.",
+      "publicClaim": "Private wishes and source notes are protected by access, redaction, cache, and consent controls; field-level encryption is not advertised as complete."
+    },
+    {
+      "key": "server_only_secret_management",
+      "label": "Server-only secret management",
+      "status": "implemented",
+      "evidence": "API integrations use server-side environment variables and public contracts avoid publishing secret values.",
+      "publicClaim": "Secrets must stay in deployment/provider secret stores and never be copied into public docs or client bundles."
+    },
+    {
+      "key": "two_factor_admin_gate",
+      "label": "2FA/MFA admin gate",
+      "status": "required_before_scale",
+      "evidence": "The public pilot does not claim verified 2FA enforcement for all sensitive admin users.",
+      "publicClaim": "Sensitive admin scale requires verified MFA/2FA enforcement before expansion."
+    },
+    {
+      "key": "device_session_review_gate",
+      "label": "Device/session review gate",
+      "status": "required_before_scale",
+      "evidence": "The public pilot does not yet publish device inventory, session revocation, or anomalous-session review evidence.",
+      "publicClaim": "Sensitive admin scale requires a device/session review and revocation procedure."
+    },
+    {
+      "key": "key_rotation_gate",
+      "label": "Key rotation gate",
+      "status": "required_before_scale",
+      "evidence": "The public pilot does not yet publish a Moral Trade-specific key rotation cadence for every provider secret.",
+      "publicClaim": "Paid-action or trust-badge scale requires provider secret/key rotation records and rollback notes."
+    },
+    {
+      "key": "platform_abuse_throttling",
+      "label": "Platform abuse throttling",
+      "status": "implemented",
+      "evidence": "Core signup, login, offer creation, comments, privacy requests, wish search, and analytics ingest have named rate-limit surfaces.",
+      "publicClaim": "Abuse-prone surfaces are rate-limited and must fail safely."
+    },
+    {
+      "key": "incident_response_reporting",
+      "label": "Incident response reporting",
+      "status": "required_before_scale",
+      "evidence": "Evaluation and operations profiles name privacy incident count and route error metrics, but a full public incident runbook is not claimed.",
+      "publicClaim": "Scaling trust badges, paid actions, or sensitive admin roles requires a public incident-response and disclosure lane."
+    }
+  ],
+  "scaleGates": [
+    {
+      "key": "sensitive_admin_scale",
+      "label": "Sensitive admin scale",
+      "requires": [
+        "two_factor_admin_gate",
+        "device_session_review_gate",
+        "key_rotation_gate",
+        "incident_response_reporting"
+      ],
+      "rule": "Do not expand sensitive admin access until MFA, device/session review, key rotation, and incident-response evidence are ready."
+    },
+    {
+      "key": "paid_action_volume_scale",
+      "label": "Paid-action volume scale",
+      "requires": [
+        "platform_abuse_throttling",
+        "provider_encryption_at_rest",
+        "server_only_secret_management",
+        "key_rotation_gate",
+        "incident_response_reporting"
+      ],
+      "rule": "Do not expand paid-action volume until provider/security boundaries, key rotation, incident response, and abuse throttles are documented."
+    },
+    {
+      "key": "trust_badge_scale",
+      "label": "Trust badge scale",
+      "requires": [
+        "private_no_store_cache",
+        "supabase_auth_cookies",
+        "platform_abuse_throttling",
+        "incident_response_reporting"
+      ],
+      "rule": "Do not expand public trust badges unless private cache, authenticated session, abuse throttling, and incident reporting remain verifiable."
+    }
+  ],
+  "publicNonClaims": [
+    "Moral Trade does not claim custom field-level encryption for all private wish/source-note rows.",
+    "Moral Trade does not claim verified MFA/2FA enforcement for every sensitive admin user until the admin gate passes.",
+    "Moral Trade does not claim a completed key-rotation program until provider rotation records are published.",
+    "Moral Trade does not claim zero security risk; public health endpoints expose blockers instead."
+  ],
+  "securityTests": [
+    "security_profile_validator",
+    "security_scale_gate_audit",
+    "no_overclaim_nonclaim_smoke",
+    "private_cache_header_smoke",
+    "security_health_route_contract_smoke",
+    "technical_spec_security_smoke"
+  ]
+}

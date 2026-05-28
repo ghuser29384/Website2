@@ -1,0 +1,154 @@
+{
+  "version": "moral-trade-copilot-v0.1-2026-05",
+  "purpose": "Strict contract for schema-bound Moral Trade drafting, critique, explanation, evidence-checklist, and reviewer-summary assistance.",
+  "permittedRoles": [
+    {
+      "key": "draft_repair",
+      "label": "Draft repair",
+      "description": "Normalize proposal fields, detect missing or thin fields, and generate bounded clarification prompts."
+    },
+    {
+      "key": "match_explanation",
+      "label": "Match explanation",
+      "description": "Render rule-derived factor codes and redaction notes for privacy-safe match previews."
+    },
+    {
+      "key": "reviewer_summary",
+      "label": "Reviewer summary",
+      "description": "Summarize observable claims, evidence gaps, and policy flags without moral endorsement."
+    },
+    {
+      "key": "evidence_checklist",
+      "label": "Evidence checklist",
+      "description": "Request exact receipts, logs, attestations, provider records, or baseline artifacts needed for review."
+    },
+    {
+      "key": "cited_evidence_table",
+      "label": "Cited evidence table",
+      "description": "List observable claims, evidence status, and citations without inventing facts or hidden reasoning."
+    }
+  ],
+  "strictInputBundle": [
+    "structured_draft",
+    "policy_registry",
+    "prohibited_pattern_registry",
+    "factor_code_dictionary",
+    "verification_method_taxonomy",
+    "redaction_policy",
+    "evidence_metadata",
+    "redacted_profile_pair",
+    "match_constraint_set",
+    "stated_exclusions"
+  ],
+  "approvedOutputSections": [
+    "status",
+    "completeness",
+    "trade_structure",
+    "trust_assessment",
+    "match_explanation",
+    "clarification_questions",
+    "uncertainty_flags",
+    "next_step_checklist",
+    "cited_evidence_table",
+    "review_instructions",
+    "reviewer_summary",
+    "citations"
+  ],
+  "statusValues": [
+    "draft",
+    "needs_clarification",
+    "needs_evidence",
+    "needs_human_review",
+    "blocked",
+    "matchable"
+  ],
+  "completenessFields": [
+    "missing_required_fields",
+    "underspecified_fields",
+    "policy_conflicts"
+  ],
+  "trustAxes": [
+    "factual_trust",
+    "counterfactual_baseline",
+    "externality_review",
+    "party_relative_benefit",
+    "privacy_redaction"
+  ],
+  "guardrails": [
+    {
+      "code": "approved_json_only",
+      "label": "Approved JSON only",
+      "rule": "Emit only the approved output schema plus a short reviewer-facing summary when explicitly requested."
+    },
+    {
+      "code": "no_chain_of_thought",
+      "label": "No hidden reasoning transcript",
+      "rule": "Expose structured summaries, uncertainty flags, citations, and next-step checklists instead of private reasoning."
+    },
+    {
+      "code": "no_global_moral_ranking",
+      "label": "No global moral ranking",
+      "rule": "Never decide whether a proposal is objectively morally correct."
+    },
+    {
+      "code": "no_autonomous_outreach",
+      "label": "No autonomous outreach",
+      "rule": "Never reveal, contact, or introduce counterparties without explicit consent in the input bundle."
+    },
+    {
+      "code": "no_private_feed_ingestion",
+      "label": "No private feed ingestion",
+      "rule": "Use only the supplied structured bundle, not broad account context or raw private feeds."
+    },
+    {
+      "code": "separate_trust_axes",
+      "label": "Separate trust axes",
+      "rule": "Keep factual proof, counterfactual baseline confidence, and externality review separate."
+    },
+    {
+      "code": "anti_threat_escalation",
+      "label": "Anti-threat escalation",
+      "rule": "Return blocked with policy reason for threat, coercion, doxxing, harassment, fraud, illegality, or newly escalated harmful behavior."
+    }
+  ],
+  "verificationLoop": [
+    { "key": "schema_completeness", "label": "Schema completeness check", "blocksMatchable": true },
+    { "key": "anti_threat", "label": "Anti-threat / prohibited-content check", "blocksMatchable": true },
+    { "key": "baseline_credibility", "label": "Baseline credibility check", "blocksMatchable": true },
+    { "key": "evidence_sufficiency", "label": "Evidence sufficiency check", "blocksMatchable": true },
+    { "key": "externality_trigger", "label": "Externality-review trigger check", "blocksMatchable": false },
+    { "key": "privacy_redaction", "label": "Privacy/redaction check", "blocksMatchable": true },
+    { "key": "match_explanation", "label": "Match explanation generation", "blocksMatchable": false },
+    { "key": "human_review_routing", "label": "Human-review routing", "blocksMatchable": false }
+  ],
+  "redactionsAppliedByDefault": [
+    "exact_private_wishes",
+    "contact_details",
+    "sensitive_constraints",
+    "raw_profile_notes"
+  ],
+  "rolloutStages": [
+    {
+      "key": "shadow_mode",
+      "label": "Shadow mode",
+      "rule": "Generate critiques and reviewer summaries without controlling live decisions."
+    },
+    {
+      "key": "assist_mode",
+      "label": "Assist mode",
+      "rule": "Pre-fill structured fields and factor codes while humans approve status changes."
+    },
+    {
+      "key": "guarded_automation",
+      "label": "Guarded automation",
+      "rule": "Automate only low-risk missing-field, explanation, and evidence-checklist tasks."
+    }
+  ],
+  "humanControlledDecisions": [
+    "safety_blocking",
+    "matching_disclosure",
+    "reviewed_completion",
+    "dispute_resolution"
+  ],
+  "fallbackRule": "If copilot generation fails, times out, or emits invalid output, fall back to deterministic/manual review without changing proposal state."
+}

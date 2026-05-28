@@ -17,11 +17,39 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["offer", "trade", "marketplace", "listing", "registry", "proposal", "swap", "payment", "offset"],
   },
   {
+    href: "/projects",
+    label: "Projects",
+    summary: "See worked examples, the Public Goods Fund, and upcoming pilot workflows in one hub.",
+    kind: "learn",
+    keywords: ["projects", "what are you doing", "worked examples", "public goods", "pilot", "upcoming"],
+  },
+  {
+    href: "/about",
+    label: "About Moral Trade",
+    summary: "What exists today, what does not exist yet, who is accountable, and what comes next.",
+    kind: "learn",
+    keywords: ["about", "mission", "what exists", "what is live", "boundaries", "operator"],
+  },
+  {
     href: "/moral-trade",
     label: "What is moral trade?",
     summary: "A short primer on voluntary cooperation across moral disagreement.",
     kind: "learn",
     keywords: ["primer", "moral trade", "ord", "voluntary", "disagreement", "vegetarian"],
+  },
+  {
+    href: "/moral-trade/technical-spec",
+    label: "Moral Trade technical spec",
+    summary: "Inspect the core proposal validator, factor codes, evidence schemas, and health JSON.",
+    kind: "learn",
+    keywords: ["technical", "spec", "validator", "protocol", "schema", "factor codes", "provenance"],
+  },
+  {
+    href: "/how-it-works",
+    label: "How it works",
+    summary: "Start with one low-risk example, write the baseline, agree on proof, and review risks.",
+    kind: "learn",
+    keywords: ["how it works", "steps", "baseline", "proof", "review", "first action"],
   },
   {
     href: "/anti-threat-baseline",
@@ -77,6 +105,13 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["status", "roadmap", "pilot updates", "live offers", "prototype", "liquidity"],
   },
   {
+    href: "/updates",
+    label: "Pilot updates",
+    summary: "Read public pilot logs, governance updates, transparency notes, and case-study plans.",
+    kind: "learn",
+    keywords: ["updates", "news", "archive", "transparency", "case study", "changelog", "pilot log"],
+  },
+  {
     href: "/trust",
     label: "What you can rely on",
     summary: "Review current guarantees, non-guarantees, review states, and recourse routes.",
@@ -89,6 +124,13 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     summary: "Reach operators about safety concerns, reviewer questions, partnerships, and cohort inquiries.",
     kind: "learn",
     keywords: ["contact", "support", "safety concern", "operator", "partnership", "recourse"],
+  },
+  {
+    href: "/team",
+    label: "Team and governance",
+    summary: "Review operator routes, reviewer responsibilities, governance gaps, and publication commitments.",
+    kind: "learn",
+    keywords: ["team", "governance", "operators", "advisors", "reviewers", "conflicts", "accountability"],
   },
   {
     href: "/onboarding",
@@ -135,9 +177,9 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   {
     href: "/donate",
     label: "Donation routes",
-    summary: "Use verified Every.org routes and return to log gifts when they matter for a workflow.",
+    summary: "Choose a cause, complete payment on Every.org, and optionally record the gift afterward.",
     kind: "fund",
-    keywords: ["donate", "donation", "every.org", "gift", "route", "log gift", "reconciliation"],
+    keywords: ["donate", "donation", "every.org", "gift", "route", "record gift", "reconciliation"],
   },
   {
     href: "/priority-correction-fund",

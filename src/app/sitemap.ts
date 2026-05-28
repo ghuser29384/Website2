@@ -20,28 +20,34 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.92,
     },
     {
+      url: getAbsoluteUrl("/moral-trade/technical-spec"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.72,
+    },
+    {
+      url: getAbsoluteUrl("/about"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.88,
+    },
+    {
       url: getAbsoluteUrl("/how-it-works"),
       lastModified: now,
       changeFrequency: "monthly",
-      priority: 0.9,
+      priority: 0.86,
     },
     {
-      url: getAbsoluteUrl("/sources"),
+      url: getAbsoluteUrl("/projects"),
       lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.62,
+      changeFrequency: "weekly",
+      priority: 0.88,
     },
     {
       url: getAbsoluteUrl("/anti-threat-baseline"),
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.82,
-    },
-    {
-      url: getAbsoluteUrl("/about"),
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.72,
     },
     {
       url: getAbsoluteUrl("/research"),
@@ -52,8 +58,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     {
       url: getAbsoluteUrl("/reasoning-center"),
       lastModified: now,
-      changeFrequency: "daily",
-      priority: 0.84,
+      changeFrequency: "weekly",
+      priority: 0.82,
     },
     {
       url: getAbsoluteUrl("/offers"),
@@ -77,7 +83,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: getAbsoluteUrl("/updates"),
       lastModified: now,
       changeFrequency: "weekly",
-      priority: 0.7,
+      priority: 0.76,
+    },
+    {
+      url: getAbsoluteUrl("/team"),
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.76,
     },
     {
       url: getAbsoluteUrl("/trust"),

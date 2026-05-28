@@ -1,0 +1,407 @@
+{
+  "version": "moral-trade-api-contract-v0.1-2026-05",
+  "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
+  "routes": [
+    {
+      "key": "moral_trade_health",
+      "method": "GET",
+      "path": "/api/moral-trade/health",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "moral_trade_aggregate_health_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return ok:false with validator blockers; never silently claim readiness."
+    },
+    {
+      "key": "moral_trade_provenance_schema",
+      "method": "GET",
+      "path": "/api/moral-trade/provenance/schema",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "provenance_schema_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "public_contract_static",
+      "fallback": "Return only schema metadata and validation rules; never expose submitted evidence artifacts."
+    },
+    {
+      "key": "moral_trade_copilot_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/copilot/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "copilot_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return contract validation blockers; invalid copilot output cannot change proposal state."
+    },
+    {
+      "key": "moral_trade_operations_health",
+      "method": "GET",
+      "path": "/api/moral-trade/operations/health",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "operations_health_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return operations blockers for missing headers, rate-limit surfaces, fallbacks, or rollout gates."
+    },
+    {
+      "key": "moral_trade_security_health",
+      "method": "GET",
+      "path": "/api/moral-trade/security/health",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "security_health_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return security blockers and scale-gate readiness; do not claim field-level encryption, MFA, key rotation, or zero risk unless verified."
+    },
+    {
+      "key": "moral_trade_evaluation_health",
+      "method": "GET",
+      "path": "/api/moral-trade/evaluation/health",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "evaluation_health_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return evaluation blockers for missing privacy, fairness, quality, or promotion-gate metrics."
+    },
+    {
+      "key": "moral_trade_performance_health",
+      "method": "GET",
+      "path": "/api/moral-trade/performance/health",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "performance_health_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return performance blockers and public non-claims; do not claim Core Web Vitals, API latency, or loading-state readiness without route-level evidence."
+    },
+    {
+      "key": "moral_trade_externality_health",
+      "method": "GET",
+      "path": "/api/moral-trade/externality/health",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "externality_health_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return externality blockers for missing due-diligence steps, affected-party standing, remedy controls, or source standards."
+    },
+    {
+      "key": "moral_trade_ai_governance_health",
+      "method": "GET",
+      "path": "/api/moral-trade/ai-governance/health",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "ai_governance_health_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return AI-governance blockers; undocumented ML cannot rank, match, disclose, or change proposal state."
+    },
+    {
+      "key": "profile_schema",
+      "method": "GET",
+      "path": "/api/profile/schema",
+      "auth": "public",
+      "privacyClass": "public_schema",
+      "requestSchema": "empty_request",
+      "responseSchema": "profile_portability_schema_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "public_contract_static",
+      "fallback": "Publish only portable field definitions and non-importable counterparty boundary notes."
+    },
+    {
+      "key": "profile_export",
+      "method": "GET",
+      "path": "/api/profile/export",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "authenticated_export_request",
+      "responseSchema": "profile_export_response",
+      "rateLimitSurface": "profile_portability",
+      "cacheControl": "private_no_store",
+      "fallback": "Fail closed if the viewer is missing; export only the viewer-owned portable profile bundle."
+    },
+    {
+      "key": "profile_import",
+      "method": "POST",
+      "path": "/api/profile/import",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "profile_import_request",
+      "responseSchema": "profile_import_response",
+      "rateLimitSurface": "profile_portability",
+      "cacheControl": "private_no_store",
+      "fallback": "Fail closed if the viewer is missing; validate payload shape and import mode before writing, and do not import counterparty-linked records."
+    },
+    {
+      "key": "wish_registry_search",
+      "method": "GET",
+      "path": "/api/wish-registry/search",
+      "auth": "public",
+      "privacyClass": "privacy_thresholded_public_preview",
+      "requestSchema": "wish_registry_search_request",
+      "responseSchema": "wish_registry_search_response",
+      "rateLimitSurface": "wish_registry_search",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Rate-limit high-volume search, suppress sparse sensitive result sets, and return broad previews only."
+    },
+    {
+      "key": "funnel_events",
+      "method": "POST",
+      "path": "/api/funnel-events",
+      "auth": "optional",
+      "privacyClass": "redacted_analytics",
+      "requestSchema": "funnel_event_request",
+      "responseSchema": "empty_204_response",
+      "rateLimitSurface": "analytics_ingest",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Drop or reject malformed analytics without blocking the user workflow; never store raw private wish text."
+    }
+  ],
+  "schemaDefinitions": [
+    {
+      "key": "empty_request",
+      "purpose": "No request body or query contract beyond route path and auth context.",
+      "fields": []
+    },
+    {
+      "key": "moral_trade_aggregate_health_response",
+      "purpose": "Aggregate protocol, copilot, operations, evaluation, and API-contract validation response.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Core protocol validator result." },
+        { "key": "copilotValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Copilot contract validator result." },
+        { "key": "operationsValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Operations contract validator result." },
+        { "key": "securityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Security posture validator result for headers, sessions, encryption boundaries, keys, MFA gates, and abuse controls." },
+        { "key": "evaluationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Evaluation contract validator result." },
+        { "key": "performanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Performance and route-resilience validator result." },
+        { "key": "externalityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Externality due-diligence validator result." },
+        { "key": "apiContractValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "API contract validator result." },
+        { "key": "aiGovernanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validator result for documentation, fairness, and human-control gates." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published codes, route keys, schema keys, transition rules, and metric names." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Validator blockers that prevent readiness claims." }
+      ]
+    },
+    {
+      "key": "provenance_schema_response",
+      "purpose": "Public evidence object schema names, invariants, and profile version.",
+      "fields": [
+        { "key": "schemaVersion", "type": "string", "required": true, "privacy": "public", "description": "Version label for the provenance object schema set." },
+        { "key": "profileVersion", "type": "string", "required": true, "privacy": "public", "description": "Core protocol profile version linked to the schemas." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "objectSchemas", "type": "array", "required": true, "privacy": "public", "description": "Typed evidence artifact, external entity reference, claim, privacy-safe match signal, interoperable traceability event, decision, activity, and agent schemas." },
+        { "key": "validationRules", "type": "string_array", "required": true, "privacy": "public", "description": "Public invariants such as one-proof-one-claim, scope alignment, and external entity dedupe." }
+      ]
+    },
+    {
+      "key": "copilot_contract_response",
+      "purpose": "Strict input bundle, approved output sections, guardrails, verification loop, and fallback rule.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the copilot contract validator passes." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Copilot contract version." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Schema-bound copilot contract validation." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Permitted roles, input bundle, output sections, guardrails, and rollout stages." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Missing copilot-contract controls." }
+      ]
+    },
+    {
+      "key": "operations_health_response",
+      "purpose": "Security headers, rate-limit surfaces, privacy/session controls, metrics, fallbacks, and rollout gates.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when operations validator passes." },
+        { "key": "profileVersion", "type": "string", "required": true, "privacy": "public", "description": "Operations profile version." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Security, rate-limit, fallback, and rollout validation." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published security headers, rate-limit surfaces, metrics, and tests." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Operations blockers." }
+      ]
+    },
+    {
+      "key": "security_health_response",
+      "purpose": "Security posture controls, provider boundaries, public non-claims, and scale-gate readiness.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when security profile validator passes." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Security profile validation result." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published controls, statuses, scale-gate readiness, and non-claims." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Security profile blockers." }
+      ]
+    },
+    {
+      "key": "evaluation_health_response",
+      "purpose": "Evaluation metrics, privacy boundaries, cohort slices, promotion gates, and blockers.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when evaluation validator passes." },
+        { "key": "cadence", "type": "string", "required": true, "privacy": "public", "description": "Evaluation reporting cadence." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Quality, privacy, fairness, and rollout-gate validation." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published metrics, slices, privacy boundaries, and promotion gates." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Evaluation blockers." }
+      ]
+    },
+    {
+      "key": "performance_health_response",
+      "purpose": "Performance and route-resilience targets, instrumentation controls, route families, release gates, and public non-claims.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when performance profile validator passes." },
+        { "key": "measurementCadence", "type": "string", "required": true, "privacy": "public", "description": "Performance measurement cadence." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Performance profile validation result." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published metric targets, instrumentation controls, route families, release gates, and non-claims." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Performance profile blockers." }
+      ]
+    },
+    {
+      "key": "externality_health_response",
+      "purpose": "Due-diligence steps, externality trigger codes, review standards, affected-party remedy controls, and allowed outcomes.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when externality validator passes." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Externality due-diligence validation result." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published due-diligence steps, triggers, standards, remedy controls, and outcomes." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Externality blockers." }
+      ]
+    },
+    {
+      "key": "ai_governance_health_response",
+      "purpose": "AI governance controls for deterministic decisioning, model-card and datasheet requirements, fairness documentation, explanation controls, prohibited uses, and human-controlled decisions.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when AI governance validator passes." },
+        { "key": "decisioningMode", "type": "string", "required": true, "privacy": "public", "description": "Current decision mode; core matching and state transitions must remain deterministic/rule governed." },
+        { "key": "mlEnabledForMatching", "type": "boolean", "required": true, "privacy": "public", "description": "False unless documented ML matching is explicitly approved." },
+        { "key": "mlEnabledForStateChanges", "type": "boolean", "required": true, "privacy": "public", "description": "False because safety, disclosure, completion, and disputes remain human-controlled." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validation result." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Required documentation, permitted automation, prohibited uses, fairness documentation, explanation controls, and external standards." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "AI governance blockers." }
+      ]
+    },
+    {
+      "key": "profile_portability_schema_response",
+      "purpose": "Portable profile fields and explicit counterparty-linked import/export exclusions.",
+      "fields": [
+        { "key": "exportVersion", "type": "string", "required": true, "privacy": "public", "description": "Profile portability contract version." },
+        { "key": "importableCollections", "type": "string_array", "required": true, "privacy": "public", "description": "Collections accepted by profile import." },
+        { "key": "notes", "type": "string_array", "required": true, "privacy": "public", "description": "Import boundaries, including counterparty-linked exclusions." }
+      ]
+    },
+    {
+      "key": "authenticated_export_request",
+      "purpose": "Authenticated profile export request with no public query or body fields.",
+      "fields": [
+        { "key": "viewer", "type": "authenticated_session", "required": true, "privacy": "private_authenticated", "description": "The signed-in viewer whose records may be exported." }
+      ]
+    },
+    {
+      "key": "profile_export_response",
+      "purpose": "Viewer-owned profile portability bundle with schema URL and import URL.",
+      "fields": [
+        { "key": "exportedAt", "type": "iso_datetime", "required": true, "privacy": "private_authenticated", "description": "Export creation time." },
+        { "key": "profile", "type": "object_or_null", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned public profile row." },
+        { "key": "wishProfile", "type": "object_or_null", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned wish profile row." },
+        { "key": "wishEntries", "type": "array", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned wish entries only." },
+        { "key": "schemaUrl", "type": "path", "required": true, "privacy": "private_authenticated", "description": "Public schema endpoint for import/export shape." },
+        { "key": "importUrl", "type": "path", "required": true, "privacy": "private_authenticated", "description": "Authenticated import endpoint." },
+        { "key": "privacyNotice", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Boundary note: other users' private wish data is not exported." }
+      ]
+    },
+    {
+      "key": "profile_import_request",
+      "purpose": "Validated profile portability import payload and replace-existing flag.",
+      "fields": [
+        { "key": "replaceExisting", "type": "boolean", "required": false, "privacy": "private_authenticated", "description": "Whether viewer-owned importable records should be replaced." },
+        { "key": "wishProfile", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Portable wish profile fields scoped to the viewer." },
+        { "key": "wishEntries", "type": "array", "required": false, "privacy": "private_authenticated", "description": "Portable wish entries; counterparty-linked records are excluded." },
+        { "key": "sourceConnections", "type": "array", "required": false, "privacy": "private_authenticated", "description": "Viewer-owned manually reviewed source connection metadata." },
+        { "key": "savedSearches", "type": "array", "required": false, "privacy": "private_authenticated", "description": "Viewer-owned saved searches without external counterparty records." }
+      ]
+    },
+    {
+      "key": "profile_import_response",
+      "purpose": "Import result counts and deterministic synthesis refresh status.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private_authenticated", "description": "True when import and synthesis refresh complete." },
+        { "key": "importedCounts", "type": "object", "required": true, "privacy": "private_authenticated", "description": "Counts by imported collection." },
+        { "key": "schemaUrl", "type": "path", "required": true, "privacy": "private_authenticated", "description": "Public schema endpoint for the import contract." },
+        { "key": "privacyNotice", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Counterparty-linked records are not imported." }
+      ]
+    },
+    {
+      "key": "wish_registry_search_request",
+      "purpose": "Privacy-thresholded public wish-registry query parameters.",
+      "fields": [
+        { "key": "q", "type": "string", "required": false, "privacy": "redacted_public", "description": "Search text used only for matching; exact text is not echoed." },
+        { "key": "cause", "type": "string", "required": false, "privacy": "public_summary", "description": "Broad cause filter." },
+        { "key": "limit", "type": "integer", "required": false, "privacy": "public_summary", "description": "Requested result count capped by the endpoint." },
+        { "key": "payment", "type": "boolean_flag", "required": false, "privacy": "public_summary", "description": "Broad openness-to-payment filter." },
+        { "key": "pledges", "type": "boolean_flag", "required": false, "privacy": "public_summary", "description": "Broad openness-to-pledges filter." },
+        { "key": "privacy", "type": "string", "required": false, "privacy": "public_summary", "description": "Broad privacy-stage filter." }
+      ]
+    },
+    {
+      "key": "wish_registry_search_response",
+      "purpose": "Privacy-thresholded public wish previews with broad causes and disclosure stage.",
+      "fields": [
+        { "key": "results", "type": "array", "required": true, "privacy": "privacy_thresholded_public_preview", "description": "Broad previews only; may be empty when sparse privacy floor applies." },
+        { "key": "privacyNotice", "type": "string", "required": true, "privacy": "public", "description": "Explanation of public-preview and sparse-result privacy boundaries." }
+      ]
+    },
+    {
+      "key": "funnel_event_request",
+      "purpose": "Redacted analytics event type, path, profile id if available, and metadata without private source text.",
+      "fields": [
+        { "key": "eventType", "type": "enum", "required": true, "privacy": "redacted_analytics", "description": "Whitelisted funnel event type." },
+        { "key": "metadata", "type": "redacted_object", "required": false, "privacy": "redacted_analytics", "description": "Sanitized key/value metadata; raw wishes, contact details, source notes, and private text are forbidden." },
+        { "key": "path", "type": "path", "required": false, "privacy": "redacted_analytics", "description": "Path only; query strings and hashes are stripped." },
+        { "key": "referrer", "type": "origin_path", "required": false, "privacy": "redacted_analytics", "description": "Origin and path only; query strings and hashes are stripped." }
+      ]
+    },
+    {
+      "key": "empty_204_response",
+      "purpose": "No response body; the endpoint either accepts asynchronously or safely no-ops.",
+      "fields": []
+    }
+  ],
+  "privacyClasses": [
+    {
+      "key": "public_contract",
+      "rule": "May expose public schema, validator status, route names, and blockers; must not expose participant records."
+    },
+    {
+      "key": "public_schema",
+      "rule": "May expose field definitions and portability boundaries; must not expose user data."
+    },
+    {
+      "key": "authenticated_private",
+      "rule": "Requires viewer authentication and private no-store cache headers."
+    },
+    {
+      "key": "privacy_thresholded_public_preview",
+      "rule": "Returns only broad public previews and suppresses sparse sensitive result sets."
+    },
+    {
+      "key": "redacted_analytics",
+      "rule": "Accepts only low-sensitivity event metadata; exact wishes, contact details, and source notes are forbidden."
+    }
+  ],
+  "apiTests": [
+    "api_contract_profile_validator",
+    "health_route_contract_smoke",
+    "technical_spec_api_contract_smoke",
+    "security_route_contract",
+    "performance_route_contract",
+    "externality_route_contract",
+    "ai_governance_route_contract",
+    "profile_portability_route_contract",
+    "wish_registry_rate_limit_contract",
+    "analytics_redaction_contract"
+  ]
+}

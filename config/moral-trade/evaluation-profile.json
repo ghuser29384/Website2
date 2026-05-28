@@ -1,0 +1,182 @@
+{
+  "version": "moral-trade-evaluation-v0.1-2026-05",
+  "purpose": "Public evaluation contract for Moral Trade protocol quality, copilot assistance, privacy safety, explanation usefulness, fairness slices, and human-review reliability.",
+  "cadence": "monthly_public_aggregate",
+  "metrics": [
+    {
+      "key": "draft_completion_rate",
+      "label": "Draft completion rate",
+      "definition": "Share of started drafts that reach all required protocol fields before submission.",
+      "direction": "increase",
+      "target": "increase_without_higher_blocked_precision_loss",
+      "source": "structured_draft_events",
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "No raw draft text or exact private wishes in analytics."
+    },
+    {
+      "key": "time_to_valid_draft",
+      "label": "Time to valid draft",
+      "definition": "Median minutes from first draft event to all required protocol fields being complete.",
+      "direction": "decrease",
+      "target": "median_down_or_explained_before_promotion",
+      "source": "structured_draft_events",
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Report minutes and counts only; raw draft text stays out of analytics."
+    },
+    {
+      "key": "blocked_proposal_precision",
+      "label": "Blocked-proposal precision",
+      "definition": "Reviewer-confirmed share of protocol-blocked proposals that truly match prohibited or coercive patterns.",
+      "direction": "increase",
+      "target": "reviewer_confirmed_precision_not_lower_than_prior_period",
+      "source": "review_decision_events",
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Publish counts and rates, not proposal text."
+    },
+    {
+      "key": "privacy_leakage_incidents",
+      "label": "Privacy leakage incidents",
+      "definition": "Confirmed cases where private wishes, exact constraints, contact details, or source notes appear outside their consent scope.",
+      "direction": "decrease",
+      "target": "zero_confirmed_incidents",
+      "source": "privacy_incident_log",
+      "publicReporting": "aggregate_with_zero_allowed",
+      "dataBoundary": "Incident summaries must be redacted and consent scoped."
+    },
+    {
+      "key": "explanation_helpfulness",
+      "label": "Explanation helpfulness",
+      "definition": "Reviewer or participant rating that factor-code explanations made the next step clearer.",
+      "direction": "increase",
+      "target": "median_rating_not_lower_than_prior_period",
+      "source": "post_review_feedback",
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Feedback is bucketed; free-text quotes require explicit consent."
+    },
+    {
+      "key": "reviewer_efficiency_minutes",
+      "label": "Reviewer efficiency minutes",
+      "definition": "Median reviewer minutes per protocol decision, measured alongside overrule and dispute rates.",
+      "direction": "decrease",
+      "target": "median_down_or_explained_without_higher_overrule_rate",
+      "source": "review_decision_events",
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Report timing buckets and reason codes, not reviewer free text."
+    },
+    {
+      "key": "false_match_rate",
+      "label": "False match rate",
+      "definition": "Share of previewed matches later rejected for mismatched format, cause surface, evidence rule, or consent scope.",
+      "direction": "decrease",
+      "target": "decrease_without_privacy_leakage_increase",
+      "source": "match_preview_review_events",
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "No private match explanation text in analytics."
+    },
+    {
+      "key": "subgroup_surfacing_parity",
+      "label": "Subgroup surfacing parity",
+      "definition": "Monitoring slice for whether protected or vulnerable participant groups are systematically under-surfaced by candidate-preview rules.",
+      "direction": "band",
+      "target": "investigate_material_slice_gaps_before_rollout",
+      "source": "consented_demographic_or_proxy_slices",
+      "publicReporting": "aggregate_thresholded",
+      "dataBoundary": "Use only consented, sufficiently large, privacy-thresholded slices."
+    },
+    {
+      "key": "human_overrule_rate",
+      "label": "Human overrule rate",
+      "definition": "Share of copilot or deterministic suggestions that reviewers override before status change, match preview, disclosure, or completion.",
+      "direction": "band",
+      "target": "stable_or_explained_by_policy_changes",
+      "source": "reviewer_override_events",
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Record reason codes rather than reviewer free text by default."
+    },
+    {
+      "key": "appeal_overturn_rate",
+      "label": "Appeal overturn rate",
+      "definition": "Share of appealed review decisions that are reversed or materially corrected.",
+      "direction": "band",
+      "target": "publish_with_challenge_context",
+      "source": "appeal_decision_events",
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Appeal records must redact private evidence and contact details."
+    },
+    {
+      "key": "evidence_review_sla",
+      "label": "Evidence review SLA",
+      "definition": "Share of submitted evidence claims that receive a missing, challenge-window, review-cleared, or unresolved state within the public SLA.",
+      "direction": "increase",
+      "target": "meet_or_explain_public_sla",
+      "source": "evidence_review_events",
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Report state counts, not raw artifacts."
+    },
+    {
+      "key": "duplicate_proof_miss_rate",
+      "label": "Duplicate-proof miss rate",
+      "definition": "Confirmed duplicate-proof reuse discovered after an evidence claim was initially accepted.",
+      "direction": "decrease",
+      "target": "zero_unexplained_misses",
+      "source": "provenance_challenge_events",
+      "publicReporting": "aggregate_with_zero_allowed",
+      "dataBoundary": "Artifact hashes may be counted; raw locators stay private when consent requires."
+    },
+    {
+      "key": "unresolved_dispute_share",
+      "label": "Unresolved dispute share",
+      "definition": "Share of challenged evidence, baseline, disclosure, or completion decisions still unresolved after the public dispute window.",
+      "direction": "decrease",
+      "target": "decrease_or_publish_reason_codes",
+      "source": "challenge_and_dispute_events",
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Dispute summaries use reason codes and redacted scopes."
+    }
+  ],
+  "cohortSlices": [
+    "trade_format",
+    "cause_area_pair",
+    "geography_bucket",
+    "verification_method",
+    "privacy_stage",
+    "new_vs_returning_participant",
+    "consented_demographic_slice",
+    "optional_governed_sensitive_attribute"
+  ],
+  "privacyBoundaries": [
+    "aggregate_only_by_default",
+    "no_raw_private_wish_text",
+    "no_contact_details",
+    "no_source_note_leakage",
+    "small_cell_suppression",
+    "free_text_quote_requires_consent"
+  ],
+  "promotionGates": [
+    {
+      "stage": "shadow_mode",
+      "rule": "Collect metrics while copilot advice is ignored for live decisions."
+    },
+    {
+      "stage": "assist_mode",
+      "rule": "Allow field prefill and factor-code suggestions only if privacy incidents stay at zero and overrule reasons are reviewed."
+    },
+    {
+      "stage": "guarded_automation",
+      "rule": "Automate only missing-field detection, explanation rendering, and evidence-checklist drafting after public metrics meet or explain targets."
+    },
+    {
+      "stage": "human_controlled_decisions",
+      "rule": "Safety blocking, matching disclosure, reviewed completion, and dispute resolution remain human controlled."
+    }
+  ],
+  "evaluationTests": [
+    "evaluation_profile_validator",
+    "surfacing_parity_audit",
+    "ux_readiness_audit",
+    "health_route_contract_smoke",
+    "privacy_metric_boundary_smoke",
+    "promotion_gate_contract_smoke",
+    "public_technical_spec_smoke"
+  ]
+}

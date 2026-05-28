@@ -1,0 +1,142 @@
+{
+  "version": "moral-trade-operations-v0.1-2026-05",
+  "purpose": "Public operating contract for core Moral Trade security headers, private-cache controls, rate-limit surfaces, observability metrics, fallback behavior, and rollout gates.",
+  "securityHeaders": [
+    {
+      "code": "strict_transport_security",
+      "label": "Strict Transport Security",
+      "evidence": "next.config.ts sets Strict-Transport-Security for all routes."
+    },
+    {
+      "code": "x_content_type_options",
+      "label": "No MIME sniffing",
+      "evidence": "next.config.ts sets X-Content-Type-Options: nosniff."
+    },
+    {
+      "code": "x_frame_options",
+      "label": "Frame denial",
+      "evidence": "next.config.ts sets X-Frame-Options: DENY."
+    },
+    {
+      "code": "referrer_policy",
+      "label": "Referrer policy",
+      "evidence": "next.config.ts sets Referrer-Policy: strict-origin-when-cross-origin."
+    },
+    {
+      "code": "permissions_policy",
+      "label": "Permissions policy",
+      "evidence": "next.config.ts disables camera, microphone, geolocation, and payment."
+    },
+    {
+      "code": "csp_report_only",
+      "label": "CSP report-only baseline",
+      "evidence": "next.config.ts publishes a Content-Security-Policy-Report-Only baseline."
+    },
+    {
+      "code": "private_no_store",
+      "label": "Private route no-store",
+      "evidence": "Private dashboard, admin, profile API, and job API routes get private no-store headers."
+    }
+  ],
+  "rateLimitSurfaces": [
+    { "key": "signup", "window": "15 minutes", "limit": 5 },
+    { "key": "login", "window": "15 minutes", "limit": 8 },
+    { "key": "offer_create", "window": "15 minutes", "limit": 8 },
+    { "key": "privacy_access_request", "window": "1 day", "limit": 12 },
+    { "key": "match_concierge_request", "window": "1 day", "limit": 10 },
+    { "key": "offer_comment", "window": "15 minutes", "limit": 12 },
+    { "key": "wish_registry_search", "window": "1 minute", "limit": 60 },
+    { "key": "analytics_ingest", "window": "1 minute", "limit": 120 }
+  ],
+  "privacyAndSessionControls": [
+    {
+      "key": "supabase_auth_cookies",
+      "label": "Supabase auth cookies",
+      "evidence": "src/lib/supabase/proxy.ts refreshes auth claims through server-side cookies."
+    },
+    {
+      "key": "private_route_cache_control",
+      "label": "Private route cache control",
+      "evidence": "Private route prefixes receive Cache-Control: private, no-store."
+    },
+    {
+      "key": "data_right_requests",
+      "label": "Data-right request lane",
+      "evidence": "Profile data-right requests validate destructive/corrective details and due dates."
+    },
+    {
+      "key": "field_level_disclosure_grants",
+      "label": "Field-level disclosure grants",
+      "evidence": "Background networking grants stage public previews, detail requests, and mutual consent."
+    },
+    {
+      "key": "audit_events",
+      "label": "Audit events",
+      "evidence": "Match, privacy, and admin actions record audit events where disclosure is safe."
+    }
+  ],
+  "observabilityMetrics": [
+    "funnel_event_counts",
+    "route_error_rate",
+    "api_latency_p95",
+    "web_vitals",
+    "blocked_proposal_rate",
+    "privacy_incident_count",
+    "copilot_fallback_rate",
+    "evidence_review_sla",
+    "appeal_overturn_rate"
+  ],
+  "fallbackControls": [
+    {
+      "key": "deterministic_manual_fallback",
+      "label": "Deterministic/manual fallback",
+      "rule": "If copilot, provider, or evidence tooling fails, keep deterministic validation and manual review available."
+    },
+    {
+      "key": "invalid_copilot_output_no_state_change",
+      "label": "Invalid copilot output cannot change state",
+      "rule": "Invalid or timed-out copilot output must not publish, match, disclose, or complete a proposal."
+    },
+    {
+      "key": "provider_timeout_no_state_change",
+      "label": "Provider timeout cannot change state",
+      "rule": "Provider or payment/evidence timeouts remain pending or manual-review states."
+    },
+    {
+      "key": "replay_safe_state_transitions",
+      "label": "Replay-safe state transitions",
+      "rule": "State transitions should be idempotent, auditable, and safe to retry."
+    }
+  ],
+  "rolloutGates": [
+    {
+      "key": "shadow_mode",
+      "label": "Shadow mode first",
+      "rule": "Copilot critiques and reviewer summaries do not control live decisions."
+    },
+    {
+      "key": "assist_mode",
+      "label": "Assist mode requires human approval",
+      "rule": "Field prefill and factor-code suggestions require human approval for status changes."
+    },
+    {
+      "key": "guarded_automation",
+      "label": "Guarded automation only for low-risk tasks",
+      "rule": "Only missing-field detection, explanation rendering, and evidence checklist drafting may be automated."
+    },
+    {
+      "key": "human_controlled_safety",
+      "label": "Safety decisions stay human-controlled",
+      "rule": "Safety blocking, matching disclosure, reviewed completion, and dispute resolution remain human-controlled."
+    }
+  ],
+  "operationalTests": [
+    "security_header_source_smoke",
+    "private_cache_header_smoke",
+    "rate_limit_surface_smoke",
+    "operations_profile_validator",
+    "resilience_fallback_audit",
+    "health_route_contract_smoke",
+    "production_build"
+  ]
+}

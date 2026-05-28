@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.moraltrade.org/schemas/moral-trade/api-contract-profile.schema.json",
+  "title": "Moral Trade API Contract Profile",
+  "type": "object",
+  "required": ["version", "purpose", "routes", "schemaDefinitions", "privacyClasses", "apiTests"],
+  "properties": {
+    "version": { "type": "string", "minLength": 1 },
+    "purpose": { "type": "string", "minLength": 1 },
+    "routes": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "method",
+          "path",
+          "auth",
+          "privacyClass",
+          "requestSchema",
+          "responseSchema",
+          "rateLimitSurface",
+          "cacheControl",
+          "fallback"
+        ],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "method": { "enum": ["GET", "POST"] },
+          "path": { "type": "string", "pattern": "^/api/" },
+          "auth": { "enum": ["public", "optional", "authenticated", "internal"] },
+          "privacyClass": { "type": "string", "minLength": 1 },
+          "requestSchema": { "type": "string", "minLength": 1 },
+          "responseSchema": { "type": "string", "minLength": 1 },
+          "rateLimitSurface": { "type": "string", "minLength": 1 },
+          "cacheControl": { "type": "string", "minLength": 1 },
+          "fallback": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "schemaDefinitions": {
+      "type": "array",
+      "minItems": 12,
+      "items": {
+        "type": "object",
+        "required": ["key", "purpose", "fields"],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "purpose": { "type": "string", "minLength": 1 },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["key", "type", "required", "privacy", "description"],
+              "properties": {
+                "key": { "type": "string", "minLength": 1 },
+                "type": { "type": "string", "minLength": 1 },
+                "required": { "type": "boolean" },
+                "privacy": { "type": "string", "minLength": 1 },
+                "description": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "privacyClasses": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["key", "rule"],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "rule": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "apiTests": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false
+}

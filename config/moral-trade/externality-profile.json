@@ -1,0 +1,147 @@
+{
+  "version": "moral-trade-externality-v0.1-2026-05",
+  "purpose": "Public due-diligence contract for reviewing third-party externalities, affected-party standing, remedy paths, and ethical-trade standards before Moral Trade proposals become relied upon.",
+  "dueDiligenceSteps": [
+    {
+      "key": "embed_policy",
+      "label": "Embed policy",
+      "rule": "State the policy boundary, affected-party scope, and reviewer authority before evaluation."
+    },
+    {
+      "key": "identify_impacts",
+      "label": "Identify impacts",
+      "rule": "Name actual or plausible impacts on unrepresented people, vulnerable parties, labor, communities, or ecosystems."
+    },
+    {
+      "key": "prevent_or_mitigate",
+      "label": "Prevent or mitigate",
+      "rule": "Document how the proposal prevents, mitigates, or avoids worsening identified impacts."
+    },
+    {
+      "key": "track_results",
+      "label": "Track results",
+      "rule": "Track evidence, challenge-window outcomes, and unresolved externality flags."
+    },
+    {
+      "key": "communicate",
+      "label": "Communicate",
+      "rule": "Publish only privacy-safe reason codes and aggregate outcomes, not private evidence."
+    },
+    {
+      "key": "remediate",
+      "label": "Remediate",
+      "rule": "Define appeal, correction, pause, blocked, or unresolved-dispute paths when impacts are substantiated."
+    }
+  ],
+  "triggerCodes": [
+    {
+      "key": "unrepresented_third_party",
+      "label": "Unrepresented third party",
+      "rule": "Trigger review when a trade materially affects people who are not participants."
+    },
+    {
+      "key": "vulnerable_party_pressure",
+      "label": "Vulnerable-party pressure",
+      "rule": "Trigger review when a paid action, disclosure, or pledge may pressure a vulnerable person or group."
+    },
+    {
+      "key": "political_or_campaign_adjacent",
+      "label": "Political or campaign-adjacent",
+      "rule": "Trigger review for political-adjacent proposals and block direct campaign contribution offsets elsewhere."
+    },
+    {
+      "key": "paid_action_pressure",
+      "label": "Paid-action pressure",
+      "rule": "Trigger review when compensation could distort voluntariness, labor conditions, or baseline incentives."
+    },
+    {
+      "key": "labor_or_supply_chain",
+      "label": "Labor or supply-chain claim",
+      "rule": "Trigger review when a proposal makes ethical-trade, sourcing, labor, or supplier claims."
+    },
+    {
+      "key": "recipient_or_destination_risk",
+      "label": "Recipient or destination risk",
+      "rule": "Trigger review when money, action, or reputation flows to an organization with contested governance or harm risks."
+    },
+    {
+      "key": "environment_or_community_impact",
+      "label": "Environmental or community impact",
+      "rule": "Trigger review when a project may affect local communities, pollution, land, animals, or ecosystems."
+    },
+    {
+      "key": "perverse_incentive",
+      "label": "Perverse incentive",
+      "rule": "Trigger review when the trade may reward newly escalated or strategically worsened behavior."
+    }
+  ],
+  "reviewStandards": [
+    {
+      "key": "oecd_due_diligence",
+      "label": "OECD due diligence",
+      "scope": "General six-step policy, impact, mitigation, tracking, communication, and remediation review."
+    },
+    {
+      "key": "un_guiding_principles",
+      "label": "UN Guiding Principles",
+      "scope": "Human-rights impact, remedy, and affected-party review."
+    },
+    {
+      "key": "ilo_fundamental_principles",
+      "label": "ILO Fundamental Principles",
+      "scope": "Labor rights, forced labor, child labor, discrimination, association, and workplace standing."
+    },
+    {
+      "key": "eti_base_code",
+      "label": "ETI Base Code",
+      "scope": "Practical labor and supplier condition checks for ethical-trade claims."
+    },
+    {
+      "key": "fairtrade_standards",
+      "label": "Fairtrade Standards",
+      "scope": "Destination, producer, and certification-style claims when fair-trade language is used."
+    },
+    {
+      "key": "open_supply_hub",
+      "label": "Open Supply Hub orientation",
+      "scope": "Identifier, deduplication, and public traceability discipline for supplier-like entities."
+    }
+  ],
+  "remedyControls": [
+    {
+      "key": "affected_party_standing",
+      "label": "Affected-party standing",
+      "rule": "Externality review must state who can challenge the trade and what standing they need."
+    },
+    {
+      "key": "remediation_plan",
+      "label": "Remediation plan",
+      "rule": "The record must include pause, correction, reversal, appeal, or unresolved-dispute paths."
+    },
+    {
+      "key": "challenge_window_required",
+      "label": "Challenge window required",
+      "rule": "Material externality triggers route to challenge_window before reviewed completion or reputation reliance."
+    },
+    {
+      "key": "privacy_safe_reporting",
+      "label": "Privacy-safe reporting",
+      "rule": "Public reporting uses reason codes, counts, and aggregate outcomes rather than private evidence."
+    }
+  ],
+  "allowedOutcomes": [
+    "no_externality_review_required",
+    "needs_human_review",
+    "challenge_window",
+    "blocked",
+    "disputed_unresolved"
+  ],
+  "externalityTests": [
+    "externality_profile_validator",
+    "due_diligence_steps_contract",
+    "affected_party_remedy_gate",
+    "labor_supply_chain_standard_gate",
+    "health_route_contract_smoke",
+    "technical_spec_externality_smoke"
+  ]
+}

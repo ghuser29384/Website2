@@ -34,6 +34,10 @@ import {
   type PaymentIntervalUnit,
   type OfferMode,
 } from "@/lib/offers";
+import {
+  evaluateMoralTradeProtocolDraft,
+  formatProtocolReviewStatus,
+} from "@/lib/proposal-review";
 
 interface DonationOffsetPoolOption {
   id: string;
@@ -472,6 +476,43 @@ export function OfferCreateForm({
     () => [...liveCoreOfferErrors, ...liveOffsetErrors],
     [liveCoreOfferErrors, liveOffsetErrors],
   );
+  const protocolReview = useMemo(
+    () =>
+      evaluateMoralTradeProtocolDraft({
+        format: mode,
+        offeredCause,
+        requestedCause,
+        offeredAction: offerAction,
+        requestedAction: requestAction,
+        baselineStatement,
+        duration: reviewPeriod,
+        exitConditions: exitCondition,
+        verificationMethod: isOffset
+          ? formatDonationOffsetVerificationMethod(effectiveVerificationMethod)
+          : verificationPreference,
+        publicDescription: notes,
+        evidenceUrl,
+        participantImportance: Number(offerImpact),
+        counterpartyThreshold: Number(minCounterpartyImpact),
+      }),
+    [
+      baselineStatement,
+      effectiveVerificationMethod,
+      evidenceUrl,
+      exitCondition,
+      isOffset,
+      minCounterpartyImpact,
+      mode,
+      notes,
+      offerAction,
+      offerImpact,
+      offeredCause,
+      requestedCause,
+      requestAction,
+      reviewPeriod,
+      verificationPreference,
+    ],
+  );
   const canPublishOffer = supabaseReady && liveOfferErrors.length === 0;
   const wizardSteps: OfferWizardStep[] = useMemo(
     () => [
@@ -721,6 +762,149 @@ export function OfferCreateForm({
               <span>{template.description}</span>
             </button>
           ))}
+        </div>
+      </section>
+
+      <section
+        className={`protocol-review-panel protocol-review-panel-${protocolReview.status}`}
+        aria-labelledby="protocol-review-heading"
+      >
+        <div className="protocol-review-head">
+          <div>
+            <p className="eyebrow">Protocol review preview</p>
+            <h3 id="protocol-review-heading">
+              Status: {formatProtocolReviewStatus(protocolReview.status)}
+            </h3>
+            <p>{protocolReview.summary}</p>
+          </div>
+          <span className="protocol-review-status">
+            {protocolReview.factorCodes.length} factor code
+            {protocolReview.factorCodes.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        <div className="protocol-review-grid">
+          <div>
+            <strong>Missing or thin fields</strong>
+            {protocolReview.missingRequiredFields.length ||
+            protocolReview.underspecifiedFields.length ? (
+              <ul className="clean-list">
+                {[...protocolReview.missingRequiredFields, ...protocolReview.underspecifiedFields].map(
+                  (field) => (
+                    <li key={field}>{field}</li>
+                  ),
+                )}
+              </ul>
+            ) : (
+              <p>Core draft fields are present.</p>
+            )}
+          </div>
+          <div>
+            <strong>Trust axes</strong>
+            <ul className="clean-list">
+              <li>Factual trust: {protocolReview.trustAssessment.factualTrust.rating}</li>
+              <li>
+                Counterfactual baseline:{" "}
+                {protocolReview.trustAssessment.counterfactualBaseline.rating}
+              </li>
+              <li>
+                Externality review:{" "}
+                {protocolReview.trustAssessment.externalityReview.required ? "required" : "not triggered"}
+              </li>
+              <li>
+                Party-relative benefit:{" "}
+                {protocolReview.trustAssessment.partyRelativeBenefit.rating}
+              </li>
+              <li>Privacy redaction: {protocolReview.trustAssessment.privacyRedaction.rating}</li>
+            </ul>
+          </div>
+          <div>
+            <strong>Factor codes</strong>
+            <div className="protocol-factor-list">
+              {protocolReview.factorCodes.map((factor) => (
+                <span key={factor}>{factor}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {protocolReview.policyConflicts.length ? (
+          <div className="protocol-conflict-note">
+            <strong>Policy conflicts:</strong> {protocolReview.policyConflicts.join(", ")}
+          </div>
+        ) : null}
+
+        <div className="protocol-review-grid">
+          <div>
+            <strong>Evidence to request</strong>
+            {protocolReview.reviewInstructions.artifactsToRequest.length ? (
+              <ul className="clean-list">
+                {protocolReview.reviewInstructions.artifactsToRequest.map((artifact) => (
+                  <li key={artifact}>{artifact}</li>
+                ))}
+              </ul>
+            ) : (
+              <p>No extra artifacts are requested by the deterministic preview.</p>
+            )}
+          </div>
+          <div>
+            <strong>Reviewer scope</strong>
+            <ul className="clean-list">
+              {protocolReview.reviewInstructions.reviewScope.map((scope) => (
+                <li key={scope}>{scope}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <strong>Appeal triggers</strong>
+            <ul className="clean-list">
+              {protocolReview.reviewInstructions.appealTriggers.map((trigger) => (
+                <li key={trigger}>{trigger}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="protocol-review-grid">
+          <div>
+            <strong>Cited evidence table</strong>
+            <ul className="clean-list">
+              {protocolReview.citedEvidenceTable.map((row) => (
+                <li key={`${row.citation}:${row.claim}`}>
+                  {row.status}: {row.claim} ({row.citation})
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="protocol-review-grid">
+          <div>
+            <strong>Clarification questions</strong>
+            {protocolReview.clarificationQuestions.length ? (
+              <ul className="clean-list">
+                {protocolReview.clarificationQuestions.map((item) => (
+                  <li key={item.field}>
+                    {item.field}: {item.question}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No clarification questions are needed before reviewer triage.</p>
+            )}
+          </div>
+          <div>
+            <strong>Next step checklist</strong>
+            <ul className="clean-list">
+              {protocolReview.nextStepChecklist.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <strong>Reviewer summary</strong>
+            <p>{protocolReview.reviewerSummary}</p>
+          </div>
         </div>
       </section>
 
@@ -1427,6 +1611,10 @@ export function OfferCreateForm({
               value={offerImpact}
               onChange={(event) => setOfferImpact(readFormControlValue(event))}
             />
+            <small>
+              This reflects your own stated priorities. It is not a platform judgment about
+              objective moral value.
+            </small>
           </label>
 
           <label className="field">
@@ -1439,6 +1627,10 @@ export function OfferCreateForm({
               value={minCounterpartyImpact}
               onChange={(event) => setMinCounterpartyImpact(readFormControlValue(event))}
             />
+            <small>
+              Use this as a participant-relative threshold for the trade, not as a global moral
+              ranking.
+            </small>
           </label>
         </div>
 
@@ -1532,7 +1724,7 @@ export function OfferCreateForm({
           <textarea
             name="notes"
             onChange={(event) => setNotes(readFormControlValue(event))}
-            placeholder="Explain why this offset beats zero-sum spending on your view, what evidence you can provide, and what should happen if matching is incomplete."
+            placeholder="Explain why each side is better off than the no-trade baseline, what evidence you can provide, and what should happen if matching is incomplete."
             required
             rows={4}
             value={notes}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useReportWebVitals } from "next/web-vitals";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import type { FunnelEventType } from "@/lib/growth";
@@ -52,9 +53,46 @@ function postFunnelEvent(eventType: FunnelEventType, metadata: Record<string, un
   });
 }
 
+function getWebVitalValueBucket(metricName: string, value: number) {
+  if (!Number.isFinite(value)) return "unknown";
+
+  if (metricName === "CLS") {
+    if (value <= 0.1) return "good";
+    if (value <= 0.25) return "needs_improvement";
+    return "poor";
+  }
+
+  if (metricName === "LCP") {
+    if (value <= 2500) return "good";
+    if (value <= 4000) return "needs_improvement";
+    return "poor";
+  }
+
+  if (metricName === "INP") {
+    if (value <= 200) return "good";
+    if (value <= 500) return "needs_improvement";
+    return "poor";
+  }
+
+  return "other";
+}
+
 export function FunnelTracker() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  useReportWebVitals((metric) => {
+    if (!["CLS", "INP", "LCP"].includes(metric.name)) {
+      return;
+    }
+
+    postFunnelEvent("performance_metric_recorded", {
+      metricName: metric.name,
+      metricRating: metric.rating,
+      metricValueBucket: getWebVitalValueBucket(metric.name, metric.value),
+      navigationType: metric.navigationType,
+    });
+  });
 
   useEffect(() => {
     postFunnelEvent("page_view", {

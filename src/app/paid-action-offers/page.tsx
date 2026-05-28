@@ -57,7 +57,7 @@ export default async function PaidActionOffersPage() {
                 Review validation rules
               </Link>
               <Link className="text-button" href={viewer ? "/offers/new?mode=offset" : "/signup?returnTo=/offers/new%3Fmode%3Doffset"}>
-                Create verified offset instead
+                Trade instead
               </Link>
             </>
           }

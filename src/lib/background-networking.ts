@@ -545,7 +545,11 @@ export function evaluateDeterministicMatch({
   const viewerText = `${viewer.publicPreview ?? ""} ${viewer.wishText ?? ""} ${viewer.askText ?? ""} ${viewer.offerText ?? ""} ${viewer.brokeragePreference ?? ""}`;
   const viewerTokens = getBackgroundTokens(viewerText, 18);
   const counterpartyTokens = new Set(getBackgroundTokens(counterpartyText, 18));
-  const sharedTokens = viewerTokens.filter((token) => counterpartyTokens.has(token)).slice(0, 6);
+  const sharedTokenCount = viewerTokens.filter((token) => counterpartyTokens.has(token)).slice(0, 6).length;
+  const sharedTokens = Array.from(
+    { length: sharedTokenCount },
+    (_, index) => `broad_language_overlap_${index + 1}`,
+  );
   const sharedCauses = viewer.causes.filter((cause) =>
     (counterparty.causes ?? []).map(normalizeBackgroundToken).includes(normalizeBackgroundToken(cause)),
   );
@@ -609,7 +613,7 @@ export function evaluateDeterministicMatch({
 
   const score = clamp(
     sharedCauses.length * 18 +
-      Math.min(sharedTokens.length, 4) * 5 +
+      Math.min(sharedTokenCount, 4) * 5 +
       Math.min(askOfferOverlap.length, 3) * 10 +
       (paymentCompatible ? 12 : 0) +
       (pledgeCompatible ? 10 : 0) +
@@ -641,7 +645,7 @@ export function evaluateDeterministicMatch({
   const basis = [
     sharedCauses.length ? `Shared broad cause overlap count: ${sharedCauses.length}` : "",
     askOfferOverlap.length ? `Possible complementarity count: ${askOfferOverlap.length}` : "",
-    sharedTokens.length ? "Shared broad language overlap" : "",
+    sharedTokenCount ? "Shared broad language overlap" : "",
     paymentCompatible ? "Both sides allow payment-mediated trades" : "",
     pledgeCompatible ? "Both sides allow pledge-mediated trades" : "",
     verificationReady ? "Both sides have verification preferences recorded" : "",
@@ -653,13 +657,13 @@ export function evaluateDeterministicMatch({
   ].filter(Boolean);
 
   const viewerReason = askOfferOverlap.length
-    ? `A possible counterparty may be able to satisfy part of your ask around ${askOfferOverlap.join(", ")} while fitting your stated causes and trade constraints.`
+    ? `A possible counterparty may satisfy ${askOfferOverlap.length} broad ask/offer compatibility signal(s) while fitting your stated causes and trade constraints.`
     : sharedCauses.length
       ? `A possible counterparty shares ${sharedCauses.join(", ")} and has a broad preview that looks compatible enough to explore further.`
       : `A possible counterparty appears compatible on broad signals, but exact wishes should remain private until consent.`;
 
   const counterpartyReason = askOfferOverlap.length
-    ? "A possible counterparty has a stated ask or capability pattern that could complement yours if both sides opt in."
+    ? "A possible counterparty has broad ask or capability factors that could complement yours if both sides opt in."
     : sharedCauses.length
       ? `A possible counterparty appears aligned on ${sharedCauses.join(", ")} without revealing exact wishes yet.`
       : "A possible counterparty matches on broad registry signals without revealing exact wishes yet.";

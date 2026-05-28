@@ -12,6 +12,7 @@ import {
   TradeFlowDiagram,
 } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import { validateMoralTradeProtocolProfile } from "@/lib/moral-trade/protocol";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import {
@@ -41,6 +42,7 @@ export const metadata: Metadata = {
 
 export default async function ValidationPage() {
   const viewer = await getViewer();
+  const protocolValidation = validateMoralTradeProtocolProfile();
 
   return (
     <div className="page-shell">
@@ -88,6 +90,35 @@ export default async function ValidationPage() {
                 <p>{scope.detail}</p>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="core-protocol-heading">
+          <SectionHeader
+            eyebrow="Public validator"
+            id="core-protocol-heading"
+            title="The core Moral Trade protocol now has a public check surface."
+          >
+            The validator publishes required proposal fields, status values, factor codes, evidence
+            schemas, and provenance objects so the core feature is inspectable like MPGF.
+          </SectionHeader>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Core profile</p>
+              <h3>{protocolValidation.profileVersion}</h3>
+              <p>
+                {protocolValidation.checks.length} check(s),{" "}
+                {protocolValidation.blockers.length} blocker(s), status {protocolValidation.status}.
+              </p>
+            </div>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/moral-trade/technical-spec">
+                Open technical spec
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/health">
+                View health JSON
+              </Link>
+            </div>
           </div>
         </section>
 

@@ -4,9 +4,19 @@ import {
   ATTRIBUTION_COOKIE_NAME,
   isFunnelEventType,
   parseAttributionCookie,
+  sanitizeFunnelEventMetadata,
+  sanitizeFunnelEventPath,
+  sanitizeFunnelEventReferrer,
 } from "@/lib/growth";
+import {
+  getRequestRateLimitKey,
+  getRetryAfterSeconds,
+  takeRateLimitSlot,
+} from "@/lib/rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+
+export const runtime = "nodejs";
 
 function cleanText(value: unknown, maxLength = 500) {
   return String(value ?? "").trim().slice(0, maxLength);
@@ -30,6 +40,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unknown funnel event type." }, { status: 400 });
   }
 
+  const rateLimit = takeRateLimitSlot(getRequestRateLimitKey(request, "analytics-ingest"), {
+    limit: 120,
+    windowMs: 60_000,
+  });
+
+  if (rateLimit.limited) {
+    return NextResponse.json(
+      { error: "Too many analytics events. Try again shortly." },
+      {
+        headers: {
+          "Retry-After": String(getRetryAfterSeconds(rateLimit.resetAt)),
+        },
+        status: 429,
+      },
+    );
+  }
+
   const attribution = parseAttributionCookie(
     request.cookies.get(ATTRIBUTION_COOKIE_NAME)?.value,
   );
@@ -38,18 +65,20 @@ export async function POST(request: NextRequest) {
   const profileId = data.user?.id ?? null;
   const metadata =
     payload.metadata && typeof payload.metadata === "object"
-      ? (payload.metadata as Record<string, unknown>)
+      ? sanitizeFunnelEventMetadata(payload.metadata)
       : {};
+  const requestReferrer = sanitizeFunnelEventReferrer(payload.referrer);
+  const attributionReferrer = sanitizeFunnelEventReferrer(attribution?.referrer);
 
   const { error } = await (supabase as any).from("funnel_events").insert({
     anonymous_id: attribution?.anonymousId ?? "",
     event_type: eventType,
     metadata,
     partner_slug: attribution?.partnerSlug ?? "",
-    path: cleanText(payload.path, 1_000),
+    path: sanitizeFunnelEventPath(payload.path) || "/",
     profile_id: profileId,
     referral_code: attribution?.referralCode ?? "",
-    referrer: cleanText(payload.referrer, 1_000) || attribution?.referrer || "",
+    referrer: requestReferrer || attributionReferrer,
     utm_campaign: attribution?.utmCampaign ?? "",
     utm_content: attribution?.utmContent ?? "",
     utm_medium: attribution?.utmMedium ?? "",

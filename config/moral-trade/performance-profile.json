@@ -1,0 +1,174 @@
+{
+  "version": "moral-trade-performance-v0.1-2026-05",
+  "purpose": "Public performance and route-resilience contract for the core Moral Trade experience, including loading-state recovery, Web Vitals, API latency, error-rate measurement, cache posture, and honest non-claims.",
+  "measurementCadence": "weekly_internal_monthly_public_aggregate",
+  "observedFriction": [
+    {
+      "key": "loading_interstitials",
+      "label": "Repeated loading interstitials",
+      "risk": "Public routes can feel provisional if loading screens are generic or long-lived.",
+      "mitigation": "Track route-level loading fallback duration, expose specific recovery paths, and keep route content server-renderable where practical."
+    },
+    {
+      "key": "reasoning_route_resilience",
+      "label": "Reasoning route resilience",
+      "risk": "A public reasoning/review route failure undermines trust in the protocol layer.",
+      "mitigation": "Use route error boundaries, retry controls, public-directory fallbacks, and route-manifest smoke checks."
+    },
+    {
+      "key": "public_liquidity_perception",
+      "label": "Pilot liquidity perception",
+      "risk": "Low live-offer counts can make the product feel empty if examples, directories, and next actions are slow to render.",
+      "mitigation": "Measure time to first useful content for marketplace, worked-example, and onboarding routes."
+    }
+  ],
+  "metricTargets": [
+    {
+      "key": "route_error_rate",
+      "label": "Public route error rate",
+      "source": "route_error_events",
+      "target": "<=1% of public route views over a reporting period",
+      "threshold": { "operator": "lte", "value": 0.01, "unit": "rate" },
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Route names and counts only; no raw query strings, private wish text, or contact details."
+    },
+    {
+      "key": "api_latency_p95_ms",
+      "label": "Core API p95 latency",
+      "source": "server_timing_or_api_metrics",
+      "target": "<=800ms p95 for public Moral Trade contract and directory APIs",
+      "threshold": { "operator": "lte", "value": 800, "unit": "milliseconds" },
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Route key, status bucket, and duration bucket only."
+    },
+    {
+      "key": "web_vitals_lcp_p75_ms",
+      "label": "Largest Contentful Paint p75",
+      "source": "web_vitals_events",
+      "target": "<=2500ms p75 for public Moral Trade routes",
+      "threshold": { "operator": "lte", "value": 2500, "unit": "milliseconds" },
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Route bucket and metric value only; no raw user text."
+    },
+    {
+      "key": "web_vitals_inp_p75_ms",
+      "label": "Interaction to Next Paint p75",
+      "source": "web_vitals_events",
+      "target": "<=200ms p75 for public Moral Trade routes",
+      "threshold": { "operator": "lte", "value": 200, "unit": "milliseconds" },
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Route bucket and metric value only; no raw user text."
+    },
+    {
+      "key": "web_vitals_cls_p75",
+      "label": "Cumulative Layout Shift p75",
+      "source": "web_vitals_events",
+      "target": "<=0.1 p75 for public Moral Trade routes",
+      "threshold": { "operator": "lte", "value": 0.1, "unit": "score" },
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Route bucket and metric value only; no raw user text."
+    },
+    {
+      "key": "specific_loading_recovery_ratio",
+      "label": "Specific loading and recovery coverage",
+      "source": "route_source_smoke",
+      "target": ">=90% of public Moral Trade route families have specific loading or error recovery paths",
+      "threshold": { "operator": "gte", "value": 0.9, "unit": "ratio" },
+      "publicReporting": "aggregate_only",
+      "dataBoundary": "Route family counts only."
+    },
+    {
+      "key": "build_route_manifest_coverage",
+      "label": "Build route manifest coverage",
+      "source": "production_build_manifest",
+      "target": "Every public Moral Trade contract route appears in the production build manifest before release.",
+      "threshold": { "operator": "eq", "value": 1, "unit": "boolean" },
+      "publicReporting": "release_gate",
+      "dataBoundary": "Route keys and manifest presence only."
+    }
+  ],
+  "instrumentationControls": [
+    {
+      "key": "web_vitals_capture",
+      "label": "Web Vitals capture",
+      "rule": "Capture LCP, INP, and CLS by public route bucket with privacy-redacted analytics metadata."
+    },
+    {
+      "key": "api_server_timing",
+      "label": "API server timing",
+      "rule": "Record core API duration buckets and p95 summaries without request bodies or private fields."
+    },
+    {
+      "key": "route_error_boundary",
+      "label": "Route error boundary",
+      "rule": "Public route errors must expose retry and safe navigation paths instead of a dead end."
+    },
+    {
+      "key": "loading_state_inventory",
+      "label": "Loading-state inventory",
+      "rule": "Generic loading states must be tracked and replaced with route-specific progress or server-rendered content when repeated."
+    },
+    {
+      "key": "production_route_manifest_smoke",
+      "label": "Production route manifest smoke",
+      "rule": "Build verification must confirm public Moral Trade contract and marketplace routes are present."
+    }
+  ],
+  "routeFamilies": [
+    {
+      "key": "core_protocol_contract",
+      "paths": ["/moral-trade/technical-spec", "/api/moral-trade/health", "/api/moral-trade/api-contract"],
+      "recoveryExpectation": "Public contract routes render from static profile data or return validator blockers."
+    },
+    {
+      "key": "offer_marketplace",
+      "paths": ["/offers", "/offers/new", "/offers/examples/[exampleId]"],
+      "recoveryExpectation": "Marketplace routes keep worked examples, validation guidance, and create-entry actions visible even with low live liquidity."
+    },
+    {
+      "key": "background_networking",
+      "paths": ["/background-networking", "/wish-registry", "/api/wish-registry/search"],
+      "recoveryExpectation": "Private matching previews degrade to broad, privacy-thresholded states without leaking exact wishes."
+    },
+    {
+      "key": "reasoning_and_review",
+      "paths": ["/reasoning-center", "/validation", "/trust"],
+      "recoveryExpectation": "Review and reasoning pages expose safe navigation and retry paths if a route fails."
+    }
+  ],
+  "releaseGates": [
+    {
+      "key": "instrument_before_optimize",
+      "label": "Instrument before optimizing",
+      "requires": ["web_vitals_capture", "api_server_timing", "route_error_boundary"],
+      "rule": "Do not claim performance readiness from design intent alone; publish measurement coverage first."
+    },
+    {
+      "key": "public_route_resilience",
+      "label": "Public route resilience",
+      "requires": ["route_error_boundary", "loading_state_inventory", "production_route_manifest_smoke"],
+      "rule": "Do not expand public acquisition until core public routes have retry/recovery affordances and build-manifest coverage."
+    },
+    {
+      "key": "privacy_safe_telemetry",
+      "label": "Privacy-safe telemetry",
+      "requires": ["web_vitals_capture", "api_server_timing"],
+      "rule": "Do not store performance telemetry that includes raw private wishes, source notes, contact details, or unredacted query strings."
+    }
+  ],
+  "publicNonClaims": [
+    "Moral Trade does not claim verified Core Web Vitals pass status until route-level samples are collected and published in aggregate.",
+    "Moral Trade does not claim all loading states are optimized; generic fallbacks are tracked as route-resilience debt.",
+    "Moral Trade does not claim production API latency targets are met without current server-timing or provider metrics.",
+    "Moral Trade does not claim performance telemetry can include raw private wishes, source notes, contact details, or unredacted query strings."
+  ],
+  "performanceTests": [
+    "performance_profile_validator",
+    "performance_snapshot_audit",
+    "loading_error_boundary_smoke",
+    "route_manifest_coverage_smoke",
+    "performance_health_route_contract_smoke",
+    "technical_spec_performance_smoke",
+    "privacy_safe_telemetry_smoke"
+  ]
+}

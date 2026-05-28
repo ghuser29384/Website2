@@ -42,6 +42,7 @@ export const FUNNEL_EVENT_TYPES = [
   "email_nurture_subscribed",
   "day_one_return",
   "day_seven_return",
+  "performance_metric_recorded",
 ] as const;
 
 export type FunnelEventType = (typeof FUNNEL_EVENT_TYPES)[number];
@@ -199,6 +200,193 @@ export type FirstAction = (typeof FIRST_ACTIONS)[number]["value"];
 
 export function isFunnelEventType(value: string): value is FunnelEventType {
   return FUNNEL_EVENT_TYPES.includes(value as FunnelEventType);
+}
+
+const FUNNEL_METADATA_ALLOWED_KEYS = new Set([
+  "accessLevel",
+  "audienceStage",
+  "bothConsented",
+  "candidateBucket",
+  "causeAreaCount",
+  "causeAreas",
+  "decision",
+  "exampleId",
+  "fieldCount",
+  "firstAction",
+  "generatedBy",
+  "hasMatch",
+  "hasNote",
+  "hasSession",
+  "hasTargetUrl",
+  "matchesCreated",
+  "metricName",
+  "metricRating",
+  "metricValueBucket",
+  "mode",
+  "navigationType",
+  "participantKind",
+  "partnerSlug",
+  "primaryGoal",
+  "stage",
+  "step",
+  "targetKind",
+  "taskCount",
+  "template",
+]);
+
+const SENSITIVE_FUNNEL_METADATA_KEY_PATTERN =
+  /(wish|ask|constraint|contact|email|phone|address|private|raw|message|note|source|evidence|receipt|counterparty|prompt|text)/i;
+
+function normalizeFunnelMetadataKey(key: string) {
+  return key.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 48);
+}
+
+function cleanFunnelScalarText(value: unknown, maxLength = 160) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
+    .replace(/\+?\d[\d\s().-]{7,}\d/g, "[redacted-phone]")
+    .slice(0, maxLength);
+}
+
+function getTextLengthBucket(value: unknown) {
+  const length = cleanFunnelScalarText(value, 10_000).length;
+
+  if (length === 0) return "0";
+  if (length < 20) return "1-19";
+  if (length < 100) return "20-99";
+  return "100+";
+}
+
+function safeMetadataValue(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string") return cleanFunnelScalarText(value);
+  if (value === null) return null;
+
+  if (Array.isArray(value)) {
+    const entries = value
+      .map((entry) => cleanFunnelScalarText(entry, 80))
+      .filter(Boolean)
+      .slice(0, 8);
+
+    return entries.length ? Array.from(new Set(entries)) : undefined;
+  }
+
+  return undefined;
+}
+
+function getSearchParamKeys(value: unknown) {
+  const raw = cleanFunnelScalarText(value, 1_000).replace(/^\?/, "");
+
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    return Array.from(new Set(Array.from(new URLSearchParams(raw).keys()).map(normalizeFunnelMetadataKey)))
+      .filter(Boolean)
+      .slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
+export function sanitizeFunnelEventPath(value: unknown, maxLength = 1_000) {
+  const raw = cleanFunnelScalarText(value, maxLength);
+
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const url = new URL(raw, "https://www.moraltrade.org");
+    return url.pathname.slice(0, maxLength) || "/";
+  } catch {
+    const [path = ""] = raw.split(/[?#]/);
+    return path.startsWith("/") ? path.slice(0, maxLength) : "";
+  }
+}
+
+export function sanitizeFunnelEventReferrer(value: unknown, maxLength = 1_000) {
+  const raw = cleanFunnelScalarText(value, maxLength);
+
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return "";
+    }
+
+    return `${url.origin}${url.pathname}`.slice(0, maxLength);
+  } catch {
+    return sanitizeFunnelEventPath(raw, maxLength);
+  }
+}
+
+export function sanitizeFunnelEventMetadata(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const safeMetadata: Record<string, unknown> = {};
+  const entries = Object.entries(value as Record<string, unknown>).slice(0, 24);
+
+  for (const [rawKey, rawValue] of entries) {
+    const key = normalizeFunnelMetadataKey(rawKey);
+
+    if (!key) {
+      continue;
+    }
+
+    if (key === "query") {
+      safeMetadata.queryPresent = cleanFunnelScalarText(rawValue, 10_000).length > 0;
+      safeMetadata.queryLengthBucket = getTextLengthBucket(rawValue);
+      continue;
+    }
+
+    if (key === "search") {
+      const searchParamKeys = getSearchParamKeys(rawValue);
+      if (searchParamKeys.length) {
+        safeMetadata.searchParamKeys = searchParamKeys;
+      }
+      continue;
+    }
+
+    if (key === "href" || key === "targetUrl" || key === "target_url") {
+      const hrefPath = sanitizeFunnelEventPath(rawValue);
+      if (hrefPath) {
+        safeMetadata.hrefPath = hrefPath;
+      }
+      continue;
+    }
+
+    if (key === "label") {
+      const label = cleanFunnelScalarText(rawValue, 120);
+      if (label) {
+        safeMetadata.label = label;
+      }
+      continue;
+    }
+
+    if (
+      !FUNNEL_METADATA_ALLOWED_KEYS.has(key) ||
+      SENSITIVE_FUNNEL_METADATA_KEY_PATTERN.test(key)
+    ) {
+      continue;
+    }
+
+    const safeValue = safeMetadataValue(rawValue);
+    if (safeValue !== undefined) {
+      safeMetadata[key] = safeValue;
+    }
+  }
+
+  return safeMetadata;
 }
 
 export function createAnonymousId() {

@@ -124,11 +124,11 @@ export default async function ResearchPage() {
           <h2>People, operators, and advisors</h2>
           <p>
             Public authorship matters because counterparties are trusting more than a matching
-            interface. The people page should identify operators, reviewer responsibilities, and
-            advisor roles as they become formal.
+            interface. The team and governance page should identify operators, reviewer
+            responsibilities, and advisor roles as they become formal.
           </p>
-          <Link className="text-button" href="/people">
-            View public people
+          <Link className="text-button" href="/team">
+            View team and governance
           </Link>
         </section>
 
@@ -139,7 +139,7 @@ export default async function ResearchPage() {
             site as a liquid marketplace before the trust problem is solved.
           </p>
           <Link className="button button-primary" href="/updates">
-            Subscribe for pilot updates
+            Read pilot updates
           </Link>
         </section>
       </main>

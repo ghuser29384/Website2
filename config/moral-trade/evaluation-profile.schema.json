@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.moraltrade.org/schemas/moral-trade/evaluation-profile.schema.json",
+  "title": "Moral Trade Evaluation Profile",
+  "type": "object",
+  "required": [
+    "version",
+    "purpose",
+    "cadence",
+    "metrics",
+    "cohortSlices",
+    "privacyBoundaries",
+    "promotionGates",
+    "evaluationTests"
+  ],
+  "properties": {
+    "version": { "type": "string", "minLength": 1 },
+    "purpose": { "type": "string", "minLength": 1 },
+    "cadence": { "type": "string", "minLength": 1 },
+    "metrics": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "definition",
+          "direction",
+          "target",
+          "source",
+          "publicReporting",
+          "dataBoundary"
+        ],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "definition": { "type": "string", "minLength": 1 },
+          "direction": { "enum": ["increase", "decrease", "band"] },
+          "target": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "minLength": 1 },
+          "publicReporting": { "type": "string", "minLength": 1 },
+          "dataBoundary": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "cohortSlices": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "privacyBoundaries": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "promotionGates": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["stage", "rule"],
+        "properties": {
+          "stage": { "type": "string", "minLength": 1 },
+          "rule": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "evaluationTests": {
+      "type": "array",
+      "minItems": 4,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false
+}

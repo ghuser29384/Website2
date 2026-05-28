@@ -136,9 +136,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                     Create account
                   </Link>
                 </div>
-                <p className="form-footnote">
-                  <Link href="/password-reset">Forgot your password?</Link>
-                </p>
               </form>
             </article>
 

@@ -33,22 +33,22 @@ const startPaths: ReadonlyArray<{
   title: string;
 }> = [
   {
-    title: "Learn the idea",
-    description: "Read the core concept, examples, boundaries, and the counterfactual trust problem.",
+    title: "Read what exists today",
+    description: "See what the pilot supports, what it does not promise, and why review matters.",
     href: "/moral-trade",
     icon: "source",
-    actionLabel: "Read the moral trade primer",
+    actionLabel: "Read the plain-language primer",
   },
   {
-    title: "Browse offers",
-    description: "Search live listings and worked examples before publishing anything live.",
-    href: "/offers",
+    title: "See a worked example",
+    description: "Inspect a complete, non-live example before drafting or relying on a real trade.",
+    href: "/offers?view=examples",
     icon: "example",
-    actionLabel: "Open offer marketplace",
+    actionLabel: "Open worked examples",
   },
   {
-    title: "Donate through a route",
-    description: "Use a verified Every.org path, then log the gift when it belongs in a site workflow.",
+    title: "Donate through a vetted route",
+    description: "Choose a cause, complete payment on Every.org, and optionally record the gift here.",
     href: "/donate",
     icon: "fund",
     actionLabel: "Open donation routes",
@@ -123,9 +123,6 @@ function getOfferModeIcon(mode: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]["m
 
 export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps) {
   const cohortHref = isAuthenticated ? "/dashboard" : "/cohort";
-  const createOffsetHref = isAuthenticated
-    ? "/offers/new?mode=offset"
-    : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
   const featuredExamples = CANONICAL_WORKED_CASE_OFFERS.slice(0, 3);
   const liveOfferCount = formatOptionalCount(marketplaceOverview.openOfferCount);
   const publicProfileCount = formatOptionalCount(marketplaceOverview.publicProfileCount);
@@ -142,21 +139,21 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
 
         <div className="growth-hero-inner">
           <section className="growth-hero-copy">
-            <h1>Make one reviewable moral trade.</h1>
+            <h1>Cooperate across deep value differences.</h1>
             <p className="hero-text">
-              Browse offers, compare worked examples, and create bounded pledge swaps, donation
-              offsets, or shared public-good commitments with explicit baselines and evidence
-              rules.
+              Moral Trade helps serious participants test one small, reviewable commitment, such
+              as a pledge swap, donation offset, or public-good contribution, without pretending
+              this is already a mature marketplace.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/offers">
-                Browse marketplace
-              </Link>
-              <Link className="button button-secondary" href={createOffsetHref}>
-                Create verified offset
+              <Link className="button button-primary" href="/offers?view=examples">
+                See a worked example
               </Link>
               <Link className="button button-secondary" href={cohortHref}>
                 Join the founding cohort
+              </Link>
+              <Link className="button button-secondary" href="/donate">
+                Donate through a vetted route
               </Link>
             </div>
           </section>
@@ -177,14 +174,20 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
               <span>Public profiles</span>
               <strong>{publicProfileCount}</strong>
             </div>
+            <div className="growth-progress-stat">
+              <IconMark name="review" />
+              <span>Completed agreements</span>
+              <strong>{formatOptionalCount(marketplaceOverview.completedAgreementCount)}</strong>
+            </div>
           </aside>
         </div>
 
         <div className="growth-trust-row" aria-label="Trust standards">
-          <TrustChip>Founding cohort first</TrustChip>
-          <TrustChip>Worked examples before live liquidity</TrustChip>
-          <TrustChip>No escrow or custody claim</TrustChip>
-          <TrustChip>Anti-threat baseline review</TrustChip>
+          <TrustChip>Pilot stage</TrustChip>
+          <TrustChip>No custody or escrow</TrustChip>
+          <TrustChip>Manual review before reliance</TrustChip>
+          <TrustChip>Privacy-first matching</TrustChip>
+          <TrustChip>{formatOptionalCount(marketplaceOverview.completedAgreementCount)} completed agreements - transparency first</TrustChip>
         </div>
         <div className="growth-no-automation-strip" aria-label="Non-automation posture">
           <strong>No surprise exposure. No autonomous outreach. No private-feed mining.</strong>

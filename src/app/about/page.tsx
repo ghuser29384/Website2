@@ -10,24 +10,35 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "About Moral Trade's pilot-stage stewardship, operator commitments, review posture, and public trust roadmap.",
+    "What Moral Trade is, what exists today, what does not exist yet, who is publicly accountable, and what the pilot will publish next.",
   alternates: {
     canonical: "/about",
   },
   openGraph: {
     title: "About Moral Trade",
     description:
-      "Moral Trade is a pilot institution for evidence-reviewed cooperation across moral disagreement, private discovery, and public-goods coordination.",
+      "A concise overview of Moral Trade's pilot status, boundaries, operators, and next publication commitments.",
     url: getAbsoluteUrl("/about"),
     type: "website",
   },
 };
 
-const commitments = [
-  "Separate worked examples from live proposals and avoid liquidity claims before verified activity exists.",
-  "Keep no-custody, no-escrow, no-legal-advice, and no-hidden-automation boundaries visible.",
-  "Reject threats, coercive baselines, harassment, fraud, and pressure on vulnerable people.",
-  "Publish reviewer roles, transparency metrics, and operator/advisor identities as governance formalizes.",
+const aboutCards = [
+  {
+    title: "What exists today",
+    detail:
+      "A public primer, worked examples, donation routes, validation standards, safety rules, and the Public Goods Fund pilot.",
+  },
+  {
+    title: "What does not exist yet",
+    detail:
+      "A liquid marketplace, escrow, custody, automated outreach, legal enforceability, mature reviewer governance, or broad social proof.",
+  },
+  {
+    title: "What we will publish next",
+    detail:
+      "Named governance roles, transparency reports, pilot case studies, and measurement of where visitors drop out or get confused.",
+  },
 ] as const;
 
 export default async function AboutPage() {
@@ -46,91 +57,69 @@ export default async function AboutPage() {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">About</p>
-            <h1>A pilot institution for cooperation under disagreement.</h1>
+            <h1>What exists today, and what does not.</h1>
             <p className="hero-text">
-              Moral Trade is being built as a reviewed pilot before it is a broad marketplace:
-              education, cohort formation, evidence standards, and governance come before claims
-              about liquidity or impact.
+              Moral Trade is a pilot for small, voluntary, evidence-reviewed commitments across
+              moral disagreement. The current job is to make the mechanism legible, trustworthy,
+              and measurable before claiming marketplace maturity.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/status">
-                Read pilot status
+              <Link className="button button-primary" href="/projects">
+                Browse projects
               </Link>
-              <Link className="button button-secondary" href="/contact">
-                Contact operators
+              <Link className="button button-secondary" href="/team">
+                Meet the operators
               </Link>
             </div>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Current posture</p>
-            <div className="flow-card">
-              <div className="flow-step">
-                <span className="flow-number">01</span>
-                <div>
-                  <strong>Prototype-stage public site</strong>
-                  <p>Worked examples and cohort loops are the main public value today.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">02</span>
-                <div>
-                  <strong>Manual review before reliance</strong>
-                  <p>Records need evidence, baseline, and externality checks.</p>
-                </div>
-              </div>
-              <div className="flow-step">
-                <span className="flow-number">03</span>
-                <div>
-                  <strong>Governance still forming</strong>
-                  <p>Named reviewer and advisor roles should become public as they formalize.</p>
-                </div>
-              </div>
-            </div>
+            <p className="eyebrow">One sentence</p>
+            <p className="hero-followup">
+              Moral Trade helps serious participants test one reviewable commitment at a time,
+              with explicit baselines, evidence rules, and no custody or escrow claim.
+            </p>
           </aside>
         </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-white">
+        <section className="section section-white" aria-labelledby="about-overview-heading">
           <div className="section-head">
-            <p className="eyebrow">Operator commitments</p>
-            <h2>What stewardship means at this stage</h2>
-            <p>
-              The public trust layer should be honest about what exists now and what must be
-              published before broader marketplace mechanics are credible.
-            </p>
+            <p className="eyebrow">Pilot clarity</p>
+            <h2 id="about-overview-heading">A short operating overview</h2>
           </div>
-          <div className="panel data-card data-card-wide">
-            <ul className="compact-list">
-              {commitments.map((commitment) => (
-                <li key={commitment}>{commitment}</li>
-              ))}
-            </ul>
+
+          <div className="data-grid">
+            {aboutCards.map((card) => (
+              <article className="panel data-card" key={card.title}>
+                <h3>{card.title}</h3>
+                <p className="route-text">{card.detail}</p>
+              </article>
+            ))}
           </div>
         </section>
 
-        <section className="section section-subtle">
+        <section className="section section-subtle" aria-labelledby="about-next-heading">
           <div className="section-head">
-            <p className="eyebrow">Trust roadmap</p>
-            <h2>What should become visible next</h2>
-            <p>
-              The audit calls for stronger authorship, governance, accessibility, and
-              measurement. The current site now exposes the destinations for that work.
-            </p>
+            <p className="eyebrow">Start here</p>
+            <h2 id="about-next-heading">Choose the page that answers your first question</h2>
           </div>
           <div className="data-grid">
-            <Link className="panel data-card" href="/research">
-              <h3>Research and governance</h3>
-              <p className="route-text">Open questions, reviewer rulebook links, and transparency plans.</p>
+            <Link className="panel data-card" href="/projects">
+              <h3>What are you doing?</h3>
+              <p className="route-text">See worked examples, the Public Goods Fund, and upcoming pilot surfaces.</p>
+              <span className="inline-link">Open Projects</span>
             </Link>
-            <Link className="panel data-card" href="/trust">
-              <h3>What you can rely on</h3>
-              <p className="route-text">Guarantees, non-guarantees, and review states.</p>
+            <Link className="panel data-card" href="/team">
+              <h3>Who runs this?</h3>
+              <p className="route-text">Review current operator routes, reviewer responsibilities, and governance gaps.</p>
+              <span className="inline-link">Open Team and Governance</span>
             </Link>
             <Link className="panel data-card" href="/updates">
-              <h3>Pilot updates</h3>
-              <p className="route-text">Follow public progress without relying on premature claims.</p>
+              <h3>What changed recently?</h3>
+              <p className="route-text">Read pilot logs, governance updates, and planned transparency reports.</p>
+              <span className="inline-link">Open Updates</span>
             </Link>
           </div>
         </section>

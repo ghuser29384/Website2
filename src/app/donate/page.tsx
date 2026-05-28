@@ -17,14 +17,14 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "Donate",
   description:
-    "Donate directly through Every.org from Moral Trade. Use verified Every.org routes for selected cause areas, then record the gift in your Moral Trade workflow if needed.",
+    "Donate through vetted Every.org routes from Moral Trade in three steps: choose a cause, complete payment on Every.org, and optionally record the gift afterward.",
   alternates: {
     canonical: "/donate",
   },
   openGraph: {
     title: "Donate through Every.org",
     description:
-      "Use verified Every.org donation routes from inside Moral Trade for selected cause areas.",
+      "Choose a vetted route, complete payment on Every.org, and optionally record the gift for Moral Trade workflows.",
     url: getAbsoluteUrl("/donate"),
     type: "website",
   },
@@ -34,24 +34,13 @@ interface DonatePageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-function getDonationLogHref(targetId: string, causeAreas: readonly string[]) {
+function getDonationConfirmHref(targetId: string, causeAreas: readonly string[]) {
   const params = new URLSearchParams({
-    source: "every.org",
     target: targetId,
     cause: causeAreas[0] ?? "Donation",
   });
 
-  return `/priority-correction-fund?${params.toString()}#record-gift`;
-}
-
-function getSignedDonationLogHref(
-  targetId: string,
-  causeAreas: readonly string[],
-  isAuthenticated: boolean,
-) {
-  const logHref = getDonationLogHref(targetId, causeAreas);
-
-  return isAuthenticated ? logHref : `/login?returnTo=${encodeURIComponent(logHref)}`;
+  return `/donate/confirm?${params.toString()}`;
 }
 
 function readParam(value: string | string[] | undefined) {
@@ -76,28 +65,29 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Donate</p>
-            <h1>Donate directly through Every.org.</h1>
+            <h1>Donate through a vetted route in three steps.</h1>
             <p className="hero-text">
-              These buttons open Every.org&apos;s donation flow for a small set of verified public
-              funds and recipients that fit major cause areas already used on Moral Trade.
+              Choose a cause, complete payment securely on Every.org, and optionally return to
+              record the gift for Moral Trade workflows.
             </p>
             <p className="hero-followup">
-              Use this page when you want a straightforward giving route inside the platform.
-              If you also want the gift reflected in your Priority Correction Fund history, log
-              it afterward on{" "}
-              <Link className="inline-link" href="/priority-correction-fund">
-                the Priority Correction Fund page
-              </Link>
-              .
+              The payment happens off-site. Moral Trade does not hold donations, provide escrow,
+              or decide tax treatment.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/priority-correction-fund">
-                Open Priority Fund
+              <Link className="button button-primary" href="#direct-routes">
+                Choose a donation route
               </Link>
               <Link className="button button-secondary" href="/donation-offsets">
                 Review donation offsets
               </Link>
             </div>
+            <ul className="hero-signals" aria-label="Donation trust notes">
+              <li>Payment on Every.org</li>
+              <li>Optional record afterward</li>
+              <li>No custody or escrow</li>
+              <li>Manual evidence review</li>
+            </ul>
           </section>
 
           <aside className="hero-panel panel">
@@ -120,8 +110,8 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Record it if needed</strong>
-                  <p>Log the gift on Moral Trade when you want it reflected in site governance and public reasoning.</p>
+                  <strong>Return only if useful</strong>
+                  <p>Record the gift here when it should count toward a Moral Trade workflow.</p>
                 </div>
               </div>
             </div>
@@ -132,15 +122,15 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
       <main id="main-content" tabIndex={-1}>
         {returnedTarget ? (
           <div className="status-banner status-banner-success">
-            Ready to log a donation route for {returnedTarget}. Use the matching record link below
-            if this gift should count toward a Moral Trade workflow.
+            Ready to confirm a donation route for {returnedTarget}. Use the matching record link
+            below only if this gift should count toward a Moral Trade workflow.
           </div>
         ) : null}
 
-        <section className="section section-white">
+        <section className="section section-white" id="direct-routes">
           <div className="section-head">
             <p className="eyebrow">Direct routes</p>
-            <h2>Verified Every.org donation buttons</h2>
+            <h2>Choose a vetted Every.org route</h2>
             <p>
               These are starting points, not exhaustive endorsements. We configured only routes we
               could verify directly on Every.org.
@@ -170,13 +160,9 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
                     />
                     <Link
                       className="button button-secondary"
-                      href={getSignedDonationLogHref(
-                        target.id,
-                        target.causeAreas,
-                        Boolean(viewer),
-                      )}
+                      href={getDonationConfirmHref(target.id, target.causeAreas)}
                     >
-                      Log this gift afterward
+                      I donated: record optional gift
                     </Link>
                     <a
                       className="text-button"

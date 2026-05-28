@@ -83,6 +83,13 @@ import {
   hasStripeEnv,
 } from "@/lib/stripe";
 import { evidenceLocatorsConflict } from "@/lib/validation";
+import { evaluateMoralTradeProtocolDraft } from "@/lib/proposal-review";
+import {
+  buildMoralTradeOfferProtocolNotes,
+  getMoralTradeOfferPersistenceStatus,
+  validateMoralTradeOfferCreateTransition,
+} from "@/lib/moral-trade/offer-write-path";
+import { validateAgreementReviewProtocolTransition } from "@/lib/moral-trade/agreement-write-path";
 
 type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
@@ -1994,131 +2001,6 @@ export async function createWebinarRsvpAction(formData: FormData) {
   redirectWithMessage(returnTo, "message", "RSVP saved. We will follow up with a small-group demo slot.");
 }
 
-export async function subscribePilotUpdatesAction(formData: FormData) {
-  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/updates");
-  const email = readRequired(formData, "email").toLowerCase();
-  const segment = readOptional(formData, "segment") || "pilot_updates";
-  const nextStep = readOptional(formData, "next_step") || "Receive pilot updates";
-
-  if (!hasSupabaseEnv()) {
-    redirectWithMessage(returnTo, "error", "Supabase is not configured yet.");
-  }
-
-  if (!email) {
-    redirectWithMessage(returnTo, "error", "Email is required.");
-  }
-
-  enforceActionRateLimit({
-    key: `pilot-updates:${email}`,
-    limit: 4,
-    message: "Too many update subscription attempts. Wait a few minutes before trying again.",
-    returnTo,
-    windowMs: 15 * 60 * 1000,
-  });
-
-  const supabase = await createClient();
-  const viewer = await getViewer();
-
-  await subscribeEmailNurture({
-    email,
-    nextStep,
-    profileId: viewer?.authUser.id ?? null,
-    segment,
-    source: "pilot_updates",
-    supabase,
-  });
-
-  await recordServerFunnelEvent({
-    eventType: "email_nurture_subscribed",
-    metadata: { segment },
-    path: returnTo,
-    profileId: viewer?.authUser.id ?? null,
-    supabase,
-  });
-
-  redirectWithMessage(returnTo, "message", "Subscribed. We will send pilot updates to that email.");
-}
-
-export async function requestPasswordResetAction(formData: FormData) {
-  const email = readRequired(formData, "email").toLowerCase();
-  const returnTo = "/password-reset";
-
-  if (!hasSupabaseEnv()) {
-    redirectWithMessage(returnTo, "error", "Supabase is not configured yet.");
-  }
-
-  if (!email) {
-    redirectWithMessage(returnTo, "error", "Email is required.");
-  }
-
-  enforceActionRateLimit({
-    key: `password-reset:${email}`,
-    limit: 4,
-    message: "Too many password reset attempts. Wait a few minutes before trying again.",
-    returnTo,
-    windowMs: 15 * 60 * 1000,
-  });
-
-  const supabase = await createClient();
-  const headerStore = await headers();
-  const origin = headerStore.get("origin") ?? getSiteUrl();
-  const confirmationUrl = new URL("/auth/confirm", origin);
-  confirmationUrl.searchParams.set("next", "/password-update");
-
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: confirmationUrl.toString(),
-  });
-
-  if (error) {
-    redirectWithMessage(returnTo, "error", error.message);
-  }
-
-  redirectWithMessage(
-    "/login",
-    "message",
-    "Password reset email sent. Use the link in your email to choose a new password.",
-  );
-}
-
-export async function updatePasswordAction(formData: FormData) {
-  const password = readRequired(formData, "password");
-  const confirmPassword = readRequired(formData, "confirm_password");
-
-  if (!hasSupabaseEnv()) {
-    redirectWithMessage("/password-update", "error", "Supabase is not configured yet.");
-  }
-
-  if (password.length < 12) {
-    redirectWithMessage("/password-update", "error", "Use at least 12 characters.");
-  }
-
-  if (password !== confirmPassword) {
-    redirectWithMessage("/password-update", "error", "Passwords do not match.");
-  }
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    redirectWithMessage(
-      "/password-reset",
-      "error",
-      "Use the reset link from your email before choosing a new password.",
-    );
-  }
-
-  const { error } = await supabase.auth.updateUser({ password });
-
-  if (error) {
-    redirectWithMessage("/password-update", "error", error.message);
-  }
-
-  redirectWithMessage("/dashboard", "message", "Password updated.");
-}
-
 export async function signInAction(formData: FormData) {
   if (!hasSupabaseEnv()) {
     redirectWithMessage("/login", "error", "Supabase is not configured yet.");
@@ -2206,11 +2088,6 @@ export async function createOfferAction(formData: FormData) {
   const paymentIntervalUnit = null;
   const paymentIntervalValue = null;
   const notes = readRequired(formData, "notes");
-  const structuredNotes = [
-    notes,
-    `No-trade baseline / default: ${baselineStatement}`,
-    `Exit, pause, or expiry condition: ${exitCondition}`,
-  ].join("\n\n");
   const offerImpact = readBoundedInt(formData, "offer_impact", {
     fallback: 7,
     min: 1,
@@ -2290,6 +2167,58 @@ export async function createOfferAction(formData: FormData) {
   if (!offerAction || !requestAction || !baselineStatement || !exitCondition || !offeredCause || !requestedCause) {
     redirectWithMessage(newOfferReturnPath, "error", "Complete all required offer fields.");
   }
+
+  const protocolDraft = {
+    format: normalizedMode,
+    offeredCause,
+    requestedCause,
+    offeredAction: offerAction,
+    requestedAction: requestAction,
+    baselineStatement,
+    duration,
+    exitConditions: exitCondition,
+    verificationMethod: verification,
+    publicDescription: notes,
+    evidenceUrl: normalizedMode === "offset" ? readOptional(formData, "offset_evidence_url") : "",
+    participantImportance: offerImpact,
+    counterpartyThreshold: minCounterpartyImpact,
+  };
+  const protocolReview = evaluateMoralTradeProtocolDraft(protocolDraft);
+  const protocolTransition = validateMoralTradeOfferCreateTransition({
+    draft: protocolDraft,
+    protocolReview,
+  });
+
+  if (protocolReview.policyConflicts.length) {
+    redirectWithMessage(
+      newOfferReturnPath,
+      "error",
+      `This proposal cannot be published because it triggered protocol guardrails: ${protocolReview.policyConflicts.join(", ")}.`,
+    );
+  }
+
+  if (protocolReview.missingRequiredFields.length) {
+    redirectWithMessage(
+      newOfferReturnPath,
+      "error",
+      `Complete the protocol-required fields: ${protocolReview.missingRequiredFields.join(", ")}.`,
+    );
+  }
+
+  if (protocolTransition.status === "fail") {
+    redirectWithMessage(
+      newOfferReturnPath,
+      "error",
+      `The protocol state transition could not be recorded: ${protocolTransition.blockers.join(", ")}.`,
+    );
+  }
+
+  const structuredNotes = [
+    notes,
+    `No-trade baseline / default: ${baselineStatement}`,
+    `Exit, pause, or expiry condition: ${exitCondition}`,
+    buildMoralTradeOfferProtocolNotes(protocolReview, protocolTransition),
+  ].join("\n\n");
 
   let donationOffsetFields: DonationOffsetFields | null = null;
 
@@ -2495,6 +2424,10 @@ export async function createOfferAction(formData: FormData) {
     normalizedMode === "offset" && donationOffsetFields
       ? assessDonationOffsetModeration(donationOffsetFields)
       : null;
+  const offerPersistenceStatus = getMoralTradeOfferPersistenceStatus({
+    donationOffsetModerationStatus: offsetModeration?.status ?? null,
+    protocolReviewStatus: protocolReview.status,
+  });
 
   const { data, error } = await supabase
     .from("offers")
@@ -2515,10 +2448,7 @@ export async function createOfferAction(formData: FormData) {
       payment_interval_value: paymentIntervalValue,
       trust_level: trustLevel,
       notes: structuredNotes,
-      status:
-        normalizedMode === "offset" && offsetModeration?.status === "flagged"
-          ? "paused"
-          : "open",
+      status: offerPersistenceStatus,
     })
     .select("id")
     .single();
@@ -2575,6 +2505,8 @@ export async function createOfferAction(formData: FormData) {
     "message",
     normalizedMode === "offset" && offsetModeration?.status === "flagged"
       ? "Donation offset saved for moderator review. It will remain paused until the baseline evidence is approved."
+      : offerPersistenceStatus === "paused"
+        ? "Offer saved for protocol review. It will remain paused until evidence or human-review requirements are cleared."
       : "Offer created successfully.",
   );
 }
@@ -6310,6 +6242,73 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
     reviewed_at: reviewedAt,
     challenge_window_ends_at: challengeWindowEndsAt,
   };
+
+  const { data: currentReviewCase, error: currentReviewCaseError } = await supabase
+    .from("agreement_review_cases")
+    .select("*")
+    .eq("id", reviewCaseId)
+    .maybeSingle();
+
+  if (currentReviewCaseError || !currentReviewCase) {
+    logSupabaseActionError("Failed to load current agreement review case", currentReviewCaseError, {
+      reviewCaseId,
+      nextStatus,
+    });
+    redirectWithMessage(returnTo, "error", currentReviewCaseError?.message ?? "Review case not found.");
+  }
+
+  const { data: currentAgreement, error: currentAgreementError } = await supabase
+    .from("agreements")
+    .select("*")
+    .eq("id", currentReviewCase.agreement_id)
+    .maybeSingle();
+
+  if (currentAgreementError || !currentAgreement) {
+    logSupabaseActionError("Failed to load agreement for protocol review transition", currentAgreementError, {
+      agreementId: currentReviewCase.agreement_id,
+      reviewCaseId,
+    });
+    redirectWithMessage(
+      returnTo,
+      "error",
+      currentAgreementError?.message ?? "Agreement not found for review transition.",
+    );
+  }
+
+  const protocolTransition = validateAgreementReviewProtocolTransition({
+    currentCompletionState: currentAgreement.completion_state,
+    currentReviewCaseStatus: currentReviewCase.status,
+    nextReviewCaseStatus: nextStatus,
+    terms: {
+      source: currentAgreement.source,
+      notes: currentAgreement.notes,
+      structuredTerms: currentAgreement.structured_terms,
+      noTradeBaseline: currentAgreement.no_trade_baseline,
+      counterfactualDeclaration: currentAgreement.counterfactual_declaration,
+      durationTerms: currentAgreement.duration_terms,
+      exitConditions: currentAgreement.exit_conditions,
+      evidenceRule: currentAgreement.evidence_rule,
+      privacyScope: currentAgreement.privacy_scope,
+      disclosureScope: currentAgreement.disclosure_scope,
+    },
+    hasEvidenceItem: Boolean(currentReviewCase.evidence_item_id),
+    reviewerConfidence,
+    disputeRecordCreated: Boolean(
+      updatePayload.public_reasoning_summary ||
+        updatePayload.reviewer_notes ||
+        currentReviewCase.appeal_reason,
+    ),
+    humanReviewApproved: true,
+    provenanceActivityRecorded: true,
+  });
+
+  if (protocolTransition.status === "fail") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      `The review state transition is not allowed by the Moral Trade protocol: ${protocolTransition.blockers.join(", ")}.`,
+    );
+  }
 
   const { data: reviewCase, error } = await supabase
     .from("agreement_review_cases")

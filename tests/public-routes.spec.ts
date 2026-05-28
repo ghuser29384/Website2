@@ -10,10 +10,11 @@ const publicRoutes = [
   "/paid-action-offers",
   "/background-networking",
   "/reasoning-standards",
-  "/reasoning-center",
   "/donate",
   "/donation-offsets",
   "/methodology",
+  "/reasoning-center",
+  "/moral-trade/technical-spec",
   "/wish-registry",
   "/people",
   "/mpgf",
@@ -111,12 +112,7 @@ for (const route of ["/", "/offers", "/donation-offsets", "/mpgf", "/methodology
         .map((item) => (item.textContent ?? "").replace(/\s+/g, " ").trim()),
     );
 
-    expect(navLabels).toEqual([
-      "Browse",
-      "Create",
-      "Learn",
-      "Community",
-    ]);
+    expect(navLabels).toEqual(["Browse", "Create", "Learn", "Community"]);
     expect(actionLabels).toContain("Sign in");
     expect(navLabels).not.toContain("Marketplace");
     expect(navLabels).not.toContain("Explore");

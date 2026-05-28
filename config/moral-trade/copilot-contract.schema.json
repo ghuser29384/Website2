@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.moraltrade.org/schemas/moral-trade/copilot-contract.schema.json",
+  "title": "Moral Trade Copilot Contract",
+  "type": "object",
+  "required": [
+    "version",
+    "purpose",
+    "permittedRoles",
+    "strictInputBundle",
+    "approvedOutputSections",
+    "statusValues",
+    "completenessFields",
+    "trustAxes",
+    "guardrails",
+    "verificationLoop",
+    "redactionsAppliedByDefault",
+    "rolloutStages",
+    "humanControlledDecisions",
+    "fallbackRule"
+  ],
+  "properties": {
+    "version": { "type": "string", "minLength": 1 },
+    "purpose": { "type": "string", "minLength": 1 },
+    "permittedRoles": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "description"],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "strictInputBundle": {
+      "type": "array",
+      "minItems": 6,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "approvedOutputSections": {
+      "type": "array",
+      "minItems": 7,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "statusValues": {
+      "type": "array",
+      "minItems": 5,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "completenessFields": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "trustAxes": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "guardrails": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "type": "object",
+        "required": ["code", "label", "rule"],
+        "properties": {
+          "code": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "rule": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "verificationLoop": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "blocksMatchable"],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "blocksMatchable": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "redactionsAppliedByDefault": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "rolloutStages": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "rule"],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "rule": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "humanControlledDecisions": {
+      "type": "array",
+      "minItems": 3,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "fallbackRule": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}

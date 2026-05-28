@@ -1,49 +1,90 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { subscribePilotUpdatesAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
-import { getFormMessage } from "@/lib/form-state";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
   title: "Pilot Updates",
   description:
-    "Subscribe to Moral Trade pilot updates about founding cohorts, reviewer governance, public-goods tests, and transparency reports.",
+    "Public Moral Trade pilot updates, transparency notes, governance logs, and case-study placeholders.",
   alternates: {
     canonical: "/updates",
   },
   openGraph: {
     title: "Moral Trade pilot updates",
     description:
-      "Follow the Moral Trade pilot without assuming live marketplace liquidity: cohorts, governance, and public-goods coordination.",
+      "A public archive for pilot logs, governance updates, case studies, and transparency notes.",
     url: getAbsoluteUrl("/updates"),
     type: "website",
   },
 };
 
-interface UpdatesPageProps {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}
-
-const updateTopics = [
-  "Founding cohort openings and small-group demos",
-  "Reviewer rulebook changes and transparency reports",
-  "Public Goods Fund threshold-commitment pilots",
-  "New worked examples and safety case studies",
+const updates = [
+  {
+    date: "May 27, 2026",
+    tag: "Pilot log",
+    title: "Audit response: make the pilot easier to understand",
+    summary:
+      "The public site now foregrounds a plain-English first action, a Projects hub, donation handoff clarity, and visible trust/governance routes.",
+    href: "/projects",
+  },
+  {
+    date: "May 26, 2026",
+    tag: "Public goods",
+    title: "Public Goods Fund surfaces gathered for inspection",
+    summary:
+      "Candidate pools, contribution evidence, real-money terms, and technical notes are grouped so reviewers can inspect the pilot without treating it as custody or escrow.",
+    href: "/mpgf",
+  },
+  {
+    date: "May 19, 2026",
+    tag: "Review rulebook",
+    title: "Validation roles, evidence states, and challenge windows",
+    summary:
+      "The validation rulebook keeps reviewer scope, conflict handling, appeal paths, and quality metrics public before reliance grows.",
+    href: "/validation",
+  },
 ] as const;
 
-export default async function UpdatesPage({ searchParams }: UpdatesPageProps) {
-  const [viewer, resolvedSearchParams] = await Promise.all([getViewer(), searchParams]);
-  const formMessage = getFormMessage(resolvedSearchParams);
-  const supabaseReady = hasSupabaseEnv();
+const upcomingReports = [
+  "First transparency report: review outcomes, rejected proposal classes, and unresolved objections.",
+  "First case study: one low-risk pledge swap or donation offset from draft through review.",
+  "Governance roster update: named operators, advisors, reviewers, and conflicts once roles are formal.",
+] as const;
+
+export default async function UpdatesPage() {
+  const viewer = await getViewer();
+
+  const updatesStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Moral Trade pilot updates",
+    url: getAbsoluteUrl("/updates"),
+    description: "Public pilot logs, governance updates, case studies, and transparency notes.",
+    mainEntity: {
+      "@type": "ItemList",
+      itemListElement: updates.map((update, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: update.title,
+        url: getAbsoluteUrl(update.href),
+        description: update.summary,
+      })),
+    },
+  };
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(updatesStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <header className="hero">
         <SiteTopbar
           brandHref="/"
@@ -55,62 +96,80 @@ export default async function UpdatesPage({ searchParams }: UpdatesPageProps) {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Pilot updates</p>
-            <h1>Follow the pilot without treating it as a liquid marketplace.</h1>
+            <h1>A public archive for what changed and what was learned.</h1>
             <p className="hero-text">
-              Updates focus on cohort openings, reviewer governance, public-goods experiments, and
-              transparency reports rather than impact claims the pilot has not earned yet.
+              Moral Trade is early, so trust depends on visible iteration. This archive collects
+              pilot logs, governance updates, case studies, and short transparency notes.
             </p>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/status">
+                Check pilot status
+              </Link>
+              <a className="button button-secondary" href="mailto:support@moraltrade.org?subject=Pilot%20updates">
+                Subscribe by email
+              </a>
+            </div>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Subscribe</p>
-            {!supabaseReady ? (
-              <div className="status-banner status-banner-error">
-                Supabase is not configured yet. Email support@moraltrade.org for updates.
+            <p className="eyebrow">Archive promise</p>
+            <div className="flow-card">
+              <div className="flow-step">
+                <span className="flow-number">01</span>
+                <div>
+                  <strong>Short notes are enough</strong>
+                  <p>Monthly logs should be public even before there are polished case studies.</p>
+                </div>
               </div>
-            ) : null}
-            {formMessage ? (
-              <div
-                className={`status-banner ${
-                  formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"
-                }`}
-              >
-                {formMessage.text}
+              <div className="flow-step">
+                <span className="flow-number">02</span>
+                <div>
+                  <strong>No fake proof</strong>
+                  <p>Updates should label plans, active pilots, and reviewed outcomes separately.</p>
+                </div>
               </div>
-            ) : null}
-            <form action={subscribePilotUpdatesAction} className="stack-form">
-              <input name="return_to" type="hidden" value="/updates" />
-              <input name="segment" type="hidden" value="pilot_updates" />
-              <input name="next_step" type="hidden" value="Receive pilot update digest" />
-              <label className="field">
-                <span>Email</span>
-                <input name="email" placeholder="you@example.com" type="email" />
-              </label>
-              <button className="button button-primary" type="submit">
-                Subscribe for pilot updates
-              </button>
-            </form>
-            <Link className="text-button" href="/contact">
-              Contact operators instead
-            </Link>
+            </div>
           </aside>
         </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="section section-white">
+        <section className="section section-white" aria-labelledby="updates-archive-heading">
           <div className="section-head">
-            <p className="eyebrow">What you will receive</p>
-            <h2>Updates are about trust-building work</h2>
+            <p className="eyebrow">Archive</p>
+            <h2 id="updates-archive-heading">Recent pilot notes</h2>
             <p>
-              The current stage needs public learning and careful review more than promotional
-              marketplace language.
+              These are intentionally concise. The point is to make progress and uncertainty
+              visible before the pilot has mature social proof.
             </p>
+          </div>
+
+          <div className="updates-list">
+            {updates.map((update) => (
+              <article className="panel data-card update-card" key={update.title}>
+                <div className="update-card-meta">
+                  <span>{update.date}</span>
+                  <span className="badge">{update.tag}</span>
+                </div>
+                <h3>{update.title}</h3>
+                <p className="route-text">{update.summary}</p>
+                <Link className="text-button" href={update.href}>
+                  Read the related surface
+                </Link>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="upcoming-updates-heading">
+          <div className="section-head">
+            <p className="eyebrow">Next to publish</p>
+            <h2 id="upcoming-updates-heading">Transparency work that would build trust</h2>
           </div>
           <div className="panel data-card data-card-wide">
             <ul className="compact-list">
-              {updateTopics.map((topic) => (
-                <li key={topic}>{topic}</li>
+              {upcomingReports.map((report) => (
+                <li key={report}>{report}</li>
               ))}
             </ul>
           </div>

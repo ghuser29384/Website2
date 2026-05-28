@@ -1,0 +1,190 @@
+{
+  "version": "moral-trade-ai-governance-v0.1-2026-05",
+  "purpose": "Public governance contract for keeping Moral Trade decisioning deterministic, schema-bound, documented, and human-controlled before any ML-assisted ranking or scoring is introduced.",
+  "decisioningMode": "deterministic_rules_with_schema_bound_copilot",
+  "mlEnabledForMatching": false,
+  "mlEnabledForStateChanges": false,
+  "requiredDocumentationBeforeMl": [
+    {
+      "key": "model_card",
+      "label": "Model card",
+      "rule": "Any model used beyond rendering deterministic factor codes must publish intended use, non-use, risk, performance slices, and failure modes."
+    },
+    {
+      "key": "dataset_datasheet",
+      "label": "Dataset datasheet",
+      "rule": "Any historical training or evaluation dataset must document collection, consent, composition, retention, exclusion rules, and known limitations."
+    },
+    {
+      "key": "benchmark_slices",
+      "label": "Benchmark slices",
+      "rule": "Benchmarks must include cause-area, trade-format, geography, privacy-stage, and optional governed sensitive-attribute slices."
+    },
+    {
+      "key": "intended_use_limits",
+      "label": "Intended-use limits",
+      "rule": "Documentation must state that the model cannot rank global moral value, make safety decisions, disclose counterparties, or complete agreements."
+    },
+    {
+      "key": "fairness_audit_report",
+      "label": "Fairness audit report",
+      "rule": "Before rollout, publish aggregate fairness metrics, trade-offs, reviewed deviations, and remediation decisions."
+    },
+    {
+      "key": "change_log",
+      "label": "Change log",
+      "rule": "Every material model, dataset, prompt, or metric change must have an operator-visible change log entry and rollback note."
+    }
+  ],
+  "permittedAutomation": [
+    {
+      "key": "schema_bound_drafting",
+      "label": "Schema-bound drafting",
+      "rule": "Drafting may normalize user text into approved proposal fields without inventing facts or evidence."
+    },
+    {
+      "key": "missing_field_detection",
+      "label": "Missing-field detection",
+      "rule": "Automation may flag missing required fields and ask clarification questions tied to those fields."
+    },
+    {
+      "key": "factor_code_explanation",
+      "label": "Factor-code explanation rendering",
+      "rule": "Automation may render explanations only from deterministic factor codes and approved redaction rules."
+    },
+    {
+      "key": "evidence_checklist_drafting",
+      "label": "Evidence checklist drafting",
+      "rule": "Automation may draft checklists of observable artifacts without deciding that evidence is sufficient."
+    },
+    {
+      "key": "reviewer_summary_drafting",
+      "label": "Reviewer-summary drafting",
+      "rule": "Automation may summarize records for reviewers while preserving uncertainty and unresolved flags."
+    }
+  ],
+  "prohibitedUses": [
+    {
+      "key": "end_to_end_llm_matching",
+      "label": "End-to-end LLM matching",
+      "rule": "No model may decide counterparties or matchability from broad application context."
+    },
+    {
+      "key": "global_moral_ranking",
+      "label": "Global moral ranking",
+      "rule": "No model or optimization layer may claim a platform-wide objective moral ranking."
+    },
+    {
+      "key": "unreviewed_learning_to_rank",
+      "label": "Unreviewed learning to rank",
+      "rule": "Historical outcome ranking cannot be used until labels, bias risks, model cards, and fairness audits are complete."
+    },
+    {
+      "key": "protected_trait_inference",
+      "label": "Protected-trait inference",
+      "rule": "Models must not infer protected traits, ideology, psychology, or hidden preferences for matching."
+    },
+    {
+      "key": "autonomous_outreach",
+      "label": "Autonomous outreach",
+      "rule": "No automation may contact or reveal counterparties without explicit consent and human-controlled disclosure."
+    },
+    {
+      "key": "raw_private_feed_training",
+      "label": "Raw private-feed training",
+      "rule": "Raw private wishes, source notes, contact details, and private feeds cannot be used as model training input."
+    }
+  ],
+  "fairnessDocumentation": {
+    "requiredBeforeAnyMl": true,
+    "metrics": [
+      "subgroup_surfacing_parity",
+      "false_match_rate",
+      "human_overrule_rate",
+      "privacy_leakage_incidents",
+      "appeal_overturn_rate"
+    ],
+    "slices": [
+      "trade_format",
+      "cause_area_pair",
+      "geography_bucket",
+      "privacy_stage",
+      "optional_governed_sensitive_attribute"
+    ],
+    "reviewRule": "Material slice gaps must be thresholded, reviewed, documented, and remediated before promotion."
+  },
+  "explanationControls": [
+    {
+      "key": "factor_codes_source_of_truth",
+      "label": "Factor codes are the source of truth",
+      "rule": "Natural-language explanations may render deterministic factor codes and cited fields, but must not become a separate reasoning source."
+    },
+    {
+      "key": "meaningful_user_action",
+      "label": "Meaningful user action",
+      "rule": "Every explanation must state the current status, why the deterministic factors led there, and what action the participant or reviewer can take next."
+    },
+    {
+      "key": "system_accuracy_boundary",
+      "label": "System accuracy boundary",
+      "rule": "Explanations must be accurate to the system inputs: source fields, factor codes, evidence rows, and policy flags, without claiming hidden context or objective moral truth."
+    },
+    {
+      "key": "uncertainty_and_redaction_notice",
+      "label": "Uncertainty and redaction notice",
+      "rule": "Explanations must name uncertainty flags and redacted surfaces when private wishes, contact details, sensitive constraints, or evidence remain hidden."
+    },
+    {
+      "key": "appealable_review_scope",
+      "label": "Appealable review scope",
+      "rule": "Reviewer-facing explanations must state which claim, evidence row, or policy flag can be appealed and which unrelated moral disagreements are out of scope."
+    },
+    {
+      "key": "reversible_interaction",
+      "label": "Reversible interaction",
+      "rule": "Explanations must support correction, resubmission, or human override before state changes; users can correct fields without automatic disclosure or reliance."
+    }
+  ],
+  "externalStandards": [
+    {
+      "key": "nist_ai_rmf",
+      "label": "NIST AI RMF",
+      "use": "Govern, map, measure, and manage any model-assisted workflow before rollout."
+    },
+    {
+      "key": "nist_xai",
+      "label": "NIST XAI principles",
+      "use": "Require explanations that are meaningful, accurate to the system, bounded, and uncertainty-aware."
+    },
+    {
+      "key": "model_cards",
+      "label": "Model Cards",
+      "use": "Document model purpose, limits, performance, risks, and non-use cases."
+    },
+    {
+      "key": "datasheets_for_datasets",
+      "label": "Datasheets for Datasets",
+      "use": "Document dataset collection, consent, composition, retention, and limitations."
+    },
+    {
+      "key": "fairness_tradeoff_literature",
+      "label": "Fairness trade-off literature",
+      "use": "Avoid pretending one fairness metric is universally correct; publish trade-offs and review decisions."
+    }
+  ],
+  "humanControlledDecisions": [
+    "safety_blocking",
+    "matching_disclosure",
+    "reviewed_completion",
+    "dispute_resolution",
+    "appeal_decision"
+  ],
+  "governanceTests": [
+    "ai_governance_profile_validator",
+    "no_undocumented_ml_gate",
+    "model_card_datasheet_required",
+    "fairness_documentation_contract",
+    "technical_spec_ai_governance_smoke",
+    "health_route_contract_smoke"
+  ]
+}

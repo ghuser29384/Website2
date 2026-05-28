@@ -9,9 +9,8 @@ export function SiteFooter() {
           <p className="eyebrow">Moral Trade</p>
           <h2>A pilot institution for cooperation under disagreement.</h2>
           <p>
-            Moral Trade is a pilot for evidence-reviewed moral trade, private counterparty
-            discovery, and moral public-good coordination. It does not provide legal, tax, escrow,
-            or custody services.
+            Moral Trade helps serious participants test small, reviewable commitments across
+            moral disagreement. It does not provide legal, tax, escrow, or custody services.
           </p>
         </div>
 
