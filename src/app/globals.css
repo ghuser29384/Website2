@@ -5198,6 +5198,48 @@ output {
   font-size: 0.82rem;
 }
 
+.listing-factor-codes {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.listing-factor-codes > strong {
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.listing-factor-codes div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.32rem;
+}
+
+.listing-factor-codes span {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.18rem 0.34rem;
+  background: #ffffff;
+  color: var(--ink-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.7rem;
+  line-height: 1.2;
+}
+
+.listing-next-step {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.listing-next-step strong {
+  color: var(--ink);
+}
+
 .format-card .inline-link,
 .teaser-card {
   align-self: end;

@@ -36,6 +36,10 @@ import {
   getMoralTradeCopilotContract,
   validateMoralTradeCopilotContract,
 } from "@/lib/moral-trade/copilot";
+import {
+  getOfferReviewWorkflowContract,
+  validateOfferReviewWorkflowContract,
+} from "@/lib/proposal-review";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +48,9 @@ export async function GET() {
   const validation = validateMoralTradeProtocolProfile();
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
+  const reviewWorkflowContract = getOfferReviewWorkflowContract();
+  const reviewWorkflowValidation =
+    validateOfferReviewWorkflowContract(reviewWorkflowContract);
   const operationsProfile = getMoralTradeOperationsProfile();
   const operationsValidation = validateMoralTradeOperationsProfile(operationsProfile);
   const securityProfile = getMoralTradeSecurityProfile();
@@ -63,6 +70,7 @@ export async function GET() {
     ok:
       validation.status === "pass" &&
       copilotValidation.status === "pass" &&
+      reviewWorkflowValidation.status === "pass" &&
       operationsValidation.status === "pass" &&
       securityValidation.status === "pass" &&
       evaluationValidation.status === "pass" &&
@@ -75,6 +83,7 @@ export async function GET() {
     purpose: profile.purpose,
     validation,
     copilotValidation,
+    reviewWorkflowValidation,
     operationsValidation,
     securityValidation,
     evaluationValidation,
@@ -100,6 +109,11 @@ export async function GET() {
       copilotInputBundle: copilotContract.strictInputBundle,
       copilotOutputSections: copilotContract.approvedOutputSections,
       copilotVerificationSteps: copilotContract.verificationLoop.map((step) => step.key),
+      reviewWorkflowContractVersion: reviewWorkflowContract.version,
+      reviewWorkflowCardKeys: reviewWorkflowContract.detailWorkflowCards.map((card) => card.key),
+      reviewWorkflowMarketplaceFactorPriority:
+        reviewWorkflowContract.marketplaceFactorPriority,
+      reviewWorkflowContractTests: reviewWorkflowContract.contractTests,
       operationsProfileVersion: operationsProfile.version,
       securityHeaderCodes: operationsProfile.securityHeaders.map((header) => header.code),
       rateLimitSurfaces: operationsProfile.rateLimitSurfaces.map((surface) => surface.key),
@@ -153,6 +167,7 @@ export async function GET() {
     blockers: [
       ...validation.blockers,
       ...copilotValidation.blockers,
+      ...reviewWorkflowValidation.blockers,
       ...operationsValidation.blockers,
       ...securityValidation.blockers,
       ...evaluationValidation.blockers,

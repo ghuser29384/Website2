@@ -51,6 +51,30 @@
       "fallback": "Return request or output validation blockers and deterministic manual-review fallback metadata; never store the submitted draft, contact counterparties, or change proposal state."
     },
     {
+      "key": "moral_trade_review_workflow_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/review-workflow/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "review_workflow_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return review-workflow validator blockers; marketplace cards must not invent factor codes or imply completion without the public contract."
+    },
+    {
+      "key": "moral_trade_review_workflow_evaluate",
+      "method": "POST",
+      "path": "/api/moral-trade/review-workflow/evaluate",
+      "auth": "optional",
+      "privacyClass": "ephemeral_private_draft_review",
+      "requestSchema": "review_workflow_evaluate_request",
+      "responseSchema": "review_workflow_evaluate_response",
+      "rateLimitSurface": "review_workflow_evaluate",
+      "cacheControl": "private_no_store",
+      "fallback": "Return deterministic workflow cards and blockers without changing proposal state; never store submitted review input or imply completion."
+    },
+    {
       "key": "moral_trade_operations_health",
       "method": "GET",
       "path": "/api/moral-trade/operations/health",
@@ -197,6 +221,7 @@
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Core protocol validator result." },
         { "key": "copilotValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Copilot contract validator result." },
+        { "key": "reviewWorkflowValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Review workflow card contract validator result." },
         { "key": "operationsValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Operations contract validator result." },
         { "key": "securityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Security posture validator result for headers, sessions, encryption boundaries, keys, MFA gates, and abuse controls." },
         { "key": "evaluationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Evaluation contract validator result." },
@@ -253,6 +278,42 @@
         { "key": "contractValidation", "type": "validator_result", "required": false, "privacy": "public_contract", "description": "Validation result for the copilot contract itself." },
         { "key": "fallback", "type": "string", "required": false, "privacy": "public_contract", "description": "Safe fallback reason for malformed or missing request bodies." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Request, contract, or output blockers that prevent relying on the packet." }
+      ]
+    },
+    {
+      "key": "review_workflow_contract_response",
+      "purpose": "Public review-card contract for detail workflow cards, marketplace factor-code cards, next-step rules, and non-ranking invariants.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the review workflow contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the contract validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Review workflow contract version." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for card key coverage, factor-code coverage, marketplace priority, non-ranking, appeal scope, and trust-dimension separation." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Statuses, detail workflow cards, marketplace factor priority, invariants, sample keys, and contract tests." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Review workflow blockers that prevent relying on card instrumentation." }
+      ]
+    },
+    {
+      "key": "review_workflow_evaluate_request",
+      "purpose": "Ephemeral structured review workflow evaluation request for deterministic workflow cards without live state mutation.",
+      "fields": [
+        { "key": "reviewInput", "type": "structured_review_input", "required": true, "privacy": "private_request", "description": "Known offer review fields only; unknown fields are ignored and the body is not stored." }
+      ]
+    },
+    {
+      "key": "review_workflow_evaluate_response",
+      "purpose": "Deterministic workflow cards, marketplace card factors, contract validation, and no-state-change metadata.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private_response", "description": "True only when the review workflow contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private_response", "description": "Server time for the deterministic workflow evaluation." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Review workflow contract version used for the evaluation." },
+        { "key": "decisioningMode", "type": "string", "required": true, "privacy": "public_contract", "description": "Always deterministic_review_workflow_only; the route performs deterministic review-workflow evaluation only." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; the route cannot publish, match, disclose, complete, or change proposal state." },
+        { "key": "inputBundleUsed", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Strict local bundle sources used to produce the workflow cards." },
+        { "key": "reviewInput", "type": "structured_review_input", "required": true, "privacy": "private_response", "description": "Normalized review input returned only to the requester for inspection." },
+        { "key": "workflowCards", "type": "review_workflow_card_array", "required": true, "privacy": "private_response", "description": "Status, factor codes, summary, and next step for status, evidence, baseline, externality, participant-relative scores, and appeal scope." },
+        { "key": "marketplaceCard", "type": "review_marketplace_card", "required": true, "privacy": "private_response", "description": "Prioritized factor codes and next action used by marketplace cards." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "public_contract", "description": "Validation result for the review workflow contract itself." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Contract blockers that prevent relying on the workflow packet." }
       ]
     },
     {

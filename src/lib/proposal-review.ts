@@ -50,6 +50,49 @@ export interface OfferReviewWorkflowCard {
   nextStep: string;
 }
 
+export interface OfferReviewCardInstrumentation {
+  factorCodes: string[];
+  label: string;
+  nextStep: string;
+  status: MoralTradeVerificationStepStatus;
+}
+
+export interface OfferReviewWorkflowCardContract {
+  key: OfferReviewWorkflowCard["key"];
+  label: string;
+  requiredFactorCodes: string[];
+  purpose: string;
+  nextStepRule: string;
+}
+
+export interface OfferReviewWorkflowContract {
+  version: string;
+  purpose: string;
+  statuses: MoralTradeVerificationStepStatus[];
+  detailWorkflowCards: OfferReviewWorkflowCardContract[];
+  marketplaceFactorPriority: string[];
+  invariants: string[];
+  sampleDetailCards: OfferReviewWorkflowCard[];
+  sampleMarketplaceCard: OfferReviewCardInstrumentation;
+  contractTests: string[];
+}
+
+export interface OfferReviewWorkflowContractCheck {
+  id: string;
+  label: string;
+  status: "pass" | "fail";
+  evidence: string;
+}
+
+export interface OfferReviewWorkflowContractValidation {
+  status: "pass" | "fail";
+  validatorName: "moral-trade-review-workflow-contract";
+  validatorVersion: string;
+  contractVersion: string;
+  checks: OfferReviewWorkflowContractCheck[];
+  blockers: string[];
+}
+
 export interface MoralTradeProtocolDraftInput {
   format: string;
   offeredCause?: string | null;
@@ -144,6 +187,57 @@ export const WORKED_EXAMPLE_LAUNCH_ORDER = [
   "seed-rebecca",
   "seed-christopher",
 ] as const;
+
+export const MORAL_TRADE_REVIEW_WORKFLOW_CONTRACT_VERSION =
+  "moral-trade-review-workflow-v0.1-2026-05";
+
+export const MORAL_TRADE_REVIEW_WORKFLOW_VALIDATOR_VERSION =
+  "moral-trade-review-workflow-validator-v0.1";
+
+export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContract[] = [
+  {
+    key: "current_status",
+    label: "Status card",
+    requiredFactorCodes: ["status_visible", "human_review_required"],
+    purpose: "Expose whether a record is live, example-only, blocked, or still under review.",
+    nextStepRule: "Never imply completion, custody, enforceability, or moral endorsement from a visible status.",
+  },
+  {
+    key: "action_evidence",
+    label: "Action evidence",
+    requiredFactorCodes: ["evidence_rule_named", "evidence_sufficiency"],
+    purpose: "Show whether each factual action claim has a named reviewable proof method.",
+    nextStepRule: "Ask for scoped artifacts before anyone relies on a factual action claim.",
+  },
+  {
+    key: "baseline_confidence",
+    label: "Counterfactual baseline",
+    requiredFactorCodes: ["baseline_stated", "baseline_credibility"],
+    purpose: "Keep factual proof separate from the no-trade baseline and counterfactual trust problem.",
+    nextStepRule: "Ask what would happen without the trade and what dated evidence supports that claim.",
+  },
+  {
+    key: "externality_review",
+    label: "Externality review",
+    requiredFactorCodes: ["externality_review_required", "human_review_required"],
+    purpose: "Name third-party harm, perverse-incentive, and unrepresented-value review before reliance.",
+    nextStepRule: "Route affected-party standing, remedy, and challenge-window questions to human review.",
+  },
+  {
+    key: "participant_relative_scores",
+    label: "Participant-relative scores",
+    requiredFactorCodes: ["participant_relative_scores", "no_global_moral_ranking"],
+    purpose: "Display stated priorities without turning them into an objective platform ranking.",
+    nextStepRule: "Use scores only as participant-stated context and preserve the no-global-ranking notice.",
+  },
+  {
+    key: "appeal_scope",
+    label: "Appeal scope",
+    requiredFactorCodes: ["appealable_review_scope", "reviewer_summary"],
+    purpose: "Limit appeals to the claim, evidence row, baseline concern, disclosure decision, or policy flag under review.",
+    nextStepRule: "Do not reopen unrelated moral disagreements by default.",
+  },
+];
 
 const WORKED_EXAMPLE_ORDER_MAP = new Map<string, number>(
   WORKED_EXAMPLE_LAUNCH_ORDER.map((id, index) => [id, index]),
@@ -1464,4 +1558,175 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
         "Do not reopen unrelated moral disagreements by default; route the appealed claim with reason codes and redacted evidence scope.",
     },
   ];
+}
+
+export const MARKETPLACE_REVIEW_FACTOR_PRIORITY = [
+  "human_review_required",
+  "evidence_rule_named",
+  "baseline_credibility",
+  "externality_review_required",
+  "no_global_moral_ranking",
+  "appealable_review_scope",
+] as const;
+
+export function getOfferReviewCardInstrumentation(
+  input: OfferReviewWorkflowInput,
+): OfferReviewCardInstrumentation {
+  const workflowCards = getOfferReviewWorkflowCards(input);
+  const nextActionCard =
+    workflowCards.find((card) => card.key !== "current_status" && card.status !== "pass") ??
+    workflowCards.find((card) => card.status !== "pass") ??
+    workflowCards[0];
+  const allFactorCodes = new Set(workflowCards.flatMap((card) => card.factorCodes));
+  const priorityFactorCodes = MARKETPLACE_REVIEW_FACTOR_PRIORITY.filter((code) =>
+    allFactorCodes.has(code),
+  );
+  const fallbackFactorCodes = Array.from(allFactorCodes).filter(
+    (code) => !priorityFactorCodes.includes(code as (typeof MARKETPLACE_REVIEW_FACTOR_PRIORITY)[number]),
+  );
+
+  return {
+    factorCodes: [...priorityFactorCodes, ...fallbackFactorCodes].slice(0, 5),
+    label: nextActionCard.label,
+    nextStep: nextActionCard.nextStep,
+    status: nextActionCard.status,
+  };
+}
+
+const REVIEW_WORKFLOW_SAMPLE_INPUT: OfferReviewWorkflowInput = {
+  mode: "offset",
+  verification: "Manual review required",
+  trustLevel: 4,
+  baselineAmountUsd: 1000,
+  baselineOpposedCause: "Gun rights",
+  requestedMatchingAmountUsd: 1000,
+  requestedOpposedCause: "Gun control",
+  evidenceUrl: "https://example.com/reviewable-evidence",
+  moderationStatus: "clear",
+  offeredCause: "Gun rights",
+  requestedCause: "Gun control",
+  currentStatus: "Worked example; manual review required before reliance",
+  offerImpact: 8,
+  minCounterpartyImpact: 7,
+};
+
+function workflowContractCheck(
+  id: string,
+  label: string,
+  passed: boolean,
+  evidence: string,
+): OfferReviewWorkflowContractCheck {
+  return {
+    id,
+    label,
+    status: passed ? "pass" : "fail",
+    evidence,
+  };
+}
+
+export function getOfferReviewWorkflowContract(): OfferReviewWorkflowContract {
+  const sampleDetailCards = getOfferReviewWorkflowCards(REVIEW_WORKFLOW_SAMPLE_INPUT);
+  const sampleMarketplaceCard = getOfferReviewCardInstrumentation(REVIEW_WORKFLOW_SAMPLE_INPUT);
+
+  return {
+    version: MORAL_TRADE_REVIEW_WORKFLOW_CONTRACT_VERSION,
+    purpose:
+      "Public contract for the review workflow cards shown on offer detail pages, worked examples, marketplace cards, and homepage preview cards.",
+    statuses: ["pass", "needs_input", "human_review", "blocked"],
+    detailWorkflowCards: OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS,
+    marketplaceFactorPriority: [...MARKETPLACE_REVIEW_FACTOR_PRIORITY],
+    invariants: [
+      "Every detail workflow card must expose at least one factor code and one next-step instruction.",
+      "Marketplace cards must show prioritized factor codes derived from the same workflow contract.",
+      "Participant-relative scores must preserve no_global_moral_ranking.",
+      "Appeals must preserve appealable_review_scope and reviewer_summary factor codes.",
+      "Action evidence, baseline confidence, and externality review must remain separate cards.",
+    ],
+    sampleDetailCards,
+    sampleMarketplaceCard,
+    contractTests: [
+      "review_workflow_contract_validator",
+      "offer_review_workflow_card_smoke",
+      "marketplace_factor_card_smoke",
+      "technical_spec_review_workflow_smoke",
+    ],
+  };
+}
+
+export function validateOfferReviewWorkflowContract(
+  contract: OfferReviewWorkflowContract = getOfferReviewWorkflowContract(),
+): OfferReviewWorkflowContractValidation {
+  const contractKeys = contract.detailWorkflowCards.map((card) => card.key);
+  const sampleKeys = contract.sampleDetailCards.map((card) => card.key);
+  const contractFactorCodes = new Set(
+    contract.detailWorkflowCards.flatMap((card) => card.requiredFactorCodes),
+  );
+  const sampleFactorCodes = new Set(
+    contract.sampleDetailCards.flatMap((card) => card.factorCodes),
+  );
+  const checks = [
+    workflowContractCheck(
+      "card-key-coverage",
+      "Detail card contract covers every rendered workflow card",
+      contractKeys.length === 6 &&
+        sampleKeys.length === contractKeys.length &&
+        contractKeys.every((key, index) => sampleKeys[index] === key),
+      `${contractKeys.join(", ")} -> ${sampleKeys.join(", ")}`,
+    ),
+    workflowContractCheck(
+      "factor-code-coverage",
+      "Required factor codes appear in rendered samples",
+      Array.from(contractFactorCodes).every((code) => sampleFactorCodes.has(code)),
+      Array.from(contractFactorCodes).join(", "),
+    ),
+    workflowContractCheck(
+      "marketplace-factor-priority",
+      "Marketplace factor priority is bounded and rendered",
+      contract.marketplaceFactorPriority.length >= 5 &&
+        contract.sampleMarketplaceCard.factorCodes.length > 0 &&
+        contract.sampleMarketplaceCard.factorCodes.length <= 5 &&
+        contract.sampleMarketplaceCard.factorCodes.every((code) => contractFactorCodes.has(code)),
+      contract.sampleMarketplaceCard.factorCodes.join(", "),
+    ),
+    workflowContractCheck(
+      "no-global-ranking-and-appeal-scope",
+      "No-global-ranking and appeal-scope factors are preserved",
+      contractFactorCodes.has("no_global_moral_ranking") &&
+        contractFactorCodes.has("appealable_review_scope") &&
+        contract.sampleDetailCards.some((card) => card.factorCodes.includes("no_global_moral_ranking")) &&
+        contract.sampleDetailCards.some((card) => card.factorCodes.includes("appealable_review_scope")),
+      Array.from(sampleFactorCodes).join(", "),
+    ),
+    workflowContractCheck(
+      "separate-trust-dimensions",
+      "Action evidence, baseline confidence, and externality review remain separate",
+      contractKeys.includes("action_evidence") &&
+        contractKeys.includes("baseline_confidence") &&
+        contractKeys.includes("externality_review"),
+      contractKeys.join(", "),
+    ),
+    workflowContractCheck(
+      "contract-tests",
+      "Review workflow contract test hooks are named",
+      [
+        "review_workflow_contract_validator",
+        "offer_review_workflow_card_smoke",
+        "marketplace_factor_card_smoke",
+        "technical_spec_review_workflow_smoke",
+      ].every((hook) => contract.contractTests.includes(hook)),
+      contract.contractTests.join(", "),
+    ),
+  ];
+  const blockers = checks
+    .filter((check) => check.status === "fail")
+    .map((check) => `${check.id}: ${check.label}`);
+
+  return {
+    status: blockers.length ? "fail" : "pass",
+    validatorName: "moral-trade-review-workflow-contract",
+    validatorVersion: MORAL_TRADE_REVIEW_WORKFLOW_VALIDATOR_VERSION,
+    contractVersion: contract.version,
+    checks,
+    blockers,
+  };
 }

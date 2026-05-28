@@ -280,6 +280,8 @@ test("global search and offers search expose real marketplace discovery", () => 
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const offersPage = readRepoFile("src/app/offers/page.tsx");
   const appDataSource = readRepoFile("src/lib/app-data.ts");
+  const pagePrimitives = readRepoFile("src/components/ui/page-primitives.tsx");
+  const globalCss = readRepoFile("src/app/globals.css");
   const animalResults = filterSiteSearchItems("animal welfare");
   const mpfgResults = filterSiteSearchItems("manual evidence");
   const validationResults = filterSiteSearchItems("appeal rulebook");
@@ -309,8 +311,15 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(offersPage, /getListingModeIcon/);
   assert.match(offersPage, /primaryActionLabel/);
   assert.match(offersPage, /OfferCard/);
+  assert.match(offersPage, /getOfferReviewCardInstrumentation/);
+  assert.match(offersPage, /reviewFactorCodes/);
+  assert.match(offersPage, /reviewNextStep/);
   assert.match(offersPage, /listingMatchesFilters/);
   assert.match(offersPage, /sortListings/);
+  assert.match(pagePrimitives, /listing-factor-codes/);
+  assert.match(pagePrimitives, /Next step:/);
+  assert.match(globalCss, /listing-factor-codes/);
+  assert.match(globalCss, /listing-next-step/);
   assert.match(appDataSource, /offerMatchesSearchQuery/);
   assert.equal(animalResults[0]?.href, "/offers?search=Animal%20Welfare");
   assert.equal(filterSiteSearchItems("pledge swap")[0]?.href, "/pledge-swaps");
@@ -349,6 +358,9 @@ test("home page is a focused marketplace landing page with pilot metrics and mar
   assert.match(homeSource, /Completed agreements/);
   assert.match(homeSource, /IconMark/);
   assert.match(homeSource, /OfferCard/);
+  assert.match(homeSource, /getOfferReviewCardInstrumentation/);
+  assert.match(homeSource, /reviewFactorCodes/);
+  assert.match(homeSource, /reviewNextStep/);
   assert.equal(homeSource.includes("opening-sequence"), false);
   assert.equal(homeSource.includes("OfferComposer"), false);
   assert.equal(homeSource.includes("ParetoChart"), false);
@@ -742,6 +754,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const copilotContractRoute = readRepoFile("src/app/api/moral-trade/copilot/contract/route.ts");
   const copilotReviewRoute = readRepoFile("src/app/api/moral-trade/copilot/review/route.ts");
+  const reviewWorkflowContractRoute = readRepoFile(
+    "src/app/api/moral-trade/review-workflow/contract/route.ts",
+  );
+  const reviewWorkflowEvaluateRoute = readRepoFile(
+    "src/app/api/moral-trade/review-workflow/evaluate/route.ts",
+  );
   const operationsHealthRoute = readRepoFile("src/app/api/moral-trade/operations/health/route.ts");
   const securityHealthRoute = readRepoFile("src/app/api/moral-trade/security/health/route.ts");
   const evaluationHealthRoute = readRepoFile("src/app/api/moral-trade/evaluation/health/route.ts");
@@ -771,6 +789,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(protocolSource, /REQUIRED_GUARDRAILS/);
   assert.match(proposalReviewSource, /assessPrivacyRedaction/);
   assert.match(proposalReviewSource, /contact_email_in_public_draft/);
+  assert.match(proposalReviewSource, /getOfferReviewWorkflowContract/);
+  assert.match(proposalReviewSource, /validateOfferReviewWorkflowContract/);
+  assert.match(proposalReviewSource, /MARKETPLACE_REVIEW_FACTOR_PRIORITY/);
+  assert.match(proposalReviewSource, /technical_spec_review_workflow_smoke/);
   assert.match(protocolSource, /validateMoralTradeProtocolProfile/);
   assert.match(protocolSource, /validateMoralTradeProposalStateTransition/);
   assert.match(protocolProfile, /anti_threat_baseline/);
@@ -898,6 +920,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiGovernanceProfile, /no_undocumented_ml_gate/);
   assert.match(apiContractSource, /validateMoralTradeApiContractProfile/);
   assert.match(apiContractSource, /moral_trade_copilot_review/);
+  assert.match(apiContractSource, /moral_trade_review_workflow_contract/);
+  assert.match(apiContractSource, /moral_trade_review_workflow_evaluate/);
+  assert.match(apiContractSource, /review-workflow-evaluate-nonmutating/);
   assert.match(apiContractSource, /moral_trade_security_health/);
   assert.match(apiContractSource, /moral_trade_performance_health/);
   assert.match(apiContractSource, /moral_trade_externality_health/);
@@ -906,6 +931,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /profile_export/);
   assert.match(apiContractProfile, /copilot_review_request/);
   assert.match(apiContractProfile, /copilot_review_response/);
+  assert.match(apiContractProfile, /review_workflow_contract_response/);
+  assert.match(apiContractProfile, /review_workflow_evaluate_request/);
+  assert.match(apiContractProfile, /review_workflow_evaluate_response/);
+  assert.match(apiContractProfile, /deterministic_review_workflow_only/);
+  assert.match(apiContractProfile, /marketplace cards must not invent factor codes/);
+  assert.match(apiContractProfile, /Review workflow card contract validator result/);
+  assert.match(apiContractProfile, /never store submitted review input/);
   assert.match(apiContractProfile, /fixed verification loop/);
   assert.match(apiContractProfile, /ephemeral_private_draft_review/);
   assert.match(apiContractProfile, /copilot_draft_review/);
@@ -938,6 +970,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Copilot contract/);
   assert.match(technicalSpecPage, /schema-bound and reversible/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/copilot\/contract/);
+  assert.match(technicalSpecPage, /Review workflow contract/);
+  assert.match(technicalSpecPage, /Marketplace cards and detail pages share one factor-code source/);
+  assert.match(technicalSpecPage, /reviewWorkflowContract\.marketplaceFactorPriority/);
+  assert.match(technicalSpecPage, /\/api\/moral-trade\/review-workflow\/contract/);
+  assert.match(technicalSpecPage, /POST \/api\/moral-trade\/review-workflow\/evaluate/);
+  assert.match(technicalSpecPage, /stateMutation false/);
   assert.match(technicalSpecPage, /Operations contract/);
   assert.match(technicalSpecPage, /Security, rate limits, metrics, and fallbacks are inspectable/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/operations\/health/);
@@ -981,6 +1019,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /provenanceObjectSchemas/);
   assert.match(healthRoute, /copilotValidation/);
   assert.match(healthRoute, /copilotOutputSections/);
+  assert.match(healthRoute, /reviewWorkflowValidation/);
+  assert.match(healthRoute, /reviewWorkflowCardKeys/);
+  assert.match(healthRoute, /reviewWorkflowMarketplaceFactorPriority/);
   assert.match(healthRoute, /operationsValidation/);
   assert.match(healthRoute, /rateLimitSurfaces/);
   assert.match(healthRoute, /securityValidation/);
@@ -1007,6 +1048,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotReviewRoute, /deterministic_draft_review_only/);
   assert.match(copilotReviewRoute, /stateMutation/);
   assert.match(copilotReviewRoute, /private, no-store/);
+  assert.match(reviewWorkflowContractRoute, /validateOfferReviewWorkflowContract/);
+  assert.match(reviewWorkflowContractRoute, /detailWorkflowCards/);
+  assert.match(reviewWorkflowContractRoute, /marketplaceFactorPriority/);
+  assert.match(reviewWorkflowEvaluateRoute, /getOfferReviewWorkflowCards/);
+  assert.match(reviewWorkflowEvaluateRoute, /getOfferReviewCardInstrumentation/);
+  assert.match(reviewWorkflowEvaluateRoute, /stateMutation: false/);
+  assert.match(reviewWorkflowEvaluateRoute, /private, no-store/);
   assert.match(operationsHealthRoute, /validateMoralTradeOperationsProfile/);
   assert.match(operationsHealthRoute, /resilienceFallbackTests/);
   assert.match(securityHealthRoute, /validateMoralTradeSecurityProfile/);

@@ -15,6 +15,7 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_security_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_copilot_review"));
+  assert.ok(profile.routes.some((route) => route.key === "moral_trade_review_workflow_evaluate"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_performance_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_externality_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_ai_governance_health"));
@@ -27,6 +28,8 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_import_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "copilot_review_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "copilot_review_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "security_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "performance_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "externality_health_response"));
@@ -81,6 +84,10 @@ test("api contract validation fails when private or sparse-preview protections a
         return { ...route, cacheControl: "public_cache", fallback: "Return generated output." };
       }
 
+      if (route.key === "moral_trade_review_workflow_evaluate") {
+        return { ...route, cacheControl: "public_cache", fallback: "Publish evaluated workflow." };
+      }
+
       return route;
     }),
   };
@@ -90,6 +97,11 @@ test("api contract validation fails when private or sparse-preview protections a
   assert.ok(validation.blockers.some((blocker) => blocker.includes("private-cache-controls")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("privacy-thresholded-search")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("copilot-review-nonmutating")));
+  assert.ok(
+    validation.blockers.some((blocker) =>
+      blocker.includes("review-workflow-evaluate-nonmutating"),
+    ),
+  );
 });
 
 test("api contract validation fails when route-referenced schema fields are missing", () => {

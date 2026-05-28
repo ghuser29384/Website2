@@ -4,10 +4,13 @@ import test from "node:test";
 import {
   evaluateMoralTradeProtocolDraft,
   formatProtocolReviewStatus,
+  getOfferReviewCardInstrumentation,
+  getOfferReviewWorkflowContract,
   getOfferReviewWorkflowCards,
   MORAL_TRADE_VERIFICATION_LOOP_STEPS,
   PROHIBITED_MORAL_TRADE_PATTERNS,
   PROHIBITED_PROPOSAL_FIXTURES,
+  validateOfferReviewWorkflowContract,
 } from "./proposal-review";
 
 test("protocol draft review requests missing required fields without ranking moral value", () => {
@@ -262,4 +265,45 @@ test("offer review workflow cards expose status, factor codes, next steps, and a
       ?.factorCodes.includes("no_global_moral_ranking"),
   );
   assert.match(cards.find((card) => card.key === "appeal_scope")?.summary ?? "", /specific reviewed claim/);
+});
+
+test("offer review card instrumentation exposes prioritized factor codes and next action", () => {
+  const instrumentation = getOfferReviewCardInstrumentation({
+    mode: "offset",
+    verification: "Manual review required",
+    trustLevel: 2,
+    baselineAmountUsd: 1000,
+    baselineOpposedCause: "Gun rights",
+    offeredCause: "Gun rights",
+    requestedCause: "Gun control",
+    currentStatus: "Worked example; manual review required before reliance",
+    offerImpact: 8,
+    minCounterpartyImpact: 7,
+  });
+
+  assert.equal(instrumentation.status, "human_review");
+  assert.equal(instrumentation.label, "Action evidence");
+  assert.deepEqual(instrumentation.factorCodes.slice(0, 4), [
+    "human_review_required",
+    "evidence_rule_named",
+    "baseline_credibility",
+    "externality_review_required",
+  ]);
+  assert.ok(instrumentation.factorCodes.includes("no_global_moral_ranking"));
+  assert.match(instrumentation.nextStep, /scoped artifact/);
+});
+
+test("offer review workflow contract validates public card and marketplace instrumentation", () => {
+  const contract = getOfferReviewWorkflowContract();
+  const validation = validateOfferReviewWorkflowContract(contract);
+
+  assert.equal(validation.status, "pass");
+  assert.equal(contract.detailWorkflowCards.length, 6);
+  assert.ok(contract.detailWorkflowCards.some((card) => card.key === "action_evidence"));
+  assert.ok(contract.detailWorkflowCards.some((card) => card.key === "baseline_confidence"));
+  assert.ok(contract.detailWorkflowCards.some((card) => card.key === "externality_review"));
+  assert.ok(contract.marketplaceFactorPriority.includes("no_global_moral_ranking"));
+  assert.ok(contract.invariants.some((entry) => /Marketplace cards/.test(entry)));
+  assert.ok(contract.sampleMarketplaceCard.factorCodes.length <= 5);
+  assert.ok(contract.contractTests.includes("technical_spec_review_workflow_smoke"));
 });

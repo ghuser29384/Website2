@@ -17,6 +17,7 @@ import {
   getActionEvidenceSummary,
   getBaselineConfidence,
   getExternalityReviewSummary,
+  getOfferReviewCardInstrumentation,
   getScoreConfidence,
 } from "@/lib/proposal-review";
 
@@ -271,42 +272,52 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             </p>
           </div>
           <div className="listing-grid compact-listing-grid">
-            {featuredExamples.map((offer) => (
-              <OfferCard
-                alias={offer.alias}
-                causeExchange={`${offer.offeredCause} -> ${offer.requestedCause}`}
-                ctaHref={`/offers/examples/${offer.id}`}
-                duration={offer.duration}
-                evidence={offer.verification}
-                key={offer.id}
-                actionEvidence={getActionEvidenceSummary(offer)}
-                baselineConfidence={getBaselineConfidence(offer)}
-                externalityReview={getExternalityReviewSummary(offer)}
-                modeIcon={getOfferModeIcon(offer.mode)}
-                modeLabel={formatMode(offer.mode)}
-                offeredAction={offer.offerAction}
-                offeredScore={offer.offerImpact}
-                primaryActionLabel="View example"
-                requestedAction={offer.requestAction}
-                requestedThreshold={offer.minCounterpartyImpact}
-                reviewState="Worked example. Manual review required before reliance."
-                scoreConfidence={getScoreConfidence(offer)}
-                secondaryAction={
-                  <Link
-                    className="button button-secondary button-mini"
-                    href={
-                      isAuthenticated
-                        ? `/offers/new?mode=${offer.mode}&example=${offer.id}`
-                        : `/signup?returnTo=${encodeURIComponent(`/offers/new?mode=${offer.mode}&example=${offer.id}`)}`
-                    }
-                  >
-                    Create similar
-                  </Link>
-                }
-                sourceLabel="Worked example"
-                title={`${offer.offeredCause} for ${offer.requestedCause}`}
-              />
-            ))}
+            {featuredExamples.map((offer) => {
+              const reviewInstrumentation = getOfferReviewCardInstrumentation({
+                ...offer,
+                currentStatus: "Worked example; manual review required before reliance",
+                minCounterpartyImpact: offer.minCounterpartyImpact,
+              });
+
+              return (
+                <OfferCard
+                  alias={offer.alias}
+                  causeExchange={`${offer.offeredCause} -> ${offer.requestedCause}`}
+                  ctaHref={`/offers/examples/${offer.id}`}
+                  duration={offer.duration}
+                  evidence={offer.verification}
+                  key={offer.id}
+                  actionEvidence={getActionEvidenceSummary(offer)}
+                  baselineConfidence={getBaselineConfidence(offer)}
+                  externalityReview={getExternalityReviewSummary(offer)}
+                  modeIcon={getOfferModeIcon(offer.mode)}
+                  modeLabel={formatMode(offer.mode)}
+                  offeredAction={offer.offerAction}
+                  offeredScore={offer.offerImpact}
+                  primaryActionLabel="View example"
+                  requestedAction={offer.requestAction}
+                  requestedThreshold={offer.minCounterpartyImpact}
+                  reviewFactorCodes={reviewInstrumentation.factorCodes}
+                  reviewNextStep={reviewInstrumentation.nextStep}
+                  reviewState="Worked example. Manual review required before reliance."
+                  scoreConfidence={getScoreConfidence(offer)}
+                  secondaryAction={
+                    <Link
+                      className="button button-secondary button-mini"
+                      href={
+                        isAuthenticated
+                          ? `/offers/new?mode=${offer.mode}&example=${offer.id}`
+                          : `/signup?returnTo=${encodeURIComponent(`/offers/new?mode=${offer.mode}&example=${offer.id}`)}`
+                      }
+                    >
+                      Create similar
+                    </Link>
+                  }
+                  sourceLabel="Worked example"
+                  title={`${offer.offeredCause} for ${offer.requestedCause}`}
+                />
+              );
+            })}
           </div>
           <div className="section-actions">
             <Link className="button button-primary" href="/offers?view=examples">

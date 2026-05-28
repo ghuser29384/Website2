@@ -403,6 +403,8 @@ interface OfferCardProps {
   primaryActionLabel?: string;
   requestedAction: string;
   requestedThreshold?: number;
+  reviewFactorCodes?: readonly string[];
+  reviewNextStep?: string;
   reviewState: string;
   scoreConfidence?: string;
   secondaryAction?: ReactNode;
@@ -427,6 +429,8 @@ export function OfferCard({
   primaryActionLabel = "Inspect terms",
   requestedAction,
   requestedThreshold,
+  reviewFactorCodes,
+  reviewNextStep,
   reviewState,
   scoreConfidence,
   secondaryAction,
@@ -504,6 +508,21 @@ export function OfferCard({
             </div>
           ) : null}
         </div>
+      ) : null}
+      {reviewFactorCodes?.length ? (
+        <div className="listing-factor-codes" aria-label="Review factor codes">
+          <strong>Factor codes</strong>
+          <div>
+            {reviewFactorCodes.map((code) => (
+              <span key={code}>{code}</span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {reviewNextStep ? (
+        <p className="listing-next-step">
+          <strong>Next step:</strong> {reviewNextStep}
+        </p>
       ) : null}
       <p className="review-state">{reviewState}</p>
       <div className="offer-card-actions">

@@ -60,6 +60,8 @@ const REQUIRED_ROUTES = [
   "moral_trade_provenance_schema",
   "moral_trade_copilot_contract",
   "moral_trade_copilot_review",
+  "moral_trade_review_workflow_contract",
+  "moral_trade_review_workflow_evaluate",
   "moral_trade_operations_health",
   "moral_trade_security_health",
   "moral_trade_evaluation_health",
@@ -121,6 +123,9 @@ export function validateMoralTradeApiContractProfile(
   );
   const draftReviewRoutes = profile.routes.filter(
     (route) => route.privacyClass === "ephemeral_private_draft_review",
+  );
+  const reviewWorkflowEvaluateRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_review_workflow_evaluate",
   );
   const analyticsRoutes = profile.routes.filter((route) => route.privacyClass === "redacted_analytics");
   const funnelEventSchema = profile.schemaDefinitions.find(
@@ -200,6 +205,19 @@ export function validateMoralTradeApiContractProfile(
           /never store|without changing proposal state|change proposal state/i.test(route.fallback),
       ),
       draftReviewRoutes.map((route) => `${route.key}:${route.cacheControl}`).join(", "),
+    ),
+    check(
+      "review-workflow-evaluate-nonmutating",
+      "Review workflow evaluation is ephemeral and non-mutating",
+      reviewWorkflowEvaluateRoute?.method === "POST" &&
+        reviewWorkflowEvaluateRoute.cacheControl === "private_no_store" &&
+        reviewWorkflowEvaluateRoute.rateLimitSurface === "review_workflow_evaluate" &&
+        /without changing proposal state|never store|state/i.test(
+          reviewWorkflowEvaluateRoute.fallback,
+        ),
+      reviewWorkflowEvaluateRoute
+        ? `${reviewWorkflowEvaluateRoute.key}:${reviewWorkflowEvaluateRoute.cacheControl}:${reviewWorkflowEvaluateRoute.rateLimitSurface}`
+        : "missing",
     ),
     check(
       "analytics-redaction",

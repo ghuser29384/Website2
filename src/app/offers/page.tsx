@@ -18,6 +18,7 @@ import {
   getActionEvidenceSummary,
   getBaselineConfidence,
   getExternalityReviewSummary,
+  getOfferReviewCardInstrumentation,
   getScoreConfidence,
   getWorkedExampleLaunchOrder,
 } from "@/lib/proposal-review";
@@ -128,6 +129,8 @@ interface MarketplaceListing {
   requestedCause: string;
   verification: string;
   duration: string;
+  reviewFactorCodes: string[];
+  reviewNextStep: string;
   reviewState: string;
   offerImpact: number;
   requestedImpact: number;
@@ -216,6 +219,11 @@ function formatListingMode(mode: MarketplaceListing["mode"]) {
 
 function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]): MarketplaceListing {
   const baselineConfidence = getBaselineConfidence(offer);
+  const reviewInstrumentation = getOfferReviewCardInstrumentation({
+    ...offer,
+    currentStatus: "Worked example; manual review required before reliance",
+    minCounterpartyImpact: offer.minCounterpartyImpact,
+  });
 
   return {
     actionEvidence: getActionEvidenceSummary(offer),
@@ -234,6 +242,8 @@ function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number
     requestedCause: offer.requestedCause,
     requestedImpact: offer.minCounterpartyImpact,
     requesting: offer.requestAction,
+    reviewFactorCodes: reviewInstrumentation.factorCodes,
+    reviewNextStep: reviewInstrumentation.nextStep,
     reviewState: "Worked example; manual review required before reliance",
     scoreConfidence: getScoreConfidence(offer),
     source: "example",
@@ -256,6 +266,12 @@ function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
     requestedCause: offer.requested_cause,
   };
   const baselineConfidence = getBaselineConfidence(reviewInput);
+  const reviewInstrumentation = getOfferReviewCardInstrumentation({
+    ...reviewInput,
+    currentStatus: "Live offer; evidence and baseline review required before reliance",
+    offerImpact: offer.offer_impact,
+    minCounterpartyImpact: offer.min_counterparty_impact,
+  });
 
   return {
     actionEvidence: getActionEvidenceSummary(reviewInput),
@@ -274,6 +290,8 @@ function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
     requestedCause: offer.requested_cause,
     requestedImpact: offer.min_counterparty_impact,
     requesting: offer.request_action,
+    reviewFactorCodes: reviewInstrumentation.factorCodes,
+    reviewNextStep: reviewInstrumentation.nextStep,
     reviewState: "Live offer; evidence and baseline review required before reliance",
     scoreConfidence: getScoreConfidence(reviewInput),
     source: "live",
@@ -1224,6 +1242,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                             primaryActionLabel="View details"
                             requestedAction={listing.requesting}
                             requestedThreshold={listing.requestedImpact}
+                            reviewFactorCodes={listing.reviewFactorCodes}
+                            reviewNextStep={listing.reviewNextStep}
                             reviewState={listing.reviewState}
                             scoreConfidence={listing.scoreConfidence}
                             secondaryAction={
@@ -1294,6 +1314,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                               primaryActionLabel="View details"
                               requestedAction={listing.requesting}
                               requestedThreshold={listing.requestedImpact}
+                              reviewFactorCodes={listing.reviewFactorCodes}
+                              reviewNextStep={listing.reviewNextStep}
                               reviewState={listing.reviewState}
                               scoreConfidence={listing.scoreConfidence}
                               secondaryAction={

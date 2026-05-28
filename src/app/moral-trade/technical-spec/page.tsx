@@ -10,6 +10,10 @@ import {
   validateMoralTradeCopilotContract,
 } from "@/lib/moral-trade/copilot";
 import {
+  getOfferReviewWorkflowContract,
+  validateOfferReviewWorkflowContract,
+} from "@/lib/proposal-review";
+import {
   getMoralTradeProtocolProfile,
   validateMoralTradeProtocolProfile,
 } from "@/lib/moral-trade/protocol";
@@ -67,6 +71,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const validation = validateMoralTradeProtocolProfile();
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
+  const reviewWorkflowContract = getOfferReviewWorkflowContract();
+  const reviewWorkflowValidation =
+    validateOfferReviewWorkflowContract(reviewWorkflowContract);
   const operationsProfile = getMoralTradeOperationsProfile();
   const operationsValidation = validateMoralTradeOperationsProfile(operationsProfile);
   const securityProfile = getMoralTradeSecurityProfile();
@@ -118,6 +125,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/copilot/contract">
                 View copilot contract
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/review-workflow/contract">
+                View review workflow
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/operations/health">
                 View operations health
@@ -251,6 +261,82 @@ export default async function MoralTradeTechnicalSpecPage() {
                 <p className="detail-kicker">{factor.code}</p>
                 <h3>{factor.label}</h3>
                 <p>{factor.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="review-workflow-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Review workflow contract</p>
+            <h2 id="review-workflow-contract-heading">
+              Marketplace cards and detail pages share one factor-code source.
+            </h2>
+            <p>
+              The report recommends replacing prose-heavy pages with instrumented workflow cards.
+              This contract publishes the card keys, factor-code requirements, next-step rules, and
+              non-ranking invariants used by offer details, worked examples, marketplace listings,
+              and the homepage preview.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Review workflow {reviewWorkflowContract.version}</p>
+              <h3>Status {reviewWorkflowValidation.status}</h3>
+              <p>
+                {reviewWorkflowValidation.checks.length} check(s),{" "}
+                {reviewWorkflowValidation.blockers.length} blocker(s),{" "}
+                {reviewWorkflowContract.detailWorkflowCards.length} card contract(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/review-workflow/contract">
+              Open review workflow JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Marketplace priority</h3>
+              <ul className="clean-list">
+                {reviewWorkflowContract.marketplaceFactorPriority.map((code) => (
+                  <li key={code}>{code}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Invariants</h3>
+              <ul className="clean-list">
+                {reviewWorkflowContract.invariants.slice(0, 4).map((invariant) => (
+                  <li key={invariant}>{invariant}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Contract tests</h3>
+              <ul className="clean-list">
+                {reviewWorkflowContract.contractTests.map((hook) => (
+                  <li key={hook}>{hook.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Evaluation route</h3>
+              <p>
+                POST /api/moral-trade/review-workflow/evaluate returns deterministic workflow
+                cards and marketplace factors with stateMutation false.
+              </p>
+            </article>
+          </div>
+          <div className="data-grid">
+            {reviewWorkflowContract.detailWorkflowCards.map((card) => (
+              <article className="panel data-card" key={card.key}>
+                <p className="detail-kicker">{card.key}</p>
+                <h3>{card.label}</h3>
+                <p>{card.purpose}</p>
+                <ul className="clean-list">
+                  {card.requiredFactorCodes.map((code) => (
+                    <li key={code}>{code}</li>
+                  ))}
+                </ul>
               </article>
             ))}
           </div>
