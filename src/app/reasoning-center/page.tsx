@@ -4,16 +4,11 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
-import { getMoralTradeProvenanceContract } from "@/lib/moral-trade/provenance";
 import {
-  evaluateMoralTradeProtocolDraft,
-  formatProtocolReviewStatus,
-  getOfferReviewCardInstrumentation,
-  getOfferReviewWorkflowContract,
-  type ProtocolReviewStatus,
-} from "@/lib/proposal-review";
+  getMoralTradeReasoningPacketContract,
+  getMoralTradeReasoningPackets,
+} from "@/lib/moral-trade/reasoning-packets";
 import { getAbsoluteUrl } from "@/lib/seo";
-import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -52,75 +47,8 @@ const topics = [
   "Moral uncertainty",
 ] as const;
 
-function getReasoningStatusTone(status: ProtocolReviewStatus) {
-  switch (status) {
-    case "blocked":
-      return "blocked";
-    case "matchable":
-      return "pass";
-    case "needs_human_review":
-      return "human-review";
-    default:
-      return "needs-input";
-  }
-}
-
-function getWorkedCaseBaselineStatement(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number]) {
-  if (offer.mode === "offset" && offer.baselineAmountUsd) {
-    return `Without this trade, ${offer.alias} reports a baseline intention to direct $${offer.baselineAmountUsd.toLocaleString()} toward ${offer.baselineOpposedCause}.`;
-  }
-
-  return `Without this trade, ${offer.alias} would not expect this reciprocal ${offer.mode} to happen during ${offer.duration}.`;
-}
-
-function getReasoningReviewRecords() {
-  return CANONICAL_WORKED_CASE_OFFERS.slice(0, 5).map((offer, index) => {
-    const protocolReview = evaluateMoralTradeProtocolDraft({
-      format: offer.mode,
-      offeredCause: offer.offeredCause,
-      requestedCause: offer.requestedCause,
-      offeredAction: offer.offerAction,
-      requestedAction: offer.requestAction,
-      baselineStatement: getWorkedCaseBaselineStatement(offer),
-      duration: offer.duration,
-      exitConditions:
-        "If evidence is missing, disputed, stale, or outside the agreed scope, this worked example stays unresolved until a reviewer records a scoped decision.",
-      verificationMethod: offer.verification,
-      publicDescription: offer.notes,
-      evidenceUrl: offer.evidenceUrl,
-      participantImportance: offer.offerImpact,
-      counterpartyThreshold: offer.minCounterpartyImpact,
-    });
-    const marketplaceInstrumentation = getOfferReviewCardInstrumentation({
-      ...offer,
-      currentStatus: "Worked example; manual review required before reliance",
-      offerImpact: offer.offerImpact,
-      minCounterpartyImpact: offer.minCounterpartyImpact,
-    });
-    const factorCodes = Array.from(
-      new Set([...marketplaceInstrumentation.factorCodes, ...protocolReview.factorCodes]),
-    ).slice(0, 7);
-
-    return {
-      status: formatProtocolReviewStatus(protocolReview.status),
-      statusTone: getReasoningStatusTone(protocolReview.status),
-      scope: `Worked example ${offer.id}`,
-      title: `${offer.alias}: ${offer.offeredCause} for ${offer.requestedCause}`,
-      factorCodes,
-      summary: protocolReview.summary,
-      nextStep: protocolReview.nextStepChecklist[0] ?? marketplaceInstrumentation.nextStep,
-      evidenceRows: protocolReview.citedEvidenceTable.slice(0, 3),
-      uncertaintyFlags: protocolReview.uncertaintyFlags.slice(0, 4),
-      reviewScope: protocolReview.reviewInstructions.reviewScope.slice(0, 3),
-      href: `/offers/examples/${offer.id}`,
-      rank: index + 1,
-    };
-  });
-}
-
-const reviewRecords = getReasoningReviewRecords();
-const provenanceContract = getMoralTradeProvenanceContract();
-const reviewWorkflowContract = getOfferReviewWorkflowContract();
+const reviewRecords = getMoralTradeReasoningPackets();
+const reasoningPacketContract = getMoralTradeReasoningPacketContract(reviewRecords);
 
 const reviewNotes = [
   {
@@ -232,17 +160,25 @@ export default async function ReasoningCenterPage() {
           <section className="reasoning-contract-strip" aria-label="Published review contracts">
             <article>
               <span>Review workflow</span>
-              <strong>{reviewWorkflowContract.detailWorkflowCards.length} cards</strong>
-              <small>{reviewWorkflowContract.marketplaceFactorPriority.length} marketplace factors</small>
+              <strong>
+                {reasoningPacketContract.linkedContracts.reviewWorkflowCardCount} cards
+              </strong>
+              <small>
+                {reasoningPacketContract.linkedContracts.reviewWorkflowMarketplaceFactorCount} marketplace factors
+              </small>
             </article>
             <article>
               <span>Provenance contract</span>
-              <strong>{provenanceContract.validationRules.length} rules</strong>
-              <small>{provenanceContract.sampleBundleSummary.validationStatus} sample bundle</small>
+              <strong>
+                {reasoningPacketContract.linkedContracts.provenanceValidationRuleCount} rules
+              </strong>
+              <small>
+                {reasoningPacketContract.linkedContracts.provenanceSampleBundleStatus} sample bundle
+              </small>
             </article>
             <article>
-              <span>Public packet source</span>
-              <strong>{reviewRecords.length} worked examples</strong>
+              <span>Packet contract</span>
+              <strong>{reasoningPacketContract.packetCount} worked examples</strong>
               <small>deterministic review output only</small>
             </article>
           </section>
@@ -309,6 +245,7 @@ export default async function ReasoningCenterPage() {
                     <span>{record.scope}</span>
                     <Link href="/moral-trade/technical-spec">Protocol spec</Link>
                     <Link href="/api/moral-trade/review-workflow/contract">Review contract</Link>
+                    <Link href="/api/moral-trade/reasoning/packets">Packet JSON</Link>
                     <Link href="/api/moral-trade/provenance/schema">Provenance schema</Link>
                     <Link href="/reasoning-standards">Evidence standards</Link>
                   </div>
@@ -336,14 +273,14 @@ export default async function ReasoningCenterPage() {
 
           <section className="reasoning-widget">
             <div className="reasoning-widget-head">
-              <h2>Contract rules</h2>
-              <Link href="/api/moral-trade/provenance/schema">JSON</Link>
+              <h2>Packet rules</h2>
+              <Link href="/api/moral-trade/reasoning/packets">JSON</Link>
             </div>
             <ul className="reasoning-contract-rule-list">
-              {provenanceContract.validationRules.slice(0, 5).map((rule) => (
-                <li key={rule.key}>
-                  <strong>{rule.key}</strong>
-                  <span>{rule.label}</span>
+              {reasoningPacketContract.invariants.slice(0, 5).map((invariant, index) => (
+                <li key={invariant}>
+                  <strong>rule {index + 1}</strong>
+                  <span>{invariant}</span>
                 </li>
               ))}
             </ul>

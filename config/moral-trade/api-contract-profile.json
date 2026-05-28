@@ -51,6 +51,30 @@
       "fallback": "Return request or output validation blockers and deterministic manual-review fallback metadata; never store the submitted draft, contact counterparties, or change proposal state."
     },
     {
+      "key": "moral_trade_match_signal_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/match-signal/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "match_signal_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return match-signal contract validation blockers; redacted matching cannot disclose, contact, rely, or change proposal state without human review."
+    },
+    {
+      "key": "moral_trade_match_signal_evaluate",
+      "method": "POST",
+      "path": "/api/moral-trade/match-signal/evaluate",
+      "auth": "optional",
+      "privacyClass": "ephemeral_private_draft_review",
+      "requestSchema": "match_signal_evaluate_request",
+      "responseSchema": "match_signal_evaluate_response",
+      "rateLimitSurface": "match_signal_evaluate",
+      "cacheControl": "private_no_store",
+      "fallback": "Return redacted match-signal blockers and no-state-change fallback metadata; never store submitted redacted profiles, reveal exact wishes, contact counterparties, or rank moral value."
+    },
+    {
       "key": "moral_trade_review_workflow_contract",
       "method": "GET",
       "path": "/api/moral-trade/review-workflow/contract",
@@ -61,6 +85,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return review-workflow validator blockers; marketplace cards must not invent factor codes or imply completion without the public contract."
+    },
+    {
+      "key": "moral_trade_reasoning_packets",
+      "method": "GET",
+      "path": "/api/moral-trade/reasoning/packets",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "reasoning_packets_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return reasoning-packet validator blockers and public worked-example packets; never expose live private offers, hidden reasoning, contact details, or global moral ranking."
     },
     {
       "key": "moral_trade_review_workflow_evaluate",
@@ -215,14 +251,16 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, copilot, operations, evaluation, and API-contract validation response.",
+      "purpose": "Aggregate protocol, copilot, reasoning-packet, operations, evaluation, and API-contract validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Core protocol validator result." },
         { "key": "provenanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Provenance object contract validator result." },
         { "key": "copilotValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Copilot contract validator result." },
+        { "key": "matchSignalValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Redacted match-signal contract validator result." },
         { "key": "reviewWorkflowValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Review workflow card contract validator result." },
+        { "key": "reasoningPacketValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Reasoning Center packet contract validator result." },
         { "key": "operationsValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Operations contract validator result." },
         { "key": "securityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Security posture validator result for headers, sessions, encryption boundaries, keys, MFA gates, and abuse controls." },
         { "key": "evaluationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Evaluation contract validator result." },
@@ -289,6 +327,44 @@
       ]
     },
     {
+      "key": "match_signal_contract_response",
+      "purpose": "Public redacted-profile match-signal input boundary, factor-code set, redaction list, invariants, sample signal, and validator result.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the match-signal contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the contract validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Match signal contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable match-signal purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for input boundaries, redactions, approved factor codes, non-mutating preview, human review, and no private inference." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Required input fields, optional input fields, approved factor codes, redacted fields, invariants, sample signal, and contract tests." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on redacted match previews." }
+      ]
+    },
+    {
+      "key": "match_signal_evaluate_request",
+      "purpose": "Ephemeral redacted-profile pair for deterministic match preview without private inference or live state mutation.",
+      "fields": [
+        { "key": "profilePair", "type": "redacted_profile_pair", "required": true, "privacy": "private_request", "description": "Left and right profiles containing only broad cause areas, trade modes, verification preferences, location sensitivity, privacy stage, privacy constraints, and stated exclusions." }
+      ]
+    },
+    {
+      "key": "match_signal_evaluate_response",
+      "purpose": "Deterministic redacted-profile match signal, validator results, and no-state-change metadata.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private_response", "description": "True only when the contract and signal validators pass." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private_response", "description": "Server time for the deterministic match preview." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Match signal contract version used for the preview." },
+        { "key": "decisioningMode", "type": "string", "required": true, "privacy": "public_contract", "description": "Always redacted_profile_match_preview_only; the route cannot disclose, contact, rely, or change state." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." },
+        { "key": "inputBundleUsed", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Strict local bundle sources used to produce the match signal." },
+        { "key": "profilePair", "type": "redacted_profile_pair", "required": false, "privacy": "private_response", "description": "Normalized redacted profiles returned only to the requester for inspection." },
+        { "key": "signal", "type": "match_signal", "required": false, "privacy": "private_response", "description": "Status, confidence band, factor codes, redacted fields, human review flag, counts, and blockers." },
+        { "key": "signalValidation", "type": "validator_result", "required": false, "privacy": "public_contract", "description": "Validation result for the generated match signal." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "public_contract", "description": "Validation result for the match-signal contract." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "public_contract", "description": "Safe fallback reason for malformed, missing, or incomplete redacted profile requests." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Request, contract, or signal blockers that prevent relying on the preview." }
+      ]
+    },
+    {
       "key": "review_workflow_contract_response",
       "purpose": "Public review-card contract for detail workflow cards, marketplace factor-code cards, next-step rules, and non-ranking invariants.",
       "fields": [
@@ -298,6 +374,20 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for card key coverage, factor-code coverage, marketplace priority, non-ranking, appeal scope, and trust-dimension separation." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Statuses, detail workflow cards, marketplace factor priority, invariants, sample keys, and contract tests." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Review workflow blockers that prevent relying on card instrumentation." }
+      ]
+    },
+    {
+      "key": "reasoning_packets_response",
+      "purpose": "Public validator-backed Reasoning Center packet contract and deterministic worked-example packets.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the reasoning-packet contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the reasoning-packet validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Reasoning packet contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for packet count, field shape, cited evidence rows, uncertainty flags, factor codes, privacy, and linked contracts." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Required packet fields, linked contract versions, invariants, sample packet ids, and contract-test hooks." },
+        { "key": "packets", "type": "reasoning_packet_array", "required": true, "privacy": "public_contract", "description": "Deterministic public worked-example packets with structured summaries, evidence rows, uncertainty flags, reviewer scope, and next steps." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Reasoning-packet blockers that prevent relying on public review explanations." }
       ]
     },
     {
@@ -510,6 +600,8 @@
     "performance_route_contract",
     "externality_route_contract",
     "ai_governance_route_contract",
+    "reasoning_packet_route_contract",
+    "match_signal_route_contract",
     "copilot_review_route_contract",
     "profile_portability_route_contract",
     "wish_registry_rate_limit_contract",

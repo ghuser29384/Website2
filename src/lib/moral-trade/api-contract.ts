@@ -60,7 +60,10 @@ const REQUIRED_ROUTES = [
   "moral_trade_provenance_schema",
   "moral_trade_copilot_contract",
   "moral_trade_copilot_review",
+  "moral_trade_match_signal_contract",
+  "moral_trade_match_signal_evaluate",
   "moral_trade_review_workflow_contract",
+  "moral_trade_reasoning_packets",
   "moral_trade_review_workflow_evaluate",
   "moral_trade_operations_health",
   "moral_trade_security_health",
@@ -130,8 +133,26 @@ export function validateMoralTradeApiContractProfile(
   const draftReviewRoutes = profile.routes.filter(
     (route) => route.privacyClass === "ephemeral_private_draft_review",
   );
+  const matchSignalContractRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_match_signal_contract",
+  );
+  const matchSignalEvaluateRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_match_signal_evaluate",
+  );
+  const matchSignalContractResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "match_signal_contract_response",
+  );
+  const matchSignalEvaluateResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "match_signal_evaluate_response",
+  );
   const reviewWorkflowEvaluateRoute = profile.routes.find(
     (route) => route.key === "moral_trade_review_workflow_evaluate",
+  );
+  const reasoningPacketsRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_reasoning_packets",
+  );
+  const reasoningPacketsResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "reasoning_packets_response",
   );
   const analyticsRoutes = profile.routes.filter((route) => route.privacyClass === "redacted_analytics");
   const funnelEventSchema = profile.schemaDefinitions.find(
@@ -242,6 +263,60 @@ export function validateMoralTradeApiContractProfile(
         ),
       reviewWorkflowEvaluateRoute
         ? `${reviewWorkflowEvaluateRoute.key}:${reviewWorkflowEvaluateRoute.cacheControl}:${reviewWorkflowEvaluateRoute.rateLimitSurface}`
+        : "missing",
+    ),
+    check(
+      "match-signal-routes",
+      "Match signal contract and evaluate routes are validator-backed and non-mutating",
+      matchSignalContractRoute?.method === "GET" &&
+        matchSignalContractRoute.cacheControl === "no_store_dynamic" &&
+        /validation blockers|human review/i.test(matchSignalContractRoute.fallback) &&
+        matchSignalEvaluateRoute?.method === "POST" &&
+        matchSignalEvaluateRoute.cacheControl === "private_no_store" &&
+        matchSignalEvaluateRoute.rateLimitSurface === "match_signal_evaluate" &&
+        /never store|exact wishes|contact counterparties|rank moral value/i.test(
+          matchSignalEvaluateRoute.fallback,
+        ) &&
+        Boolean(
+          matchSignalContractResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          matchSignalEvaluateResponse?.fields.some(
+            (field) => field.key === "stateMutation" && /Always false/i.test(field.description),
+          ),
+        ),
+      matchSignalEvaluateRoute
+        ? `${matchSignalEvaluateRoute.key}:${matchSignalEvaluateRoute.cacheControl}:${matchSignalEvaluateRoute.rateLimitSurface}`
+        : "missing",
+    ),
+    check(
+      "reasoning-packets-validator",
+      "Reasoning packets route is public and validator-backed",
+      reasoningPacketsRoute?.method === "GET" &&
+        reasoningPacketsRoute.cacheControl === "no_store_dynamic" &&
+        reasoningPacketsRoute.privacyClass === "public_contract" &&
+        /validator|private offers|hidden reasoning|global moral ranking/i.test(
+          reasoningPacketsRoute.fallback,
+        ) &&
+        Boolean(
+          reasoningPacketsResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          reasoningPacketsResponse?.fields.some(
+            (field) => field.key === "packets" && field.type === "reasoning_packet_array",
+          ),
+        ) &&
+        Boolean(
+          reasoningPacketsResponse?.fields.some(
+            (field) => field.key === "publicContract" && field.privacy === "public_contract",
+          ),
+        ),
+      reasoningPacketsRoute
+        ? `${reasoningPacketsRoute.key}:${reasoningPacketsRoute.cacheControl}`
         : "missing",
     ),
     check(

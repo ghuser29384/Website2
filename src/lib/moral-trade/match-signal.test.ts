@@ -3,8 +3,11 @@ import test from "node:test";
 
 import {
   evaluateMoralTradeRedactedProfileMatch,
+  getMoralTradeMatchSignalContract,
+  validateMoralTradeMatchSignalContract,
   validateMoralTradeMatchSignal,
   type MoralTradeMatchSignal,
+  type MoralTradeMatchSignalContract,
   type MoralTradeRedactedProfile,
 } from "./match-signal";
 
@@ -157,4 +160,40 @@ test("match signal validation rejects privacy-safe preview without compatible pr
       blocker.includes("privacy_safe_preview: requires compatible privacy stage"),
     ),
   );
+});
+
+test("match signal contract validates the redacted matching boundary", () => {
+  const contract = getMoralTradeMatchSignalContract();
+  const validation = validateMoralTradeMatchSignalContract(contract);
+
+  assert.equal(validation.status, "pass");
+  assert.equal(contract.decisioningMode, "redacted_profile_match_preview_only");
+  assert.equal(contract.stateMutation, false);
+  assert.ok(contract.requiredInputFields.includes("privacyStage"));
+  assert.ok(contract.approvedFactorCodes.includes("cause_area_complementarity"));
+  assert.ok(contract.redactedFields.includes("exact_private_wishes"));
+  assert.ok(contract.redactedFields.includes("ideology_or_psychology_inferences"));
+  assert.ok(contract.contractTests.includes("match_signal_evaluate_route_contract"));
+});
+
+test("match signal contract validation fails if human review and redactions are weakened", () => {
+  const contract: MoralTradeMatchSignalContract = {
+    ...getMoralTradeMatchSignalContract(),
+    redactedFields: ["exact_private_wishes"],
+    invariants: ["Match previews can disclose automatically."],
+    sampleSignal: {
+      ...getMoralTradeMatchSignalContract().sampleSignal,
+      humanReviewRequired: false,
+      redactedFields: [],
+    },
+    contractTests: [],
+  };
+  const validation = validateMoralTradeMatchSignalContract(contract);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("redaction-boundary")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("sample-signal-validation")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("nonmutating-human-review")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("no-private-inference")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("contract-tests")));
 });

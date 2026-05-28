@@ -10,6 +10,10 @@ import {
   validateMoralTradeCopilotContract,
 } from "@/lib/moral-trade/copilot";
 import {
+  getMoralTradeMatchSignalContract,
+  validateMoralTradeMatchSignalContract,
+} from "@/lib/moral-trade/match-signal";
+import {
   getOfferReviewWorkflowContract,
   validateOfferReviewWorkflowContract,
 } from "@/lib/proposal-review";
@@ -21,6 +25,11 @@ import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
+import {
+  getMoralTradeReasoningPacketContract,
+  getMoralTradeReasoningPackets,
+  validateMoralTradeReasoningPacketContract,
+} from "@/lib/moral-trade/reasoning-packets";
 import {
   getMoralTradeOperationsProfile,
   validateMoralTradeOperationsProfile,
@@ -77,9 +86,20 @@ export default async function MoralTradeTechnicalSpecPage() {
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
+  const matchSignalContract = getMoralTradeMatchSignalContract();
+  const matchSignalValidation =
+    validateMoralTradeMatchSignalContract(matchSignalContract);
   const reviewWorkflowContract = getOfferReviewWorkflowContract();
   const reviewWorkflowValidation =
     validateOfferReviewWorkflowContract(reviewWorkflowContract);
+  const reasoningPackets = getMoralTradeReasoningPackets();
+  const reasoningPacketContract =
+    getMoralTradeReasoningPacketContract(reasoningPackets);
+  const reasoningPacketValidation =
+    validateMoralTradeReasoningPacketContract(
+      reasoningPacketContract,
+      reasoningPackets,
+    );
   const operationsProfile = getMoralTradeOperationsProfile();
   const operationsValidation = validateMoralTradeOperationsProfile(operationsProfile);
   const securityProfile = getMoralTradeSecurityProfile();
@@ -132,8 +152,14 @@ export default async function MoralTradeTechnicalSpecPage() {
               <Link className="button button-secondary" href="/api/moral-trade/copilot/contract">
                 View copilot contract
               </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/match-signal/contract">
+                View match contract
+              </Link>
               <Link className="button button-secondary" href="/api/moral-trade/review-workflow/contract">
                 View review workflow
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/reasoning/packets">
+                View reasoning packets
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/operations/health">
                 View operations health
@@ -272,6 +298,77 @@ export default async function MoralTradeTechnicalSpecPage() {
           </div>
         </section>
 
+        <section className="section section-white" aria-labelledby="match-signal-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Match signal contract</p>
+            <h2 id="match-signal-contract-heading">
+              Redacted profile matching is preview-only and human-reviewed.
+            </h2>
+            <p>
+              The matching contract uses only broad cause areas, trade modes, verification
+              preferences, location sensitivity, privacy stage, and stated exclusions. It never
+              infers hidden preferences or authorizes disclosure, contact, reliance, or state
+              changes.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Match signal {matchSignalContract.version}</p>
+              <h3>Status {matchSignalValidation.status}</h3>
+              <p>
+                {matchSignalValidation.checks.length} check(s),{" "}
+                {matchSignalValidation.blockers.length} blocker(s),{" "}
+                {matchSignalContract.approvedFactorCodes.length} factor code(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/match-signal/contract">
+              Open match contract JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Input boundary</h3>
+              <ul className="clean-list">
+                {matchSignalContract.requiredInputFields.map((field) => (
+                  <li key={field}>{field}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Redacted fields</h3>
+              <ul className="clean-list">
+                {matchSignalContract.redactedFields.map((field) => (
+                  <li key={field}>{field}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Evaluation route</h3>
+              <p>
+                POST /api/moral-trade/match-signal/evaluate returns redacted factor codes,
+                blockers, confidence band, redacted fields, and humanReviewRequired with
+                stateMutation false.
+              </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Contract tests</h3>
+              <ul className="clean-list">
+                {matchSignalContract.contractTests.map((hook) => (
+                  <li key={hook}>{hook.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="data-grid">
+            {matchSignalContract.invariants.map((invariant) => (
+              <article className="panel data-card" key={invariant}>
+                <p className="detail-kicker">Match invariant</p>
+                <p>{invariant}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
         <section className="section section-subtle" aria-labelledby="review-workflow-contract-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Review workflow contract</p>
@@ -343,6 +440,80 @@ export default async function MoralTradeTechnicalSpecPage() {
                     <li key={code}>{code}</li>
                   ))}
                 </ul>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="reasoning-packet-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Reasoning packet contract</p>
+            <h2 id="reasoning-packet-contract-heading">
+              The Reasoning Center publishes structured packets, not hidden reasoning.
+            </h2>
+            <p>
+              Public packets are derived from canonical worked examples and expose only structured
+              summaries, cited evidence rows, uncertainty flags, reviewer scope, factor codes, and
+              the next human-controlled step. The packet route is validator-backed and does not
+              export live private offers.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Reasoning packets {reasoningPacketContract.version}
+              </p>
+              <h3>Status {reasoningPacketValidation.status}</h3>
+              <p>
+                {reasoningPacketValidation.checks.length} check(s),{" "}
+                {reasoningPacketValidation.blockers.length} blocker(s),{" "}
+                {reasoningPacketContract.packetCount} public packet(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/reasoning/packets">
+              Open packet JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Required packet fields</h3>
+              <ul className="clean-list">
+                {reasoningPacketContract.requiredPacketFields.slice(0, 8).map((field) => (
+                  <li key={field}>{field}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Linked contracts</h3>
+              <ul className="clean-list">
+                <li>
+                  Review workflow:{" "}
+                  {reasoningPacketContract.linkedContracts.reviewWorkflowContractVersion}
+                </li>
+                <li>
+                  Provenance:{" "}
+                  {reasoningPacketContract.linkedContracts.provenanceSchemaVersion}
+                </li>
+                <li>
+                  Provenance sample:{" "}
+                  {reasoningPacketContract.linkedContracts.provenanceSampleBundleStatus}
+                </li>
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Contract tests</h3>
+              <ul className="clean-list">
+                {reasoningPacketContract.contractTests.map((hook) => (
+                  <li key={hook}>{hook.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="data-grid">
+            {reasoningPacketContract.invariants.map((invariant) => (
+              <article className="panel data-card" key={invariant}>
+                <p className="detail-kicker">Packet invariant</p>
+                <p>{invariant}</p>
               </article>
             ))}
           </div>

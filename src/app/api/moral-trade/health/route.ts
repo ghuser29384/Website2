@@ -9,6 +9,11 @@ import {
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
 import {
+  getMoralTradeReasoningPacketContract,
+  getMoralTradeReasoningPackets,
+  validateMoralTradeReasoningPacketContract,
+} from "@/lib/moral-trade/reasoning-packets";
+import {
   getMoralTradeOperationsProfile,
   validateMoralTradeOperationsProfile,
 } from "@/lib/moral-trade/operations";
@@ -37,6 +42,10 @@ import {
   validateMoralTradeAiGovernanceProfile,
 } from "@/lib/moral-trade/ai-governance";
 import {
+  getMoralTradeMatchSignalContract,
+  validateMoralTradeMatchSignalContract,
+} from "@/lib/moral-trade/match-signal";
+import {
   getMoralTradeCopilotContract,
   validateMoralTradeCopilotContract,
 } from "@/lib/moral-trade/copilot";
@@ -54,9 +63,20 @@ export async function GET() {
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
+  const matchSignalContract = getMoralTradeMatchSignalContract();
+  const matchSignalValidation =
+    validateMoralTradeMatchSignalContract(matchSignalContract);
   const reviewWorkflowContract = getOfferReviewWorkflowContract();
   const reviewWorkflowValidation =
     validateOfferReviewWorkflowContract(reviewWorkflowContract);
+  const reasoningPackets = getMoralTradeReasoningPackets();
+  const reasoningPacketContract =
+    getMoralTradeReasoningPacketContract(reasoningPackets);
+  const reasoningPacketValidation =
+    validateMoralTradeReasoningPacketContract(
+      reasoningPacketContract,
+      reasoningPackets,
+    );
   const operationsProfile = getMoralTradeOperationsProfile();
   const operationsValidation = validateMoralTradeOperationsProfile(operationsProfile);
   const securityProfile = getMoralTradeSecurityProfile();
@@ -77,7 +97,9 @@ export async function GET() {
       validation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
+      matchSignalValidation.status === "pass" &&
       reviewWorkflowValidation.status === "pass" &&
+      reasoningPacketValidation.status === "pass" &&
       operationsValidation.status === "pass" &&
       securityValidation.status === "pass" &&
       evaluationValidation.status === "pass" &&
@@ -91,7 +113,9 @@ export async function GET() {
     validation,
     provenanceValidation,
     copilotValidation,
+    matchSignalValidation,
     reviewWorkflowValidation,
+    reasoningPacketValidation,
     operationsValidation,
     securityValidation,
     evaluationValidation,
@@ -121,11 +145,24 @@ export async function GET() {
       copilotInputBundle: copilotContract.strictInputBundle,
       copilotOutputSections: copilotContract.approvedOutputSections,
       copilotVerificationSteps: copilotContract.verificationLoop.map((step) => step.key),
+      matchSignalContractVersion: matchSignalContract.version,
+      matchSignalDecisioningMode: matchSignalContract.decisioningMode,
+      matchSignalStateMutation: matchSignalContract.stateMutation,
+      matchSignalRequiredInputFields: matchSignalContract.requiredInputFields,
+      matchSignalFactorCodes: matchSignalContract.approvedFactorCodes,
+      matchSignalRedactedFields: matchSignalContract.redactedFields,
+      matchSignalContractTests: matchSignalContract.contractTests,
       reviewWorkflowContractVersion: reviewWorkflowContract.version,
       reviewWorkflowCardKeys: reviewWorkflowContract.detailWorkflowCards.map((card) => card.key),
       reviewWorkflowMarketplaceFactorPriority:
         reviewWorkflowContract.marketplaceFactorPriority,
       reviewWorkflowContractTests: reviewWorkflowContract.contractTests,
+      reasoningPacketContractVersion: reasoningPacketContract.version,
+      reasoningPacketCount: reasoningPacketContract.packetCount,
+      reasoningPacketRequiredFields:
+        reasoningPacketContract.requiredPacketFields,
+      reasoningPacketLinkedContracts: reasoningPacketContract.linkedContracts,
+      reasoningPacketContractTests: reasoningPacketContract.contractTests,
       operationsProfileVersion: operationsProfile.version,
       securityHeaderCodes: operationsProfile.securityHeaders.map((header) => header.code),
       rateLimitSurfaces: operationsProfile.rateLimitSurfaces.map((surface) => surface.key),
@@ -180,7 +217,9 @@ export async function GET() {
       ...validation.blockers,
       ...provenanceValidation.blockers,
       ...copilotValidation.blockers,
+      ...matchSignalValidation.blockers,
       ...reviewWorkflowValidation.blockers,
+      ...reasoningPacketValidation.blockers,
       ...operationsValidation.blockers,
       ...securityValidation.blockers,
       ...evaluationValidation.blockers,
