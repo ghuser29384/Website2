@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   evaluateMoralTradeProtocolDraft,
   formatProtocolReviewStatus,
+  MORAL_TRADE_VERIFICATION_LOOP_STEPS,
   PROHIBITED_MORAL_TRADE_PATTERNS,
   PROHIBITED_PROPOSAL_FIXTURES,
 } from "./proposal-review";
@@ -29,6 +30,14 @@ test("protocol draft review requests missing required fields without ranking mor
   assert.ok(review.missingRequiredFields.includes("No-trade baseline"));
   assert.ok(review.factorCodes.includes("participant_relative_scores"));
   assert.ok(review.clarificationQuestions.length <= 5);
+  assert.deepEqual(
+    review.verificationLoop.map((step) => step.key),
+    MORAL_TRADE_VERIFICATION_LOOP_STEPS.map((step) => step.key),
+  );
+  assert.equal(
+    review.verificationLoop.find((step) => step.key === "schema_completeness")?.status,
+    "needs_input",
+  );
   assert.ok(review.clarificationQuestions.some((item) => item.field === "Offered action"));
   assert.ok(review.uncertaintyFlags.includes("required_fields_incomplete"));
   assert.ok(review.nextStepChecklist.some((step) => /clarification questions/i.test(step)));
@@ -56,6 +65,14 @@ test("protocol draft review blocks threat-like proposal framing", () => {
   assert.equal(review.status, "blocked");
   assert.ok(review.policyConflicts.includes("anti_threat_baseline"));
   assert.ok(review.factorCodes.includes("human_review_required"));
+  assert.equal(
+    review.verificationLoop.find((step) => step.key === "anti_threat")?.status,
+    "blocked",
+  );
+  assert.equal(
+    review.verificationLoop.find((step) => step.key === "match_explanation")?.status,
+    "blocked",
+  );
   assert.ok(review.uncertaintyFlags.includes("policy_conflict:anti_threat_baseline"));
   assert.ok(review.nextStepChecklist.some((step) => /Do not publish or match/i.test(step)));
   assert.ok(
@@ -121,6 +138,10 @@ test("protocol draft review requires privacy redaction before matchability", () 
 
   assert.equal(review.status, "needs_clarification");
   assert.ok(review.underspecifiedFields.includes("Privacy redaction"));
+  assert.equal(
+    review.verificationLoop.find((step) => step.key === "privacy_redaction")?.status,
+    "needs_input",
+  );
   assert.ok(review.clarificationQuestions.some((item) => item.field === "Privacy redaction"));
   assert.ok(review.uncertaintyFlags.includes("privacy_redaction_low"));
   assert.ok(review.uncertaintyFlags.includes("privacy:contact_email_in_public_draft"));
@@ -182,6 +203,14 @@ test("protocol draft review separates factual trust, baseline confidence, and ex
   assert.equal(review.trustAssessment.factualTrust.rating, "high");
   assert.equal(review.trustAssessment.counterfactualBaseline.rating, "high");
   assert.equal(review.trustAssessment.externalityReview.required, true);
+  assert.equal(
+    review.verificationLoop.find((step) => step.key === "externality_trigger")?.status,
+    "human_review",
+  );
+  assert.equal(
+    review.verificationLoop.find((step) => step.key === "human_review_routing")?.status,
+    "human_review",
+  );
   assert.ok(review.factorCodes.includes("externality_review_required"));
   assert.ok(review.uncertaintyFlags.includes("externality:political_adjacent_case"));
   assert.ok(review.nextStepChecklist.some((step) => /third-party impact/i.test(step)));

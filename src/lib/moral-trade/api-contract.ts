@@ -59,6 +59,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_health",
   "moral_trade_provenance_schema",
   "moral_trade_copilot_contract",
+  "moral_trade_copilot_review",
   "moral_trade_operations_health",
   "moral_trade_security_health",
   "moral_trade_evaluation_health",
@@ -78,6 +79,7 @@ const REQUIRED_PRIVACY_CLASSES = [
   "authenticated_private",
   "privacy_thresholded_public_preview",
   "redacted_analytics",
+  "ephemeral_private_draft_review",
 ] as const;
 
 const EMPTY_SCHEMA_KEYS = new Set(["empty_request", "empty_204_response"]);
@@ -116,6 +118,9 @@ export function validateMoralTradeApiContractProfile(
   const authenticatedRoutes = profile.routes.filter((route) => route.auth === "authenticated");
   const publicPreviewRoutes = profile.routes.filter(
     (route) => route.privacyClass === "privacy_thresholded_public_preview",
+  );
+  const draftReviewRoutes = profile.routes.filter(
+    (route) => route.privacyClass === "ephemeral_private_draft_review",
   );
   const analyticsRoutes = profile.routes.filter((route) => route.privacyClass === "redacted_analytics");
   const funnelEventSchema = profile.schemaDefinitions.find(
@@ -182,6 +187,19 @@ export function validateMoralTradeApiContractProfile(
           /suppress|sparse|broad previews/i.test(route.fallback),
       ),
       publicPreviewRoutes.map((route) => `${route.key}:${route.rateLimitSurface}`).join(", "),
+    ),
+    check(
+      "copilot-review-nonmutating",
+      "Copilot draft review is ephemeral and non-mutating",
+      draftReviewRoutes.some(
+        (route) =>
+          route.key === "moral_trade_copilot_review" &&
+          route.method === "POST" &&
+          route.cacheControl === "private_no_store" &&
+          route.rateLimitSurface === "copilot_draft_review" &&
+          /never store|without changing proposal state|change proposal state/i.test(route.fallback),
+      ),
+      draftReviewRoutes.map((route) => `${route.key}:${route.cacheControl}`).join(", "),
     ),
     check(
       "analytics-redaction",

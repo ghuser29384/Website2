@@ -4,6 +4,7 @@ import {
   evaluateMoralTradeProtocolDraft,
   type MoralTradeProtocolDraftInput,
   type MoralTradeProtocolDraftReview,
+  type MoralTradeVerificationStepStatus,
   type ProtocolReviewStatus,
   type ProtocolTrustRating,
 } from "@/lib/proposal-review";
@@ -111,6 +112,13 @@ export interface MoralTradeCopilotOutput {
     confidence_band: ProtocolTrustRating;
     redactions_applied: string[];
   };
+  verification_loop: Array<{
+    key: string;
+    label: string;
+    status: MoralTradeVerificationStepStatus;
+    detail: string;
+    blocks_matchable: boolean;
+  }>;
   clarification_questions: Array<{
     field: string;
     question: string;
@@ -154,6 +162,7 @@ const REQUIRED_OUTPUT_SECTIONS = [
   "trade_structure",
   "trust_assessment",
   "match_explanation",
+  "verification_loop",
   "clarification_questions",
   "uncertainty_flags",
   "next_step_checklist",
@@ -362,6 +371,13 @@ export function buildMoralTradeCopilotOutput(
       confidence_band: getConfidenceBand(review),
       redactions_applied: copilotContract.redactionsAppliedByDefault,
     },
+    verification_loop: review.verificationLoop.map((step) => ({
+      key: step.key,
+      label: step.label,
+      status: step.status,
+      detail: step.detail,
+      blocks_matchable: step.blocksMatchable,
+    })),
     clarification_questions: review.clarificationQuestions,
     uncertainty_flags: review.uncertaintyFlags,
     next_step_checklist: review.nextStepChecklist,
@@ -399,6 +415,18 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
 
   if (!output.match_explanation.redactions_applied.length) {
     blockers.push("redactions_applied: privacy-safe outputs must name default redactions");
+  }
+
+  if (
+    !hasAll(
+      output.verification_loop.map((step) => step.key),
+      copilotContract.verificationLoop.map((step) => step.key),
+    ) ||
+    output.verification_loop.some(
+      (step) => !step.label || !step.status || !step.detail || typeof step.blocks_matchable !== "boolean",
+    )
+  ) {
+    blockers.push("verification_loop: every fixed verification step needs status and detail");
   }
 
   if (output.clarification_questions.length > 5) {

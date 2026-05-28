@@ -46,6 +46,7 @@
     "trade_structure",
     "trust_assessment",
     "match_explanation",
+    "verification_loop",
     "clarification_questions",
     "uncertainty_flags",
     "next_step_checklist",

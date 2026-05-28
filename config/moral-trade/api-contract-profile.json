@@ -39,6 +39,18 @@
       "fallback": "Return contract validation blockers; invalid copilot output cannot change proposal state."
     },
     {
+      "key": "moral_trade_copilot_review",
+      "method": "POST",
+      "path": "/api/moral-trade/copilot/review",
+      "auth": "optional",
+      "privacyClass": "ephemeral_private_draft_review",
+      "requestSchema": "copilot_review_request",
+      "responseSchema": "copilot_review_response",
+      "rateLimitSurface": "copilot_draft_review",
+      "cacheControl": "private_no_store",
+      "fallback": "Return request or output validation blockers and deterministic manual-review fallback metadata; never store the submitted draft, contact counterparties, or change proposal state."
+    },
+    {
       "key": "moral_trade_operations_health",
       "method": "GET",
       "path": "/api/moral-trade/operations/health",
@@ -219,6 +231,31 @@
       ]
     },
     {
+      "key": "copilot_review_request",
+      "purpose": "Ephemeral schema-bound draft review request for deterministic copilot critique without live state mutation.",
+      "fields": [
+        { "key": "draft", "type": "structured_draft", "required": true, "privacy": "private_request", "description": "Known Moral Trade draft fields only; unknown fields are ignored and the body is not stored." },
+        { "key": "citations", "type": "string_array", "required": false, "privacy": "private_request", "description": "Optional local evidence labels or source pointers returned only to the requester." }
+      ]
+    },
+    {
+      "key": "copilot_review_response",
+      "purpose": "Approved copilot output packet, validation result, and no-state-change fallback metadata.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private_response", "description": "True only when contract and output validators pass." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private_response", "description": "Server time for the deterministic review." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Copilot contract version used for the review." },
+        { "key": "decisioningMode", "type": "string", "required": true, "privacy": "public_contract", "description": "States that the route performs deterministic draft review only." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; the route cannot publish, match, disclose, or change proposal state." },
+        { "key": "inputBundleUsed", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Strict local bundle sources used to produce the review output." },
+        { "key": "output", "type": "moral_trade_copilot_output", "required": false, "privacy": "private_response", "description": "Approved status, completeness, trust assessment, match explanation, fixed verification loop, checklist, evidence table, review instructions, and reviewer summary when the request contains a structured draft." },
+        { "key": "outputValidation", "type": "validator_result", "required": false, "privacy": "public_contract", "description": "Validation result for the generated output packet when one is produced." },
+        { "key": "contractValidation", "type": "validator_result", "required": false, "privacy": "public_contract", "description": "Validation result for the copilot contract itself." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "public_contract", "description": "Safe fallback reason for malformed or missing request bodies." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Request, contract, or output blockers that prevent relying on the packet." }
+      ]
+    },
+    {
       "key": "operations_health_response",
       "purpose": "Security headers, rate-limit surfaces, privacy/session controls, metrics, fallbacks, and rollout gates.",
       "fields": [
@@ -390,6 +427,10 @@
     {
       "key": "redacted_analytics",
       "rule": "Accepts only low-sensitivity event metadata; exact wishes, contact details, and source notes are forbidden."
+    },
+    {
+      "key": "ephemeral_private_draft_review",
+      "rule": "Accepts one requester-supplied structured draft for deterministic critique, returns private no-store output to that requester, and never mutates live proposal state."
     }
   ],
   "apiTests": [
@@ -400,6 +441,7 @@
     "performance_route_contract",
     "externality_route_contract",
     "ai_governance_route_contract",
+    "copilot_review_route_contract",
     "profile_portability_route_contract",
     "wish_registry_rate_limit_contract",
     "analytics_redaction_contract"

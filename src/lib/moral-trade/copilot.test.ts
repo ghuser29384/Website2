@@ -8,6 +8,7 @@ import {
   validateMoralTradeCopilotOutput,
   type MoralTradeCopilotContract,
 } from "./copilot";
+import { POST as reviewDraftRoute } from "../../app/api/moral-trade/copilot/review/route";
 
 const completeDraft = {
   format: "pledge_swap",
@@ -38,6 +39,7 @@ test("copilot contract requires strict bundle, approved output, guardrails, and 
   assert.ok(contract.strictInputBundle.includes("redacted_profile_pair"));
   assert.ok(contract.strictInputBundle.includes("stated_exclusions"));
   assert.ok(contract.approvedOutputSections.includes("review_instructions"));
+  assert.ok(contract.approvedOutputSections.includes("verification_loop"));
   assert.ok(contract.approvedOutputSections.includes("clarification_questions"));
   assert.ok(contract.approvedOutputSections.includes("cited_evidence_table"));
   assert.ok(contract.approvedOutputSections.includes("reviewer_summary"));
@@ -69,6 +71,11 @@ test("copilot output uses approved schema and redacted factor-code explanations"
   assert.deepEqual(output.completeness.policy_conflicts, []);
   assert.ok(output.match_explanation.factor_codes.includes("terms_complete"));
   assert.ok(output.match_explanation.redactions_applied.includes("exact_private_wishes"));
+  assert.equal(output.verification_loop.length, 8);
+  assert.equal(
+    output.verification_loop.find((step) => step.key === "human_review_routing")?.status,
+    "human_review",
+  );
   assert.equal(output.trust_assessment.factual_trust.rating, "medium");
   assert.equal(output.trust_assessment.counterfactual_baseline.rating, "high");
   assert.equal(output.trust_assessment.party_relative_benefit.rating, "high");
@@ -79,6 +86,70 @@ test("copilot output uses approved schema and redacted factor-code explanations"
   assert.match(output.reviewer_summary, /What is being offered/);
   assert.equal(output.reviewer_summary.split(/\s+/).filter(Boolean).length <= 180, true);
   assert.deepEqual(output.citations, ["proposal:local-draft"]);
+});
+
+test("copilot review route returns validated non-mutating draft critique", async () => {
+  const response = await reviewDraftRoute(
+    new Request("http://localhost/api/moral-trade/copilot/review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        draft: completeDraft,
+        citations: ["proposal:route-test"],
+      }),
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(body.ok, true);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.decisioningMode, "deterministic_draft_review_only");
+  assert.equal(body.output.status, "matchable");
+  assert.equal(body.output.verification_loop.length, 8);
+  assert.equal(
+    body.output.verification_loop.find((step: { key: string }) => step.key === "schema_completeness")
+      ?.status,
+    "pass",
+  );
+  assert.ok(body.output.match_explanation.redactions_applied.includes("exact_private_wishes"));
+  assert.deepEqual(body.output.citations, ["proposal:route-test"]);
+  assert.deepEqual(body.blockers, []);
+});
+
+test("copilot review route fails closed on malformed or missing draft input", async () => {
+  const missingDraftResponse = await reviewDraftRoute(
+    new Request("http://localhost/api/moral-trade/copilot/review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ citations: ["proposal:missing-draft"] }),
+    }),
+  );
+  const missingDraftBody = await missingDraftResponse.json();
+
+  assert.equal(missingDraftResponse.status, 400);
+  assert.equal(missingDraftBody.ok, false);
+  assert.equal(missingDraftBody.stateMutation, false);
+  assert.ok(
+    missingDraftBody.blockers.some((blocker: string) =>
+      blocker.includes("structured_draft object is required"),
+    ),
+  );
+
+  const invalidJsonResponse = await reviewDraftRoute(
+    new Request("http://localhost/api/moral-trade/copilot/review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{",
+    }),
+  );
+  const invalidJsonBody = await invalidJsonResponse.json();
+
+  assert.equal(invalidJsonResponse.status, 400);
+  assert.equal(invalidJsonBody.ok, false);
+  assert.equal(invalidJsonBody.stateMutation, false);
+  assert.ok(invalidJsonBody.blockers.includes("invalid_json_body"));
 });
 
 test("copilot output blocks threat-like drafts without making them matchable", () => {
@@ -144,6 +215,9 @@ test("copilot output validation enforces bounded draft-repair packets", () => {
   });
 
   output.clarification_questions = [];
+  output.verification_loop = output.verification_loop.filter(
+    (step) => step.key !== "schema_completeness",
+  );
   output.next_step_checklist = [];
   output.cited_evidence_table = [];
   output.reviewer_summary = Array.from({ length: 181 }, () => "word").join(" ");
@@ -152,6 +226,7 @@ test("copilot output validation enforces bounded draft-repair packets", () => {
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("clarification_questions")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("verification_loop")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("next_step_checklist")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("cited_evidence_table")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("reviewer_summary")));

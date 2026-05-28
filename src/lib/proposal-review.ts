@@ -1,6 +1,11 @@
 export type BaselineConfidence = "Weak" | "Moderate" | "Strong" | "Not assessed";
 export type ScoreConfidence = "Low" | "Medium" | "High";
 export type ProtocolTrustRating = "low" | "medium" | "high";
+export type MoralTradeVerificationStepStatus =
+  | "pass"
+  | "needs_input"
+  | "human_review"
+  | "blocked";
 export type ProtocolReviewStatus =
   | "draft"
   | "needs_clarification"
@@ -54,6 +59,14 @@ export interface MoralTradeCitedEvidenceRow {
   reviewerNote: string;
 }
 
+export interface MoralTradeVerificationLoopStep {
+  key: (typeof MORAL_TRADE_VERIFICATION_LOOP_STEPS)[number]["key"];
+  label: string;
+  status: MoralTradeVerificationStepStatus;
+  detail: string;
+  blocksMatchable: boolean;
+}
+
 export interface MoralTradeProtocolDraftReview {
   status: ProtocolReviewStatus;
   summary: string;
@@ -65,6 +78,7 @@ export interface MoralTradeProtocolDraftReview {
     field: string;
     question: string;
   }>;
+  verificationLoop: MoralTradeVerificationLoopStep[];
   uncertaintyFlags: string[];
   nextStepChecklist: string[];
   citedEvidenceTable: MoralTradeCitedEvidenceRow[];
@@ -130,6 +144,17 @@ const REQUIRED_DRAFT_FIELD_LABELS: Array<{
   { key: "verificationMethod", label: "Verification method" },
   { key: "publicDescription", label: "Public description and boundaries", minLength: 20 },
 ];
+
+export const MORAL_TRADE_VERIFICATION_LOOP_STEPS = [
+  { key: "schema_completeness", label: "Schema completeness check", blocksMatchable: true },
+  { key: "anti_threat", label: "Anti-threat / prohibited-content check", blocksMatchable: true },
+  { key: "baseline_credibility", label: "Baseline credibility check", blocksMatchable: true },
+  { key: "evidence_sufficiency", label: "Evidence sufficiency check", blocksMatchable: true },
+  { key: "externality_trigger", label: "Externality-review trigger check", blocksMatchable: false },
+  { key: "privacy_redaction", label: "Privacy/redaction check", blocksMatchable: true },
+  { key: "match_explanation", label: "Match explanation generation", blocksMatchable: false },
+  { key: "human_review_routing", label: "Human-review routing", blocksMatchable: false },
+] as const;
 
 const THREAT_OR_COERCION_PATTERNS = [
   /\bpay\s+me\b.{0,80}\b(or|otherwise|unless)\b.{0,80}\bi\s+will\b/,
@@ -687,6 +712,119 @@ function getUncertaintyFlags({
   return [...new Set(flags)];
 }
 
+function verificationStep(
+  key: (typeof MORAL_TRADE_VERIFICATION_LOOP_STEPS)[number]["key"],
+  status: MoralTradeVerificationStepStatus,
+  detail: string,
+): MoralTradeVerificationLoopStep {
+  const step = MORAL_TRADE_VERIFICATION_LOOP_STEPS.find((entry) => entry.key === key);
+
+  if (!step) {
+    throw new Error(`Unknown Moral Trade verification step: ${key}`);
+  }
+
+  return {
+    key,
+    label: step.label,
+    status,
+    detail,
+    blocksMatchable: step.blocksMatchable,
+  };
+}
+
+function buildVerificationLoop({
+  counterfactualBaseline,
+  externalityReview,
+  factualTrust,
+  factorCodes,
+  missingRequiredFields,
+  policyConflicts,
+  privacyRedaction,
+  status,
+}: {
+  counterfactualBaseline: { rating: ProtocolTrustRating };
+  externalityReview: { required: boolean; flags: readonly string[] };
+  factualTrust: { rating: ProtocolTrustRating };
+  factorCodes: readonly string[];
+  missingRequiredFields: readonly string[];
+  policyConflicts: readonly string[];
+  privacyRedaction: { rating: ProtocolTrustRating };
+  status: ProtocolReviewStatus;
+}) {
+  return [
+    verificationStep(
+      "schema_completeness",
+      missingRequiredFields.length ? "needs_input" : "pass",
+      missingRequiredFields.length
+        ? `${missingRequiredFields.length} required field(s) need clarification before matching.`
+        : "Required draft fields are present.",
+    ),
+    verificationStep(
+      "anti_threat",
+      policyConflicts.length ? "blocked" : "pass",
+      policyConflicts.length
+        ? `Policy conflict codes: ${policyConflicts.join(", ")}.`
+        : "No deterministic prohibited-pattern conflict was detected.",
+    ),
+    verificationStep(
+      "baseline_credibility",
+      counterfactualBaseline.rating === "low" ? "needs_input" : "pass",
+      counterfactualBaseline.rating === "low"
+        ? "The no-trade baseline needs prior-intent, history, or dated support."
+        : `Baseline credibility preview is ${counterfactualBaseline.rating}.`,
+    ),
+    verificationStep(
+      "evidence_sufficiency",
+      factualTrust.rating === "low" ? "needs_input" : "pass",
+      factualTrust.rating === "low"
+        ? "A scoped receipt, public log, attestation, payment record, or audit trail is still needed."
+        : `Factual evidence readiness is ${factualTrust.rating}.`,
+    ),
+    verificationStep(
+      "externality_trigger",
+      externalityReview.required ? "human_review" : "pass",
+      externalityReview.required
+        ? `Human review is required for: ${externalityReview.flags.join(", ")}.`
+        : "No material externality trigger was detected by the deterministic preview.",
+    ),
+    verificationStep(
+      "privacy_redaction",
+      privacyRedaction.rating === "low" ? "needs_input" : "pass",
+      privacyRedaction.rating === "low"
+        ? "Public fields need redaction before any match preview."
+        : "Public fields pass the deterministic redaction preview.",
+    ),
+    verificationStep(
+      "match_explanation",
+      policyConflicts.length
+        ? "blocked"
+        : factorCodes.length && privacyRedaction.rating === "high"
+          ? "pass"
+          : "needs_input",
+      policyConflicts.length
+        ? "Policy conflicts block any match explanation from authorizing a preview."
+        : factorCodes.length && privacyRedaction.rating === "high"
+          ? "Factor codes and redactions are available for reviewer-facing explanation."
+          : "A privacy-safe factor-code explanation is not ready yet.",
+    ),
+    verificationStep(
+      "human_review_routing",
+      status === "blocked"
+        ? "blocked"
+        : status === "matchable" || status === "needs_human_review"
+          ? "human_review"
+          : "needs_input",
+      status === "blocked"
+        ? "Route to human safety review; do not publish or match."
+        : status === "matchable"
+          ? "Route to human review before reliance, disclosure, or agreement completion."
+          : status === "needs_human_review"
+            ? "Route to human review before matching or reliance."
+            : "Complete the earlier gates before reviewer matchability routing.",
+    ),
+  ];
+}
+
 function getNextStepChecklist({
   missingRequiredFields,
   policyConflicts,
@@ -1015,6 +1153,16 @@ export function evaluateMoralTradeProtocolDraft(
     partyRelativeBenefit,
     privacyRedaction,
   });
+  const verificationLoop = buildVerificationLoop({
+    counterfactualBaseline,
+    externalityReview,
+    factualTrust,
+    factorCodes,
+    missingRequiredFields,
+    policyConflicts,
+    privacyRedaction,
+    status,
+  });
 
   return {
     status,
@@ -1024,6 +1172,7 @@ export function evaluateMoralTradeProtocolDraft(
     policyConflicts,
     factorCodes: [...new Set(factorCodes)],
     clarificationQuestions,
+    verificationLoop,
     uncertaintyFlags,
     nextStepChecklist,
     citedEvidenceTable: buildCitedEvidenceTable({

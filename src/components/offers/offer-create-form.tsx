@@ -37,6 +37,7 @@ import {
 import {
   evaluateMoralTradeProtocolDraft,
   formatProtocolReviewStatus,
+  type MoralTradeVerificationStepStatus,
 } from "@/lib/proposal-review";
 
 interface DonationOffsetPoolOption {
@@ -238,6 +239,19 @@ function readFormControlValue(event: { currentTarget: EventTarget }) {
 
 function formatOfferModeLabel(mode: OfferMode) {
   return OFFER_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? mode;
+}
+
+function formatVerificationStepStatus(status: MoralTradeVerificationStepStatus) {
+  switch (status) {
+    case "blocked":
+      return "Blocked";
+    case "human_review":
+      return "Review";
+    case "needs_input":
+      return "Input";
+    default:
+      return "Pass";
+  }
 }
 
 export function OfferCreateForm({
@@ -781,6 +795,24 @@ export function OfferCreateForm({
             {protocolReview.factorCodes.length} factor code
             {protocolReview.factorCodes.length === 1 ? "" : "s"}
           </span>
+        </div>
+
+        <div>
+          <strong>Fixed verification loop</strong>
+          <ol className="protocol-verification-list">
+            {protocolReview.verificationLoop.map((step) => (
+              <li
+                className={`protocol-verification-step protocol-verification-step-${step.status}`}
+                key={step.key}
+              >
+                <span className="protocol-step-status">
+                  {formatVerificationStepStatus(step.status)}
+                </span>
+                <strong>{step.label}</strong>
+                <small>{step.detail}</small>
+              </li>
+            ))}
+          </ol>
         </div>
 
         <div className="protocol-review-grid">
