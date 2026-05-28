@@ -35,6 +35,20 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
   assert.ok(profile.statusValues.includes("completion_reviewed"));
   assert.ok(profile.statusValues.includes("disputed_unresolved"));
   assert.ok(profile.stateTransitionRules.some((rule) => rule.from === "draft"));
+  assert.ok(
+    profile.stateTransitionRules
+      .filter((rule) => rule.allowedTo.includes("matchable"))
+      .every(
+        (rule) =>
+          rule.requires.includes("policy_screen_before_matchable") &&
+          rule.requires.includes("baseline_credibility_before_matchable") &&
+          rule.requires.includes("evidence_sufficiency_before_matchable") &&
+          rule.requires.includes("externality_trigger_before_matchable") &&
+          rule.requires.includes("privacy_redaction_before_matchable") &&
+          rule.requires.includes("match_explanation_before_matchable") &&
+          rule.requires.includes("human_review_before_matchable"),
+      ),
+  );
 });
 
 const completeProposal = {
@@ -105,11 +119,88 @@ test("proposal state transitions require human review, evidence review, and even
   assert.equal(missingHumanReview.status, "fail");
   assert.ok(missingHumanReview.blockers.includes("human_review_required_before:matchable"));
 
-  const validMatchable = validateMoralTradeProposalStateTransition({
+  const missingMatchableEvidence = validateMoralTradeProposalStateTransition({
     from: "submitted",
     to: "matchable",
     proposal: completeProposal,
     humanReviewApproved: true,
+    provenanceActivityRecorded: true,
+  });
+
+  assert.equal(missingMatchableEvidence.status, "fail");
+  assert.ok(
+    missingMatchableEvidence.blockers.includes("evidence_review_required_before:matchable"),
+  );
+
+  const incompleteMatchableVerificationLoop = validateMoralTradeProposalStateTransition({
+    from: "submitted",
+    to: "matchable",
+    proposal: completeProposal,
+    humanReviewApproved: true,
+    evidenceReviewed: true,
+    provenanceActivityRecorded: true,
+  });
+
+  assert.equal(incompleteMatchableVerificationLoop.status, "fail");
+  assert.ok(
+    incompleteMatchableVerificationLoop.blockers.includes(
+      "policy_screen_required_before:matchable",
+    ),
+  );
+  assert.ok(
+    incompleteMatchableVerificationLoop.blockers.includes(
+      "baseline_credibility_required_before:matchable",
+    ),
+  );
+  assert.ok(
+    incompleteMatchableVerificationLoop.blockers.includes(
+      "externality_trigger_required_before:matchable",
+    ),
+  );
+  assert.ok(
+    incompleteMatchableVerificationLoop.blockers.includes(
+      "privacy_redaction_required_before:matchable",
+    ),
+  );
+  assert.ok(
+    incompleteMatchableVerificationLoop.blockers.includes(
+      "match_explanation_required_before:matchable",
+    ),
+  );
+
+  const policyConflictMatchable = validateMoralTradeProposalStateTransition({
+    from: "submitted",
+    to: "matchable",
+    proposal: completeProposal,
+    baselineCredibilityReviewed: true,
+    evidenceReviewed: true,
+    externalityTriggerReviewed: true,
+    humanReviewApproved: true,
+    matchExplanationGenerated: true,
+    policyConflictCodes: ["anti_threat_baseline"],
+    policyScreenReviewed: true,
+    privacyRedactionReviewed: true,
+    provenanceActivityRecorded: true,
+  });
+
+  assert.equal(policyConflictMatchable.status, "fail");
+  assert.ok(
+    policyConflictMatchable.blockers.includes(
+      "policy_conflicts_block_matchable:anti_threat_baseline",
+    ),
+  );
+
+  const validMatchable = validateMoralTradeProposalStateTransition({
+    from: "submitted",
+    to: "matchable",
+    proposal: completeProposal,
+    baselineCredibilityReviewed: true,
+    humanReviewApproved: true,
+    evidenceReviewed: true,
+    externalityTriggerReviewed: true,
+    matchExplanationGenerated: true,
+    policyScreenReviewed: true,
+    privacyRedactionReviewed: true,
     provenanceActivityRecorded: true,
   });
 

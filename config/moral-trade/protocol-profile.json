@@ -43,7 +43,7 @@
       "key": "submitted_triage",
       "from": "submitted",
       "allowedTo": ["needs_evidence", "needs_human_review", "challenge_window", "matchable", "blocked"],
-      "requires": ["required_fields_before_reliance", "human_review_before_matchable", "transition_event_recorded"],
+      "requires": ["required_fields_before_reliance", "policy_screen_before_matchable", "baseline_credibility_before_matchable", "evidence_sufficiency_before_matchable", "externality_trigger_before_matchable", "privacy_redaction_before_matchable", "match_explanation_before_matchable", "human_review_before_matchable", "transition_event_recorded"],
       "provenanceActivity": "risk_screened"
     },
     {
@@ -57,7 +57,7 @@
       "key": "human_review_routing",
       "from": "needs_human_review",
       "allowedTo": ["needs_evidence", "challenge_window", "matchable", "blocked"],
-      "requires": ["human_review_before_matchable", "transition_event_recorded"],
+      "requires": ["policy_screen_before_matchable", "baseline_credibility_before_matchable", "evidence_sufficiency_before_matchable", "externality_trigger_before_matchable", "privacy_redaction_before_matchable", "match_explanation_before_matchable", "human_review_before_matchable", "transition_event_recorded"],
       "provenanceActivity": "risk_screened"
     },
     {

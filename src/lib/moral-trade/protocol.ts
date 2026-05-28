@@ -32,9 +32,14 @@ export interface MoralTradeProposalStateTransitionInput {
   from: string;
   to: string;
   proposal: Record<string, unknown>;
+  baselineCredibilityReviewed?: boolean;
+  externalityTriggerReviewed?: boolean;
   humanReviewApproved?: boolean;
   evidenceReviewed?: boolean;
+  matchExplanationGenerated?: boolean;
   disputeRecordCreated?: boolean;
+  policyScreenReviewed?: boolean;
+  privacyRedactionReviewed?: boolean;
   provenanceActivityRecorded?: boolean;
   policyConflictCodes?: string[];
 }
@@ -134,6 +139,42 @@ const COMPLETE_PROPOSAL_REQUIRED_STATUSES = [
 ] as const;
 
 const HUMAN_REVIEW_REQUIRED_STATUSES = ["matchable", "completion_reviewed"] as const;
+const MATCHABLE_REVIEW_SOURCE_STATUSES = ["submitted", "needs_human_review"] as const;
+const MATCHABLE_PROFILE_REQUIREMENTS = [
+  "policy_screen_before_matchable",
+  "baseline_credibility_before_matchable",
+  "evidence_sufficiency_before_matchable",
+  "externality_trigger_before_matchable",
+  "privacy_redaction_before_matchable",
+  "match_explanation_before_matchable",
+  "human_review_before_matchable",
+] as const;
+const MATCHABLE_REVIEW_CHECKS = [
+  {
+    inputKey: "policyScreenReviewed",
+    blocker: "policy_screen_required_before:matchable",
+  },
+  {
+    inputKey: "baselineCredibilityReviewed",
+    blocker: "baseline_credibility_required_before:matchable",
+  },
+  {
+    inputKey: "evidenceReviewed",
+    blocker: "evidence_review_required_before:matchable",
+  },
+  {
+    inputKey: "externalityTriggerReviewed",
+    blocker: "externality_trigger_required_before:matchable",
+  },
+  {
+    inputKey: "privacyRedactionReviewed",
+    blocker: "privacy_redaction_required_before:matchable",
+  },
+  {
+    inputKey: "matchExplanationGenerated",
+    blocker: "match_explanation_required_before:matchable",
+  },
+] as const;
 
 function hasAll(values: readonly string[], required: readonly string[]) {
   return required.every((entry) => values.includes(entry));
@@ -224,6 +265,24 @@ export function validateMoralTradeProposalStateTransition(
     blockers.push(`human_review_required_before:${input.to}`);
   }
 
+  if (input.to === "matchable") {
+    if (input.policyConflictCodes?.length) {
+      blockers.push(`policy_conflicts_block_matchable:${input.policyConflictCodes.join(",")}`);
+    }
+
+    if (
+      MATCHABLE_REVIEW_SOURCE_STATUSES.includes(
+        input.from as (typeof MATCHABLE_REVIEW_SOURCE_STATUSES)[number],
+      )
+    ) {
+      for (const reviewCheck of MATCHABLE_REVIEW_CHECKS) {
+        if (!input[reviewCheck.inputKey]) {
+          blockers.push(reviewCheck.blocker);
+        }
+      }
+    }
+  }
+
   if (input.to === "completion_reviewed" && !input.evidenceReviewed) {
     blockers.push("evidence_review_required_before:completion_reviewed");
   }
@@ -310,7 +369,10 @@ export function validateMoralTradeProtocolProfile(): MoralTradeProtocolValidatio
           (rule) =>
             rule.requires.includes("transition_event_recorded") &&
             protocolProfile.provenanceModel.activities.includes(rule.provenanceActivity),
-        ),
+        ) &&
+        protocolProfile.stateTransitionRules
+          .filter((rule) => rule.allowedTo.includes("matchable"))
+          .every((rule) => hasAll(rule.requires, MATCHABLE_PROFILE_REQUIREMENTS)),
       `${protocolProfile.stateTransitionRules.length} state transition rule(s) publish allowed edges, required checks, and provenance activities.`,
     ),
     check(

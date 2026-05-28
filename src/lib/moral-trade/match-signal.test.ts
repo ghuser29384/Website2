@@ -102,6 +102,8 @@ test("redacted profile matching blocks unresolved location, privacy, and exclusi
   assert.ok(signal.blockers.includes("location_constraint_unresolved"));
   assert.ok(signal.blockers.includes("privacy_stage_or_constraint_unresolved"));
   assert.ok(signal.blockers.includes("stated_exclusion_conflict"));
+  assert.ok(!signal.factorCodes.includes("privacy_safe_preview"));
+  assert.ok(!signal.factorCodes.includes("privacy_stage_compatible"));
   assert.equal(validateMoralTradeMatchSignal(signal).status, "pass");
 });
 
@@ -137,4 +139,22 @@ test("match signal validation rejects autonomous disclosure and unapproved facto
   assert.ok(validation.blockers.some((blocker) => blocker.includes("human_review_required")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("redacted_fields")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("factor_codes")));
+});
+
+test("match signal validation rejects privacy-safe preview without compatible privacy stage", () => {
+  const signal = evaluateMoralTradeRedactedProfileMatch({
+    left: leftProfile,
+    right: rightProfile,
+  }) as MoralTradeMatchSignal;
+
+  signal.factorCodes = signal.factorCodes.filter((code) => code !== "privacy_stage_compatible");
+
+  const validation = validateMoralTradeMatchSignal(signal);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(
+    validation.blockers.some((blocker) =>
+      blocker.includes("privacy_safe_preview: requires compatible privacy stage"),
+    ),
+  );
 });

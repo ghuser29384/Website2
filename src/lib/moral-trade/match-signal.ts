@@ -220,7 +220,7 @@ export function evaluateMoralTradeRedactedProfileMatch({
     compatibleVerificationPreferences ? "verification_preference_compatible" : "",
     locationOk ? "location_constraint_satisfied" : "",
     privacyOk ? "privacy_stage_compatible" : "",
-    "privacy_safe_preview",
+    privacyOk ? "privacy_safe_preview" : "",
     !exclusionConflict ? "stated_exclusions_clear" : "",
     humanReviewRequired ? "human_review_required" : "",
   ].filter(Boolean) as MoralTradeMatchFactorCode[]);
@@ -275,6 +275,13 @@ export function validateMoralTradeMatchSignal(signal: MoralTradeMatchSignal) {
     if (!MATCH_SIGNAL_FACTOR_CODES.has(code)) {
       blockers.push(`factor_codes: unapproved ${code}`);
     }
+  }
+
+  if (
+    signal.factorCodes.includes("privacy_safe_preview") &&
+    !signal.factorCodes.includes("privacy_stage_compatible")
+  ) {
+    blockers.push("privacy_safe_preview: requires compatible privacy stage and constraints");
   }
 
   if (
