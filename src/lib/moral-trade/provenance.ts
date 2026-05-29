@@ -32,6 +32,7 @@ export type MoralTradeProvenanceEntityKind =
 
 export type MoralTradeProvenanceActivityKind =
   | "draft_created"
+  | "draft_updated"
   | "evidence_submitted"
   | "traceability_event_recorded"
   | "risk_screened"
@@ -238,6 +239,13 @@ export interface MoralTradeProvenanceValidationRule {
   rule: string;
 }
 
+export interface MoralTradeProvenancePersistenceTable {
+  table: string;
+  objectSchemaKey: string;
+  accessModel: string;
+  requiredColumns: readonly string[];
+}
+
 export interface MoralTradeProvenanceContract {
   schemaVersion: string;
   purpose: string;
@@ -257,12 +265,22 @@ export interface MoralTradeProvenanceContract {
     traceabilityEventCount: number;
     validationStatus: MoralTradeProvenanceValidation["status"];
   };
+  persistenceTables: readonly MoralTradeProvenancePersistenceTable[];
   contractTests: string[];
 }
 
 export interface MoralTradeProvenanceContractValidation {
   status: "pass" | "fail";
   validatorName: "moral-trade-provenance-contract";
+  validatorVersion: string;
+  schemaVersion: string;
+  checks: MoralTradeProvenanceCheck[];
+  blockers: string[];
+}
+
+export interface MoralTradeProvenancePersistenceSqlValidation {
+  status: "pass" | "fail";
+  validatorName: "moral-trade-provenance-persistence-sql";
   validatorVersion: string;
   schemaVersion: string;
   checks: MoralTradeProvenanceCheck[];
@@ -361,6 +379,27 @@ export const MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS = [
     label: "Provenance agent",
     required: ["id", "kind", "label"],
   },
+  {
+    key: "state_transition_event_record",
+    label: "Immutable state transition event record",
+    required: [
+      "id",
+      "schemaVersion",
+      "subjectId",
+      "subjectKind",
+      "from",
+      "to",
+      "provenanceActivity",
+      "recordedAt",
+      "actorAgentId",
+      "actorAgentKind",
+      "usedEntityIds",
+      "generatedEntityIds",
+      "idempotencyKey",
+      "previousEventHash",
+      "eventHash",
+    ],
+  },
 ] as const;
 
 export const MORAL_TRADE_PROVENANCE_VALIDATION_RULES: MoralTradeProvenanceValidationRule[] = [
@@ -411,8 +450,154 @@ export const MORAL_TRADE_PROVENANCE_VALIDATION_RULES: MoralTradeProvenanceValida
   },
 ];
 
+export const MORAL_TRADE_PROVENANCE_PERSISTENCE_TABLES: readonly MoralTradeProvenancePersistenceTable[] =
+  [
+    {
+      table: "moral_trade_provenance_agents",
+      objectSchemaKey: "provenance_agent",
+      accessModel: "owner_insert_public_or_owner_read",
+      requiredColumns: [
+        "id",
+        "owner_profile_id",
+        "agent_key",
+        "kind",
+        "label",
+        "redaction_level",
+        "created_at",
+      ],
+    },
+    {
+      table: "moral_trade_evidence_artifacts",
+      objectSchemaKey: "evidence_artifact",
+      accessModel: "owner_insert_public_or_owner_read",
+      requiredColumns: [
+        "id",
+        "owner_profile_id",
+        "subject_kind",
+        "subject_id",
+        "kind",
+        "normalized_locator",
+        "claim_scopes",
+        "submitted_by_agent_id",
+        "redaction_level",
+        "sha256",
+      ],
+    },
+    {
+      table: "moral_trade_evidence_claims",
+      objectSchemaKey: "evidence_claim",
+      accessModel: "owner_insert_public_or_owner_read",
+      requiredColumns: [
+        "id",
+        "owner_profile_id",
+        "subject_kind",
+        "subject_id",
+        "claim_type",
+        "claim_scope",
+        "reviewer_confidence",
+        "uniqueness_checked",
+        "redaction_level",
+      ],
+    },
+    {
+      table: "moral_trade_evidence_claim_artifacts",
+      objectSchemaKey: "evidence_claim",
+      accessModel: "owner_insert_public_pair_read",
+      requiredColumns: ["claim_id", "artifact_id", "owner_profile_id", "created_at"],
+    },
+    {
+      table: "moral_trade_external_entity_references",
+      objectSchemaKey: "external_entity_reference",
+      accessModel: "owner_insert_public_or_owner_read",
+      requiredColumns: [
+        "id",
+        "owner_profile_id",
+        "entity_type",
+        "identifier_system",
+        "normalized_identifier",
+        "dedupe_key",
+        "verification_status",
+        "redaction_level",
+        "sha256",
+      ],
+    },
+    {
+      table: "moral_trade_review_decisions",
+      objectSchemaKey: "review_decision",
+      accessModel: "owner_insert_public_or_owner_read",
+      requiredColumns: [
+        "id",
+        "owner_profile_id",
+        "subject_kind",
+        "subject_id",
+        "outcome",
+        "reason_codes",
+        "summary",
+        "reviewer_agent_id",
+        "redaction_level",
+      ],
+    },
+    {
+      table: "moral_trade_provenance_activities",
+      objectSchemaKey: "provenance_activity",
+      accessModel: "owner_insert_public_or_owner_read",
+      requiredColumns: [
+        "id",
+        "owner_profile_id",
+        "subject_kind",
+        "subject_id",
+        "kind",
+        "activity_at",
+        "used_entity_ids",
+        "generated_entity_ids",
+        "agent_ids",
+        "activity_hash",
+      ],
+    },
+    {
+      table: "moral_trade_traceability_events",
+      objectSchemaKey: "traceability_event",
+      accessModel: "owner_insert_public_or_owner_read",
+      requiredColumns: [
+        "id",
+        "owner_profile_id",
+        "event_time",
+        "recorded_at",
+        "action",
+        "business_step",
+        "disposition",
+        "what",
+        "where_recorded",
+        "why",
+        "agent_ids",
+        "redaction_level",
+        "sha256",
+      ],
+    },
+    {
+      table: "moral_trade_state_transition_events",
+      objectSchemaKey: "state_transition_event_record",
+      accessModel: "owner_insert_public_or_owner_read",
+      requiredColumns: [
+        "id",
+        "owner_profile_id",
+        "subject_kind",
+        "subject_id",
+        "from_status",
+        "to_status",
+        "provenance_activity",
+        "actor_agent_id",
+        "idempotency_key",
+        "event_hash",
+      ],
+    },
+  ];
+
 export const MORAL_TRADE_PROVENANCE_CONTRACT_VALIDATOR_VERSION =
   "moral-trade-provenance-contract-validator-v0.1";
+
+export const MORAL_TRADE_PROVENANCE_PERSISTENCE_SQL_VALIDATOR_VERSION =
+  "moral-trade-provenance-persistence-sql-validator-v0.1";
 
 function sortObjectKeys(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -457,6 +642,173 @@ function normalizeExternalIdentifier(
   }
 
   return cleaned.toLowerCase().replace(/[^a-z0-9._:-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasSqlPattern(sql: string, pattern: string) {
+  return new RegExp(pattern, "is").test(sql);
+}
+
+function createPersistenceSqlCheck(
+  id: string,
+  label: string,
+  passed: boolean,
+  evidence: string,
+): MoralTradeProvenanceCheck {
+  return check(id, label, passed, evidence);
+}
+
+export function validateMoralTradeProvenancePersistenceSql({
+  migrationSql,
+  schemaSql,
+}: {
+  schemaSql: string;
+  migrationSql?: string;
+}): MoralTradeProvenancePersistenceSqlValidation {
+  const tableNames = MORAL_TRADE_PROVENANCE_PERSISTENCE_TABLES.map(
+    (entry) => entry.table,
+  );
+  const tablePatterns = tableNames.map((table) => ({
+    table,
+    escaped: escapeRegExp(table),
+  }));
+  const missingCreateTables = tablePatterns
+    .filter(
+      ({ escaped }) =>
+        !hasSqlPattern(schemaSql, `create\\s+table\\s+if\\s+not\\s+exists\\s+public\\.${escaped}\\b`),
+    )
+    .map(({ table }) => table);
+  const missingMigrationTables = migrationSql
+    ? tablePatterns
+        .filter(
+          ({ escaped }) =>
+            !hasSqlPattern(
+              migrationSql,
+              `create\\s+table\\s+if\\s+not\\s+exists\\s+public\\.${escaped}\\b`,
+            ),
+        )
+        .map(({ table }) => table)
+    : [];
+  const missingRls = tablePatterns
+    .filter(
+      ({ escaped }) =>
+        !hasSqlPattern(schemaSql, `alter\\s+table\\s+public\\.${escaped}\\s+enable\\s+row\\s+level\\s+security`),
+    )
+    .map(({ table }) => table);
+  const missingSelectPolicies = tablePatterns
+    .filter(
+      ({ escaped }) =>
+        !hasSqlPattern(
+          schemaSql,
+          `create\\s+policy\\s+"${escaped}_select_visible"\\s+on\\s+public\\.${escaped}\\s+for\\s+select`,
+        ),
+    )
+    .map(({ table }) => table);
+  const missingInsertPolicies = tablePatterns
+    .filter(
+      ({ escaped }) =>
+        !hasSqlPattern(
+          schemaSql,
+          `create\\s+policy\\s+"${escaped}_insert_owner"\\s+on\\s+public\\.${escaped}\\s+for\\s+insert`,
+        ),
+    )
+    .map(({ table }) => table);
+  const missingOwnerChecks = tablePatterns
+    .filter(
+      ({ escaped }) =>
+        !hasSqlPattern(
+          schemaSql,
+          `create\\s+policy\\s+"${escaped}_insert_owner"[\\s\\S]*?owner_profile_id\\s*=\\s*\\(select\\s+auth\\.uid\\(\\)\\)`,
+        ),
+    )
+    .map(({ table }) => table);
+  const missingPublicReadChecks = tablePatterns
+    .filter(
+      ({ escaped }) =>
+        !hasSqlPattern(
+          schemaSql,
+          `create\\s+policy\\s+"${escaped}_select_visible"[\\s\\S]*?redaction_level\\s*=\\s*'public'`,
+        ),
+    )
+    .map(({ table }) => table);
+  const updateOrDeletePolicies = tablePatterns
+    .filter(({ escaped }) =>
+      hasSqlPattern(
+        schemaSql,
+        `create\\s+policy\\s+"${escaped}_[^"]*(?:update|delete)[^"]*"\\s+on\\s+public\\.${escaped}`,
+      ),
+    )
+    .map(({ table }) => table);
+  const missingAppendOnlyComment = !/Provenance tables are append-only by policy/i.test(
+    schemaSql,
+  );
+  const checks = [
+    createPersistenceSqlCheck(
+      "persistence-tables-created",
+      "Persistence tables exist in schema",
+      missingCreateTables.length === 0,
+      missingCreateTables.length
+        ? `Missing: ${missingCreateTables.join(", ")}`
+        : `${tableNames.length} table(s) created.`,
+    ),
+    createPersistenceSqlCheck(
+      "persistence-migration-created",
+      "Persistence migration creates every table",
+      !migrationSql || missingMigrationTables.length === 0,
+      !migrationSql
+        ? "Migration SQL not supplied."
+        : missingMigrationTables.length
+          ? `Missing: ${missingMigrationTables.join(", ")}`
+          : `${tableNames.length} migration table(s) created.`,
+    ),
+    createPersistenceSqlCheck(
+      "persistence-rls-enabled",
+      "Persistence tables have RLS enabled",
+      missingRls.length === 0,
+      missingRls.length ? `Missing: ${missingRls.join(", ")}` : `${tableNames.length} RLS statement(s).`,
+    ),
+    createPersistenceSqlCheck(
+      "persistence-visible-select-policies",
+      "Persistence tables have public-or-owner select policies",
+      missingSelectPolicies.length === 0 && missingPublicReadChecks.length === 0,
+      [...new Set([...missingSelectPolicies, ...missingPublicReadChecks])].length
+        ? `Missing or incomplete: ${[...new Set([...missingSelectPolicies, ...missingPublicReadChecks])].join(", ")}`
+        : `${tableNames.length} select-visible policy/policies.`,
+    ),
+    createPersistenceSqlCheck(
+      "persistence-owner-insert-policies",
+      "Persistence tables require owner-scoped inserts",
+      missingInsertPolicies.length === 0 && missingOwnerChecks.length === 0,
+      [...new Set([...missingInsertPolicies, ...missingOwnerChecks])].length
+        ? `Missing or incomplete: ${[...new Set([...missingInsertPolicies, ...missingOwnerChecks])].join(", ")}`
+        : `${tableNames.length} owner-insert policy/policies.`,
+    ),
+    createPersistenceSqlCheck(
+      "persistence-append-only-policies",
+      "Persistence tables are append-only by policy",
+      updateOrDeletePolicies.length === 0 && !missingAppendOnlyComment,
+      updateOrDeletePolicies.length
+        ? `Unexpected update/delete policy/policies: ${updateOrDeletePolicies.join(", ")}`
+        : missingAppendOnlyComment
+          ? "Missing append-only policy comment."
+          : "No update/delete policies detected.",
+    ),
+  ];
+  const blockers = checks
+    .filter((entry) => entry.status === "fail")
+    .map((entry) => `${entry.id}: ${entry.label}`);
+
+  return {
+    status: blockers.length ? "fail" : "pass",
+    validatorName: "moral-trade-provenance-persistence-sql",
+    validatorVersion: MORAL_TRADE_PROVENANCE_PERSISTENCE_SQL_VALIDATOR_VERSION,
+    schemaVersion: MORAL_TRADE_PROVENANCE_SCHEMA_VERSION,
+    checks,
+    blockers,
+  };
 }
 
 export function createMoralTradeExternalEntityReference(
@@ -938,10 +1290,12 @@ export function getMoralTradeProvenanceContract(): MoralTradeProvenanceContract 
       traceabilityEventCount: sampleBundle.traceabilityEvents?.length ?? 0,
       validationStatus: sampleValidation.status,
     },
+    persistenceTables: MORAL_TRADE_PROVENANCE_PERSISTENCE_TABLES,
     contractTests: [
       "provenance_contract_validator",
       "provenance_sample_bundle_smoke",
       "traceability_event_contract_smoke",
+      "provenance_persistence_schema_smoke",
       "technical_spec_provenance_contract_smoke",
     ],
   };
@@ -965,8 +1319,12 @@ export function validateMoralTradeProvenanceContract(
     "traceability_event",
     "provenance_activity",
     "provenance_agent",
+    "state_transition_event_record",
   ];
   const requiredRuleKeys = MORAL_TRADE_PROVENANCE_VALIDATION_RULES.map((rule) => rule.key);
+  const requiredPersistenceTables = MORAL_TRADE_PROVENANCE_PERSISTENCE_TABLES.map(
+    (table) => table.table,
+  );
   const checks = [
     check(
       "object-schema-coverage",
@@ -1001,12 +1359,29 @@ export function validateMoralTradeProvenanceContract(
       sampleBundle.reviewDecisions.map((decision) => `${decision.id}:${decision.reviewerId}`).join(", "),
     ),
     check(
+      "persistence-table-coverage",
+      "Append-only provenance objects have owner-scoped storage tables",
+      requiredPersistenceTables.every((table) =>
+        contract.persistenceTables.some((entry) => entry.table === table),
+      ) &&
+        contract.persistenceTables.every(
+          (entry) =>
+            schemaKeys.includes(entry.objectSchemaKey) &&
+            entry.requiredColumns.includes("owner_profile_id") &&
+            /owner_insert/.test(entry.accessModel),
+        ),
+      contract.persistenceTables
+        .map((entry) => `${entry.table}:${entry.objectSchemaKey}`)
+        .join(", "),
+    ),
+    check(
       "contract-tests",
       "Provenance contract test hooks are named",
       [
         "provenance_contract_validator",
         "provenance_sample_bundle_smoke",
         "traceability_event_contract_smoke",
+        "provenance_persistence_schema_smoke",
         "technical_spec_provenance_contract_smoke",
       ].every((hook) => contract.contractTests.includes(hook)),
       contract.contractTests.join(", "),

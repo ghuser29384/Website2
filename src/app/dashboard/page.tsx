@@ -255,7 +255,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               {viewer ? (
                 <>
                   Signed in as <strong>{viewer.displayName}</strong>. This dashboard ties together
-                  your public profile, offers, interests, agreements, ratings, and cart items.
+                  your public profile, offers, interests, agreements, ratings, and saved offers.
                 </>
               ) : (
                 <>Configure Supabase to enable the live dashboard and authenticated activity.</>
@@ -267,7 +267,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   View public profile
                 </Link>
                 <Link className="button button-secondary" href="/cart">
-                  Open cart
+                  Open saved offers
                 </Link>
               </div>
             ) : null}
@@ -300,10 +300,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Agreements and cart</strong>
+                  <strong>Agreements and saved offers</strong>
                   <p>
                     Showing recent items: {dashboardData?.agreements.length ?? 0} agreement(s) |{" "}
-                    {dashboardData?.cartItems.length ?? 0} cart item(s)
+                    {dashboardData?.cartItems.length ?? 0} saved offer(s)
                   </p>
                 </div>
               </div>
@@ -2587,7 +2587,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <div className="empty-state">
                 <div>
                   <strong>No incoming responses yet.</strong>
-                  <p>Member and guest responses will appear here when someone responds to one of your offers.</p>
+                  <p>
+                    Signed-in member responses will appear here. Legacy guest records remain
+                    visible if one exists, but new public contact paths require sign-in first.
+                  </p>
                 </div>
               </div>
             )}
@@ -2872,16 +2875,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         <section className="section section-subtle">
           <div className="section-head">
-            <p className="eyebrow">Cart</p>
+            <p className="eyebrow">Saved offers</p>
             <h2>Offers you are tracking</h2>
-            <p>Discounts or reduced burdens published by offer owners will appear here and on the cart page.</p>
+            <p>Discounts or reduced burdens published by offer owners will appear here and on your saved-offers page.</p>
           </div>
 
           <div className="data-grid">
             {dashboardData?.errors.cartItems ? (
               <div className="empty-state">
                 <div>
-                  <strong>We could not load your cart right now.</strong>
+                  <strong>We could not load your saved offers right now.</strong>
                   <p>The dashboard stayed available, and the detailed Supabase error was logged on the server.</p>
                 </div>
               </div>
@@ -2908,7 +2911,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           View offer
                         </Link>
                         <Link className="text-button" href="/cart">
-                          Open cart
+                          Open saved offers
                         </Link>
                       </div>
                     </div>
@@ -2918,8 +2921,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ) : (
               <div className="empty-state">
                 <div>
-                  <strong>No cart items yet.</strong>
-                  <p>Add an offer to your cart when you want to track it closely.</p>
+                  <strong>No saved offers yet.</strong>
+                  <p>Save an offer when you want to track it closely.</p>
                 </div>
               </div>
             )}

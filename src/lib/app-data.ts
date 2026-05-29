@@ -3066,9 +3066,9 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
   try {
     cartItems = await listCartItems(userId, DASHBOARD_PAGE_SIZE);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to load cart items.";
+    const message = error instanceof Error ? error.message : "Unable to load saved offers.";
     errors.cartItems = message;
-    console.error("[supabase] Failed to load dashboard cart items", { message, userId });
+    console.error("[supabase] Failed to load dashboard saved offers", { message, userId });
   }
 
   let wishProfile: WishProfileRecord | null = null;

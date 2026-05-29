@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
   auditMoralTradeSecurityScaleReadiness,
   getMoralTradeSecurityProfile,
+  validateMoralTradeSecurityImplementation,
   validateMoralTradeSecurityProfile,
   type MoralTradeSecurityProfile,
 } from "@/lib/moral-trade/security";
+
+function readRepoFile(path: string) {
+  return readFileSync(join(process.cwd(), path), "utf8");
+}
 
 test("security profile publishes headers, sessions, provider boundaries, non-claims, and scale gates", () => {
   const profile = getMoralTradeSecurityProfile();
@@ -31,6 +38,23 @@ test("security profile publishes headers, sessions, provider boundaries, non-cla
   );
   assert.ok(profile.publicNonClaims.some((entry) => /24\/7 staffed security operations/i.test(entry)));
   assert.ok(profile.scaleGates.some((gate) => gate.key === "sensitive_admin_scale"));
+  assert.ok(profile.securityTests.includes("security_implementation_source_smoke"));
+});
+
+test("security implementation source keeps headers, cache, and sessions aligned", () => {
+  const validation = validateMoralTradeSecurityImplementation({
+    nextConfigSource: readRepoFile("next.config.ts"),
+    supabaseProxySource: readRepoFile("src/lib/supabase/proxy.ts"),
+    supabaseServerSource: readRepoFile("src/lib/supabase/server.ts"),
+  });
+
+  assert.equal(validation.status, "pass");
+  assert.equal(validation.blockers.length, 0);
+  assert.ok(
+    validation.checks.some(
+      (check) => check.id === "supabase-session-refresh-source" && check.status === "pass",
+    ),
+  );
 });
 
 test("security validation fails if provider boundaries are overclaimed or scale gates disappear", () => {

@@ -22,6 +22,11 @@ test("data model profile covers the audit-named core Moral Trade entities", () =
   assert.ok(entityKeys.includes("baseline_statement"));
   assert.ok(entityKeys.includes("evidence_claim"));
   assert.ok(entityKeys.includes("evidence_artifact"));
+  assert.ok(entityKeys.includes("external_entity_reference"));
+  assert.ok(entityKeys.includes("traceability_event"));
+  assert.ok(entityKeys.includes("provenance_activity"));
+  assert.ok(entityKeys.includes("provenance_agent"));
+  assert.ok(entityKeys.includes("state_transition_event_record"));
   assert.ok(entityKeys.includes("review_decision"));
   assert.equal(entityKeys.includes("reviewer_decision"), false);
   assert.ok(entityKeys.includes("challenge"));
@@ -48,9 +53,15 @@ test("data model profile publishes offer fields and privacy boundaries from the 
     (boundary) => boundary.key === "match_disclosure_boundary",
   );
   const reviewDecision = profile.entities.find((entity) => entity.key === "review_decision");
+  const traceabilityEvent = profile.entities.find((entity) => entity.key === "traceability_event");
+  const stateTransitionEvent = profile.entities.find(
+    (entity) => entity.key === "state_transition_event_record",
+  );
 
   assert.ok(offer);
   assert.ok(reviewDecision);
+  assert.ok(traceabilityEvent);
+  assert.ok(stateTransitionEvent);
   assert.ok(offer.requiredFields.includes("cause_areas"));
   assert.ok(offer.requiredFields.includes("offered_action"));
   assert.ok(offer.requiredFields.includes("requested_action"));
@@ -63,6 +74,11 @@ test("data model profile publishes offer fields and privacy boundaries from the 
   assert.ok(reviewDecision.requiredFields.includes("outcome"));
   assert.ok(reviewDecision.requiredFields.includes("reason_codes"));
   assert.ok(reviewDecision.requiredFields.includes("reviewer_id"));
+  assert.ok(traceabilityEvent.requiredFields.includes("where_recorded"));
+  assert.ok(traceabilityEvent.requiredFields.includes("why"));
+  assert.ok(traceabilityEvent.relationships.includes("external_entity_reference"));
+  assert.ok(stateTransitionEvent.requiredFields.includes("event_hash"));
+  assert.ok(stateTransitionEvent.relationships.includes("provenance_activity"));
   assert.match(sourceBoundary?.rule ?? "", /manual summaries/);
   assert.match(sourceBoundary?.rule ?? "", /raw private feeds/);
   assert.match(matchBoundary?.rule ?? "", /exact wishes/);

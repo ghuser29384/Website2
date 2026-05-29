@@ -189,7 +189,7 @@ const PUBLIC_OFFER_NON_CLAIMS = [
   "The public offers API is not escrow, custody, legal advice, tax advice, or contract formation.",
   "Participant scores are participant-stated context, not platform moral rankings.",
   "Worked examples are not live liquidity and require manual review before reliance.",
-  "The collection response must not expose private wishes, contact details, raw source notes, raw evidence artifacts, or personalized cart state.",
+  "The collection response must not expose private wishes, contact details, raw source notes, raw evidence artifacts, or personalized saved-offer state.",
 ] as const;
 const PUBLIC_OFFER_DETAIL_NON_CLAIMS = [
   ...PUBLIC_OFFER_NON_CLAIMS,

@@ -87,6 +87,14 @@ export interface MoralTradeCopilotContractValidation {
   blockers: string[];
 }
 
+export interface MoralTradeCopilotImplementationValidation {
+  status: "pass" | "fail";
+  validatorName: "moral-trade-copilot-review-route-implementation";
+  validatorVersion: string;
+  checks: MoralTradeCopilotContractCheck[];
+  blockers: string[];
+}
+
 export type MoralTradeCopilotRolloutStageKey =
   | "shadow_mode"
   | "assist_mode"
@@ -380,6 +388,85 @@ function check(
     label,
     status: passed ? "pass" : "fail",
     evidence,
+  };
+}
+
+export function validateMoralTradeCopilotReviewRouteImplementation({
+  routeSource,
+}: {
+  routeSource: string;
+}): MoralTradeCopilotImplementationValidation {
+  const forbiddenMutationPatterns = [
+    /\bcreateClient\b/,
+    /\bcreateServiceClient\b/,
+    /\bsupabase\b/i,
+    /\.from\s*\(/,
+    /\.insert\s*\(/,
+    /\.upsert\s*\(/,
+    /\.update\s*\(/,
+    /\.delete\s*\(/,
+    /\brevalidatePath\b/,
+    /\bredirect\b/,
+    /\bqueueEmailOutbox\b/,
+    /\bfetch\s*\(/,
+  ];
+  const matchedForbiddenPatterns = forbiddenMutationPatterns
+    .filter((pattern) => pattern.test(routeSource))
+    .map((pattern) => pattern.source);
+  const checks = [
+    check(
+      "copilot-review-private-no-store",
+      "Copilot review responses are private no-store",
+      /Cache-Control/.test(routeSource) && /private,\s*no-store/.test(routeSource),
+      "Review route should set Cache-Control private, no-store on every JSON response.",
+    ),
+    check(
+      "copilot-review-deterministic-mode",
+      "Copilot review route declares deterministic advisory mode",
+      /decisioningMode:\s*"deterministic_draft_review_only"/.test(routeSource) &&
+        /stateMutation:\s*false/.test(routeSource) &&
+        !/stateMutation:\s*true/.test(routeSource),
+      "Review route should return deterministic_draft_review_only and stateMutation=false.",
+    ),
+    check(
+      "copilot-review-no-live-mutations",
+      "Copilot review route does not import or call live mutation surfaces",
+      matchedForbiddenPatterns.length === 0,
+      matchedForbiddenPatterns.length
+        ? `Forbidden mutation pattern(s): ${matchedForbiddenPatterns.join(", ")}`
+        : "No Supabase writes, revalidation, redirects, email, outreach, or fetch calls detected.",
+    ),
+    check(
+      "copilot-review-strict-input-normalization",
+      "Copilot review route normalizes only the strict input bundle",
+      /normalizeDraftInput/.test(routeSource) &&
+        /normalizeMoralTradeCopilotEvidenceMetadata/.test(routeSource) &&
+        /normalizeCitations/.test(routeSource) &&
+        /MAX_TEXT_FIELD_LENGTH/.test(routeSource) &&
+        /contract\.strictInputBundle/.test(routeSource),
+      "Review route should normalize structured draft, citations, and redacted evidence metadata only.",
+    ),
+    check(
+      "copilot-review-output-validation",
+      "Copilot review route validates output before success",
+      /validateMoralTradeCopilotOutput/.test(routeSource) &&
+        /contractValidation\.blockers/.test(routeSource) &&
+        /outputValidation\.blockers/.test(routeSource) &&
+        /evidenceMetadataNormalization\.blockers/.test(routeSource) &&
+        /blockers\.length\s*\?\s*422\s*:\s*200/.test(routeSource),
+      "Review route should combine contract, output, and metadata blockers before returning success.",
+    ),
+  ];
+  const blockers = checks
+    .filter((entry) => entry.status === "fail")
+    .map((entry) => `${entry.id}: ${entry.label}`);
+
+  return {
+    status: blockers.length ? "fail" : "pass",
+    validatorName: "moral-trade-copilot-review-route-implementation",
+    validatorVersion: MORAL_TRADE_COPILOT_CONTRACT_VALIDATOR_VERSION,
+    checks,
+    blockers,
   };
 }
 

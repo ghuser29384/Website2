@@ -103,6 +103,58 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(topbarSource, /showSearch = true/);
 });
 
+test("offer save surfaces avoid shopping-cart framing", () => {
+  const cartPage = readRepoFile("src/app/cart/page.tsx");
+  const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
+  const offerDetailPage = readRepoFile("src/app/offers/[offerId]/page.tsx");
+  const notFoundPage = readRepoFile("src/app/not-found.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+  const publicOffersSource = readRepoFile("src/lib/public-offers.ts");
+  const offerFollowsSource = readRepoFile("src/lib/offer-follows.ts");
+  const offerCreateSimilarSource = readRepoFile("src/lib/offer-create-similar.ts");
+  const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
+  const publicCopySources = [
+    cartPage,
+    dashboardPage,
+    offerDetailPage,
+    notFoundPage,
+    actionsSource,
+  ].join("\n");
+  const contractSources = [
+    publicOffersSource,
+    offerFollowsSource,
+    offerCreateSimilarSource,
+    apiContractProfile,
+  ].join("\n");
+
+  assert.match(cartPage, /title: "Saved offers"/);
+  assert.match(cartPage, /<p className="eyebrow">Saved offers<\/p>/);
+  assert.match(cartPage, /Your saved offers/);
+  assert.match(dashboardPage, /Open saved offers/);
+  assert.match(offerDetailPage, /Interest and saved-offer activity/);
+  assert.match(actionsSource, /Saved offer/);
+  assert.match(contractSources, /personalized saved-offer state/);
+
+  for (const forbidden of [
+    "Shopping cart",
+    "Your cart",
+    "Open cart",
+    "cart addition(s)",
+    "Currently in your cart",
+    "Not yet added to your cart",
+    "Added to cart",
+    "Removed from cart",
+    "cart item(s)",
+    "cart items",
+    "personalized cart state",
+    "cart state, or source notes",
+    "Dashboards, carts",
+  ]) {
+    assert.equal(publicCopySources.includes(forbidden), false);
+    assert.equal(contractSources.includes(forbidden), false);
+  }
+});
+
 test("MPGF public copy leads with manual evidence instead of raw gate/debug wording", () => {
   assert.match(MPGF_COPY.plainLanguageSummary, /manual external-payment evidence/i);
   assert.match(MPGF_COPY.manualExternalPaymentEvidence, /review/i);
@@ -1118,6 +1170,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const offerSavedSearchMigration = readRepoFile(
     "supabase/migrations/20260529_offer_saved_search_capture.sql",
   );
+  const provenancePersistenceMigration = readRepoFile(
+    "supabase/migrations/20260529_moral_trade_provenance_persistence.sql",
+  );
+  const schemaSource = readRepoFile("supabase/schema.sql");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const provenanceSource = readRepoFile("src/lib/moral-trade/provenance.ts");
@@ -1231,6 +1287,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(protocolProfile, /match_signal/);
   assert.match(protocolProfile, /traceability_event/);
   assert.match(protocolProfile, /external_entity_reference/);
+  assert.match(protocolProfile, /provenancePersistence/);
+  assert.match(protocolProfile, /moral_trade_evidence_artifacts/);
+  assert.match(protocolProfile, /moral_trade_traceability_events/);
+  assert.match(protocolProfile, /No update or delete policies/);
   assert.match(protocolProfile, /cause_area_overlap/);
   assert.match(protocolProfile, /cause_area_complementarity/);
   assert.match(protocolProfile, /party_relative_benefit/);
@@ -1248,6 +1308,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(dataModelProfile, /privacy_grant/);
   assert.match(dataModelProfile, /review_decision/);
   assert.equal(dataModelProfile.includes("reviewer_decision"), false);
+  assert.match(dataModelProfile, /external_entity_reference/);
+  assert.match(dataModelProfile, /traceability_event/);
+  assert.match(dataModelProfile, /provenance_activity/);
+  assert.match(dataModelProfile, /provenance_agent/);
+  assert.match(dataModelProfile, /state_transition_event_record/);
   assert.match(dataModelProfile, /payment_update/);
   assert.match(dataModelProfile, /agreement_event/);
   assert.match(dataModelProfile, /raw private feeds are not mined/);
@@ -1267,12 +1332,24 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(provenanceSource, /getMoralTradeProvenanceSampleBundle/);
   assert.match(provenanceSource, /createMoralTradeTraceabilityEvent/);
   assert.match(provenanceSource, /createMoralTradeExternalEntityReference/);
+  assert.match(provenanceSource, /MORAL_TRADE_PROVENANCE_PERSISTENCE_TABLES/);
+  assert.match(provenanceSource, /validateMoralTradeProvenancePersistenceSql/);
+  assert.match(provenanceSource, /persistence-table-coverage/);
   assert.match(provenanceSource, /provenance_contract_validator/);
   assert.match(provenanceSource, /external-entity-references/);
   assert.match(provenanceSource, /open_supply_hub_id/);
   assert.match(provenanceSource, /traceability-events/);
   assert.match(provenanceSource, /one-proof-one-claim/);
   assert.match(provenanceSource, /scope-alignment/);
+  assert.match(schemaSource, /create table if not exists public\.moral_trade_evidence_artifacts/);
+  assert.match(schemaSource, /create table if not exists public\.moral_trade_provenance_activities/);
+  assert.match(schemaSource, /create table if not exists public\.moral_trade_traceability_events/);
+  assert.match(schemaSource, /create table if not exists public\.moral_trade_state_transition_events/);
+  assert.match(schemaSource, /moral_trade_evidence_artifacts_select_visible/);
+  assert.match(schemaSource, /moral_trade_traceability_events_insert_owner/);
+  assert.match(schemaSource, /Provenance tables are append-only by policy/);
+  assert.match(provenancePersistenceMigration, /moral_trade_external_entity_references/);
+  assert.match(provenancePersistenceMigration, /moral_trade_state_transition_events_insert_owner/);
   assert.match(reasoningPacketSource, /getMoralTradeReasoningPackets/);
   assert.match(reasoningPacketSource, /validateMoralTradeReasoningPacketContract/);
   assert.match(reasoningPacketSource, /cited evidence rows/i);
@@ -1286,6 +1363,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotSource, /buildMoralTradeCopilotOutput/);
   assert.match(copilotSource, /normalizeMoralTradeCopilotEvidenceMetadata/);
   assert.match(copilotSource, /MORAL_TRADE_COPILOT_EVIDENCE_METADATA_REDACTIONS/);
+  assert.match(copilotSource, /validateMoralTradeCopilotReviewRouteImplementation/);
   assert.match(copilotSource, /validateMoralTradeCopilotContract/);
   assert.match(copilotContract, /strictInputBundle/);
   assert.match(copilotContract, /evidence-metadata review/);
@@ -1360,6 +1438,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(operationsProfile, /resilience_fallback_audit/);
   assert.match(operationsProfile, /human_controlled_safety/);
   assert.match(securitySource, /validateMoralTradeSecurityProfile/);
+  assert.match(securitySource, /validateMoralTradeSecurityImplementation/);
   assert.match(securitySource, /auditMoralTradeSecurityScaleReadiness/);
   assert.match(securitySource, /provider-boundary-and-nonclaims/);
   assert.match(securitySource, /scale_control_not_ready/);
@@ -1370,6 +1449,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(securityProfile, /key_rotation_gate/);
   assert.match(securityProfile, /incident_response_reporting/);
   assert.match(securityProfile, /platform_abuse_throttling/);
+  assert.match(securityProfile, /security_implementation_source_smoke/);
   assert.match(securityProfile, /Moral Trade does not claim custom field-level encryption/);
   assert.match(incidentResponseSource, /validateMoralTradeIncidentResponseProfile/);
   assert.match(incidentResponseSource, /auditMoralTradeIncidentReadinessGate/);
@@ -1578,6 +1658,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /offer_facets_read/);
   assert.match(apiContractProfile, /offer_create_similar/);
   assert.match(apiContractProfile, /saved_search_write/);
+  assert.match(apiContractProfile, /persistenceTables/);
   assert.match(apiContractProfile, /sample-bundle summary/);
   assert.match(apiContractProfile, /undocumented ML cannot rank/);
   assert.match(apiContractProfile, /private_no_store/);
@@ -1605,6 +1686,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /external entity dedupe failures/);
   assert.match(technicalSpecPage, /Provenance contract/);
   assert.match(technicalSpecPage, /provenanceContract\.validationRules/);
+  assert.match(technicalSpecPage, /Append-only storage/);
+  assert.match(technicalSpecPage, /provenanceContract\.persistenceTables/);
   assert.match(technicalSpecPage, /provenanceContract\.contractTests/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/provenance\/schema/);
   assert.match(technicalSpecPage, /Copilot contract/);
@@ -1715,6 +1798,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /provenanceObjectSchemas/);
   assert.match(healthRoute, /provenanceValidation/);
   assert.match(healthRoute, /provenanceValidationRules/);
+  assert.match(healthRoute, /provenancePersistenceTables/);
   assert.match(healthRoute, /provenanceSampleBundleSummary/);
   assert.match(healthRoute, /schemaRegistryValidation/);
   assert.match(healthRoute, /schemaRegistryDocuments/);
@@ -1786,6 +1870,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotReviewRoute, /validateMoralTradeCopilotOutput/);
   assert.match(copilotReviewRoute, /deterministic_draft_review_only/);
   assert.match(copilotReviewRoute, /stateMutation/);
+  assert.equal(copilotReviewRoute.includes("stateMutation: true"), false);
   assert.match(copilotReviewRoute, /private, no-store/);
   assert.match(matchSignalContractRoute, /validateMoralTradeMatchSignalContract/);
   assert.match(matchSignalContractRoute, /approvedFactorCodes/);
@@ -1854,6 +1939,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractRoute, /requestSchema/);
   assert.match(provenanceSchemaRoute, /validateMoralTradeProvenanceContract/);
   assert.match(provenanceSchemaRoute, /publicContract/);
+  assert.match(provenanceSchemaRoute, /persistenceTables/);
   assert.match(provenanceSchemaRoute, /validationRuleCodes/);
   assert.match(provenanceSchemaRoute, /sampleBundleSummary/);
   assert.match(schemaRegistrySource, /validateMoralTradeSchemaRegistry/);
@@ -1939,9 +2025,15 @@ test("pooled donation offset creation has visible path and server-side guardrail
 });
 
 test("offer detail and worked examples expose instrumented review workflow cards", () => {
+  const actionsSource = readRepoFile("src/app/actions.ts");
+  const dashboardSource = readRepoFile("src/app/dashboard/page.tsx");
   const offerDetailSource = readRepoFile("src/app/offers/[offerId]/page.tsx");
   const workedExampleSource = readRepoFile("src/app/offers/examples/[exampleId]/page.tsx");
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
+  const guestContactMigration = readRepoFile(
+    "supabase/migrations/20260529_disable_guest_interest_public_insert.sql",
+  );
+  const schemaSource = readRepoFile("supabase/schema.sql");
   const globalCss = readRepoFile("src/app/globals.css");
 
   assert.match(proposalReviewSource, /getOfferReviewWorkflowCards/);
@@ -1961,6 +2053,15 @@ test("offer detail and worked examples expose instrumented review workflow cards
   assert.match(offerDetailSource, /new public contact paths now require\s+sign-in/);
   assert.equal(offerDetailSource.includes("expressGuestInterestAction"), false);
   assert.equal(offerDetailSource.includes("Respond without account"), false);
+  assert.match(dashboardSource, /new public contact paths require sign-in first/);
+  assert.equal(actionsSource.includes("expressGuestInterestAction"), false);
+  assert.equal(actionsSource.includes("Response recorded without an account"), false);
+  assert.equal(actionsSource.includes('from("guest_interests").upsert'), false);
+  assert.match(schemaSource, /No insert policy is intentionally defined for guest_interests/);
+  assert.match(schemaSource, /New offer contact paths require sign-in and write to public\.interests/);
+  assert.equal(schemaSource.includes('create policy "guest_interests_insert_public"'), false);
+  assert.match(guestContactMigration, /drop policy if exists "guest_interests_insert_public"/);
+  assert.match(guestContactMigration, /New public contact writes are disabled/);
   assert.match(workedExampleSource, /getOfferReviewWorkflowCards/);
   assert.match(workedExampleSource, /Worked example; manual review required before reliance/);
   assert.match(workedExampleSource, /reviewWorkflowCards\.map/);

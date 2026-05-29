@@ -356,6 +356,11 @@ export function validateMoralTradeApiContractProfile(
           provenanceSchemaResponse?.fields.some(
             (field) => field.key === "sampleBundleSummary" && field.type === "object",
           ),
+        ) &&
+        Boolean(
+          provenanceSchemaResponse?.fields.some(
+            (field) => field.key === "persistenceTables" && field.type === "array",
+          ),
         ),
       provenanceSchemaRoute
         ? `${provenanceSchemaRoute.key}:${provenanceSchemaRoute.cacheControl}`
@@ -425,7 +430,7 @@ export function validateMoralTradeApiContractProfile(
         publicOfferDetailRoute.cacheControl === "no_store_dynamic" &&
         publicOfferDetailRoute.rateLimitSurface === "offer_detail_read" &&
         publicOfferDetailRoute.privacyClass === "public_contract" &&
-        /validator-backed public listing detail|404 blockers|contact details|private wishes|personalized cart state|agreement formation/i.test(
+        /validator-backed public listing detail|404 blockers|contact details|private wishes|personalized saved-offer state|agreement formation/i.test(
           publicOfferDetailRoute.fallback,
         ) &&
         Boolean(

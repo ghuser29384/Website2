@@ -22,6 +22,7 @@ export async function GET() {
     validation,
     publicContract: contract,
     objectSchemas: contract.objectSchemas,
+    persistenceTables: contract.persistenceTables,
     validationRules: contract.validationRules.map((rule) => rule.rule),
     validationRuleCodes: contract.validationRules.map((rule) => rule.key),
     sampleBundleSummary: contract.sampleBundleSummary,

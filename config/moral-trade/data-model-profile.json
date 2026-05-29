@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-data-model-v0.1.2-2026-05",
+  "version": "moral-trade-data-model-v0.1.3-2026-05",
   "purpose": "Public contract for the core Moral Trade domain entities, required fields, privacy classes, relationship boundaries, and non-claims named by the product audit.",
   "entities": [
     {
@@ -111,12 +111,57 @@
       "publicExposure": "Artifacts require hashes, scope alignment, and redaction levels before any public reasoning summary references them."
     },
     {
+      "key": "external_entity_reference",
+      "label": "External entity reference",
+      "category": "provenance",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "entity_type", "identifier_system", "normalized_identifier", "dedupe_key", "verification_status", "redaction_level", "sha256"],
+      "relationships": ["evidence_artifact", "traceability_event", "provenance_activity"],
+      "publicExposure": "External charities, payment providers, registries, or supplier-like records expose only stable redacted identifiers after registry or reviewer confirmation."
+    },
+    {
+      "key": "traceability_event",
+      "label": "Traceability event",
+      "category": "provenance",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "subject_id", "event_time", "recorded_at", "action", "business_step", "disposition", "what", "where_recorded", "why", "agent_ids", "redaction_level", "sha256"],
+      "relationships": ["evidence_artifact", "external_entity_reference", "provenance_agent", "provenance_activity", "review_decision"],
+      "publicExposure": "What/where/why event records can support payment, charity-routing, or external-evidence audits; raw artifacts and private provider payloads remain redacted."
+    },
+    {
+      "key": "provenance_activity",
+      "label": "Provenance activity",
+      "category": "provenance",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "subject_id", "kind", "activity_at", "used_entity_ids", "generated_entity_ids", "agent_ids", "activity_hash"],
+      "relationships": ["evidence_artifact", "evidence_claim", "review_decision", "provenance_agent", "traceability_event", "state_transition_event_record"],
+      "publicExposure": "Activities link submitted, reviewed, and changed records to agents; public summaries omit raw private wishes, contact details, and source notes."
+    },
+    {
+      "key": "provenance_agent",
+      "label": "Provenance agent",
+      "category": "provenance",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "owner_profile_id", "agent_key", "kind", "label", "redaction_level", "created_at"],
+      "relationships": ["participant", "review_decision", "provenance_activity", "traceability_event", "state_transition_event_record"],
+      "publicExposure": "Participants, counterparties, reviewers, operators, and providers are represented by scoped agent records; public labels require explicit redaction review."
+    },
+    {
+      "key": "state_transition_event_record",
+      "label": "State transition event record",
+      "category": "provenance",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "subject_id", "from_status", "to_status", "provenance_activity", "actor_agent_id", "idempotency_key", "event_hash", "recorded_at"],
+      "relationships": ["offer", "review_decision", "provenance_activity", "provenance_agent", "agreement_event"],
+      "publicExposure": "Reliance-bearing status changes require immutable event hashes and agent links; public exposure is limited to redacted status evidence."
+    },
+    {
       "key": "review_decision",
       "label": "Reviewer decision",
       "category": "review",
       "privacyClass": "review_scoped",
       "requiredFields": ["id", "proposal_id", "outcome", "reason_codes", "summary", "reviewer_id", "created_at"],
-      "relationships": ["offer", "evidence_claim", "challenge", "appeal", "agreement_event"],
+      "relationships": ["offer", "evidence_claim", "challenge", "appeal", "agreement_event", "provenance_agent", "provenance_activity", "state_transition_event_record"],
       "publicExposure": "Only a narrow public reasoning summary is exposed when safe; private notes and source notes are redacted."
     },
     {
@@ -197,7 +242,7 @@
       "category": "provenance",
       "privacyClass": "review_scoped",
       "requiredFields": ["id", "agreement_id", "event_kind", "actor_id", "entity_ids", "created_at", "previous_event_hash"],
-      "relationships": ["offer", "review_decision", "payment_record", "notification", "dispute"],
+      "relationships": ["offer", "review_decision", "payment_record", "notification", "dispute", "state_transition_event_record", "provenance_activity"],
       "publicExposure": "Immutable event records support auditability; public summaries are redacted and status-scoped."
     }
   ],

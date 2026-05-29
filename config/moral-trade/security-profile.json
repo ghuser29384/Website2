@@ -126,6 +126,7 @@
   "securityTests": [
     "security_profile_validator",
     "security_scale_gate_audit",
+    "security_implementation_source_smoke",
     "no_overclaim_nonclaim_smoke",
     "private_cache_header_smoke",
     "security_profile_incident_lane_smoke",

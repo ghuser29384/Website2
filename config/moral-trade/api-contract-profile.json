@@ -24,7 +24,7 @@
       "responseSchema": "public_offers_collection_response",
       "rateLimitSurface": "offer_collection_read",
       "cacheControl": "no_store_dynamic",
-      "fallback": "Return filtered worked-example and live listing payloads, visible facets, validator blockers, and zero-live guidance; never expose private wishes, contact details, raw evidence artifacts, personalized cart state, or global moral ranking."
+      "fallback": "Return filtered worked-example and live listing payloads, visible facets, validator blockers, and zero-live guidance; never expose private wishes, contact details, raw evidence artifacts, personalized saved-offer state, or global moral ranking."
     },
     {
       "key": "public_offer_detail",
@@ -36,7 +36,7 @@
       "responseSchema": "public_offer_detail_response",
       "rateLimitSurface": "offer_detail_read",
       "cacheControl": "no_store_dynamic",
-      "fallback": "Return a validator-backed public listing detail or 404 blockers; never expose contact details, private wishes, raw evidence artifacts, personalized cart state, or agreement formation claims."
+      "fallback": "Return a validator-backed public listing detail or 404 blockers; never expose contact details, private wishes, raw evidence artifacts, personalized saved-offer state, or agreement formation claims."
     },
     {
       "key": "public_offers_facets",
@@ -60,7 +60,7 @@
       "responseSchema": "saved_search_create_response",
       "rateLimitSurface": "saved_search_write",
       "cacheControl": "private_no_store",
-      "fallback": "Require viewer authentication to store a saved search; unauthenticated requests return a sign-in draft without storage. Never expose private wishes, contact details, raw source notes, personalized cart state, autonomous outreach, or platform moral ranking."
+      "fallback": "Require viewer authentication to store a saved search; unauthenticated requests return a sign-in draft without storage. Never expose private wishes, contact details, raw source notes, personalized saved-offer state, autonomous outreach, or platform moral ranking."
     },
     {
       "key": "public_offer_follow",
@@ -72,7 +72,7 @@
       "responseSchema": "public_offer_follow_response",
       "rateLimitSurface": "offer_follow_write",
       "cacheControl": "private_no_store",
-      "fallback": "Require viewer authentication and a live public offer id before writing a viewer-owned saved-offer record. Never expose private wishes, contact details, raw source notes, personalized cart state, public social-follow counts, autonomous outreach, or agreement formation claims."
+      "fallback": "Require viewer authentication and a live public offer id before writing a viewer-owned saved-offer record. Never expose private wishes, contact details, raw source notes, personalized saved-offer state, public social-follow counts, autonomous outreach, or agreement formation claims."
     },
     {
       "key": "public_offer_create_similar",
@@ -84,7 +84,7 @@
       "responseSchema": "public_offer_create_similar_response",
       "rateLimitSurface": "offer_create_similar",
       "cacheControl": "private_no_store",
-      "fallback": "Require viewer authentication and a live public offer id before returning a review-required draft prefill. Never store before auth, copy private wishes, contact details, raw source notes, evidence URLs, personalized cart state, autonomous outreach, global moral ranking, escrow, or agreement formation claims."
+      "fallback": "Require viewer authentication and a live public offer id before returning a review-required draft prefill. Never store before auth, copy private wishes, contact details, raw source notes, evidence URLs, personalized saved-offer state, autonomous outreach, global moral ranking, escrow, or agreement formation claims."
     },
     {
       "key": "moral_trade_data_model_contract",
@@ -621,16 +621,17 @@
     },
     {
       "key": "provenance_schema_response",
-      "purpose": "Public validator-backed evidence object schema names, invariants, sample-bundle summary, and profile version.",
+      "purpose": "Public validator-backed evidence object schema names, persistence tables, invariants, sample-bundle summary, and profile version.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the provenance object contract validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the provenance schema validation run." },
         { "key": "schemaVersion", "type": "string", "required": true, "privacy": "public", "description": "Version label for the provenance object schema set." },
         { "key": "profileVersion", "type": "string", "required": true, "privacy": "public", "description": "Core protocol profile version linked to the schemas." },
         { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
-        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for schema coverage, validation-rule coverage, synthetic sample execution, reviewer-agent links, and test hooks." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Object schemas, named validation rules, sample-bundle summary, and contract-test hooks without submitted evidence artifacts." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for schema coverage, persistence-table coverage, validation-rule coverage, synthetic sample execution, reviewer-agent links, and test hooks." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Object schemas, owner-scoped persistence tables, named validation rules, sample-bundle summary, and contract-test hooks without submitted evidence artifacts." },
         { "key": "objectSchemas", "type": "array", "required": true, "privacy": "public", "description": "Typed evidence artifact, external entity reference, claim, privacy-safe match signal, interoperable traceability event, decision, activity, and agent schemas." },
+        { "key": "persistenceTables", "type": "array", "required": true, "privacy": "public_contract", "description": "Append-only owner-scoped tables that persist provenance agents, artifacts, claims, claim-artifact links, external references, review decisions, activities, traceability events, and state transition events." },
         { "key": "validationRules", "type": "string_array", "required": true, "privacy": "public", "description": "Public invariants such as one-proof-one-claim, scope alignment, and external entity dedupe." },
         { "key": "validationRuleCodes", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Stable rule codes used by the provenance validator." },
         { "key": "sampleBundleSummary", "type": "object", "required": true, "privacy": "public_contract", "description": "Synthetic non-user evidence bundle counts and validation status proving the contract is executable without exposing submitted evidence." },

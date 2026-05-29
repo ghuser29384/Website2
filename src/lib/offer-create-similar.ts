@@ -95,7 +95,7 @@ export interface OfferCreateSimilarValidation {
 const CREATE_SIMILAR_NON_CLAIMS = [
   "Create-similar returns a viewer-local draft prefill, not an offer publication, agreement, escrow, custody promise, or completed moral trade.",
   "No create-similar storage happens before authentication; the API only returns a sign-in draft URL for logged-out viewers.",
-  "Templates copy only public offer terms and deliberately omit private wishes, contact details, raw source notes, personalized cart state, and evidence URLs.",
+  "Templates copy only public offer terms and deliberately omit private wishes, contact details, raw source notes, personalized saved-offer state, and evidence URLs.",
   "Every copied draft still requires human editing, provenance review, consent gates, and manual evidence review before publication or reliance.",
   "Create-similar does not contact counterparties, rank moral value globally, or expose public social-follow counts.",
 ] as const;

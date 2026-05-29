@@ -42,6 +42,21 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
       (schema) => schema.key === "state_transition_event_record",
     ),
   );
+  assert.ok(
+    profile.provenancePersistence.tables.some(
+      (table) => table.table === "moral_trade_evidence_artifacts",
+    ),
+  );
+  assert.ok(
+    profile.provenancePersistence.tables.some(
+      (table) => table.table === "moral_trade_traceability_events",
+    ),
+  );
+  assert.ok(
+    profile.provenancePersistence.accessRules.some((rule) =>
+      /No update or delete policies/.test(rule),
+    ),
+  );
   assert.ok(profile.qualityMetrics.includes("privacy_leakage_incidents"));
   assert.ok(profile.statusValues.includes("completion_reviewed"));
   assert.ok(profile.statusValues.includes("disputed_unresolved"));

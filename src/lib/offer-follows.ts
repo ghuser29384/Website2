@@ -49,7 +49,7 @@ export interface OfferFollowValidation {
 
 const NON_CLAIMS = [
   "Offer follow records are viewer-owned saved-offer records, not public social follows.",
-  "Following an offer does not disclose private wishes, contact details, cart state, or source notes.",
+  "Following an offer does not disclose private wishes, contact details, saved-offer state, or source notes.",
   "Following an offer does not create escrow, custody, agreement formation, autonomous outreach, or platform moral ranking.",
   "A followed offer can still require sign-in, consent, evidence review, and manual review before any reliance.",
 ] as const;

@@ -46,7 +46,7 @@ export default function NotFound() {
                 <span className="flow-number">02</span>
                 <div>
                   <strong>Sign in for private records</strong>
-                  <p>Dashboards, carts, and agreements require the relevant account.</p>
+                  <p>Dashboards, saved offers, and agreements require the relevant account.</p>
                 </div>
               </div>
             </div>

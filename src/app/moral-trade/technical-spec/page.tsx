@@ -1786,6 +1786,14 @@ export default async function MoralTradeTechnicalSpecPage() {
               </p>
             </article>
             <article className="panel protocol-contract-card">
+              <h3>Append-only storage</h3>
+              <p>
+                {provenanceContract.persistenceTables.length} owner-scoped table(s) persist
+                artifacts, claims, agents, activities, external references, traceability events,
+                and state transitions.
+              </p>
+            </article>
+            <article className="panel protocol-contract-card">
               <h3>Contract tests</h3>
               <ul className="clean-list">
                 {provenanceContract.contractTests.map((hook) => (
@@ -1793,6 +1801,15 @@ export default async function MoralTradeTechnicalSpecPage() {
                 ))}
               </ul>
             </article>
+          </div>
+          <div className="protocol-contract-grid">
+            {provenanceContract.persistenceTables.slice(0, 6).map((table) => (
+              <article className="panel protocol-contract-card" key={table.table}>
+                <p className="detail-kicker">{table.objectSchemaKey}</p>
+                <h3>{table.table}</h3>
+                <p>{table.accessModel}</p>
+              </article>
+            ))}
           </div>
           <div className="protocol-contract-grid">
             {profile.provenanceObjectSchemas.map((schema) => (

@@ -2703,84 +2703,6 @@ export async function expressInterestAction(formData: FormData) {
   redirectWithMessage(`/offers/${offerId}`, "message", "Interest recorded.");
 }
 
-export async function expressGuestInterestAction(formData: FormData) {
-  if (!hasSupabaseEnv()) {
-    redirectWithMessage("/offers", "error", "Supabase is not configured yet.");
-  }
-
-  const offerId = readRequired(formData, "offer_id");
-  const contactEmail = readRequired(formData, "contact_email").toLowerCase();
-  const displayName = readOptional(formData, "display_name");
-  const city = readOptional(formData, "city");
-  const region = readOptional(formData, "region");
-  const message = readRequired(formData, "message");
-  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), `/offers/${offerId}`);
-
-  if (!offerId || !contactEmail || !message) {
-    redirectWithMessage(returnTo, "error", "Email and message are required.");
-  }
-
-  enforceActionRateLimit({
-    key: `guest-interest:${offerId}:${contactEmail}`,
-    limit: 4,
-    message: "Too many guest responses for this offer. Wait a few minutes before trying again.",
-    returnTo,
-    windowMs: 10 * 60 * 1000,
-  });
-
-  const viewer = await getViewer();
-  if (viewer) {
-    redirectWithMessage(returnTo, "error", "You are already signed in. Use the member response form instead.");
-  }
-
-  const supabase = await createClient();
-  const { data: offer, error: offerError } = await supabase
-    .from("offers")
-    .select("*")
-    .eq("id", offerId)
-    .maybeSingle();
-
-  if (offerError || !offer) {
-    redirectWithMessage("/offers", "error", offerError?.message ?? "Offer not found.");
-  }
-
-  if (offer.status !== "open") {
-    redirectWithMessage(returnTo, "error", "This offer is not currently accepting new responses.");
-  }
-
-  const guestAlias = displayName || contactEmail.split("@")[0] || "Guest respondent";
-  const { error } = await supabase.from("guest_interests").upsert(
-    {
-      offer_id: offerId,
-      contact_email: contactEmail,
-      display_name: guestAlias,
-      city: city || null,
-      region: region || null,
-      message,
-      status: "pending",
-    },
-    {
-      onConflict: "offer_id,contact_email",
-    },
-  );
-
-  if (error) {
-    logSupabaseActionError("Failed to record guest interest", error, {
-      offerId,
-      contactEmail,
-    });
-    redirectWithMessage(returnTo, "error", error.message);
-  }
-
-  revalidatePath(`/offers/${offerId}`);
-  revalidatePath("/dashboard");
-  redirectWithMessage(
-    returnTo,
-    "message",
-    "Response recorded without an account. The offer owner can follow up by email, and you can create an account later to manage exchanges publicly.",
-  );
-}
-
 export async function updateProfileAction(formData: FormData) {
   if (!hasSupabaseEnv()) {
     redirectWithMessage("/", "error", "Supabase is not configured yet.");
@@ -6901,7 +6823,7 @@ export async function toggleCartAction(formData: FormData) {
   }
 
   if (offer.owner_id === viewer.authUser.id) {
-    redirectWithMessage(returnTo, "error", "You cannot add your own offer to your cart.");
+    redirectWithMessage(returnTo, "error", "You cannot save your own offer.");
   }
 
   const { data: existing } = await supabase
@@ -6919,7 +6841,7 @@ export async function toggleCartAction(formData: FormData) {
       .eq("user_id", viewer.authUser.id);
 
     if (error) {
-      logSupabaseActionError("Failed to remove offer from cart", error, {
+      logSupabaseActionError("Failed to remove saved offer", error, {
         offerId,
         userId: viewer.authUser.id,
       });
@@ -6929,7 +6851,7 @@ export async function toggleCartAction(formData: FormData) {
     revalidatePath("/cart");
     revalidatePath("/dashboard");
     revalidatePath(`/offers/${offerId}`);
-    redirectWithMessage(returnTo, "message", "Removed from cart.");
+    redirectWithMessage(returnTo, "message", "Removed saved offer.");
   }
 
   const { error } = await supabase.from("offer_carts").insert({
@@ -6938,7 +6860,7 @@ export async function toggleCartAction(formData: FormData) {
   });
 
   if (error) {
-    logSupabaseActionError("Failed to add offer to cart", error, {
+    logSupabaseActionError("Failed to save offer", error, {
       offerId,
       userId: viewer.authUser.id,
     });
@@ -6948,7 +6870,7 @@ export async function toggleCartAction(formData: FormData) {
   revalidatePath("/cart");
   revalidatePath("/dashboard");
   revalidatePath(`/offers/${offerId}`);
-  redirectWithMessage(returnTo, "message", "Added to cart.");
+  redirectWithMessage(returnTo, "message", "Saved offer.");
 }
 
 export async function updateOfferDiscountAction(formData: FormData) {

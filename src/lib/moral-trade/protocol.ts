@@ -21,6 +21,16 @@ export type MoralTradeProtocolProfile = {
     agents: string[];
   };
   provenanceObjectSchemas: Array<{ key: string; label: string; required: string[] }>;
+  provenancePersistence: {
+    strategy: string;
+    tables: Array<{
+      table: string;
+      objectSchemaKey: string;
+      accessModel: string;
+      requiredColumns: string[];
+    }>;
+    accessRules: string[];
+  };
   qualityMetrics: string[];
 };
 
@@ -169,6 +179,18 @@ const REQUIRED_PROVENANCE_OBJECT_SCHEMAS = [
   "provenance_activity",
   "provenance_agent",
   "state_transition_event_record",
+] as const;
+
+const REQUIRED_PROVENANCE_PERSISTENCE_TABLES = [
+  "moral_trade_provenance_agents",
+  "moral_trade_evidence_artifacts",
+  "moral_trade_evidence_claims",
+  "moral_trade_evidence_claim_artifacts",
+  "moral_trade_external_entity_references",
+  "moral_trade_review_decisions",
+  "moral_trade_provenance_activities",
+  "moral_trade_traceability_events",
+  "moral_trade_state_transition_events",
 ] as const;
 
 const COMPLETE_PROPOSAL_REQUIRED_STATUSES = [
@@ -599,6 +621,11 @@ export function validateMoralTradeProtocolProfile(): MoralTradeProtocolValidatio
     rule.from,
     ...rule.allowedTo,
   ]);
+  const provenancePersistence = protocolProfile.provenancePersistence ?? {
+    accessRules: [],
+    strategy: "",
+    tables: [],
+  };
   const checks = [
     check(
       "required-proposal-fields",
@@ -698,6 +725,25 @@ export function validateMoralTradeProtocolProfile(): MoralTradeProtocolValidatio
       ) &&
         protocolProfile.provenanceObjectSchemas.every((schema) => schema.required.length >= 3),
       `${protocolProfile.provenanceObjectSchemas.length} object schema(s) published for evidence and review provenance.`,
+    ),
+    check(
+      "provenance-persistence",
+      "Provenance persistence tables",
+      hasAll(
+        provenancePersistence.tables.map((table) => table.table),
+        REQUIRED_PROVENANCE_PERSISTENCE_TABLES,
+      ) &&
+        provenancePersistence.tables.every(
+          (table) =>
+            protocolProfile.provenanceObjectSchemas.some(
+              (schema) => schema.key === table.objectSchemaKey,
+            ) &&
+            table.requiredColumns.includes("owner_profile_id") &&
+            table.requiredColumns.length >= 4,
+        ) &&
+        provenancePersistence.accessRules.some((rule) => /No anonymous writes/i.test(rule)) &&
+        provenancePersistence.accessRules.some((rule) => /No update or delete policies/i.test(rule)),
+      `${provenancePersistence.tables.length} append-only persistence table(s) map provenance object schemas to owner-scoped storage.`,
     ),
     check(
       "quality-metrics",

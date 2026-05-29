@@ -277,6 +277,70 @@
       "required": ["id", "kind", "label"]
     }
   ],
+  "provenancePersistence": {
+    "strategy": "Append-only owner-scoped tables persist W3C PROV-style entities, activities, agents, external references, and EPCIS-oriented traceability events. Public reads require redaction_level=public; private artifacts remain owner-scoped unless a separate review workflow publishes a redacted summary.",
+    "tables": [
+      {
+        "table": "moral_trade_provenance_agents",
+        "objectSchemaKey": "provenance_agent",
+        "accessModel": "owner_insert_public_or_owner_read",
+        "requiredColumns": ["id", "owner_profile_id", "agent_key", "kind", "label", "redaction_level", "created_at"]
+      },
+      {
+        "table": "moral_trade_evidence_artifacts",
+        "objectSchemaKey": "evidence_artifact",
+        "accessModel": "owner_insert_public_or_owner_read",
+        "requiredColumns": ["id", "owner_profile_id", "subject_kind", "subject_id", "kind", "normalized_locator", "claim_scopes", "submitted_by_agent_id", "redaction_level", "sha256"]
+      },
+      {
+        "table": "moral_trade_evidence_claims",
+        "objectSchemaKey": "evidence_claim",
+        "accessModel": "owner_insert_public_or_owner_read",
+        "requiredColumns": ["id", "owner_profile_id", "subject_kind", "subject_id", "claim_type", "claim_scope", "reviewer_confidence", "uniqueness_checked", "redaction_level"]
+      },
+      {
+        "table": "moral_trade_evidence_claim_artifacts",
+        "objectSchemaKey": "evidence_claim",
+        "accessModel": "owner_insert_public_pair_read",
+        "requiredColumns": ["claim_id", "artifact_id", "owner_profile_id", "created_at"]
+      },
+      {
+        "table": "moral_trade_external_entity_references",
+        "objectSchemaKey": "external_entity_reference",
+        "accessModel": "owner_insert_public_or_owner_read",
+        "requiredColumns": ["id", "owner_profile_id", "entity_type", "identifier_system", "normalized_identifier", "dedupe_key", "verification_status", "redaction_level", "sha256"]
+      },
+      {
+        "table": "moral_trade_review_decisions",
+        "objectSchemaKey": "review_decision",
+        "accessModel": "owner_insert_public_or_owner_read",
+        "requiredColumns": ["id", "owner_profile_id", "subject_kind", "subject_id", "outcome", "reason_codes", "summary", "reviewer_agent_id", "redaction_level"]
+      },
+      {
+        "table": "moral_trade_provenance_activities",
+        "objectSchemaKey": "provenance_activity",
+        "accessModel": "owner_insert_public_or_owner_read",
+        "requiredColumns": ["id", "owner_profile_id", "subject_kind", "subject_id", "kind", "activity_at", "used_entity_ids", "generated_entity_ids", "agent_ids", "activity_hash"]
+      },
+      {
+        "table": "moral_trade_traceability_events",
+        "objectSchemaKey": "traceability_event",
+        "accessModel": "owner_insert_public_or_owner_read",
+        "requiredColumns": ["id", "owner_profile_id", "event_time", "recorded_at", "action", "business_step", "disposition", "what", "where_recorded", "why", "agent_ids", "redaction_level", "sha256"]
+      },
+      {
+        "table": "moral_trade_state_transition_events",
+        "objectSchemaKey": "state_transition_event_record",
+        "accessModel": "owner_insert_public_or_owner_read",
+        "requiredColumns": ["id", "owner_profile_id", "subject_kind", "subject_id", "from_status", "to_status", "provenance_activity", "actor_agent_id", "idempotency_key", "event_hash"]
+      }
+    ],
+    "accessRules": [
+      "No anonymous writes to provenance persistence tables.",
+      "No update or delete policies are defined for provenance persistence tables; corrections append new activities or review decisions.",
+      "Public reads require redaction_level=public and must not include raw private wishes, contact details, source notes, payment secrets, or unredacted evidence artifacts."
+    ]
+  },
   "qualityMetrics": [
     "draft_completion_rate",
     "blocked_proposal_precision",

@@ -220,6 +220,9 @@ export async function GET() {
         ) ?? null,
       provenanceSchemaVersion: provenanceContract.schemaVersion,
       provenanceValidationRules: provenanceContract.validationRules.map((rule) => rule.key),
+      provenancePersistenceTables: provenanceContract.persistenceTables.map(
+        (table) => table.table,
+      ),
       provenanceSampleBundleSummary: provenanceContract.sampleBundleSummary,
       provenanceContractTests: provenanceContract.contractTests,
       schemaRegistryVersion: schemaRegistry.version,

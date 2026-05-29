@@ -49,6 +49,14 @@ export interface MoralTradeSecurityValidation {
   blockers: string[];
 }
 
+export interface MoralTradeSecurityImplementationValidation {
+  status: "pass" | "fail";
+  validatorName: "moral-trade-security-implementation";
+  validatorVersion: string;
+  checks: MoralTradeSecurityCheck[];
+  blockers: string[];
+}
+
 export interface MoralTradeSecurityScaleReadiness {
   status: "pass" | "blocked";
   gateKey: string;
@@ -88,6 +96,7 @@ const REQUIRED_PUBLIC_NON_CLAIMS = [
 const REQUIRED_SECURITY_TESTS = [
   "security_profile_validator",
   "security_scale_gate_audit",
+  "security_implementation_source_smoke",
   "no_overclaim_nonclaim_smoke",
   "private_cache_header_smoke",
   "security_profile_incident_lane_smoke",
@@ -157,6 +166,83 @@ export function auditMoralTradeSecurityScaleReadiness({
     status: blockers.length ? "blocked" : "pass",
     gateKey,
     requiredControls: gate.requires,
+    blockers,
+  };
+}
+
+export function validateMoralTradeSecurityImplementation({
+  nextConfigSource,
+  supabaseProxySource,
+  supabaseServerSource,
+}: {
+  nextConfigSource: string;
+  supabaseProxySource: string;
+  supabaseServerSource: string;
+}): MoralTradeSecurityImplementationValidation {
+  const checks = [
+    check(
+      "security-headers-source",
+      "Security headers are implemented in Next config",
+      /Strict-Transport-Security/.test(nextConfigSource) &&
+        /max-age=63072000;\s*includeSubDomains;\s*preload/.test(nextConfigSource) &&
+        /X-Content-Type-Options/.test(nextConfigSource) &&
+        /nosniff/.test(nextConfigSource) &&
+        /X-Frame-Options/.test(nextConfigSource) &&
+        /DENY/.test(nextConfigSource) &&
+        /Referrer-Policy/.test(nextConfigSource) &&
+        /Permissions-Policy/.test(nextConfigSource) &&
+        /Content-Security-Policy-Report-Only/.test(nextConfigSource) &&
+        /frame-ancestors 'none'/.test(nextConfigSource),
+      "next.config.ts should publish HSTS, nosniff, frame denial, referrer, permissions, and CSP report-only headers.",
+    ),
+    check(
+      "private-no-store-source",
+      "Private route cache headers are implemented",
+      /Cache-Control/.test(nextConfigSource) &&
+        /private,\s*no-store,\s*max-age=0/.test(nextConfigSource) &&
+        /source:\s*"\/dashboard\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/admin\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/api\/profile\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/api\/jobs\/:path\*"/.test(nextConfigSource),
+      "dashboard, admin, profile API, and job API routes should be private no-store.",
+    ),
+    check(
+      "supabase-session-refresh-source",
+      "Supabase session refresh stays server-side",
+      /createServerClient<Database>/.test(supabaseProxySource) &&
+        /request\.cookies\.getAll/.test(supabaseProxySource) &&
+        /response\.cookies\.set/.test(supabaseProxySource) &&
+        /supabase\.auth\.getClaims/.test(supabaseProxySource) &&
+        /SESSION_REFRESH_TIMEOUT_MS/.test(supabaseProxySource),
+      "proxy session refresh should use server-side cookies, getClaims, and a timeout.",
+    ),
+    check(
+      "service-role-no-session-source",
+      "Service-role Supabase client does not persist sessions",
+      /getSupabaseServiceEnv/.test(supabaseServerSource) &&
+        /createSupabaseClient<Database>/.test(supabaseServerSource) &&
+        /persistSession:\s*false/.test(supabaseServerSource),
+      "service-role clients must not persist browser sessions.",
+    ),
+    check(
+      "attribution-cookie-boundary-source",
+      "Attribution cookie keeps narrow security boundary",
+      /sameSite:\s*"lax"/.test(supabaseProxySource) &&
+        /secure:\s*request\.nextUrl\.protocol === "https:"/.test(supabaseProxySource) &&
+        /httpOnly:\s*false/.test(supabaseProxySource) &&
+        /ATTRIBUTION_COOKIE_NAME/.test(supabaseProxySource),
+      "analytics attribution cookies should be SameSite=Lax, secure on HTTPS, and separate from auth cookies.",
+    ),
+  ];
+  const blockers = checks
+    .filter((entry) => entry.status === "fail")
+    .map((entry) => `${entry.id}: ${entry.label}`);
+
+  return {
+    status: blockers.length ? "fail" : "pass",
+    validatorName: "moral-trade-security-implementation",
+    validatorVersion: MORAL_TRADE_SECURITY_VALIDATOR_VERSION,
+    checks,
     blockers,
   };
 }

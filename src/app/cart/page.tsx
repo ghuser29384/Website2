@@ -11,7 +11,7 @@ import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
-  title: "Cart",
+  title: "Saved offers",
   robots: {
     index: false,
     follow: false,
@@ -40,11 +40,11 @@ export default async function CartPage({ searchParams }: CartPageProps) {
 
         <div className="hero-grid">
           <section className="hero-copy">
-            <p className="eyebrow">Shopping cart</p>
+            <p className="eyebrow">Saved offers</p>
             <h1>Offers you are actively tracking.</h1>
             <p className="hero-text">
-              The cart is a lightweight way to keep candidate offers in view. If an owner reduces
-              the cost or commitment, the updated discount note appears here.
+              Saving an offer keeps a candidate trade in view without signaling public endorsement.
+              If an owner reduces the cost or commitment, the updated discount note appears here.
             </p>
           </section>
 
@@ -55,7 +55,7 @@ export default async function CartPage({ searchParams }: CartPageProps) {
                 <span className="flow-number">01</span>
                 <div>
                   <strong>Offers under consideration</strong>
-                  <p>Use the cart for public commitments you may want to evaluate more carefully.</p>
+                  <p>Save public commitments you may want to evaluate more carefully.</p>
                 </div>
               </div>
               <div className="flow-step">
@@ -84,7 +84,7 @@ export default async function CartPage({ searchParams }: CartPageProps) {
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Tracked offers</p>
-            <h2>Your cart</h2>
+            <h2>Your saved offers</h2>
             <p>
               These entries are private to you. Each one links back to the live offer dossier and
               carries any current discount note from the owner.
@@ -134,7 +134,7 @@ export default async function CartPage({ searchParams }: CartPageProps) {
                           <input name="offer_id" type="hidden" value={item.offer.id} />
                           <input name="return_to" type="hidden" value="/cart" />
                           <button className="button button-secondary button-mini" type="submit">
-                            Remove
+                            Remove saved offer
                           </button>
                         </form>
                       </div>
@@ -145,8 +145,8 @@ export default async function CartPage({ searchParams }: CartPageProps) {
             ) : (
               <div className="empty-state">
                 <div>
-                  <strong>Your cart is empty.</strong>
-                  <p>Add offers from the public directory when you want to track them closely.</p>
+                  <strong>You have no saved offers yet.</strong>
+                  <p>Save offers from the public directory when you want to track them closely.</p>
                 </div>
               </div>
             )}

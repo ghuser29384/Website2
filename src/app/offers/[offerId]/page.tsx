@@ -328,15 +328,15 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               <div className="flow-step">
                 <span className="flow-number">02</span>
                 <div>
-                  <strong>Interest and cart activity</strong>
+                  <strong>Interest and saved-offer activity</strong>
                   <p>
                     {isOwner
-                      ? `${incomingResponses.length} response(s) | ${cartState.cartCount ?? 0} cart addition(s)`
+                      ? `${incomingResponses.length} response(s) | ${cartState.cartCount ?? 0} saved offer(s)`
                       : myInterest
                         ? `Your interest status: ${myInterest.status}`
                         : cartState.isInCart
-                          ? "Currently in your cart"
-                          : "Not yet added to your cart"}
+                          ? "Saved for your review"
+                          : "Not saved yet"}
                   </p>
                 </div>
               </div>
@@ -605,7 +605,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                 <div className="clean-stack">
                   <div className="owner-summary">
                     <span className="badge">{incomingResponses.length} responses</span>
-                    <span className="impact-pill">{cartState.cartCount ?? 0} carts</span>
+                    <span className="impact-pill">{cartState.cartCount ?? 0} saved</span>
                   </div>
 
                   <form action={updateOfferDiscountAction} className="stack-form">
@@ -859,7 +859,10 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                 <div className="empty-state">
                   <div>
                     <strong>No responses yet.</strong>
-                    <p>Member and guest responses will appear here when someone engages with your offer.</p>
+                    <p>
+                      Signed-in member responses will appear here. Legacy guest records remain
+                      visible if one exists, but new public contact paths require sign-in first.
+                    </p>
                   </div>
                 </div>
               )}

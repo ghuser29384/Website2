@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
 import copilotContractSchemaJson from "../../../config/moral-trade/copilot-contract.schema.json";
@@ -11,6 +13,7 @@ import {
   summarizeMoralTradeCopilotEvidenceMetadata,
   validateMoralTradeCopilotContract,
   validateMoralTradeCopilotOutput,
+  validateMoralTradeCopilotReviewRouteImplementation,
   type MoralTradeCopilotContract,
 } from "./copilot";
 import { GET as contractRoute } from "../../app/api/moral-trade/copilot/contract/route";
@@ -34,6 +37,10 @@ type CopilotContractJsonSchema = {
 };
 
 const copilotContractSchema = copilotContractSchemaJson as CopilotContractJsonSchema;
+
+function readRepoFile(path: string) {
+  return readFileSync(join(process.cwd(), path), "utf8");
+}
 
 const completeDraft = {
   format: "pledge_swap",
@@ -224,6 +231,20 @@ test("copilot contract route publishes rollout readiness evidence", async () => 
   assert.equal(body.publicContract.rolloutReadiness[0].targetStage, "shadow_mode");
   assert.equal(body.publicContract.rolloutReadiness[0].status, "pass");
   assert.equal(body.publicContract.rolloutReadiness[1].status, "blocked");
+});
+
+test("copilot review route remains deterministic and non-mutating", () => {
+  const validation = validateMoralTradeCopilotReviewRouteImplementation({
+    routeSource: readRepoFile("src/app/api/moral-trade/copilot/review/route.ts"),
+  });
+
+  assert.equal(validation.status, "pass");
+  assert.equal(validation.blockers.length, 0);
+  assert.ok(
+    validation.checks.some(
+      (check) => check.id === "copilot-review-no-live-mutations" && check.status === "pass",
+    ),
+  );
 });
 
 test("copilot output uses approved schema and redacted factor-code explanations", () => {

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
 import {
@@ -9,6 +11,7 @@ import {
   getMoralTradeProvenanceSampleBundle,
   MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS,
   validateMoralTradeProvenanceContract,
+  validateMoralTradeProvenancePersistenceSql,
   validateMoralTradeProvenanceBundle,
   type MoralTradeEvidenceArtifact,
   type MoralTradeEvidenceClaim,
@@ -18,6 +21,10 @@ import {
   type MoralTradeProvenanceBundle,
   type MoralTradeTraceabilityEvent,
 } from "./provenance";
+
+function readRepoFile(path: string) {
+  return readFileSync(join(process.cwd(), path), "utf8");
+}
 
 const submittedAt = "2026-05-01T12:00:00.000Z";
 const now = new Date("2026-05-27T12:00:00.000Z");
@@ -178,7 +185,35 @@ test("provenance contract publishes validator-backed sample bundle coverage", ()
   assert.ok(contract.validationRules.some((rule) => rule.key === "external-entity-references"));
   assert.equal(contract.sampleBundleSummary.validationStatus, "pass");
   assert.ok(contract.sampleBundleSummary.reviewDecisionCount > 0);
+  assert.ok(
+    contract.persistenceTables.some(
+      (table) => table.table === "moral_trade_evidence_artifacts",
+    ),
+  );
+  assert.ok(
+    contract.persistenceTables.some(
+      (table) => table.table === "moral_trade_state_transition_events",
+    ),
+  );
+  assert.ok(contract.contractTests.includes("provenance_persistence_schema_smoke"));
   assert.ok(contract.contractTests.includes("technical_spec_provenance_contract_smoke"));
+});
+
+test("provenance persistence SQL is append-only and privacy scoped", () => {
+  const validation = validateMoralTradeProvenancePersistenceSql({
+    schemaSql: readRepoFile("supabase/schema.sql"),
+    migrationSql: readRepoFile(
+      "supabase/migrations/20260529_moral_trade_provenance_persistence.sql",
+    ),
+  });
+
+  assert.equal(validation.status, "pass");
+  assert.equal(validation.blockers.length, 0);
+  assert.ok(
+    validation.checks.some(
+      (check) => check.id === "persistence-append-only-policies" && check.status === "pass",
+    ),
+  );
 });
 
 test("external entity references normalize identifiers and produce stable dedupe keys", () => {
