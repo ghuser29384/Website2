@@ -1,8 +1,22 @@
 import { NextResponse } from "next/server";
 
+import {
+  buildMoralTradeApiRateLimitResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
+
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "public_contract_read");
+
+  if (rateLimit.limited) {
+    return buildMoralTradeApiRateLimitResponse(
+      rateLimit,
+      "Rate-limited public contract read returns no contract payload until the window resets.",
+    );
+  }
+
   return NextResponse.json({
     exportVersion: "background-networking-v5",
     importableCollections: [

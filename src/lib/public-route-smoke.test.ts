@@ -1143,6 +1143,58 @@ test("dashboard exposes existing profile portability endpoints", () => {
   );
 });
 
+test("public contract APIs enforce the documented public contract read throttle", () => {
+  const apiRateLimitSource = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const publicContractReadRoutes = [
+    "src/app/api/moral-trade/health/route.ts",
+    "src/app/api/moral-trade/api-contract/route.ts",
+    "src/app/api/moral-trade/data-model/contract/route.ts",
+    "src/app/api/moral-trade/policy-bundle/contract/route.ts",
+    "src/app/api/moral-trade/provenance/schema/route.ts",
+    "src/app/api/moral-trade/schemas/route.ts",
+    "src/app/api/moral-trade/copilot/contract/route.ts",
+    "src/app/api/moral-trade/match-signal/contract/route.ts",
+    "src/app/api/moral-trade/challenge-appeal/contract/route.ts",
+    "src/app/api/moral-trade/disclosure/contract/route.ts",
+    "src/app/api/moral-trade/review-workflow/contract/route.ts",
+    "src/app/api/moral-trade/reasoning/packets/route.ts",
+    "src/app/api/moral-trade/operations/health/route.ts",
+    "src/app/api/moral-trade/security/health/route.ts",
+    "src/app/api/moral-trade/incident-response/health/route.ts",
+    "src/app/api/moral-trade/evaluation/health/route.ts",
+    "src/app/api/moral-trade/performance/health/route.ts",
+    "src/app/api/moral-trade/externality/health/route.ts",
+    "src/app/api/moral-trade/ai-governance/health/route.ts",
+    "src/app/api/profile/schema/route.ts",
+  ];
+
+  assert.match(
+    apiRateLimitSource,
+    /public_contract_read: \{ limit: 240, windowMs: 60_000 \}/,
+  );
+  assert.match(apiRateLimitSource, /buildMoralTradeApiRateLimitResponse/);
+  assert.match(apiRateLimitSource, /buildMoralTradeApiRateLimitBlocker\(rateLimit\.surface\)/);
+  assert.match(apiRateLimitSource, /"Retry-After"/);
+  assert.match(apiRateLimitSource, /"Cache-Control": cacheControl/);
+
+  for (const routePath of publicContractReadRoutes) {
+    const routeSource = readRepoFile(routePath);
+
+    assert.match(routeSource, /export async function GET\(request: Request\)/, routePath);
+    assert.match(
+      routeSource,
+      /takeMoralTradeApiRateLimitSlot\(request, "public_contract_read"\)/,
+      routePath,
+    );
+    assert.match(routeSource, /buildMoralTradeApiRateLimitResponse\(/, routePath);
+    assert.ok(
+      routeSource.indexOf('takeMoralTradeApiRateLimitSlot(request, "public_contract_read")') <
+        routeSource.indexOf("NextResponse.json"),
+      routePath,
+    );
+  }
+});
+
 test("public guidance describes verification pipelines without custody overclaims", () => {
   const donationOffsetsPage = readRepoFile("src/app/donation-offsets/page.tsx");
   const mpfgPage = readRepoFile("src/app/mpgf/page.tsx");

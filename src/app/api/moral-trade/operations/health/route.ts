@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
+  buildMoralTradeApiRateLimitResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
+import {
   MORAL_TRADE_RESILIENCE_FALLBACK_TESTS,
   getMoralTradeOperationsProfile,
   validateMoralTradeOperationsProfile,
@@ -8,7 +12,16 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "public_contract_read");
+
+  if (rateLimit.limited) {
+    return buildMoralTradeApiRateLimitResponse(
+      rateLimit,
+      "Rate-limited public contract read returns no contract payload until the window resets.",
+    );
+  }
+
   const profile = getMoralTradeOperationsProfile();
   const validation = validateMoralTradeOperationsProfile(profile);
 

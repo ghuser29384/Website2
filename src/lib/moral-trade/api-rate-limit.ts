@@ -1,3 +1,5 @@
+import { NextResponse } from "next/server";
+
 import {
   getRequestRateLimitKey,
   getRetryAfterSeconds,
@@ -41,4 +43,34 @@ export function takeMoralTradeApiRateLimitSlot(
 
 export function buildMoralTradeApiRateLimitBlocker(surface: MoralTradeApiRateLimitSurface) {
   return `rate_limit_exceeded:${surface}`;
+}
+
+export function buildMoralTradeApiRateLimitResponse(
+  rateLimit: ReturnType<typeof takeMoralTradeApiRateLimitSlot>,
+  fallback: string,
+  cacheControl = "no-store",
+) {
+  return NextResponse.json(
+    {
+      ok: false,
+      checkedAt: new Date().toISOString(),
+      error: "rate_limited",
+      rateLimit: {
+        limit: rateLimit.limit,
+        remaining: rateLimit.remaining,
+        resetAt: new Date(rateLimit.resetAt).toISOString(),
+        surface: rateLimit.surface,
+        windowMs: rateLimit.windowMs,
+      },
+      fallback,
+      blockers: [buildMoralTradeApiRateLimitBlocker(rateLimit.surface)],
+    },
+    {
+      headers: {
+        "Cache-Control": cacheControl,
+        "Retry-After": String(rateLimit.retryAfterSeconds),
+      },
+      status: 429,
+    },
+  );
 }
