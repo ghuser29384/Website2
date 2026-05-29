@@ -74,7 +74,7 @@ type CollectiveDecisionResponseRow =
 type InterestStatus = Database["public"]["Enums"]["interest_status"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-export type PeopleSort = "rating" | "followers" | "karma" | "comments";
+export type PeopleSort = "reviewed" | "offers" | "newest";
 export type PublicLocationGranularity = "hidden" | "country" | "region" | "city";
 export const OFFERS_PAGE_SIZE = 24;
 export const PEOPLE_PAGE_SIZE = 24;
@@ -948,28 +948,16 @@ export async function getViewer() {
 }
 
 function applyPublicProfileSort(query: any, sort: PeopleSort) {
-  if (sort === "followers") {
+  if (sort === "offers") {
     return query
-      .order("follower_count", { ascending: false })
       .order("offer_count", { ascending: false })
+      .order("rating_count", { ascending: false })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });
   }
 
-  if (sort === "karma") {
-    return query
-      .order("karma", { ascending: false })
-      .order("offer_count", { ascending: false })
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true });
-  }
-
-  if (sort === "comments") {
-    return query
-      .order("comment_count", { ascending: false })
-      .order("offer_count", { ascending: false })
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true });
+  if (sort === "newest") {
+    return query.order("created_at", { ascending: false }).order("id", { ascending: true });
   }
 
   return query

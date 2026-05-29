@@ -12,6 +12,7 @@ import {
   PEOPLE_PAGE_SIZE,
   type PeopleSort,
 } from "@/lib/app-data";
+import { getPublicProfileMetaSummary } from "@/lib/public-profile-trust";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -33,10 +34,9 @@ export const metadata: Metadata = {
 };
 
 const SORT_OPTIONS: Array<{ value: PeopleSort; label: string }> = [
-  { value: "rating", label: "Reviewed trust" },
-  { value: "followers", label: "Counterparty interest" },
-  { value: "karma", label: "Reviewer karma" },
-  { value: "comments", label: "Public discussion" },
+  { value: "reviewed", label: "Reviewed records" },
+  { value: "offers", label: "Open offers" },
+  { value: "newest", label: "Newest opt-ins" },
 ];
 
 interface PeoplePageProps {
@@ -44,11 +44,11 @@ interface PeoplePageProps {
 }
 
 function normalizeSort(value: string | undefined): PeopleSort {
-  if (value === "followers" || value === "karma" || value === "comments") {
+  if (value === "offers" || value === "newest") {
     return value;
   }
 
-  return "rating";
+  return "reviewed";
 }
 
 function parsePage(value: string | string[] | undefined) {
@@ -59,7 +59,7 @@ function parsePage(value: string | string[] | undefined) {
 }
 
 function buildPeopleHref(sort: PeopleSort, page: number) {
-  if (sort === "rating" && page === 1) {
+  if (sort === "reviewed" && page === 1) {
     return "/people";
   }
 
@@ -93,7 +93,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
     name: "Moral Trade people directory",
     url: getAbsoluteUrl(
       `/people${
-        sort === "rating" && page === 1
+        sort === "reviewed" && page === 1
           ? ""
           : `?sort=${sort}${page === 1 ? "" : `&page=${page}`}`
       }`,
@@ -106,7 +106,9 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
         url: getAbsoluteUrl(`/people/${profile.id}`),
         name: profile.resolvedName,
         description: truncateDescription(
-          `${formatPublicProfileLocation(profile) || "Location not listed"}. ${profile.offerCount} open offers. ${profile.verificationBadges.length} reviewed proof badges.`,
+          getPublicProfileMetaSummary(profile, {
+            publicLocation: formatPublicProfileLocation(profile),
+          }),
           140,
         ),
       })),
@@ -132,20 +134,21 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">People directory</p>
-            <h1>Public member records and visible reputation signals.</h1>
+            <h1>Public member records with reviewable signals.</h1>
             <p className="hero-text">
               Public profiles appear after participants publish offers or explicitly opt into
-              visibility. The goal is accountability around reviewable trades, not social-feed growth.
+              visibility. The goal is accountability around reviewable trades, not follower,
+              karma, or comment leaderboards.
             </p>
           </section>
 
           <aside className="hero-panel panel">
-            <p className="eyebrow">Directory sorting</p>
+            <p className="eyebrow">Record sorting</p>
             <div className="flow-card">
               <div className="flow-step">
                 <span className="flow-number">01</span>
                 <div>
-                  <strong>Reviewed trust</strong>
+                  <strong>Reviewed records</strong>
                   <p>Ratings and proof badges matter only after there is a reviewable record.</p>
                 </div>
               </div>
@@ -184,8 +187,9 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
             <p className="eyebrow">Public directory</p>
             <h2>Browse all visible members</h2>
             <p>
-              Sorting emphasizes public record signals rather than trending or activity-ranking
-              mechanics, and the directory is paged so it remains usable at much larger scale.
+              Sorting emphasizes reviewed records, open offers, and recent opt-ins rather than
+              social counters. Empty follower, karma, and comment metrics stay hidden until they
+              carry real trust value.
             </p>
           </div>
 

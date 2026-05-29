@@ -20,6 +20,10 @@ import {
   listRecommendableOffers,
 } from "@/lib/app-data";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
+import {
+  getPublicProfileMetaSummary,
+  getPublicProfileTrustSignals,
+} from "@/lib/public-profile-trust";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -44,7 +48,9 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
     title: data.profile ? data.profile.resolvedName : "Profile",
     description: data.profile
       ? truncateDescription(
-          `${data.profile.resolvedName}${formatPublicProfileLocation(data.profile) ? ` from ${formatPublicProfileLocation(data.profile)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers and ${data.profile.verificationBadges.length} reviewed proof badges.`,
+          getPublicProfileMetaSummary(data.profile, {
+            publicLocation: formatPublicProfileLocation(data.profile),
+          }),
         )
       : "Public Moral Trade member profile.",
     alternates: {
@@ -54,7 +60,9 @@ export async function generateMetadata({ params }: ProfilePageProps): Promise<Me
       title: data.profile ? data.profile.resolvedName : "Profile",
       description: data.profile
         ? truncateDescription(
-            `${data.profile.resolvedName}${formatPublicProfileLocation(data.profile) ? ` from ${formatPublicProfileLocation(data.profile)}` : ""}. Public Moral Trade profile with ${data.offers.length} open offers and ${data.profile.verificationBadges.length} reviewed proof badges.`,
+            getPublicProfileMetaSummary(data.profile, {
+              publicLocation: formatPublicProfileLocation(data.profile),
+            }),
           )
         : "Public Moral Trade member profile.",
       url: getAbsoluteUrl(`/people/${profileId}`),
@@ -91,6 +99,10 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
   const profile = data.profile;
   const isOwnProfile = viewer?.authUser.id === profile.id;
   const publicLocation = formatPublicProfileLocation(profile);
+  const visibleTrustSignals = getPublicProfileTrustSignals(profile, {
+    authoredCommentCount: data.authoredCommentCount,
+    publicLocation,
+  });
   const recommendableOffers =
     viewer && isOwnProfile ? await listRecommendableOffers(viewer.authUser.id) : [];
   const profileStructuredData = {
@@ -172,9 +184,11 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
                 <span className="badge badge-secondary">No reviewed public record yet</span>
               ) : null}
             </div>
+            {profile.bio ? <p className="route-text">{profile.bio}</p> : null}
             <p className="route-text">
-              {profile.bio ||
-                "No additional public profile note yet. Exact wishes and contact details remain private until consent."}
+              {visibleTrustSignals.length
+                ? `${visibleTrustSignals.join(". ")}. Exact wishes and contact details remain private until consent.`
+                : "Trust signals appear here only after this member publishes reviewable records. Exact wishes and contact details remain private until consent."}
             </p>
           </aside>
         </div>
@@ -321,8 +335,14 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
                   <p className="route-text">{offer.offer_action}</p>
                   <div className="tag-row">
                     <span className="badge">{offer.status}</span>
-                    <span className="impact-pill">{offer.commentCount} comments</span>
-                    <span className="impact-pill">{offer.recommendationCount} recommendations</span>
+                    {offer.commentCount > 0 ? (
+                      <span className="impact-pill">{offer.commentCount} comments</span>
+                    ) : null}
+                    {offer.recommendationCount > 0 ? (
+                      <span className="impact-pill">
+                        {offer.recommendationCount} recommendations
+                      </span>
+                    ) : null}
                   </div>
                   <div className="offer-footer">
                     <div className="tag-row">

@@ -476,6 +476,29 @@ test("homepage metrics use live counts when available and avoid fake impact tota
   assert.equal(homeSource.includes("registered users"), false);
 });
 
+test("people directory hides empty social proof and sorts by reviewable records", () => {
+  const peoplePage = readRepoFile("src/app/people/page.tsx");
+  const profilePage = readRepoFile("src/app/people/[profileId]/page.tsx");
+  const appDataSource = readRepoFile("src/lib/app-data.ts");
+  const publicProfileTrustSource = readRepoFile("src/lib/public-profile-trust.ts");
+
+  assert.match(peoplePage, /Reviewed records/);
+  assert.match(peoplePage, /Open offers/);
+  assert.match(peoplePage, /Newest opt-ins/);
+  assert.match(peoplePage, /Empty follower, karma, and comment metrics stay hidden/);
+  assert.equal(peoplePage.includes("Counterparty interest"), false);
+  assert.equal(peoplePage.includes("Reviewer karma"), false);
+  assert.equal(peoplePage.includes("Public discussion"), false);
+  assert.match(appDataSource, /export type PeopleSort = "reviewed" \| "offers" \| "newest"/);
+  assert.equal(appDataSource.includes('sort === "followers"'), false);
+  assert.equal(appDataSource.includes('sort === "karma"'), false);
+  assert.equal(appDataSource.includes('sort === "comments"'), false);
+  assert.match(profilePage, /Trust signals appear here only after this member publishes reviewable records/);
+  assert.match(profilePage, /offer\.commentCount > 0/);
+  assert.match(profilePage, /offer\.recommendationCount > 0/);
+  assert.match(publicProfileTrustSource, /reviewable records are not public yet/);
+});
+
 test("MPGF signed-out manual evidence copy and controls are gated", () => {
   const consoleSource = readRepoFile("src/components/mpgf/mpgf-console.tsx");
 
