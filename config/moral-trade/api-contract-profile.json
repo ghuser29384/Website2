@@ -649,14 +649,14 @@
     },
     {
       "key": "ai_governance_health_response",
-      "purpose": "AI governance controls for deterministic decisioning, model-card and datasheet requirements, fairness documentation, explanation controls, prohibited uses, and human-controlled decisions.",
+      "purpose": "AI governance controls for deterministic decisioning, model-card and datasheet requirements, documentation templates, fairness documentation, explanation controls, prohibited uses, and human-controlled decisions.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when AI governance validator passes." },
         { "key": "decisioningMode", "type": "string", "required": true, "privacy": "public", "description": "Current decision mode; core matching and state transitions must remain deterministic/rule governed." },
         { "key": "mlEnabledForMatching", "type": "boolean", "required": true, "privacy": "public", "description": "False unless documented ML matching is explicitly approved." },
         { "key": "mlEnabledForStateChanges", "type": "boolean", "required": true, "privacy": "public", "description": "False because safety, disclosure, completion, and disputes remain human-controlled." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validation result." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Required documentation, permitted automation, prohibited uses, fairness documentation, explanation controls, and external standards." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Required documentation, machine-checkable documentation templates, permitted automation, prohibited uses, fairness documentation, explanation controls, and external standards." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "AI governance blockers." }
       ]
     },

@@ -16,6 +16,13 @@ test("AI governance profile requires documented, human-controlled, non-ranking a
   assert.equal(profile.mlEnabledForStateChanges, false);
   assert.ok(profile.requiredDocumentationBeforeMl.some((entry) => entry.key === "model_card"));
   assert.ok(profile.requiredDocumentationBeforeMl.some((entry) => entry.key === "dataset_datasheet"));
+  assert.ok(profile.documentationTemplates.some((entry) => entry.key === "model_card"));
+  assert.ok(profile.documentationTemplates.some((entry) => entry.key === "fairness_audit_report"));
+  assert.ok(
+    profile.documentationTemplates.every((entry) =>
+      entry.redactedFields.includes("raw_private_wish_text"),
+    ),
+  );
   assert.ok(profile.prohibitedUses.some((entry) => entry.key === "global_moral_ranking"));
   assert.ok(profile.prohibitedUses.some((entry) => entry.key === "end_to_end_llm_matching"));
   assert.ok(profile.prohibitedUses.some((entry) => entry.key === "raw_private_feed_training"));
@@ -37,6 +44,9 @@ test("AI governance validation fails if ML can rank or mutate state without docu
     requiredDocumentationBeforeMl: profile.requiredDocumentationBeforeMl.filter(
       (entry) => entry.key !== "model_card" && entry.key !== "dataset_datasheet",
     ),
+    documentationTemplates: profile.documentationTemplates.filter(
+      (entry) => entry.key !== "model_card",
+    ),
     prohibitedUses: profile.prohibitedUses.filter(
       (entry) => entry.key !== "global_moral_ranking",
     ),
@@ -46,7 +56,29 @@ test("AI governance validation fails if ML can rank or mutate state without docu
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("deterministic-decisioning")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("required-documentation-before-ml")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("documentation-templates")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("prohibited-uses")));
+});
+
+test("AI governance validation fails if documentation templates leak private inputs", () => {
+  const profile = getMoralTradeAiGovernanceProfile();
+  const weakenedProfile: MoralTradeAiGovernanceProfile = {
+    ...profile,
+    documentationTemplates: profile.documentationTemplates.map((template) =>
+      template.key === "dataset_datasheet"
+        ? {
+            ...template,
+            publicSummaryFields: ["collection_purpose", "raw_private_wish_text"],
+            redactedFields: ["source_note_details"],
+            reviewRule: "Publish automatically.",
+          }
+        : template,
+    ),
+  };
+  const validation = validateMoralTradeAiGovernanceProfile(weakenedProfile);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("documentation-templates")));
 });
 
 test("AI governance validation fails if fairness documentation or human control is missing", () => {

@@ -17,6 +17,15 @@ type MoralTradeFairnessDocumentation = {
   reviewRule: string;
 };
 
+type MoralTradeDocumentationTemplate = {
+  key: string;
+  label: string;
+  requiredFields: string[];
+  publicSummaryFields: string[];
+  redactedFields: string[];
+  reviewRule: string;
+};
+
 export type MoralTradeAiGovernanceProfile = {
   version: string;
   purpose: string;
@@ -24,6 +33,7 @@ export type MoralTradeAiGovernanceProfile = {
   mlEnabledForMatching: boolean;
   mlEnabledForStateChanges: boolean;
   requiredDocumentationBeforeMl: Array<Required<Pick<GovernanceEntry, "key" | "label" | "rule">>>;
+  documentationTemplates: MoralTradeDocumentationTemplate[];
   permittedAutomation: Array<Required<Pick<GovernanceEntry, "key" | "label" | "rule">>>;
   prohibitedUses: Array<Required<Pick<GovernanceEntry, "key" | "label" | "rule">>>;
   fairnessDocumentation: MoralTradeFairnessDocumentation;
@@ -58,6 +68,11 @@ const REQUIRED_DOCUMENTATION = [
   "intended_use_limits",
   "fairness_audit_report",
   "change_log",
+] as const;
+
+const REQUIRED_TEMPLATE_REDACTIONS = [
+  "raw_private_wish_text",
+  "contact_details",
 ] as const;
 
 const REQUIRED_PERMITTED_AUTOMATION = [
@@ -150,6 +165,7 @@ export function validateMoralTradeAiGovernanceProfile(
   profile: MoralTradeAiGovernanceProfile = aiGovernanceProfile,
 ): MoralTradeAiGovernanceValidation {
   const documentationKeys = profile.requiredDocumentationBeforeMl.map((entry) => entry.key);
+  const documentationTemplateKeys = profile.documentationTemplates.map((entry) => entry.key);
   const permittedAutomationKeys = profile.permittedAutomation.map((entry) => entry.key);
   const prohibitedUseKeys = profile.prohibitedUses.map((entry) => entry.key);
   const explanationControlKeys = profile.explanationControls.map((entry) => entry.key);
@@ -169,6 +185,29 @@ export function validateMoralTradeAiGovernanceProfile(
       hasAll(documentationKeys, REQUIRED_DOCUMENTATION) &&
         profile.requiredDocumentationBeforeMl.every((entry) => entry.rule),
       documentationKeys.join(", "),
+    ),
+    check(
+      "documentation-templates",
+      "Required ML documentation has machine-checkable templates",
+      hasAll(documentationTemplateKeys, REQUIRED_DOCUMENTATION) &&
+        profile.requiredDocumentationBeforeMl.every((entry) =>
+          documentationTemplateKeys.includes(entry.key),
+        ) &&
+        profile.documentationTemplates.every(
+          (template) =>
+            template.requiredFields.length >= 4 &&
+            template.publicSummaryFields.length >= 3 &&
+            template.publicSummaryFields.every((field) =>
+              template.requiredFields.includes(field),
+            ) &&
+            REQUIRED_TEMPLATE_REDACTIONS.every((field) =>
+              template.redactedFields.includes(field),
+            ) &&
+            /review|approve|confirm|log/i.test(template.reviewRule),
+        ),
+      profile.documentationTemplates
+        .map((entry) => `${entry.key}:${entry.requiredFields.length}`)
+        .join(", "),
     ),
     check(
       "permitted-automation",

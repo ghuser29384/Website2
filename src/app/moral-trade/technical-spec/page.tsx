@@ -1388,6 +1388,17 @@ export default async function MoralTradeTechnicalSpecPage() {
               </ul>
             </article>
             <article className="panel protocol-contract-card">
+              <h3>Documentation templates</h3>
+              <ul className="clean-list">
+                {aiGovernanceProfile.documentationTemplates.map((template) => (
+                  <li key={template.key}>
+                    {template.label}: {template.requiredFields.length} required fields; redacts{" "}
+                    {template.redactedFields.slice(0, 2).join(" and ")}
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
               <h3>Prohibited uses</h3>
               <ul className="clean-list">
                 {aiGovernanceProfile.prohibitedUses.map((entry) => (

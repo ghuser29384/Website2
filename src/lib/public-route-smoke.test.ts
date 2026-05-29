@@ -1113,10 +1113,16 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(externalityProfile, /challenge_window_required/);
   assert.match(aiGovernanceSource, /validateMoralTradeAiGovernanceProfile/);
   assert.match(aiGovernanceSource, /REQUIRED_DOCUMENTATION/);
+  assert.match(aiGovernanceSource, /documentation-templates/);
   assert.match(aiGovernanceSource, /deterministic-decisioning/);
   assert.match(aiGovernanceProfile, /model_card/);
   assert.match(aiGovernanceProfile, /dataset_datasheet/);
   assert.match(aiGovernanceProfile, /benchmark_slices/);
+  assert.match(aiGovernanceProfile, /documentationTemplates/);
+  assert.match(aiGovernanceProfile, /requiredFields/);
+  assert.match(aiGovernanceProfile, /publicSummaryFields/);
+  assert.match(aiGovernanceProfile, /raw_private_wish_text/);
+  assert.match(aiGovernanceProfile, /small_cell_identifiers/);
   assert.match(aiGovernanceProfile, /nist_ai_rmf/);
   assert.match(aiGovernanceProfile, /datasheets_for_datasets/);
   assert.match(aiGovernanceProfile, /fairness_tradeoff_literature/);
@@ -1214,6 +1220,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /Core Web Vitals, API latency, or loading-state readiness/);
   assert.match(apiContractProfile, /externality_health_response/);
   assert.match(apiContractProfile, /ai_governance_health_response/);
+  assert.match(apiContractProfile, /machine-checkable documentation templates/);
   assert.match(apiContractProfile, /external entity reference/);
   assert.match(apiContractProfile, /external entity dedupe/);
   assert.match(apiContractProfile, /Provenance object contract validator result/);
@@ -1310,6 +1317,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /\/api\/moral-trade\/externality\/health/);
   assert.match(technicalSpecPage, /AI governance contract/);
   assert.match(technicalSpecPage, /Undocumented ML cannot rank, match, disclose, or change state/);
+  assert.match(technicalSpecPage, /Documentation templates/);
+  assert.match(technicalSpecPage, /aiGovernanceProfile\.documentationTemplates/);
   assert.match(technicalSpecPage, /Explanation controls/);
   assert.match(technicalSpecPage, /model\s+cards/i);
   assert.match(technicalSpecPage, /dataset datasheets/i);
@@ -1453,6 +1462,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(externalityHealthRoute, /remedyControls/);
   assert.match(aiGovernanceHealthRoute, /validateMoralTradeAiGovernanceProfile/);
   assert.match(aiGovernanceHealthRoute, /requiredDocumentationBeforeMl/);
+  assert.match(aiGovernanceHealthRoute, /documentationTemplates/);
   assert.match(aiGovernanceHealthRoute, /explanationControls/);
   assert.match(aiGovernanceHealthRoute, /prohibitedUses/);
   assert.match(apiContractRoute, /validateMoralTradeApiContractProfile/);

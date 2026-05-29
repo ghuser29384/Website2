@@ -36,6 +36,170 @@
       "rule": "Every material model, dataset, prompt, or metric change must have an operator-visible change log entry and rollback note."
     }
   ],
+  "documentationTemplates": [
+    {
+      "key": "model_card",
+      "label": "Model card template",
+      "requiredFields": [
+        "intended_use",
+        "non_use_cases",
+        "decision_boundaries",
+        "training_data_summary",
+        "evaluation_slices",
+        "known_failure_modes",
+        "human_control_points",
+        "rollback_plan"
+      ],
+      "publicSummaryFields": [
+        "intended_use",
+        "non_use_cases",
+        "evaluation_slices",
+        "known_failure_modes",
+        "human_control_points"
+      ],
+      "redactedFields": [
+        "raw_private_wish_text",
+        "contact_details",
+        "exact_private_constraints",
+        "unreviewed_training_rows"
+      ],
+      "reviewRule": "A reviewer must confirm intended use, non-use, performance slices, known risks, and rollback before any model leaves shadow mode."
+    },
+    {
+      "key": "dataset_datasheet",
+      "label": "Dataset datasheet template",
+      "requiredFields": [
+        "collection_purpose",
+        "consent_basis",
+        "composition_summary",
+        "exclusion_rules",
+        "retention_policy",
+        "known_limitations",
+        "sensitive_attribute_handling",
+        "deletion_or_correction_path"
+      ],
+      "publicSummaryFields": [
+        "collection_purpose",
+        "composition_summary",
+        "exclusion_rules",
+        "retention_policy",
+        "known_limitations"
+      ],
+      "redactedFields": [
+        "raw_private_wish_text",
+        "contact_details",
+        "source_note_details",
+        "row_level_sensitive_attributes"
+      ],
+      "reviewRule": "A reviewer must confirm consent, exclusions, retention, redaction, and correction paths before any dataset supports training or evaluation."
+    },
+    {
+      "key": "benchmark_slices",
+      "label": "Benchmark-slice template",
+      "requiredFields": [
+        "slice_key",
+        "sample_count",
+        "trade_format",
+        "cause_area_pair",
+        "geography_bucket",
+        "privacy_stage",
+        "metric_values",
+        "confidence_notes"
+      ],
+      "publicSummaryFields": [
+        "slice_key",
+        "sample_count",
+        "trade_format",
+        "cause_area_pair",
+        "metric_values"
+      ],
+      "redactedFields": [
+        "raw_private_wish_text",
+        "contact_details",
+        "exact_location",
+        "small_cell_identifiers"
+      ],
+      "reviewRule": "A reviewer must confirm benchmark slices are privacy-thresholded and include the documented trade-format, cause-area, geography, and privacy-stage cuts."
+    },
+    {
+      "key": "intended_use_limits",
+      "label": "Intended-use limits template",
+      "requiredFields": [
+        "permitted_tasks",
+        "prohibited_tasks",
+        "human_review_boundary",
+        "state_mutation_boundary",
+        "disclosure_boundary",
+        "appeal_or_override_path"
+      ],
+      "publicSummaryFields": [
+        "permitted_tasks",
+        "prohibited_tasks",
+        "human_review_boundary",
+        "state_mutation_boundary"
+      ],
+      "redactedFields": [
+        "raw_private_wish_text",
+        "contact_details",
+        "exact_private_constraints"
+      ],
+      "reviewRule": "A reviewer must confirm the documented use limit forbids global moral ranking, safety blocking, disclosure, and completion decisions."
+    },
+    {
+      "key": "fairness_audit_report",
+      "label": "Fairness audit report template",
+      "requiredFields": [
+        "metrics",
+        "slices",
+        "thresholds",
+        "observed_deviations",
+        "reviewed_tradeoffs",
+        "remediation_plan",
+        "promotion_decision"
+      ],
+      "publicSummaryFields": [
+        "metrics",
+        "slices",
+        "thresholds",
+        "observed_deviations",
+        "remediation_plan",
+        "promotion_decision"
+      ],
+      "redactedFields": [
+        "raw_private_wish_text",
+        "contact_details",
+        "exact_sensitive_attribute_values",
+        "small_cell_identifiers"
+      ],
+      "reviewRule": "A reviewer must log material slice gaps, trade-offs, remediation, and a promotion decision before any ML-assisted ranking or scoring scales."
+    },
+    {
+      "key": "change_log",
+      "label": "Change-log template",
+      "requiredFields": [
+        "change_id",
+        "changed_artifact",
+        "reason_for_change",
+        "risk_assessment",
+        "validation_run_ids",
+        "operator_approval",
+        "rollback_note"
+      ],
+      "publicSummaryFields": [
+        "change_id",
+        "changed_artifact",
+        "reason_for_change",
+        "risk_assessment",
+        "rollback_note"
+      ],
+      "redactedFields": [
+        "raw_private_wish_text",
+        "contact_details",
+        "private_operator_notes"
+      ],
+      "reviewRule": "A reviewer or operator must approve material model, dataset, prompt, metric, or template changes before promotion and keep a rollback note."
+    }
+  ],
   "permittedAutomation": [
     {
       "key": "schema_bound_drafting",

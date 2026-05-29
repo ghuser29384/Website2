@@ -24,6 +24,13 @@ export async function GET() {
       requiredDocumentationBeforeMl: profile.requiredDocumentationBeforeMl.map(
         (entry) => entry.key,
       ),
+      documentationTemplates: profile.documentationTemplates.map((template) => ({
+        key: template.key,
+        requiredFields: template.requiredFields,
+        publicSummaryFields: template.publicSummaryFields,
+        redactedFields: template.redactedFields,
+        reviewRule: template.reviewRule,
+      })),
       permittedAutomation: profile.permittedAutomation.map((entry) => entry.key),
       prohibitedUses: profile.prohibitedUses.map((entry) => entry.key),
       fairnessDocumentation: profile.fairnessDocumentation,
