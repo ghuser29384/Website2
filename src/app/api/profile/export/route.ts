@@ -1,13 +1,57 @@
 import { NextResponse } from "next/server";
 
+import {
+  buildMoralTradeApiRateLimitBlocker,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+function jsonResponse(
+  body: Record<string, unknown>,
+  status = 200,
+  headers: Record<string, string> = {},
+) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "private, no-store",
+      ...headers,
+    },
+  });
+}
+
+export async function GET(request: Request) {
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "profile_portability");
+
+  if (rateLimit.limited) {
+    return jsonResponse(
+      {
+        ok: false,
+        checkedAt: new Date().toISOString(),
+        error: "rate_limited",
+        rateLimit: {
+          limit: rateLimit.limit,
+          remaining: rateLimit.remaining,
+          resetAt: new Date(rateLimit.resetAt).toISOString(),
+          surface: rateLimit.surface,
+          windowMs: rateLimit.windowMs,
+        },
+        fallback:
+          "Rate-limited profile export fails closed without reading or exporting viewer-owned records.",
+        blockers: [buildMoralTradeApiRateLimitBlocker(rateLimit.surface)],
+      },
+      429,
+      {
+        "Retry-After": String(rateLimit.retryAfterSeconds),
+      },
+    );
+  }
+
   if (!hasSupabaseEnv()) {
-    return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+    return jsonResponse({ error: "Supabase is not configured." }, 503);
   }
 
   const supabase = await createClient();
@@ -17,7 +61,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    return jsonResponse({ error: "Authentication required." }, 401);
   }
 
   const profileId = user.id;
@@ -92,10 +136,10 @@ export async function GET() {
   ].find(Boolean);
 
   if (firstError) {
-    return NextResponse.json({ error: firstError.message }, { status: 500 });
+    return jsonResponse({ error: firstError.message }, 500);
   }
 
-  return NextResponse.json({
+  return jsonResponse({
     exportedAt: new Date().toISOString(),
     profile: profile.data,
     wishProfile: wishProfile.data,

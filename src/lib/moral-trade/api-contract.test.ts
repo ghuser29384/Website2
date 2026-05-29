@@ -39,6 +39,8 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_ai_governance_health"));
   assert.ok(profile.routes.some((route) => route.key === "profile_export"));
   assert.ok(profile.routes.some((route) => route.key === "profile_import"));
+  assert.ok(profile.routes.some((route) => route.key === "profile_export" && route.rateLimitSurface === "profile_portability"));
+  assert.ok(profile.routes.some((route) => route.key === "profile_import" && route.rateLimitSurface === "profile_portability"));
   assert.ok(profile.routes.some((route) => route.key === "wish_registry_search"));
   assert.ok(profile.routes.some((route) => route.key === "funnel_events"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_export_response"));
@@ -138,6 +140,14 @@ test("api contract validation fails when private or sparse-preview protections a
     routes: profile.routes.map((route) => {
       if (route.key === "profile_export") {
         return { ...route, cacheControl: "public_cache" };
+      }
+
+      if (route.key === "profile_import") {
+        return {
+          ...route,
+          fallback: "Import anything.",
+          rateLimitSurface: "public_contract_read",
+        };
       }
 
       if (route.key === "wish_registry_search") {
@@ -249,6 +259,7 @@ test("api contract validation fails when private or sparse-preview protections a
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("private-cache-controls")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("profile-portability-routes")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("privacy-thresholded-search")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("provenance-schema-validator")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("schema-registry-route")));

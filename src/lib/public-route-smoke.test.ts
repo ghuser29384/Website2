@@ -1128,7 +1128,19 @@ test("dashboard exposes existing profile portability endpoints", () => {
   assert.match(panelSource, /replaceExisting/);
   assert.match(exportRoute, /schemaUrl: "\/api\/profile\/schema"/);
   assert.match(exportRoute, /importUrl: "\/api\/profile\/import"/);
+  assert.match(exportRoute, /takeMoralTradeApiRateLimitSlot\(request, "profile_portability"\)/);
+  assert.match(exportRoute, /buildMoralTradeApiRateLimitBlocker\(rateLimit\.surface\)/);
+  assert.match(exportRoute, /"Retry-After"/);
+  assert.match(exportRoute, /"Cache-Control": "private, no-store"/);
   assert.match(importRoute, /buildDeterministicSynthesis/);
+  assert.match(importRoute, /takeMoralTradeApiRateLimitSlot\(request, "profile_portability"\)/);
+  assert.match(importRoute, /buildMoralTradeApiRateLimitBlocker\(rateLimit\.surface\)/);
+  assert.match(importRoute, /"Retry-After"/);
+  assert.match(importRoute, /"Cache-Control": "private, no-store"/);
+  assert.ok(
+    importRoute.indexOf('takeMoralTradeApiRateLimitSlot(request, "profile_portability")') <
+      importRoute.indexOf("request.json()"),
+  );
 });
 
 test("public guidance describes verification pipelines without custody overclaims", () => {

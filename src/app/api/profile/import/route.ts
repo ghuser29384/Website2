@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { buildDeterministicSynthesis } from "@/lib/background-networking";
+import {
+  buildMoralTradeApiRateLimitBlocker,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -26,9 +30,49 @@ type ImportTableMap = {
   source_connections: SourceConnectionInsert;
 };
 
+function jsonResponse(
+  body: Record<string, unknown>,
+  status = 200,
+  headers: Record<string, string> = {},
+) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "private, no-store",
+      ...headers,
+    },
+  });
+}
+
 export async function POST(request: Request) {
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "profile_portability");
+
+  if (rateLimit.limited) {
+    return jsonResponse(
+      {
+        ok: false,
+        checkedAt: new Date().toISOString(),
+        error: "rate_limited",
+        rateLimit: {
+          limit: rateLimit.limit,
+          remaining: rateLimit.remaining,
+          resetAt: new Date(rateLimit.resetAt).toISOString(),
+          surface: rateLimit.surface,
+          windowMs: rateLimit.windowMs,
+        },
+        fallback:
+          "Rate-limited profile import fails closed without reading the import payload or writing viewer-owned records.",
+        blockers: [buildMoralTradeApiRateLimitBlocker(rateLimit.surface)],
+      },
+      429,
+      {
+        "Retry-After": String(rateLimit.retryAfterSeconds),
+      },
+    );
+  }
+
   if (!hasSupabaseEnv()) {
-    return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+    return jsonResponse({ error: "Supabase is not configured." }, 503);
   }
 
   const supabase = await createClient();
@@ -38,13 +82,13 @@ export async function POST(request: Request) {
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    return jsonResponse({ error: "Authentication required." }, 401);
   }
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
 
   if (!body) {
-    return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
+    return jsonResponse({ error: "Invalid JSON payload." }, 400);
   }
 
   const replaceExisting = body.replaceExisting === true;
@@ -120,7 +164,7 @@ export async function POST(request: Request) {
       .upsert(payload, { onConflict: "profile_id" });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonResponse({ error: error.message }, 500);
     }
 
     importedCounts.wishProfile = 1;
@@ -148,7 +192,7 @@ export async function POST(request: Request) {
 
     const { error } = await supabase.from("wish_entries").insert(payload);
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonResponse({ error: error.message }, 500);
     }
 
     importedCounts.wishEntries = payload.length;
@@ -188,7 +232,7 @@ export async function POST(request: Request) {
       .upsert(payload, { onConflict: "profile_id" });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonResponse({ error: error.message }, 500);
     }
 
     importedCounts.personalDelegate = 1;
@@ -459,9 +503,9 @@ export async function POST(request: Request) {
       }),
     });
   } catch (error) {
-    return NextResponse.json(
+    return jsonResponse(
       { error: error instanceof Error ? error.message : "Import failed." },
-      { status: 500 },
+      500,
     );
   }
 
@@ -494,7 +538,7 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({
+  return jsonResponse({
     importedCounts,
     importedFor: profileId,
     replaceExisting,

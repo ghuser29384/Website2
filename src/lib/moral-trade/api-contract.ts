@@ -204,6 +204,12 @@ export function validateMoralTradeApiContractProfile(
   const publicOfferCreateSimilarResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "public_offer_create_similar_response",
   );
+  const profileExportRoute = profile.routes.find(
+    (route) => route.key === "profile_export",
+  );
+  const profileImportRoute = profile.routes.find(
+    (route) => route.key === "profile_import",
+  );
   const dataModelContractRoute = profile.routes.find(
     (route) => route.key === "moral_trade_data_model_contract",
   );
@@ -330,6 +336,29 @@ export function validateMoralTradeApiContractProfile(
         authenticatedRoutes.every((route) => route.cacheControl === "private_no_store") &&
         authenticatedRoutes.every((route) => /viewer|authenticated|auth/i.test(route.fallback)),
       authenticatedRoutes.map((route) => route.key).join(", "),
+    ),
+    check(
+      "profile-portability-routes",
+      "Profile export and import fail closed with private cache and rate limits",
+      profileExportRoute?.method === "GET" &&
+        profileExportRoute.path === "/api/profile/export" &&
+        profileExportRoute.auth === "authenticated" &&
+        profileExportRoute.cacheControl === "private_no_store" &&
+        profileExportRoute.rateLimitSurface === "profile_portability" &&
+        /Fail closed|viewer-owned portable profile bundle/i.test(profileExportRoute.fallback) &&
+        profileImportRoute?.method === "POST" &&
+        profileImportRoute.path === "/api/profile/import" &&
+        profileImportRoute.auth === "authenticated" &&
+        profileImportRoute.cacheControl === "private_no_store" &&
+        profileImportRoute.rateLimitSurface === "profile_portability" &&
+        /Fail closed|validate payload shape|counterparty-linked records/i.test(
+          profileImportRoute.fallback,
+        ),
+      [profileExportRoute, profileImportRoute]
+        .flatMap((route) =>
+          route ? [`${route.key}:${route.rateLimitSurface}:${route.cacheControl}`] : [],
+        )
+        .join(", "),
     ),
     check(
       "privacy-thresholded-search",

@@ -10,7 +10,8 @@ export type MoralTradeApiRateLimitSurface =
   | "match_signal_evaluate"
   | "challenge_appeal_evaluate"
   | "disclosure_evaluate"
-  | "review_workflow_evaluate";
+  | "review_workflow_evaluate"
+  | "profile_portability";
 
 export const MORAL_TRADE_API_RATE_LIMITS = {
   public_contract_read: { limit: 240, windowMs: 60_000 },
@@ -19,6 +20,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   challenge_appeal_evaluate: { limit: 30, windowMs: 60_000 },
   disclosure_evaluate: { limit: 30, windowMs: 60_000 },
   review_workflow_evaluate: { limit: 60, windowMs: 60_000 },
+  profile_portability: { limit: 12, windowMs: 60_000 },
 } as const satisfies Record<MoralTradeApiRateLimitSurface, { limit: number; windowMs: number }>;
 
 export function takeMoralTradeApiRateLimitSlot(
