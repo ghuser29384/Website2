@@ -7,6 +7,7 @@
     "version",
     "purpose",
     "permittedRoles",
+    "promptTemplates",
     "strictInputBundle",
     "approvedOutputSections",
     "statusValues",
@@ -16,6 +17,7 @@
     "verificationLoop",
     "redactionsAppliedByDefault",
     "rolloutStages",
+    "rolloutReadinessSignals",
     "humanControlledDecisions",
     "fallbackRule"
   ],
@@ -32,6 +34,44 @@
           "key": { "type": "string", "minLength": 1 },
           "label": { "type": "string", "minLength": 1 },
           "description": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "promptTemplates": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "purpose",
+          "instructionSummary",
+          "safetyCodes",
+          "outputRequirements"
+        ],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "purpose": { "type": "string", "minLength": 1 },
+          "instructionSummary": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "safetyCodes": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "outputRequirements": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
         },
         "additionalProperties": false
       }
@@ -109,6 +149,26 @@
         "properties": {
           "key": { "type": "string", "minLength": 1 },
           "label": { "type": "string", "minLength": 1 },
+          "rule": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "rolloutReadinessSignals": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "stages", "rule"],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "stages": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
           "rule": { "type": "string", "minLength": 1 }
         },
         "additionalProperties": false

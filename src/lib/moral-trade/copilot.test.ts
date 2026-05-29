@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import copilotContractSchemaJson from "../../../config/moral-trade/copilot-contract.schema.json";
 import {
   auditMoralTradeCopilotRolloutReadiness,
   buildMoralTradeCopilotOutput,
@@ -12,6 +13,25 @@ import {
 } from "./copilot";
 import { GET as contractRoute } from "../../app/api/moral-trade/copilot/contract/route";
 import { POST as reviewDraftRoute } from "../../app/api/moral-trade/copilot/review/route";
+
+type JsonSchemaArrayItem = {
+  required?: string[];
+  properties?: Record<string, unknown>;
+  additionalProperties?: boolean;
+};
+
+type JsonSchemaProperty = {
+  type?: string;
+  items?: JsonSchemaArrayItem;
+};
+
+type CopilotContractJsonSchema = {
+  required: string[];
+  properties: Record<string, JsonSchemaProperty>;
+  additionalProperties: boolean;
+};
+
+const copilotContractSchema = copilotContractSchemaJson as CopilotContractJsonSchema;
 
 const completeDraft = {
   format: "pledge_swap",
@@ -71,6 +91,36 @@ test("copilot contract requires strict bundle, approved output, guardrails, and 
       (signal) => signal.key === "human_approval_for_status_changes",
     ),
   );
+});
+
+test("copilot JSON schema covers every published top-level contract field", () => {
+  const contract = getMoralTradeCopilotContract();
+  const contractKeys = Object.keys(contract);
+
+  assert.equal(copilotContractSchema.additionalProperties, false);
+
+  for (const key of contractKeys) {
+    assert.ok(copilotContractSchema.required.includes(key), `${key} missing from schema.required`);
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(copilotContractSchema.properties, key),
+      `${key} missing from schema.properties`,
+    );
+  }
+
+  for (const schemaKey of Object.keys(copilotContractSchema.properties)) {
+    assert.ok(contractKeys.includes(schemaKey), `${schemaKey} is not in the runtime contract`);
+  }
+
+  const promptTemplateItems = copilotContractSchema.properties.promptTemplates?.items;
+  assert.ok(promptTemplateItems?.required?.includes("instructionSummary"));
+  assert.ok(promptTemplateItems?.required?.includes("safetyCodes"));
+  assert.ok(promptTemplateItems?.required?.includes("outputRequirements"));
+  assert.equal(promptTemplateItems?.additionalProperties, false);
+
+  const readinessSignalItems = copilotContractSchema.properties.rolloutReadinessSignals?.items;
+  assert.ok(readinessSignalItems?.required?.includes("stages"));
+  assert.ok(readinessSignalItems?.required?.includes("rule"));
+  assert.equal(readinessSignalItems?.additionalProperties, false);
 });
 
 test("copilot contract validation fails when required input sources are missing", () => {
