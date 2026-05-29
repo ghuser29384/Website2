@@ -63,6 +63,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(hrefs.includes("/validation"));
   assert.ok(hrefs.includes("/offers?view=examples"));
   assert.ok(hrefs.includes("/measurement"));
+  assert.ok(hrefs.includes("/accessibility"));
   assert.ok(hrefs.includes("/faq"));
   assert.ok(hrefs.includes("/sources"));
   assert.ok(hrefs.includes("/background-networking"));
@@ -92,6 +93,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(siteSource, /\/start/);
   assert.match(siteSource, /\/updates/);
   assert.match(siteSource, /\/measurement/);
+  assert.match(siteSource, /\/accessibility/);
   assert.match(siteSource, /href: "\/sources", label: "Sources"/);
   assert.equal(siteSource.includes("/methodology#sources"), false);
   assert.match(topbarSource, /topbar-menu-heading/);
@@ -916,6 +918,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   const projectsPage = readRepoFile("src/app/projects/page.tsx");
   const sourcesPage = readRepoFile("src/app/sources/page.tsx");
   const measurementPage = readRepoFile("src/app/measurement/page.tsx");
+  const accessibilityPage = readRepoFile("src/app/accessibility/page.tsx");
   const measurementPlanSource = readRepoFile("src/lib/measurement-plan.ts");
   const updatesPage = readRepoFile("src/app/updates/page.tsx");
   const teamPage = readRepoFile("src/app/team/page.tsx");
@@ -981,6 +984,13 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(measurementPage, /Measure pilot clarity, not moral worth/);
   assert.match(measurementPage, /Lighthouse/);
   assert.match(measurementPage, /Search Console/);
+  assert.match(accessibilityPage, /Accessibility statement/);
+  assert.match(accessibilityPage, /WCAG 2\.1 AA-oriented QA/);
+  assert.match(accessibilityPage, /keyboard and screen-reader QA/);
+  assert.match(accessibilityPage, /Report accessibility issue/);
+  assert.match(accessibilityPage, /Known limitations/);
+  assert.match(accessibilityPage, /buildBreadcrumbJsonLd/);
+  assert.match(accessibilityPage, /application\/ld\+json/);
   assert.match(measurementPlanSource, /hero_primary_cta_clicked/);
   assert.match(measurementPlanSource, /signup_complete/);
   assert.match(measurementPlanSource, /performance_metric_recorded/);
@@ -995,6 +1005,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(sitemapSource, /\/anti-threat-baseline/);
   assert.match(sitemapSource, /\/research/);
   assert.match(sitemapSource, /\/measurement/);
+  assert.match(sitemapSource, /\/accessibility/);
   assert.match(sitemapSource, /\/sources/);
   assert.match(sitemapSource, /\/trust/);
   assert.match(sitemapSource, /\/contact/);
@@ -1007,6 +1018,8 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(siteSearchSource, /Pilot updates/);
   assert.match(siteSearchSource, /Primary references and product-boundary notes/);
   assert.match(siteSearchSource, /Privacy-safe event taxonomy/);
+  assert.match(siteSearchSource, /Accessibility statement/);
+  assert.match(siteSearchSource, /keyboard and screen-reader checks/);
   assert.match(siteSearchSource, /Anti-threat and baseline integrity/);
   assert.match(siteSearchSource, /What you can rely on/);
 });

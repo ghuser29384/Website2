@@ -106,6 +106,22 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     ],
   },
   {
+    href: "/accessibility",
+    label: "Accessibility statement",
+    summary: "WCAG-oriented QA scope, keyboard and screen-reader checks, known limitations, and access-barrier support.",
+    kind: "learn",
+    keywords: [
+      "accessibility",
+      "wcag",
+      "keyboard",
+      "screen reader",
+      "screen-reader",
+      "assistive technology",
+      "focus order",
+      "access issue",
+    ],
+  },
+  {
     href: "/privacy",
     label: "Privacy practices",
     summary: "Public/private fields, cookies, analytics redaction, processors, retention, and data request routes.",

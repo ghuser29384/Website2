@@ -59,6 +59,7 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
         { href: "/validation", label: "Validation", description: "Evidence states, challenge windows, and review scopes." },
         { href: "/safety", label: "Safety", description: "Coercion, fraud, and pressure boundaries." },
         { href: "/anti-threat-baseline", label: "Anti-threat rules", description: "Baseline integrity and externality checks." },
+        { href: "/accessibility", label: "Accessibility", description: "WCAG-oriented QA scope, limitations, and support route." },
         { href: "/measurement", label: "Measurement", description: "Privacy-safe event taxonomy and performance baselines." },
         { href: "/team", label: "Team and governance", description: "Operator routes, reviewer roles, and public gaps." },
         { href: "/updates", label: "Pilot updates", description: "Public logs, governance updates, and case-study notes." },
@@ -108,6 +109,7 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/safety", label: "Safety policy" },
       { href: "/anti-threat-baseline", label: "Anti-threat rules" },
       { href: "/validation", label: "Validation" },
+      { href: "/accessibility", label: "Accessibility" },
       { href: "/moral-trade/technical-spec", label: "Moral Trade technical spec" },
       { href: "/reasoning-standards", label: "Evidence standards" },
       { href: "/faq", label: "FAQ" },
@@ -144,6 +146,7 @@ export const FOOTER_LINK_GROUPS = [
     links: [
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },
+      { href: "/accessibility", label: "Accessibility" },
       { href: "/safety", label: "Safety policy" },
       { href: "/mpgf/contribute", label: "Evidence review" },
     ],
