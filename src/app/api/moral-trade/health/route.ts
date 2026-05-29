@@ -64,6 +64,7 @@ import {
 } from "@/lib/moral-trade/disclosure";
 import {
   getMoralTradeCopilotContract,
+  getMoralTradeCopilotRolloutReadinessAudits,
   validateMoralTradeCopilotContract,
 } from "@/lib/moral-trade/copilot";
 import {
@@ -85,6 +86,8 @@ export async function GET() {
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
+  const copilotRolloutReadiness =
+    getMoralTradeCopilotRolloutReadinessAudits(copilotContract);
   const matchSignalContract = getMoralTradeMatchSignalContract();
   const matchSignalValidation =
     validateMoralTradeMatchSignalContract(matchSignalContract);
@@ -202,6 +205,9 @@ export async function GET() {
       copilotInputBundle: copilotContract.strictInputBundle,
       copilotOutputSections: copilotContract.approvedOutputSections,
       copilotVerificationSteps: copilotContract.verificationLoop.map((step) => step.key),
+      copilotRolloutReadinessStatuses: Object.fromEntries(
+        copilotRolloutReadiness.map((audit) => [audit.targetStage, audit.status]),
+      ),
       matchSignalContractVersion: matchSignalContract.version,
       matchSignalDecisioningMode: matchSignalContract.decisioningMode,
       matchSignalStateMutation: matchSignalContract.stateMutation,

@@ -7,6 +7,7 @@ import { Breadcrumbs, PageHero, StatusBadge } from "@/components/ui/page-primiti
 import { getViewer } from "@/lib/app-data";
 import {
   getMoralTradeCopilotContract,
+  getMoralTradeCopilotRolloutReadinessAudits,
   validateMoralTradeCopilotContract,
 } from "@/lib/moral-trade/copilot";
 import {
@@ -108,6 +109,8 @@ export default async function MoralTradeTechnicalSpecPage() {
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
+  const copilotRolloutReadiness =
+    getMoralTradeCopilotRolloutReadinessAudits(copilotContract);
   const matchSignalContract = getMoralTradeMatchSignalContract();
   const matchSignalValidation =
     validateMoralTradeMatchSignalContract(matchSignalContract);
@@ -905,6 +908,16 @@ export default async function MoralTradeTechnicalSpecPage() {
                 ))}
               </ul>
             </article>
+            <article className="panel protocol-contract-card">
+              <h3>Rollout readiness gates</h3>
+              <ul className="clean-list">
+                {copilotRolloutReadiness.map((audit) => (
+                  <li key={audit.targetStage}>
+                    {audit.targetStage.replaceAll("_", " ")}: {audit.status}
+                  </li>
+                ))}
+              </ul>
+            </article>
           </div>
           <div className="data-grid">
             {copilotContract.verificationLoop.map((step) => (
@@ -912,6 +925,18 @@ export default async function MoralTradeTechnicalSpecPage() {
                 <p className="detail-kicker">{step.key}</p>
                 <h3>{step.label}</h3>
                 <p>{step.blocksMatchable ? "Blocks matchable status until resolved." : "Routes or explains without changing state."}</p>
+              </article>
+            ))}
+          </div>
+          <div className="data-grid">
+            {copilotRolloutReadiness.map((audit) => (
+              <article className="panel data-card" key={audit.targetStage}>
+                <p className="detail-kicker">Rollout readiness</p>
+                <h3>{audit.targetStage.replaceAll("_", " ")}</h3>
+                <p>
+                  Status {audit.status}; {audit.requiredSignals.length} required signal(s),{" "}
+                  {audit.allowedTasks.length} allowed task(s), {audit.blockers.length} blocker(s).
+                </p>
               </article>
             ))}
           </div>

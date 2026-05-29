@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  auditMoralTradeCopilotRolloutReadiness,
   buildMoralTradeCopilotOutput,
   getMoralTradeCopilotContract,
+  getMoralTradeCopilotRolloutReadinessAudits,
   validateMoralTradeCopilotContract,
   validateMoralTradeCopilotOutput,
   type MoralTradeCopilotContract,
 } from "./copilot";
+import { GET as contractRoute } from "../../app/api/moral-trade/copilot/contract/route";
 import { POST as reviewDraftRoute } from "../../app/api/moral-trade/copilot/review/route";
 
 const completeDraft = {
@@ -49,6 +52,11 @@ test("copilot contract requires strict bundle, approved output, guardrails, and 
   assert.ok(contract.trustAxes.includes("party_relative_benefit"));
   assert.ok(contract.trustAxes.includes("privacy_redaction"));
   assert.ok(contract.rolloutStages.some((stage) => stage.key === "shadow_mode"));
+  assert.ok(
+    contract.rolloutReadinessSignals.some(
+      (signal) => signal.key === "human_approval_for_status_changes",
+    ),
+  );
 });
 
 test("copilot contract validation fails when required input sources are missing", () => {
@@ -60,6 +68,63 @@ test("copilot contract validation fails when required input sources are missing"
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("strict-input-bundle")));
+});
+
+test("copilot rollout readiness starts in shadow and gates assist or automation on evidence", () => {
+  const defaultAudits = getMoralTradeCopilotRolloutReadinessAudits();
+  const shadowAudit = defaultAudits.find((audit) => audit.targetStage === "shadow_mode");
+  const assistAudit = defaultAudits.find((audit) => audit.targetStage === "assist_mode");
+  const guardedAudit = defaultAudits.find((audit) => audit.targetStage === "guarded_automation");
+
+  assert.equal(shadowAudit?.status, "pass");
+  assert.equal(assistAudit?.status, "blocked");
+  assert.equal(guardedAudit?.status, "blocked");
+  assert.ok(assistAudit?.blockers.includes("minimum_observed_runs_required:20"));
+  assert.ok(guardedAudit?.blockers.includes("minimum_observed_runs_required:100"));
+
+  const readyAssist = auditMoralTradeCopilotRolloutReadiness({
+    targetStage: "assist_mode",
+    observedRuns: 25,
+    validatedOutputRate: 0.96,
+    privacyIncidentCount: 0,
+    stateMutationDisabled: true,
+    fallbackTested: true,
+    humanApprovalRequiredForStatusChanges: true,
+    evaluationAuditsPassing: true,
+    enabledTasks: ["structured_field_prefill", "factor_code_prefill"],
+  });
+
+  assert.equal(readyAssist.status, "pass");
+  assert.deepEqual(readyAssist.blockers, []);
+
+  const unsafeGuarded = auditMoralTradeCopilotRolloutReadiness({
+    targetStage: "guarded_automation",
+    observedRuns: 125,
+    validatedOutputRate: 0.99,
+    privacyIncidentCount: 0,
+    stateMutationDisabled: true,
+    fallbackTested: true,
+    humanApprovalRequiredForStatusChanges: true,
+    evaluationAuditsPassing: true,
+    enabledTasks: ["missing_field_detection", "safety_blocking"],
+  });
+
+  assert.equal(unsafeGuarded.status, "blocked");
+  assert.ok(
+    unsafeGuarded.blockers.includes("task_not_allowed_for_guarded_automation:safety_blocking"),
+  );
+});
+
+test("copilot contract route publishes rollout readiness evidence", async () => {
+  const response = await contractRoute();
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.ok(body.publicContract.rolloutReadinessSignals.includes("low_risk_task_scope"));
+  assert.equal(body.publicContract.rolloutReadiness[0].targetStage, "shadow_mode");
+  assert.equal(body.publicContract.rolloutReadiness[0].status, "pass");
+  assert.equal(body.publicContract.rolloutReadiness[1].status, "blocked");
 });
 
 test("copilot output uses approved schema and redacted factor-code explanations", () => {

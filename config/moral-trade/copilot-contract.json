@@ -145,6 +145,56 @@
       "rule": "Automate only low-risk missing-field, explanation, and evidence-checklist tasks."
     }
   ],
+  "rolloutReadinessSignals": [
+    {
+      "key": "state_mutation_disabled",
+      "label": "State mutation disabled",
+      "stages": ["shadow_mode", "assist_mode", "guarded_automation"],
+      "rule": "Copilot outputs remain advisory and cannot directly publish, disclose, complete, dispute, or otherwise mutate live proposal state."
+    },
+    {
+      "key": "fallback_path_tested",
+      "label": "Fallback path tested",
+      "stages": ["shadow_mode", "assist_mode", "guarded_automation"],
+      "rule": "Invalid, missing, or timed-out outputs fall back to deterministic/manual review without changing proposal state."
+    },
+    {
+      "key": "zero_privacy_incidents",
+      "label": "Zero privacy incidents",
+      "stages": ["shadow_mode", "assist_mode", "guarded_automation"],
+      "rule": "No private wish text, contact details, sensitive constraints, or raw notes leaked in the observed rollout window."
+    },
+    {
+      "key": "human_approval_for_status_changes",
+      "label": "Human approval for status changes",
+      "stages": ["shadow_mode", "assist_mode", "guarded_automation"],
+      "rule": "Humans approve all status, disclosure, completion, safety, and dispute decisions."
+    },
+    {
+      "key": "minimum_observed_runs",
+      "label": "Minimum observed runs",
+      "stages": ["assist_mode", "guarded_automation"],
+      "rule": "Assist mode requires at least 20 observed non-mutating runs; guarded automation requires at least 100."
+    },
+    {
+      "key": "validated_output_rate",
+      "label": "Validated output rate",
+      "stages": ["assist_mode", "guarded_automation"],
+      "rule": "Assist mode requires at least 95% valid outputs; guarded automation requires at least 98% valid outputs."
+    },
+    {
+      "key": "sample_evaluation_audits_passing",
+      "label": "Sample evaluation audits passing",
+      "stages": ["assist_mode", "guarded_automation"],
+      "rule": "Fairness and UX readiness sample audits must pass before scaling beyond shadow mode."
+    },
+    {
+      "key": "low_risk_task_scope",
+      "label": "Low-risk task scope",
+      "stages": ["guarded_automation"],
+      "rule": "Guarded automation may only cover missing-field detection, explanation generation, and evidence-checklist drafting."
+    }
+  ],
   "humanControlledDecisions": [
     "safety_blocking",
     "matching_disclosure",

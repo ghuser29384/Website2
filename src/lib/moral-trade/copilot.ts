@@ -36,6 +36,13 @@ type CopilotRolloutStage = {
   rule: string;
 };
 
+type CopilotRolloutReadinessSignal = {
+  key: string;
+  label: string;
+  stages: string[];
+  rule: string;
+};
+
 export type MoralTradeCopilotContract = {
   version: string;
   purpose: string;
@@ -49,6 +56,7 @@ export type MoralTradeCopilotContract = {
   verificationLoop: CopilotVerificationStep[];
   redactionsAppliedByDefault: string[];
   rolloutStages: CopilotRolloutStage[];
+  rolloutReadinessSignals: CopilotRolloutReadinessSignal[];
   humanControlledDecisions: string[];
   fallbackRule: string;
 };
@@ -66,6 +74,32 @@ export interface MoralTradeCopilotContractValidation {
   validatorVersion: string;
   contractVersion: string;
   checks: MoralTradeCopilotContractCheck[];
+  blockers: string[];
+}
+
+export type MoralTradeCopilotRolloutStageKey =
+  | "shadow_mode"
+  | "assist_mode"
+  | "guarded_automation";
+
+export interface MoralTradeCopilotRolloutReadinessInput {
+  targetStage: MoralTradeCopilotRolloutStageKey;
+  contract?: MoralTradeCopilotContract;
+  observedRuns?: number;
+  validatedOutputRate?: number;
+  privacyIncidentCount?: number;
+  stateMutationDisabled?: boolean;
+  fallbackTested?: boolean;
+  humanApprovalRequiredForStatusChanges?: boolean;
+  evaluationAuditsPassing?: boolean;
+  enabledTasks?: string[];
+}
+
+export interface MoralTradeCopilotRolloutReadiness {
+  status: "pass" | "blocked";
+  targetStage: MoralTradeCopilotRolloutStageKey;
+  requiredSignals: string[];
+  allowedTasks: string[];
   blockers: string[];
 }
 
@@ -194,6 +228,33 @@ const REQUIRED_VERIFICATION_STEPS = [
 ] as const;
 
 const REQUIRED_ROLLOUT_STAGES = ["shadow_mode", "assist_mode", "guarded_automation"] as const;
+const REQUIRED_ROLLOUT_READINESS_SIGNALS = [
+  "state_mutation_disabled",
+  "fallback_path_tested",
+  "zero_privacy_incidents",
+  "human_approval_for_status_changes",
+  "minimum_observed_runs",
+  "validated_output_rate",
+  "sample_evaluation_audits_passing",
+  "low_risk_task_scope",
+] as const;
+
+const REQUIRED_HUMAN_CONTROLLED_DECISIONS = [
+  "safety_blocking",
+  "matching_disclosure",
+  "reviewed_completion",
+  "dispute_resolution",
+] as const;
+
+const COPILOT_ROLLOUT_ALLOWED_TASKS: Record<MoralTradeCopilotRolloutStageKey, string[]> = {
+  shadow_mode: ["draft_critique", "reviewer_summary_second_screen"],
+  assist_mode: ["structured_field_prefill", "factor_code_prefill", "evidence_checklist_prefill"],
+  guarded_automation: [
+    "missing_field_detection",
+    "explanation_generation",
+    "evidence_checklist_drafting",
+  ],
+};
 
 function hasAll(values: readonly string[], required: readonly string[]) {
   return required.every((entry) => values.includes(entry));
@@ -247,9 +308,154 @@ export function getMoralTradeCopilotContract() {
   return copilotContract;
 }
 
+function rolloutSignalKeysForStage(
+  contract: MoralTradeCopilotContract,
+  targetStage: MoralTradeCopilotRolloutStageKey,
+) {
+  return contract.rolloutReadinessSignals
+    .filter((signal) => signal.stages.includes(targetStage))
+    .map((signal) => signal.key);
+}
+
+function getObservedRunMinimum(targetStage: MoralTradeCopilotRolloutStageKey) {
+  if (targetStage === "guarded_automation") {
+    return 100;
+  }
+
+  if (targetStage === "assist_mode") {
+    return 20;
+  }
+
+  return 0;
+}
+
+function getValidatedOutputRateMinimum(targetStage: MoralTradeCopilotRolloutStageKey) {
+  if (targetStage === "guarded_automation") {
+    return 0.98;
+  }
+
+  if (targetStage === "assist_mode") {
+    return 0.95;
+  }
+
+  return 0;
+}
+
+export function auditMoralTradeCopilotRolloutReadiness({
+  targetStage,
+  contract = copilotContract,
+  observedRuns = 0,
+  validatedOutputRate = 0,
+  privacyIncidentCount = 0,
+  stateMutationDisabled = false,
+  fallbackTested = false,
+  humanApprovalRequiredForStatusChanges = false,
+  evaluationAuditsPassing = false,
+  enabledTasks = [],
+}: MoralTradeCopilotRolloutReadinessInput): MoralTradeCopilotRolloutReadiness {
+  const blockers: string[] = [];
+  const stageKnown = contract.rolloutStages.some((stage) => stage.key === targetStage);
+  const requiredSignals = stageKnown ? rolloutSignalKeysForStage(contract, targetStage) : [];
+  const allowedTasks = COPILOT_ROLLOUT_ALLOWED_TASKS[targetStage] ?? [];
+  const minimumObservedRuns = getObservedRunMinimum(targetStage);
+  const minimumValidatedOutputRate = getValidatedOutputRateMinimum(targetStage);
+
+  if (!stageKnown) {
+    blockers.push(`unknown_rollout_stage:${targetStage}`);
+  }
+
+  if (!stateMutationDisabled) {
+    blockers.push(`state_mutation_must_remain_disabled:${targetStage}`);
+  }
+
+  if (!fallbackTested) {
+    blockers.push(`fallback_path_not_tested:${targetStage}`);
+  }
+
+  if (privacyIncidentCount > 0) {
+    blockers.push(`privacy_incidents_must_be_zero:${privacyIncidentCount}`);
+  }
+
+  if (!humanApprovalRequiredForStatusChanges) {
+    blockers.push(`human_status_approval_required:${targetStage}`);
+  }
+
+  if (observedRuns < minimumObservedRuns) {
+    blockers.push(`minimum_observed_runs_required:${minimumObservedRuns}`);
+  }
+
+  if (validatedOutputRate < minimumValidatedOutputRate) {
+    blockers.push(`validated_output_rate_required:${minimumValidatedOutputRate}`);
+  }
+
+  if ((targetStage === "assist_mode" || targetStage === "guarded_automation") && !evaluationAuditsPassing) {
+    blockers.push(`sample_evaluation_audits_required:${targetStage}`);
+  }
+
+  for (const task of enabledTasks) {
+    if (!allowedTasks.includes(task)) {
+      blockers.push(`task_not_allowed_for_${targetStage}:${task}`);
+    }
+  }
+
+  if (
+    targetStage === "guarded_automation" &&
+    !hasAll(contract.humanControlledDecisions, REQUIRED_HUMAN_CONTROLLED_DECISIONS)
+  ) {
+    blockers.push("human_controlled_decisions_missing_for_guarded_automation");
+  }
+
+  return {
+    status: blockers.length ? "blocked" : "pass",
+    targetStage,
+    requiredSignals,
+    allowedTasks,
+    blockers: Array.from(new Set(blockers)),
+  };
+}
+
+export function getMoralTradeCopilotRolloutReadinessAudits(
+  contract: MoralTradeCopilotContract = copilotContract,
+): MoralTradeCopilotRolloutReadiness[] {
+  return [
+    auditMoralTradeCopilotRolloutReadiness({
+      targetStage: "shadow_mode",
+      contract,
+      stateMutationDisabled: true,
+      fallbackTested: true,
+      humanApprovalRequiredForStatusChanges: true,
+      privacyIncidentCount: 0,
+      enabledTasks: ["draft_critique", "reviewer_summary_second_screen"],
+    }),
+    auditMoralTradeCopilotRolloutReadiness({
+      targetStage: "assist_mode",
+      contract,
+      stateMutationDisabled: true,
+      fallbackTested: true,
+      humanApprovalRequiredForStatusChanges: true,
+      privacyIncidentCount: 0,
+      enabledTasks: ["structured_field_prefill", "factor_code_prefill"],
+    }),
+    auditMoralTradeCopilotRolloutReadiness({
+      targetStage: "guarded_automation",
+      contract,
+      stateMutationDisabled: true,
+      fallbackTested: true,
+      humanApprovalRequiredForStatusChanges: true,
+      privacyIncidentCount: 0,
+      enabledTasks: [
+        "missing_field_detection",
+        "explanation_generation",
+        "evidence_checklist_drafting",
+      ],
+    }),
+  ];
+}
+
 export function validateMoralTradeCopilotContract(
   contract: MoralTradeCopilotContract = copilotContract,
 ): MoralTradeCopilotContractValidation {
+  const readinessAudits = getMoralTradeCopilotRolloutReadinessAudits(contract);
   const checks = [
     check(
       "strict-input-bundle",
@@ -316,6 +522,27 @@ export function validateMoralTradeCopilotContract(
         contract.humanControlledDecisions.includes("safety_blocking") &&
         contract.humanControlledDecisions.includes("dispute_resolution"),
       contract.rolloutStages.map((stage) => stage.key).join(", "),
+    ),
+    check(
+      "rollout-readiness-signals",
+      "Rollout readiness signals",
+      hasAll(
+        contract.rolloutReadinessSignals.map((signal) => signal.key),
+        REQUIRED_ROLLOUT_READINESS_SIGNALS,
+      ) &&
+        contract.rolloutReadinessSignals.every((signal) =>
+          signal.stages.every((stage) => contract.rolloutStages.some((entry) => entry.key === stage)),
+        ),
+      contract.rolloutReadinessSignals.map((signal) => signal.key).join(", "),
+    ),
+    check(
+      "rollout-readiness-audit",
+      "Default rollout audit starts in shadow mode and blocks higher automation until evidence exists",
+      readinessAudits.find((audit) => audit.targetStage === "shadow_mode")?.status === "pass" &&
+        readinessAudits
+          .filter((audit) => audit.targetStage !== "shadow_mode")
+          .every((audit) => audit.status === "blocked"),
+      readinessAudits.map((audit) => `${audit.targetStage}:${audit.status}`).join(", "),
     ),
     check(
       "safe-fallback",

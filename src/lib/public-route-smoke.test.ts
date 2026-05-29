@@ -917,6 +917,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotContract, /no_chain_of_thought/);
   assert.match(copilotContract, /no_autonomous_outreach/);
   assert.match(copilotContract, /guarded_automation/);
+  assert.match(copilotContract, /rolloutReadinessSignals/);
+  assert.match(copilotContract, /low_risk_task_scope/);
   assert.match(matchSignalSource, /evaluateMoralTradeRedactedProfileMatch/);
   assert.match(matchSignalSource, /getMoralTradeMatchSignalContract/);
   assert.match(matchSignalSource, /validateMoralTradeMatchSignalContract/);
@@ -1142,6 +1144,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /\/api\/moral-trade\/provenance\/schema/);
   assert.match(technicalSpecPage, /Copilot contract/);
   assert.match(technicalSpecPage, /schema-bound and reversible/);
+  assert.match(technicalSpecPage, /Rollout readiness gates/);
+  assert.match(technicalSpecPage, /copilotRolloutReadiness/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/copilot\/contract/);
   assert.match(technicalSpecPage, /Match signal contract/);
   assert.match(technicalSpecPage, /Redacted profile matching is preview-only and human-reviewed/);
@@ -1270,6 +1274,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(policyBundleContractRoute, /prohibitedPatternCodes/);
   assert.match(policyBundleContractRoute, /verificationMethodKeys/);
   assert.match(copilotContractRoute, /validateMoralTradeCopilotContract/);
+  assert.match(copilotContractRoute, /getMoralTradeCopilotRolloutReadinessAudits/);
+  assert.match(copilotContractRoute, /rolloutReadinessSignals/);
+  assert.match(copilotContractRoute, /rolloutReadiness/);
+  assert.match(healthRoute, /copilotRolloutReadinessStatuses/);
   assert.match(copilotReviewRoute, /buildMoralTradeCopilotOutput/);
   assert.match(copilotReviewRoute, /validateMoralTradeCopilotOutput/);
   assert.match(copilotReviewRoute, /deterministic_draft_review_only/);
