@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
+import { MORAL_TRADE_API_RATE_LIMITS } from "./api-rate-limit";
 import {
   decideMoralTradeFallback,
   evaluateMoralTradeFallbackDecision,
   getMoralTradeOperationsProfile,
   validateMoralTradeOperationsProfile,
 } from "./operations";
+
+function readRepoFile(path: string) {
+  return readFileSync(join(process.cwd(), path), "utf8");
+}
 
 test("operations profile publishes security, rate-limit, observability, fallback, and rollout contracts", () => {
   const profile = getMoralTradeOperationsProfile();
@@ -16,6 +23,7 @@ test("operations profile publishes security, rate-limit, observability, fallback
   assert.equal(validation.blockers.length, 0);
   assert.ok(profile.securityHeaders.some((header) => header.code === "strict_transport_security"));
   assert.ok(profile.securityHeaders.some((header) => header.code === "private_no_store"));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "public_contract_read" && surface.limit === 240));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_create" && surface.limit > 0));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_collection_read" && surface.limit === 120));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_detail_read" && surface.limit === 120));
@@ -23,8 +31,20 @@ test("operations profile publishes security, rate-limit, observability, fallback
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_follow_write" && surface.limit === 30));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_create_similar" && surface.limit === 30));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "saved_search_write" && surface.limit === 30));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "copilot_draft_review" && surface.limit === 30));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "match_signal_evaluate" && surface.limit === 60));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "challenge_appeal_evaluate" && surface.limit === 30));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "disclosure_evaluate" && surface.limit === 30));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "review_workflow_evaluate" && surface.limit === 60));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "profile_portability" && surface.limit === 12));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "wish_registry_search" && surface.limit > 0));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "analytics_ingest" && surface.limit === 120));
+  assert.deepEqual(
+    Object.keys(MORAL_TRADE_API_RATE_LIMITS).filter(
+      (surface) => !profile.rateLimitSurfaces.some((entry) => entry.key === surface),
+    ),
+    [],
+  );
   assert.ok(profile.privacyAndSessionControls.some((control) => control.key === "data_right_requests"));
   assert.ok(profile.observabilityMetrics.includes("copilot_fallback_rate"));
   assert.ok(profile.fallbackControls.some((control) => control.key === "invalid_copilot_output_no_state_change"));
@@ -43,6 +63,48 @@ test("operations profile validation fails if core abuse controls are missing", (
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("rate-limit-surfaces")));
+});
+
+test("private Moral Trade advisory routes enforce named rate limits before reading drafts", () => {
+  const routeSurfaces = [
+    {
+      path: "src/app/api/moral-trade/copilot/review/route.ts",
+      surface: "copilot_draft_review",
+    },
+    {
+      path: "src/app/api/moral-trade/match-signal/evaluate/route.ts",
+      surface: "match_signal_evaluate",
+    },
+    {
+      path: "src/app/api/moral-trade/challenge-appeal/evaluate/route.ts",
+      surface: "challenge_appeal_evaluate",
+    },
+    {
+      path: "src/app/api/moral-trade/disclosure/evaluate/route.ts",
+      surface: "disclosure_evaluate",
+    },
+    {
+      path: "src/app/api/moral-trade/review-workflow/evaluate/route.ts",
+      surface: "review_workflow_evaluate",
+    },
+  ] as const;
+
+  for (const route of routeSurfaces) {
+    const source = readRepoFile(route.path);
+    const rateLimitIndex = source.indexOf(
+      `takeMoralTradeApiRateLimitSlot(request, "${route.surface}")`,
+    );
+    const bodyParseIndex = source.indexOf("request.json()");
+
+    assert.notEqual(rateLimitIndex, -1, `${route.path} missing named rate limit`);
+    assert.notEqual(bodyParseIndex, -1, `${route.path} missing request parsing`);
+    assert.ok(rateLimitIndex < bodyParseIndex, `${route.path} should rate-limit before parsing body`);
+    assert.match(source, /buildMoralTradeApiRateLimitBlocker\(rateLimit\.surface\)/);
+    assert.match(source, /"Retry-After"/);
+    assert.match(source, /429/);
+    assert.match(source, /private, no-store/);
+    assert.match(source, /without changing|without revealing|without exposing|without disclosing/);
+  }
 });
 
 test("invalid copilot output falls back to manual review without live state changes", () => {

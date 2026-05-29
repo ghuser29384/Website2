@@ -7,6 +7,10 @@ import {
   type DisclosureAudienceStage,
 } from "@/lib/background-disclosure";
 import {
+  buildMoralTradeApiRateLimitBlocker,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
+import {
   evaluateMoralTradeDisclosureGrant,
   getMoralTradeDisclosureContract,
   validateMoralTradeDisclosureContract,
@@ -105,16 +109,47 @@ function getDisclosureInput(body: Record<string, unknown>): MoralTradeDisclosure
   };
 }
 
-function jsonResponse(body: Record<string, unknown>, status = 200) {
+function jsonResponse(
+  body: Record<string, unknown>,
+  status = 200,
+  headers: Record<string, string> = {},
+) {
   return NextResponse.json(body, {
     status,
     headers: {
       "Cache-Control": "private, no-store",
+      ...headers,
     },
   });
 }
 
 export async function POST(request: Request) {
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "disclosure_evaluate");
+
+  if (rateLimit.limited) {
+    return jsonResponse(
+      {
+        ok: false,
+        checkedAt: new Date().toISOString(),
+        error: "rate_limited",
+        rateLimit: {
+          limit: rateLimit.limit,
+          remaining: rateLimit.remaining,
+          resetAt: new Date(rateLimit.resetAt).toISOString(),
+          surface: rateLimit.surface,
+          windowMs: rateLimit.windowMs,
+        },
+        fallback:
+          "Rate-limited disclosure evaluation falls back to no disclosure evaluation without revealing private fields or changing grants.",
+        blockers: [buildMoralTradeApiRateLimitBlocker(rateLimit.surface)],
+      },
+      429,
+      {
+        "Retry-After": String(rateLimit.retryAfterSeconds),
+      },
+    );
+  }
+
   const contract = getMoralTradeDisclosureContract();
   const contractValidation = validateMoralTradeDisclosureContract(contract);
   let body: unknown;

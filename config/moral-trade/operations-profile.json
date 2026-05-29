@@ -39,6 +39,7 @@
     }
   ],
   "rateLimitSurfaces": [
+    { "key": "public_contract_read", "window": "1 minute", "limit": 240 },
     { "key": "signup", "window": "15 minutes", "limit": 5 },
     { "key": "login", "window": "15 minutes", "limit": 8 },
     { "key": "offer_create", "window": "15 minutes", "limit": 8 },
@@ -51,6 +52,12 @@
     { "key": "offer_follow_write", "window": "1 minute", "limit": 30 },
     { "key": "offer_create_similar", "window": "1 minute", "limit": 30 },
     { "key": "saved_search_write", "window": "1 minute", "limit": 30 },
+    { "key": "copilot_draft_review", "window": "1 minute", "limit": 30 },
+    { "key": "match_signal_evaluate", "window": "1 minute", "limit": 60 },
+    { "key": "challenge_appeal_evaluate", "window": "1 minute", "limit": 30 },
+    { "key": "disclosure_evaluate", "window": "1 minute", "limit": 30 },
+    { "key": "review_workflow_evaluate", "window": "1 minute", "limit": 60 },
+    { "key": "profile_portability", "window": "1 minute", "limit": 12 },
     { "key": "wish_registry_search", "window": "1 minute", "limit": 60 },
     { "key": "analytics_ingest", "window": "1 minute", "limit": 120 }
   ],

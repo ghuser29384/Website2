@@ -69,7 +69,7 @@
       "key": "platform_abuse_throttling",
       "label": "Platform abuse throttling",
       "status": "implemented",
-      "evidence": "Core signup, login, offer creation, comments, privacy requests, wish search, and analytics ingest have named rate-limit surfaces.",
+      "evidence": "Core signup, login, offer creation, comments, privacy requests, public contract reads, private advisory evaluations, wish search, profile portability, and analytics ingest have named rate-limit surfaces.",
       "publicClaim": "Abuse-prone surfaces are rate-limited and must fail safely."
     },
     {

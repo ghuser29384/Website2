@@ -102,6 +102,7 @@ const REQUIRED_SECURITY_HEADERS = [
 ] as const;
 
 const REQUIRED_RATE_LIMITS = [
+  "public_contract_read",
   "signup",
   "login",
   "offer_create",
@@ -114,6 +115,12 @@ const REQUIRED_RATE_LIMITS = [
   "offer_follow_write",
   "offer_create_similar",
   "saved_search_write",
+  "copilot_draft_review",
+  "match_signal_evaluate",
+  "challenge_appeal_evaluate",
+  "disclosure_evaluate",
+  "review_workflow_evaluate",
+  "profile_portability",
   "wish_registry_search",
   "analytics_ingest",
 ] as const;

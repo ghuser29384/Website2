@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
+  buildMoralTradeApiRateLimitBlocker,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
+import {
   getOfferReviewCardInstrumentation,
   getOfferReviewWorkflowCards,
   getOfferReviewWorkflowContract,
@@ -75,16 +79,47 @@ function normalizeReviewInput(record: Record<string, unknown>): OfferReviewWorkf
   return normalized;
 }
 
-function jsonResponse(body: Record<string, unknown>, status = 200) {
+function jsonResponse(
+  body: Record<string, unknown>,
+  status = 200,
+  headers: Record<string, string> = {},
+) {
   return NextResponse.json(body, {
     status,
     headers: {
       "Cache-Control": "private, no-store",
+      ...headers,
     },
   });
 }
 
 export async function POST(request: Request) {
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "review_workflow_evaluate");
+
+  if (rateLimit.limited) {
+    return jsonResponse(
+      {
+        ok: false,
+        checkedAt: new Date().toISOString(),
+        error: "rate_limited",
+        rateLimit: {
+          limit: rateLimit.limit,
+          remaining: rateLimit.remaining,
+          resetAt: new Date(rateLimit.resetAt).toISOString(),
+          surface: rateLimit.surface,
+          windowMs: rateLimit.windowMs,
+        },
+        fallback:
+          "Rate-limited review-workflow evaluation falls back to manual review without changing proposal state.",
+        blockers: [buildMoralTradeApiRateLimitBlocker(rateLimit.surface)],
+      },
+      429,
+      {
+        "Retry-After": String(rateLimit.retryAfterSeconds),
+      },
+    );
+  }
+
   const contract = getOfferReviewWorkflowContract();
   const contractValidation = validateOfferReviewWorkflowContract(contract);
   let body: unknown;
