@@ -308,6 +308,10 @@ export async function GET(request: Request) {
       operationsProfileVersion: operationsProfile.version,
       securityHeaderCodes: operationsProfile.securityHeaders.map((header) => header.code),
       rateLimitSurfaces: operationsProfile.rateLimitSurfaces.map((surface) => surface.key),
+      retentionControlKeys: operationsProfile.retentionControls.map((control) => control.key),
+      retentionControlScopes: Object.fromEntries(
+        operationsProfile.retentionControls.map((control) => [control.key, control.scope]),
+      ),
       observabilityMetrics: operationsProfile.observabilityMetrics,
       securityProfileVersion: securityProfile.version,
       securityControls: securityProfile.controls.map((control) => control.key),

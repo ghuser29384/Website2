@@ -431,7 +431,9 @@ test("offer review workflow contract validates public card and marketplace instr
 });
 
 test("review workflow routes publish participant copy templates", async () => {
-  const contractResponse = await reviewWorkflowContractRoute();
+  const contractResponse = await reviewWorkflowContractRoute(
+    new Request("http://localhost/api/moral-trade/review-workflow/contract"),
+  );
   const contractBody = await contractResponse.json();
 
   assert.equal(contractResponse.status, 200);

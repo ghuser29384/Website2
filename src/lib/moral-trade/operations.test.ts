@@ -16,7 +16,7 @@ function readRepoFile(path: string) {
   return readFileSync(join(process.cwd(), path), "utf8");
 }
 
-test("operations profile publishes security, rate-limit, observability, fallback, and rollout contracts", () => {
+test("operations profile publishes security, rate-limit, retention, fallback, and rollout contracts", () => {
   const profile = getMoralTradeOperationsProfile();
   const validation = validateMoralTradeOperationsProfile();
   const apiContractSurfaces = Array.from(
@@ -61,8 +61,19 @@ test("operations profile publishes security, rate-limit, observability, fallback
     );
   }
   assert.ok(profile.privacyAndSessionControls.some((control) => control.key === "data_right_requests"));
+  assert.ok(profile.retentionControls.some((control) => control.key === "account_profile_lifecycle"));
+  assert.ok(profile.retentionControls.some((control) => control.key === "private_wish_source_lifecycle"));
+  assert.ok(profile.retentionControls.some((control) => control.key === "evidence_provenance_lifecycle"));
+  assert.ok(profile.retentionControls.some((control) => control.key === "payment_donation_reference_lifecycle"));
+  assert.ok(profile.retentionControls.some((control) => control.key === "analytics_attribution_lifecycle"));
+  assert.ok(profile.retentionControls.some((control) => control.key === "notification_delivery_lifecycle"));
+  assert.ok(profile.retentionControls.some((control) => control.key === "data_right_request_lifecycle"));
+  assert.ok(
+    profile.retentionControls.every((control) => control.scope && control.retentionWindow && control.evidence),
+  );
   assert.ok(profile.observabilityMetrics.includes("copilot_fallback_rate"));
   assert.ok(profile.fallbackControls.some((control) => control.key === "invalid_copilot_output_no_state_change"));
+  assert.ok(profile.operationalTests.includes("retention_lifecycle_contract_smoke"));
   assert.ok(profile.operationalTests.includes("resilience_fallback_audit"));
   assert.ok(profile.rolloutGates.some((gate) => gate.key === "human_controlled_safety"));
 });
@@ -78,6 +89,19 @@ test("operations profile validation fails if core abuse controls are missing", (
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("rate-limit-surfaces")));
+});
+
+test("operations profile validation fails if retention lifecycle boundaries are missing", () => {
+  const profile = {
+    ...getMoralTradeOperationsProfile(),
+    retentionControls: getMoralTradeOperationsProfile().retentionControls.filter(
+      (control) => control.key !== "private_wish_source_lifecycle",
+    ),
+  };
+  const validation = validateMoralTradeOperationsProfile(profile);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("retention-lifecycle-controls")));
 });
 
 test("private Moral Trade advisory routes enforce named rate limits before reading drafts", () => {

@@ -9,6 +9,7 @@
     "securityHeaders",
     "rateLimitSurfaces",
     "privacyAndSessionControls",
+    "retentionControls",
     "observabilityMetrics",
     "fallbackControls",
     "rolloutGates",
@@ -54,6 +55,22 @@
         "properties": {
           "key": { "type": "string", "minLength": 1 },
           "label": { "type": "string", "minLength": 1 },
+          "evidence": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "retentionControls": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "scope", "retentionWindow", "evidence"],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "scope": { "type": "string", "minLength": 1 },
+          "retentionWindow": { "type": "string", "minLength": 1 },
           "evidence": { "type": "string", "minLength": 1 }
         },
         "additionalProperties": false

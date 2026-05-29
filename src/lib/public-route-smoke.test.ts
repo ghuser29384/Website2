@@ -1273,6 +1273,10 @@ test("public contract APIs enforce the documented public contract read throttle"
   assert.match(funnelEventsRoute, /buildMoralTradeApiJsonResponse/);
   assert.match(funnelEventsRoute, /MORAL_TRADE_API_CACHE_CONTROL_HEADERS\.no_store_dynamic/);
   assert.match(funnelEventsRoute, /"Retry-After": String\(rateLimit\.retryAfterSeconds\)/);
+  assert.ok(
+    funnelEventsRoute.indexOf('takeMoralTradeApiRateLimitSlot(request, "analytics_ingest")') <
+      funnelEventsRoute.indexOf("request.json()"),
+  );
   assert.equal(funnelEventsRoute.includes("analytics-ingest"), false);
 });
 
@@ -1310,6 +1314,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const disclosureSource = readRepoFile("src/lib/moral-trade/disclosure.ts");
   const operationsSource = readRepoFile("src/lib/moral-trade/operations.ts");
   const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
+  const operationsProfileSchema = readRepoFile("config/moral-trade/operations-profile.schema.json");
   const securitySource = readRepoFile("src/lib/moral-trade/security.ts");
   const securityProfile = readRepoFile("config/moral-trade/security-profile.json");
   const incidentResponseSource = readRepoFile("src/lib/moral-trade/incident-response.ts");
@@ -1629,9 +1634,22 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(operationsSource, /decideMoralTradeFallback/);
   assert.match(operationsSource, /fallback_path_unavailable/);
   assert.match(operationsSource, /replay_hash_mismatch/);
+  assert.match(operationsSource, /REQUIRED_RETENTION_CONTROLS/);
+  assert.match(operationsSource, /retention-lifecycle-controls/);
   assert.match(operationsProfile, /strict_transport_security/);
   assert.match(operationsProfile, /wish_registry_search/);
   assert.match(operationsProfile, /analytics_ingest/);
+  assert.match(operationsProfile, /retentionControls/);
+  assert.match(operationsProfile, /account_profile_lifecycle/);
+  assert.match(operationsProfile, /private_wish_source_lifecycle/);
+  assert.match(operationsProfile, /evidence_provenance_lifecycle/);
+  assert.match(operationsProfile, /payment_donation_reference_lifecycle/);
+  assert.match(operationsProfile, /analytics_attribution_lifecycle/);
+  assert.match(operationsProfile, /notification_delivery_lifecycle/);
+  assert.match(operationsProfile, /data_right_request_lifecycle/);
+  assert.match(operationsProfile, /retention_lifecycle_contract_smoke/);
+  assert.match(operationsProfileSchema, /retentionControls/);
+  assert.match(operationsProfileSchema, /retentionWindow/);
   assert.match(operationsProfile, /copilot_fallback_rate/);
   assert.match(operationsProfile, /invalid_copilot_output_no_state_change/);
   assert.match(operationsProfile, /resilience_fallback_audit/);
@@ -1938,6 +1956,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /live private offers/);
   assert.match(technicalSpecPage, /Operations contract/);
   assert.match(technicalSpecPage, /Security, rate limits, metrics, and fallbacks are inspectable/);
+  assert.match(technicalSpecPage, /retention lifecycle boundaries/);
+  assert.match(technicalSpecPage, /Retention lifecycle/);
+  assert.match(technicalSpecPage, /operationsProfile\.retentionControls/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/operations\/health/);
   assert.match(technicalSpecPage, /Security contract/);
   assert.match(technicalSpecPage, /Security posture is explicit about controls, boundaries, and non-claims/);
@@ -2032,6 +2053,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /reasoningPacketLinkedContracts/);
   assert.match(healthRoute, /operationsValidation/);
   assert.match(healthRoute, /rateLimitSurfaces/);
+  assert.match(healthRoute, /retentionControlKeys/);
+  assert.match(healthRoute, /retentionControlScopes/);
   assert.match(healthRoute, /securityValidation/);
   assert.match(healthRoute, /securityControls/);
   assert.match(healthRoute, /securityScaleGates/);
@@ -2117,6 +2140,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(reasoningPacketsRoute, /packets/);
   assert.match(reasoningPacketsRoute, /buildMoralTradeApiJsonResponse/);
   assert.match(operationsHealthRoute, /validateMoralTradeOperationsProfile/);
+  assert.match(operationsHealthRoute, /retentionControls/);
+  assert.match(operationsHealthRoute, /retentionWindow/);
   assert.match(operationsHealthRoute, /resilienceFallbackTests/);
   assert.match(securityHealthRoute, /validateMoralTradeSecurityProfile/);
   assert.match(securityHealthRoute, /auditMoralTradeSecurityScaleReadiness/);
@@ -2356,6 +2381,12 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(offerForm, /Set evidence rules/);
   assert.match(offerForm, /Ready for review/);
   assert.match(offerForm, /Protocol review preview/);
+  assert.match(offerForm, /getOfferReviewWorkflowCards/);
+  assert.match(offerForm, /reviewWorkflowCards/);
+  assert.match(offerForm, /Draft review workflow cards/);
+  assert.match(offerForm, /review-workflow-card-\$\{card\.status\}/);
+  assert.match(offerForm, /review-factor-list/);
+  assert.match(offerForm, /review-next-step/);
   assert.match(offerForm, /Fixed verification loop/);
   assert.match(offerForm, /protocolReview\.verificationLoop/);
   assert.match(offerForm, /buildEvidenceProvenancePreflight/);

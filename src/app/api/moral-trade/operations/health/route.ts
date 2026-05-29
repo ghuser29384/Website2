@@ -34,6 +34,12 @@ export async function GET(request: Request) {
       securityHeaders: profile.securityHeaders.map((header) => header.code),
       rateLimitSurfaces: profile.rateLimitSurfaces.map((surface) => surface.key),
       privacyAndSessionControls: profile.privacyAndSessionControls.map((control) => control.key),
+      retentionControls: profile.retentionControls.map((control) => ({
+        key: control.key,
+        scope: control.scope,
+        retentionWindow: control.retentionWindow,
+        evidence: control.evidence,
+      })),
       observabilityMetrics: profile.observabilityMetrics,
       fallbackControls: profile.fallbackControls.map((control) => control.key),
       resilienceFallbackTests: MORAL_TRADE_RESILIENCE_FALLBACK_TESTS,

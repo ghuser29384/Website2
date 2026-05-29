@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-operations-v0.1-2026-05",
-  "purpose": "Public operating contract for core Moral Trade security headers, private-cache controls, rate-limit surfaces, observability metrics, fallback behavior, and rollout gates.",
+  "version": "moral-trade-operations-v0.2-2026-05",
+  "purpose": "Public operating contract for core Moral Trade security headers, private-cache controls, rate-limit surfaces, retention lifecycle controls, observability metrics, fallback behavior, and rollout gates.",
   "securityHeaders": [
     {
       "code": "strict_transport_security",
@@ -88,6 +88,57 @@
       "evidence": "Match, privacy, and admin actions record audit events where disclosure is safe."
     }
   ],
+  "retentionControls": [
+    {
+      "key": "account_profile_lifecycle",
+      "label": "Account and profile lifecycle",
+      "scope": "Authenticated account records, opt-in public profiles, profile export/import records, and profile portability schema metadata.",
+      "retentionWindow": "Kept while the account, public profile, or review record needs it; export, correction, deletion, and restriction requests must route through authenticated dashboard or privacy support lanes.",
+      "evidence": "src/app/privacy/page.tsx publishes account/profile retention and src/app/api/profile/export plus src/app/api/profile/import use private no-store profile portability APIs."
+    },
+    {
+      "key": "private_wish_source_lifecycle",
+      "label": "Private wish and source lifecycle",
+      "scope": "Private wishes, source summaries, matching preferences, and consent-gated background-networking inputs.",
+      "retentionWindow": "Kept only for the consent scope or review workflow that needs it; exact wishes and source notes remain excluded from public cards, analytics, public contract routes, and search previews.",
+      "evidence": "Data-model and disclosure contracts require field-level grants, stage scope, expiry, and private/public boundaries before disclosure."
+    },
+    {
+      "key": "evidence_provenance_lifecycle",
+      "label": "Evidence and provenance lifecycle",
+      "scope": "Evidence metadata, reviewer decisions, state-transition event records, and append-only provenance activities.",
+      "retentionWindow": "Append-only review/provenance records are retained for audit integrity; corrections append new activities rather than mutating prior records, and raw evidence artifacts are excluded from public APIs.",
+      "evidence": "Provenance contract publishes append-only persistence tables, correction rules, sample bundle summaries, and raw-artifact exclusion."
+    },
+    {
+      "key": "payment_donation_reference_lifecycle",
+      "label": "Payment and donation reference lifecycle",
+      "scope": "Stripe payment identifiers, donation-route handoff references, payment status, amount, cadence, and review evidence notes.",
+      "retentionWindow": "Retained only where reconciliation, dispute handling, audit integrity, or compliance needs require it; public routes must not claim custody, escrow, or guarantee payment protection.",
+      "evidence": "Privacy and terms pages publish payment/donation processor boundaries and non-custody claims."
+    },
+    {
+      "key": "analytics_attribution_lifecycle",
+      "label": "Analytics and attribution lifecycle",
+      "scope": "Approved funnel event type, route path, coarse metadata buckets, partner attribution, and optional authenticated profile id.",
+      "retentionWindow": "Only redacted funnel records are eligible for storage; exact wishes, contact details, report bodies, raw source notes, private evidence artifacts, and free-form payloads are excluded before insert.",
+      "evidence": "src/lib/measurement-plan.ts defines approved events and src/lib/growth.ts builds privacy-safe funnel event records."
+    },
+    {
+      "key": "notification_delivery_lifecycle",
+      "label": "Notification delivery lifecycle",
+      "scope": "Email/in-app delivery rows, digest preferences, opt-out state, and failed-delivery diagnostics.",
+      "retentionWindow": "Preference rows and delivery records are retained to honor opt-outs, diagnose failed delivery, and avoid exposing private wish text in notifications.",
+      "evidence": "Privacy page publishes notification processor boundaries and notification retention purpose."
+    },
+    {
+      "key": "data_right_request_lifecycle",
+      "label": "Data-right request lifecycle",
+      "scope": "Access, correction, deletion, restriction, and processor-clarification requests.",
+      "retentionWindow": "Requests keep the minimum status, request type, due date, requester scope, and resolution metadata needed to complete and audit the rights lane; destructive or corrective details must remain private no-store.",
+      "evidence": "Privacy, terms, dashboard, and privacy_access_requests actions expose access/correction/deletion/restriction request lanes."
+    }
+  ],
   "observabilityMetrics": [
     "funnel_event_counts",
     "route_error_rate",
@@ -147,6 +198,7 @@
     "security_header_source_smoke",
     "private_cache_header_smoke",
     "rate_limit_surface_smoke",
+    "retention_lifecycle_contract_smoke",
     "operations_profile_validator",
     "resilience_fallback_audit",
     "health_route_contract_smoke",

@@ -17,12 +17,21 @@ type RateLimitSurface = {
   limit: number;
 };
 
+type RetentionControl = {
+  key: string;
+  label: string;
+  scope: string;
+  retentionWindow: string;
+  evidence: string;
+};
+
 type MoralTradeOperationsProfile = {
   version: string;
   purpose: string;
   securityHeaders: Array<Required<Pick<OperationsEntry, "code" | "label" | "evidence">>>;
   rateLimitSurfaces: RateLimitSurface[];
   privacyAndSessionControls: Array<Required<Pick<OperationsEntry, "key" | "label" | "evidence">>>;
+  retentionControls: RetentionControl[];
   observabilityMetrics: string[];
   fallbackControls: Array<Required<Pick<OperationsEntry, "key" | "label" | "rule">>>;
   rolloutGates: Array<Required<Pick<OperationsEntry, "key" | "label" | "rule">>>;
@@ -131,6 +140,16 @@ const REQUIRED_PRIVACY_CONTROLS = [
   "data_right_requests",
   "field_level_disclosure_grants",
   "audit_events",
+] as const;
+
+const REQUIRED_RETENTION_CONTROLS = [
+  "account_profile_lifecycle",
+  "private_wish_source_lifecycle",
+  "evidence_provenance_lifecycle",
+  "payment_donation_reference_lifecycle",
+  "analytics_attribution_lifecycle",
+  "notification_delivery_lifecycle",
+  "data_right_request_lifecycle",
 ] as const;
 
 const REQUIRED_OBSERVABILITY_METRICS = [
@@ -280,6 +299,7 @@ export function validateMoralTradeOperationsProfile(
   const securityHeaderCodes = profile.securityHeaders.map((header) => header.code);
   const rateLimitKeys = profile.rateLimitSurfaces.map((surface) => surface.key);
   const privacyKeys = profile.privacyAndSessionControls.map((control) => control.key);
+  const retentionKeys = profile.retentionControls.map((control) => control.key);
   const fallbackKeys = profile.fallbackControls.map((control) => control.key);
   const rolloutKeys = profile.rolloutGates.map((gate) => gate.key);
   const checks = [
@@ -301,6 +321,17 @@ export function validateMoralTradeOperationsProfile(
       "Privacy and session controls",
       hasAll(privacyKeys, REQUIRED_PRIVACY_CONTROLS),
       privacyKeys.join(", "),
+    ),
+    check(
+      "retention-lifecycle-controls",
+      "Retention lifecycle controls",
+      hasAll(retentionKeys, REQUIRED_RETENTION_CONTROLS) &&
+        profile.retentionControls.every((control) =>
+          /retain|kept|keep|storage|excluded|private|append/i.test(
+            `${control.retentionWindow} ${control.evidence}`,
+          ),
+        ),
+      retentionKeys.join(", "),
     ),
     check(
       "observability-metrics",

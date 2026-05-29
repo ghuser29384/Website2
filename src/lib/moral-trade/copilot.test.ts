@@ -212,7 +212,9 @@ test("copilot rollout readiness starts in shadow and gates assist or automation 
 });
 
 test("copilot contract route publishes rollout readiness evidence", async () => {
-  const response = await contractRoute();
+  const response = await contractRoute(
+    new Request("http://localhost/api/moral-trade/copilot/contract"),
+  );
   const body = await response.json();
 
   assert.equal(response.status, 200);
@@ -484,6 +486,20 @@ test("copilot output blocks public contact details through the privacy-redaction
   assert.ok(!output.match_explanation.factor_codes.includes("privacy_safe_preview"));
   assert.equal(output.match_explanation.confidence_band, "low");
   assert.equal(validateMoralTradeCopilotOutput(output).status, "pass");
+});
+
+test("copilot output validation rejects hidden reasoning transcript markers", () => {
+  const output = buildMoralTradeCopilotOutput(completeDraft);
+
+  output.reviewer_summary =
+    "Chain of thought: I privately reasoned through the offer. Public summary: the draft needs review.";
+  output.cited_evidence_table[0].reviewer_note =
+    "Internal reasoning says this evidence should pass.";
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("no_chain_of_thought")));
 });
 
 test("copilot output carries baseline challenge recommendations as structured flags", () => {

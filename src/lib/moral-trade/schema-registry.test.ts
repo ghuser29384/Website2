@@ -82,7 +82,9 @@ test("schema document lookup returns exact schema documents by public slug", () 
 });
 
 test("schema registry and public schema routes return validator-backed JSON", async () => {
-  const registryResponse = await schemaRegistryRoute();
+  const registryResponse = await schemaRegistryRoute(
+    new Request("http://localhost/api/moral-trade/schemas"),
+  );
   const registryBody = await registryResponse.json();
   const schemaResponse = await schemaDocumentRoute(
     new Request("http://localhost/schemas/moral-trade/data-model-profile.schema.json"),

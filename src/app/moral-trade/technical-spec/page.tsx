@@ -1021,7 +1021,8 @@ export default async function MoralTradeTechnicalSpecPage() {
             <p>
               The core feature now publishes the operating controls that were previously scattered
               across code and policy pages: security headers, private-cache rules, abuse throttles,
-              observability metrics, safe fallbacks, and rollout gates.
+              retention lifecycle boundaries, observability metrics, safe fallbacks, and rollout
+              gates.
             </p>
           </div>
           <div className="protocol-validator-card panel">
@@ -1061,6 +1062,14 @@ export default async function MoralTradeTechnicalSpecPage() {
               <ul className="clean-list">
                 {operationsProfile.observabilityMetrics.map((metric) => (
                   <li key={metric}>{metric}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Retention lifecycle</h3>
+              <ul className="clean-list">
+                {operationsProfile.retentionControls.map((control) => (
+                  <li key={control.key}>{control.label}</li>
                 ))}
               </ul>
             </article>

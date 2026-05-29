@@ -229,7 +229,9 @@ test("match signal contract validation fails if human review and redactions are 
 });
 
 test("match signal routes publish participant explanation copy", async () => {
-  const contractResponse = await contractRoute();
+  const contractResponse = await contractRoute(
+    new Request("http://localhost/api/moral-trade/match-signal/contract"),
+  );
   const contractBody = await contractResponse.json();
 
   assert.equal(contractResponse.status, 200);

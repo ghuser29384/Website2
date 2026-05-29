@@ -30,6 +30,21 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "analytics_ingest");
+
+  if (rateLimit.limited) {
+    return buildMoralTradeApiJsonResponse(
+      { error: "Too many analytics events. Try again shortly." },
+      "no_store_dynamic",
+      {
+        headers: {
+          "Retry-After": String(rateLimit.retryAfterSeconds),
+        },
+        status: 429,
+      },
+    );
+  }
+
   let payload: Record<string, unknown>;
 
   try {
@@ -48,21 +63,6 @@ export async function POST(request: NextRequest) {
       { error: "Unknown funnel event type." },
       "no_store_dynamic",
       { status: 400 },
-    );
-  }
-
-  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "analytics_ingest");
-
-  if (rateLimit.limited) {
-    return buildMoralTradeApiJsonResponse(
-      { error: "Too many analytics events. Try again shortly." },
-      "no_store_dynamic",
-      {
-        headers: {
-          "Retry-After": String(rateLimit.retryAfterSeconds),
-        },
-        status: 429,
-      },
     );
   }
 

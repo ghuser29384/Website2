@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.3-2026-05",
+  "version": "moral-trade-api-contract-v0.4-2026-05",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -882,12 +882,12 @@
     },
     {
       "key": "operations_health_response",
-      "purpose": "Security headers, rate-limit surfaces, privacy/session controls, metrics, fallbacks, and rollout gates.",
+      "purpose": "Security headers, rate-limit surfaces, privacy/session controls, retention lifecycle controls, metrics, fallbacks, and rollout gates.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when operations validator passes." },
         { "key": "profileVersion", "type": "string", "required": true, "privacy": "public", "description": "Operations profile version." },
-        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Security, rate-limit, fallback, and rollout validation." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published security headers, rate-limit surfaces, metrics, and tests." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Security, rate-limit, retention, fallback, and rollout validation." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published security headers, rate-limit surfaces, retention controls, metrics, and tests." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Operations blockers." }
       ]
     },

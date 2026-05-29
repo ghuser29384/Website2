@@ -355,6 +355,8 @@ const EVIDENCE_METADATA_REDACTION_LEVELS = [
   "reviewer_only",
   "participant_private",
 ] as const;
+const HIDDEN_REASONING_DISCLOSURE_PATTERN =
+  /\b(chain[- ]of[- ]thought|hidden reasoning|internal reasoning|private reasoning|step[- ]by[- ]step reasoning|scratchpad|let me think|my reasoning is)\b/i;
 
 export const MORAL_TRADE_COPILOT_EVIDENCE_METADATA_REDACTIONS = [
   "raw_artifact_body",
@@ -375,6 +377,10 @@ const COPILOT_ROLLOUT_ALLOWED_TASKS: Record<MoralTradeCopilotRolloutStageKey, st
 
 function hasAll(values: readonly string[], required: readonly string[]) {
   return required.every((entry) => values.includes(entry));
+}
+
+function containsHiddenReasoningDisclosure(value: string) {
+  return HIDDEN_REASONING_DISCLOSURE_PATTERN.test(value);
 }
 
 function check(
@@ -1110,6 +1116,19 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
 
   if (!output.next_step_checklist.length) {
     blockers.push("next_step_checklist: required next steps are missing");
+  }
+
+  if (
+    containsHiddenReasoningDisclosure(output.reviewer_summary) ||
+    output.verification_loop.some((step) => containsHiddenReasoningDisclosure(step.detail)) ||
+    output.cited_evidence_table.some((row) =>
+      containsHiddenReasoningDisclosure(`${row.claim} ${row.reviewer_note}`),
+    ) ||
+    output.next_step_checklist.some((step) => containsHiddenReasoningDisclosure(step))
+  ) {
+    blockers.push(
+      "no_chain_of_thought: outputs must expose summaries, citations, uncertainty flags, and next steps instead of hidden reasoning transcripts",
+    );
   }
 
   if (

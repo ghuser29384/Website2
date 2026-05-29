@@ -112,6 +112,11 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "reasoning_packets_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "operations_health_response")
+      ?.purpose.includes("retention lifecycle controls"),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "security_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "incident_response_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "performance_health_response"));

@@ -37,6 +37,7 @@ import {
 import {
   evaluateMoralTradeProtocolDraft,
   formatProtocolReviewStatus,
+  getOfferReviewWorkflowCards,
   type MoralTradeProtocolDraftReview,
   type MoralTradeVerificationStepStatus,
 } from "@/lib/proposal-review";
@@ -610,6 +611,9 @@ export function OfferCreateForm({
     () => [...liveCoreOfferErrors, ...liveOffsetErrors],
     [liveCoreOfferErrors, liveOffsetErrors],
   );
+  const reviewVerificationMethod = isOffset
+    ? formatDonationOffsetVerificationMethod(effectiveVerificationMethod)
+    : verificationPreference;
   const protocolReview = useMemo(
     () =>
       evaluateMoralTradeProtocolDraft({
@@ -621,9 +625,7 @@ export function OfferCreateForm({
         baselineStatement,
         duration: reviewPeriod,
         exitConditions: exitCondition,
-        verificationMethod: isOffset
-          ? formatDonationOffsetVerificationMethod(effectiveVerificationMethod)
-          : verificationPreference,
+        verificationMethod: reviewVerificationMethod,
         publicDescription: notes,
         evidenceUrl,
         participantImportance: Number(offerImpact),
@@ -631,10 +633,8 @@ export function OfferCreateForm({
       }),
     [
       baselineStatement,
-      effectiveVerificationMethod,
       evidenceUrl,
       exitCondition,
-      isOffset,
       minCounterpartyImpact,
       mode,
       notes,
@@ -644,7 +644,46 @@ export function OfferCreateForm({
       requestedCause,
       requestAction,
       reviewPeriod,
-      verificationPreference,
+      reviewVerificationMethod,
+    ],
+  );
+  const reviewWorkflowCards = useMemo(
+    () =>
+      getOfferReviewWorkflowCards({
+        mode,
+        verification: reviewVerificationMethod,
+        trustLevel: Number(trustLevel),
+        baselineAmountUsd: isOffset ? Number(baselineAmountUsd) : null,
+        baselineOpposedCause: isOffset ? effectiveBaselineOpposedCause : null,
+        requestedMatchingAmountUsd: isOffset ? Number(requestedMatchingAmountUsd) : null,
+        requestedOpposedCause: isOffset ? effectiveRequestedOpposedCause : null,
+        evidenceUrl,
+        moderationStatus: protocolReview.policyConflicts.length ? "blocked" : "clear",
+        offeredCause,
+        requestedCause,
+        currentStatus:
+          protocolReview.status === "matchable"
+            ? "Manual review required before reliance"
+            : formatProtocolReviewStatus(protocolReview.status),
+        offerImpact: Number(offerImpact),
+        minCounterpartyImpact: Number(minCounterpartyImpact),
+      }),
+    [
+      baselineAmountUsd,
+      effectiveBaselineOpposedCause,
+      effectiveRequestedOpposedCause,
+      evidenceUrl,
+      isOffset,
+      minCounterpartyImpact,
+      mode,
+      offerImpact,
+      offeredCause,
+      protocolReview.policyConflicts.length,
+      protocolReview.status,
+      requestedCause,
+      requestedMatchingAmountUsd,
+      reviewVerificationMethod,
+      trustLevel,
     ],
   );
   const evidenceProvenancePreflight = useMemo(
@@ -919,6 +958,30 @@ export function OfferCreateForm({
             {protocolReview.factorCodes.length} factor code
             {protocolReview.factorCodes.length === 1 ? "" : "s"}
           </span>
+        </div>
+
+        <div className="review-workflow-grid" aria-label="Draft review workflow cards">
+          {reviewWorkflowCards.map((card) => (
+            <article
+              className={`panel review-workflow-card review-workflow-card-${card.status}`}
+              key={card.key}
+            >
+              <div className="review-workflow-card-head">
+                <p className="detail-kicker">{card.key.replaceAll("_", " ")}</p>
+                <span className="review-workflow-status">{card.status.replaceAll("_", " ")}</span>
+              </div>
+              <h4>{card.label}</h4>
+              <p className="route-text">{card.summary}</p>
+              <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
+                {card.factorCodes.map((factorCode) => (
+                  <span key={factorCode}>{factorCode}</span>
+                ))}
+              </div>
+              <p className="review-next-step">
+                <strong>Next step:</strong> {card.nextStep}
+              </p>
+            </article>
+          ))}
         </div>
 
         <div>
