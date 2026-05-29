@@ -242,9 +242,12 @@ test("public offer and registry pages include seeded examples instead of empty-o
   assert.equal(offersPage.includes("No public offers have been published yet"), false);
 
   const registryPage = readRepoFile("src/app/wish-registry/page.tsx");
+  const wishRegistrySource = readRepoFile("src/lib/wish-registry.ts");
   assert.match(registryPage, /EXAMPLE_WISH_PREVIEWS/);
   assert.match(registryPage, /filterWishRegistryExamplePreviews/);
   assert.match(registryPage, /Example preview/);
+  assert.match(wishRegistrySource, /getWishRegistryRedactedOverlapTokens/);
+  assert.match(wishRegistrySource, /broad_language_overlap_/);
 });
 
 test("public copy does not claim escrow-backed payment protection", () => {

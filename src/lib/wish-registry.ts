@@ -52,6 +52,10 @@ export function getWishRegistryTokens(value: string) {
   );
 }
 
+export function getWishRegistryRedactedOverlapTokens(tokens: readonly string[]) {
+  return tokens.map((_, index) => `broad_language_overlap_${index + 1}`);
+}
+
 export function filterWishRegistryExamplePreviews<TPreview extends WishRegistryExamplePreview>(
   previews: readonly TPreview[],
   {
@@ -129,7 +133,7 @@ function toSearchResult(
     opennessToPledges: Boolean(preview.openness_to_pledges),
     privacyStage: preview.privacy_stage,
     score,
-    sharedTokens,
+    sharedTokens: getWishRegistryRedactedOverlapTokens(sharedTokens),
   };
 }
 

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { filterWishRegistryExamplePreviews } from "@/lib/wish-registry";
+import {
+  filterWishRegistryExamplePreviews,
+  getWishRegistryRedactedOverlapTokens,
+} from "@/lib/wish-registry";
 
 const examplePreviews = [
   {
@@ -54,4 +57,19 @@ test("wish registry example previews respect cause and openness filters", () => 
 
 test("wish registry example previews stay unfiltered without search inputs", () => {
   assert.equal(filterWishRegistryExamplePreviews(examplePreviews).length, examplePreviews.length);
+});
+
+test("wish registry overlap markers never echo raw query tokens", () => {
+  const markers = getWishRegistryRedactedOverlapTokens([
+    "exact",
+    "private",
+    "counterparty",
+  ]);
+
+  assert.deepEqual(markers, [
+    "broad_language_overlap_1",
+    "broad_language_overlap_2",
+    "broad_language_overlap_3",
+  ]);
+  assert.equal(JSON.stringify(markers).includes("counterparty"), false);
 });
