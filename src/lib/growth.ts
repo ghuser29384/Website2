@@ -236,6 +236,8 @@ const FUNNEL_METADATA_ALLOWED_KEYS = new Set([
 
 const SENSITIVE_FUNNEL_METADATA_KEY_PATTERN =
   /(wish|ask|constraint|contact|email|phone|address|private|raw|message|note|source|evidence|receipt|counterparty|prompt|text)/i;
+const SENSITIVE_FUNNEL_VALUE_PATTERN =
+  /\b(exact\s+private\s+wish|private\s+wish|source\s+note|raw\s+note|contact\s+details|sensitive\s+constraint|private\s+feed|counterparty)\b/i;
 
 function normalizeFunnelMetadataKey(key: string) {
   return key.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 48);
@@ -248,6 +250,11 @@ function cleanFunnelScalarText(value: unknown, maxLength = 160) {
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
     .replace(/\+?\d[\d\s().-]{7,}\d/g, "[redacted-phone]")
     .slice(0, maxLength);
+}
+
+function cleanFunnelAttributionText(value: unknown, maxLength = 160) {
+  const clean = cleanFunnelScalarText(value, maxLength);
+  return SENSITIVE_FUNNEL_VALUE_PATTERN.test(clean) ? "" : clean;
 }
 
 function getTextLengthBucket(value: unknown) {
@@ -387,6 +394,41 @@ export function sanitizeFunnelEventMetadata(value: unknown) {
   }
 
   return safeMetadata;
+}
+
+export function buildPrivacySafeFunnelEventRecord({
+  attribution,
+  eventType,
+  metadata = {},
+  path,
+  profileId,
+  referrer,
+}: {
+  attribution?: Partial<AttributionPayload> | null;
+  eventType: FunnelEventType;
+  metadata?: unknown;
+  path?: unknown;
+  profileId?: string | null;
+  referrer?: unknown;
+}) {
+  const requestReferrer = sanitizeFunnelEventReferrer(referrer);
+  const attributionReferrer = sanitizeFunnelEventReferrer(attribution?.referrer);
+
+  return {
+    anonymous_id: cleanFunnelScalarText(attribution?.anonymousId, 160),
+    event_type: eventType,
+    metadata: sanitizeFunnelEventMetadata(metadata),
+    partner_slug: cleanFunnelAttributionText(attribution?.partnerSlug, 160),
+    path: sanitizeFunnelEventPath(path) || "/",
+    profile_id: profileId ?? null,
+    referral_code: cleanFunnelAttributionText(attribution?.referralCode, 160),
+    referrer: requestReferrer || attributionReferrer,
+    utm_campaign: cleanFunnelAttributionText(attribution?.utmCampaign, 160),
+    utm_content: cleanFunnelAttributionText(attribution?.utmContent, 160),
+    utm_medium: cleanFunnelAttributionText(attribution?.utmMedium, 160),
+    utm_source: cleanFunnelAttributionText(attribution?.utmSource, 160),
+    utm_term: cleanFunnelAttributionText(attribution?.utmTerm, 160),
+  };
 }
 
 export function createAnonymousId() {

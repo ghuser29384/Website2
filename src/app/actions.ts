@@ -50,6 +50,7 @@ import {
 import { getSafeInternalPath } from "@/lib/paths";
 import {
   ATTRIBUTION_COOKIE_NAME,
+  buildPrivacySafeFunnelEventRecord,
   getFirstActionHref,
   normalizeFirstAction,
   normalizeOnboardingGoal,
@@ -315,21 +316,14 @@ async function recordServerFunnelEvent({
   supabase: SupabaseServerClient;
 }) {
   const attribution = await readAttributionPayload();
-  const { error } = await (supabase as any).from("funnel_events").insert({
-    anonymous_id: attribution?.anonymousId ?? "",
-    event_type: eventType,
+  const eventRecord = buildPrivacySafeFunnelEventRecord({
+    attribution,
+    eventType,
     metadata,
-    partner_slug: attribution?.partnerSlug ?? "",
     path,
-    profile_id: profileId,
-    referral_code: attribution?.referralCode ?? "",
-    referrer: attribution?.referrer ?? "",
-    utm_campaign: attribution?.utmCampaign ?? "",
-    utm_content: attribution?.utmContent ?? "",
-    utm_medium: attribution?.utmMedium ?? "",
-    utm_source: attribution?.utmSource ?? "",
-    utm_term: attribution?.utmTerm ?? "",
+    profileId,
   });
+  const { error } = await (supabase as any).from("funnel_events").insert(eventRecord);
 
   if (error) {
     logSupabaseActionError("Failed to record funnel event", error, {

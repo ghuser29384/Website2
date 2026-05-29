@@ -2,11 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import {
   ATTRIBUTION_COOKIE_NAME,
+  buildPrivacySafeFunnelEventRecord,
   isFunnelEventType,
   parseAttributionCookie,
-  sanitizeFunnelEventMetadata,
-  sanitizeFunnelEventPath,
-  sanitizeFunnelEventReferrer,
 } from "@/lib/growth";
 import {
   getRequestRateLimitKey,
@@ -63,28 +61,16 @@ export async function POST(request: NextRequest) {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   const profileId = data.user?.id ?? null;
-  const metadata =
-    payload.metadata && typeof payload.metadata === "object"
-      ? sanitizeFunnelEventMetadata(payload.metadata)
-      : {};
-  const requestReferrer = sanitizeFunnelEventReferrer(payload.referrer);
-  const attributionReferrer = sanitizeFunnelEventReferrer(attribution?.referrer);
-
-  const { error } = await (supabase as any).from("funnel_events").insert({
-    anonymous_id: attribution?.anonymousId ?? "",
-    event_type: eventType,
-    metadata,
-    partner_slug: attribution?.partnerSlug ?? "",
-    path: sanitizeFunnelEventPath(payload.path) || "/",
-    profile_id: profileId,
-    referral_code: attribution?.referralCode ?? "",
-    referrer: requestReferrer || attributionReferrer,
-    utm_campaign: attribution?.utmCampaign ?? "",
-    utm_content: attribution?.utmContent ?? "",
-    utm_medium: attribution?.utmMedium ?? "",
-    utm_source: attribution?.utmSource ?? "",
-    utm_term: attribution?.utmTerm ?? "",
+  const eventRecord = buildPrivacySafeFunnelEventRecord({
+    attribution,
+    eventType,
+    metadata: payload.metadata,
+    path: payload.path,
+    profileId,
+    referrer: payload.referrer,
   });
+
+  const { error } = await (supabase as any).from("funnel_events").insert(eventRecord);
 
   if (error) {
     console.error("[supabase] Failed to record funnel event", {

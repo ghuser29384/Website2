@@ -509,6 +509,7 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(growthSource, /PARTNER_COHORTS/);
   assert.match(growthSource, /sanitizeFunnelEventMetadata/);
   assert.match(growthSource, /sanitizeFunnelEventPath/);
+  assert.match(growthSource, /buildPrivacySafeFunnelEventRecord/);
   assert.match(growthSource, /queryLengthBucket/);
   assert.match(migrationSource, /funnel_events/);
   assert.match(migrationSource, /cohort_attributions/);
@@ -518,7 +519,8 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(apiSource, /parseAttributionCookie/);
   assert.match(apiSource, /takeRateLimitSlot/);
   assert.match(apiSource, /analytics-ingest/);
-  assert.match(apiSource, /sanitizeFunnelEventMetadata/);
+  assert.match(apiSource, /buildPrivacySafeFunnelEventRecord/);
+  assert.match(actionsSource, /buildPrivacySafeFunnelEventRecord/);
   assert.match(funnelTracker, /useReportWebVitals/);
   assert.match(funnelTracker, /performance_metric_recorded/);
   assert.match(funnelTracker, /metricValueBucket/);

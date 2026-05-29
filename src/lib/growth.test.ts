@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildPrivacySafeFunnelEventRecord,
   isFunnelEventType,
   sanitizeFunnelEventMetadata,
   sanitizeFunnelEventPath,
@@ -33,6 +34,46 @@ test("funnel event metadata redacts raw private search and contact-like fields",
   assert.equal(serialized.includes("person@example.com"), false);
   assert.equal(serialized.includes("counterparty to do X"), false);
   assert.equal(serialized.includes("private notes"), false);
+});
+
+test("server funnel event records sanitize metadata, paths, and attribution referrers", () => {
+  const record = buildPrivacySafeFunnelEventRecord({
+    attribution: {
+      anonymousId: "anon-person@example.com",
+      partnerSlug: "EA NYC",
+      referralCode: "REF-private@example.com",
+      referrer: "https://source.example/path?private_wish=secret#frag",
+      utmCampaign: "launch",
+      utmContent: "button",
+      utmMedium: "email",
+      utmSource: "newsletter",
+      utmTerm: "exact private wish",
+    },
+    eventType: "detail_request_submitted",
+    metadata: {
+      contactEmail: "person@example.com",
+      query: "exact private wish about a counterparty",
+      sourceNote: "raw note from private feed",
+      step: "request",
+    },
+    path: "/background-networking?search=exact+wish#private",
+    profileId: "profile-1",
+  });
+  const serialized = JSON.stringify(record);
+
+  assert.equal(record.event_type, "detail_request_submitted");
+  assert.deepEqual(record.metadata, {
+    queryPresent: true,
+    queryLengthBucket: "20-99",
+    step: "request",
+  });
+  assert.equal(record.path, "/background-networking");
+  assert.equal(record.referrer, "https://source.example/path");
+  assert.equal(record.utm_term, "");
+  assert.equal(serialized.includes("person@example.com"), false);
+  assert.equal(serialized.includes("raw note"), false);
+  assert.equal(serialized.includes("exact private wish about"), false);
+  assert.equal(serialized.includes("?search="), false);
 });
 
 test("performance metric metadata keeps only privacy-safe metric buckets", () => {
