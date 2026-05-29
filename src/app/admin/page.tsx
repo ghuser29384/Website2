@@ -649,6 +649,29 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           <span>Reviewer notes</span>
                           <textarea defaultValue={reviewCase.reviewer_notes} name="reviewer_notes" rows={3} />
                         </label>
+                        <fieldset className="review-readiness-fieldset">
+                          <legend>Completion evidence readiness</legend>
+                          <label className="checkbox-label">
+                            <input name="evidence_artifact_linked" type="checkbox" />
+                            <span>Evidence artifact is linked to this review case.</span>
+                          </label>
+                          <label className="checkbox-label">
+                            <input name="claim_scope_aligned" type="checkbox" />
+                            <span>Artifact scope matches the exact claim under review.</span>
+                          </label>
+                          <label className="checkbox-label">
+                            <input name="proof_uniqueness_checked" type="checkbox" />
+                            <span>Duplicate-proof reuse was checked or explicitly justified.</span>
+                          </label>
+                          <label className="checkbox-label">
+                            <input name="evidence_freshness_reviewed" type="checkbox" />
+                            <span>Evidence timestamp or freshness window was reviewed.</span>
+                          </label>
+                          <label className="checkbox-label">
+                            <input name="evidence_agent_links_recorded" type="checkbox" />
+                            <span>Participant, reviewer, and provider/attestation agents are recorded.</span>
+                          </label>
+                        </fieldset>
                         <label className="field">
                           <span>Public reasoning summary</span>
                           <textarea

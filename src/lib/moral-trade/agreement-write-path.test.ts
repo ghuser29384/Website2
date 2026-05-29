@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildAgreementProtocolProposalRecord,
   mapAgreementReviewStatusToProtocolStatus,
+  validateAgreementEvidenceReviewReadiness,
   validateAgreementReviewProtocolTransition,
 } from "./agreement-write-path";
 
@@ -21,6 +22,16 @@ const completeTerms = {
   evidenceRule: "Public pledge log, donation receipt, and reviewer attestation.",
   privacyScope: "broad public summary",
   disclosureScope: "mutual consent detail release",
+};
+
+const completeEvidenceReviewReadiness = {
+  hasEvidenceItem: true,
+  reviewerConfidence: 80,
+  artifactLinked: true,
+  claimScopeAligned: true,
+  proofUniquenessChecked: true,
+  freshnessReviewed: true,
+  agentLinksRecorded: true,
 };
 
 test("agreement review mapping uses protocol states for completion and disputes", () => {
@@ -70,9 +81,48 @@ test("agreement review completion requires challenge window, evidence review, an
     terms: completeTerms,
     hasEvidenceItem: true,
     reviewerConfidence: 80,
+    evidenceReviewReadiness: completeEvidenceReviewReadiness,
   });
 
   assert.equal(validCompletion.status, "pass");
+});
+
+test("agreement review completion requires scoped evidence readiness checks", () => {
+  const readiness = validateAgreementEvidenceReviewReadiness({
+    ...completeEvidenceReviewReadiness,
+    claimScopeAligned: false,
+    proofUniquenessChecked: false,
+  });
+  const validation = validateAgreementReviewProtocolTransition({
+    currentCompletionState: "challenge_window_open",
+    currentReviewCaseStatus: "challenge_window_open",
+    nextReviewCaseStatus: "reviewed_complete",
+    terms: completeTerms,
+    hasEvidenceItem: true,
+    reviewerConfidence: 80,
+    evidenceReviewReadiness: {
+      ...completeEvidenceReviewReadiness,
+      claimScopeAligned: false,
+      proofUniquenessChecked: false,
+    },
+  });
+
+  assert.equal(readiness.evidenceReviewed, false);
+  assert.ok(
+    readiness.blockers.includes("evidence_scope_alignment_required_before:completion_reviewed"),
+  );
+  assert.ok(
+    readiness.blockers.includes("proof_uniqueness_check_required_before:completion_reviewed"),
+  );
+  assert.equal(validation.status, "fail");
+  assert.ok(
+    validation.blockers.includes("evidence_scope_alignment_required_before:completion_reviewed"),
+  );
+  assert.ok(
+    validation.blockers.includes("proof_uniqueness_check_required_before:completion_reviewed"),
+  );
+  assert.ok(validation.requiredChecks.includes("claim_scope_aligned"));
+  assert.ok(validation.requiredChecks.includes("proof_uniqueness_checked"));
 });
 
 test("agreement review disputes require a dispute record", () => {

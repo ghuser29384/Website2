@@ -6275,6 +6275,33 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
     );
   }
 
+  const { data: currentEvidenceItem, error: currentEvidenceItemError } =
+    currentReviewCase.evidence_item_id
+      ? await supabase
+          .from("agreement_evidence_items")
+          .select("*")
+          .eq("id", currentReviewCase.evidence_item_id)
+          .maybeSingle()
+      : { data: null, error: null };
+
+  if (currentEvidenceItemError) {
+    logSupabaseActionError("Failed to load evidence item for protocol review transition", currentEvidenceItemError, {
+      evidenceItemId: currentReviewCase.evidence_item_id,
+      reviewCaseId,
+    });
+    redirectWithMessage(returnTo, "error", currentEvidenceItemError.message);
+  }
+
+  const evidenceReviewReadiness = {
+    hasEvidenceItem: Boolean(currentEvidenceItem),
+    reviewerConfidence,
+    artifactLinked: readBoolean(formData, "evidence_artifact_linked"),
+    claimScopeAligned: readBoolean(formData, "claim_scope_aligned"),
+    proofUniquenessChecked: readBoolean(formData, "proof_uniqueness_checked"),
+    freshnessReviewed: readBoolean(formData, "evidence_freshness_reviewed"),
+    agentLinksRecorded: readBoolean(formData, "evidence_agent_links_recorded"),
+  };
+
   const protocolTransition = validateAgreementReviewProtocolTransition({
     currentCompletionState: currentAgreement.completion_state,
     currentReviewCaseStatus: currentReviewCase.status,
@@ -6291,8 +6318,9 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
       privacyScope: currentAgreement.privacy_scope,
       disclosureScope: currentAgreement.disclosure_scope,
     },
-    hasEvidenceItem: Boolean(currentReviewCase.evidence_item_id),
+    hasEvidenceItem: evidenceReviewReadiness.hasEvidenceItem,
     reviewerConfidence,
+    evidenceReviewReadiness,
     disputeRecordCreated: Boolean(
       updatePayload.public_reasoning_summary ||
         updatePayload.reviewer_notes ||
@@ -6390,6 +6418,18 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
     });
   }
 
+  const evidenceReadinessAuditDetails =
+    nextStatus === "reviewed_complete"
+      ? [
+          "Evidence readiness checks:",
+          `artifact_linked=${evidenceReviewReadiness.artifactLinked};`,
+          `claim_scope_aligned=${evidenceReviewReadiness.claimScopeAligned};`,
+          `proof_uniqueness_checked=${evidenceReviewReadiness.proofUniquenessChecked};`,
+          `freshness_reviewed=${evidenceReviewReadiness.freshnessReviewed};`,
+          `agent_links_recorded=${evidenceReviewReadiness.agentLinksRecorded}.`,
+        ].join(" ")
+      : "";
+
   await supabase.from("agreement_events").insert({
     agreement_id: reviewCase.agreement_id,
     actor_id: admin.authUser.id,
@@ -6398,7 +6438,12 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
         ? "challenge_opened"
         : "review_status_changed",
     summary: `Review case moved to ${nextStatus.replaceAll("_", " ")}.`,
-    details: updatePayload.public_reasoning_summary || updatePayload.reviewer_notes || "",
+    details: [
+      updatePayload.public_reasoning_summary || updatePayload.reviewer_notes || "",
+      evidenceReadinessAuditDetails,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
   });
 
   if (nextStatus === "reviewed_complete" && agreement) {

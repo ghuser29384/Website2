@@ -88,6 +88,11 @@ export interface MoralTradeUxReadinessAudit {
   blockers: string[];
 }
 
+export interface MoralTradeEvaluationSampleAudits {
+  surfacingParityAudit: MoralTradeSurfacingParityAudit;
+  uxReadinessAudit: MoralTradeUxReadinessAudit;
+}
+
 const evaluationProfile = evaluationProfileJson as MoralTradeEvaluationProfile;
 
 export const MORAL_TRADE_SURFACING_PARITY_DEFAULTS = {
@@ -413,11 +418,65 @@ export function auditMoralTradeUxReadiness({
   };
 }
 
+export function getMoralTradeEvaluationSampleAudits(): MoralTradeEvaluationSampleAudits {
+  return {
+    surfacingParityAudit: auditMoralTradeSurfacingParity({
+      events: [
+        ...Array.from({ length: 5 }, (_, index) => ({
+          id: `sample-pledge-west-${index}`,
+          eligible: true,
+          surfaced: index < 3,
+          slices: {
+            trade_format: "pledge_swap",
+            cause_area_pair: "animal_welfare__global_poverty",
+            geography_bucket: "US-West",
+            privacy_stage: "broad_preview",
+            optional_governed_sensitive_attribute: "consented_group_a",
+          },
+        })),
+        ...Array.from({ length: 5 }, (_, index) => ({
+          id: `sample-offset-east-${index}`,
+          eligible: true,
+          surfaced: index < 3,
+          slices: {
+            trade_format: "donation_offset",
+            cause_area_pair: "climate__global_health",
+            geography_bucket: "US-East",
+            privacy_stage: "broad_preview",
+            optional_governed_sensitive_attribute: "consented_group_b",
+          },
+        })),
+      ],
+    }),
+    uxReadinessAudit: auditMoralTradeUxReadiness({
+      previous: {
+        period: "2026-04",
+        startedDraftCount: 12,
+        validDraftCount: 6,
+        medianTimeToValidDraftMinutes: 24,
+        explanationHelpfulMedianRating: 4.1,
+        reviewerMedianMinutesPerDecision: 16,
+        reviewerOverruleRate: 0.18,
+      },
+      current: {
+        period: "2026-05",
+        startedDraftCount: 14,
+        validDraftCount: 9,
+        medianTimeToValidDraftMinutes: 18,
+        explanationHelpfulMedianRating: 4.4,
+        reviewerMedianMinutesPerDecision: 12,
+        reviewerOverruleRate: 0.17,
+      },
+    }),
+  };
+}
+
 export function validateMoralTradeEvaluationProfile(
   profile: MoralTradeEvaluationProfile = evaluationProfile,
 ): MoralTradeEvaluationValidation {
   const metricKeys = profile.metrics.map((metric) => metric.key);
   const promotionStages = profile.promotionGates.map((gate) => gate.stage);
+  const sampleAudits = getMoralTradeEvaluationSampleAudits();
   const checks = [
     check(
       "required-metrics",
@@ -475,6 +534,13 @@ export function validateMoralTradeEvaluationProfile(
         profile.evaluationTests.includes("health_route_contract_smoke") &&
         profile.evaluationTests.includes("public_technical_spec_smoke"),
       profile.evaluationTests.join(", "),
+    ),
+    check(
+      "sample-audits",
+      "Deterministic sample evaluation audits execute",
+      sampleAudits.surfacingParityAudit.status === "pass" &&
+        sampleAudits.uxReadinessAudit.status === "pass",
+      `surfacing ${sampleAudits.surfacingParityAudit.status}; ux ${sampleAudits.uxReadinessAudit.status}`,
     ),
   ];
   const blockers = checks

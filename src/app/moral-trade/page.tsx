@@ -16,6 +16,7 @@ import { getMoralTradeProtocolProfile } from "@/lib/moral-trade/protocol";
 import {
   evaluateMoralTradeProtocolDraft,
   formatProtocolReviewStatus,
+  type MoralTradeVerificationStepStatus,
 } from "@/lib/proposal-review";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -140,6 +141,10 @@ function reviewTone(status: (typeof workflowCards)[number]["review"]["status"]) 
       : "secondary";
 }
 
+function formatVerificationStepStatus(status: MoralTradeVerificationStepStatus) {
+  return status.replaceAll("_", " ");
+}
+
 export default async function MoralTradePrimerPage() {
   const viewer = await getViewer();
   const profile = getMoralTradeProtocolProfile();
@@ -218,12 +223,58 @@ export default async function MoralTradePrimerPage() {
                 </div>
                 <p>{card.review.summary}</p>
                 <div>
+                  <strong>Verification gates</strong>
+                  <ol className="protocol-gate-list" aria-label={`${card.label} verification gates`}>
+                    {card.review.verificationLoop.map((step) => (
+                      <li className={`protocol-gate-item protocol-gate-item-${step.status}`} key={step.key}>
+                        <div>
+                          <strong>{step.label}</strong>
+                          <small>{step.detail}</small>
+                        </div>
+                        <span>{formatVerificationStepStatus(step.status)}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+                <div>
                   <strong>Why</strong>
                   <div className="protocol-factor-list" aria-label={`${card.label} factor codes`}>
                     {card.review.factorCodes.map((factor) => (
                       <span key={factor} title={factorDictionary.get(factor) ?? factor}>
                         {factor}
                       </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="protocol-workflow-evidence-grid">
+                  <div>
+                    <strong>Evidence to request</strong>
+                    <ul>
+                      {(card.review.reviewInstructions.artifactsToRequest.length
+                        ? card.review.reviewInstructions.artifactsToRequest
+                        : ["No new artifact requested by this deterministic preview."]
+                      ).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <strong>Reviewer scope</strong>
+                    <ul>
+                      {card.review.reviewInstructions.reviewScope.slice(0, 3).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div>
+                  <strong>Cited evidence rows</strong>
+                  <div className="protocol-evidence-row-list" aria-label={`${card.label} cited evidence rows`}>
+                    {card.review.citedEvidenceTable.slice(0, 3).map((row) => (
+                      <div className="protocol-evidence-row" key={`${row.citation}-${row.claim}`}>
+                        <span>{row.status.replaceAll("_", " ")}</span>
+                        <p>{row.claim}</p>
+                      </div>
                     ))}
                   </div>
                 </div>

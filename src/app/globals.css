@@ -4014,6 +4014,108 @@ output {
   justify-content: space-between;
 }
 
+.protocol-gate-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.protocol-gate-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.protocol-gate-item div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.protocol-gate-item strong,
+.protocol-gate-item small,
+.protocol-gate-item span {
+  min-width: 0;
+}
+
+.protocol-gate-item small {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.protocol-gate-item > span,
+.protocol-evidence-row > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.55rem;
+  padding: 0.2rem 0.48rem;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.protocol-gate-item-pass {
+  border-color: rgba(74, 132, 75, 0.34);
+}
+
+.protocol-gate-item-needs_input,
+.protocol-gate-item-human_review {
+  border-color: rgba(160, 124, 39, 0.35);
+}
+
+.protocol-gate-item-blocked {
+  border-color: rgba(158, 54, 54, 0.35);
+}
+
+.protocol-workflow-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.protocol-workflow-evidence-grid ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.55rem 0 0;
+  padding-left: 1rem;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.protocol-evidence-row-list {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.protocol-evidence-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.protocol-evidence-row p {
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
 .stack-form,
 .clean-stack,
 .offers-board,
@@ -7054,6 +7156,25 @@ output {
   margin-bottom: 0.75rem;
 }
 
+.review-readiness-fieldset {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0 0 0.75rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.review-readiness-fieldset legend {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.review-readiness-fieldset .checkbox-label:last-child {
+  margin-bottom: 0;
+}
+
 .checkbox-label {
   display: flex;
   gap: 0.55rem;
@@ -7419,6 +7540,7 @@ strong {
   .protocol-verification-list,
   .protocol-provenance-list,
   .protocol-contract-grid,
+  .protocol-workflow-evidence-grid,
   .offer-wizard-steps,
   .field-grid,
   .meter-grid,
@@ -7441,6 +7563,16 @@ strong {
   .profile-stats,
   .detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .protocol-gate-item,
+  .protocol-evidence-row {
+    grid-template-columns: 1fr;
+  }
+
+  .protocol-gate-item > span,
+  .protocol-evidence-row > span {
+    justify-self: start;
   }
 
   .protocol-provenance-head {

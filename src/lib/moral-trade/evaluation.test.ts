@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   auditMoralTradeSurfacingParity,
   auditMoralTradeUxReadiness,
+  getMoralTradeEvaluationSampleAudits,
   getMoralTradeEvaluationProfile,
   MORAL_TRADE_SURFACING_PARITY_DEFAULTS,
   MORAL_TRADE_UX_READINESS_DEFAULTS,
@@ -30,6 +31,17 @@ test("evaluation profile publishes Codex quality, privacy, fairness, and reviewe
   assert.ok(profile.evaluationTests.includes("surfacing_parity_audit"));
   assert.ok(profile.evaluationTests.includes("ux_readiness_audit"));
   assert.ok(profile.promotionGates.some((gate) => gate.stage === "human_controlled_decisions"));
+});
+
+test("evaluation contract publishes executable sample audit evidence", () => {
+  const validation = validateMoralTradeEvaluationProfile();
+  const sampleAudits = getMoralTradeEvaluationSampleAudits();
+
+  assert.ok(validation.checks.some((check) => check.id === "sample-audits"));
+  assert.equal(sampleAudits.surfacingParityAudit.status, "pass");
+  assert.equal(sampleAudits.surfacingParityAudit.overallSurfacingRate, 0.6);
+  assert.equal(sampleAudits.uxReadinessAudit.status, "pass");
+  assert.deepEqual(sampleAudits.uxReadinessAudit.blockers, []);
 });
 
 test("evaluation validation fails when privacy metrics or human control gates are missing", () => {

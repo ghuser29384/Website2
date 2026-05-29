@@ -597,9 +597,18 @@ test("accepted introductions can progress through agreement evidence review", ()
   assert.match(adminPage, /Verification ladder/);
   assert.match(adminPage, /updateAgreementReviewCaseAction/);
   assert.match(adminPage, /updateProfileVerificationBadgeAction/);
+  assert.match(adminPage, /Completion evidence readiness/);
+  assert.match(adminPage, /evidence_artifact_linked/);
+  assert.match(adminPage, /claim_scope_aligned/);
+  assert.match(adminPage, /proof_uniqueness_checked/);
+  assert.match(adminPage, /evidence_freshness_reviewed/);
+  assert.match(adminPage, /evidence_agent_links_recorded/);
   assert.match(actionsSource, /createAgreementRoomFromIntroductionPlanAction/);
   assert.match(actionsSource, /updateAgreementReviewCaseAction/);
   assert.match(actionsSource, /validateAgreementReviewProtocolTransition/);
+  assert.match(actionsSource, /evidenceReviewReadiness/);
+  assert.match(actionsSource, /readBoolean\(formData, "claim_scope_aligned"\)/);
+  assert.match(actionsSource, /Evidence readiness checks/);
   assert.match(actionsSource, /The review state transition is not allowed by the Moral Trade protocol/);
   assert.match(actionsSource, /completion_reviewed/);
   assert.match(actionsSource, /repeat_counterparty/);
@@ -655,6 +664,13 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(primerPage, /Reviewable draft/);
   assert.match(primerPage, /Blocked draft/);
   assert.match(primerPage, /factor codes/);
+  assert.match(primerPage, /Verification gates/);
+  assert.match(primerPage, /card\.review\.verificationLoop/);
+  assert.match(primerPage, /Evidence to request/);
+  assert.match(primerPage, /Reviewer scope/);
+  assert.match(primerPage, /Cited evidence rows/);
+  assert.match(primerPage, /card\.review\.reviewInstructions\.artifactsToRequest/);
+  assert.match(primerPage, /card\.review\.citedEvidenceTable/);
   assert.match(primerPage, /evaluateMoralTradeProtocolDraft/);
   assert.match(primerPage, /card\.review\.factorCodes/);
   assert.match(primerPage, /anti-threat rules/i);
@@ -1446,6 +1462,9 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(globalCss, /protocol-verification-step/);
   assert.match(globalCss, /protocol-workflow-card/);
   assert.match(globalCss, /protocol-factor-list/);
+  assert.match(globalCss, /protocol-gate-list/);
+  assert.match(globalCss, /protocol-workflow-evidence-grid/);
+  assert.match(globalCss, /protocol-evidence-row-list/);
 });
 
 test("offers page keeps content before the footer in source order", () => {

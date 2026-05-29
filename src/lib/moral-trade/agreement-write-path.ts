@@ -32,6 +32,62 @@ export interface AgreementProtocolTerms {
   disclosureScope: string | null;
 }
 
+export interface AgreementEvidenceReviewReadinessInput {
+  hasEvidenceItem: boolean;
+  reviewerConfidence: number | null;
+  artifactLinked?: boolean;
+  claimScopeAligned?: boolean;
+  proofUniquenessChecked?: boolean;
+  freshnessReviewed?: boolean;
+  agentLinksRecorded?: boolean;
+}
+
+export interface AgreementEvidenceReviewReadiness {
+  evidenceReviewed: boolean;
+  requiredChecks: string[];
+  blockers: string[];
+}
+
+const AGREEMENT_EVIDENCE_REVIEW_CHECKS = [
+  {
+    key: "evidence_item_linked",
+    blocker: "evidence_item_required_before:completion_reviewed",
+    isReady: (input: AgreementEvidenceReviewReadinessInput) => input.hasEvidenceItem,
+  },
+  {
+    key: "reviewer_confidence_recorded",
+    blocker: "reviewer_confidence_required_before:completion_reviewed",
+    isReady: (input: AgreementEvidenceReviewReadinessInput) =>
+      Number(input.reviewerConfidence ?? 0) > 0,
+  },
+  {
+    key: "evidence_artifact_linked",
+    blocker: "evidence_artifact_link_required_before:completion_reviewed",
+    isReady: (input: AgreementEvidenceReviewReadinessInput) => input.artifactLinked === true,
+  },
+  {
+    key: "claim_scope_aligned",
+    blocker: "evidence_scope_alignment_required_before:completion_reviewed",
+    isReady: (input: AgreementEvidenceReviewReadinessInput) => input.claimScopeAligned === true,
+  },
+  {
+    key: "proof_uniqueness_checked",
+    blocker: "proof_uniqueness_check_required_before:completion_reviewed",
+    isReady: (input: AgreementEvidenceReviewReadinessInput) =>
+      input.proofUniquenessChecked === true,
+  },
+  {
+    key: "evidence_freshness_reviewed",
+    blocker: "evidence_freshness_review_required_before:completion_reviewed",
+    isReady: (input: AgreementEvidenceReviewReadinessInput) => input.freshnessReviewed === true,
+  },
+  {
+    key: "evidence_agent_links_recorded",
+    blocker: "evidence_agent_links_required_before:completion_reviewed",
+    isReady: (input: AgreementEvidenceReviewReadinessInput) => input.agentLinksRecorded === true,
+  },
+] as const;
+
 export function mapAgreementReviewStatusToProtocolStatus(
   status: AgreementReviewCaseStatus,
 ): string {
@@ -94,6 +150,20 @@ export function buildAgreementProtocolProposalRecord(
   };
 }
 
+export function validateAgreementEvidenceReviewReadiness(
+  input: AgreementEvidenceReviewReadinessInput,
+): AgreementEvidenceReviewReadiness {
+  const blockers = AGREEMENT_EVIDENCE_REVIEW_CHECKS.filter((check) => !check.isReady(input)).map(
+    (check) => check.blocker,
+  );
+
+  return {
+    evidenceReviewed: blockers.length === 0,
+    requiredChecks: AGREEMENT_EVIDENCE_REVIEW_CHECKS.map((check) => check.key),
+    blockers,
+  };
+}
+
 export function validateAgreementReviewProtocolTransition({
   currentCompletionState,
   currentReviewCaseStatus,
@@ -101,6 +171,7 @@ export function validateAgreementReviewProtocolTransition({
   terms,
   hasEvidenceItem,
   reviewerConfidence,
+  evidenceReviewReadiness,
   disputeRecordCreated = false,
   humanReviewApproved = true,
   provenanceActivityRecorded = true,
@@ -111,6 +182,7 @@ export function validateAgreementReviewProtocolTransition({
   terms: AgreementProtocolTerms;
   hasEvidenceItem: boolean;
   reviewerConfidence: number | null;
+  evidenceReviewReadiness?: AgreementEvidenceReviewReadinessInput;
   disputeRecordCreated?: boolean;
   humanReviewApproved?: boolean;
   provenanceActivityRecorded?: boolean;
@@ -136,14 +208,36 @@ export function validateAgreementReviewProtocolTransition({
     };
   }
 
-  return validateMoralTradeProposalStateTransition({
+  const readiness =
+    to === "completion_reviewed"
+      ? validateAgreementEvidenceReviewReadiness(
+          evidenceReviewReadiness ?? {
+            hasEvidenceItem,
+            reviewerConfidence,
+          },
+        )
+      : null;
+
+  const transition = validateMoralTradeProposalStateTransition({
     from,
     to,
     proposal: buildAgreementProtocolProposalRecord(terms),
     humanReviewApproved,
-    evidenceReviewed,
+    evidenceReviewed: readiness ? readiness.evidenceReviewed : evidenceReviewed,
     disputeRecordCreated,
     provenanceActivityRecorded,
     policyConflictCodes: to === "blocked" ? ["human_review_block"] : [],
   });
+
+  if (!readiness || readiness.blockers.length === 0) {
+    return transition;
+  }
+
+  return {
+    ...transition,
+    status: "fail",
+    allowed: false,
+    requiredChecks: [...new Set([...transition.requiredChecks, ...readiness.requiredChecks])],
+    blockers: [...new Set([...transition.blockers, ...readiness.blockers])],
+  };
 }
