@@ -1150,6 +1150,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const dataModelSource = readRepoFile("src/lib/moral-trade/data-model.ts");
   const policyBundleSource = readRepoFile("src/lib/moral-trade/policy-bundle.ts");
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
+  const offerWritePathSource = readRepoFile("src/lib/moral-trade/offer-write-path.ts");
+  const actionsSource = readRepoFile("src/app/actions.ts");
   const copilotSource = readRepoFile("src/lib/moral-trade/copilot.ts");
   const copilotContract = readRepoFile("config/moral-trade/copilot-contract.json");
   const backgroundExplanationsSource = readRepoFile("src/lib/background-explanations.ts");
@@ -1292,6 +1294,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(protocolProfile, /completion_reviewed/);
   assert.match(protocolProfile, /disputed_unresolved/);
   assert.match(protocolProfile, /transition_event_recorded/);
+  assert.match(protocolProfile, /"offer"/);
   assert.match(protocolProfile, /state_transition_event_record/);
   assert.match(protocolProfile, /eventHash/);
   assert.match(protocolProfile, /privacy_safe_preview/);
@@ -1308,6 +1311,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(protocolProfile, /party_relative_benefit/);
   assert.match(protocolProfile, /evidence_artifact/);
   assert.match(protocolProfile, /provenanceObjectSchemas/);
+  assert.match(offerWritePathSource, /buildMoralTradeOfferCreateProvenanceRows/);
+  assert.match(offerWritePathSource, /buildMoralTradeOfferCreateProvenanceAgentRow/);
+  assert.match(offerWritePathSource, /stateTransitionEvent/);
+  assert.match(actionsSource, /persistMoralTradeOfferCreateProtocolProvenance/);
+  assert.match(actionsSource, /moral_trade_provenance_agents/);
+  assert.match(actionsSource, /moral_trade_provenance_activities/);
+  assert.match(actionsSource, /moral_trade_state_transition_events/);
+  assert.match(actionsSource, /Offer saved but kept paused because the protocol provenance record could not be written/);
   assert.match(dataModelSource, /validateMoralTradeDataModelProfile/);
   assert.match(dataModelSource, /REQUIRED_ENTITIES/);
   assert.match(dataModelSource, /review_decision/);

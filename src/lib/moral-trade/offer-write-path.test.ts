@@ -4,6 +4,8 @@ import test from "node:test";
 import { evaluateMoralTradeProtocolDraft } from "@/lib/proposal-review";
 
 import {
+  buildMoralTradeOfferCreateProvenanceAgentRow,
+  buildMoralTradeOfferCreateProvenanceRows,
   buildMoralTradeOfferProtocolNotes,
   buildMoralTradeProtocolProposalRecord,
   getMoralTradeOfferPersistenceStatus,
@@ -106,4 +108,45 @@ test("offer create write path pauses challenge-window drafts and records protoco
   assert.match(notes, /Protocol review status: challenge_window/);
   assert.match(notes, /Protocol transition accepted: draft->submitted/);
   assert.match(notes, /Transition event record:/);
+});
+
+test("offer create write path maps accepted transitions to append-only provenance rows", () => {
+  const protocolReview = evaluateMoralTradeProtocolDraft(completeDraft);
+  const transition = validateMoralTradeOfferCreateTransition({
+    actorAgentId: "00000000-0000-4000-8000-000000000123",
+    actorAgentKind: "participant",
+    draft: completeDraft,
+    idempotencyKey: "offer-create:offer-123:draft-to-submitted",
+    protocolReview,
+    recordedAt: "2026-05-29T12:00:00.000Z",
+    subjectId: "offer-123",
+    subjectKind: "offer",
+  });
+  const agentRow = buildMoralTradeOfferCreateProvenanceAgentRow({
+    actorAgentId: "00000000-0000-4000-8000-000000000123",
+    actorLabel: "Pilot participant",
+    ownerProfileId: "00000000-0000-4000-8000-000000000123",
+  });
+  const rows = buildMoralTradeOfferCreateProvenanceRows({
+    actorProvenanceAgentId: "11111111-1111-4111-8111-111111111111",
+    offerId: "offer-123",
+    ownerProfileId: "00000000-0000-4000-8000-000000000123",
+    transitionEventRecord: transition.transitionEventRecord!,
+  });
+
+  assert.equal(transition.status, "pass");
+  assert.equal(transition.transitionEventRecord?.subjectKind, "offer");
+  assert.equal(agentRow.agent_key, "participant:00000000-0000-4000-8000-000000000123");
+  assert.equal(agentRow.kind, "participant");
+  assert.equal(rows.provenanceActivity.subject_kind, "offer");
+  assert.equal(rows.provenanceActivity.kind, "draft_created");
+  assert.equal(rows.provenanceActivity.activity_hash, transition.transitionEventRecord?.eventHash);
+  assert.deepEqual(rows.provenanceActivity.agent_ids, [
+    "11111111-1111-4111-8111-111111111111",
+  ]);
+  assert.equal(rows.stateTransitionEvent.actor_agent_id, "11111111-1111-4111-8111-111111111111");
+  assert.equal(rows.stateTransitionEvent.from_status, "draft");
+  assert.equal(rows.stateTransitionEvent.to_status, "submitted");
+  assert.equal(rows.stateTransitionEvent.subject_id, "offer-123");
+  assert.equal(rows.stateTransitionEvent.event_hash.length, 64);
 });

@@ -40,6 +40,7 @@ export function validateMoralTradeOfferCreateTransition({
   previousEventHash = null,
   provenanceActivityRecorded = true,
   recordedAt,
+  subjectKind = "proposal_record",
   subjectId = "proposal_record:new_offer",
   transitionEventRecord,
 }: {
@@ -51,6 +52,7 @@ export function validateMoralTradeOfferCreateTransition({
   previousEventHash?: string | null;
   provenanceActivityRecorded?: boolean;
   recordedAt?: string;
+  subjectKind?: "proposal_record" | "agreement" | "offer";
   subjectId?: string;
   transitionEventRecord?: MoralTradeStateTransitionEventRecord;
 }): MoralTradeProposalStateTransitionValidation {
@@ -74,11 +76,87 @@ export function validateMoralTradeOfferCreateTransition({
               idempotencyKey ?? `offer-create:${actorAgentId}:${transitionRecordedAt}`,
             previousEventHash,
             recordedAt: transitionRecordedAt,
+            subjectKind,
             subjectId,
             to,
           })
         : undefined),
   });
+}
+
+export function buildMoralTradeOfferCreateProvenanceAgentRow({
+  actorAgentId,
+  actorLabel,
+  ownerProfileId,
+}: {
+  actorAgentId: string;
+  actorLabel: string;
+  ownerProfileId: string;
+}) {
+  return {
+    agent_key: `participant:${actorAgentId}`,
+    kind: "participant",
+    label: actorLabel || "Offer creator",
+    metadata: {
+      authUserId: actorAgentId,
+      source: "offer_create_protocol_transition",
+    },
+    owner_profile_id: ownerProfileId,
+    redaction_level: "participant_private",
+  } as const;
+}
+
+export function buildMoralTradeOfferCreateProvenanceRows({
+  actorProvenanceAgentId,
+  offerId,
+  ownerProfileId,
+  transitionEventRecord,
+}: {
+  actorProvenanceAgentId: string;
+  offerId: string;
+  ownerProfileId: string;
+  transitionEventRecord: MoralTradeStateTransitionEventRecord;
+}) {
+  const generatedEntityIds = transitionEventRecord.generatedEntityIds.includes(offerId)
+    ? transitionEventRecord.generatedEntityIds
+    : [offerId, ...transitionEventRecord.generatedEntityIds];
+  const usedEntityIds = transitionEventRecord.usedEntityIds.includes(offerId)
+    ? transitionEventRecord.usedEntityIds
+    : [offerId, ...transitionEventRecord.usedEntityIds];
+
+  return {
+    provenanceActivity: {
+      activity_at: transitionEventRecord.recordedAt,
+      activity_hash: transitionEventRecord.eventHash,
+      agent_ids: [actorProvenanceAgentId],
+      generated_entity_ids: generatedEntityIds,
+      idempotency_key: `${transitionEventRecord.idempotencyKey}:activity`,
+      kind: transitionEventRecord.provenanceActivity,
+      owner_profile_id: ownerProfileId,
+      previous_activity_hash: transitionEventRecord.previousEventHash,
+      redaction_level: "participant_private",
+      subject_id: offerId,
+      subject_kind: "offer",
+      used_entity_ids: usedEntityIds,
+    },
+    stateTransitionEvent: {
+      actor_agent_id: actorProvenanceAgentId,
+      actor_agent_kind: transitionEventRecord.actorAgentKind,
+      event_hash: transitionEventRecord.eventHash,
+      from_status: transitionEventRecord.from,
+      generated_entity_ids: generatedEntityIds,
+      idempotency_key: transitionEventRecord.idempotencyKey,
+      owner_profile_id: ownerProfileId,
+      previous_event_hash: transitionEventRecord.previousEventHash,
+      provenance_activity: transitionEventRecord.provenanceActivity,
+      recorded_at: transitionEventRecord.recordedAt,
+      redaction_level: "participant_private",
+      subject_id: offerId,
+      subject_kind: "offer",
+      to_status: transitionEventRecord.to,
+      used_entity_ids: usedEntityIds,
+    },
+  } as const;
 }
 
 export function getMoralTradeOfferPersistenceStatus({

@@ -226,7 +226,7 @@
     }
   ],
   "provenanceModel": {
-    "entities": ["proposal_record", "evidence_artifact", "external_entity_reference", "review_decision", "match_explanation", "match_signal", "traceability_event"],
+    "entities": ["proposal_record", "offer", "evidence_artifact", "external_entity_reference", "review_decision", "match_explanation", "match_signal", "traceability_event"],
     "activities": ["draft_created", "draft_updated", "evidence_submitted", "traceability_event_recorded", "risk_screened", "challenge_window_opened", "review_completed"],
     "agents": ["participant", "counterparty", "operator", "external_reviewer", "payment_or_evidence_provider"]
   },

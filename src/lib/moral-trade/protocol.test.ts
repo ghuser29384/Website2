@@ -29,6 +29,7 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
   assert.ok(profile.factorCodes.some((factor) => factor.code === "trade_mode_compatible"));
   assert.ok(profile.evidenceSchemas.some((schema) => schema.key === "donation_offset_v1"));
   assert.ok(profile.provenanceModel.entities.includes("evidence_artifact"));
+  assert.ok(profile.provenanceModel.entities.includes("offer"));
   assert.ok(profile.provenanceModel.entities.includes("external_entity_reference"));
   assert.ok(profile.provenanceModel.entities.includes("match_signal"));
   assert.ok(profile.provenanceModel.entities.includes("traceability_event"));

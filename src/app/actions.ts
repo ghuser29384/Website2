@@ -86,6 +86,8 @@ import {
 import { evidenceLocatorsConflict } from "@/lib/validation";
 import { evaluateMoralTradeProtocolDraft } from "@/lib/proposal-review";
 import {
+  buildMoralTradeOfferCreateProvenanceAgentRow,
+  buildMoralTradeOfferCreateProvenanceRows,
   buildMoralTradeOfferProtocolNotes,
   getMoralTradeOfferPersistenceStatus,
   validateMoralTradeOfferCreateTransition,
@@ -296,6 +298,144 @@ function logSupabaseActionError(
     message: error.message,
     ...metadata,
   });
+}
+
+async function getOrCreateMoralTradeOfferProvenanceAgentId({
+  actorAgentId,
+  actorLabel,
+  ownerProfileId,
+  supabase,
+}: {
+  actorAgentId: string;
+  actorLabel: string;
+  ownerProfileId: string;
+  supabase: SupabaseServerClient;
+}) {
+  const agentRow = buildMoralTradeOfferCreateProvenanceAgentRow({
+    actorAgentId,
+    actorLabel,
+    ownerProfileId,
+  });
+  const provenanceClient = supabase as any;
+  const { data: existingAgent, error: existingAgentError } = await provenanceClient
+    .from("moral_trade_provenance_agents")
+    .select("id")
+    .eq("owner_profile_id", ownerProfileId)
+    .eq("agent_key", agentRow.agent_key)
+    .maybeSingle();
+
+  if (existingAgentError) {
+    return { error: existingAgentError as PostgrestError, id: null };
+  }
+
+  if (existingAgent?.id) {
+    return { error: null, id: String(existingAgent.id) };
+  }
+
+  const { data: insertedAgent, error: insertedAgentError } = await provenanceClient
+    .from("moral_trade_provenance_agents")
+    .insert(agentRow)
+    .select("id")
+    .single();
+
+  if (!insertedAgentError && insertedAgent?.id) {
+    return { error: null, id: String(insertedAgent.id) };
+  }
+
+  if (insertedAgentError?.code === "23505") {
+    const { data: racedAgent, error: racedAgentError } = await provenanceClient
+      .from("moral_trade_provenance_agents")
+      .select("id")
+      .eq("owner_profile_id", ownerProfileId)
+      .eq("agent_key", agentRow.agent_key)
+      .maybeSingle();
+
+    if (racedAgent?.id && !racedAgentError) {
+      return { error: null, id: String(racedAgent.id) };
+    }
+
+    return { error: racedAgentError ?? insertedAgentError, id: null };
+  }
+
+  return { error: insertedAgentError as PostgrestError, id: null };
+}
+
+async function persistMoralTradeOfferCreateProtocolProvenance({
+  actorAgentId,
+  actorLabel,
+  draft,
+  offerId,
+  ownerProfileId,
+  protocolReview,
+  recordedAt,
+  supabase,
+}: {
+  actorAgentId: string;
+  actorLabel: string;
+  draft: Parameters<typeof validateMoralTradeOfferCreateTransition>[0]["draft"];
+  offerId: string;
+  ownerProfileId: string;
+  protocolReview: Parameters<typeof validateMoralTradeOfferCreateTransition>[0]["protocolReview"];
+  recordedAt: string;
+  supabase: SupabaseServerClient;
+}) {
+  const agent = await getOrCreateMoralTradeOfferProvenanceAgentId({
+    actorAgentId,
+    actorLabel,
+    ownerProfileId,
+    supabase,
+  });
+
+  if (!agent.id || agent.error) {
+    return {
+      error: agent.error,
+      transition: null,
+    };
+  }
+
+  const transition = validateMoralTradeOfferCreateTransition({
+    actorAgentId: agent.id,
+    actorAgentKind: "participant",
+    draft,
+    idempotencyKey: `offer-create:${offerId}:draft-to-submitted`,
+    protocolReview,
+    recordedAt,
+    subjectId: offerId,
+    subjectKind: "offer",
+  });
+
+  if (transition.status === "fail" || !transition.transitionEventRecord) {
+    return {
+      error: new Error(
+        `Offer protocol provenance transition failed: ${transition.blockers.join(", ")}`,
+      ),
+      transition,
+    };
+  }
+
+  const rows = buildMoralTradeOfferCreateProvenanceRows({
+    actorProvenanceAgentId: agent.id,
+    offerId,
+    ownerProfileId,
+    transitionEventRecord: transition.transitionEventRecord,
+  });
+  const provenanceClient = supabase as any;
+  const { error: activityError } = await provenanceClient
+    .from("moral_trade_provenance_activities")
+    .insert(rows.provenanceActivity);
+
+  if (activityError) {
+    return { error: activityError as PostgrestError, transition };
+  }
+
+  const { error: transitionError } = await provenanceClient
+    .from("moral_trade_state_transition_events")
+    .insert(rows.stateTransitionEvent);
+
+  return {
+    error: (transitionError as PostgrestError | null) ?? null,
+    transition,
+  };
 }
 
 async function readAttributionPayload() {
@@ -2573,7 +2713,7 @@ export async function createOfferAction(formData: FormData) {
       payment_interval_value: paymentIntervalValue,
       trust_level: trustLevel,
       notes: structuredNotes,
-      status: offerPersistenceStatus,
+      status: "paused",
     })
     .select("id")
     .single();
@@ -2619,6 +2759,55 @@ export async function createOfferAction(formData: FormData) {
       });
       redirectWithMessage(newOfferReturnPath, "error", offsetError.message);
     }
+  }
+
+  const provenanceResult = await persistMoralTradeOfferCreateProtocolProvenance({
+    actorAgentId: viewer.authUser.id,
+    actorLabel: ownerAlias,
+    draft: protocolDraft,
+    offerId: data.id,
+    ownerProfileId: viewer.authUser.id,
+    protocolReview,
+    recordedAt: protocolTransitionRecordedAt,
+    supabase,
+  });
+
+  if (provenanceResult.error || !provenanceResult.transition) {
+    logSupabaseActionError("Failed to persist offer protocol provenance", provenanceResult.error, {
+      offerId: data.id,
+      ownerId: viewer.authUser.id,
+    });
+    redirectWithMessage(
+      `/offers/${data.id}`,
+      "error",
+      "Offer saved but kept paused because the protocol provenance record could not be written. Ask an operator to review before relying on it.",
+    );
+  }
+
+  const finalStructuredNotes = [
+    notes,
+    `No-trade baseline / default: ${baselineStatement}`,
+    `Exit, pause, or expiry condition: ${exitCondition}`,
+    buildMoralTradeOfferProtocolNotes(protocolReview, provenanceResult.transition),
+  ].join("\n\n");
+  const { error: finalOfferUpdateError } = await supabase
+    .from("offers")
+    .update({
+      notes: finalStructuredNotes,
+      status: offerPersistenceStatus,
+    })
+    .eq("id", data.id);
+
+  if (finalOfferUpdateError) {
+    logSupabaseActionError("Failed to finalize offer protocol provenance status", finalOfferUpdateError, {
+      offerId: data.id,
+      ownerId: viewer.authUser.id,
+    });
+    redirectWithMessage(
+      `/offers/${data.id}`,
+      "error",
+      "Offer saved but kept paused because the protocol provenance status could not be finalized.",
+    );
   }
 
   revalidatePath("/offers");
