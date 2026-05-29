@@ -227,6 +227,203 @@ create table if not exists public.mpgf_public_goods_analytics_events (
   )
 );
 
+alter table public.mpgf_pool_proposals
+  add column if not exists public_goods_destination_type text check (
+    public_goods_destination_type is null or
+    public_goods_destination_type in ('external_charity', 'fiscal_host', 'internal_demo_pool', 'signed_sponsor_route')
+  ),
+  add column if not exists public_goods_destination_ref text,
+  add column if not exists public_goods_threshold_amount_cents bigint check (
+    public_goods_threshold_amount_cents is null or public_goods_threshold_amount_cents > 0
+  ),
+  add column if not exists public_goods_threshold_supporters integer check (
+    public_goods_threshold_supporters is null or public_goods_threshold_supporters > 0
+  ),
+  add column if not exists public_goods_deadline_at timestamptz,
+  add column if not exists public_goods_verification_method text,
+  add column if not exists public_goods_baseline_rule text,
+  add column if not exists public_goods_exit_rule text,
+  add column if not exists public_goods_base_match_ratio numeric not null default 1 check (
+    public_goods_base_match_ratio >= 0
+  ),
+  add column if not exists public_goods_qf_enabled boolean not null default false,
+  add column if not exists public_goods_qf_cap_multiple numeric not null default 1.5 check (
+    public_goods_qf_cap_multiple >= 0
+  ),
+  add column if not exists public_goods_payout_method text check (
+    public_goods_payout_method is null or
+    public_goods_payout_method in ('external_handoff', 'stored_payment_method', 'signed_intent')
+  );
+
+insert into public.mpgf_public_goods_match_pools (
+  id,
+  funder_type,
+  budget_cents,
+  base_match_ratio,
+  qf_bonus_cents,
+  visible_commitment,
+  restrictions_json,
+  status
+) values (
+  'mpgf-common-ground-sponsor-pool-2026-05',
+  'demo_common_ground_pool',
+  150000,
+  1,
+  50000,
+  'A demo common-ground sponsor pool releases a 1:1 challenge match only after assurance and review gates pass.',
+  '{"noCustody": true, "baseMatchDefault": "1:1", "qfCapMultiple": 1.5, "qfAfterThresholdOnly": true, "transferableTokens": false}'::jsonb,
+  'active'
+) on conflict (id) do update set
+  funder_type = excluded.funder_type,
+  budget_cents = excluded.budget_cents,
+  base_match_ratio = excluded.base_match_ratio,
+  qf_bonus_cents = excluded.qf_bonus_cents,
+  visible_commitment = excluded.visible_commitment,
+  restrictions_json = excluded.restrictions_json,
+  status = excluded.status;
+
+insert into public.mpgf_public_goods_rounds (
+  id,
+  name,
+  starts_at,
+  ends_at,
+  match_pool_id,
+  qf_enabled,
+  qf_cap_multiple,
+  supporter_gate,
+  status
+) values (
+  'mpgf-assurance-round-demo-2026-05',
+  'May 2026 Verified Assurance Matching demo',
+  '2026-05-01T00:00:00.000Z',
+  '2026-05-31T23:59:59.000Z',
+  'mpgf-common-ground-sponsor-pool-2026-05',
+  true,
+  1.5,
+  'demo_self_attestation',
+  'open'
+) on conflict (id) do update set
+  name = excluded.name,
+  starts_at = excluded.starts_at,
+  ends_at = excluded.ends_at,
+  match_pool_id = excluded.match_pool_id,
+  qf_enabled = excluded.qf_enabled,
+  qf_cap_multiple = excluded.qf_cap_multiple,
+  supporter_gate = excluded.supporter_gate,
+  status = excluded.status;
+
+insert into public.mpgf_public_goods_campaigns (
+  id,
+  round_id,
+  slug,
+  pool_alternative_id,
+  title,
+  destination_type,
+  destination_ref,
+  cause_tags,
+  public_summary,
+  threshold_amount_cents,
+  threshold_supporters,
+  deadline_at,
+  verification_method,
+  baseline_rule,
+  exit_rule,
+  review_status,
+  challenge_window_ends_at
+) values
+  (
+    'campaign-global-health-basic-needs',
+    'mpgf-assurance-round-demo-2026-05',
+    'global-health-basic-needs',
+    null,
+    'Global health and basic needs assurance campaign',
+    'external_charity',
+    'Demo external destination: vetted global health fund',
+    array['global health', 'basic needs', 'consensus good'],
+    'A thresholded route for participants who want an external global-health destination to receive support only after enough verified people join.',
+    25000,
+    3,
+    '2026-05-31T23:59:59.000Z',
+    'External receipt or fiscal-host evidence reviewed before counting.',
+    'No participant is asked to worsen a baseline or pay to prevent new harm.',
+    'If the threshold fails, pledges expire without charge or custody.',
+    'approved',
+    '2026-06-03T23:59:59.000Z'
+  ),
+  (
+    'campaign-existential-risk-resilience',
+    'mpgf-assurance-round-demo-2026-05',
+    'existential-risk-resilience',
+    null,
+    'Existential-risk resilience assurance campaign',
+    'fiscal_host',
+    'Demo fiscal-host route: resilience research fund',
+    array['long-run future', 'resilience', 'hybrid good'],
+    'A fiscal-hosted route that can attract support from longtermist, humanitarian, and pluralist participants without making a global moral ranking.',
+    50000,
+    3,
+    '2026-05-31T23:59:59.000Z',
+    'Fiscal-host confirmation plus reviewer acceptance.',
+    'No threat, coercion, political quid pro quo, or perverse-incentive baseline is allowed.',
+    'If the route misses either threshold, pledged intents are voided.',
+    'challenge_window',
+    '2026-06-04T23:59:59.000Z'
+  ),
+  (
+    'campaign-animal-welfare-transition',
+    'mpgf-assurance-round-demo-2026-05',
+    'animal-welfare-transition',
+    null,
+    'Animal welfare transition assurance campaign',
+    'external_charity',
+    'Demo external destination: animal welfare transition fund',
+    array['animal welfare', 'transition', 'hybrid good'],
+    'A thresholded external-handoff route for reducing intense animal suffering while preserving review and challenge windows.',
+    20000,
+    3,
+    '2026-05-31T23:59:59.000Z',
+    'External receipt evidence and destination review before allocation.',
+    'The campaign cannot reward newly increased harm or extortionary threats.',
+    'Pledges expire if threshold or review gates do not pass.',
+    'approved',
+    '2026-06-03T23:59:59.000Z'
+  ),
+  (
+    'campaign-public-interest-knowledge',
+    'mpgf-assurance-round-demo-2026-05',
+    'public-interest-knowledge',
+    null,
+    'Public-interest knowledge assurance campaign',
+    'signed_sponsor_route',
+    'Demo signed intent: public-interest research fund',
+    array['epistemics', 'public knowledge', 'consensus good'],
+    'A signed-intent route for shared evidence infrastructure that only becomes payable after supporter and review thresholds clear.',
+    18000,
+    2,
+    '2026-05-20T23:59:59.000Z',
+    'Signed sponsor intent plus public reviewer note.',
+    'No private wish text or sensitive evidence is published by default.',
+    'Missed thresholds are recorded as expired, not as failed donations.',
+    'submitted',
+    null
+  )
+on conflict (id) do update set
+  round_id = excluded.round_id,
+  slug = excluded.slug,
+  title = excluded.title,
+  destination_type = excluded.destination_type,
+  destination_ref = excluded.destination_ref,
+  cause_tags = excluded.cause_tags,
+  public_summary = excluded.public_summary,
+  threshold_amount_cents = excluded.threshold_amount_cents,
+  threshold_supporters = excluded.threshold_supporters,
+  deadline_at = excluded.deadline_at,
+  verification_method = excluded.verification_method,
+  baseline_rule = excluded.baseline_rule,
+  exit_rule = excluded.exit_rule,
+  review_status = excluded.review_status,
+  challenge_window_ends_at = excluded.challenge_window_ends_at;
+
 grant select on
   public.mpgf_public_goods_match_pools,
   public.mpgf_public_goods_rounds,

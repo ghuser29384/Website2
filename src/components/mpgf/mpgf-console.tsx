@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   createMpgfRealMoneyCheckoutAction,
   recordMpgfPledgesAction,
+  recordMpgfPublicGoodsPledgeAction,
   saveMpgfBallotAction,
   saveMpgfPoolProposalAction,
   submitMpgfManualExternalPaymentEvidenceAction,
@@ -26,6 +27,8 @@ import {
   buildDemoLedgerTransactions,
   buildPublicSummary,
   computeExactMpgfAllocation,
+  createMpgfPublicGoodsIdentityAttestation,
+  createMpgfPublicGoodsPledge,
   createMpgfPublicGoodsSponsorSubscription,
   createMpgfPledgeOnlyRecord,
   createMpgfRecurringContributionCommitment,
@@ -39,6 +42,11 @@ import {
 } from "@/lib/mpgf/mechanism";
 import type { MpgfParticipantState } from "@/lib/mpgf/participant-types";
 import type { MpgfManualEvidenceProvider, MpgfManualEvidenceReadiness, MpgfRealMoneyReadiness } from "@/lib/mpgf/real-money-types";
+import type {
+  MpgfPublicGoodsCaptureMode,
+  MpgfPublicGoodsDestinationType,
+  MpgfPublicGoodsVisibilityMode,
+} from "@/lib/mpgf/types";
 
 type MpgfConsoleTab = "contribute" | "pools" | "ballot" | "summary";
 
@@ -89,9 +97,19 @@ export function MpgfConsole({
 }: MpgfConsoleProps) {
   const [activeTab, setActiveTab] = useState<MpgfConsoleTab>(initialTab);
   const [persistedState, setPersistedState] = useState<MpgfParticipantState | undefined>(participantState);
-  const [pendingAction, setPendingAction] = useState<"pledge" | "checkout" | "manualEvidence" | "proposal" | "ballot" | null>(null);
+  const [pendingAction, setPendingAction] = useState<
+    "pledge" | "publicGoodsPledge" | "checkout" | "manualEvidence" | "proposal" | "ballot" | null
+  >(null);
   const [oneTimePledge, setOneTimePledge] = useState(25);
   const [monthlyPledge, setMonthlyPledge] = useState(10);
+  const [publicGoodsCampaignId, setPublicGoodsCampaignId] = useState("campaign-global-health-basic-needs");
+  const [publicGoodsPledgeAmount, setPublicGoodsPledgeAmount] = useState(25);
+  const [publicGoodsVisibilityMode, setPublicGoodsVisibilityMode] =
+    useState<MpgfPublicGoodsVisibilityMode>("private_amount");
+  const [publicGoodsCaptureMode, setPublicGoodsCaptureMode] =
+    useState<MpgfPublicGoodsCaptureMode>("external_handoff");
+  const [publicGoodsRecurring, setPublicGoodsRecurring] = useState(false);
+  const [publicGoodsReason, setPublicGoodsReason] = useState("");
   const [manualEvidenceAmount, setManualEvidenceAmount] = useState(25);
   const [manualEvidenceProvider, setManualEvidenceProvider] = useState<MpgfManualEvidenceProvider>("open_collective");
   const [manualEvidenceReference, setManualEvidenceReference] = useState("");
@@ -99,6 +117,9 @@ export function MpgfConsole({
   const [manualEvidenceDescription, setManualEvidenceDescription] = useState("");
   const [manualEvidencePaidAt, setManualEvidencePaidAt] = useState("");
   const [pledgeIdempotencyKey, setPledgeIdempotencyKey] = useState(() => createClientMutationKey("mpgf.pledge"));
+  const [publicGoodsPledgeIdempotencyKey, setPublicGoodsPledgeIdempotencyKey] = useState(() =>
+    createClientMutationKey("mpgf.public-goods-pledge"),
+  );
   const [poolProposalIdempotencyKey, setPoolProposalIdempotencyKey] = useState(() =>
     createClientMutationKey("mpgf.pool"),
   );
@@ -112,6 +133,9 @@ export function MpgfConsole({
     viewerPresent
       ? "No new pledge has been recorded in this account session."
       : "No pledge has been recorded in this browser session.",
+  );
+  const [publicGoodsPledgeConfirmation, setPublicGoodsPledgeConfirmation] = useState(
+    "Your pledge only happens if enough verified people join. No money moves in pledge-only mode.",
   );
   const [proposalTitle, setProposalTitle] = useState("Community public-goods evaluation reserve");
   const [proposalSummary, setProposalSummary] = useState("");
@@ -135,6 +159,20 @@ export function MpgfConsole({
   const [proposalMisusePathways, setProposalMisusePathways] = useState("");
   const [proposalRecipientName, setProposalRecipientName] = useState("");
   const [proposalImplementingTeam, setProposalImplementingTeam] = useState("");
+  const [proposalDestinationType, setProposalDestinationType] =
+    useState<MpgfPublicGoodsDestinationType>("external_charity");
+  const [proposalDestinationRef, setProposalDestinationRef] = useState("");
+  const [proposalThresholdAmount, setProposalThresholdAmount] = useState(10_000);
+  const [proposalThresholdSupporters, setProposalThresholdSupporters] = useState(25);
+  const [proposalDeadlineAt, setProposalDeadlineAt] = useState("2026-06-30");
+  const [proposalVerificationMethod, setProposalVerificationMethod] = useState("");
+  const [proposalBaselineRule, setProposalBaselineRule] = useState("");
+  const [proposalExitRule, setProposalExitRule] = useState("");
+  const [proposalBaseMatchRatio, setProposalBaseMatchRatio] = useState(1);
+  const [proposalQfEnabled, setProposalQfEnabled] = useState(true);
+  const [proposalQfCapMultiple, setProposalQfCapMultiple] = useState(1.5);
+  const [proposalPayoutMethod, setProposalPayoutMethod] =
+    useState<MpgfPublicGoodsCaptureMode>("external_handoff");
   const [proposalConfirmation, setProposalConfirmation] = useState(
     "Complete the pool reasoning fields before saving or submitting. This route performs no live authorization, payout, or real-money accounting.",
   );
@@ -187,8 +225,13 @@ export function MpgfConsole({
 
   const participantPledgeCount = persistedState?.pledges.length ?? 0;
   const participantCommitmentCount = persistedState?.recurringCommitments.length ?? 0;
+  const participantPublicGoodsPledgeCount = persistedState?.publicGoodsPledges.length ?? 0;
+  const participantPublicGoodsSubscriptionCount = persistedState?.publicGoodsSubscriptions.length ?? 0;
   const participantProposalCount = persistedState?.poolProposals.length ?? 0;
   const participantBallotCount = persistedState?.ballots.length ?? 0;
+  const selectedPublicGoodsCampaign =
+    demoMpgfPublicGoodsCampaigns.find((campaign) => campaign.id === publicGoodsCampaignId) ??
+    demoMpgfPublicGoodsCampaigns[0];
   const persistenceLabel = viewerPresent
     ? persistedState?.status === "authenticated"
       ? "Persisted to your MPGF participant account."
@@ -215,10 +258,20 @@ export function MpgfConsole({
     proposalExpectedEffectVsFunding,
     proposalTimeline,
     proposalMisusePathways,
+    proposalDestinationRef,
+    proposalVerificationMethod,
+    proposalBaselineRule,
+    proposalExitRule,
   ].every((value) => value.trim()) &&
     proposalRequestedMaximumFunding > 0 &&
     proposalMinimumViableFunding >= 0 &&
     proposalMinimumViableFunding <= proposalRequestedMaximumFunding &&
+    proposalThresholdAmount > 0 &&
+    proposalThresholdAmount <= proposalRequestedMaximumFunding &&
+    proposalThresholdSupporters > 0 &&
+    Number.isFinite(Date.parse(`${proposalDeadlineAt}T00:00:00.000Z`)) &&
+    proposalBaseMatchRatio >= 0 &&
+    proposalQfCapMultiple >= 0 &&
     proposalMilestoneItems.length > 0 &&
     proposalRiskItems.length > 0 &&
     Boolean(proposalRecipientName.trim() || proposalImplementingTeam.trim());
@@ -246,6 +299,20 @@ export function MpgfConsole({
       misusePathways: proposalMisusePathways,
       proposedRecipientName: proposalRecipientName,
       implementingTeam: proposalImplementingTeam,
+      publicGoodsDestinationType: proposalDestinationType,
+      publicGoodsDestinationRef: proposalDestinationRef,
+      publicGoodsThresholdAmountDollars: proposalThresholdAmount,
+      publicGoodsThresholdSupporters: proposalThresholdSupporters,
+      publicGoodsDeadlineAt: proposalDeadlineAt
+        ? new Date(`${proposalDeadlineAt}T23:59:59.000Z`).toISOString()
+        : undefined,
+      publicGoodsVerificationMethod: proposalVerificationMethod,
+      publicGoodsBaselineRule: proposalBaselineRule,
+      publicGoodsExitRule: proposalExitRule,
+      publicGoodsBaseMatchRatio: proposalBaseMatchRatio,
+      publicGoodsQfEnabled: proposalQfEnabled,
+      publicGoodsQfCapMultiple: proposalQfCapMultiple,
+      publicGoodsPayoutMethod: proposalPayoutMethod,
       intent,
     };
   }
@@ -324,6 +391,66 @@ export function MpgfConsole({
         ? `Recorded demo pledge ${oneTime.id}, monthly commitment ${monthly.id}, and materialized pledge ${materializedMonthlyPledge.id}. No money moved.`
         : `Recorded demo commitment ${oneTime.id}. No money moved.`,
     );
+  }
+
+  async function recordPublicGoodsAssurancePledge() {
+    if (!selectedPublicGoodsCampaign) {
+      setPublicGoodsPledgeConfirmation("Choose a public-goods campaign before pledging.");
+      return;
+    }
+
+    if (viewerPresent) {
+      setPendingAction("publicGoodsPledge");
+      const result = await recordMpgfPublicGoodsPledgeAction({
+        idempotencyKey: publicGoodsPledgeIdempotencyKey,
+        campaignId: selectedPublicGoodsCampaign.id,
+        amountDollars: publicGoodsPledgeAmount,
+        visibilityMode: publicGoodsVisibilityMode,
+        captureMode: publicGoodsCaptureMode,
+        isRecurring: publicGoodsRecurring,
+        supporterReason: publicGoodsReason,
+      });
+
+      if (result.state) {
+        setPersistedState(result.state);
+      }
+
+      setPublicGoodsPledgeConfirmation(result.message);
+      if (result.ok) {
+        setPublicGoodsPledgeIdempotencyKey(createClientMutationKey("mpgf.public-goods-pledge"));
+        setPublicGoodsReason("");
+      }
+      setPendingAction(null);
+      return;
+    }
+
+    try {
+      const identity = createMpgfPublicGoodsIdentityAttestation({
+        userId: "browser-public-goods-supporter",
+        provider: "demo_self_attestation",
+        humanScoreBps: 8_000,
+        expiresAt: "2026-12-31T23:59:59.000Z",
+        redactedReference: "browser-demo-public-goods-attestation",
+      });
+      const pledge = createMpgfPublicGoodsPledge({
+        campaign: selectedPublicGoodsCampaign,
+        userId: identity.userId,
+        amountCents: Math.max(1, Math.round(publicGoodsPledgeAmount * 100)),
+        visibilityMode: publicGoodsVisibilityMode,
+        captureMode: publicGoodsCaptureMode,
+        isRecurring: publicGoodsRecurring,
+        supporterReason: publicGoodsReason,
+        identityAttestation: identity,
+      });
+
+      setPublicGoodsPledgeConfirmation(
+        `Recorded demo public-goods pledge ${pledge.id}. It remains conditional on threshold, review, and evidence gates.`,
+      );
+    } catch (error) {
+      setPublicGoodsPledgeConfirmation(
+        error instanceof Error ? error.message : "Public-goods pledge could not be recorded.",
+      );
+    }
   }
 
   async function startRealMoneyCheckout(cadence: "one_time" | "monthly") {
@@ -439,7 +566,7 @@ export function MpgfConsole({
   async function savePoolProposal(intent: "draft" | "submitted") {
     if (!poolReasoningComplete) {
       setProposalConfirmation(
-        "Complete the pool reasoning fields before saving or submitting: funding, output unit, effect reasoning, timeline, milestones, risks, misuse pathways, and recipient or implementing team.",
+        "Complete the pool reasoning and assurance fields before saving or submitting: funding, destination, thresholds, verification rules, output unit, effect reasoning, timeline, milestones, risks, misuse pathways, and recipient or implementing team.",
       );
       return;
     }
@@ -495,12 +622,137 @@ export function MpgfConsole({
         ))}
       </div>
       <p className="mpgf-small" role="status">
-        {persistenceLabel} Account records: {participantPledgeCount} pledges, {participantCommitmentCount} monthly
-        commitments, {participantProposalCount} proposals, {participantBallotCount} ballots.
+        {persistenceLabel} Account records: {participantPublicGoodsPledgeCount} public-goods pledges,{" "}
+        {participantPublicGoodsSubscriptionCount} sponsor-pool refills, {participantPledgeCount} legacy pledges,{" "}
+        {participantCommitmentCount} monthly commitments, {participantProposalCount} proposals, {participantBallotCount} ballots.
       </p>
 
       {activeTab === "contribute" ? (
         <div className="mpgf-workflow-grid">
+          <section className="mpgf-panel mpgf-panel-primary">
+            <p className="eyebrow">Verified assurance pledge</p>
+            <h2>Your pledge only happens if enough verified people join</h2>
+            <p>
+              Choose a campaign, amount, visibility setting, and capture mode. Public-goods
+              pledges are conditional commitments: they count only after supporter, identity,
+              threshold, review, and evidence gates pass.
+            </p>
+            <div className="mpgf-form-grid">
+              <label>
+                Campaign
+                <select
+                  value={publicGoodsCampaignId}
+                  onChange={(event) => setPublicGoodsCampaignId(readFormControlValue(event))}
+                >
+                  {demoMpgfPublicGoodsCampaigns.map((campaign) => (
+                    <option key={campaign.id} value={campaign.id}>
+                      {campaign.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Conditional pledge amount
+                <span className="mpgf-money-input">
+                  <span>$</span>
+                  <input
+                    min="1"
+                    step="1"
+                    type="number"
+                    value={publicGoodsPledgeAmount}
+                    onChange={(event) => setPublicGoodsPledgeAmount(readNumericFormControlValue(event))}
+                  />
+                </span>
+              </label>
+              <label>
+                Visibility
+                <select
+                  value={publicGoodsVisibilityMode}
+                  onChange={(event) =>
+                    setPublicGoodsVisibilityMode(readFormControlValue(event) as MpgfPublicGoodsVisibilityMode)
+                  }
+                >
+                  <option value="private_amount">Private amount</option>
+                  <option value="public_supporter">Public supporter</option>
+                  <option value="public_reason">Public reason</option>
+                </select>
+              </label>
+              <label>
+                Capture mode
+                <select
+                  value={publicGoodsCaptureMode}
+                  onChange={(event) =>
+                    setPublicGoodsCaptureMode(readFormControlValue(event) as MpgfPublicGoodsCaptureMode)
+                  }
+                >
+                  <option value="external_handoff">External handoff</option>
+                  <option value="signed_intent">Signed intent</option>
+                  <option value="stored_payment_method" disabled>
+                    Stored payment method - provider phase
+                  </option>
+                </select>
+              </label>
+              <label>
+                Supporter reason
+                <textarea
+                  disabled={publicGoodsVisibilityMode !== "public_reason"}
+                  placeholder="Optional public reason shown only when public reason is selected."
+                  value={publicGoodsReason}
+                  onChange={(event) => setPublicGoodsReason(readFormControlValue(event))}
+                />
+              </label>
+              <label className="checkbox-label">
+                <input
+                  checked={publicGoodsRecurring}
+                  type="checkbox"
+                  onChange={(event) => setPublicGoodsRecurring(event.currentTarget.checked)}
+                />
+                <span>Also create an optional monthly sponsor-pool refill pledge</span>
+              </label>
+            </div>
+            <dl className="mpgf-summary-grid">
+              <div>
+                <dt>Threshold</dt>
+                <dd>{selectedPublicGoodsCampaign ? formatUsd(selectedPublicGoodsCampaign.thresholdAmountCents) : "-"}</dd>
+              </div>
+              <div>
+                <dt>Verified supporters needed</dt>
+                <dd>{selectedPublicGoodsCampaign?.thresholdSupporters ?? "-"}</dd>
+              </div>
+              <div>
+                <dt>Default capture</dt>
+                <dd>{publicGoodsCaptureMode.replaceAll("_", " ")}</dd>
+              </div>
+              <div>
+                <dt>Deadline</dt>
+                <dd>
+                  {selectedPublicGoodsCampaign
+                    ? new Date(selectedPublicGoodsCampaign.deadlineAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })
+                    : "-"}
+                </dd>
+              </div>
+            </dl>
+            <div className="mpgf-inline-actions">
+              <button
+                className="button button-primary"
+                disabled={pendingAction === "publicGoodsPledge" || publicGoodsPledgeAmount < 1}
+                type="button"
+                onClick={recordPublicGoodsAssurancePledge}
+              >
+                {viewerPresent ? "Save assurance pledge" : "Record demo assurance pledge"}
+              </button>
+              <Link className="button button-secondary" href="/mpgf/pools">
+                Compare campaigns
+              </Link>
+            </div>
+            <p className="mpgf-small" role="status">
+              {publicGoodsPledgeConfirmation}
+            </p>
+          </section>
+
           <section className="mpgf-panel">
             <p className="eyebrow">Pledge rehearsal</p>
             <h2>Try the mechanism before evidence review</h2>
@@ -920,6 +1172,116 @@ export function MpgfConsole({
                   onChange={(event) => setProposalImplementingTeam(readFormControlValue(event))}
                 />
               </label>
+              <label>
+                Destination type
+                <select
+                  value={proposalDestinationType}
+                  onChange={(event) =>
+                    setProposalDestinationType(readFormControlValue(event) as MpgfPublicGoodsDestinationType)
+                  }
+                >
+                  <option value="external_charity">External charity</option>
+                  <option value="fiscal_host">Fiscal host</option>
+                  <option value="internal_demo_pool">Internal demo pool</option>
+                  <option value="signed_sponsor_route">Signed sponsor route</option>
+                </select>
+              </label>
+              <label>
+                Destination reference
+                <input
+                  placeholder="Public charity, fiscal host, or signed sponsor route"
+                  value={proposalDestinationRef}
+                  onChange={(event) => setProposalDestinationRef(readFormControlValue(event))}
+                />
+              </label>
+              <label>
+                Amount threshold
+                <span className="mpgf-money-input">
+                  <span>$</span>
+                  <input
+                    min="1"
+                    step="100"
+                    type="number"
+                    value={proposalThresholdAmount}
+                    onChange={(event) => setProposalThresholdAmount(readNumericFormControlValue(event))}
+                  />
+                </span>
+              </label>
+              <label>
+                Verified supporter minimum
+                <input
+                  min="1"
+                  step="1"
+                  type="number"
+                  value={proposalThresholdSupporters}
+                  onChange={(event) => setProposalThresholdSupporters(readNumericFormControlValue(event))}
+                />
+              </label>
+              <label>
+                Assurance deadline
+                <input
+                  type="date"
+                  value={proposalDeadlineAt}
+                  onChange={(event) => setProposalDeadlineAt(readFormControlValue(event))}
+                />
+              </label>
+              <label>
+                Verification method
+                <textarea
+                  value={proposalVerificationMethod}
+                  onChange={(event) => setProposalVerificationMethod(readFormControlValue(event))}
+                />
+              </label>
+              <label>
+                Anti-threat baseline rule
+                <textarea
+                  value={proposalBaselineRule}
+                  onChange={(event) => setProposalBaselineRule(readFormControlValue(event))}
+                />
+              </label>
+              <label>
+                Exit rule
+                <textarea value={proposalExitRule} onChange={(event) => setProposalExitRule(readFormControlValue(event))} />
+              </label>
+              <label>
+                Base match ratio
+                <input
+                  min="0"
+                  step="0.1"
+                  type="number"
+                  value={proposalBaseMatchRatio}
+                  onChange={(event) => setProposalBaseMatchRatio(readNumericFormControlValue(event))}
+                />
+              </label>
+              <label>
+                QF cap multiple
+                <input
+                  min="0"
+                  step="0.1"
+                  type="number"
+                  value={proposalQfCapMultiple}
+                  onChange={(event) => setProposalQfCapMultiple(readNumericFormControlValue(event))}
+                />
+              </label>
+              <label>
+                Payout method
+                <select
+                  value={proposalPayoutMethod}
+                  onChange={(event) => setProposalPayoutMethod(readFormControlValue(event) as MpgfPublicGoodsCaptureMode)}
+                >
+                  <option value="external_handoff">External handoff</option>
+                  <option value="signed_intent">Signed intent</option>
+                  <option value="stored_payment_method">Stored payment method</option>
+                </select>
+              </label>
+              <label className="checkbox-label">
+                <input
+                  checked={proposalQfEnabled}
+                  type="checkbox"
+                  onChange={(event) => setProposalQfEnabled(event.currentTarget.checked)}
+                />
+                <span>Allow capped QF bonus after threshold and review gates</span>
+              </label>
             </div>
             <div className="mpgf-inline-actions">
               <button
@@ -959,6 +1321,18 @@ export function MpgfConsole({
                     ) : null}
                     {proposal.requestedMaximumFundingCents ? (
                       <p>Requested maximum: {formatUsd(proposal.requestedMaximumFundingCents)}</p>
+                    ) : null}
+                    {proposal.publicGoodsThresholdAmountCents ? (
+                      <p>
+                        Assurance threshold: {formatUsd(proposal.publicGoodsThresholdAmountCents)} with{" "}
+                        {proposal.publicGoodsThresholdSupporters ?? "-"} verified supporters.
+                      </p>
+                    ) : null}
+                    {proposal.publicGoodsDestinationRef ? (
+                      <p>
+                        Destination: {proposal.publicGoodsDestinationType?.replaceAll("_", " ") ?? "public goods"} -{" "}
+                        {proposal.publicGoodsDestinationRef}
+                      </p>
                     ) : null}
                   </div>
                   <span className="mpgf-small">Saved</span>

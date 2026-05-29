@@ -552,6 +552,26 @@ test("MPGF public-goods migration covers required entities and RLS policies", ()
   assert.match(migration, /mpgf_public_goods_pledges_insert_own/);
   assert.match(migration, /mpgf_public_goods_payment_proofs_insert_own/);
   assert.match(migration, /mpgf_public_goods_analytics_no_raw_contact/);
+  assert.match(migration, /public_goods_threshold_amount_cents/);
+  assert.match(migration, /public_goods_destination_type/);
+  assert.match(migration, /insert into public\.mpgf_public_goods_campaigns/);
+  assert.match(migration, /campaign-global-health-basic-needs/);
+});
+
+test("MPGF public-goods participant paths persist campaign pledges and creation fields", () => {
+  const persistence = readFileSync("src/lib/mpgf/persistence.ts", "utf8");
+  const actions = readFileSync("src/app/mpgf/actions.ts", "utf8");
+  const consoleSource = readFileSync("src/components/mpgf/mpgf-console.tsx", "utf8");
+  const accountSource = readFileSync("src/components/mpgf/mpgf-contribution-controls.tsx", "utf8");
+
+  assert.match(persistence, /persistMpgfPublicGoodsPledge/);
+  assert.match(persistence, /mpgf_public_goods_pledges/);
+  assert.match(persistence, /mpgf_public_goods_subscriptions/);
+  assert.match(persistence, /public_goods_threshold_amount_cents/);
+  assert.match(actions, /recordMpgfPublicGoodsPledgeAction/);
+  assert.match(consoleSource, /Your pledge only happens if enough verified people join/);
+  assert.match(consoleSource, /publicGoodsDestinationType/);
+  assert.match(accountSource, /Conditional campaign pledges/);
 });
 
 test("MPGF production completion gate fails while production evidence is only pending", () => {

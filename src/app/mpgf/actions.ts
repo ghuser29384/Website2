@@ -11,6 +11,7 @@ import {
   persistMpgfPledgeOnlyRecords,
   persistMpgfPledgeStatus,
   persistMpgfPoolProposal,
+  persistMpgfPublicGoodsPledge,
   persistMpgfRecurringCommitmentStatus,
 } from "@/lib/mpgf/persistence";
 import {
@@ -26,7 +27,13 @@ import type {
   MpgfManualEvidenceProvider,
   MpgfRealMoneyCheckoutResult,
 } from "@/lib/mpgf/real-money-types";
-import type { MpgfPledge, MpgfRecurringContributionCommitment } from "@/lib/mpgf/types";
+import type {
+  MpgfPublicGoodsCaptureMode,
+  MpgfPublicGoodsDestinationType,
+  MpgfPublicGoodsVisibilityMode,
+  MpgfPledge,
+  MpgfRecurringContributionCommitment,
+} from "@/lib/mpgf/types";
 
 async function requireMpgfActionViewer(): Promise<
   | {
@@ -121,6 +128,56 @@ export async function recordMpgfPledgesAction(input: {
     return {
       ok: false,
       message: error instanceof Error ? error.message : "Could not save MPGF pledge state.",
+      state: await loadMpgfParticipantState(viewer),
+    };
+  }
+}
+
+export async function recordMpgfPublicGoodsPledgeAction(input: {
+  idempotencyKey: string;
+  campaignId: string;
+  amountDollars: number;
+  visibilityMode: MpgfPublicGoodsVisibilityMode;
+  captureMode: MpgfPublicGoodsCaptureMode;
+  isRecurring: boolean;
+  supporterReason?: string;
+}): Promise<MpgfParticipantActionResult> {
+  const viewer = await requireMpgfActionViewer();
+
+  if (!isActionViewer(viewer)) {
+    return viewer;
+  }
+
+  try {
+    const persisted = await persistMpgfPublicGoodsPledge({
+      userId: viewer.userId,
+      displayName: viewer.displayName,
+      idempotencyKey: input.idempotencyKey,
+      campaignId: input.campaignId,
+      amountCents: Math.max(1, centsFromDollars(input.amountDollars)),
+      visibilityMode: input.visibilityMode,
+      captureMode: input.captureMode,
+      isRecurring: input.isRecurring,
+      supporterReason: input.supporterReason,
+    });
+    const state = await loadMpgfParticipantState(viewer);
+    revalidateMpgfParticipantRoutes();
+
+    return {
+      ok: true,
+      message: persisted.subscription
+        ? `Saved public-goods pledge ${persisted.pledge.id} and optional sponsor-pool refill. No money moved.`
+        : `Saved public-goods pledge ${persisted.pledge.id}. It only counts after threshold, identity, and review gates pass.`,
+      data: persisted,
+      state: {
+        ...state,
+        warnings: [...state.warnings, ...persisted.warnings],
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "Could not save MPGF public-goods pledge.",
       state: await loadMpgfParticipantState(viewer),
     };
   }
@@ -328,6 +385,18 @@ export async function saveMpgfPoolProposalAction(input: {
   misusePathways: string;
   proposedRecipientName?: string;
   implementingTeam: string;
+  publicGoodsDestinationType?: MpgfPublicGoodsDestinationType;
+  publicGoodsDestinationRef?: string;
+  publicGoodsThresholdAmountDollars?: number;
+  publicGoodsThresholdSupporters?: number;
+  publicGoodsDeadlineAt?: string;
+  publicGoodsVerificationMethod?: string;
+  publicGoodsBaselineRule?: string;
+  publicGoodsExitRule?: string;
+  publicGoodsBaseMatchRatio?: number;
+  publicGoodsQfEnabled?: boolean;
+  publicGoodsQfCapMultiple?: number;
+  publicGoodsPayoutMethod?: MpgfPublicGoodsCaptureMode;
   intent: "draft" | "submitted";
 }): Promise<MpgfParticipantActionResult> {
   const viewer = await requireMpgfActionViewer();
@@ -364,6 +433,21 @@ export async function saveMpgfPoolProposalAction(input: {
       misusePathways: input.misusePathways,
       proposedRecipientName: input.proposedRecipientName,
       implementingTeam: input.implementingTeam,
+      publicGoodsDestinationType: input.publicGoodsDestinationType,
+      publicGoodsDestinationRef: input.publicGoodsDestinationRef,
+      publicGoodsThresholdAmountCents:
+        input.publicGoodsThresholdAmountDollars == null
+          ? undefined
+          : Math.max(0, centsFromDollars(input.publicGoodsThresholdAmountDollars)),
+      publicGoodsThresholdSupporters: input.publicGoodsThresholdSupporters,
+      publicGoodsDeadlineAt: input.publicGoodsDeadlineAt,
+      publicGoodsVerificationMethod: input.publicGoodsVerificationMethod,
+      publicGoodsBaselineRule: input.publicGoodsBaselineRule,
+      publicGoodsExitRule: input.publicGoodsExitRule,
+      publicGoodsBaseMatchRatio: input.publicGoodsBaseMatchRatio,
+      publicGoodsQfEnabled: input.publicGoodsQfEnabled,
+      publicGoodsQfCapMultiple: input.publicGoodsQfCapMultiple,
+      publicGoodsPayoutMethod: input.publicGoodsPayoutMethod,
       intent: input.intent,
     });
     const state = await loadMpgfParticipantState(viewer);

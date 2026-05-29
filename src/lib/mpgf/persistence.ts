@@ -3,9 +3,26 @@ import { createHash } from "node:crypto";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
-import { demoAlternatives, demoCycle } from "./data";
+import {
+  demoAlternatives,
+  demoCycle,
+  demoMpgfAssuranceRound,
+  demoMpgfMatchPool,
+  demoMpgfPublicGoodsCampaigns,
+} from "./data";
+import { createMpgfPublicGoodsIdentityAttestation, createMpgfPublicGoodsPledge } from "./mechanism";
 import type { MpgfParticipantState, MpgfPoolProposalRecord } from "./participant-types";
-import type { MpgfBallot, MpgfBallotWeight, MpgfPledge, MpgfRecurringContributionCommitment } from "./types";
+import type {
+  MpgfBallot,
+  MpgfBallotWeight,
+  MpgfPledge,
+  MpgfPublicGoodsCaptureMode,
+  MpgfPublicGoodsDestinationType,
+  MpgfPublicGoodsPledge,
+  MpgfPublicGoodsSubscription,
+  MpgfPublicGoodsVisibilityMode,
+  MpgfRecurringContributionCommitment,
+} from "./types";
 
 type SupabaseAny = Awaited<ReturnType<typeof createClient>> & {
   from: (table: string) => any;
@@ -50,7 +67,29 @@ export interface SavePoolProposalInput extends Required<MpgfParticipantIdentity>
   misusePathways: string;
   proposedRecipientName?: string;
   implementingTeam: string;
+  publicGoodsDestinationType?: MpgfPublicGoodsDestinationType;
+  publicGoodsDestinationRef?: string;
+  publicGoodsThresholdAmountCents?: number;
+  publicGoodsThresholdSupporters?: number;
+  publicGoodsDeadlineAt?: string;
+  publicGoodsVerificationMethod?: string;
+  publicGoodsBaselineRule?: string;
+  publicGoodsExitRule?: string;
+  publicGoodsBaseMatchRatio?: number;
+  publicGoodsQfEnabled?: boolean;
+  publicGoodsQfCapMultiple?: number;
+  publicGoodsPayoutMethod?: MpgfPublicGoodsCaptureMode;
   intent: "draft" | "submitted";
+}
+
+export interface RecordPublicGoodsPledgeInput extends Required<MpgfParticipantIdentity> {
+  idempotencyKey: string;
+  campaignId: string;
+  amountCents: number;
+  visibilityMode: MpgfPublicGoodsVisibilityMode;
+  captureMode: MpgfPublicGoodsCaptureMode;
+  isRecurring: boolean;
+  supporterReason?: string;
 }
 
 export interface SaveBallotInput extends Required<MpgfParticipantIdentity> {
@@ -374,6 +413,64 @@ function coerceBallotStatus(value: unknown): MpgfBallot["status"] {
   return "submitted";
 }
 
+function coercePublicGoodsVisibilityMode(value: unknown): MpgfPublicGoodsVisibilityMode {
+  if (value === "public_supporter" || value === "public_reason") {
+    return value;
+  }
+
+  return "private_amount";
+}
+
+function coercePublicGoodsCaptureMode(value: unknown): MpgfPublicGoodsCaptureMode {
+  if (value === "stored_payment_method" || value === "signed_intent") {
+    return value;
+  }
+
+  return "external_handoff";
+}
+
+function coercePublicGoodsDestinationType(value: unknown): MpgfPublicGoodsDestinationType | undefined {
+  if (
+    value === "external_charity" ||
+    value === "fiscal_host" ||
+    value === "internal_demo_pool" ||
+    value === "signed_sponsor_route"
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function coercePublicGoodsPledgeStatus(value: unknown): MpgfPublicGoodsPledge["status"] {
+  if (value === "captured" || value === "voided" || value === "expired") {
+    return value;
+  }
+
+  return "pledged";
+}
+
+function coercePublicGoodsPledgeEligibility(value: unknown): MpgfPublicGoodsPledge["eligibilityState"] {
+  if (
+    value === "eligible" ||
+    value === "duplicate_identity" ||
+    value === "below_minimum" ||
+    value === "blocked"
+  ) {
+    return value;
+  }
+
+  return "pending_review";
+}
+
+function coercePublicGoodsSubscriptionStatus(value: unknown): MpgfPublicGoodsSubscription["status"] {
+  if (value === "paused" || value === "cancelled" || value === "past_due" || value === "expired") {
+    return value;
+  }
+
+  return "active";
+}
+
 function normalizeBallotWeights(value: unknown): MpgfBallotWeight[] {
   if (!Array.isArray(value)) {
     return [];
@@ -468,9 +565,60 @@ function mapPoolProposalRow(row: Record<string, unknown>): MpgfPoolProposalRecor
     misusePathways: toStringOrUndefined(row.misuse_pathways) ?? "",
     proposedRecipientName: toStringOrUndefined(row.proposed_recipient_name),
     implementingTeam,
+    publicGoodsDestinationType: coercePublicGoodsDestinationType(row.public_goods_destination_type),
+    publicGoodsDestinationRef: toStringOrUndefined(row.public_goods_destination_ref),
+    publicGoodsThresholdAmountCents:
+      row.public_goods_threshold_amount_cents == null ? undefined : toNumber(row.public_goods_threshold_amount_cents),
+    publicGoodsThresholdSupporters:
+      row.public_goods_threshold_supporters == null ? undefined : toNumber(row.public_goods_threshold_supporters),
+    publicGoodsDeadlineAt: toStringOrUndefined(row.public_goods_deadline_at),
+    publicGoodsVerificationMethod: toStringOrUndefined(row.public_goods_verification_method),
+    publicGoodsBaselineRule: toStringOrUndefined(row.public_goods_baseline_rule),
+    publicGoodsExitRule: toStringOrUndefined(row.public_goods_exit_rule),
+    publicGoodsBaseMatchRatio:
+      row.public_goods_base_match_ratio == null ? undefined : toNumber(row.public_goods_base_match_ratio),
+    publicGoodsQfEnabled: row.public_goods_qf_enabled == null ? undefined : Boolean(row.public_goods_qf_enabled),
+    publicGoodsQfCapMultiple:
+      row.public_goods_qf_cap_multiple == null ? undefined : toNumber(row.public_goods_qf_cap_multiple),
+    publicGoodsPayoutMethod: row.public_goods_payout_method
+      ? coercePublicGoodsCaptureMode(row.public_goods_payout_method)
+      : undefined,
     status: coerceProposalStatus(row.status),
     candidateAlternativeId: toStringOrUndefined(row.candidate_alternative_id),
     createdAt: toStringOrUndefined(row.created_at),
+  };
+}
+
+function mapPublicGoodsPledgeRow(row: Record<string, unknown>): MpgfPublicGoodsPledge {
+  return {
+    id: String(row.id),
+    campaignId: String(row.campaign_id),
+    userId: toStringOrUndefined(row.user_ref) ?? toStringOrUndefined(row.profile_id) ?? "mpgf-participant",
+    amountCents: toNumber(row.amount_cents),
+    visibilityMode: coercePublicGoodsVisibilityMode(row.visibility_mode),
+    isRecurring: Boolean(row.is_recurring),
+    captureMode: coercePublicGoodsCaptureMode(row.capture_mode),
+    paymentIntentRef: toStringOrUndefined(row.payment_intent_ref),
+    eligibilityState: coercePublicGoodsPledgeEligibility(row.eligibility_state),
+    humanScoreBps: toNumber(row.human_score_bps),
+    status: coercePublicGoodsPledgeStatus(row.status),
+    supporterReason: toStringOrUndefined(row.supporter_reason),
+    createdAt: toStringOrUndefined(row.created_at) ?? new Date(0).toISOString(),
+  };
+}
+
+function mapPublicGoodsSubscriptionRow(row: Record<string, unknown>): MpgfPublicGoodsSubscription {
+  return {
+    id: String(row.id),
+    userId: toStringOrUndefined(row.user_ref) ?? toStringOrUndefined(row.profile_id) ?? "mpgf-participant",
+    poolId: String(row.pool_id),
+    amountCents: toNumber(row.amount_cents),
+    interval: row.interval === "annual" ? "annual" : "monthly",
+    status: coercePublicGoodsSubscriptionStatus(row.status),
+    captureMode: coercePublicGoodsCaptureMode(row.capture_mode),
+    mode: row.mode === "test_payment" || row.mode === "real_money" ? row.mode : "pledge_only",
+    nextChargeAt: toStringOrUndefined(row.next_charge_at) ?? new Date(0).toISOString(),
+    createdAt: toStringOrUndefined(row.created_at) ?? new Date(0).toISOString(),
   };
 }
 
@@ -571,6 +719,8 @@ export async function loadMpgfParticipantState(identity: MpgfParticipantIdentity
       displayName: identity.displayName,
       pledges: [],
       recurringCommitments: [],
+      publicGoodsPledges: [],
+      publicGoodsSubscriptions: [],
       poolProposals: [],
       ballots: [],
       warnings: ["Supabase is not configured, so MPGF participant state cannot be persisted."],
@@ -583,6 +733,8 @@ export async function loadMpgfParticipantState(identity: MpgfParticipantIdentity
       displayName: identity.displayName,
       pledges: [],
       recurringCommitments: [],
+      publicGoodsPledges: [],
+      publicGoodsSubscriptions: [],
       poolProposals: [],
       ballots: [],
       warnings: ["Sign in to save MPGF participant state across sessions."],
@@ -591,7 +743,7 @@ export async function loadMpgfParticipantState(identity: MpgfParticipantIdentity
 
   const supabase = (await createClient()) as SupabaseAny;
   const warnings: string[] = [];
-  const [pledgeRows, commitmentRows, proposalRows, ballotRows] = await Promise.all([
+  const [pledgeRows, commitmentRows, publicGoodsPledgeRows, publicGoodsSubscriptionRows, proposalRows, ballotRows] = await Promise.all([
     listRows(warnings, "Pledges", async () =>
       supabase
         .from("mpgf_pledges")
@@ -605,6 +757,22 @@ export async function loadMpgfParticipantState(identity: MpgfParticipantIdentity
         .from("mpgf_recurring_contribution_commitments")
         .select("*")
         .eq("user_id", identity.userId)
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ),
+    listRows(warnings, "Public goods pledges", async () =>
+      supabase
+        .from("mpgf_public_goods_pledges")
+        .select("*")
+        .eq("profile_id", identity.userId)
+        .order("created_at", { ascending: false })
+        .limit(50),
+    ),
+    listRows(warnings, "Public goods subscriptions", async () =>
+      supabase
+        .from("mpgf_public_goods_subscriptions")
+        .select("*")
+        .eq("profile_id", identity.userId)
         .order("created_at", { ascending: false })
         .limit(50),
     ),
@@ -634,6 +802,10 @@ export async function loadMpgfParticipantState(identity: MpgfParticipantIdentity
     displayName: identity.displayName,
     pledges: pledgeRows.map((row) => mapPledgeRow(row as Record<string, unknown>)),
     recurringCommitments: commitmentRows.map((row) => mapRecurringCommitmentRow(row as Record<string, unknown>)),
+    publicGoodsPledges: publicGoodsPledgeRows.map((row) => mapPublicGoodsPledgeRow(row as Record<string, unknown>)),
+    publicGoodsSubscriptions: publicGoodsSubscriptionRows.map((row) =>
+      mapPublicGoodsSubscriptionRow(row as Record<string, unknown>),
+    ),
     poolProposals: proposalRows.map((row) => mapPoolProposalRow(row as Record<string, unknown>)),
     ballots: ballotRows.map((row) => mapBallotRow(row as Record<string, unknown>)),
     warnings,
@@ -808,6 +980,178 @@ export async function persistMpgfPledgeOnlyRecords(input: RecordPledgesInput) {
     const result = {
       pledges: insertedPledges,
       recurringCommitments: insertedCommitments,
+      warnings,
+    };
+    await completeIdempotency(supabase, reservation, result);
+    return result;
+  } catch (error) {
+    await failIdempotency(supabase, reservation);
+    throw error;
+  }
+}
+
+export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledgeInput) {
+  const campaign = demoMpgfPublicGoodsCampaigns.find((candidate) => candidate.id === input.campaignId);
+
+  if (!campaign) {
+    throw new Error("MPGF public-goods pledge requires a known assurance campaign.");
+  }
+
+  const amountCents = toPositiveInteger(input.amountCents, "Public-goods pledge amount");
+  const identityAttestation = createMpgfPublicGoodsIdentityAttestation({
+    userId: input.userId,
+    provider: "repository_profile",
+    humanScoreBps: 8_000,
+    expiresAt: "2026-12-31T23:59:59.000Z",
+    redactedReference: `repository-profile:${input.userId.slice(0, 8)}:redacted`,
+  });
+  const pledge = createMpgfPublicGoodsPledge({
+    campaign,
+    userId: input.userId,
+    amountCents,
+    visibilityMode: input.visibilityMode,
+    captureMode: input.captureMode,
+    isRecurring: input.isRecurring,
+    supporterReason: input.supporterReason,
+    identityAttestation,
+  });
+  const supabase = (await createClient()) as SupabaseAny;
+  const reservation = await reserveIdempotency<{
+    pledge: MpgfPublicGoodsPledge;
+    subscription?: MpgfPublicGoodsSubscription;
+    warnings: string[];
+  }>(supabase, {
+    scope: `mpgf:public-goods-pledge:${input.userId}:${campaign.id}`,
+    idempotencyKey: input.idempotencyKey,
+    actorUserId: input.userId,
+    action: "mpgf.public_goods_pledge.create",
+    request: {
+      campaignId: campaign.id,
+      amountCents,
+      visibilityMode: input.visibilityMode,
+      captureMode: input.captureMode,
+      isRecurring: input.isRecurring,
+      supporterReason: input.supporterReason?.trim() || null,
+    },
+  });
+
+  if (reservation.replayed) {
+    return reservation.result;
+  }
+
+  const warnings: string[] = [];
+
+  try {
+    const attestationInsert = await supabase.from("mpgf_public_goods_identity_attestations").insert({
+      profile_id: input.userId,
+      user_ref: input.userId,
+      provider: identityAttestation.provider,
+      human_score_bps: identityAttestation.humanScoreBps,
+      expires_at: identityAttestation.expiresAt,
+      status: identityAttestation.status,
+      redacted_reference: identityAttestation.redactedReference,
+    });
+
+    if (attestationInsert.error && !isUniqueViolationError(attestationInsert.error)) {
+      if (isMissingRelationError(attestationInsert.error) || isMissingColumnError(attestationInsert.error)) {
+        warnings.push(`Public-goods identity attestation table unavailable: ${summarizeDbError(attestationInsert.error)}`);
+      } else {
+        throw new Error(`Could not save public-goods identity attestation: ${summarizeDbError(attestationInsert.error)}`);
+      }
+    }
+
+    const pledgeInsert = await supabase
+      .from("mpgf_public_goods_pledges")
+      .insert({
+        campaign_id: pledge.campaignId,
+        profile_id: input.userId,
+        user_ref: input.userId,
+        amount_cents: pledge.amountCents,
+        currency: "usd",
+        visibility_mode: pledge.visibilityMode,
+        is_recurring: pledge.isRecurring,
+        capture_mode: pledge.captureMode,
+        eligibility_state: pledge.eligibilityState,
+        human_score_bps: pledge.humanScoreBps,
+        status: pledge.status,
+        supporter_reason: pledge.supporterReason ?? null,
+        payment_intent_ref: pledge.paymentIntentRef ?? null,
+      })
+      .select("*")
+      .single();
+
+    if (pledgeInsert.error) {
+      if (isForeignKeyError(pledgeInsert.error)) {
+        throw new Error(
+          `Public-goods campaign catalog is missing for ${campaign.id}. Apply 20260529_mpgf_verified_assurance_matching.sql.`,
+        );
+      }
+
+      throw new Error(`Could not save public-goods pledge: ${summarizeDbError(pledgeInsert.error)}`);
+    }
+
+    const savedPledge = mapPublicGoodsPledgeRow(pledgeInsert.data as Record<string, unknown>);
+    let savedSubscription: MpgfPublicGoodsSubscription | undefined;
+
+    await recordParticipantMutationEvidence(supabase, {
+      actorUserId: input.userId,
+      action: "mpgf.public_goods_pledge.create",
+      objectType: "public_goods_pledge",
+      objectId: savedPledge.id,
+      fromStatus: null,
+      toStatus: savedPledge.status,
+      reason: "participant created threshold-conditional public-goods pledge",
+      eventJson: {
+        campaignId: campaign.id,
+        amountCents,
+        captureMode: pledge.captureMode,
+        visibilityMode: pledge.visibilityMode,
+      },
+    });
+
+    if (input.isRecurring) {
+      const subscriptionInsert = await supabase
+        .from("mpgf_public_goods_subscriptions")
+        .insert({
+          profile_id: input.userId,
+          user_ref: input.userId,
+          pool_id: demoMpgfMatchPool.id,
+          amount_cents: amountCents,
+          currency: "usd",
+          interval: "monthly",
+          status: "active",
+          capture_mode: "external_handoff",
+          mode: "pledge_only",
+          provider_subscription_ref: null,
+          next_charge_at: nextMonthIso(),
+        })
+        .select("*")
+        .single();
+
+      if (subscriptionInsert.error) {
+        warnings.push(`Public-goods sponsor subscription unavailable: ${summarizeDbError(subscriptionInsert.error)}`);
+      } else {
+        savedSubscription = mapPublicGoodsSubscriptionRow(subscriptionInsert.data as Record<string, unknown>);
+        await recordParticipantMutationEvidence(supabase, {
+          actorUserId: input.userId,
+          action: "mpgf.public_goods_subscription.create",
+          objectType: "public_goods_subscription",
+          objectId: savedSubscription.id,
+          fromStatus: null,
+          toStatus: savedSubscription.status,
+          reason: "participant created optional recurring sponsor-pool pledge",
+          eventJson: {
+            poolId: demoMpgfMatchPool.id,
+            amountCents,
+            mode: savedSubscription.mode,
+          },
+        });
+      }
+    }
+
+    const result = {
+      pledge: savedPledge,
+      subscription: savedSubscription,
       warnings,
     };
     await completeIdempotency(supabase, reservation, result);
@@ -1022,6 +1366,24 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
   const misusePathways = toRequiredTrimmed(input.misusePathways, "Misuse pathways", 10);
   const proposedRecipientName = input.proposedRecipientName?.trim();
   const implementingTeam = input.implementingTeam.trim();
+  const publicGoodsDestinationType = input.publicGoodsDestinationType ?? "external_charity";
+  const publicGoodsDestinationRef = input.publicGoodsDestinationRef?.trim();
+  const publicGoodsThresholdAmountCents = toOptionalPositiveInteger(
+    input.publicGoodsThresholdAmountCents,
+    "Public-goods threshold amount",
+  );
+  const publicGoodsThresholdSupporters =
+    input.publicGoodsThresholdSupporters == null || input.publicGoodsThresholdSupporters === 0
+      ? undefined
+      : toPositiveInteger(input.publicGoodsThresholdSupporters, "Public-goods verified supporter threshold");
+  const publicGoodsDeadlineAt = input.publicGoodsDeadlineAt?.trim();
+  const publicGoodsVerificationMethod = input.publicGoodsVerificationMethod?.trim();
+  const publicGoodsBaselineRule = input.publicGoodsBaselineRule?.trim();
+  const publicGoodsExitRule = input.publicGoodsExitRule?.trim();
+  const publicGoodsBaseMatchRatio = input.publicGoodsBaseMatchRatio ?? demoMpgfMatchPool.baseMatchRatio;
+  const publicGoodsQfEnabled = input.publicGoodsQfEnabled ?? demoMpgfAssuranceRound.qfEnabled;
+  const publicGoodsQfCapMultiple = input.publicGoodsQfCapMultiple ?? demoMpgfAssuranceRound.qfCapMultiple;
+  const publicGoodsPayoutMethod = input.publicGoodsPayoutMethod ?? "external_handoff";
   const status = input.intent;
 
   if (!proposedRecipientName && !implementingTeam) {
@@ -1030,6 +1392,22 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
 
   if (minimumViableFundingCents && minimumViableFundingCents > requestedMaximumFundingCents) {
     throw new Error("Minimum viable funding cannot exceed requested maximum funding.");
+  }
+
+  if (publicGoodsThresholdAmountCents && publicGoodsThresholdAmountCents > requestedMaximumFundingCents) {
+    throw new Error("Public-goods threshold amount cannot exceed requested maximum funding.");
+  }
+
+  if (publicGoodsDeadlineAt && !Number.isFinite(Date.parse(publicGoodsDeadlineAt))) {
+    throw new Error("Public-goods deadline must be an ISO timestamp.");
+  }
+
+  if (!Number.isFinite(publicGoodsBaseMatchRatio) || publicGoodsBaseMatchRatio < 0) {
+    throw new Error("Public-goods base match ratio must be a non-negative number.");
+  }
+
+  if (!Number.isFinite(publicGoodsQfCapMultiple) || publicGoodsQfCapMultiple < 0) {
+    throw new Error("Public-goods QF cap multiple must be a non-negative number.");
   }
 
   const supabase = (await createClient()) as SupabaseAny;
@@ -1057,6 +1435,18 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
     misusePathways,
     proposedRecipientName: proposedRecipientName || null,
     implementingTeam: implementingTeam || null,
+    publicGoodsDestinationType,
+    publicGoodsDestinationRef: publicGoodsDestinationRef || null,
+    publicGoodsThresholdAmountCents: publicGoodsThresholdAmountCents ?? null,
+    publicGoodsThresholdSupporters: publicGoodsThresholdSupporters ?? null,
+    publicGoodsDeadlineAt: publicGoodsDeadlineAt || null,
+    publicGoodsVerificationMethod: publicGoodsVerificationMethod || null,
+    publicGoodsBaselineRule: publicGoodsBaselineRule || null,
+    publicGoodsExitRule: publicGoodsExitRule || null,
+    publicGoodsBaseMatchRatio,
+    publicGoodsQfEnabled,
+    publicGoodsQfCapMultiple,
+    publicGoodsPayoutMethod,
     status,
   };
   const reservation = await reserveIdempotency<MpgfPoolProposalRecord>(supabase, {
@@ -1092,6 +1482,18 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
         misuse_pathways: misusePathways,
         proposed_recipient_name: proposedRecipientName || null,
         implementing_team_json: implementingTeam ? { summary: implementingTeam } : null,
+        public_goods_destination_type: publicGoodsDestinationType,
+        public_goods_destination_ref: publicGoodsDestinationRef || null,
+        public_goods_threshold_amount_cents: publicGoodsThresholdAmountCents ?? null,
+        public_goods_threshold_supporters: publicGoodsThresholdSupporters ?? null,
+        public_goods_deadline_at: publicGoodsDeadlineAt || null,
+        public_goods_verification_method: publicGoodsVerificationMethod || null,
+        public_goods_baseline_rule: publicGoodsBaselineRule || null,
+        public_goods_exit_rule: publicGoodsExitRule || null,
+        public_goods_base_match_ratio: publicGoodsBaseMatchRatio,
+        public_goods_qf_enabled: publicGoodsQfEnabled,
+        public_goods_qf_cap_multiple: publicGoodsQfCapMultiple,
+        public_goods_payout_method: publicGoodsPayoutMethod,
         submitted_at: status === "submitted" ? new Date().toISOString() : null,
         status,
       })
@@ -1111,7 +1513,13 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
           status === "submitted"
             ? "participant submitted candidate pool proposal"
             : "participant saved candidate pool proposal draft",
-        eventJson: { requestedMaximumFundingCents, causeArea },
+        eventJson: {
+          requestedMaximumFundingCents,
+          causeArea,
+          publicGoodsDestinationType,
+          publicGoodsThresholdAmountCents: publicGoodsThresholdAmountCents ?? null,
+          publicGoodsThresholdSupporters: publicGoodsThresholdSupporters ?? null,
+        },
       });
       await completeIdempotency(supabase, reservation, proposal);
       return proposal;
@@ -1138,11 +1546,17 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
           `Expected effect vs funding: ${expectedEffectVsFunding}`,
           `Timeline: ${timeline}`,
           `Milestones: ${milestones.join("; ")}`,
+          publicGoodsDestinationRef ? `Destination: ${publicGoodsDestinationType} ${publicGoodsDestinationRef}` : null,
+          publicGoodsThresholdAmountCents ? `Threshold: ${publicGoodsThresholdAmountCents} cents` : null,
+          publicGoodsThresholdSupporters ? `Verified supporters: ${publicGoodsThresholdSupporters}` : null,
         ].filter(Boolean).join("\n"),
         moral_public_good_rationale: [
           moralPublicGoodRationale,
           `Risks: ${risks.join("; ")}`,
           `Misuse pathways: ${misusePathways}`,
+          publicGoodsVerificationMethod ? `Verification: ${publicGoodsVerificationMethod}` : null,
+          publicGoodsBaselineRule ? `Baseline: ${publicGoodsBaselineRule}` : null,
+          publicGoodsExitRule ? `Exit: ${publicGoodsExitRule}` : null,
           implementingTeam ? `Implementing team: ${implementingTeam}` : null,
         ].filter(Boolean).join("\n"),
         proposed_recipient_name: proposedRecipientName || null,
@@ -1168,6 +1582,18 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
       risks,
       misusePathways,
       implementingTeam: implementingTeam || undefined,
+      publicGoodsDestinationType,
+      publicGoodsDestinationRef: publicGoodsDestinationRef || undefined,
+      publicGoodsThresholdAmountCents,
+      publicGoodsThresholdSupporters,
+      publicGoodsDeadlineAt: publicGoodsDeadlineAt || undefined,
+      publicGoodsVerificationMethod: publicGoodsVerificationMethod || undefined,
+      publicGoodsBaselineRule: publicGoodsBaselineRule || undefined,
+      publicGoodsExitRule: publicGoodsExitRule || undefined,
+      publicGoodsBaseMatchRatio,
+      publicGoodsQfEnabled,
+      publicGoodsQfCapMultiple,
+      publicGoodsPayoutMethod,
     };
     await recordParticipantMutationEvidence(supabase, {
       actorUserId: input.userId,
@@ -1180,7 +1606,14 @@ export async function persistMpgfPoolProposal(input: SavePoolProposalInput) {
         status === "submitted"
           ? "participant submitted candidate pool proposal in compatibility mode"
           : "participant saved candidate pool proposal draft in compatibility mode",
-      eventJson: { requestedMaximumFundingCents, causeArea, compatibilityMode: true },
+      eventJson: {
+        requestedMaximumFundingCents,
+        causeArea,
+        compatibilityMode: true,
+        publicGoodsDestinationType,
+        publicGoodsThresholdAmountCents: publicGoodsThresholdAmountCents ?? null,
+        publicGoodsThresholdSupporters: publicGoodsThresholdSupporters ?? null,
+      },
     });
     await completeIdempotency(supabase, reservation, proposal);
     return proposal;

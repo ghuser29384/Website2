@@ -10,7 +10,12 @@ import {
 } from "@/app/mpgf/actions";
 import type { MpgfParticipantState } from "@/lib/mpgf/participant-types";
 import type { MpgfRealMoneyAccountState } from "@/lib/mpgf/real-money-types";
-import type { MpgfPledge, MpgfRecurringContributionCommitment } from "@/lib/mpgf/types";
+import type {
+  MpgfPledge,
+  MpgfPublicGoodsPledge,
+  MpgfPublicGoodsSubscription,
+  MpgfRecurringContributionCommitment,
+} from "@/lib/mpgf/types";
 
 function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", {
@@ -52,6 +57,12 @@ export function MpgfContributionControls({
 }) {
   const [pledgeRows, setPledgeRows] = useState(pledges);
   const [commitmentRows, setCommitmentRows] = useState(recurringCommitments);
+  const [publicGoodsPledgeRows, setPublicGoodsPledgeRows] = useState<MpgfPublicGoodsPledge[]>(
+    participantState?.publicGoodsPledges ?? [],
+  );
+  const [publicGoodsSubscriptionRows, setPublicGoodsSubscriptionRows] = useState<MpgfPublicGoodsSubscription[]>(
+    participantState?.publicGoodsSubscriptions ?? [],
+  );
   const [realMoneyRows, setRealMoneyRows] = useState(realMoneyAccountState?.contributions ?? []);
   const [refundRows, setRefundRows] = useState(realMoneyAccountState?.refunds ?? []);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -72,6 +83,8 @@ export function MpgfContributionControls({
       if (result.state) {
         setPledgeRows(result.state.pledges);
         setCommitmentRows(result.state.recurringCommitments);
+        setPublicGoodsPledgeRows(result.state.publicGoodsPledges);
+        setPublicGoodsSubscriptionRows(result.state.publicGoodsSubscriptions);
       } else if (result.data) {
         setPledgeRows((current) =>
           current.map((pledge) => (pledge.id === pledgeId ? (result.data as MpgfPledge) : pledge)),
@@ -138,6 +151,8 @@ export function MpgfContributionControls({
       if (result.state) {
         setPledgeRows(result.state.pledges);
         setCommitmentRows(result.state.recurringCommitments);
+        setPublicGoodsPledgeRows(result.state.publicGoodsPledges);
+        setPublicGoodsSubscriptionRows(result.state.publicGoodsSubscriptions);
       } else if (result.data) {
         setCommitmentRows((current) =>
           current.map((commitment) =>
@@ -163,6 +178,72 @@ export function MpgfContributionControls({
 
   return (
     <>
+      <div className="section-head">
+        <p className="eyebrow">Public goods assurance</p>
+        <h2>Conditional campaign pledges</h2>
+        <p>
+          These pledges are tied to public-goods campaigns and count only after amount,
+          verified-supporter, review, and evidence gates pass.
+        </p>
+      </div>
+      <div className="mpgf-table">
+        <div className="mpgf-table-row mpgf-table-head">
+          <span>Campaign</span>
+          <span>Amount</span>
+          <span>Status</span>
+          <span>Capture</span>
+        </div>
+        {publicGoodsPledgeRows.length === 0 ? (
+          <div className="mpgf-table-row">
+            <span>No public-goods pledges</span>
+            <span>-</span>
+            <span>-</span>
+            <span>{viewerPresent ? "Create an assurance pledge from the contribution page." : "Sign in to load records."}</span>
+          </div>
+        ) : null}
+        {publicGoodsPledgeRows.map((pledge) => (
+          <div key={pledge.id} className="mpgf-table-row">
+            <span>{pledge.campaignId.replace(/^campaign-/, "").replaceAll("-", " ")}</span>
+            <span>{formatUsd(pledge.amountCents)}</span>
+            <span>{pledge.eligibilityState.replaceAll("_", " ")}</span>
+            <span>{pledge.captureMode.replaceAll("_", " ")}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="section-head">
+        <p className="eyebrow">Sponsor-pool refills</p>
+        <h2>Optional recurring sponsor support</h2>
+        <p>
+          These records refill future challenge budgets. They remain separate from one-time
+          campaign pledges and do not imply custody or tax treatment.
+        </p>
+      </div>
+      <div className="mpgf-table">
+        <div className="mpgf-table-row mpgf-table-head">
+          <span>Pool</span>
+          <span>Amount</span>
+          <span>Status</span>
+          <span>Next</span>
+        </div>
+        {publicGoodsSubscriptionRows.length === 0 ? (
+          <div className="mpgf-table-row">
+            <span>No sponsor-pool refills</span>
+            <span>-</span>
+            <span>-</span>
+            <span>Optional monthly refills appear here after creation.</span>
+          </div>
+        ) : null}
+        {publicGoodsSubscriptionRows.map((subscription) => (
+          <div key={subscription.id} className="mpgf-table-row">
+            <span>{subscription.poolId.replaceAll("-", " ")}</span>
+            <span>{formatUsd(subscription.amountCents)}</span>
+            <span>{subscription.status.replaceAll("_", " ")}</span>
+            <span>{new Date(subscription.nextChargeAt).toLocaleDateString()}</span>
+          </div>
+        ))}
+      </div>
+
       <div className="section-head">
         <p className="eyebrow">Pledge-only records</p>
         <h2>Pledge rehearsal records</h2>

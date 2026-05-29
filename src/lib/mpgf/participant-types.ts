@@ -1,4 +1,12 @@
-import type { MpgfBallot, MpgfPledge, MpgfRecurringContributionCommitment } from "./types";
+import type {
+  MpgfBallot,
+  MpgfPledge,
+  MpgfPublicGoodsCaptureMode,
+  MpgfPublicGoodsDestinationType,
+  MpgfPublicGoodsPledge,
+  MpgfPublicGoodsSubscription,
+  MpgfRecurringContributionCommitment,
+} from "./types";
 
 export type MpgfParticipantPersistenceStatus =
   | "authenticated"
@@ -25,6 +33,18 @@ export interface MpgfPoolProposalRecord {
   misusePathways: string;
   proposedRecipientName?: string;
   implementingTeam?: string;
+  publicGoodsDestinationType?: MpgfPublicGoodsDestinationType;
+  publicGoodsDestinationRef?: string;
+  publicGoodsThresholdAmountCents?: number;
+  publicGoodsThresholdSupporters?: number;
+  publicGoodsDeadlineAt?: string;
+  publicGoodsVerificationMethod?: string;
+  publicGoodsBaselineRule?: string;
+  publicGoodsExitRule?: string;
+  publicGoodsBaseMatchRatio?: number;
+  publicGoodsQfEnabled?: boolean;
+  publicGoodsQfCapMultiple?: number;
+  publicGoodsPayoutMethod?: MpgfPublicGoodsCaptureMode;
   status: "draft" | "submitted" | "under_review" | "approved_as_candidate" | "rejected" | "withdrawn";
   candidateAlternativeId?: string;
   createdAt?: string;
@@ -36,6 +56,8 @@ export interface MpgfParticipantState {
   displayName?: string;
   pledges: MpgfPledge[];
   recurringCommitments: MpgfRecurringContributionCommitment[];
+  publicGoodsPledges: MpgfPublicGoodsPledge[];
+  publicGoodsSubscriptions: MpgfPublicGoodsSubscription[];
   poolProposals: MpgfPoolProposalRecord[];
   ballots: MpgfBallot[];
   warnings: string[];
