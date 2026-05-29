@@ -1,5 +1,7 @@
 import { FUNNEL_EVENT_TYPES, type FunnelEventType } from "@/lib/growth";
 
+import performanceBaselineConfig from "../../config/measurement/public-route-baseline.json";
+
 export type MeasurementStage =
   | "orientation"
   | "activation"
@@ -24,6 +26,41 @@ export interface MeasurementRoadmapItem {
   title: string;
   status: "active" | "planned";
   detail: string;
+}
+
+export interface MeasurementBaselineDevice {
+  key: string;
+  label: string;
+  userAgent: string;
+  viewport: {
+    height: number;
+    width: number;
+  };
+}
+
+export interface MeasurementBaselineRoute {
+  family: string;
+  path: string;
+  stage: MeasurementStage;
+}
+
+export interface MeasurementPerformanceBaseline {
+  baseUrlEnv: string;
+  budgets: {
+    maxDomContentLoadedMs: number;
+    maxLoadMs: number;
+    maxScriptTags: number;
+    minBodyTextCharacters: number;
+  };
+  command: string;
+  defaultOutputPath: string;
+  devices: MeasurementBaselineDevice[];
+  outputPathEnv: string;
+  publicNonClaims: string[];
+  purpose: string;
+  requiredChecks: string[];
+  routes: MeasurementBaselineRoute[];
+  version: string;
 }
 
 export const MEASUREMENT_EVENT_SPECS: MeasurementEventSpec[] = [
@@ -204,7 +241,7 @@ export const MEASUREMENT_GUARDRAILS: MeasurementGuardrail[] = [
   },
 ];
 
-export const MEASUREMENT_BASELINE_ROUTES = [
+const REQUIRED_BASELINE_ROUTES = [
   "/",
   "/moral-trade",
   "/offers",
@@ -215,7 +252,24 @@ export const MEASUREMENT_BASELINE_ROUTES = [
   "/background-networking",
   "/wish-registry",
   "/mpgf",
+  "/measurement",
 ] as const;
+
+const REQUIRED_BASELINE_CHECKS = [
+  "http_status_ok",
+  "main_content_present",
+  "nonblank_body",
+  "no_framework_overlay",
+  "dom_content_loaded_budget",
+  "load_budget",
+  "script_count_budget",
+] as const;
+
+export const MEASUREMENT_PERFORMANCE_BASELINE =
+  performanceBaselineConfig as MeasurementPerformanceBaseline;
+
+export const MEASUREMENT_BASELINE_ROUTES =
+  MEASUREMENT_PERFORMANCE_BASELINE.routes.map((route) => route.path);
 
 export const MEASUREMENT_ROADMAP: MeasurementRoadmapItem[] = [
   {
@@ -226,9 +280,9 @@ export const MEASUREMENT_ROADMAP: MeasurementRoadmapItem[] = [
   },
   {
     title: "Core route performance baseline",
-    status: "planned",
+    status: "active",
     detail:
-      "Run Lighthouse or PageSpeed-style checks on the home, offers, cohort, signup, login, Moral Trade, private matching, and public-goods routes on mobile and desktop.",
+      "Run the public route-baseline command on the home, offers, cohort, signup, login, Moral Trade, private matching, and public-goods routes on mobile and desktop before optimizing.",
   },
   {
     title: "Aggregate search visibility",
@@ -280,23 +334,68 @@ function isSensitiveMeasurementMetadataKey(key: string) {
   return splitMetadataKeyTokens(key).some((token) => sensitiveTerms.has(token));
 }
 
+function findDuplicateStrings(values: readonly string[]) {
+  return values.filter((value, index) => values.indexOf(value) !== index);
+}
+
 export function validateMeasurementPlan() {
   const supportedEvents = new Set<FunnelEventType>(FUNNEL_EVENT_TYPES);
   const invalidEvents = MEASUREMENT_EVENT_SPECS.filter(
     (spec) => !supportedEvents.has(spec.eventType),
   ).map((spec) => spec.eventType);
-  const duplicateEvents = getMeasurementEventKeys().filter(
-    (eventType, index, events) => events.indexOf(eventType) !== index,
-  );
+  const duplicateEvents = findDuplicateStrings(getMeasurementEventKeys());
   const sensitiveMetadata = MEASUREMENT_EVENT_SPECS.flatMap((spec) =>
     spec.allowedMetadata
       .filter(isSensitiveMeasurementMetadataKey)
       .map((key) => `${spec.eventType}:${key}`),
   );
+  const baselineRoutePaths = MEASUREMENT_PERFORMANCE_BASELINE.routes.map(
+    (route) => route.path,
+  );
+  const baselineChecks = new Set(MEASUREMENT_PERFORMANCE_BASELINE.requiredChecks);
+  const duplicateBaselineRoutes = findDuplicateStrings(baselineRoutePaths);
+  const missingBaselineRoutes = REQUIRED_BASELINE_ROUTES.filter(
+    (route) => !baselineRoutePaths.includes(route),
+  );
+  const missingBaselineChecks = REQUIRED_BASELINE_CHECKS.filter(
+    (check) => !baselineChecks.has(check),
+  );
+  const invalidBaselineDevices = MEASUREMENT_PERFORMANCE_BASELINE.devices
+    .filter(
+      (device) =>
+        !device.key ||
+        !device.label ||
+        !device.userAgent ||
+        device.viewport.width < 320 ||
+        device.viewport.height < 480,
+    )
+    .map((device) => device.key || "missing-device-key");
+  const invalidBaselineBudgets = Object.entries(
+    MEASUREMENT_PERFORMANCE_BASELINE.budgets,
+  )
+    .filter(([, value]) => typeof value !== "number" || value <= 0)
+    .map(([key]) => key);
+  const baselineCommandErrors = [
+    MEASUREMENT_PERFORMANCE_BASELINE.command.includes("npm run measure:routes")
+      ? null
+      : "missing-measure-routes-command",
+    MEASUREMENT_PERFORMANCE_BASELINE.baseUrlEnv === "MORALTRADE_BASE_URL"
+      ? null
+      : "missing-base-url-env",
+    MEASUREMENT_PERFORMANCE_BASELINE.outputPathEnv === "MORALTRADE_BASELINE_OUTPUT"
+      ? null
+      : "missing-output-path-env",
+  ].filter((entry): entry is string => Boolean(entry));
 
   return {
+    baselineCommandErrors,
     duplicateEvents,
+    duplicateBaselineRoutes,
+    invalidBaselineBudgets,
+    invalidBaselineDevices,
     invalidEvents,
+    missingBaselineChecks,
+    missingBaselineRoutes,
     sensitiveMetadata,
   };
 }

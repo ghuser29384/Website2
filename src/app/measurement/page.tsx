@@ -8,6 +8,7 @@ import {
   MEASUREMENT_BASELINE_ROUTES,
   MEASUREMENT_EVENT_SPECS,
   MEASUREMENT_GUARDRAILS,
+  MEASUREMENT_PERFORMANCE_BASELINE,
   MEASUREMENT_ROADMAP,
   type MeasurementStage,
 } from "@/lib/measurement-plan";
@@ -138,6 +139,35 @@ export default async function MeasurementPage() {
             pilot. Web Vitals may be recorded as LCP, INP, and CLS buckets; Lighthouse or
             PageSpeed-style runs should stay aggregate and route-level.
           </p>
+          <div className="panel data-card data-card-wide">
+            <h3>Executable baseline command</h3>
+            <p className="route-text">
+              Run <code>{MEASUREMENT_PERFORMANCE_BASELINE.command}</code> against a production
+              build to capture local mobile and desktop route-health evidence before optimizing.
+              The output path defaults to{" "}
+              <code>{MEASUREMENT_PERFORMANCE_BASELINE.defaultOutputPath}</code>.
+            </p>
+            <p className="route-text">
+              Devices:{" "}
+              {MEASUREMENT_PERFORMANCE_BASELINE.devices
+                .map((device) => `${device.label} ${device.viewport.width}x${device.viewport.height}`)
+                .join("; ")}
+              .
+            </p>
+            <p className="route-text">
+              Budgets: DOM content loaded under{" "}
+              {MEASUREMENT_PERFORMANCE_BASELINE.budgets.maxDomContentLoadedMs}ms, load under{" "}
+              {MEASUREMENT_PERFORMANCE_BASELINE.budgets.maxLoadMs}ms, at least{" "}
+              {MEASUREMENT_PERFORMANCE_BASELINE.budgets.minBodyTextCharacters} body-text
+              characters, and no more than{" "}
+              {MEASUREMENT_PERFORMANCE_BASELINE.budgets.maxScriptTags} script tags.
+            </p>
+            <ul className="compact-list">
+              {MEASUREMENT_PERFORMANCE_BASELINE.publicNonClaims.map((nonClaim) => (
+                <li key={nonClaim}>{nonClaim}</li>
+              ))}
+            </ul>
+          </div>
           <div className="data-grid">
             {MEASUREMENT_BASELINE_ROUTES.map((route) => (
               <article className="panel data-card" key={route}>

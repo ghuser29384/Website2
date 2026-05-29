@@ -13,6 +13,7 @@
     "prestart": "node scripts/ensure-next-swc.mjs",
     "start": "next start",
     "lint": "eslint .",
+    "measure:routes": "node scripts/check-public-route-baseline.mjs",
     "test": "node --import tsx --test src/**/*.test.ts",
     "test:e2e": "playwright test"
   },

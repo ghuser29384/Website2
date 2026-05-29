@@ -7,6 +7,7 @@ import { PARTNER_COHORTS } from "@/lib/growth";
 import {
   MEASUREMENT_EVENT_SPECS,
   MEASUREMENT_GUARDRAILS,
+  MEASUREMENT_PERFORMANCE_BASELINE,
   validateMeasurementPlan,
 } from "@/lib/measurement-plan";
 import { demoAlternatives, MPGF_COPY } from "@/lib/mpgf/data";
@@ -721,16 +722,37 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
 
 test("public measurement plan stays aligned with privacy-safe analytics", () => {
   const validation = validateMeasurementPlan();
+  const measurementPage = readRepoFile("src/app/measurement/page.tsx");
+  const packageSource = readRepoFile("package.json");
+  const routeBaselineScript = readRepoFile("scripts/check-public-route-baseline.mjs");
 
   assert.deepEqual(validation.invalidEvents, []);
   assert.deepEqual(validation.duplicateEvents, []);
   assert.deepEqual(validation.sensitiveMetadata, []);
+  assert.deepEqual(validation.duplicateBaselineRoutes, []);
+  assert.deepEqual(validation.missingBaselineRoutes, []);
+  assert.deepEqual(validation.missingBaselineChecks, []);
+  assert.deepEqual(validation.invalidBaselineDevices, []);
+  assert.deepEqual(validation.invalidBaselineBudgets, []);
+  assert.deepEqual(validation.baselineCommandErrors, []);
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "hero_primary_cta_clicked"));
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "worked_example_opened"));
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "signup_complete"));
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "cohort_interest_started"));
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "detail_request_resolved"));
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "performance_metric_recorded"));
+  assert.match(MEASUREMENT_PERFORMANCE_BASELINE.command, /npm run measure:routes/);
+  assert.equal(MEASUREMENT_PERFORMANCE_BASELINE.baseUrlEnv, "MORALTRADE_BASE_URL");
+  assert.equal(MEASUREMENT_PERFORMANCE_BASELINE.outputPathEnv, "MORALTRADE_BASELINE_OUTPUT");
+  assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.routes.some((route) => route.path === "/offers?view=examples"));
+  assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.devices.some((device) => device.key === "mobile"));
+  assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.requiredChecks.includes("no_framework_overlay"));
+  assert.match(measurementPage, /Executable baseline command/);
+  assert.match(measurementPage, /MEASUREMENT_PERFORMANCE_BASELINE/);
+  assert.match(packageSource, /measure:routes/);
+  assert.match(routeBaselineScript, /process\.env\[config\.baseUrlEnv\]/);
+  assert.match(routeBaselineScript, /process\.env\[config\.outputPathEnv\]/);
+  assert.match(routeBaselineScript, /no_framework_overlay/);
   assert.ok(
     MEASUREMENT_GUARDRAILS.some((guardrail) =>
       /not moral worth|not score users/i.test(`${guardrail.title} ${guardrail.rule}`),
