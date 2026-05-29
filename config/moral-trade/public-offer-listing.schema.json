@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.moraltrade.org/schemas/moral-trade/public-offer-listing.schema.json",
+  "title": "Moral Trade Public Offer Listing",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "slug",
+    "title",
+    "summary",
+    "format",
+    "status",
+    "source",
+    "isWorkedExample",
+    "reviewState",
+    "primaryCause",
+    "secondaryCause",
+    "offeredAction",
+    "requestedAction",
+    "verificationMethod",
+    "verificationSummary",
+    "duration",
+    "offeredImpactScore",
+    "requestedImpactThreshold",
+    "displayName",
+    "canonicalUrl",
+    "createdAt",
+    "updatedAt",
+    "manualReviewRequired",
+    "evidenceGated",
+    "noEscrow"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "slug": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 300 },
+    "format": {
+      "type": "string",
+      "enum": ["pledge-swap", "donation-offset", "public-good", "paid-action"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "live", "archived", "deferred"]
+    },
+    "source": {
+      "type": "string",
+      "enum": ["live", "worked_example"]
+    },
+    "isWorkedExample": { "type": "boolean" },
+    "reviewState": {
+      "type": "string",
+      "enum": ["unreviewed", "manual-review-required", "reviewed", "disputed"]
+    },
+    "primaryCause": { "type": "string", "minLength": 1 },
+    "secondaryCause": { "type": ["string", "null"] },
+    "offeredAction": { "type": "string", "minLength": 1 },
+    "requestedAction": { "type": "string", "minLength": 1 },
+    "verificationMethod": { "type": "string", "minLength": 1 },
+    "verificationSummary": { "type": ["string", "null"] },
+    "duration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "label"],
+      "properties": {
+        "value": { "type": ["number", "null"], "minimum": 0 },
+        "unit": {
+          "type": "string",
+          "enum": ["days", "months", "years", "open-ended"]
+        },
+        "label": { "type": "string", "minLength": 1 }
+      }
+    },
+    "offeredImpactScore": { "type": ["number", "null"], "minimum": 0, "maximum": 10 },
+    "requestedImpactThreshold": { "type": ["number", "null"], "minimum": 0, "maximum": 10 },
+    "displayName": { "type": "string", "minLength": 1 },
+    "canonicalUrl": { "type": "string", "format": "uri" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "manualReviewRequired": { "type": "boolean" },
+    "evidenceGated": { "type": "boolean" },
+    "noEscrow": { "type": "boolean" }
+  }
+}

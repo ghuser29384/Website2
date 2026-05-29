@@ -108,6 +108,7 @@ const REQUIRED_RATE_LIMITS = [
   "privacy_access_request",
   "match_concierge_request",
   "offer_comment",
+  "offer_collection_read",
   "wish_registry_search",
   "analytics_ingest",
 ] as const;

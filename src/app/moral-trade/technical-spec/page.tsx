@@ -1599,7 +1599,7 @@ export default async function MoralTradeTechnicalSpecPage() {
                 {schemaRegistryValidation.checks.length} check(s),{" "}
                 {schemaRegistryValidation.blockers.length} blocker(s),{" "}
                 {schemaRegistry.schemaDocuments.length} public schema document(s), including the
-                core data-model profile schema.
+                core data-model and public offer listing schemas.
               </p>
             </div>
             <Link className="button button-secondary" href="/api/moral-trade/schemas">
@@ -1610,7 +1610,7 @@ export default async function MoralTradeTechnicalSpecPage() {
             <article className="panel protocol-contract-card">
               <h3>Public schema documents</h3>
               <ul className="clean-list">
-                {schemaRegistry.schemaDocuments.slice(0, 5).map((schema) => (
+                {schemaRegistry.schemaDocuments.map((schema) => (
                   <li key={schema.key}>
                     <Link href={schema.publicPath}>{schema.slug}</Link>
                   </li>

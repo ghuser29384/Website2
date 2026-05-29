@@ -8,6 +8,7 @@ import incidentResponseProfileSchemaJson from "../../../config/moral-trade/incid
 import operationsProfileSchemaJson from "../../../config/moral-trade/operations-profile.schema.json";
 import performanceProfileSchemaJson from "../../../config/moral-trade/performance-profile.schema.json";
 import protocolProfileSchemaJson from "../../../config/moral-trade/protocol-profile.schema.json";
+import publicOfferListingSchemaJson from "../../../config/moral-trade/public-offer-listing.schema.json";
 import securityProfileSchemaJson from "../../../config/moral-trade/security-profile.schema.json";
 
 export const MORAL_TRADE_SCHEMA_REGISTRY_VERSION =
@@ -140,6 +141,13 @@ const SCHEMA_SOURCES: SchemaSource[] = [
     document: protocolProfileSchemaJson as MoralTradeJsonSchemaDocument,
   },
   {
+    key: "public_offer_listing_schema",
+    label: "Public offer listing schema",
+    slug: "public-offer-listing.schema.json",
+    profileKey: "public_offers",
+    document: publicOfferListingSchemaJson as MoralTradeJsonSchemaDocument,
+  },
+  {
     key: "security_profile_schema",
     label: "Security profile schema",
     slug: "security-profile.schema.json",
@@ -159,6 +167,7 @@ const REQUIRED_SCHEMA_KEYS = [
   "operations_profile_schema",
   "performance_profile_schema",
   "protocol_profile_schema",
+  "public_offer_listing_schema",
   "security_profile_schema",
 ] as const;
 
@@ -313,6 +322,21 @@ export function validateMoralTradeSchemaRegistry(
             entry.topLevelRequiredFields.includes("relationshipBoundaries"),
         ),
       registry.schemaDocuments.find((entry) => entry.key === "data_model_profile_schema")
+        ?.schemaId ?? "missing",
+    ),
+    check(
+      "public-offer-listing-schema",
+      "Public offers collection has an exact listing JSON Schema",
+      keys.includes("public_offer_listing_schema") &&
+        registry.schemaDocuments.some(
+          (entry) =>
+            entry.key === "public_offer_listing_schema" &&
+            entry.topLevelRequiredFields.includes("offeredAction") &&
+            entry.topLevelRequiredFields.includes("requestedAction") &&
+            entry.topLevelRequiredFields.includes("verificationMethod") &&
+            entry.topLevelRequiredFields.includes("noEscrow"),
+        ),
+      registry.schemaDocuments.find((entry) => entry.key === "public_offer_listing_schema")
         ?.schemaId ?? "missing",
     ),
     check(

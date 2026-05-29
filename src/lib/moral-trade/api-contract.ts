@@ -57,6 +57,7 @@ const apiContractProfile = apiContractProfileJson as MoralTradeApiContractProfil
 
 const REQUIRED_ROUTES = [
   "moral_trade_health",
+  "public_offers_collection",
   "moral_trade_data_model_contract",
   "moral_trade_policy_bundle_contract",
   "moral_trade_provenance_schema",
@@ -143,6 +144,15 @@ export function validateMoralTradeApiContractProfile(
   );
   const schemaRegistryResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "schema_registry_response",
+  );
+  const publicOffersRoute = profile.routes.find(
+    (route) => route.key === "public_offers_collection",
+  );
+  const publicOffersRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "public_offers_collection_request",
+  );
+  const publicOffersResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "public_offers_collection_response",
   );
   const dataModelContractRoute = profile.routes.find(
     (route) => route.key === "moral_trade_data_model_contract",
@@ -323,6 +333,38 @@ export function validateMoralTradeApiContractProfile(
         ),
       schemaRegistryRoute
         ? `${schemaRegistryRoute.key}:${schemaRegistryRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
+      "public-offers-collection-route",
+      "Public offers collection route exposes filtered listings and facets safely",
+      publicOffersRoute?.method === "GET" &&
+        publicOffersRoute.path === "/api/offers" &&
+        publicOffersRoute.cacheControl === "no_store_dynamic" &&
+        publicOffersRoute.rateLimitSurface === "offer_collection_read" &&
+        publicOffersRoute.privacyClass === "public_contract" &&
+        /worked-example|live listing|visible facets|private wishes|contact details|global moral ranking/i.test(
+          publicOffersRoute.fallback,
+        ) &&
+        Boolean(
+          publicOffersRequest?.fields.some(
+            (field) => field.key === "tab" && /defaults to examples/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          publicOffersResponse?.fields.some(
+            (field) =>
+              field.key === "items" && field.type === "public_offer_listing_array",
+          ),
+        ) &&
+        Boolean(
+          publicOffersResponse?.fields.some(
+            (field) =>
+              field.key === "meta" && /hidden-zero-facet|available facet/i.test(field.description),
+          ),
+        ),
+      publicOffersRoute
+        ? `${publicOffersRoute.key}:${publicOffersRoute.rateLimitSurface}:${publicOffersRoute.cacheControl}`
         : "missing",
     ),
     check(
@@ -578,6 +620,7 @@ export function validateMoralTradeApiContractProfile(
         profile.apiTests.includes("technical_spec_api_contract_smoke") &&
         profile.apiTests.includes("data_model_contract_route") &&
         profile.apiTests.includes("policy_bundle_contract_route") &&
+        profile.apiTests.includes("public_offers_collection_route") &&
         profile.apiTests.includes("performance_route_contract") &&
         profile.apiTests.includes("incident_response_route_contract"),
       profile.apiTests.join(", "),

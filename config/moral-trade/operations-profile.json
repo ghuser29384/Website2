@@ -45,6 +45,7 @@
     { "key": "privacy_access_request", "window": "1 day", "limit": 12 },
     { "key": "match_concierge_request", "window": "1 day", "limit": 10 },
     { "key": "offer_comment", "window": "15 minutes", "limit": 12 },
+    { "key": "offer_collection_read", "window": "1 minute", "limit": 120 },
     { "key": "wish_registry_search", "window": "1 minute", "limit": 60 },
     { "key": "analytics_ingest", "window": "1 minute", "limit": 120 }
   ],

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import dataModelProfileSchemaJson from "../../../config/moral-trade/data-model-profile.schema.json";
+import publicOfferListingSchemaJson from "../../../config/moral-trade/public-offer-listing.schema.json";
 
 import {
   getMoralTradeSchemaDocumentBySlug,
@@ -24,6 +25,7 @@ test("schema registry publishes every core Moral Trade JSON Schema document", ()
   assert.ok(keys.includes("api_contract_profile_schema"));
   assert.ok(keys.includes("copilot_contract_schema"));
   assert.ok(keys.includes("incident_response_profile_schema"));
+  assert.ok(keys.includes("public_offer_listing_schema"));
   assert.ok(
     registry.schemaDocuments.every((entry) =>
       entry.publicPath.startsWith("/schemas/moral-trade/"),
@@ -33,6 +35,19 @@ test("schema registry publishes every core Moral Trade JSON Schema document", ()
     registry.schemaDocuments.every((entry) =>
       entry.schemaId.startsWith("https://www.moraltrade.org/schemas/moral-trade/"),
     ),
+  );
+});
+
+test("public offer listing schema covers the collection API payload fields", () => {
+  assert.equal(publicOfferListingSchemaJson.additionalProperties, false);
+  assert.ok(publicOfferListingSchemaJson.required.includes("offeredAction"));
+  assert.ok(publicOfferListingSchemaJson.required.includes("requestedAction"));
+  assert.ok(publicOfferListingSchemaJson.required.includes("verificationMethod"));
+  assert.ok(publicOfferListingSchemaJson.required.includes("manualReviewRequired"));
+  assert.ok(publicOfferListingSchemaJson.required.includes("noEscrow"));
+  assert.equal(
+    publicOfferListingSchemaJson.$id,
+    "https://www.moraltrade.org/schemas/moral-trade/public-offer-listing.schema.json",
   );
 });
 
@@ -59,6 +74,10 @@ test("schema document lookup returns exact schema documents by public slug", () 
   assert.ok(found);
   assert.equal(found.entry.key, "data_model_profile_schema");
   assert.equal(found.document.$id, found.entry.schemaId);
+  assert.equal(
+    getMoralTradeSchemaDocumentBySlug("public-offer-listing.schema.json")?.entry.key,
+    "public_offer_listing_schema",
+  );
   assert.equal(missing, null);
 });
 

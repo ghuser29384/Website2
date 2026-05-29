@@ -1108,6 +1108,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const aiGovernanceProfile = readRepoFile("config/moral-trade/ai-governance-profile.json");
   const schemaRegistrySource = readRepoFile("src/lib/moral-trade/schema-registry.ts");
   const dataModelProfileSchema = readRepoFile("config/moral-trade/data-model-profile.schema.json");
+  const publicOfferListingSchema = readRepoFile(
+    "config/moral-trade/public-offer-listing.schema.json",
+  );
+  const publicOffersSource = readRepoFile("src/lib/public-offers.ts");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const provenanceSource = readRepoFile("src/lib/moral-trade/provenance.ts");
@@ -1153,6 +1157,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const reasoningPacketsRoute = readRepoFile(
     "src/app/api/moral-trade/reasoning/packets/route.ts",
   );
+  const publicOffersRoute = readRepoFile("src/app/api/offers/route.ts");
   const operationsHealthRoute = readRepoFile("src/app/api/moral-trade/operations/health/route.ts");
   const securityHealthRoute = readRepoFile("src/app/api/moral-trade/security/health/route.ts");
   const incidentResponseHealthRoute = readRepoFile(
@@ -1549,6 +1554,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /external entity reference/);
   assert.match(apiContractProfile, /external entity dedupe/);
   assert.match(apiContractProfile, /Provenance object contract validator result/);
+  assert.match(apiContractProfile, /public_offers_collection_response/);
+  assert.match(apiContractProfile, /offer_collection_read/);
   assert.match(apiContractProfile, /sample-bundle summary/);
   assert.match(apiContractProfile, /undocumented ML cannot rank/);
   assert.match(apiContractProfile, /private_no_store/);
@@ -1563,6 +1570,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /\/api\/moral-trade\/data-model\/contract/);
   assert.match(technicalSpecPage, /Schema registry/);
   assert.match(technicalSpecPage, /schemaRegistry\.schemaDocuments/);
+  assert.match(technicalSpecPage, /public offer listing schemas/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/schemas/);
   assert.match(technicalSpecPage, /Policy bundle contract/);
   assert.match(technicalSpecPage, /Copilot inputs are concrete registries, not broad application context/);
@@ -1828,14 +1836,25 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(provenanceSchemaRoute, /sampleBundleSummary/);
   assert.match(schemaRegistrySource, /validateMoralTradeSchemaRegistry/);
   assert.match(schemaRegistrySource, /data_model_profile_schema/);
+  assert.match(schemaRegistrySource, /public_offer_listing_schema/);
   assert.match(schemaRegistrySource, /schemaPublicPath/);
   assert.match(dataModelProfileSchema, /Moral Trade Data Model Profile/);
   assert.match(dataModelProfileSchema, /relationshipBoundaries/);
   assert.match(dataModelProfileSchema, /additionalProperties/);
+  assert.match(publicOfferListingSchema, /Moral Trade Public Offer Listing/);
+  assert.match(publicOfferListingSchema, /offeredAction/);
+  assert.match(publicOfferListingSchema, /noEscrow/);
+  assert.match(publicOffersSource, /buildPublicOffersCollectionPayload/);
+  assert.match(publicOffersSource, /defaultedToWorkedExamples/);
+  assert.match(publicOffersSource, /hiddenZeroCountFacets/);
+  assert.match(publicOffersSource, /public-offer-listing/);
   assert.match(schemaRegistryRoute, /validateMoralTradeSchemaRegistry/);
   assert.match(schemaRegistryRoute, /schemaDocuments/);
   assert.match(schemaDocumentRoute, /getMoralTradeSchemaDocumentBySlug/);
   assert.match(schemaDocumentRoute, /availableSchemas/);
+  assert.match(publicOffersRoute, /buildPublicOffersCollectionPayload/);
+  assert.match(publicOffersRoute, /takeRateLimitSlot/);
+  assert.match(publicOffersRoute, /offer_collection_read/);
 });
 
 test("pooled donation offset creation has visible path and server-side guardrails", () => {

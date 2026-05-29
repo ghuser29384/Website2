@@ -15,6 +15,18 @@
       "fallback": "Return ok:false with validator blockers; never silently claim readiness."
     },
     {
+      "key": "public_offers_collection",
+      "method": "GET",
+      "path": "/api/offers",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "public_offers_collection_request",
+      "responseSchema": "public_offers_collection_response",
+      "rateLimitSurface": "offer_collection_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return filtered worked-example and live listing payloads, visible facets, validator blockers, and zero-live guidance; never expose private wishes, contact details, raw evidence artifacts, personalized cart state, or global moral ranking."
+    },
+    {
       "key": "moral_trade_data_model_contract",
       "method": "GET",
       "path": "/api/moral-trade/data-model/contract",
@@ -344,6 +356,34 @@
       "key": "empty_request",
       "purpose": "No request body or query contract beyond route path and auth context.",
       "fields": []
+    },
+    {
+      "key": "public_offers_collection_request",
+      "purpose": "Public collection query parameters for browsing live offers and worked examples without exposing private/personally scoped state.",
+      "fields": [
+        { "key": "q", "type": "string", "required": false, "privacy": "public", "description": "Search text used to filter public listing fields; aliases search for the same value." },
+        { "key": "tab", "type": "enum", "required": false, "privacy": "public", "description": "live, examples, or all; defaults to examples when live inventory is zero." },
+        { "key": "cause", "type": "string_array", "required": false, "privacy": "public", "description": "Broad cause area filter using public cause labels or slugs." },
+        { "key": "format", "type": "enum_array", "required": false, "privacy": "public", "description": "pledge-swap, donation-offset, public-good, or paid-action filter." },
+        { "key": "reviewState", "type": "enum_array", "required": false, "privacy": "public", "description": "Public review-state filter such as manual-review-required." },
+        { "key": "sort", "type": "enum", "required": false, "privacy": "public", "description": "newest, reviewed, highest-offered-impact, or best-fit." },
+        { "key": "page", "type": "integer", "required": false, "privacy": "public", "description": "One-based page number." },
+        { "key": "pageSize", "type": "integer", "required": false, "privacy": "public", "description": "Requested page size capped by the endpoint." }
+      ]
+    },
+    {
+      "key": "public_offers_collection_response",
+      "purpose": "Public validator-backed collection payload for live offers and worked examples, including visible facets, default-tab behavior, non-claims, and public listing items.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the public offers collection validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the public offers collection validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Public offers API contract version." },
+        { "key": "meta", "type": "object", "required": true, "privacy": "public_contract", "description": "Tab, pagination, counts, sort, query, zero-live defaulting, hidden-zero-facet flag, and available facet counts." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Source route, API route, public listing schema id, supported filters, and non-claims." },
+        { "key": "items", "type": "public_offer_listing_array", "required": true, "privacy": "public_contract", "description": "Public listing payloads with actions, review state, verification method, duration, canonical URL, and non-claims." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for contract shape, default-tab behavior, listing shape, hidden zero-count facets, privacy, and non-claims." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Public-offers blockers that prevent relying on the collection API." }
+      ]
     },
     {
       "key": "moral_trade_aggregate_health_response",
@@ -836,6 +876,7 @@
     "ai_governance_route_contract",
     "data_model_contract_route",
     "policy_bundle_contract_route",
+    "public_offers_collection_route",
     "reasoning_packet_route_contract",
     "match_signal_route_contract",
     "challenge_appeal_route_contract",
