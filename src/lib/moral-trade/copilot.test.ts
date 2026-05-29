@@ -48,6 +48,20 @@ test("copilot contract requires strict bundle, approved output, guardrails, and 
   assert.ok(contract.approvedOutputSections.includes("reviewer_summary"));
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_chain_of_thought"));
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_autonomous_outreach"));
+  assert.ok(contract.promptTemplates.some((template) => template.key === "system_prompt"));
+  assert.ok(contract.promptTemplates.some((template) => template.key === "draft_repair_prompt"));
+  assert.ok(contract.promptTemplates.some((template) => template.key === "matching_prompt"));
+  assert.ok(contract.promptTemplates.some((template) => template.key === "reviewer_summary_prompt"));
+  assert.ok(
+    contract.promptTemplates
+      .flatMap((template) => template.safetyCodes)
+      .includes("no_chain_of_thought"),
+  );
+  assert.ok(
+    contract.promptTemplates
+      .flatMap((template) => template.safetyCodes)
+      .includes("no_autonomous_outreach"),
+  );
   assert.ok(contract.verificationLoop.some((step) => step.key === "privacy_redaction"));
   assert.ok(contract.trustAxes.includes("party_relative_benefit"));
   assert.ok(contract.trustAxes.includes("privacy_redaction"));
@@ -68,6 +82,27 @@ test("copilot contract validation fails when required input sources are missing"
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("strict-input-bundle")));
+});
+
+test("copilot contract validation fails when prompt templates lose safety boundaries", () => {
+  const contract = {
+    ...getMoralTradeCopilotContract(),
+    promptTemplates: getMoralTradeCopilotContract()
+      .promptTemplates.filter((template) => template.key !== "matching_prompt")
+      .map((template) =>
+        template.key === "system_prompt"
+          ? {
+              ...template,
+              safetyCodes: template.safetyCodes.filter((code) => code !== "no_autonomous_outreach"),
+            }
+          : template,
+      ),
+  } satisfies MoralTradeCopilotContract;
+  const validation = validateMoralTradeCopilotContract(contract);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("prompt-templates")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("prompt-template-safety")));
 });
 
 test("copilot rollout readiness starts in shadow and gates assist or automation on evidence", () => {
@@ -121,6 +156,16 @@ test("copilot contract route publishes rollout readiness evidence", async () => 
 
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
+  assert.ok(
+    body.publicContract.promptTemplates.some(
+      (template: { key: string }) => template.key === "system_prompt",
+    ),
+  );
+  assert.ok(
+    body.publicContract.promptTemplates.some(
+      (template: { key: string }) => template.key === "reviewer_summary_prompt",
+    ),
+  );
   assert.ok(body.publicContract.rolloutReadinessSignals.includes("low_risk_task_scope"));
   assert.equal(body.publicContract.rolloutReadiness[0].targetStage, "shadow_mode");
   assert.equal(body.publicContract.rolloutReadiness[0].status, "pass");

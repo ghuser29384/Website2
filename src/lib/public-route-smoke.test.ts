@@ -914,6 +914,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotSource, /buildMoralTradeCopilotOutput/);
   assert.match(copilotSource, /validateMoralTradeCopilotContract/);
   assert.match(copilotContract, /strictInputBundle/);
+  assert.match(copilotContract, /promptTemplates/);
+  assert.match(copilotContract, /system_prompt/);
+  assert.match(copilotContract, /draft_repair_prompt/);
+  assert.match(copilotContract, /matching_prompt/);
+  assert.match(copilotContract, /reviewer_summary_prompt/);
   assert.match(copilotContract, /redacted_profile_pair/);
   assert.match(copilotContract, /verification_loop/);
   assert.match(copilotContract, /clarification_questions/);
@@ -1149,6 +1154,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /\/api\/moral-trade\/provenance\/schema/);
   assert.match(technicalSpecPage, /Copilot contract/);
   assert.match(technicalSpecPage, /schema-bound and reversible/);
+  assert.match(technicalSpecPage, /Prompt template registry/);
+  assert.match(technicalSpecPage, /copilotContract\.promptTemplates/);
   assert.match(technicalSpecPage, /Rollout readiness gates/);
   assert.match(technicalSpecPage, /copilotRolloutReadiness/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/copilot\/contract/);
@@ -1234,6 +1241,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /provenanceValidationRules/);
   assert.match(healthRoute, /provenanceSampleBundleSummary/);
   assert.match(healthRoute, /copilotValidation/);
+  assert.match(healthRoute, /copilotPromptTemplates/);
   assert.match(healthRoute, /copilotOutputSections/);
   assert.match(healthRoute, /matchSignalValidation/);
   assert.match(healthRoute, /matchSignalRequiredInputFields/);
@@ -1280,6 +1288,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(policyBundleContractRoute, /verificationMethodKeys/);
   assert.match(copilotContractRoute, /validateMoralTradeCopilotContract/);
   assert.match(copilotContractRoute, /getMoralTradeCopilotRolloutReadinessAudits/);
+  assert.match(copilotContractRoute, /promptTemplates/);
   assert.match(copilotContractRoute, /rolloutReadinessSignals/);
   assert.match(copilotContractRoute, /rolloutReadiness/);
   assert.match(healthRoute, /copilotRolloutReadinessStatuses/);

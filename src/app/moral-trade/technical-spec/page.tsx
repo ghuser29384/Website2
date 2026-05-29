@@ -909,6 +909,14 @@ export default async function MoralTradeTechnicalSpecPage() {
               </ul>
             </article>
             <article className="panel protocol-contract-card">
+              <h3>Prompt template registry</h3>
+              <ul className="clean-list">
+                {copilotContract.promptTemplates.map((template) => (
+                  <li key={template.key}>{template.label}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
               <h3>Rollout readiness gates</h3>
               <ul className="clean-list">
                 {copilotRolloutReadiness.map((audit) => (

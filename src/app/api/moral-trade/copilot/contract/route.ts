@@ -21,6 +21,11 @@ export async function GET() {
     validation,
     publicContract: {
       permittedRoles: contract.permittedRoles.map((role) => role.key),
+      promptTemplates: contract.promptTemplates.map((template) => ({
+        key: template.key,
+        safetyCodes: template.safetyCodes,
+        outputRequirements: template.outputRequirements,
+      })),
       strictInputBundle: contract.strictInputBundle,
       approvedOutputSections: contract.approvedOutputSections,
       guardrailCodes: contract.guardrails.map((guardrail) => guardrail.code),

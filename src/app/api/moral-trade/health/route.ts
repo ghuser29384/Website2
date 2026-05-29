@@ -202,6 +202,7 @@ export async function GET() {
       provenanceSampleBundleSummary: provenanceContract.sampleBundleSummary,
       provenanceContractTests: provenanceContract.contractTests,
       copilotContractVersion: copilotContract.version,
+      copilotPromptTemplates: copilotContract.promptTemplates.map((template) => template.key),
       copilotInputBundle: copilotContract.strictInputBundle,
       copilotOutputSections: copilotContract.approvedOutputSections,
       copilotVerificationSteps: copilotContract.verificationLoop.map((step) => step.key),

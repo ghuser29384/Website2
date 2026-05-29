@@ -28,6 +28,79 @@
       "description": "List observable claims, evidence status, and citations without inventing facts or hidden reasoning."
     }
   ],
+  "promptTemplates": [
+    {
+      "key": "system_prompt",
+      "label": "System prompt",
+      "purpose": "Set the copilot role as clarity, safety, reviewability, and privacy support only.",
+      "instructionSummary": [
+        "Use participant-relative language and never rank global moral value.",
+        "Do not contact, reveal, or introduce counterparties without explicit consent.",
+        "Separate factual proof, counterfactual baseline confidence, and externality review.",
+        "Output approved JSON fields, uncertainty flags, cited evidence rows, and reviewer-facing summaries rather than chain-of-thought."
+      ],
+      "safetyCodes": [
+        "no_global_moral_ranking",
+        "no_autonomous_outreach",
+        "no_private_feed_ingestion",
+        "separate_trust_axes",
+        "no_chain_of_thought",
+        "human_review_required"
+      ],
+      "outputRequirements": ["approved_json_schema", "reviewer_summary"]
+    },
+    {
+      "key": "draft_repair_prompt",
+      "label": "Draft-repair prompt",
+      "purpose": "Normalize proposal fields, find missing inputs, ask bounded clarification questions, and produce reviewer checklists.",
+      "instructionSummary": [
+        "Normalize into schema fields before judging readiness.",
+        "Generate at most five field-tied clarification questions.",
+        "Score only factual evidence, baseline credibility, and externality-review need.",
+        "Return blocked for anti-threat or prohibited-content patterns."
+      ],
+      "safetyCodes": [
+        "schema_completeness",
+        "anti_threat_escalation",
+        "no_chain_of_thought",
+        "observable_claims_only"
+      ],
+      "outputRequirements": ["missing_required_fields", "clarification_questions", "reviewer_checklist"]
+    },
+    {
+      "key": "matching_prompt",
+      "label": "Matching prompt",
+      "purpose": "Evaluate redacted profile-pair matchability using explicit compatibility factors only.",
+      "instructionSummary": [
+        "Use only cause areas, trade modes, verification preferences, location sensitivity, privacy constraints, and stated exclusions.",
+        "Do not infer protected traits, ideology, psychology, or hidden preferences.",
+        "Return factor codes, confidence band, redacted fields, and whether human review is mandatory."
+      ],
+      "safetyCodes": [
+        "redacted_profile_pair",
+        "no_private_inference",
+        "no_global_moral_ranking",
+        "human_review_required"
+      ],
+      "outputRequirements": ["matchable_status", "factor_codes", "confidence_band", "redacted_fields"]
+    },
+    {
+      "key": "reviewer_summary_prompt",
+      "label": "Reviewer-summary prompt",
+      "purpose": "Summarize observable proposal claims for reviewers without implying endorsement or enforceability.",
+      "instructionSummary": [
+        "Summaries stay under 180 words and cover offer, request, baseline, evidence, policy flags, and remaining uncertainty.",
+        "Never imply escrow, legal enforceability, tax treatment, investment advice, or objective moral endorsement."
+      ],
+      "safetyCodes": [
+        "reviewer_summary_word_limit",
+        "no_escrow_legal_tax_claims",
+        "observable_claims_only",
+        "no_global_moral_ranking"
+      ],
+      "outputRequirements": ["bounded_summary", "policy_flags", "unverified_claims"]
+    }
+  ],
   "strictInputBundle": [
     "structured_draft",
     "policy_registry",

@@ -24,6 +24,15 @@ type CopilotGuardrail = {
   rule: string;
 };
 
+type CopilotPromptTemplate = {
+  key: string;
+  label: string;
+  purpose: string;
+  instructionSummary: string[];
+  safetyCodes: string[];
+  outputRequirements: string[];
+};
+
 type CopilotVerificationStep = {
   key: string;
   label: string;
@@ -47,6 +56,7 @@ export type MoralTradeCopilotContract = {
   version: string;
   purpose: string;
   permittedRoles: CopilotRole[];
+  promptTemplates: CopilotPromptTemplate[];
   strictInputBundle: string[];
   approvedOutputSections: string[];
   statusValues: string[];
@@ -214,6 +224,20 @@ const REQUIRED_GUARDRAILS = [
   "no_private_feed_ingestion",
   "separate_trust_axes",
   "anti_threat_escalation",
+] as const;
+
+const REQUIRED_PROMPT_TEMPLATES = [
+  "system_prompt",
+  "draft_repair_prompt",
+  "matching_prompt",
+  "reviewer_summary_prompt",
+] as const;
+
+const REQUIRED_PROMPT_SAFETY_CODES = [
+  "no_global_moral_ranking",
+  "no_autonomous_outreach",
+  "no_chain_of_thought",
+  "human_review_required",
 ] as const;
 
 const REQUIRED_VERIFICATION_STEPS = [
@@ -502,6 +526,44 @@ export function validateMoralTradeCopilotContract(
         REQUIRED_GUARDRAILS,
       ),
       `${contract.guardrails.length} guardrail(s), including no outreach and no global ranking.`,
+    ),
+    check(
+      "prompt-templates",
+      "Approved prompt template registry",
+      hasAll(
+        contract.promptTemplates.map((template) => template.key),
+        REQUIRED_PROMPT_TEMPLATES,
+      ) &&
+        contract.promptTemplates.every(
+          (template) =>
+            template.instructionSummary.length > 0 &&
+            template.safetyCodes.length > 0 &&
+            template.outputRequirements.length > 0,
+        ),
+      contract.promptTemplates.map((template) => template.key).join(", "),
+    ),
+    check(
+      "prompt-template-safety",
+      "Prompt templates preserve copilot guardrails",
+      hasAll(
+        Array.from(
+          new Set(contract.promptTemplates.flatMap((template) => template.safetyCodes)),
+        ),
+        REQUIRED_PROMPT_SAFETY_CODES,
+      ) &&
+        contract.promptTemplates.some(
+          (template) =>
+            template.key === "reviewer_summary_prompt" &&
+            template.safetyCodes.includes("no_escrow_legal_tax_claims"),
+        ) &&
+        contract.promptTemplates.some(
+          (template) =>
+            template.key === "matching_prompt" &&
+            template.safetyCodes.includes("no_private_inference"),
+        ),
+      contract.promptTemplates
+        .map((template) => `${template.key}:${template.safetyCodes.join("+")}`)
+        .join(", "),
     ),
     check(
       "verification-loop",
