@@ -566,6 +566,14 @@ test("background networking and reasoning routes are distinct resilient public r
   assert.match(backgroundPage, /does not ingest private feeds/);
   assert.match(backgroundPage, /No autonomous outreach/);
   assert.match(reasoningCenterPage, /Pilot reasoning index/);
+  assert.match(reasoningCenterPage, /reasoningCenterDescription/);
+  assert.match(reasoningCenterPage, /twitter/);
+  assert.match(reasoningCenterPage, /buildBreadcrumbJsonLd/);
+  assert.match(reasoningCenterPage, /Breadcrumbs items/);
+  assert.match(reasoningCenterPage, /reasoningCollectionStructuredData/);
+  assert.match(reasoningCenterPage, /"@type": "CollectionPage"/);
+  assert.match(reasoningCenterPage, /"@type": "ItemList"/);
+  assert.match(reasoningCenterPage, /application\/ld\+json/);
   assert.match(reasoningCenterPage, /getOptionalViewerForReasoningCenter/);
   assert.match(reasoningCenterPage, /Rendering signed-out state after viewer lookup failed/);
   assert.match(reasoningCenterPage, /not a live forum or autonomous moral-ranking system/);

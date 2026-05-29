@@ -3,27 +3,34 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import {
   getMoralTradeReasoningPacketContract,
   getMoralTradeReasoningPackets,
 } from "@/lib/moral-trade/reasoning-packets";
-import { getAbsoluteUrl } from "@/lib/seo";
+import { buildBreadcrumbJsonLd, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+
+const reasoningCenterDescription =
+  "A Moral Trade pilot index for public review notes, factor codes, uncertainty flags, and next-step checklists.";
 
 export const metadata: Metadata = {
   title: "Reasoning Center",
-  description:
-    "A Moral Trade pilot index for public review notes, factor codes, uncertainty flags, and next-step checklists.",
+  description: reasoningCenterDescription,
   alternates: {
     canonical: "/reasoning-center",
   },
   openGraph: {
-    title: "Reasoning Center",
-    description:
-      "Public review notes, factor codes, uncertainty flags, and governance questions for the Moral Trade pilot.",
+    title: "Reasoning Center | Moral Trade",
+    description: reasoningCenterDescription,
     url: getAbsoluteUrl("/reasoning-center"),
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Reasoning Center | Moral Trade",
+    description: reasoningCenterDescription,
   },
 };
 
@@ -89,9 +96,41 @@ async function getOptionalViewerForReasoningCenter() {
 export default async function ReasoningCenterPage() {
   const viewer = await getOptionalViewerForReasoningCenter();
   const isAuthenticated = Boolean(viewer);
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([
+    { href: "/reasoning-center", label: "Reasoning Center" },
+  ]);
+  const reasoningCollectionStructuredData = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: "Moral Trade Reasoning Center",
+    url: getAbsoluteUrl("/reasoning-center"),
+    description: reasoningCenterDescription,
+    mainEntity: {
+      "@type": "ItemList",
+      itemListElement: reviewRecords.map((record, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: getAbsoluteUrl(record.href),
+        name: record.title,
+        description: truncateDescription(`${record.status}: ${record.summary}`, 150),
+      })),
+    },
+  };
 
   return (
     <div className="page-shell reasoning-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbStructuredData),
+        }}
+        type="application/ld+json"
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(reasoningCollectionStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <SiteTopbar
         brandHref="/"
         links={getPrimaryNavLinks(isAuthenticated)}
@@ -99,6 +138,7 @@ export default async function ReasoningCenterPage() {
         showLogout={isAuthenticated}
         showSearch
       />
+      <Breadcrumbs items={[{ href: "/reasoning-center", label: "Reasoning Center" }]} />
 
       <main className="reasoning-layout" id="main-content" tabIndex={-1}>
         <aside className="reasoning-left-rail" aria-label="Reasoning sections">
