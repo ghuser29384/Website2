@@ -68,7 +68,7 @@ const REQUIRED_ENTITIES = [
   "baseline_statement",
   "evidence_claim",
   "evidence_artifact",
-  "reviewer_decision",
+  "review_decision",
   "challenge",
   "appeal",
   "privacy_grant",
@@ -83,6 +83,8 @@ const REQUIRED_ENTITIES = [
   "dispute",
   "payment_update",
 ] as const;
+
+const DEPRECATED_ENTITY_KEYS = ["reviewer_decision"] as const;
 
 const REQUIRED_OFFER_FIELDS = [
   "cause_areas",
@@ -173,6 +175,9 @@ export function validateMoralTradeDataModelProfile(
       .filter((relationship) => !entityKeySet.has(relationship))
       .map((relationship) => `${entity.key}:${relationship}`),
   );
+  const deprecatedEntityKeys = entityKeys.filter((key) =>
+    DEPRECATED_ENTITY_KEYS.includes(key as (typeof DEPRECATED_ENTITY_KEYS)[number]),
+  );
   const privateEntities = profile.entities.filter((entity) =>
     PRIVATE_ENTITY_KEYS.includes(entity.key as (typeof PRIVATE_ENTITY_KEYS)[number]),
   );
@@ -201,10 +206,12 @@ export function validateMoralTradeDataModelProfile(
     check(
       "entity-coverage",
       "Core data model entities",
-      hasAll(entityKeys, REQUIRED_ENTITIES) && duplicateEntityKeys.length === 0,
+      hasAll(entityKeys, REQUIRED_ENTITIES) &&
+        duplicateEntityKeys.length === 0 &&
+        deprecatedEntityKeys.length === 0,
       `${profile.entities.length} entity/entities; duplicates: ${
         duplicateEntityKeys.length ? duplicateEntityKeys.join(", ") : "none"
-      }.`,
+      }; deprecated: ${deprecatedEntityKeys.length ? deprecatedEntityKeys.join(", ") : "none"}.`,
     ),
     check(
       "entity-field-coverage",

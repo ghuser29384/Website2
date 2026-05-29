@@ -271,7 +271,7 @@ function buildVerificationMethodTaxonomy(): VerificationMethodEntry[] {
     {
       key: "manual_review",
       label: "Manual review",
-      acceptedEvidence: ["reviewer_decision", "challenge_packet", "appeal_packet"],
+      acceptedEvidence: ["review_decision", "challenge_packet", "appeal_packet"],
       supportsClaimScopes: ["policy_flag", "privacy_disclosure", "dispute_resolution"],
     },
   ];

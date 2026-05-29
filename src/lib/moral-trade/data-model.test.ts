@@ -22,7 +22,8 @@ test("data model profile covers the audit-named core Moral Trade entities", () =
   assert.ok(entityKeys.includes("baseline_statement"));
   assert.ok(entityKeys.includes("evidence_claim"));
   assert.ok(entityKeys.includes("evidence_artifact"));
-  assert.ok(entityKeys.includes("reviewer_decision"));
+  assert.ok(entityKeys.includes("review_decision"));
+  assert.equal(entityKeys.includes("reviewer_decision"), false);
   assert.ok(entityKeys.includes("challenge"));
   assert.ok(entityKeys.includes("appeal"));
   assert.ok(entityKeys.includes("privacy_grant"));
@@ -46,8 +47,10 @@ test("data model profile publishes offer fields and privacy boundaries from the 
   const matchBoundary = profile.relationshipBoundaries.find(
     (boundary) => boundary.key === "match_disclosure_boundary",
   );
+  const reviewDecision = profile.entities.find((entity) => entity.key === "review_decision");
 
   assert.ok(offer);
+  assert.ok(reviewDecision);
   assert.ok(offer.requiredFields.includes("cause_areas"));
   assert.ok(offer.requiredFields.includes("offered_action"));
   assert.ok(offer.requiredFields.includes("requested_action"));
@@ -56,6 +59,10 @@ test("data model profile publishes offer fields and privacy boundaries from the 
   assert.ok(offer.requiredFields.includes("duration"));
   assert.ok(offer.requiredFields.includes("exit_conditions"));
   assert.ok(offer.requiredFields.includes("baseline_statement"));
+  assert.ok(offer.relationships.includes("review_decision"));
+  assert.ok(reviewDecision.requiredFields.includes("outcome"));
+  assert.ok(reviewDecision.requiredFields.includes("reason_codes"));
+  assert.ok(reviewDecision.requiredFields.includes("reviewer_id"));
   assert.match(sourceBoundary?.rule ?? "", /manual summaries/);
   assert.match(sourceBoundary?.rule ?? "", /raw private feeds/);
   assert.match(matchBoundary?.rule ?? "", /exact wishes/);
@@ -67,7 +74,7 @@ test("data model validation fails when entity coverage or source-note privacy we
   const weakened: MoralTradeDataModelProfile = {
     ...profile,
     entities: profile.entities
-      .filter((entity) => entity.key !== "source_note")
+      .filter((entity) => entity.key !== "source_note" && entity.key !== "review_decision")
       .map((entity) =>
         entity.key === "private_wish_profile"
           ? {
@@ -95,4 +102,25 @@ test("data model validation fails when entity coverage or source-note privacy we
   assert.ok(validation.blockers.some((blocker) => blocker.includes("relationship-boundaries")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("non-claims")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("contract-tests")));
+});
+
+test("data model validation rejects the legacy reviewer_decision alias", () => {
+  const profile = getMoralTradeDataModelProfile();
+  const reviewDecision = profile.entities.find((entity) => entity.key === "review_decision");
+  assert.ok(reviewDecision);
+
+  const aliased: MoralTradeDataModelProfile = {
+    ...profile,
+    entities: profile.entities.map((entity) =>
+      entity.key === "review_decision" ? { ...entity, key: "reviewer_decision" } : entity,
+    ),
+  };
+  const validation = validateMoralTradeDataModelProfile(aliased);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("entity-coverage")));
+  assert.match(
+    validation.checks.find((check) => check.id === "entity-coverage")?.evidence ?? "",
+    /deprecated: reviewer_decision/,
+  );
 });

@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-data-model-v0.1-2026-05",
+  "version": "moral-trade-data-model-v0.1.1-2026-05",
   "purpose": "Public contract for the core Moral Trade domain entities, required fields, privacy classes, relationship boundaries, and non-claims named by the product audit.",
   "entities": [
     {
@@ -80,7 +80,7 @@
       "category": "proposal",
       "privacyClass": "public_or_private_by_status",
       "requiredFields": ["id", "participant_id", "format", "cause_areas", "offered_action", "requested_action", "expected_impact", "verification_method", "duration", "exit_conditions", "baseline_statement", "status"],
-      "relationships": ["participant", "trade_format", "baseline_statement", "evidence_claim", "reviewer_decision", "challenge", "appeal"],
+      "relationships": ["participant", "trade_format", "baseline_statement", "evidence_claim", "review_decision", "challenge", "appeal"],
       "publicExposure": "Public offers expose only reviewed or preview-safe terms and must not imply escrow, legal enforceability, tax treatment, or objective moral endorsement."
     },
     {
@@ -98,7 +98,7 @@
       "category": "evidence",
       "privacyClass": "review_scoped",
       "requiredFields": ["id", "proposal_id", "claim_type", "artifact_ids", "claim_scope", "reviewer_confidence", "uniqueness_checked"],
-      "relationships": ["offer", "evidence_artifact", "reviewer_decision"],
+      "relationships": ["offer", "evidence_artifact", "review_decision"],
       "publicExposure": "Claims disclose only scoped summaries and confidence; artifacts and private locators stay behind review controls."
     },
     {
@@ -111,7 +111,7 @@
       "publicExposure": "Artifacts require hashes, scope alignment, and redaction levels before any public reasoning summary references them."
     },
     {
-      "key": "reviewer_decision",
+      "key": "review_decision",
       "label": "Reviewer decision",
       "category": "review",
       "privacyClass": "review_scoped",
@@ -125,7 +125,7 @@
       "category": "review",
       "privacyClass": "review_scoped",
       "requiredFields": ["id", "subject", "standing_category", "trigger", "scoped_claim_ids", "status", "created_at"],
-      "relationships": ["offer", "baseline_statement", "reviewer_decision", "dispute"],
+      "relationships": ["offer", "baseline_statement", "review_decision", "dispute"],
       "publicExposure": "Challenges target specific claims, evidence rows, baselines, disclosure decisions, or policy flags."
     },
     {
@@ -134,7 +134,7 @@
       "category": "review",
       "privacyClass": "review_scoped",
       "requiredFields": ["id", "challenge_id", "appeal_trigger", "remedy_request", "standing_category", "status", "created_at"],
-      "relationships": ["challenge", "reviewer_decision", "dispute"],
+      "relationships": ["challenge", "review_decision", "dispute"],
       "publicExposure": "Appeals do not reopen unrelated moral disagreements and cannot resolve disputes without human review."
     },
     {
@@ -197,7 +197,7 @@
       "category": "provenance",
       "privacyClass": "review_scoped",
       "requiredFields": ["id", "agreement_id", "event_kind", "actor_id", "entity_ids", "created_at", "previous_event_hash"],
-      "relationships": ["offer", "reviewer_decision", "payment_record", "notification", "dispute"],
+      "relationships": ["offer", "review_decision", "payment_record", "notification", "dispute"],
       "publicExposure": "Immutable event records support auditability; public summaries are redacted and status-scoped."
     }
   ],

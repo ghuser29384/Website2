@@ -877,6 +877,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(protocolProfile, /provenanceObjectSchemas/);
   assert.match(dataModelSource, /validateMoralTradeDataModelProfile/);
   assert.match(dataModelSource, /REQUIRED_ENTITIES/);
+  assert.match(dataModelSource, /review_decision/);
   assert.match(dataModelSource, /private_wish_profile/);
   assert.match(dataModelSource, /source_note_boundary/);
   assert.match(dataModelSource, /payment_non_custody_boundary/);
@@ -884,6 +885,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(dataModelProfile, /source_note/);
   assert.match(dataModelProfile, /saved_search/);
   assert.match(dataModelProfile, /privacy_grant/);
+  assert.match(dataModelProfile, /review_decision/);
+  assert.equal(dataModelProfile.includes("reviewer_decision"), false);
   assert.match(dataModelProfile, /payment_update/);
   assert.match(dataModelProfile, /agreement_event/);
   assert.match(dataModelProfile, /raw private feeds are not mined/);
@@ -893,6 +896,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(policyBundleSource, /prohibited_pattern_registry/);
   assert.match(policyBundleSource, /verification_method_taxonomy/);
   assert.match(policyBundleSource, /redaction_policy/);
+  assert.match(policyBundleSource, /review_decision/);
   assert.match(policyBundleSource, /PROHIBITED_PROPOSAL_FIXTURES/);
   assert.match(policyBundleSource, /private_feed_payloads/);
   assert.match(policyBundleSource, /policy_bundle_contract_validator/);
