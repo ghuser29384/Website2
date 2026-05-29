@@ -185,7 +185,7 @@ test("protocol review blocks political campaign offsets instead of merely routin
   assert.ok(review.policyConflicts.includes("prohibited_content_review"));
 });
 
-test("protocol draft review separates factual trust, baseline confidence, and externality review", () => {
+test("protocol draft review routes material externalities to challenge window", () => {
   const review = evaluateMoralTradeProtocolDraft({
     format: "offset",
     offeredCause: "Gun rights",
@@ -201,11 +201,14 @@ test("protocol draft review separates factual trust, baseline confidence, and ex
       "If evidence is missing by the review date, the proposal remains unresolved and no completion badge is displayed.",
     verificationMethod: "Third-party audit",
     publicDescription:
-      "A voluntary donation offset with a named compromise destination, no custody claim, and manual review before reliance.",
+      "A voluntary donation offset with a named compromise destination where each side is better off than the no-trade baseline, with no custody claim and manual review before reliance.",
     evidenceUrl: "https://example.com/audit",
+    participantImportance: 7,
+    counterpartyThreshold: 6,
   });
 
-  assert.equal(review.status, "needs_human_review");
+  assert.equal(review.status, "challenge_window");
+  assert.equal(formatProtocolReviewStatus(review.status), "Challenge window");
   assert.equal(review.trustAssessment.factualTrust.rating, "high");
   assert.equal(review.trustAssessment.counterfactualBaseline.rating, "high");
   assert.equal(review.trustAssessment.externalityReview.required, true);
@@ -225,6 +228,35 @@ test("protocol draft review separates factual trust, baseline confidence, and ex
       (row) => row.citation === "https://example.com/audit" && row.status === "evidence_locator",
     ),
   );
+});
+
+test("protocol draft review fixes public redaction before opening challenge windows", () => {
+  const review = evaluateMoralTradeProtocolDraft({
+    format: "offset",
+    offeredCause: "Political reform",
+    requestedCause: "Public health",
+    offeredAction:
+      "Redirect a planned advocacy contribution into a neutral public health charity.",
+    requestedAction:
+      "Redirect a matching public-policy contribution into the same neutral public health charity.",
+    baselineStatement:
+      "Without this trade I would otherwise make the advocacy donation next month, and I can support that with prior donation records and dated intent.",
+    duration: "3 months",
+    exitConditions:
+      "If evidence is missing by the review date, the proposal remains unresolved and no completion badge is displayed.",
+    verificationMethod: "Third-party audit",
+    publicDescription:
+      "A voluntary donation offset with manual review before reliance. Email victoria@example.org for private coordination.",
+    evidenceUrl: "https://example.com/audit",
+    participantImportance: 7,
+    counterpartyThreshold: 6,
+  });
+
+  assert.equal(review.status, "needs_clarification");
+  assert.equal(review.trustAssessment.externalityReview.required, true);
+  assert.equal(review.trustAssessment.privacyRedaction.rating, "low");
+  assert.ok(review.uncertaintyFlags.includes("externality:political_adjacent_case"));
+  assert.ok(review.uncertaintyFlags.includes("privacy:contact_email_in_public_draft"));
 });
 
 test("offer review workflow cards expose status, factor codes, next steps, and appeal scope", () => {

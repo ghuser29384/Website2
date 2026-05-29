@@ -85,6 +85,7 @@ test("copilot contract requires strict bundle, approved output, guardrails, and 
   assert.ok(contract.verificationLoop.some((step) => step.key === "privacy_redaction"));
   assert.ok(contract.trustAxes.includes("party_relative_benefit"));
   assert.ok(contract.trustAxes.includes("privacy_redaction"));
+  assert.ok(contract.statusValues.includes("challenge_window"));
   assert.ok(contract.rolloutStages.some((stage) => stage.key === "shadow_mode"));
   assert.ok(
     contract.rolloutReadinessSignals.some(
@@ -340,6 +341,27 @@ test("copilot output blocks public contact details through the privacy-redaction
   assert.ok(!output.match_explanation.factor_codes.includes("privacy_safe_preview"));
   assert.equal(output.match_explanation.confidence_band, "low");
   assert.equal(validateMoralTradeCopilotOutput(output).status, "pass");
+});
+
+test("copilot output preserves challenge-window status for externality triggers", () => {
+  const output = buildMoralTradeCopilotOutput({
+    ...completeDraft,
+    format: "offset",
+    offeredCause: "Political reform",
+    requestedCause: "Public health",
+    publicDescription:
+      "A voluntary donation offset where each side is better off than the no-trade baseline and reviewers inspect externality risks before reliance.",
+  });
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(output.status, "challenge_window");
+  assert.equal(output.trust_assessment.externality_review.required, true);
+  assert.ok(output.uncertainty_flags.some((flag) => flag.startsWith("externality:")));
+  assert.equal(
+    output.verification_loop.find((step) => step.key === "human_review_routing")?.status,
+    "human_review",
+  );
+  assert.equal(validation.status, "pass");
 });
 
 test("copilot output keeps incomplete drafts in clarification rather than matchable", () => {

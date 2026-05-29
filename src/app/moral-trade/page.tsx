@@ -134,7 +134,7 @@ const workflowCards = [
 ] as const;
 
 function reviewTone(status: (typeof workflowCards)[number]["review"]["status"]) {
-  return status === "blocked" || status === "needs_evidence" || status === "needs_human_review"
+  return ["blocked", "needs_evidence", "needs_human_review", "challenge_window"].includes(status)
     ? "warning"
     : status === "matchable"
       ? "default"

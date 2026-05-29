@@ -57,6 +57,7 @@ export function getMoralTradeOfferPersistenceStatus({
     donationOffsetModerationStatus === "flagged" ||
     protocolReviewStatus === "needs_evidence" ||
     protocolReviewStatus === "needs_human_review" ||
+    protocolReviewStatus === "challenge_window" ||
     protocolReviewStatus === "needs_clarification" ||
     protocolReviewStatus === "draft" ||
     protocolReviewStatus === "blocked"

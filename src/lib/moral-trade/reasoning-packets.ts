@@ -137,6 +137,7 @@ export function getReasoningStatusTone(
       return "blocked";
     case "matchable":
       return "pass";
+    case "challenge_window":
     case "needs_human_review":
       return "human-review";
     default:

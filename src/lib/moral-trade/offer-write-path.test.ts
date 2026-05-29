@@ -64,7 +64,7 @@ test("offer create write path blocks missing required fields before write", () =
   );
 });
 
-test("offer create write path pauses human-review drafts and records protocol notes", () => {
+test("offer create write path pauses challenge-window drafts and records protocol notes", () => {
   const externalityDraft = {
     ...completeDraft,
     format: "offset",
@@ -83,11 +83,11 @@ test("offer create write path pauses human-review drafts and records protocol no
   const notes = buildMoralTradeOfferProtocolNotes(protocolReview, transition);
 
   assert.equal(transition.status, "pass");
-  assert.equal(protocolReview.status, "needs_human_review");
+  assert.equal(protocolReview.status, "challenge_window");
   assert.equal(
     getMoralTradeOfferPersistenceStatus({ protocolReviewStatus: protocolReview.status }),
     "paused",
   );
-  assert.match(notes, /Protocol review status: needs_human_review/);
+  assert.match(notes, /Protocol review status: challenge_window/);
   assert.match(notes, /Protocol transition accepted: draft->submitted/);
 });

@@ -501,6 +501,7 @@ export function validateMoralTradeCopilotContract(
         "needs_clarification",
         "needs_evidence",
         "needs_human_review",
+        "challenge_window",
         "blocked",
         "matchable",
       ]),
@@ -700,6 +701,16 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
 
   if (output.status === "matchable" && output.completeness.missing_required_fields.length > 0) {
     blockers.push("missing_required_fields: incomplete drafts cannot be matchable");
+  }
+
+  if (
+    output.status === "challenge_window" &&
+    (!output.trust_assessment.externality_review.required ||
+      output.completeness.missing_required_fields.length > 0)
+  ) {
+    blockers.push(
+      "challenge_window: only complete drafts with material externality review triggers can enter challenge window",
+    );
   }
 
   if (!output.match_explanation.redactions_applied.length) {

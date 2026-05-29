@@ -857,6 +857,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(proposalReviewSource, /REVIEW_WORKFLOW_PARTICIPANT_COPY/);
   assert.match(proposalReviewSource, /What would you do if this trade did not happen/);
   assert.match(proposalReviewSource, /Status: Needs evidence/);
+  assert.match(proposalReviewSource, /Challenge window/);
   assert.match(proposalReviewSource, /This proposal cannot be published/);
   assert.match(proposalReviewSource, /technical_spec_review_workflow_smoke/);
   assert.match(protocolSource, /validateMoralTradeProtocolProfile/);
@@ -929,6 +930,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotContract, /reviewer_summary_prompt/);
   assert.match(copilotContract, /redacted_profile_pair/);
   assert.match(copilotContract, /verification_loop/);
+  assert.match(copilotContract, /challenge_window/);
   assert.match(copilotContract, /clarification_questions/);
   assert.match(copilotContract, /cited_evidence_table/);
   assert.match(copilotContract, /reviewer_summary/);

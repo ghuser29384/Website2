@@ -11,6 +11,7 @@ export type ProtocolReviewStatus =
   | "needs_clarification"
   | "needs_evidence"
   | "needs_human_review"
+  | "challenge_window"
   | "blocked"
   | "matchable";
 
@@ -948,13 +949,15 @@ function buildVerificationLoop({
       "human_review_routing",
       status === "blocked"
         ? "blocked"
-        : status === "matchable" || status === "needs_human_review"
+        : status === "matchable" || status === "needs_human_review" || status === "challenge_window"
           ? "human_review"
           : "needs_input",
       status === "blocked"
         ? "Route to human safety review; do not publish or match."
         : status === "matchable"
           ? "Route to human review before reliance, disclosure, or agreement completion."
+          : status === "challenge_window"
+            ? "Open a challenge window before matching, reliance, or completion."
           : status === "needs_human_review"
             ? "Route to human review before matching or reliance."
             : "Complete the earlier gates before reviewer matchability routing.",
@@ -1170,6 +1173,8 @@ export function formatProtocolReviewStatus(status: ProtocolReviewStatus) {
       return "Matchable after review";
     case "needs_evidence":
       return "Needs evidence";
+    case "challenge_window":
+      return "Challenge window";
     case "needs_human_review":
       return "Needs human review";
     default:
@@ -1253,10 +1258,6 @@ export function evaluateMoralTradeProtocolDraft(
   } else if (factualTrust.rating === "low") {
     status = "needs_evidence";
     summary = "The terms are structured, but the evidence rule is not specific enough for reliance.";
-  } else if (counterfactualBaseline.rating === "low" || externalityReview.required) {
-    status = "needs_human_review";
-    summary =
-      "The draft needs reviewer attention before matching or reliance because baseline or externality risks remain.";
   } else if (privacyRedaction.rating === "low") {
     status = "needs_clarification";
     summary =
@@ -1265,6 +1266,14 @@ export function evaluateMoralTradeProtocolDraft(
     status = "needs_clarification";
     summary =
       "The draft needs party-relative benefit framing before it can be treated as a moral-trade candidate.";
+  } else if (counterfactualBaseline.rating === "low") {
+    status = "needs_human_review";
+    summary =
+      "The draft needs reviewer attention before matching or reliance because baseline risks remain.";
+  } else if (externalityReview.required) {
+    status = "challenge_window";
+    summary =
+      "The draft is structurally reviewable, but material externality or incentive risks require a challenge window before matching or reliance.";
   }
 
   const uniqueUnderspecifiedFields = [...new Set(underspecifiedFields)];
