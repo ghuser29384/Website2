@@ -4,11 +4,13 @@ import test from "node:test";
 import { evaluateMoralTradeProtocolDraft } from "@/lib/proposal-review";
 
 import {
+  buildMoralTradeOfferCreateProvenanceConflictSelectors,
   buildMoralTradeOfferCreateProvenanceAgentRow,
   buildMoralTradeOfferCreateProvenanceRows,
   buildMoralTradeOfferProtocolNotes,
   buildMoralTradeProtocolProposalRecord,
   getMoralTradeOfferPersistenceStatus,
+  isMoralTradeOfferCreateProvenanceUniqueViolation,
   validateMoralTradeOfferCreateTransition,
 } from "./offer-write-path";
 
@@ -149,4 +151,39 @@ test("offer create write path maps accepted transitions to append-only provenanc
   assert.equal(rows.stateTransitionEvent.to_status, "submitted");
   assert.equal(rows.stateTransitionEvent.subject_id, "offer-123");
   assert.equal(rows.stateTransitionEvent.event_hash.length, 64);
+});
+
+test("offer create provenance selectors distinguish safe retries from conflicting duplicates", () => {
+  const protocolReview = evaluateMoralTradeProtocolDraft(completeDraft);
+  const transition = validateMoralTradeOfferCreateTransition({
+    actorAgentId: "11111111-1111-4111-8111-111111111111",
+    actorAgentKind: "participant",
+    draft: completeDraft,
+    idempotencyKey: "offer-create:offer-456:draft-to-submitted",
+    protocolReview,
+    recordedAt: "2026-05-29T13:00:00.000Z",
+    subjectId: "offer-456",
+    subjectKind: "offer",
+  });
+  const rows = buildMoralTradeOfferCreateProvenanceRows({
+    actorProvenanceAgentId: "11111111-1111-4111-8111-111111111111",
+    offerId: "offer-456",
+    ownerProfileId: "00000000-0000-4000-8000-000000000123",
+    transitionEventRecord: transition.transitionEventRecord!,
+  });
+  const selectors = buildMoralTradeOfferCreateProvenanceConflictSelectors(rows);
+
+  assert.equal(selectors.provenanceActivity.tableName, "moral_trade_provenance_activities");
+  assert.equal(selectors.provenanceActivity.hashColumn, "activity_hash");
+  assert.equal(selectors.provenanceActivity.hashValue, rows.provenanceActivity.activity_hash);
+  assert.equal(selectors.provenanceActivity.idempotency_key, rows.provenanceActivity.idempotency_key);
+  assert.equal(selectors.provenanceActivity.activity_hash, rows.provenanceActivity.activity_hash);
+  assert.equal(selectors.stateTransitionEvent.tableName, "moral_trade_state_transition_events");
+  assert.equal(selectors.stateTransitionEvent.hashColumn, "event_hash");
+  assert.equal(selectors.stateTransitionEvent.hashValue, rows.stateTransitionEvent.event_hash);
+  assert.equal(selectors.stateTransitionEvent.idempotency_key, rows.stateTransitionEvent.idempotency_key);
+  assert.equal(selectors.stateTransitionEvent.event_hash, rows.stateTransitionEvent.event_hash);
+  assert.equal(isMoralTradeOfferCreateProvenanceUniqueViolation({ code: "23505" }), true);
+  assert.equal(isMoralTradeOfferCreateProvenanceUniqueViolation({ code: "42501" }), false);
+  assert.equal(isMoralTradeOfferCreateProvenanceUniqueViolation(null), false);
 });

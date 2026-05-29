@@ -159,6 +159,40 @@ export function buildMoralTradeOfferCreateProvenanceRows({
   } as const;
 }
 
+export function isMoralTradeOfferCreateProvenanceUniqueViolation(error: {
+  code?: string | null;
+} | null | undefined) {
+  return error?.code === "23505";
+}
+
+export function buildMoralTradeOfferCreateProvenanceConflictSelectors(
+  rows: ReturnType<typeof buildMoralTradeOfferCreateProvenanceRows>,
+) {
+  return {
+    provenanceActivity: {
+      hashColumn: "activity_hash",
+      hashValue: rows.provenanceActivity.activity_hash,
+      activity_hash: rows.provenanceActivity.activity_hash,
+      idempotency_key: rows.provenanceActivity.idempotency_key,
+      owner_profile_id: rows.provenanceActivity.owner_profile_id,
+      tableName: "moral_trade_provenance_activities",
+    },
+    stateTransitionEvent: {
+      hashColumn: "event_hash",
+      hashValue: rows.stateTransitionEvent.event_hash,
+      event_hash: rows.stateTransitionEvent.event_hash,
+      idempotency_key: rows.stateTransitionEvent.idempotency_key,
+      owner_profile_id: rows.stateTransitionEvent.owner_profile_id,
+      tableName: "moral_trade_state_transition_events",
+    },
+  } as const;
+}
+
+export type MoralTradeOfferCreateProvenanceConflictSelector =
+  ReturnType<typeof buildMoralTradeOfferCreateProvenanceConflictSelectors>[keyof ReturnType<
+    typeof buildMoralTradeOfferCreateProvenanceConflictSelectors
+  >];
+
 export function getMoralTradeOfferPersistenceStatus({
   donationOffsetModerationStatus,
   protocolReviewStatus,

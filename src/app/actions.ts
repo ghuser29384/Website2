@@ -86,10 +86,13 @@ import {
 import { evidenceLocatorsConflict } from "@/lib/validation";
 import { evaluateMoralTradeProtocolDraft } from "@/lib/proposal-review";
 import {
+  buildMoralTradeOfferCreateProvenanceConflictSelectors,
   buildMoralTradeOfferCreateProvenanceAgentRow,
   buildMoralTradeOfferCreateProvenanceRows,
   buildMoralTradeOfferProtocolNotes,
   getMoralTradeOfferPersistenceStatus,
+  isMoralTradeOfferCreateProvenanceUniqueViolation,
+  type MoralTradeOfferCreateProvenanceConflictSelector,
   validateMoralTradeOfferCreateTransition,
 } from "@/lib/moral-trade/offer-write-path";
 import { validateAgreementReviewProtocolTransition } from "@/lib/moral-trade/agreement-write-path";
@@ -360,6 +363,60 @@ async function getOrCreateMoralTradeOfferProvenanceAgentId({
   return { error: insertedAgentError as PostgrestError, id: null };
 }
 
+async function confirmExistingMoralTradeOfferProvenanceRow({
+  selector,
+  supabase,
+}: {
+  selector: MoralTradeOfferCreateProvenanceConflictSelector;
+  supabase: SupabaseServerClient;
+}) {
+  const provenanceClient = supabase as any;
+  const { data: existingRow, error: existingRowError } = await provenanceClient
+    .from(selector.tableName)
+    .select("id")
+    .eq("owner_profile_id", selector.owner_profile_id)
+    .eq("idempotency_key", selector.idempotency_key)
+    .eq(selector.hashColumn, selector.hashValue)
+    .maybeSingle();
+
+  if (existingRow?.id && !existingRowError) {
+    return null;
+  }
+
+  return (
+    (existingRowError as PostgrestError | null) ??
+    new Error(
+      `Conflicting Moral Trade provenance duplicate for ${selector.tableName} idempotency key ${selector.idempotency_key}`,
+    )
+  );
+}
+
+async function insertMoralTradeOfferProvenanceRow({
+  row,
+  selector,
+  supabase,
+}: {
+  row: unknown;
+  selector: MoralTradeOfferCreateProvenanceConflictSelector;
+  supabase: SupabaseServerClient;
+}) {
+  const provenanceClient = supabase as any;
+  const { error } = await provenanceClient.from(selector.tableName).insert(row);
+
+  if (!error) {
+    return null;
+  }
+
+  if (!isMoralTradeOfferCreateProvenanceUniqueViolation(error)) {
+    return error as PostgrestError;
+  }
+
+  return confirmExistingMoralTradeOfferProvenanceRow({
+    selector,
+    supabase,
+  });
+}
+
 async function persistMoralTradeOfferCreateProtocolProvenance({
   actorAgentId,
   actorLabel,
@@ -419,21 +476,25 @@ async function persistMoralTradeOfferCreateProtocolProvenance({
     ownerProfileId,
     transitionEventRecord: transition.transitionEventRecord,
   });
-  const provenanceClient = supabase as any;
-  const { error: activityError } = await provenanceClient
-    .from("moral_trade_provenance_activities")
-    .insert(rows.provenanceActivity);
+  const selectors = buildMoralTradeOfferCreateProvenanceConflictSelectors(rows);
+  const activityError = await insertMoralTradeOfferProvenanceRow({
+    row: rows.provenanceActivity,
+    selector: selectors.provenanceActivity,
+    supabase,
+  });
 
   if (activityError) {
-    return { error: activityError as PostgrestError, transition };
+    return { error: activityError, transition };
   }
 
-  const { error: transitionError } = await provenanceClient
-    .from("moral_trade_state_transition_events")
-    .insert(rows.stateTransitionEvent);
+  const transitionError = await insertMoralTradeOfferProvenanceRow({
+    row: rows.stateTransitionEvent,
+    selector: selectors.stateTransitionEvent,
+    supabase,
+  });
 
   return {
-    error: (transitionError as PostgrestError | null) ?? null,
+    error: transitionError,
     transition,
   };
 }
