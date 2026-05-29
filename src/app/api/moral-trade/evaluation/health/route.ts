@@ -38,6 +38,15 @@ export async function GET() {
           eligibleCount: sampleAudits.surfacingParityAudit.eligibleCount,
           surfacedCount: sampleAudits.surfacingParityAudit.surfacedCount,
           overallSurfacingRate: sampleAudits.surfacingParityAudit.overallSurfacingRate,
+          reviewedDeviationCount: sampleAudits.surfacingParityAudit.reviewedDeviationCount,
+          unreviewedDeviationCount: sampleAudits.surfacingParityAudit.unreviewedDeviationCount,
+          deviationReviews: sampleAudits.surfacingParityAudit.deviationReviews.map((review) => ({
+            cellKey: review.cellKey,
+            reviewerRole: review.reviewerRole,
+            reviewedAt: review.reviewedAt,
+            outcome: review.outcome,
+            reasonCode: review.reasonCode,
+          })),
           blockers: sampleAudits.surfacingParityAudit.blockers,
         },
         uxReadiness: {

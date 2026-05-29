@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-evaluation-v0.1-2026-05",
-  "purpose": "Public evaluation contract for Moral Trade protocol quality, copilot assistance, privacy safety, explanation usefulness, fairness slices, and human-review reliability.",
+  "version": "moral-trade-evaluation-v0.2-2026-05",
+  "purpose": "Public evaluation contract for Moral Trade protocol quality, copilot assistance, privacy safety, explanation usefulness, fairness slices, redacted deviation review logs, and human-review reliability.",
   "cadence": "monthly_public_aggregate",
   "metrics": [
     {
@@ -78,7 +78,7 @@
       "label": "Subgroup surfacing parity",
       "definition": "Monitoring slice for whether protected or vulnerable participant groups are systematically under-surfaced by candidate-preview rules.",
       "direction": "band",
-      "target": "investigate_material_slice_gaps_before_rollout",
+      "target": "investigate_and_log_material_slice_gaps_before_rollout",
       "source": "consented_demographic_or_proxy_slices",
       "publicReporting": "aggregate_thresholded",
       "dataBoundary": "Use only consented, sufficiently large, privacy-thresholded slices."
@@ -150,6 +150,7 @@
     "no_contact_details",
     "no_source_note_leakage",
     "small_cell_suppression",
+    "deviation_review_log_redacted",
     "free_text_quote_requires_consent"
   ],
   "promotionGates": [
@@ -173,6 +174,7 @@
   "evaluationTests": [
     "evaluation_profile_validator",
     "surfacing_parity_audit",
+    "surfacing_deviation_review_log",
     "ux_readiness_audit",
     "health_route_contract_smoke",
     "privacy_metric_boundary_smoke",

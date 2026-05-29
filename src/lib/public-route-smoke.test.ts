@@ -1000,6 +1000,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(evaluationSource, /auditMoralTradeUxReadiness/);
   assert.match(evaluationSource, /getMoralTradeEvaluationSampleAudits/);
   assert.match(evaluationSource, /sample-audits/);
+  assert.match(evaluationSource, /MoralTradeSurfacingDeviationReview/);
+  assert.match(evaluationSource, /invalid_surfacing_deviation_review/);
+  assert.match(evaluationSource, /unscoped_surfacing_deviation_review/);
   assert.match(evaluationSource, /MORAL_TRADE_SURFACING_PARITY_DEFAULTS/);
   assert.match(evaluationSource, /MORAL_TRADE_UX_READINESS_DEFAULTS/);
   assert.match(evaluationProfile, /draft_completion_rate/);
@@ -1010,9 +1013,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(evaluationProfile, /geography_bucket/);
   assert.match(evaluationProfile, /optional_governed_sensitive_attribute/);
   assert.match(evaluationProfile, /surfacing_parity_audit/);
+  assert.match(evaluationProfile, /surfacing_deviation_review_log/);
   assert.match(evaluationProfile, /ux_readiness_audit/);
   assert.match(evaluationProfile, /human_overrule_rate/);
   assert.match(evaluationProfile, /no_raw_private_wish_text/);
+  assert.match(evaluationProfile, /deviation_review_log_redacted/);
   assert.match(evaluationProfile, /human_controlled_decisions/);
   assert.match(performanceSource, /validateMoralTradePerformanceProfile/);
   assert.match(performanceSource, /auditMoralTradePerformanceSnapshot/);
@@ -1219,6 +1224,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Sample surfacing parity audit/);
   assert.match(technicalSpecPage, /Sample UX readiness audit/);
   assert.match(technicalSpecPage, /sample-audits check/);
+  assert.match(technicalSpecPage, /redacted review-log entry/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/evaluation\/health/);
   assert.match(technicalSpecPage, /Performance contract/);
   assert.match(
@@ -1361,7 +1367,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(evaluationHealthRoute, /uxReadinessAuditDefaults/);
   assert.match(evaluationHealthRoute, /getMoralTradeEvaluationSampleAudits/);
   assert.match(evaluationHealthRoute, /sampleAudits/);
+  assert.match(evaluationHealthRoute, /reviewedDeviationCount/);
+  assert.match(evaluationHealthRoute, /deviationReviews/);
   assert.match(healthRoute, /evaluationSampleAuditStatuses/);
+  assert.match(healthRoute, /evaluationSurfacingDeviationReviews/);
   assert.match(performanceHealthRoute, /validateMoralTradePerformanceProfile/);
   assert.match(performanceHealthRoute, /auditDefaults/);
   assert.match(performanceHealthRoute, /publicNonClaims/);

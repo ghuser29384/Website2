@@ -1203,7 +1203,10 @@ export default async function MoralTradeTechnicalSpecPage() {
                 Status {evaluationSampleAudits.surfacingParityAudit.status};{" "}
                 {evaluationSampleAudits.surfacingParityAudit.eligibleCount} eligible,{" "}
                 {evaluationSampleAudits.surfacingParityAudit.surfacedCount} surfaced, overall
-                rate {evaluationSampleAudits.surfacingParityAudit.overallSurfacingRate}.
+                rate {evaluationSampleAudits.surfacingParityAudit.overallSurfacingRate};{" "}
+                {evaluationSampleAudits.surfacingParityAudit.reviewedDeviationCount} reviewed
+                deviation(s),{" "}
+                {evaluationSampleAudits.surfacingParityAudit.unreviewedDeviationCount} unreviewed.
               </p>
             </article>
             <article className="panel protocol-contract-card">
@@ -1219,7 +1222,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               <h3>Executable audit check</h3>
               <p>
                 The validator includes a sample-audits check so fairness and UX audit code must
-                execute successfully before the evaluation contract reports pass.
+                execute successfully before the evaluation contract reports pass. Material
+                surfacing parity deviations need a redacted review-log entry before they count as
+                reviewed.
               </p>
             </article>
           </div>

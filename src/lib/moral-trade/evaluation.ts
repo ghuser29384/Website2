@@ -1,7 +1,7 @@
 import evaluationProfileJson from "../../../config/moral-trade/evaluation-profile.json";
 
 export const MORAL_TRADE_EVALUATION_VALIDATOR_VERSION =
-  "moral-trade-evaluation-validator-v0.1";
+  "moral-trade-evaluation-validator-v0.2";
 
 export type MoralTradeEvaluationMetric = {
   key: string;
@@ -57,6 +57,16 @@ export interface MoralTradeSurfacingParityCell {
   surfacingRate: number | null;
   absoluteGapFromOverall: number | null;
   status: "pass" | "suppressed" | "needs_review" | "reviewed";
+  deviationReview?: MoralTradeSurfacingDeviationReview;
+}
+
+export interface MoralTradeSurfacingDeviationReview {
+  cellKey: string;
+  reviewerRole: "operator" | "external_reviewer" | "admin";
+  reviewedAt: string;
+  outcome: "explained" | "remediated" | "accepted_with_monitoring";
+  reasonCode: string;
+  summary: string;
 }
 
 export interface MoralTradeSurfacingParityAudit {
@@ -67,6 +77,9 @@ export interface MoralTradeSurfacingParityAudit {
   minCellSize: number;
   maxAbsoluteGap: number;
   cells: MoralTradeSurfacingParityCell[];
+  deviationReviews: MoralTradeSurfacingDeviationReview[];
+  reviewedDeviationCount: number;
+  unreviewedDeviationCount: number;
   blockers: string[];
 }
 
@@ -137,6 +150,7 @@ const REQUIRED_PRIVACY_BOUNDARIES = [
   "no_contact_details",
   "no_source_note_leakage",
   "small_cell_suppression",
+  "deviation_review_log_redacted",
 ] as const;
 
 const REQUIRED_PROMOTION_GATES = [
@@ -196,6 +210,52 @@ function normalizeSurfacingSliceValue(value: string | null | undefined) {
   return cleaned.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 64) || "unknown";
 }
 
+function containsContactLikeText(value: string) {
+  return (
+    /@/.test(value) ||
+    /\bhttps?:\/\//i.test(value) ||
+    /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/.test(value)
+  );
+}
+
+function isValidIsoDate(value: string) {
+  return Boolean(value) && !Number.isNaN(Date.parse(value));
+}
+
+function getDeviationReviewBlockers(review: MoralTradeSurfacingDeviationReview) {
+  const blockers: string[] = [];
+
+  if (!review.cellKey.trim()) {
+    blockers.push("cell_key_missing");
+  }
+
+  if (!["operator", "external_reviewer", "admin"].includes(review.reviewerRole)) {
+    blockers.push("reviewer_role_invalid");
+  }
+
+  if (!isValidIsoDate(review.reviewedAt)) {
+    blockers.push("reviewed_at_invalid");
+  }
+
+  if (!["explained", "remediated", "accepted_with_monitoring"].includes(review.outcome)) {
+    blockers.push("outcome_invalid");
+  }
+
+  if (!/^[a-z0-9_:-]{3,80}$/.test(review.reasonCode)) {
+    blockers.push("reason_code_invalid");
+  }
+
+  if (
+    review.summary.trim().length < 12 ||
+    review.summary.trim().length > 240 ||
+    containsContactLikeText(review.summary)
+  ) {
+    blockers.push("redacted_summary_required");
+  }
+
+  return blockers;
+}
+
 function roundRate(value: number) {
   return Number(value.toFixed(4));
 }
@@ -217,21 +277,27 @@ function didNotRegress(current: number | null, previous: number | null, directio
 }
 
 export function auditMoralTradeSurfacingParity({
+  deviationReviews = [],
   events,
   maxAbsoluteGap = MORAL_TRADE_SURFACING_PARITY_DEFAULTS.maxAbsoluteGap,
   minCellSize = MORAL_TRADE_SURFACING_PARITY_DEFAULTS.minCellSize,
-  reviewedDeviationKeys = [],
   sliceKeys = [...MORAL_TRADE_SURFACING_PARITY_DEFAULTS.sliceKeys],
 }: {
+  deviationReviews?: readonly MoralTradeSurfacingDeviationReview[];
   events: readonly MoralTradeSurfacingEvent[];
   maxAbsoluteGap?: number;
   minCellSize?: number;
-  reviewedDeviationKeys?: readonly string[];
   sliceKeys?: readonly string[];
 }): MoralTradeSurfacingParityAudit {
   const eligibleEvents = events.filter((event) => event.eligible);
   const eligibleCount = eligibleEvents.length;
   const surfacedCount = eligibleEvents.filter((event) => event.surfaced).length;
+  const normalizedDeviationReviews = deviationReviews.map((review) => ({
+    ...review,
+    cellKey: review.cellKey.trim(),
+    reasonCode: review.reasonCode.trim().toLowerCase(),
+    summary: review.summary.trim(),
+  }));
 
   if (!eligibleCount) {
     return {
@@ -242,12 +308,26 @@ export function auditMoralTradeSurfacingParity({
       minCellSize,
       maxAbsoluteGap,
       cells: [],
+      deviationReviews: normalizedDeviationReviews,
+      reviewedDeviationCount: 0,
+      unreviewedDeviationCount: 0,
       blockers: ["no_eligible_surfacing_events"],
     };
   }
 
   const overallSurfacingRate = surfacedCount / eligibleCount;
-  const reviewedKeys = new Set(reviewedDeviationKeys);
+  const validReviewByCellKey = new Map<string, MoralTradeSurfacingDeviationReview>();
+  const reviewBlockers = normalizedDeviationReviews.flatMap((review) => {
+    const blockers = getDeviationReviewBlockers(review);
+
+    if (!blockers.length) {
+      validReviewByCellKey.set(review.cellKey, review);
+    }
+
+    return blockers.map(
+      (blocker) => `invalid_surfacing_deviation_review:${review.cellKey || "missing"}:${blocker}`,
+    );
+  });
   const groups = new Map<string, MoralTradeSurfacingParityCell>();
 
   for (const event of eligibleEvents) {
@@ -287,14 +367,16 @@ export function auditMoralTradeSurfacingParity({
 
       const surfacingRate = cell.surfacedCount / cell.eligibleCount;
       const absoluteGapFromOverall = Math.abs(surfacingRate - overallSurfacingRate);
+      const deviationReview = validReviewByCellKey.get(cell.key);
 
       return {
         ...cell,
+        ...(deviationReview ? { deviationReview } : {}),
         surfacingRate: roundRate(surfacingRate),
         absoluteGapFromOverall: roundRate(absoluteGapFromOverall),
         status:
           absoluteGapFromOverall > maxAbsoluteGap
-            ? reviewedKeys.has(cell.key)
+            ? deviationReview
               ? ("reviewed" as const)
               : ("needs_review" as const)
             : ("pass" as const),
@@ -302,9 +384,26 @@ export function auditMoralTradeSurfacingParity({
     })
     .sort((left, right) => left.key.localeCompare(right.key));
 
-  const blockers = cells
-    .filter((cell) => cell.status === "needs_review")
-    .map((cell) => `unreviewed_surfacing_gap:${cell.key}`);
+  const materialDeviationKeys = new Set(
+    cells
+      .filter((cell) => cell.status === "needs_review" || cell.status === "reviewed")
+      .map((cell) => cell.key),
+  );
+  const unknownReviewBlockers = normalizedDeviationReviews
+    .filter(
+      (review) =>
+        !getDeviationReviewBlockers(review).length && !materialDeviationKeys.has(review.cellKey),
+    )
+    .map((review) => `unscoped_surfacing_deviation_review:${review.cellKey}`);
+  const unreviewedDeviationCount = cells.filter((cell) => cell.status === "needs_review").length;
+  const reviewedDeviationCount = cells.filter((cell) => cell.status === "reviewed").length;
+  const blockers = [
+    ...cells
+      .filter((cell) => cell.status === "needs_review")
+      .map((cell) => `unreviewed_surfacing_gap:${cell.key}`),
+    ...reviewBlockers,
+    ...unknownReviewBlockers,
+  ];
 
   return {
     status: blockers.length ? "fail" : "pass",
@@ -314,6 +413,9 @@ export function auditMoralTradeSurfacingParity({
     minCellSize,
     maxAbsoluteGap,
     cells,
+    deviationReviews: normalizedDeviationReviews,
+    reviewedDeviationCount,
+    unreviewedDeviationCount,
     blockers,
   };
 }
@@ -421,11 +523,31 @@ export function auditMoralTradeUxReadiness({
 export function getMoralTradeEvaluationSampleAudits(): MoralTradeEvaluationSampleAudits {
   return {
     surfacingParityAudit: auditMoralTradeSurfacingParity({
+      deviationReviews: [
+        {
+          cellKey: "geography_bucket:us_east",
+          reviewerRole: "operator",
+          reviewedAt: "2026-05-20T12:00:00.000Z",
+          outcome: "remediated",
+          reasonCode: "sample_rule_weight_rebalance",
+          summary:
+            "Sample audit records a bounded rule-weight correction before rollout promotion.",
+        },
+        {
+          cellKey: "geography_bucket:us_west",
+          reviewerRole: "external_reviewer",
+          reviewedAt: "2026-05-20T12:15:00.000Z",
+          outcome: "accepted_with_monitoring",
+          reasonCode: "sample_counterpart_pool_mix",
+          summary:
+            "Sample audit records a cohort-mix explanation with continued monthly monitoring.",
+        },
+      ],
       events: [
-        ...Array.from({ length: 5 }, (_, index) => ({
+        ...Array.from({ length: 10 }, (_, index) => ({
           id: `sample-pledge-west-${index}`,
           eligible: true,
-          surfaced: index < 3,
+          surfaced: index < 8,
           slices: {
             trade_format: "pledge_swap",
             cause_area_pair: "animal_welfare__global_poverty",
@@ -434,16 +556,16 @@ export function getMoralTradeEvaluationSampleAudits(): MoralTradeEvaluationSampl
             optional_governed_sensitive_attribute: "consented_group_a",
           },
         })),
-        ...Array.from({ length: 5 }, (_, index) => ({
+        ...Array.from({ length: 10 }, (_, index) => ({
           id: `sample-offset-east-${index}`,
           eligible: true,
-          surfaced: index < 3,
+          surfaced: index < 1,
           slices: {
-            trade_format: "donation_offset",
-            cause_area_pair: "climate__global_health",
+            trade_format: "pledge_swap",
+            cause_area_pair: "animal_welfare__global_poverty",
             geography_bucket: "US-East",
             privacy_stage: "broad_preview",
-            optional_governed_sensitive_attribute: "consented_group_b",
+            optional_governed_sensitive_attribute: "consented_group_a",
           },
         })),
       ],
@@ -530,6 +652,7 @@ export function validateMoralTradeEvaluationProfile(
       "Evaluation test hooks",
       profile.evaluationTests.includes("evaluation_profile_validator") &&
         profile.evaluationTests.includes("surfacing_parity_audit") &&
+        profile.evaluationTests.includes("surfacing_deviation_review_log") &&
         profile.evaluationTests.includes("ux_readiness_audit") &&
         profile.evaluationTests.includes("health_route_contract_smoke") &&
         profile.evaluationTests.includes("public_technical_spec_smoke"),
@@ -539,8 +662,10 @@ export function validateMoralTradeEvaluationProfile(
       "sample-audits",
       "Deterministic sample evaluation audits execute",
       sampleAudits.surfacingParityAudit.status === "pass" &&
+        sampleAudits.surfacingParityAudit.reviewedDeviationCount > 0 &&
+        sampleAudits.surfacingParityAudit.unreviewedDeviationCount === 0 &&
         sampleAudits.uxReadinessAudit.status === "pass",
-      `surfacing ${sampleAudits.surfacingParityAudit.status}; ux ${sampleAudits.uxReadinessAudit.status}`,
+      `surfacing ${sampleAudits.surfacingParityAudit.status}; reviewed deviations ${sampleAudits.surfacingParityAudit.reviewedDeviationCount}; ux ${sampleAudits.uxReadinessAudit.status}`,
     ),
   ];
   const blockers = checks

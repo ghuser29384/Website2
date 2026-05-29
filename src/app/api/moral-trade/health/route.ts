@@ -267,6 +267,10 @@ export async function GET() {
         surfacingParity: evaluationSampleAudits.surfacingParityAudit.status,
         uxReadiness: evaluationSampleAudits.uxReadinessAudit.status,
       },
+      evaluationSurfacingDeviationReviews: {
+        reviewed: evaluationSampleAudits.surfacingParityAudit.reviewedDeviationCount,
+        unreviewed: evaluationSampleAudits.surfacingParityAudit.unreviewedDeviationCount,
+      },
       performanceProfileVersion: performanceProfile.version,
       performanceMetricTargets: performanceProfile.metricTargets.map((metric) => metric.key),
       performanceInstrumentationControls: performanceProfile.instrumentationControls.map(
