@@ -743,11 +743,13 @@ function assessPrivacyRedaction(input: MoralTradeProtocolDraftInput) {
 }
 
 function getProtocolFactorCodes({
+  counterfactualBaseline,
   input,
   missingFields,
   partyRelativeBenefit,
   privacyRedaction,
 }: {
+  counterfactualBaseline: { rating: ProtocolTrustRating };
   input: MoralTradeProtocolDraftInput;
   missingFields: readonly string[];
   partyRelativeBenefit: { rating: ProtocolTrustRating };
@@ -761,6 +763,15 @@ function getProtocolFactorCodes({
 
   if (fieldHasSubstance(input.baselineStatement, 20)) {
     factors.push("baseline_stated");
+  }
+
+  if (counterfactualBaseline.rating === "high") {
+    factors.push("baseline_credibility");
+  } else if (
+    counterfactualBaseline.rating === "medium" &&
+    fieldHasSubstance(input.baselineStatement, 20)
+  ) {
+    factors.push("baseline_challenge_recommended");
   }
 
   if (fieldHasSubstance(input.verificationMethod)) {
@@ -832,6 +843,10 @@ function getUncertaintyFlags({
 
   if (counterfactualBaseline.rating !== "high") {
     flags.push(`counterfactual_baseline_${counterfactualBaseline.rating}`);
+  }
+
+  if (counterfactualBaseline.rating === "medium") {
+    flags.push("baseline_challenge_recommended");
   }
 
   if (externalityReview.required) {
@@ -1193,6 +1208,7 @@ export function evaluateMoralTradeProtocolDraft(
   const partyRelativeBenefit = assessPartyRelativeBenefit(input);
   const privacyRedaction = assessPrivacyRedaction(input);
   const factorCodes = getProtocolFactorCodes({
+    counterfactualBaseline,
     input,
     missingFields: missingRequiredFields,
     partyRelativeBenefit,
@@ -1220,6 +1236,9 @@ export function evaluateMoralTradeProtocolDraft(
   if (counterfactualBaseline.rating === "low") {
     underspecifiedFields.push("Counterfactual baseline");
     artifactsToRequest.push("prior-intent note, past behavior record, or dated no-trade baseline statement");
+  } else if (counterfactualBaseline.rating === "medium") {
+    artifactsToRequest.push("prior-intent note, past behavior record, or dated no-trade baseline statement");
+    reviewScope.push("Challenge the stated no-trade baseline unless prior-intent or past-behavior support is supplied.");
   }
 
   if (partyRelativeBenefit.rating === "low") {

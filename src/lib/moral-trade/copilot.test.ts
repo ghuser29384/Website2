@@ -343,6 +343,25 @@ test("copilot output blocks public contact details through the privacy-redaction
   assert.equal(validateMoralTradeCopilotOutput(output).status, "pass");
 });
 
+test("copilot output carries baseline challenge recommendations as structured flags", () => {
+  const output = buildMoralTradeCopilotOutput({
+    ...completeDraft,
+    baselineStatement:
+      "Without this trade I would probably keep my current plan and would not make the reciprocal pledge.",
+  });
+
+  assert.equal(output.status, "matchable");
+  assert.equal(output.trust_assessment.counterfactual_baseline.rating, "medium");
+  assert.ok(output.match_explanation.factor_codes.includes("baseline_challenge_recommended"));
+  assert.ok(output.uncertainty_flags.includes("baseline_challenge_recommended"));
+  assert.ok(
+    output.review_instructions.artifacts_to_request.includes(
+      "prior-intent note, past behavior record, or dated no-trade baseline statement",
+    ),
+  );
+  assert.equal(validateMoralTradeCopilotOutput(output).status, "pass");
+});
+
 test("copilot output preserves challenge-window status for externality triggers", () => {
   const output = buildMoralTradeCopilotOutput({
     ...completeDraft,

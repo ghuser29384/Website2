@@ -156,6 +156,46 @@ test("protocol draft review requires privacy redaction before matchability", () 
   assert.ok(review.factorCodes.includes("human_review_required"));
 });
 
+test("protocol draft review exposes baseline challenge recommendations", () => {
+  const review = evaluateMoralTradeProtocolDraft({
+    format: "pledge_swap",
+    offeredCause: "Animal welfare",
+    requestedCause: "Global poverty",
+    offeredAction:
+      "I will log a public animal-welfare pledge and attach completion evidence after the review period.",
+    requestedAction:
+      "The counterparty will make a bounded donation to a global poverty fund after matching.",
+    baselineStatement:
+      "Without this trade I would probably keep my current plan and would not make the reciprocal pledge.",
+    duration: "90 days",
+    exitConditions:
+      "If evidence is missing or disputed by the review date, the record stays unresolved and no completion badge is shown.",
+    verificationMethod: "Third-party receipt and public pledge log",
+    publicDescription:
+      "A bounded pledge swap where each side is better off than the no-trade baseline using participant-relative priorities.",
+    evidenceUrl: "https://example.com/receipt",
+    participantImportance: 7,
+    counterpartyThreshold: 6,
+  });
+
+  assert.equal(review.status, "matchable");
+  assert.equal(review.trustAssessment.counterfactualBaseline.rating, "medium");
+  assert.ok(review.factorCodes.includes("baseline_stated"));
+  assert.ok(review.factorCodes.includes("baseline_challenge_recommended"));
+  assert.ok(!review.factorCodes.includes("baseline_credibility"));
+  assert.ok(review.uncertaintyFlags.includes("baseline_challenge_recommended"));
+  assert.ok(
+    review.reviewInstructions.artifactsToRequest.includes(
+      "prior-intent note, past behavior record, or dated no-trade baseline statement",
+    ),
+  );
+  assert.ok(
+    review.reviewInstructions.reviewScope.some((scope) =>
+      /Challenge the stated no-trade baseline/i.test(scope),
+    ),
+  );
+});
+
 test("protocol prohibited-pattern registry blocks every seeded harmful fixture", () => {
   assert.ok(PROHIBITED_MORAL_TRADE_PATTERNS.length >= 5);
 

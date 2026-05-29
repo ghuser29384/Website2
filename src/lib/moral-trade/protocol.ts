@@ -96,6 +96,8 @@ const REQUIRED_GUARDRAILS = [
 
 const REQUIRED_FACTOR_CODES = [
   "cause_area_complementarity",
+  "baseline_challenge_recommended",
+  "baseline_credibility",
   "baseline_stated",
   "cause_area_overlap",
   "evidence_rule_named",

@@ -17,6 +17,10 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
   assert.ok(profile.requiredProposalFields.some((field) => field.key === "baseline_statement"));
   assert.ok(profile.guardrails.some((guardrail) => guardrail.code === "anti_threat_baseline"));
   assert.ok(profile.factorCodes.some((factor) => factor.code === "privacy_safe_preview"));
+  assert.ok(profile.factorCodes.some((factor) => factor.code === "baseline_credibility"));
+  assert.ok(
+    profile.factorCodes.some((factor) => factor.code === "baseline_challenge_recommended"),
+  );
   assert.ok(profile.factorCodes.some((factor) => factor.code === "cause_area_overlap"));
   assert.ok(profile.factorCodes.some((factor) => factor.code === "cause_area_complementarity"));
   assert.ok(profile.factorCodes.some((factor) => factor.code === "party_relative_benefit"));

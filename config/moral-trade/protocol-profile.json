@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-core-v0.1-2026-05",
+  "version": "moral-trade-core-v0.1.1-2026-05",
   "purpose": "Public contract for core Moral Trade proposal review, matching explanations, evidence states, and provenance.",
   "requiredProposalFields": [
     { "key": "format", "label": "Trade format" },
@@ -126,6 +126,16 @@
       "code": "baseline_stated",
       "label": "Baseline stated",
       "description": "The no-trade default is explicit enough for counterfactual review."
+    },
+    {
+      "code": "baseline_credibility",
+      "label": "Baseline credibility",
+      "description": "The no-trade default includes prior intent, history, dated support, or another reviewable counterfactual basis."
+    },
+    {
+      "code": "baseline_challenge_recommended",
+      "label": "Baseline challenge recommended",
+      "description": "The baseline is stated but thin enough that reviewers should request prior-intent or past-behavior support before reliance."
     },
     {
       "code": "evidence_rule_named",
