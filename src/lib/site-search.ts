@@ -75,6 +75,21 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["research", "governance", "reviewer", "rulebook", "transparency", "operators"],
   },
   {
+    href: "/measurement",
+    label: "Measurement plan",
+    summary: "Privacy-safe event taxonomy, performance baselines, Search Console boundaries, and public aggregate reporting.",
+    kind: "learn",
+    keywords: [
+      "analytics",
+      "measurement",
+      "funnel",
+      "lighthouse",
+      "search console",
+      "web vitals",
+      "privacy",
+    ],
+  },
+  {
     href: "/reasoning-center",
     label: "Reasoning Center",
     summary: "Forum-style essays, quick takes, questions, and reviewer notes for moral trade design.",

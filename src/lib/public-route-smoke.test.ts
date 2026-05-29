@@ -4,6 +4,11 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { PARTNER_COHORTS } from "@/lib/growth";
+import {
+  MEASUREMENT_EVENT_SPECS,
+  MEASUREMENT_GUARDRAILS,
+  validateMeasurementPlan,
+} from "@/lib/measurement-plan";
 import { demoAlternatives, MPGF_COPY } from "@/lib/mpgf/data";
 import { getAllOffers } from "@/lib/offers";
 import {
@@ -52,6 +57,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(hrefs.includes("/validation"));
   assert.ok(hrefs.includes("/moral-trade/technical-spec"));
   assert.ok(hrefs.includes("/offers?view=examples"));
+  assert.ok(hrefs.includes("/measurement"));
   assert.ok(hrefs.includes("/faq"));
   assert.ok(hrefs.includes("/sources"));
   assert.ok(hrefs.includes("/wish-registry"));
@@ -68,6 +74,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(siteSource, /\/trust/);
   assert.match(siteSource, /\/projects/);
   assert.match(siteSource, /\/updates/);
+  assert.match(siteSource, /\/measurement/);
   assert.match(siteSource, /href: "\/sources", label: "Sources"/);
   assert.equal(siteSource.includes("/methodology#sources"), false);
   assert.match(topbarSource, /topbar-menu-heading/);
@@ -623,6 +630,25 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(offerCreateForm, /initialTemplate/);
 });
 
+test("public measurement plan stays aligned with privacy-safe analytics", () => {
+  const validation = validateMeasurementPlan();
+
+  assert.deepEqual(validation.invalidEvents, []);
+  assert.deepEqual(validation.duplicateEvents, []);
+  assert.deepEqual(validation.sensitiveMetadata, []);
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "hero_primary_cta_clicked"));
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "worked_example_opened"));
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "signup_complete"));
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "cohort_interest_started"));
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "detail_request_resolved"));
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "performance_metric_recorded"));
+  assert.ok(
+    MEASUREMENT_GUARDRAILS.some((guardrail) =>
+      /not moral worth|not score users/i.test(`${guardrail.title} ${guardrail.rule}`),
+    ),
+  );
+});
+
 test("activation loop includes concierge intake, admin triage, SLA, and audit trail", () => {
   const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
   const registryPage = readRepoFile("src/app/wish-registry/page.tsx");
@@ -736,6 +762,8 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   const howItWorksPage = readRepoFile("src/app/how-it-works/page.tsx");
   const projectsPage = readRepoFile("src/app/projects/page.tsx");
   const sourcesPage = readRepoFile("src/app/sources/page.tsx");
+  const measurementPage = readRepoFile("src/app/measurement/page.tsx");
+  const measurementPlanSource = readRepoFile("src/lib/measurement-plan.ts");
   const updatesPage = readRepoFile("src/app/updates/page.tsx");
   const teamPage = readRepoFile("src/app/team/page.tsx");
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
@@ -788,6 +816,13 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(sourcesPage, /Convergence and Compromise/);
   assert.match(sourcesPage, /Moral Public Goods/);
   assert.match(sourcesPage, /product-boundary notes/);
+  assert.match(measurementPage, /Measure pilot clarity, not moral worth/);
+  assert.match(measurementPage, /Lighthouse/);
+  assert.match(measurementPage, /Search Console/);
+  assert.match(measurementPlanSource, /hero_primary_cta_clicked/);
+  assert.match(measurementPlanSource, /signup_complete/);
+  assert.match(measurementPlanSource, /performance_metric_recorded/);
+  assert.match(measurementPlanSource, /Exact wishes, source notes, private constraints/);
   assert.match(updatesPage, /public archive for what changed/);
   assert.match(teamPage, /Who is publicly accountable for the pilot/);
   assert.match(sitemapSource, /\/moral-trade/);
@@ -797,6 +832,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(sitemapSource, /\/projects/);
   assert.match(sitemapSource, /\/anti-threat-baseline/);
   assert.match(sitemapSource, /\/research/);
+  assert.match(sitemapSource, /\/measurement/);
   assert.match(sitemapSource, /\/sources/);
   assert.match(sitemapSource, /\/trust/);
   assert.match(sitemapSource, /\/contact/);
@@ -808,6 +844,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(siteSearchSource, /Team and governance/);
   assert.match(siteSearchSource, /Pilot updates/);
   assert.match(siteSearchSource, /Primary references and product-boundary notes/);
+  assert.match(siteSearchSource, /Privacy-safe event taxonomy/);
   assert.match(siteSearchSource, /Anti-threat and baseline integrity/);
   assert.match(siteSearchSource, /What you can rely on/);
 });
