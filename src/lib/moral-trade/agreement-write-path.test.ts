@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildAgreementReviewDecisionConflictSelector,
+  buildAgreementReviewDecisionRow,
   buildAgreementReviewProvenanceAgentRow,
   buildAgreementReviewProvenanceConflictSelectors,
   buildAgreementReviewProvenanceRows,
@@ -209,7 +211,20 @@ test("agreement review transitions map to append-only provenance rows", () => {
     reviewCaseId: "review-case-123",
     transitionEventRecord: validation.transitionEventRecord!,
   });
+  const reviewDecision = buildAgreementReviewDecisionRow({
+    agreementId: "agreement-123",
+    evidenceReviewReadiness: completeEvidenceReviewReadiness,
+    nextReviewCaseStatus: "reviewed_complete",
+    ownerProfileId: "00000000-0000-4000-8000-000000000456",
+    publicReasoningSummary: "The evidence supports reviewed completion.",
+    reviewCaseId: "review-case-123",
+    reviewerAgentId: "11111111-1111-4111-8111-111111111111",
+    reviewerNotes: "",
+    reviewScope: "Pledge and donation evidence",
+    transitionEventRecord: validation.transitionEventRecord!,
+  });
   const selectors = buildAgreementReviewProvenanceConflictSelectors(rows);
+  const reviewDecisionSelector = buildAgreementReviewDecisionConflictSelector(reviewDecision);
 
   assert.equal(validation.status, "pass");
   assert.equal(validation.transitionEventRecord?.subjectKind, "agreement");
@@ -225,6 +240,15 @@ test("agreement review transitions map to append-only provenance rows", () => {
   assert.equal(rows.stateTransitionEvent.subject_id, "agreement-123");
   assert.equal(rows.stateTransitionEvent.to_status, "completion_reviewed");
   assert.equal(rows.stateTransitionEvent.event_hash.length, 64);
+  assert.equal(reviewDecision.subject_kind, "agreement");
+  assert.equal(reviewDecision.subject_id, "agreement-123");
+  assert.equal(reviewDecision.outcome, "pass");
+  assert.equal(reviewDecision.reason_codes.includes("review_status_reviewed_complete"), true);
+  assert.equal(reviewDecision.decision_hash.length, 64);
+  assert.equal(reviewDecision.idempotency_key, "agreement-review-decision:review-case-123:00000000-0000-4000-8000-000000000456:challenge_window:completion_reviewed");
+  assert.equal(reviewDecisionSelector.tableName, "moral_trade_review_decisions");
+  assert.equal(reviewDecisionSelector.hashColumn, "decision_hash");
+  assert.equal(reviewDecisionSelector.hashValue, reviewDecision.decision_hash);
   assert.equal(selectors.provenanceActivity.tableName, "moral_trade_provenance_activities");
   assert.equal(selectors.provenanceActivity.hashColumn, "activity_hash");
   assert.equal(selectors.provenanceActivity.hashValue, rows.provenanceActivity.activity_hash);

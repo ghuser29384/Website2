@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   buildMoralTradeStateTransitionEventRecord,
   validateMoralTradeProposalStateTransition,
@@ -51,6 +53,7 @@ export interface AgreementEvidenceReviewReadiness {
 }
 
 type AgreementReviewProvenanceAgentKind = "operator" | "external_reviewer";
+type AgreementReviewDecisionOutcome = "pass" | "needs_more" | "challenge" | "block";
 
 const AGREEMENT_EVIDENCE_REVIEW_CHECKS = [
   {
@@ -291,6 +294,47 @@ function uniqueAgreementProtocolEntityIds(entityIds: string[]) {
   return entityIds.filter((entityId, index, entries) => entries.indexOf(entityId) === index);
 }
 
+function canonicalizeAgreementReviewDecisionPayload(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalizeAgreementReviewDecisionPayload).join(",")}]`;
+  }
+
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .filter((key) => record[key] !== undefined)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${canonicalizeAgreementReviewDecisionPayload(record[key])}`)
+    .join(",")}}`;
+}
+
+function hashAgreementReviewDecisionPayload(value: unknown) {
+  return createHash("sha256")
+    .update(canonicalizeAgreementReviewDecisionPayload(value))
+    .digest("hex");
+}
+
+function mapAgreementReviewDecisionOutcome(
+  nextReviewCaseStatus: AgreementReviewCaseStatus,
+): AgreementReviewDecisionOutcome {
+  if (nextReviewCaseStatus === "reviewed_complete") {
+    return "pass";
+  }
+
+  if (nextReviewCaseStatus === "challenge_window_open" || nextReviewCaseStatus === "appealed") {
+    return "challenge";
+  }
+
+  if (nextReviewCaseStatus === "closed") {
+    return "block";
+  }
+
+  return "needs_more";
+}
+
 export function buildAgreementReviewProvenanceAgentRow({
   actorAgentId,
   actorAgentKind,
@@ -312,6 +356,79 @@ export function buildAgreementReviewProvenanceAgentRow({
     },
     owner_profile_id: ownerProfileId,
     redaction_level: "participant_private",
+  } as const;
+}
+
+export function buildAgreementReviewDecisionRow({
+  agreementId,
+  evidenceReviewReadiness,
+  nextReviewCaseStatus,
+  ownerProfileId,
+  publicReasoningSummary,
+  reviewCaseId,
+  reviewerAgentId,
+  reviewerNotes,
+  reviewScope,
+  transitionEventRecord,
+}: {
+  agreementId: string;
+  evidenceReviewReadiness: AgreementEvidenceReviewReadinessInput;
+  nextReviewCaseStatus: AgreementReviewCaseStatus;
+  ownerProfileId: string;
+  publicReasoningSummary: string;
+  reviewCaseId: string;
+  reviewerAgentId: string;
+  reviewerNotes: string;
+  reviewScope: string;
+  transitionEventRecord: MoralTradeStateTransitionEventRecord;
+}) {
+  const outcome = mapAgreementReviewDecisionOutcome(nextReviewCaseStatus);
+  const reasonCodes = uniqueAgreementProtocolEntityIds([
+    `review_status_${nextReviewCaseStatus}`,
+    `transition_${transitionEventRecord.from}_to_${transitionEventRecord.to}`,
+    evidenceReviewReadiness.artifactLinked ? "evidence_artifact_linked" : "",
+    evidenceReviewReadiness.claimScopeAligned ? "claim_scope_aligned" : "",
+    evidenceReviewReadiness.proofUniquenessChecked ? "proof_uniqueness_checked" : "",
+    evidenceReviewReadiness.freshnessReviewed ? "evidence_freshness_reviewed" : "",
+    evidenceReviewReadiness.agentLinksRecorded ? "evidence_agent_links_recorded" : "",
+    reviewScope ? "review_scope_recorded" : "",
+    publicReasoningSummary ? "public_reasoning_summary_recorded" : "",
+  ].filter(Boolean));
+  const summary =
+    publicReasoningSummary ||
+    reviewerNotes ||
+    `Agreement review moved from ${transitionEventRecord.from} to ${transitionEventRecord.to}.`;
+  const idempotencyKey = [
+    "agreement-review-decision",
+    reviewCaseId,
+    ownerProfileId,
+    transitionEventRecord.from,
+    transitionEventRecord.to,
+  ].join(":");
+  const decisionHash = hashAgreementReviewDecisionPayload({
+    agreementId,
+    idempotencyKey,
+    outcome,
+    ownerProfileId,
+    reasonCodes,
+    reviewerAgentId,
+    summary,
+    transitionEventHash: transitionEventRecord.eventHash,
+  });
+
+  return {
+    agreement_id: agreementId,
+    created_at: transitionEventRecord.recordedAt,
+    decision_hash: decisionHash,
+    idempotency_key: idempotencyKey,
+    outcome,
+    owner_profile_id: ownerProfileId,
+    reason_codes: reasonCodes,
+    redaction_level: "participant_private",
+    reviewer_agent_id: reviewerAgentId,
+    subject_id: agreementId,
+    subject_kind: "agreement",
+    summary,
   } as const;
 }
 
@@ -373,6 +490,18 @@ export function buildAgreementReviewProvenanceRows({
       to_status: transitionEventRecord.to,
       used_entity_ids: usedEntityIds,
     },
+  } as const;
+}
+
+export function buildAgreementReviewDecisionConflictSelector(
+  row: ReturnType<typeof buildAgreementReviewDecisionRow>,
+) {
+  return {
+    hashColumn: "decision_hash",
+    hashValue: row.decision_hash,
+    idempotency_key: row.idempotency_key,
+    owner_profile_id: row.owner_profile_id,
+    tableName: "moral_trade_review_decisions",
   } as const;
 }
 

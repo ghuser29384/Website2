@@ -19,6 +19,7 @@ import {
   type MoralTradeProvenanceActivity,
   type MoralTradeProvenanceAgent,
   type MoralTradeProvenanceBundle,
+  type MoralTradeReviewDecision,
   type MoralTradeTraceabilityEvent,
 } from "./provenance";
 
@@ -91,6 +92,21 @@ function activity(overrides: Partial<MoralTradeProvenanceActivity> = {}) {
     agentIds: [participant.id],
     ...overrides,
   } satisfies MoralTradeProvenanceActivity;
+}
+
+function reviewDecision(overrides: Partial<MoralTradeReviewDecision> = {}) {
+  return {
+    id: "review-decision-1",
+    proposalId: "proposal-1",
+    outcome: "needs_more",
+    reasonCodes: ["evidence_sufficiency"],
+    summary: "Evidence remains reviewer-scoped before reliance.",
+    reviewerId: participant.id,
+    idempotencyKey: "agreement-review-decision:review-decision-1",
+    decisionHash: "1".repeat(64),
+    createdAt: submittedAt,
+    ...overrides,
+  } satisfies MoralTradeReviewDecision;
 }
 
 function traceabilityEvent(overrides: Partial<MoralTradeTraceabilityEvent> = {}) {
@@ -168,6 +184,22 @@ test("provenance bundles pass with entity/activity/agent links", () => {
   );
   assert.ok(MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.some((schema) => schema.key === "match_signal"));
   assert.ok(MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.some((schema) => schema.key === "traceability_event"));
+});
+
+test("review decisions need idempotency keys and valid hashes", () => {
+  const missingReviewDecisionHash = validateMoralTradeProvenanceBundle(
+    bundle({
+      reviewDecisions: [
+        reviewDecision({
+          decisionHash: "not-a-sha256",
+        }),
+      ],
+    }),
+    { now },
+  );
+
+  assert.equal(missingReviewDecisionHash.status, "fail");
+  assert.ok(missingReviewDecisionHash.blockers.some((blocker) => blocker.includes("artifact-hashes")));
 });
 
 test("provenance contract publishes validator-backed sample bundle coverage", () => {
@@ -322,6 +354,8 @@ test("review decisions must name a known reviewer agent", () => {
           reasonCodes: ["evidence_sufficiency"],
           summary: "Reviewer identity is missing from the provenance bundle.",
           reviewerId: "missing-reviewer",
+          idempotencyKey: "agreement-review-decision:missing-reviewer",
+          decisionHash: "1".repeat(64),
           createdAt: submittedAt,
         },
       ],

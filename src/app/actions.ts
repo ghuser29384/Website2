@@ -95,6 +95,8 @@ import {
   validateMoralTradeOfferCreateTransition,
 } from "@/lib/moral-trade/offer-write-path";
 import {
+  buildAgreementReviewDecisionConflictSelector,
+  buildAgreementReviewDecisionRow,
   buildAgreementReviewProvenanceAgentRow,
   buildAgreementReviewProvenanceConflictSelectors,
   buildAgreementReviewProvenanceRows,
@@ -375,7 +377,7 @@ async function getOrCreateMoralTradeOfferProvenanceAgentId({
   return { error: insertedAgentError as PostgrestError, id: null };
 }
 
-async function confirmExistingMoralTradeOfferProvenanceRow({
+async function confirmExistingMoralTradeProtocolPersistenceRow({
   selector,
   supabase,
 }: {
@@ -403,7 +405,7 @@ async function confirmExistingMoralTradeOfferProvenanceRow({
   );
 }
 
-async function insertMoralTradeOfferProvenanceRow({
+async function insertMoralTradeProtocolPersistenceRow({
   row,
   selector,
   supabase,
@@ -423,7 +425,7 @@ async function insertMoralTradeOfferProvenanceRow({
     return error as PostgrestError;
   }
 
-  return confirmExistingMoralTradeOfferProvenanceRow({
+  return confirmExistingMoralTradeProtocolPersistenceRow({
     selector,
     supabase,
   });
@@ -489,7 +491,7 @@ async function persistMoralTradeOfferCreateProtocolProvenance({
     transitionEventRecord: transition.transitionEventRecord,
   });
   const selectors = buildMoralTradeOfferCreateProvenanceConflictSelectors(rows);
-  const activityError = await insertMoralTradeOfferProvenanceRow({
+  const activityError = await insertMoralTradeProtocolPersistenceRow({
     row: rows.provenanceActivity,
     selector: selectors.provenanceActivity,
     supabase,
@@ -499,7 +501,7 @@ async function persistMoralTradeOfferCreateProtocolProvenance({
     return { error: activityError, transition };
   }
 
-  const transitionError = await insertMoralTradeOfferProvenanceRow({
+  const transitionError = await insertMoralTradeProtocolPersistenceRow({
     row: rows.stateTransitionEvent,
     selector: selectors.stateTransitionEvent,
     supabase,
@@ -590,7 +592,10 @@ async function persistMoralTradeAgreementReviewProtocolProvenance({
   evidenceReviewReadiness,
   nextReviewCaseStatus,
   protocolTransitionRecordedAt,
+  publicReasoningSummary,
   reviewerConfidence,
+  reviewerNotes,
+  reviewScope,
   supabase,
 }: {
   actorAgentId: string;
@@ -604,7 +609,10 @@ async function persistMoralTradeAgreementReviewProtocolProvenance({
   >;
   nextReviewCaseStatus: AgreementReviewCaseRow["status"];
   protocolTransitionRecordedAt: string;
+  publicReasoningSummary: string;
   reviewerConfidence: number;
+  reviewerNotes: string;
+  reviewScope: string;
   supabase: SupabaseServerClient;
 }) {
   const ownerProfileIds = [
@@ -696,7 +704,29 @@ async function persistMoralTradeAgreementReviewProtocolProvenance({
       transitionEventRecord: transition.transitionEventRecord,
     });
     const selectors = buildAgreementReviewProvenanceConflictSelectors(rows);
-    const activityError = await insertMoralTradeOfferProvenanceRow({
+    const reviewDecisionRow = buildAgreementReviewDecisionRow({
+      agreementId: currentAgreement.id,
+      evidenceReviewReadiness,
+      nextReviewCaseStatus,
+      ownerProfileId,
+      publicReasoningSummary,
+      reviewCaseId: currentReviewCase.id,
+      reviewerAgentId: agent.id,
+      reviewerNotes,
+      reviewScope,
+      transitionEventRecord: transition.transitionEventRecord,
+    });
+    const reviewDecisionError = await insertMoralTradeProtocolPersistenceRow({
+      row: reviewDecisionRow,
+      selector: buildAgreementReviewDecisionConflictSelector(reviewDecisionRow),
+      supabase,
+    });
+
+    if (reviewDecisionError) {
+      return { error: reviewDecisionError, transition };
+    }
+
+    const activityError = await insertMoralTradeProtocolPersistenceRow({
       row: rows.provenanceActivity,
       selector: selectors.provenanceActivity,
       supabase,
@@ -706,7 +736,7 @@ async function persistMoralTradeAgreementReviewProtocolProvenance({
       return { error: activityError, transition };
     }
 
-    const transitionError = await insertMoralTradeOfferProvenanceRow({
+    const transitionError = await insertMoralTradeProtocolPersistenceRow({
       row: rows.stateTransitionEvent,
       selector: selectors.stateTransitionEvent,
       supabase,
@@ -6878,7 +6908,10 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
         evidenceReviewReadiness,
         nextReviewCaseStatus: nextStatus,
         protocolTransitionRecordedAt,
+        publicReasoningSummary: updatePayload.public_reasoning_summary ?? "",
         reviewerConfidence,
+        reviewerNotes: updatePayload.reviewer_notes ?? "",
+        reviewScope: updatePayload.review_scope ?? "",
         supabase,
       })
     : { error: null, transition: protocolTransitionPrecheck };

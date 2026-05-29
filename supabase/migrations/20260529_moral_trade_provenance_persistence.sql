@@ -94,6 +94,8 @@ create table if not exists public.moral_trade_review_decisions (
   reason_codes text[] not null default '{}',
   summary text not null default '',
   reviewer_agent_id uuid references public.moral_trade_provenance_agents (id) on delete restrict,
+  idempotency_key text not null,
+  decision_hash text not null check (decision_hash ~ '^[a-f0-9]{64}$'),
   redaction_level text not null default 'participant_private' check (redaction_level in ('public', 'participant_private', 'reviewer_only')),
   created_at timestamptz not null default timezone('utc', now())
 );

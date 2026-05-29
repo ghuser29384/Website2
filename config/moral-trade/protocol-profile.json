@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-core-v0.1.2-2026-05",
+  "version": "moral-trade-core-v0.1.3-2026-05",
   "purpose": "Public contract for core Moral Trade proposal review, matching explanations, evidence states, and provenance.",
   "requiredProposalFields": [
     { "key": "format", "label": "Trade format" },
@@ -249,7 +249,7 @@
     {
       "key": "review_decision",
       "label": "Reviewer decision",
-      "required": ["id", "proposalId", "outcome", "reasonCodes", "summary", "reviewerId", "createdAt"]
+      "required": ["id", "proposalId", "outcome", "reasonCodes", "summary", "reviewerId", "idempotencyKey", "decisionHash", "createdAt"]
     },
     {
       "key": "match_signal",
@@ -314,7 +314,7 @@
         "table": "moral_trade_review_decisions",
         "objectSchemaKey": "review_decision",
         "accessModel": "owner_insert_public_or_owner_read",
-        "requiredColumns": ["id", "owner_profile_id", "subject_kind", "subject_id", "outcome", "reason_codes", "summary", "reviewer_agent_id", "redaction_level"]
+        "requiredColumns": ["id", "owner_profile_id", "subject_kind", "subject_id", "outcome", "reason_codes", "summary", "reviewer_agent_id", "idempotency_key", "decision_hash", "redaction_level"]
       },
       {
         "table": "moral_trade_provenance_activities",

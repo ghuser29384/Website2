@@ -961,6 +961,7 @@ test("accepted introductions can progress through agreement evidence review", ()
   assert.match(actionsSource, /updateAgreementReviewCaseAction/);
   assert.match(actionsSource, /validateAgreementReviewProtocolTransition/);
   assert.match(actionsSource, /persistMoralTradeAgreementReviewProtocolProvenance/);
+  assert.match(actionsSource, /buildAgreementReviewDecisionRow/);
   assert.match(actionsSource, /buildAgreementReviewProvenanceRows/);
   assert.match(actionsSource, /evidenceReviewReadiness/);
   assert.match(actionsSource, /readBoolean\(formData, "claim_scope_aligned"\)/);
@@ -1191,6 +1192,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const provenancePersistenceMigration = readRepoFile(
     "supabase/migrations/20260529_moral_trade_provenance_persistence.sql",
   );
+  const reviewDecisionIdempotencyMigration = readRepoFile(
+    "supabase/migrations/20260529_moral_trade_review_decision_idempotency.sql",
+  );
   const schemaSource = readRepoFile("supabase/schema.sql");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
@@ -1325,14 +1329,17 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(offerWritePathSource, /moral_trade_state_transition_events/);
   assert.match(offerWritePathSource, /stateTransitionEvent/);
   assert.match(agreementWritePathSource, /buildAgreementReviewProvenanceAgentRow/);
+  assert.match(agreementWritePathSource, /buildAgreementReviewDecisionRow/);
+  assert.match(agreementWritePathSource, /buildAgreementReviewDecisionConflictSelector/);
   assert.match(agreementWritePathSource, /buildAgreementReviewProvenanceRows/);
   assert.match(agreementWritePathSource, /buildAgreementReviewProvenanceConflictSelectors/);
+  assert.match(agreementWritePathSource, /moral_trade_review_decisions/);
   assert.match(agreementWritePathSource, /moral_trade_provenance_activities/);
   assert.match(agreementWritePathSource, /moral_trade_state_transition_events/);
   assert.match(actionsSource, /persistMoralTradeOfferCreateProtocolProvenance/);
   assert.match(actionsSource, /persistMoralTradeAgreementReviewProtocolProvenance/);
-  assert.match(actionsSource, /confirmExistingMoralTradeOfferProvenanceRow/);
-  assert.match(actionsSource, /insertMoralTradeOfferProvenanceRow/);
+  assert.match(actionsSource, /confirmExistingMoralTradeProtocolPersistenceRow/);
+  assert.match(actionsSource, /insertMoralTradeProtocolPersistenceRow/);
   assert.match(actionsSource, /selector\.tableName/);
   assert.match(actionsSource, /moral_trade_provenance_agents/);
   assert.match(actionsSource, /Offer saved but kept paused because the protocol provenance record could not be written/);
@@ -1347,6 +1354,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(dataModelProfile, /saved_search/);
   assert.match(dataModelProfile, /privacy_grant/);
   assert.match(dataModelProfile, /review_decision/);
+  assert.match(dataModelProfile, /decision_hash/);
   assert.equal(dataModelProfile.includes("reviewer_decision"), false);
   assert.match(dataModelProfile, /external_entity_reference/);
   assert.match(dataModelProfile, /traceability_event/);
@@ -1382,6 +1390,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(provenanceSource, /one-proof-one-claim/);
   assert.match(provenanceSource, /scope-alignment/);
   assert.match(schemaSource, /create table if not exists public\.moral_trade_evidence_artifacts/);
+  assert.match(schemaSource, /create table if not exists public\.moral_trade_review_decisions/);
+  assert.match(schemaSource, /decision_hash text not null/);
+  assert.match(schemaSource, /unique \(owner_profile_id, idempotency_key\)/);
   assert.match(schemaSource, /create table if not exists public\.moral_trade_provenance_activities/);
   assert.match(schemaSource, /create table if not exists public\.moral_trade_traceability_events/);
   assert.match(schemaSource, /create table if not exists public\.moral_trade_state_transition_events/);
@@ -1390,6 +1401,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /Provenance tables are append-only by policy/);
   assert.match(provenancePersistenceMigration, /moral_trade_external_entity_references/);
   assert.match(provenancePersistenceMigration, /moral_trade_state_transition_events_insert_owner/);
+  assert.match(reviewDecisionIdempotencyMigration, /moral_trade_review_decisions/);
+  assert.match(reviewDecisionIdempotencyMigration, /decision_hash/);
+  assert.match(reviewDecisionIdempotencyMigration, /moral_trade_review_decisions_owner_idempotency_idx/);
   assert.match(reasoningPacketSource, /getMoralTradeReasoningPackets/);
   assert.match(reasoningPacketSource, /validateMoralTradeReasoningPacketContract/);
   assert.match(reasoningPacketSource, /cited evidence rows/i);

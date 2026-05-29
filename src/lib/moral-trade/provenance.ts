@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { normalizeEvidenceLocator } from "@/lib/validation";
 
-export const MORAL_TRADE_PROVENANCE_SCHEMA_VERSION = "moral-trade-provenance-v0.1";
+export const MORAL_TRADE_PROVENANCE_SCHEMA_VERSION = "moral-trade-provenance-v0.2";
 
 export type MoralTradeEvidenceClaimType =
   | "receipt"
@@ -97,6 +97,8 @@ export interface MoralTradeReviewDecision {
   reasonCodes: string[];
   summary: string;
   reviewerId: string;
+  idempotencyKey: string;
+  decisionHash: string;
   createdAt: string;
 }
 
@@ -334,7 +336,17 @@ export const MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS = [
   {
     key: "review_decision",
     label: "Reviewer decision",
-    required: ["id", "proposalId", "outcome", "reasonCodes", "summary", "reviewerId", "createdAt"],
+    required: [
+      "id",
+      "proposalId",
+      "outcome",
+      "reasonCodes",
+      "summary",
+      "reviewerId",
+      "idempotencyKey",
+      "decisionHash",
+      "createdAt",
+    ],
   },
   {
     key: "match_signal",
@@ -534,6 +546,8 @@ export const MORAL_TRADE_PROVENANCE_PERSISTENCE_TABLES: readonly MoralTradeProve
         "reason_codes",
         "summary",
         "reviewer_agent_id",
+        "idempotency_key",
+        "decision_hash",
         "redaction_level",
       ],
     },
@@ -978,14 +992,28 @@ export function getMoralTradeProvenanceSampleBundle(): MoralTradeProvenanceBundl
     generatedEntityIds: [artifact.id, claim.id],
     agentIds: [participant.id, provider.id],
   };
+  const reviewDecisionIdempotencyKey =
+    "agreement-review-decision:review-case-sample:owner-sample:needs_evidence:needs_human_review";
+  const reviewDecisionReasonCodes = ["evidence_sufficiency", "payment_or_donation_record"];
+  const reviewDecisionSummary =
+    "Sample receipt locator is present; scope, freshness, and uniqueness remain reviewer-scoped before reliance.";
+  const reviewDecisionHash = sha256({
+    idempotencyKey: reviewDecisionIdempotencyKey,
+    outcome: "needs_more",
+    proposalId: "proposal-sample",
+    reasonCodes: reviewDecisionReasonCodes,
+    reviewerId: reviewer.id,
+    summary: reviewDecisionSummary,
+  });
   const reviewDecision: MoralTradeReviewDecision = {
     id: "review-decision-sample",
     proposalId: "proposal-sample",
     outcome: "needs_more",
-    reasonCodes: ["evidence_sufficiency", "payment_or_donation_record"],
-    summary:
-      "Sample receipt locator is present; scope, freshness, and uniqueness remain reviewer-scoped before reliance.",
+    reasonCodes: reviewDecisionReasonCodes,
+    summary: reviewDecisionSummary,
     reviewerId: reviewer.id,
+    idempotencyKey: reviewDecisionIdempotencyKey,
+    decisionHash: reviewDecisionHash,
     createdAt: submittedAt,
   };
   const reviewActivity: MoralTradeProvenanceActivity = {
@@ -1098,6 +1126,9 @@ export function validateMoralTradeProvenanceBundle(
   const invalidTraceabilityHashes = traceabilityEvents.filter(
     (event) => !/^[a-f0-9]{64}$/.test(event.sha256),
   );
+  const invalidReviewDecisionHashes = bundle.reviewDecisions.filter(
+    (decision) => !decision.idempotencyKey || !/^[a-f0-9]{64}$/.test(decision.decisionHash),
+  );
   const invalidExternalEntityReferences = externalEntityReferences.filter(
     (entity) =>
       !entity.normalizedIdentifier ||
@@ -1189,8 +1220,9 @@ export function validateMoralTradeProvenanceBundle(
       "Artifacts are content-addressed",
       invalidHashes.length === 0 &&
         invalidTraceabilityHashes.length === 0 &&
+        invalidReviewDecisionHashes.length === 0 &&
         bundle.artifacts.length > 0,
-      `${bundle.artifacts.length} artifact(s), ${invalidHashes.length} invalid artifact hash(es), ${invalidTraceabilityHashes.length} invalid traceability hash(es).`,
+      `${bundle.artifacts.length} artifact(s), ${invalidHashes.length} invalid artifact hash(es), ${invalidTraceabilityHashes.length} invalid traceability hash(es), ${invalidReviewDecisionHashes.length} invalid review decision hash(es).`,
     ),
     check(
       "claim-artifact-links",

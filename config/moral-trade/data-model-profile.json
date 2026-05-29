@@ -160,7 +160,7 @@
       "label": "Reviewer decision",
       "category": "review",
       "privacyClass": "review_scoped",
-      "requiredFields": ["id", "proposal_id", "outcome", "reason_codes", "summary", "reviewer_id", "created_at"],
+      "requiredFields": ["id", "proposal_id", "outcome", "reason_codes", "summary", "reviewer_id", "idempotency_key", "decision_hash", "created_at"],
       "relationships": ["offer", "evidence_claim", "challenge", "appeal", "agreement_event", "provenance_agent", "provenance_activity", "state_transition_event_record"],
       "publicExposure": "Only a narrow public reasoning summary is exposed when safe; private notes and source notes are redacted."
     },
