@@ -148,6 +148,12 @@ export function validateMoralTradeApiContractProfile(
   const policyBundleContractResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "policy_bundle_contract_response",
   );
+  const copilotReviewRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "copilot_review_request",
+  );
+  const copilotReviewResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "copilot_review_response",
+  );
   const draftReviewRoutes = profile.routes.filter(
     (route) => route.privacyClass === "ephemeral_private_draft_review",
   );
@@ -339,7 +345,23 @@ export function validateMoralTradeApiContractProfile(
           route.cacheControl === "private_no_store" &&
           route.rateLimitSurface === "copilot_draft_review" &&
           /never store|without changing proposal state|change proposal state/i.test(route.fallback),
-      ),
+      ) &&
+        Boolean(
+          copilotReviewRequest?.fields.some(
+            (field) =>
+              field.key === "evidenceMetadata" &&
+              field.privacy === "private_request" &&
+              /raw artifact|private notes|contact details/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          copilotReviewResponse?.fields.some(
+            (field) =>
+              field.key === "evidenceMetadataSummary" &&
+              field.required &&
+              /raw artifacts|private notes/i.test(field.description),
+          ),
+        ),
       draftReviewRoutes.map((route) => `${route.key}:${route.cacheControl}`).join(", "),
     ),
     check(

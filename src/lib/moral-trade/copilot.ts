@@ -10,7 +10,7 @@ import {
 } from "@/lib/proposal-review";
 
 export const MORAL_TRADE_COPILOT_CONTRACT_VALIDATOR_VERSION =
-  "moral-trade-copilot-contract-validator-v0.1";
+  "moral-trade-copilot-contract-validator-v0.2";
 
 type CopilotRole = {
   key: string;
@@ -185,6 +185,45 @@ export interface MoralTradeCopilotOutput {
   citations: string[];
 }
 
+export interface MoralTradeCopilotEvidenceMetadata {
+  id: string;
+  claim: string;
+  evidence_type: string;
+  citation: string;
+  status:
+    | "submitted"
+    | "pending_review"
+    | "reviewed"
+    | "stale"
+    | "wrong_scope"
+    | "duplicate_challenged"
+    | "rejected";
+  scope:
+    | "factual_action"
+    | "counterfactual_baseline"
+    | "externality_review"
+    | "destination_review"
+    | "privacy_review"
+    | "other";
+  redaction_level: "public" | "reviewer_only" | "participant_private";
+  submitted_at: string | null;
+}
+
+export interface MoralTradeCopilotEvidenceMetadataNormalization {
+  evidenceMetadata: MoralTradeCopilotEvidenceMetadata[];
+  acceptedCount: number;
+  rejectedCount: number;
+  ignoredFieldCount: number;
+  blockers: string[];
+}
+
+export interface MoralTradeCopilotEvidenceMetadataSummary {
+  acceptedCount: number;
+  rejectedCount: number;
+  ignoredFieldCount: number;
+  redactionsApplied: string[];
+}
+
 const copilotContract = copilotContractJson as MoralTradeCopilotContract;
 
 const REQUIRED_INPUT_BUNDLE = [
@@ -270,6 +309,52 @@ const REQUIRED_HUMAN_CONTROLLED_DECISIONS = [
   "dispute_resolution",
 ] as const;
 
+const MAX_EVIDENCE_METADATA_ENTRIES = 8;
+const EVIDENCE_METADATA_ALLOWED_KEYS = [
+  "id",
+  "claim",
+  "evidenceType",
+  "evidence_type",
+  "citation",
+  "status",
+  "scope",
+  "redactionLevel",
+  "redaction_level",
+  "submittedAt",
+  "submitted_at",
+] as const;
+const EVIDENCE_METADATA_FORBIDDEN_KEY_PATTERN =
+  /(raw|body|private|contact|exact.*wish|source.*note|artifact.*content|free.*text)/i;
+const EVIDENCE_METADATA_STATUS_VALUES = [
+  "submitted",
+  "pending_review",
+  "reviewed",
+  "stale",
+  "wrong_scope",
+  "duplicate_challenged",
+  "rejected",
+] as const;
+const EVIDENCE_METADATA_SCOPE_VALUES = [
+  "factual_action",
+  "counterfactual_baseline",
+  "externality_review",
+  "destination_review",
+  "privacy_review",
+  "other",
+] as const;
+const EVIDENCE_METADATA_REDACTION_LEVELS = [
+  "public",
+  "reviewer_only",
+  "participant_private",
+] as const;
+
+export const MORAL_TRADE_COPILOT_EVIDENCE_METADATA_REDACTIONS = [
+  "raw_artifact_body",
+  "private_notes",
+  "contact_details",
+  "exact_private_wishes",
+] as const;
+
 const COPILOT_ROLLOUT_ALLOWED_TASKS: Record<MoralTradeCopilotRolloutStageKey, string[]> = {
   shadow_mode: ["draft_critique", "reviewer_summary_second_screen"],
   assist_mode: ["structured_field_prefill", "factor_code_prefill", "evidence_checklist_prefill"],
@@ -300,6 +385,191 @@ function check(
 
 function clean(value: string | null | undefined) {
   return String(value ?? "").trim();
+}
+
+function cleanBounded(value: unknown, maxLength: number) {
+  return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeEvidenceMetadataToken(value: unknown) {
+  return cleanBounded(value, 80).toLowerCase().replace(/[^a-z0-9:_-]+/g, "_");
+}
+
+function containsContactLikeText(value: string) {
+  return /@/.test(value) || /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/.test(value);
+}
+
+function isValidIsoDate(value: string) {
+  return Boolean(value) && !Number.isNaN(Date.parse(value));
+}
+
+function getEnumValue<T extends readonly string[]>(
+  value: unknown,
+  allowedValues: T,
+): T[number] | null {
+  const normalized = normalizeEvidenceMetadataToken(value);
+
+  return allowedValues.includes(normalized as T[number]) ? (normalized as T[number]) : null;
+}
+
+function getEvidenceMetadataRawValue(
+  entry: Record<string, unknown>,
+  camelKey: string,
+  snakeKey: string,
+) {
+  return entry[camelKey] ?? entry[snakeKey];
+}
+
+function buildEvidenceMetadataReviewerNote(metadata: MoralTradeCopilotEvidenceMetadata) {
+  return `Already-submitted ${metadata.scope.replaceAll("_", " ")} metadata only; raw artifacts and private notes stay outside the copilot bundle.`;
+}
+
+export function normalizeMoralTradeCopilotEvidenceMetadata(
+  value: unknown,
+): MoralTradeCopilotEvidenceMetadataNormalization {
+  const blockers: string[] = [];
+  let ignoredFieldCount = 0;
+  let rejectedCount = 0;
+
+  if (value == null) {
+    return {
+      evidenceMetadata: [],
+      acceptedCount: 0,
+      rejectedCount: 0,
+      ignoredFieldCount: 0,
+      blockers: [],
+    };
+  }
+
+  if (!Array.isArray(value)) {
+    return {
+      evidenceMetadata: [],
+      acceptedCount: 0,
+      rejectedCount: 1,
+      ignoredFieldCount: 0,
+      blockers: ["evidence_metadata: expected an array of already-submitted metadata objects"],
+    };
+  }
+
+  if (value.length > MAX_EVIDENCE_METADATA_ENTRIES) {
+    blockers.push(`evidence_metadata: at most ${MAX_EVIDENCE_METADATA_ENTRIES} entries are allowed`);
+  }
+
+  const allowedKeys = new Set<string>(EVIDENCE_METADATA_ALLOWED_KEYS);
+  const evidenceMetadata = value.slice(0, MAX_EVIDENCE_METADATA_ENTRIES).flatMap((entry, index) => {
+    const entryBlockers: string[] = [];
+
+    if (!isRecord(entry)) {
+      rejectedCount += 1;
+      blockers.push(`evidence_metadata:${index}: metadata entry must be an object`);
+      return [];
+    }
+
+    const unknownKeys = Object.keys(entry).filter((key) => !allowedKeys.has(key));
+    const forbiddenKeys = unknownKeys.filter((key) =>
+      EVIDENCE_METADATA_FORBIDDEN_KEY_PATTERN.test(key),
+    );
+    ignoredFieldCount += unknownKeys.length;
+
+    if (forbiddenKeys.length) {
+      entryBlockers.push(
+        `raw_or_private_fields_not_allowed:${forbiddenKeys.sort().join(",")}`,
+      );
+    }
+
+    const id = cleanBounded(entry.id, 80);
+    const claim = cleanBounded(entry.claim, 180);
+    const evidenceType = normalizeEvidenceMetadataToken(
+      getEvidenceMetadataRawValue(entry, "evidenceType", "evidence_type"),
+    );
+    const citation = cleanBounded(entry.citation, 180);
+    const status = getEnumValue(entry.status, EVIDENCE_METADATA_STATUS_VALUES);
+    const scope = getEnumValue(entry.scope, EVIDENCE_METADATA_SCOPE_VALUES);
+    const redactionLevel = getEnumValue(
+      getEvidenceMetadataRawValue(entry, "redactionLevel", "redaction_level"),
+      EVIDENCE_METADATA_REDACTION_LEVELS,
+    );
+    const submittedAt = cleanBounded(
+      getEvidenceMetadataRawValue(entry, "submittedAt", "submitted_at"),
+      40,
+    );
+
+    if (!id) {
+      entryBlockers.push("id_required");
+    }
+
+    if (!claim || containsContactLikeText(claim)) {
+      entryBlockers.push("redacted_claim_required");
+    }
+
+    if (!evidenceType) {
+      entryBlockers.push("evidence_type_required");
+    }
+
+    if (!citation || containsContactLikeText(citation)) {
+      entryBlockers.push("redacted_citation_required");
+    }
+
+    if (!status) {
+      entryBlockers.push("status_invalid");
+    }
+
+    if (!scope) {
+      entryBlockers.push("scope_invalid");
+    }
+
+    if (!redactionLevel) {
+      entryBlockers.push("redaction_level_invalid");
+    }
+
+    if (submittedAt && !isValidIsoDate(submittedAt)) {
+      entryBlockers.push("submitted_at_invalid");
+    }
+
+    if (entryBlockers.length || !status || !scope || !redactionLevel) {
+      rejectedCount += 1;
+      blockers.push(
+        ...entryBlockers.map((blocker) => `evidence_metadata:${index}:${blocker}`),
+      );
+      return [];
+    }
+
+    return [
+      {
+        id,
+        claim,
+        evidence_type: evidenceType,
+        citation,
+        status,
+        scope,
+        redaction_level: redactionLevel,
+        submitted_at: submittedAt || null,
+      } satisfies MoralTradeCopilotEvidenceMetadata,
+    ];
+  });
+
+  return {
+    evidenceMetadata,
+    acceptedCount: evidenceMetadata.length,
+    rejectedCount,
+    ignoredFieldCount,
+    blockers,
+  };
+}
+
+export function summarizeMoralTradeCopilotEvidenceMetadata(
+  normalization: MoralTradeCopilotEvidenceMetadataNormalization,
+): MoralTradeCopilotEvidenceMetadataSummary {
+  return {
+    acceptedCount: normalization.acceptedCount,
+    rejectedCount: normalization.rejectedCount,
+    ignoredFieldCount: normalization.ignoredFieldCount,
+    redactionsApplied: [...MORAL_TRADE_COPILOT_EVIDENCE_METADATA_REDACTIONS],
+  };
 }
 
 function getConfidenceBand(review: MoralTradeProtocolDraftReview): ProtocolTrustRating {
@@ -631,6 +901,7 @@ export function validateMoralTradeCopilotContract(
 export function buildMoralTradeCopilotOutput(
   input: MoralTradeProtocolDraftInput,
   citations: string[] = [],
+  evidenceMetadata: MoralTradeCopilotEvidenceMetadata[] = [],
 ): MoralTradeCopilotOutput {
   const review = evaluateMoralTradeProtocolDraft(input);
 
@@ -671,13 +942,22 @@ export function buildMoralTradeCopilotOutput(
     clarification_questions: review.clarificationQuestions,
     uncertainty_flags: review.uncertaintyFlags,
     next_step_checklist: review.nextStepChecklist,
-    cited_evidence_table: review.citedEvidenceTable.map((row) => ({
-      claim: row.claim,
-      evidence_type: row.evidenceType,
-      citation: row.citation,
-      status: row.status,
-      reviewer_note: row.reviewerNote,
-    })),
+    cited_evidence_table: [
+      ...review.citedEvidenceTable.map((row) => ({
+        claim: row.claim,
+        evidence_type: row.evidenceType,
+        citation: row.citation,
+        status: row.status,
+        reviewer_note: row.reviewerNote,
+      })),
+      ...evidenceMetadata.map((metadata) => ({
+        claim: metadata.claim,
+        evidence_type: metadata.evidence_type,
+        citation: metadata.citation,
+        status: metadata.status,
+        reviewer_note: buildEvidenceMetadataReviewerNote(metadata),
+      })),
+    ],
     review_instructions: {
       artifacts_to_request: review.reviewInstructions.artifactsToRequest,
       review_scope: review.reviewInstructions.reviewScope,

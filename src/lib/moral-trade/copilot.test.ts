@@ -7,6 +7,8 @@ import {
   buildMoralTradeCopilotOutput,
   getMoralTradeCopilotContract,
   getMoralTradeCopilotRolloutReadinessAudits,
+  normalizeMoralTradeCopilotEvidenceMetadata,
+  summarizeMoralTradeCopilotEvidenceMetadata,
   validateMoralTradeCopilotContract,
   validateMoralTradeCopilotOutput,
   type MoralTradeCopilotContract,
@@ -59,6 +61,7 @@ test("copilot contract requires strict bundle, approved output, guardrails, and 
   assert.equal(validation.blockers.length, 0);
   assert.ok(contract.strictInputBundle.includes("structured_draft"));
   assert.ok(contract.strictInputBundle.includes("redaction_policy"));
+  assert.ok(contract.strictInputBundle.includes("evidence_metadata"));
   assert.ok(contract.strictInputBundle.includes("redacted_profile_pair"));
   assert.ok(contract.strictInputBundle.includes("stated_exclusions"));
   assert.ok(contract.approvedOutputSections.includes("review_instructions"));
@@ -249,6 +252,68 @@ test("copilot output uses approved schema and redacted factor-code explanations"
   assert.deepEqual(output.citations, ["proposal:local-draft"]);
 });
 
+test("copilot evidence metadata accepts only redacted already-submitted evidence fields", () => {
+  const normalization = normalizeMoralTradeCopilotEvidenceMetadata([
+    {
+      id: "receipt-meta-1",
+      claim: "Donation receipt confirms the offered pledge amount.",
+      evidenceType: "receipt",
+      citation: "evidence:receipt-meta-1",
+      status: "pending_review",
+      scope: "factual_action",
+      redactionLevel: "reviewer_only",
+      submittedAt: "2026-05-20T12:00:00.000Z",
+      displayOnly: "ignored safe display field",
+    },
+  ]);
+  const summary = summarizeMoralTradeCopilotEvidenceMetadata(normalization);
+  const output = buildMoralTradeCopilotOutput(
+    completeDraft,
+    ["proposal:local-draft"],
+    normalization.evidenceMetadata,
+  );
+
+  assert.deepEqual(normalization.blockers, []);
+  assert.equal(summary.acceptedCount, 1);
+  assert.equal(summary.ignoredFieldCount, 1);
+  assert.ok(summary.redactionsApplied.includes("raw_artifact_body"));
+  assert.ok(
+    output.cited_evidence_table.some(
+      (row) =>
+        row.citation === "evidence:receipt-meta-1" &&
+        row.evidence_type === "receipt" &&
+        /metadata only/i.test(row.reviewer_note),
+    ),
+  );
+  assert.equal(validateMoralTradeCopilotOutput(output).status, "pass");
+});
+
+test("copilot evidence metadata rejects raw private fields and contact-like metadata", () => {
+  const normalization = normalizeMoralTradeCopilotEvidenceMetadata([
+    {
+      id: "bad-meta-1",
+      claim: "Email reviewer@example.org for the exact private receipt.",
+      evidenceType: "receipt",
+      citation: "evidence:bad-meta-1",
+      status: "pending_review",
+      scope: "factual_action",
+      redactionLevel: "reviewer_only",
+      rawArtifactBody: "private receipt body",
+    },
+  ]);
+
+  assert.equal(normalization.acceptedCount, 0);
+  assert.equal(normalization.rejectedCount, 1);
+  assert.ok(
+    normalization.blockers.some((blocker) =>
+      blocker.includes("raw_or_private_fields_not_allowed:rawArtifactBody"),
+    ),
+  );
+  assert.ok(
+    normalization.blockers.some((blocker) => blocker.includes("redacted_claim_required")),
+  );
+});
+
 test("copilot review route returns validated non-mutating draft critique", async () => {
   const response = await reviewDraftRoute(
     new Request("http://localhost/api/moral-trade/copilot/review", {
@@ -257,6 +322,19 @@ test("copilot review route returns validated non-mutating draft critique", async
       body: JSON.stringify({
         draft: completeDraft,
         citations: ["proposal:route-test"],
+        evidenceMetadata: [
+          {
+            id: "receipt-meta-1",
+            claim: "Donation receipt confirms the offered pledge amount.",
+            evidenceType: "receipt",
+            citation: "evidence:receipt-meta-1",
+            status: "pending_review",
+            scope: "factual_action",
+            redactionLevel: "reviewer_only",
+            submittedAt: "2026-05-20T12:00:00.000Z",
+            displayOnly: "ignored safe display field",
+          },
+        ],
       }),
     }),
   );
@@ -268,6 +346,8 @@ test("copilot review route returns validated non-mutating draft critique", async
   assert.equal(body.stateMutation, false);
   assert.equal(body.decisioningMode, "deterministic_draft_review_only");
   assert.equal(body.output.status, "matchable");
+  assert.equal(body.evidenceMetadataSummary.acceptedCount, 1);
+  assert.equal(body.evidenceMetadataSummary.ignoredFieldCount, 1);
   assert.equal(body.output.verification_loop.length, 8);
   assert.equal(
     body.output.verification_loop.find((step: { key: string }) => step.key === "schema_completeness")
@@ -275,8 +355,50 @@ test("copilot review route returns validated non-mutating draft critique", async
     "pass",
   );
   assert.ok(body.output.match_explanation.redactions_applied.includes("exact_private_wishes"));
+  assert.ok(
+    body.output.cited_evidence_table.some(
+      (row: { citation: string; reviewer_note: string }) =>
+        row.citation === "evidence:receipt-meta-1" && /metadata only/i.test(row.reviewer_note),
+    ),
+  );
   assert.deepEqual(body.output.citations, ["proposal:route-test"]);
   assert.deepEqual(body.blockers, []);
+});
+
+test("copilot review route fails closed on raw evidence metadata", async () => {
+  const response = await reviewDraftRoute(
+    new Request("http://localhost/api/moral-trade/copilot/review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        draft: completeDraft,
+        evidenceMetadata: [
+          {
+            id: "bad-meta-1",
+            claim: "Call 415-555-0199 for the private receipt.",
+            evidenceType: "receipt",
+            citation: "evidence:bad-meta-1",
+            status: "pending_review",
+            scope: "factual_action",
+            redactionLevel: "reviewer_only",
+            privateNotes: "raw private reviewer note",
+          },
+        ],
+      }),
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 422);
+  assert.equal(body.ok, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.evidenceMetadataSummary.acceptedCount, 0);
+  assert.equal(body.evidenceMetadataSummary.rejectedCount, 1);
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("evidence_metadata:0:raw_or_private_fields_not_allowed"),
+    ),
+  );
 });
 
 test("copilot review route fails closed on malformed or missing draft input", async () => {

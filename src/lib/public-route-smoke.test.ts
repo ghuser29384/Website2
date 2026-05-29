@@ -923,8 +923,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(reasoningPacketSource, /no_global_moral_ranking/);
   assert.match(reasoningPacketSource, /reasoning_packets_api_route_smoke/);
   assert.match(copilotSource, /buildMoralTradeCopilotOutput/);
+  assert.match(copilotSource, /normalizeMoralTradeCopilotEvidenceMetadata/);
+  assert.match(copilotSource, /MORAL_TRADE_COPILOT_EVIDENCE_METADATA_REDACTIONS/);
   assert.match(copilotSource, /validateMoralTradeCopilotContract/);
   assert.match(copilotContract, /strictInputBundle/);
+  assert.match(copilotContract, /evidence-metadata review/);
   assert.match(copilotContract, /promptTemplates/);
   assert.match(copilotContract, /system_prompt/);
   assert.match(copilotContract, /draft_repair_prompt/);
@@ -1101,6 +1104,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /profile_export/);
   assert.match(apiContractProfile, /copilot_review_request/);
   assert.match(apiContractProfile, /copilot_review_response/);
+  assert.match(apiContractProfile, /evidenceMetadata/);
+  assert.match(apiContractProfile, /evidenceMetadataSummary/);
+  assert.match(apiContractProfile, /raw evidence artifacts/);
   assert.match(apiContractProfile, /match_signal_contract_response/);
   assert.match(apiContractProfile, /match_signal_evaluate_request/);
   assert.match(apiContractProfile, /match_signal_evaluate_response/);
@@ -1165,6 +1171,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /\/api\/moral-trade\/data-model\/contract/);
   assert.match(technicalSpecPage, /Policy bundle contract/);
   assert.match(technicalSpecPage, /Copilot inputs are concrete registries, not broad application context/);
+  assert.match(technicalSpecPage, /Evidence metadata boundary/);
+  assert.match(technicalSpecPage, /Raw artifacts, private notes, contact details, and exact wishes/);
   assert.match(technicalSpecPage, /policyBundleContract\.verificationMethodTaxonomy/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/policy-bundle\/contract/);
   assert.match(technicalSpecPage, /Evidence object contract/);
@@ -1322,6 +1330,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotContractRoute, /rolloutReadiness/);
   assert.match(healthRoute, /copilotRolloutReadinessStatuses/);
   assert.match(copilotReviewRoute, /buildMoralTradeCopilotOutput/);
+  assert.match(copilotReviewRoute, /normalizeMoralTradeCopilotEvidenceMetadata/);
+  assert.match(copilotReviewRoute, /evidenceMetadataSummary/);
   assert.match(copilotReviewRoute, /validateMoralTradeCopilotOutput/);
   assert.match(copilotReviewRoute, /deterministic_draft_review_only/);
   assert.match(copilotReviewRoute, /stateMutation/);

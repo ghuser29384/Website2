@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-copilot-v0.1.1-2026-05",
-  "purpose": "Strict contract for schema-bound Moral Trade drafting, critique, explanation, evidence-checklist, and reviewer-summary assistance.",
+  "version": "moral-trade-copilot-v0.1.2-2026-05",
+  "purpose": "Strict contract for schema-bound Moral Trade drafting, critique, explanation, evidence-metadata review, evidence-checklist, and reviewer-summary assistance.",
   "permittedRoles": [
     {
       "key": "draft_repair",

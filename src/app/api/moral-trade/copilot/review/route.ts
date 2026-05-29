@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import {
   buildMoralTradeCopilotOutput,
   getMoralTradeCopilotContract,
+  normalizeMoralTradeCopilotEvidenceMetadata,
+  summarizeMoralTradeCopilotEvidenceMetadata,
   validateMoralTradeCopilotContract,
   validateMoralTradeCopilotOutput,
 } from "@/lib/moral-trade/copilot";
@@ -94,6 +96,14 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
+const EMPTY_EVIDENCE_METADATA_SUMMARY = summarizeMoralTradeCopilotEvidenceMetadata({
+  evidenceMetadata: [],
+  acceptedCount: 0,
+  rejectedCount: 0,
+  ignoredFieldCount: 0,
+  blockers: [],
+});
+
 export async function POST(request: Request) {
   const contract = getMoralTradeCopilotContract();
   const contractValidation = validateMoralTradeCopilotContract(contract);
@@ -110,6 +120,7 @@ export async function POST(request: Request) {
         decisioningMode: "deterministic_draft_review_only",
         stateMutation: false,
         inputBundleUsed: contract.strictInputBundle,
+        evidenceMetadataSummary: EMPTY_EVIDENCE_METADATA_SUMMARY,
         contractValidation,
         fallback:
           "Invalid JSON falls back to manual or deterministic draft review without changing proposal state.",
@@ -128,6 +139,7 @@ export async function POST(request: Request) {
         decisioningMode: "deterministic_draft_review_only",
         stateMutation: false,
         inputBundleUsed: contract.strictInputBundle,
+        evidenceMetadataSummary: EMPTY_EVIDENCE_METADATA_SUMMARY,
         contractValidation,
         fallback:
           "Missing structured_draft falls back to clarification or manual review without changing proposal state.",
@@ -137,12 +149,20 @@ export async function POST(request: Request) {
     );
   }
 
+  const evidenceMetadataNormalization = normalizeMoralTradeCopilotEvidenceMetadata(
+    body.evidenceMetadata,
+  );
   const output = buildMoralTradeCopilotOutput(
     normalizeDraftInput(body.draft),
     normalizeCitations(body.citations),
+    evidenceMetadataNormalization.evidenceMetadata,
   );
   const outputValidation = validateMoralTradeCopilotOutput(output);
-  const blockers = [...contractValidation.blockers, ...outputValidation.blockers];
+  const blockers = [
+    ...contractValidation.blockers,
+    ...outputValidation.blockers,
+    ...evidenceMetadataNormalization.blockers,
+  ];
 
   return jsonResponse(
     {
@@ -152,6 +172,9 @@ export async function POST(request: Request) {
       decisioningMode: "deterministic_draft_review_only",
       stateMutation: false,
       inputBundleUsed: contract.strictInputBundle,
+      evidenceMetadataSummary: summarizeMoralTradeCopilotEvidenceMetadata(
+        evidenceMetadataNormalization,
+      ),
       output,
       outputValidation,
       contractValidation,

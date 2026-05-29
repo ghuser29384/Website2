@@ -72,7 +72,7 @@
       "responseSchema": "copilot_review_response",
       "rateLimitSurface": "copilot_draft_review",
       "cacheControl": "private_no_store",
-      "fallback": "Return request or output validation blockers and deterministic manual-review fallback metadata; never store the submitted draft, contact counterparties, or change proposal state."
+      "fallback": "Return request, evidence-metadata, or output validation blockers and deterministic manual-review fallback metadata; never store the submitted draft, raw evidence artifacts, contact counterparties, or change proposal state."
     },
     {
       "key": "moral_trade_match_signal_contract",
@@ -408,7 +408,8 @@
       "purpose": "Ephemeral schema-bound draft review request for deterministic copilot critique without live state mutation.",
       "fields": [
         { "key": "draft", "type": "structured_draft", "required": true, "privacy": "private_request", "description": "Known Moral Trade draft fields only; unknown fields are ignored and the body is not stored." },
-        { "key": "citations", "type": "string_array", "required": false, "privacy": "private_request", "description": "Optional local evidence labels or source pointers returned only to the requester." }
+        { "key": "citations", "type": "string_array", "required": false, "privacy": "private_request", "description": "Optional local evidence labels or source pointers returned only to the requester." },
+        { "key": "evidenceMetadata", "type": "evidence_metadata_array", "required": false, "privacy": "private_request", "description": "Optional already-submitted evidence metadata only: id, claim label, evidence type, citation label, status, scope, redaction level, and submitted timestamp; raw artifact content, private notes, exact wishes, and contact details are rejected or ignored." }
       ]
     },
     {
@@ -421,6 +422,7 @@
         { "key": "decisioningMode", "type": "string", "required": true, "privacy": "public_contract", "description": "States that the route performs deterministic draft review only." },
         { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; the route cannot publish, match, disclose, or change proposal state." },
         { "key": "inputBundleUsed", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Strict local bundle sources used to produce the review output." },
+        { "key": "evidenceMetadataSummary", "type": "object", "required": true, "privacy": "private_response", "description": "Accepted, rejected, and ignored-field counts for already-submitted evidence metadata plus redactions applied; raw artifacts and private notes are never returned." },
         { "key": "output", "type": "moral_trade_copilot_output", "required": false, "privacy": "private_response", "description": "Approved status, completeness, trust assessment, match explanation, fixed verification loop, checklist, evidence table, review instructions, and reviewer summary when the request contains a structured draft." },
         { "key": "outputValidation", "type": "validator_result", "required": false, "privacy": "public_contract", "description": "Validation result for the generated output packet when one is produced." },
         { "key": "contractValidation", "type": "validator_result", "required": false, "privacy": "public_contract", "description": "Validation result for the copilot contract itself." },

@@ -387,8 +387,9 @@ export default async function MoralTradeTechnicalSpecPage() {
             <p>
               The audit recommends a strict input bundle for any drafting or reviewer-summary
               assistance. This contract publishes the policy registry, prohibited-pattern registry,
-              factor-code dictionary, verification-method taxonomy, redaction policy, and fixed
-              verification loop used before any draft can be treated as matchable.
+              factor-code dictionary, verification-method taxonomy, redaction policy, already
+              submitted evidence metadata boundary, and fixed verification loop used before any
+              draft can be treated as matchable.
             </p>
           </div>
           <div className="protocol-validator-card panel">
@@ -422,6 +423,14 @@ export default async function MoralTradeTechnicalSpecPage() {
                   <li key={entry.code}>{entry.code.replaceAll("_", " ")}</li>
                 ))}
               </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Evidence metadata boundary</h3>
+              <p>
+                The copilot review route accepts only redacted metadata for already submitted
+                evidence. Raw artifacts, private notes, contact details, and exact wishes are
+                rejected before they can enter a reviewer-summary packet.
+              </p>
             </article>
             <article className="panel protocol-contract-card">
               <h3>Verification methods</h3>

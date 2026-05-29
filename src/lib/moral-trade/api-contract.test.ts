@@ -45,6 +45,16 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "copilot_review_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "copilot_review_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "copilot_review_request")
+      ?.fields.some((field) => field.key === "evidenceMetadata"),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "copilot_review_response")
+      ?.fields.some((field) => field.key === "evidenceMetadataSummary" && field.required),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_evaluate_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_evaluate_response"));
@@ -173,12 +183,27 @@ test("api contract validation fails when route-referenced schema fields are miss
     schemaDefinitions: profile.schemaDefinitions
       .filter((schema) => schema.key !== "wish_registry_search_request")
       .map((schema) =>
-        schema.key === "funnel_event_request" ? { ...schema, fields: [] } : schema,
+        schema.key === "funnel_event_request"
+          ? { ...schema, fields: [] }
+          : schema.key === "copilot_review_request"
+            ? {
+                ...schema,
+                fields: schema.fields.filter((field) => field.key !== "evidenceMetadata"),
+              }
+            : schema.key === "copilot_review_response"
+              ? {
+                  ...schema,
+                  fields: schema.fields.filter(
+                    (field) => field.key !== "evidenceMetadataSummary",
+                  ),
+                }
+              : schema,
       ),
   };
   const validation = validateMoralTradeApiContractProfile(weakenedProfile);
 
   assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("copilot-review-nonmutating")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("schema-definitions")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("field-level-schema-contracts")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("analytics-redaction")));
