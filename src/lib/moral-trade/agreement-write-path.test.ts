@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildAgreementReviewProvenanceAgentRow,
+  buildAgreementReviewProvenanceConflictSelectors,
+  buildAgreementReviewProvenanceRows,
   buildAgreementProtocolProposalRecord,
   mapAgreementReviewStatusToProtocolStatus,
   validateAgreementEvidenceReviewReadiness,
@@ -173,4 +176,59 @@ test("agreement review disputes require a dispute record", () => {
   });
 
   assert.equal(validDispute.status, "pass");
+});
+
+test("agreement review transitions map to append-only provenance rows", () => {
+  const validation = validateAgreementReviewProtocolTransition({
+    actorAgentId: "11111111-1111-4111-8111-111111111111",
+    actorAgentKind: "operator",
+    currentCompletionState: "challenge_window_open",
+    currentReviewCaseStatus: "challenge_window_open",
+    evidenceReviewReadiness: completeEvidenceReviewReadiness,
+    generatedEntityIds: ["review_decision:review-case-123"],
+    hasEvidenceItem: true,
+    idempotencyKey: "agreement-review:agreement-123:owner-1:challenge_window_open:reviewed_complete",
+    nextReviewCaseStatus: "reviewed_complete",
+    recordedAt: "2026-05-29T14:00:00.000Z",
+    reviewerConfidence: 80,
+    subjectId: "agreement-123",
+    subjectKind: "agreement",
+    terms: completeTerms,
+    usedEntityIds: ["agreement-123", "review_case:review-case-123"],
+  });
+  const agentRow = buildAgreementReviewProvenanceAgentRow({
+    actorAgentId: "00000000-0000-4000-8000-000000000123",
+    actorAgentKind: "operator",
+    actorLabel: "Protocol reviewer",
+    ownerProfileId: "00000000-0000-4000-8000-000000000456",
+  });
+  const rows = buildAgreementReviewProvenanceRows({
+    actorProvenanceAgentId: "11111111-1111-4111-8111-111111111111",
+    agreementId: "agreement-123",
+    ownerProfileId: "00000000-0000-4000-8000-000000000456",
+    reviewCaseId: "review-case-123",
+    transitionEventRecord: validation.transitionEventRecord!,
+  });
+  const selectors = buildAgreementReviewProvenanceConflictSelectors(rows);
+
+  assert.equal(validation.status, "pass");
+  assert.equal(validation.transitionEventRecord?.subjectKind, "agreement");
+  assert.equal(agentRow.agent_key, "operator:00000000-0000-4000-8000-000000000123");
+  assert.equal(agentRow.kind, "operator");
+  assert.equal(rows.provenanceActivity.subject_kind, "agreement");
+  assert.equal(rows.provenanceActivity.kind, "challenge_window_opened");
+  assert.equal(rows.provenanceActivity.activity_hash, validation.transitionEventRecord?.eventHash);
+  assert.deepEqual(rows.provenanceActivity.agent_ids, [
+    "11111111-1111-4111-8111-111111111111",
+  ]);
+  assert.equal(rows.stateTransitionEvent.subject_kind, "agreement");
+  assert.equal(rows.stateTransitionEvent.subject_id, "agreement-123");
+  assert.equal(rows.stateTransitionEvent.to_status, "completion_reviewed");
+  assert.equal(rows.stateTransitionEvent.event_hash.length, 64);
+  assert.equal(selectors.provenanceActivity.tableName, "moral_trade_provenance_activities");
+  assert.equal(selectors.provenanceActivity.hashColumn, "activity_hash");
+  assert.equal(selectors.provenanceActivity.hashValue, rows.provenanceActivity.activity_hash);
+  assert.equal(selectors.stateTransitionEvent.tableName, "moral_trade_state_transition_events");
+  assert.equal(selectors.stateTransitionEvent.hashColumn, "event_hash");
+  assert.equal(selectors.stateTransitionEvent.hashValue, rows.stateTransitionEvent.event_hash);
 });

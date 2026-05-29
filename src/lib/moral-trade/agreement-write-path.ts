@@ -50,6 +50,8 @@ export interface AgreementEvidenceReviewReadiness {
   blockers: string[];
 }
 
+type AgreementReviewProvenanceAgentKind = "operator" | "external_reviewer";
+
 const AGREEMENT_EVIDENCE_REVIEW_CHECKS = [
   {
     key: "evidence_item_linked",
@@ -185,6 +187,8 @@ export function validateAgreementReviewProtocolTransition({
   subjectId = "review_decision:pending",
   subjectKind = "review_decision",
   transitionEventRecord,
+  usedEntityIds,
+  generatedEntityIds,
 }: {
   currentCompletionState: AgreementCompletionState;
   currentReviewCaseStatus: AgreementReviewCaseStatus;
@@ -204,6 +208,8 @@ export function validateAgreementReviewProtocolTransition({
   subjectId?: string;
   subjectKind?: string;
   transitionEventRecord?: MoralTradeStateTransitionEventRecord;
+  usedEntityIds?: string[];
+  generatedEntityIds?: string[];
 }): MoralTradeProposalStateTransitionValidation {
   const from =
     currentReviewCaseStatus === "open" || currentReviewCaseStatus === "under_review"
@@ -262,6 +268,8 @@ export function validateAgreementReviewProtocolTransition({
             subjectId,
             subjectKind,
             to,
+            usedEntityIds,
+            generatedEntityIds,
           })
         : undefined),
   });
@@ -277,4 +285,114 @@ export function validateAgreementReviewProtocolTransition({
     requiredChecks: [...new Set([...transition.requiredChecks, ...readiness.requiredChecks])],
     blockers: [...new Set([...transition.blockers, ...readiness.blockers])],
   };
+}
+
+function uniqueAgreementProtocolEntityIds(entityIds: string[]) {
+  return entityIds.filter((entityId, index, entries) => entries.indexOf(entityId) === index);
+}
+
+export function buildAgreementReviewProvenanceAgentRow({
+  actorAgentId,
+  actorAgentKind,
+  actorLabel,
+  ownerProfileId,
+}: {
+  actorAgentId: string;
+  actorAgentKind: AgreementReviewProvenanceAgentKind;
+  actorLabel: string;
+  ownerProfileId: string;
+}) {
+  return {
+    agent_key: `${actorAgentKind}:${actorAgentId}`,
+    kind: actorAgentKind,
+    label: actorLabel || "Agreement reviewer",
+    metadata: {
+      authUserId: actorAgentId,
+      source: "agreement_review_protocol_transition",
+    },
+    owner_profile_id: ownerProfileId,
+    redaction_level: "participant_private",
+  } as const;
+}
+
+export function buildAgreementReviewProvenanceRows({
+  actorProvenanceAgentId,
+  agreementId,
+  ownerProfileId,
+  reviewCaseId,
+  transitionEventRecord,
+}: {
+  actorProvenanceAgentId: string;
+  agreementId: string;
+  ownerProfileId: string;
+  reviewCaseId: string;
+  transitionEventRecord: MoralTradeStateTransitionEventRecord;
+}) {
+  const subjectKind = "agreement";
+  const subjectId =
+    transitionEventRecord.subjectKind === "agreement" ? transitionEventRecord.subjectId : agreementId;
+  const usedEntityIds = uniqueAgreementProtocolEntityIds([
+    agreementId,
+    `review_case:${reviewCaseId}`,
+    ...transitionEventRecord.usedEntityIds,
+  ]);
+  const generatedEntityIds = uniqueAgreementProtocolEntityIds([
+    `review_decision:${reviewCaseId}`,
+    ...transitionEventRecord.generatedEntityIds,
+  ]);
+
+  return {
+    provenanceActivity: {
+      activity_at: transitionEventRecord.recordedAt,
+      activity_hash: transitionEventRecord.eventHash,
+      agent_ids: [actorProvenanceAgentId],
+      generated_entity_ids: generatedEntityIds,
+      idempotency_key: `${transitionEventRecord.idempotencyKey}:activity`,
+      kind: transitionEventRecord.provenanceActivity,
+      owner_profile_id: ownerProfileId,
+      previous_activity_hash: transitionEventRecord.previousEventHash,
+      redaction_level: "participant_private",
+      subject_id: subjectId,
+      subject_kind: subjectKind,
+      used_entity_ids: usedEntityIds,
+    },
+    stateTransitionEvent: {
+      actor_agent_id: actorProvenanceAgentId,
+      actor_agent_kind: transitionEventRecord.actorAgentKind,
+      event_hash: transitionEventRecord.eventHash,
+      from_status: transitionEventRecord.from,
+      generated_entity_ids: generatedEntityIds,
+      idempotency_key: transitionEventRecord.idempotencyKey,
+      owner_profile_id: ownerProfileId,
+      previous_event_hash: transitionEventRecord.previousEventHash,
+      provenance_activity: transitionEventRecord.provenanceActivity,
+      recorded_at: transitionEventRecord.recordedAt,
+      redaction_level: "participant_private",
+      subject_id: subjectId,
+      subject_kind: subjectKind,
+      to_status: transitionEventRecord.to,
+      used_entity_ids: usedEntityIds,
+    },
+  } as const;
+}
+
+export function buildAgreementReviewProvenanceConflictSelectors(
+  rows: ReturnType<typeof buildAgreementReviewProvenanceRows>,
+) {
+  return {
+    provenanceActivity: {
+      hashColumn: "activity_hash",
+      hashValue: rows.provenanceActivity.activity_hash,
+      idempotency_key: rows.provenanceActivity.idempotency_key,
+      owner_profile_id: rows.provenanceActivity.owner_profile_id,
+      tableName: "moral_trade_provenance_activities",
+    },
+    stateTransitionEvent: {
+      hashColumn: "event_hash",
+      hashValue: rows.stateTransitionEvent.event_hash,
+      idempotency_key: rows.stateTransitionEvent.idempotency_key,
+      owner_profile_id: rows.stateTransitionEvent.owner_profile_id,
+      tableName: "moral_trade_state_transition_events",
+    },
+  } as const;
 }

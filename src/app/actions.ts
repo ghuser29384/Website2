@@ -92,10 +92,14 @@ import {
   buildMoralTradeOfferProtocolNotes,
   getMoralTradeOfferPersistenceStatus,
   isMoralTradeOfferCreateProvenanceUniqueViolation,
-  type MoralTradeOfferCreateProvenanceConflictSelector,
   validateMoralTradeOfferCreateTransition,
 } from "@/lib/moral-trade/offer-write-path";
-import { validateAgreementReviewProtocolTransition } from "@/lib/moral-trade/agreement-write-path";
+import {
+  buildAgreementReviewProvenanceAgentRow,
+  buildAgreementReviewProvenanceConflictSelectors,
+  buildAgreementReviewProvenanceRows,
+  validateAgreementReviewProtocolTransition,
+} from "@/lib/moral-trade/agreement-write-path";
 import { summarizeMoralTradeStateTransitionEventRecord } from "@/lib/moral-trade/protocol";
 
 type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
@@ -110,6 +114,7 @@ type AgreementRow = Database["public"]["Tables"]["agreements"]["Row"];
 type AgreementInsert = Database["public"]["Tables"]["agreements"]["Insert"];
 type AgreementUpdate = Database["public"]["Tables"]["agreements"]["Update"];
 type AgreementEventInsert = Database["public"]["Tables"]["agreement_events"]["Insert"];
+type AgreementReviewCaseRow = Database["public"]["Tables"]["agreement_review_cases"]["Row"];
 type AgreementEvidenceItemInsert =
   Database["public"]["Tables"]["agreement_evidence_items"]["Insert"];
 type AgreementEvidenceItemUpdate =
@@ -150,6 +155,13 @@ type AgreementPaymentStatus = NonNullable<
   Database["public"]["Tables"]["agreement_payments"]["Update"]["status"]
 >;
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+type MoralTradeProtocolProvenanceConflictSelector = {
+  hashColumn: string;
+  hashValue: string;
+  idempotency_key: string;
+  owner_profile_id: string;
+  tableName: string;
+};
 
 function redirectWithMessage(
   path: string,
@@ -367,7 +379,7 @@ async function confirmExistingMoralTradeOfferProvenanceRow({
   selector,
   supabase,
 }: {
-  selector: MoralTradeOfferCreateProvenanceConflictSelector;
+  selector: MoralTradeProtocolProvenanceConflictSelector;
   supabase: SupabaseServerClient;
 }) {
   const provenanceClient = supabase as any;
@@ -397,7 +409,7 @@ async function insertMoralTradeOfferProvenanceRow({
   supabase,
 }: {
   row: unknown;
-  selector: MoralTradeOfferCreateProvenanceConflictSelector;
+  selector: MoralTradeProtocolProvenanceConflictSelector;
   supabase: SupabaseServerClient;
 }) {
   const provenanceClient = supabase as any;
@@ -496,6 +508,218 @@ async function persistMoralTradeOfferCreateProtocolProvenance({
   return {
     error: transitionError,
     transition,
+  };
+}
+
+function normalizeAgreementReviewProvenanceAgentKind(
+  reviewerRole: NonNullable<AgreementReviewCaseUpdate["reviewer_role"]>,
+) {
+  return reviewerRole === "external_reviewer" ? "external_reviewer" : "operator";
+}
+
+async function getOrCreateMoralTradeAgreementReviewProvenanceAgentId({
+  actorAgentId,
+  actorAgentKind,
+  actorLabel,
+  ownerProfileId,
+  supabase,
+}: {
+  actorAgentId: string;
+  actorAgentKind: "operator" | "external_reviewer";
+  actorLabel: string;
+  ownerProfileId: string;
+  supabase: SupabaseServerClient;
+}) {
+  const agentRow = buildAgreementReviewProvenanceAgentRow({
+    actorAgentId,
+    actorAgentKind,
+    actorLabel,
+    ownerProfileId,
+  });
+  const provenanceClient = supabase as any;
+  const { data: existingAgent, error: existingAgentError } = await provenanceClient
+    .from("moral_trade_provenance_agents")
+    .select("id")
+    .eq("owner_profile_id", ownerProfileId)
+    .eq("agent_key", agentRow.agent_key)
+    .maybeSingle();
+
+  if (existingAgentError) {
+    return { error: existingAgentError as PostgrestError, id: null };
+  }
+
+  if (existingAgent?.id) {
+    return { error: null, id: String(existingAgent.id) };
+  }
+
+  const { data: insertedAgent, error: insertedAgentError } = await provenanceClient
+    .from("moral_trade_provenance_agents")
+    .insert(agentRow)
+    .select("id")
+    .single();
+
+  if (!insertedAgentError && insertedAgent?.id) {
+    return { error: null, id: String(insertedAgent.id) };
+  }
+
+  if (isMoralTradeOfferCreateProvenanceUniqueViolation(insertedAgentError)) {
+    const { data: racedAgent, error: racedAgentError } = await provenanceClient
+      .from("moral_trade_provenance_agents")
+      .select("id")
+      .eq("owner_profile_id", ownerProfileId)
+      .eq("agent_key", agentRow.agent_key)
+      .maybeSingle();
+
+    if (racedAgent?.id && !racedAgentError) {
+      return { error: null, id: String(racedAgent.id) };
+    }
+
+    return { error: racedAgentError ?? insertedAgentError, id: null };
+  }
+
+  return { error: insertedAgentError as PostgrestError, id: null };
+}
+
+async function persistMoralTradeAgreementReviewProtocolProvenance({
+  actorAgentId,
+  actorAgentKind,
+  actorLabel,
+  currentAgreement,
+  currentReviewCase,
+  disputeRecordCreated,
+  evidenceReviewReadiness,
+  nextReviewCaseStatus,
+  protocolTransitionRecordedAt,
+  reviewerConfidence,
+  supabase,
+}: {
+  actorAgentId: string;
+  actorAgentKind: "operator" | "external_reviewer";
+  actorLabel: string;
+  currentAgreement: AgreementRow;
+  currentReviewCase: AgreementReviewCaseRow;
+  disputeRecordCreated: boolean;
+  evidenceReviewReadiness: NonNullable<
+    Parameters<typeof validateAgreementReviewProtocolTransition>[0]["evidenceReviewReadiness"]
+  >;
+  nextReviewCaseStatus: AgreementReviewCaseRow["status"];
+  protocolTransitionRecordedAt: string;
+  reviewerConfidence: number;
+  supabase: SupabaseServerClient;
+}) {
+  const ownerProfileIds = [
+    currentAgreement.proposer_id,
+    currentAgreement.responder_id,
+  ].filter((profileId, index, profileIds) => profileIds.indexOf(profileId) === index);
+  let firstTransition: ReturnType<typeof validateAgreementReviewProtocolTransition> | null = null;
+
+  for (const ownerProfileId of ownerProfileIds) {
+    const agent = await getOrCreateMoralTradeAgreementReviewProvenanceAgentId({
+      actorAgentId,
+      actorAgentKind,
+      actorLabel,
+      ownerProfileId,
+      supabase,
+    });
+
+    if (!agent.id || agent.error) {
+      return {
+        error: agent.error,
+        transition: firstTransition,
+      };
+    }
+
+    const transition = validateAgreementReviewProtocolTransition({
+      actorAgentId: agent.id,
+      actorAgentKind,
+      currentCompletionState: currentAgreement.completion_state,
+      currentReviewCaseStatus: currentReviewCase.status,
+      disputeRecordCreated,
+      evidenceReviewReadiness,
+      generatedEntityIds: [`review_decision:${currentReviewCase.id}`],
+      hasEvidenceItem: evidenceReviewReadiness.hasEvidenceItem,
+      humanReviewApproved: true,
+      idempotencyKey: [
+        "agreement-review",
+        currentReviewCase.id,
+        ownerProfileId,
+        currentReviewCase.status,
+        nextReviewCaseStatus,
+        protocolTransitionRecordedAt,
+      ].join(":"),
+      nextReviewCaseStatus,
+      recordedAt: protocolTransitionRecordedAt,
+      reviewerConfidence,
+      subjectId: currentAgreement.id,
+      subjectKind: "agreement",
+      terms: {
+        source: currentAgreement.source,
+        notes: currentAgreement.notes,
+        structuredTerms: currentAgreement.structured_terms,
+        noTradeBaseline: currentAgreement.no_trade_baseline,
+        counterfactualDeclaration: currentAgreement.counterfactual_declaration,
+        durationTerms: currentAgreement.duration_terms,
+        exitConditions: currentAgreement.exit_conditions,
+        evidenceRule: currentAgreement.evidence_rule,
+        privacyScope: currentAgreement.privacy_scope,
+        disclosureScope: currentAgreement.disclosure_scope,
+      },
+      usedEntityIds: [
+        currentAgreement.id,
+        `review_case:${currentReviewCase.id}`,
+        ...(currentReviewCase.evidence_item_id
+          ? [`evidence_item:${currentReviewCase.evidence_item_id}`]
+          : []),
+      ],
+    });
+
+    firstTransition ??= transition;
+
+    if (transition.status === "fail") {
+      return {
+        error: new Error(
+          `Agreement review protocol provenance transition failed: ${transition.blockers.join(", ")}`,
+        ),
+        transition,
+      };
+    }
+
+    if (!transition.transitionEventRecord) {
+      continue;
+    }
+
+    const rows = buildAgreementReviewProvenanceRows({
+      actorProvenanceAgentId: agent.id,
+      agreementId: currentAgreement.id,
+      ownerProfileId,
+      reviewCaseId: currentReviewCase.id,
+      transitionEventRecord: transition.transitionEventRecord,
+    });
+    const selectors = buildAgreementReviewProvenanceConflictSelectors(rows);
+    const activityError = await insertMoralTradeOfferProvenanceRow({
+      row: rows.provenanceActivity,
+      selector: selectors.provenanceActivity,
+      supabase,
+    });
+
+    if (activityError) {
+      return { error: activityError, transition };
+    }
+
+    const transitionError = await insertMoralTradeOfferProvenanceRow({
+      row: rows.stateTransitionEvent,
+      selector: selectors.stateTransitionEvent,
+      supabase,
+    });
+
+    if (transitionError) {
+      return { error: transitionError, transition };
+    }
+  }
+
+  return {
+    error: null,
+    transition: firstTransition,
   };
 }
 
@@ -6598,9 +6822,14 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
     freshnessReviewed: readBoolean(formData, "evidence_freshness_reviewed"),
     agentLinksRecorded: readBoolean(formData, "evidence_agent_links_recorded"),
   };
+  const disputeRecordCreated = Boolean(
+    updatePayload.public_reasoning_summary ||
+      updatePayload.reviewer_notes ||
+      currentReviewCase.appeal_reason,
+  );
 
   const protocolTransitionRecordedAt = new Date().toISOString();
-  const protocolTransition = validateAgreementReviewProtocolTransition({
+  const protocolTransitionPrecheck = validateAgreementReviewProtocolTransition({
     currentCompletionState: currentAgreement.completion_state,
     currentReviewCaseStatus: currentReviewCase.status,
     nextReviewCaseStatus: nextStatus,
@@ -6619,11 +6848,7 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
     hasEvidenceItem: evidenceReviewReadiness.hasEvidenceItem,
     reviewerConfidence,
     evidenceReviewReadiness,
-    disputeRecordCreated: Boolean(
-      updatePayload.public_reasoning_summary ||
-        updatePayload.reviewer_notes ||
-        currentReviewCase.appeal_reason,
-    ),
+    disputeRecordCreated,
     humanReviewApproved: true,
     actorAgentId: admin.authUser.id,
     actorAgentKind: "operator",
@@ -6634,13 +6859,43 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
     subjectKind: "review_decision",
   });
 
-  if (protocolTransition.status === "fail") {
+  if (protocolTransitionPrecheck.status === "fail") {
     redirectWithMessage(
       returnTo,
       "error",
-      `The review state transition is not allowed by the Moral Trade protocol: ${protocolTransition.blockers.join(", ")}.`,
+      `The review state transition is not allowed by the Moral Trade protocol: ${protocolTransitionPrecheck.blockers.join(", ")}.`,
     );
   }
+
+  const provenanceResult = protocolTransitionPrecheck.transitionEventRecord
+    ? await persistMoralTradeAgreementReviewProtocolProvenance({
+        actorAgentId: admin.authUser.id,
+        actorAgentKind: normalizeAgreementReviewProvenanceAgentKind(reviewerRole),
+        actorLabel: admin.displayName,
+        currentAgreement,
+        currentReviewCase,
+        disputeRecordCreated,
+        evidenceReviewReadiness,
+        nextReviewCaseStatus: nextStatus,
+        protocolTransitionRecordedAt,
+        reviewerConfidence,
+        supabase,
+      })
+    : { error: null, transition: protocolTransitionPrecheck };
+
+  if (provenanceResult.error) {
+    logSupabaseActionError("Failed to persist agreement review protocol provenance", provenanceResult.error, {
+      agreementId: currentAgreement.id,
+      reviewCaseId,
+    });
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Review status was not changed because the required protocol provenance record could not be written.",
+    );
+  }
+
+  const protocolTransition = provenanceResult.transition ?? protocolTransitionPrecheck;
 
   const { data: reviewCase, error } = await supabase
     .from("agreement_review_cases")

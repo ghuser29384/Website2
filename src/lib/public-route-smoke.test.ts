@@ -960,10 +960,13 @@ test("accepted introductions can progress through agreement evidence review", ()
   assert.match(actionsSource, /createAgreementRoomFromIntroductionPlanAction/);
   assert.match(actionsSource, /updateAgreementReviewCaseAction/);
   assert.match(actionsSource, /validateAgreementReviewProtocolTransition/);
+  assert.match(actionsSource, /persistMoralTradeAgreementReviewProtocolProvenance/);
+  assert.match(actionsSource, /buildAgreementReviewProvenanceRows/);
   assert.match(actionsSource, /evidenceReviewReadiness/);
   assert.match(actionsSource, /readBoolean\(formData, "claim_scope_aligned"\)/);
   assert.match(actionsSource, /Evidence readiness checks/);
   assert.match(actionsSource, /The review state transition is not allowed by the Moral Trade protocol/);
+  assert.match(actionsSource, /Review status was not changed because the required protocol provenance record could not be written/);
   assert.match(actionsSource, /completion_reviewed/);
   assert.match(actionsSource, /repeat_counterparty/);
   assert.match(appDataSource, /agreement_evidence_items/);
@@ -1151,6 +1154,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const policyBundleSource = readRepoFile("src/lib/moral-trade/policy-bundle.ts");
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
   const offerWritePathSource = readRepoFile("src/lib/moral-trade/offer-write-path.ts");
+  const agreementWritePathSource = readRepoFile("src/lib/moral-trade/agreement-write-path.ts");
   const actionsSource = readRepoFile("src/app/actions.ts");
   const copilotSource = readRepoFile("src/lib/moral-trade/copilot.ts");
   const copilotContract = readRepoFile("config/moral-trade/copilot-contract.json");
@@ -1320,7 +1324,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(offerWritePathSource, /moral_trade_provenance_activities/);
   assert.match(offerWritePathSource, /moral_trade_state_transition_events/);
   assert.match(offerWritePathSource, /stateTransitionEvent/);
+  assert.match(agreementWritePathSource, /buildAgreementReviewProvenanceAgentRow/);
+  assert.match(agreementWritePathSource, /buildAgreementReviewProvenanceRows/);
+  assert.match(agreementWritePathSource, /buildAgreementReviewProvenanceConflictSelectors/);
+  assert.match(agreementWritePathSource, /moral_trade_provenance_activities/);
+  assert.match(agreementWritePathSource, /moral_trade_state_transition_events/);
   assert.match(actionsSource, /persistMoralTradeOfferCreateProtocolProvenance/);
+  assert.match(actionsSource, /persistMoralTradeAgreementReviewProtocolProvenance/);
   assert.match(actionsSource, /confirmExistingMoralTradeOfferProvenanceRow/);
   assert.match(actionsSource, /insertMoralTradeOfferProvenanceRow/);
   assert.match(actionsSource, /selector\.tableName/);
