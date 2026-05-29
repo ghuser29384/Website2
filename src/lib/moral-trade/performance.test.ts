@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   MORAL_TRADE_PERFORMANCE_AUDIT_DEFAULTS,
   auditMoralTradePerformanceSnapshot,
+  auditMoralTradeRouteRecoveryManifest,
   getMoralTradePerformanceProfile,
   validateMoralTradePerformanceProfile,
   type MoralTradePerformanceProfile,
@@ -24,6 +25,48 @@ test("performance profile publishes route resilience, Web Vitals, latency, and n
   assert.ok(profile.releaseGates.some((gate) => gate.key === "instrument_before_optimize"));
   assert.ok(profile.publicNonClaims.some((entry) => /Core Web Vitals/i.test(entry)));
   assert.ok(profile.performanceTests.includes("performance_snapshot_audit"));
+  assert.ok(profile.performanceTests.includes("route_recovery_manifest_audit"));
+  assert.ok(validation.checks.some((check) => check.id === "route-recovery-manifest"));
+});
+
+test("route recovery manifest covers Reasoning Center and public route families", () => {
+  const audit = auditMoralTradeRouteRecoveryManifest();
+  const reasoningEntry = audit.entries.find((entry) => entry.path === "/reasoning-center");
+
+  assert.equal(audit.status, "pass");
+  assert.equal(audit.coveredRouteCount, audit.routeCount);
+  assert.equal(audit.coverageRatio, 1);
+  assert.equal(reasoningEntry?.stateMutationOnFallback, false);
+  assert.ok(reasoningEntry?.recoverySurfaces.includes("route_specific_viewer_fallback"));
+  assert.ok(reasoningEntry?.recoverySurfaces.includes("packet_json_fallback"));
+});
+
+test("route recovery manifest fails missing routes, thin fallbacks, or mutating recovery", () => {
+  const profile = getMoralTradePerformanceProfile();
+  const audit = auditMoralTradeRouteRecoveryManifest({
+    profile,
+    manifest: [
+      {
+        routeFamilyKey: "core_protocol_contract",
+        path: "/moral-trade/technical-spec",
+        serverRenderable: true,
+        recoverySurfaces: ["global_error_boundary"],
+        stateMutationOnFallback: false,
+      },
+      {
+        routeFamilyKey: "reasoning_and_review",
+        path: "/reasoning-center",
+        serverRenderable: true,
+        recoverySurfaces: ["global_error_boundary", "safe_navigation"],
+        stateMutationOnFallback: true,
+      },
+    ],
+  });
+
+  assert.equal(audit.status, "fail");
+  assert.ok(audit.blockers.includes("route_recovery_surface_too_thin:/moral-trade/technical-spec"));
+  assert.ok(audit.blockers.includes("route_recovery_mutates_state:/reasoning-center"));
+  assert.ok(audit.blockers.includes("route_recovery_missing:/api/moral-trade/health"));
 });
 
 test("performance validation fails when measurement or privacy controls are missing", () => {

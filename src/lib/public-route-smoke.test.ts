@@ -1024,6 +1024,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(evaluationProfile, /human_controlled_decisions/);
   assert.match(performanceSource, /validateMoralTradePerformanceProfile/);
   assert.match(performanceSource, /auditMoralTradePerformanceSnapshot/);
+  assert.match(performanceSource, /auditMoralTradeRouteRecoveryManifest/);
+  assert.match(performanceSource, /route_specific_viewer_fallback/);
+  assert.match(performanceSource, /packet_json_fallback/);
   assert.match(performanceSource, /MORAL_TRADE_PERFORMANCE_AUDIT_DEFAULTS/);
   assert.match(performanceSource, /insufficient_data/);
   assert.match(performanceProfile, /route_error_rate/);
@@ -1036,6 +1039,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(performanceProfile, /web_vitals_capture/);
   assert.match(performanceProfile, /route_error_boundary/);
   assert.match(performanceProfile, /loading_state_inventory/);
+  assert.match(performanceProfile, /route_recovery_manifest_audit/);
   assert.match(performanceProfile, /instrument_before_optimize/);
   assert.match(performanceProfile, /Moral Trade does not claim verified Core Web Vitals/);
   assert.match(externalitySource, /validateMoralTradeExternalityProfile/);
@@ -1240,6 +1244,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
     /Route resilience and Web Vitals are measured before readiness is claimed/,
   );
   assert.match(technicalSpecPage, /performanceProfile\.publicNonClaims/);
+  assert.match(technicalSpecPage, /Route recovery manifest/);
+  assert.match(technicalSpecPage, /routeRecoveryAudit\.coverageRatio/);
   assert.match(technicalSpecPage, /Performance non-claim/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/performance\/health/);
   assert.match(technicalSpecPage, /Externality contract/);
@@ -1382,6 +1388,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /evaluationSampleAuditStatuses/);
   assert.match(healthRoute, /evaluationSurfacingDeviationReviews/);
   assert.match(performanceHealthRoute, /validateMoralTradePerformanceProfile/);
+  assert.match(performanceHealthRoute, /auditMoralTradeRouteRecoveryManifest/);
+  assert.match(performanceHealthRoute, /reasoningCenterRecovery/);
   assert.match(performanceHealthRoute, /auditDefaults/);
   assert.match(performanceHealthRoute, /publicNonClaims/);
   assert.match(externalityHealthRoute, /validateMoralTradeExternalityProfile/);

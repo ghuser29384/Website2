@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-performance-v0.1-2026-05",
+  "version": "moral-trade-performance-v0.2-2026-05",
   "purpose": "Public performance and route-resilience contract for the core Moral Trade experience, including loading-state recovery, Web Vitals, API latency, error-rate measurement, cache posture, and honest non-claims.",
   "measurementCadence": "weekly_internal_monthly_public_aggregate",
   "observedFriction": [
@@ -165,6 +165,7 @@
   "performanceTests": [
     "performance_profile_validator",
     "performance_snapshot_audit",
+    "route_recovery_manifest_audit",
     "loading_error_boundary_smoke",
     "route_manifest_coverage_smoke",
     "performance_health_route_contract_smoke",

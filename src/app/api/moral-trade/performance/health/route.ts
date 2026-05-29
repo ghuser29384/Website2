@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   MORAL_TRADE_PERFORMANCE_AUDIT_DEFAULTS,
+  auditMoralTradeRouteRecoveryManifest,
   getMoralTradePerformanceProfile,
   validateMoralTradePerformanceProfile,
 } from "@/lib/moral-trade/performance";
@@ -11,6 +12,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const profile = getMoralTradePerformanceProfile();
   const validation = validateMoralTradePerformanceProfile(profile);
+  const routeRecoveryAudit = auditMoralTradeRouteRecoveryManifest({ profile });
 
   return NextResponse.json({
     ok: validation.status === "pass",
@@ -33,6 +35,16 @@ export async function GET() {
         key: family.key,
         paths: family.paths,
       })),
+      routeRecoveryAudit: {
+        status: routeRecoveryAudit.status,
+        routeCount: routeRecoveryAudit.routeCount,
+        coveredRouteCount: routeRecoveryAudit.coveredRouteCount,
+        coverageRatio: routeRecoveryAudit.coverageRatio,
+        blockers: routeRecoveryAudit.blockers,
+        reasoningCenterRecovery: routeRecoveryAudit.entries
+          .find((entry) => entry.path === "/reasoning-center")
+          ?.recoverySurfaces ?? [],
+      },
       releaseGates: profile.releaseGates.map((gate) => gate.key),
       publicNonClaims: profile.publicNonClaims,
       performanceTests: profile.performanceTests,

@@ -62,6 +62,7 @@ import {
   validateMoralTradeEvaluationProfile,
 } from "@/lib/moral-trade/evaluation";
 import {
+  auditMoralTradeRouteRecoveryManifest,
   getMoralTradePerformanceProfile,
   validateMoralTradePerformanceProfile,
 } from "@/lib/moral-trade/performance";
@@ -140,6 +141,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const evaluationSampleAudits = getMoralTradeEvaluationSampleAudits();
   const performanceProfile = getMoralTradePerformanceProfile();
   const performanceValidation = validateMoralTradePerformanceProfile(performanceProfile);
+  const routeRecoveryAudit = auditMoralTradeRouteRecoveryManifest({
+    profile: performanceProfile,
+  });
   const externalityProfile = getMoralTradeExternalityProfile();
   const externalityValidation = validateMoralTradeExternalityProfile(externalityProfile);
   const apiContractProfile = getMoralTradeApiContractProfile();
@@ -1082,6 +1086,14 @@ export default async function MoralTradeTechnicalSpecPage() {
                   <li key={family.key}>{family.key.replaceAll("_", " ")}</li>
                 ))}
               </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Route recovery manifest</h3>
+              <p>
+                Status {routeRecoveryAudit.status}; {routeRecoveryAudit.coveredRouteCount}/
+                {routeRecoveryAudit.routeCount} route(s) covered, recovery ratio{" "}
+                {routeRecoveryAudit.coverageRatio}.
+              </p>
             </article>
           </div>
           <div className="data-grid">

@@ -1,7 +1,7 @@
 import performanceProfileJson from "../../../config/moral-trade/performance-profile.json";
 
 export const MORAL_TRADE_PERFORMANCE_VALIDATOR_VERSION =
-  "moral-trade-performance-validator-v0.1";
+  "moral-trade-performance-validator-v0.2";
 
 export type MoralTradePerformanceThreshold = {
   operator: "lte" | "gte" | "eq";
@@ -72,6 +72,23 @@ export interface MoralTradePerformanceSnapshotAudit {
   blockers: string[];
 }
 
+export interface MoralTradeRouteRecoveryManifestEntry {
+  routeFamilyKey: string;
+  path: string;
+  serverRenderable: boolean;
+  recoverySurfaces: string[];
+  stateMutationOnFallback: boolean;
+}
+
+export interface MoralTradeRouteRecoveryManifestAudit {
+  status: "pass" | "fail";
+  routeCount: number;
+  coveredRouteCount: number;
+  coverageRatio: number;
+  entries: MoralTradeRouteRecoveryManifestEntry[];
+  blockers: string[];
+}
+
 const performanceProfile = performanceProfileJson as MoralTradePerformanceProfile;
 
 export const MORAL_TRADE_PERFORMANCE_AUDIT_DEFAULTS = {
@@ -125,6 +142,7 @@ const REQUIRED_PUBLIC_NON_CLAIMS = [
 const REQUIRED_TESTS = [
   "performance_profile_validator",
   "performance_snapshot_audit",
+  "route_recovery_manifest_audit",
   "loading_error_boundary_smoke",
   "route_manifest_coverage_smoke",
   "performance_health_route_contract_smoke",
@@ -154,8 +172,166 @@ function finiteNumber(value: number | null): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function roundRatio(value: number) {
+  return Number(value.toFixed(4));
+}
+
+const SAMPLE_ROUTE_RECOVERY_MANIFEST = [
+  {
+    routeFamilyKey: "core_protocol_contract",
+    path: "/moral-trade/technical-spec",
+    serverRenderable: true,
+    recoverySurfaces: ["global_error_boundary", "safe_navigation", "contract_links"],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "core_protocol_contract",
+    path: "/api/moral-trade/health",
+    serverRenderable: true,
+    recoverySurfaces: ["validator_blockers", "no_store_dynamic"],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "core_protocol_contract",
+    path: "/api/moral-trade/api-contract",
+    serverRenderable: true,
+    recoverySurfaces: ["validator_blockers", "no_store_dynamic"],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "offer_marketplace",
+    path: "/offers",
+    serverRenderable: true,
+    recoverySurfaces: ["global_error_boundary", "worked_examples", "safe_navigation"],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "offer_marketplace",
+    path: "/offers/new",
+    serverRenderable: true,
+    recoverySurfaces: ["global_error_boundary", "client_validation_preview", "safe_navigation"],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "offer_marketplace",
+    path: "/offers/examples/[exampleId]",
+    serverRenderable: true,
+    recoverySurfaces: ["static_worked_examples", "global_error_boundary", "safe_navigation"],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "background_networking",
+    path: "/background-networking",
+    serverRenderable: true,
+    recoverySurfaces: ["global_error_boundary", "broad_privacy_preview", "safe_navigation"],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "background_networking",
+    path: "/wish-registry",
+    serverRenderable: true,
+    recoverySurfaces: ["global_error_boundary", "example_previews", "safe_navigation"],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "background_networking",
+    path: "/api/wish-registry/search",
+    serverRenderable: true,
+    recoverySurfaces: ["sparse_result_suppression", "broad_previews", "rate_limit_surface"],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "reasoning_and_review",
+    path: "/reasoning-center",
+    serverRenderable: true,
+    recoverySurfaces: [
+      "route_specific_viewer_fallback",
+      "global_error_boundary",
+      "packet_json_fallback",
+      "safe_navigation",
+    ],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "reasoning_and_review",
+    path: "/validation",
+    serverRenderable: true,
+    recoverySurfaces: ["static_review_rulebook", "global_error_boundary", "safe_navigation"],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "reasoning_and_review",
+    path: "/trust",
+    serverRenderable: true,
+    recoverySurfaces: ["static_trust_contract", "global_error_boundary", "safe_navigation"],
+    stateMutationOnFallback: false,
+  },
+] as const satisfies readonly MoralTradeRouteRecoveryManifestEntry[];
+
 export function getMoralTradePerformanceProfile() {
   return performanceProfile;
+}
+
+export function auditMoralTradeRouteRecoveryManifest({
+  manifest = SAMPLE_ROUTE_RECOVERY_MANIFEST,
+  profile = performanceProfile,
+}: {
+  manifest?: readonly MoralTradeRouteRecoveryManifestEntry[];
+  profile?: MoralTradePerformanceProfile;
+} = {}): MoralTradeRouteRecoveryManifestAudit {
+  const expectedRoutes = profile.routeFamilies.flatMap((family) =>
+    family.paths.map((path) => ({ path, routeFamilyKey: family.key })),
+  );
+  const manifestByPath = new Map(manifest.map((entry) => [entry.path, entry]));
+  const blockers: string[] = [];
+  let coveredRouteCount = 0;
+
+  for (const expectedRoute of expectedRoutes) {
+    const entry = manifestByPath.get(expectedRoute.path);
+
+    if (!entry) {
+      blockers.push(`route_recovery_missing:${expectedRoute.path}`);
+      continue;
+    }
+
+    if (entry.routeFamilyKey !== expectedRoute.routeFamilyKey) {
+      blockers.push(`route_recovery_family_mismatch:${entry.path}`);
+    }
+
+    if (!entry.serverRenderable && !entry.recoverySurfaces.includes("validator_blockers")) {
+      blockers.push(`route_recovery_not_server_renderable:${entry.path}`);
+    }
+
+    if (entry.recoverySurfaces.length < 2) {
+      blockers.push(`route_recovery_surface_too_thin:${entry.path}`);
+    }
+
+    if (entry.stateMutationOnFallback) {
+      blockers.push(`route_recovery_mutates_state:${entry.path}`);
+    }
+
+    if (
+      entry.routeFamilyKey === expectedRoute.routeFamilyKey &&
+      (entry.serverRenderable || entry.recoverySurfaces.includes("validator_blockers")) &&
+      entry.recoverySurfaces.length >= 2 &&
+      !entry.stateMutationOnFallback
+    ) {
+      coveredRouteCount += 1;
+    }
+  }
+
+  const coverageRatio = expectedRoutes.length
+    ? roundRatio(coveredRouteCount / expectedRoutes.length)
+    : 0;
+
+  return {
+    status: blockers.length ? "fail" : "pass",
+    routeCount: expectedRoutes.length,
+    coveredRouteCount,
+    coverageRatio,
+    entries: [...manifest],
+    blockers,
+  };
 }
 
 export function validateMoralTradePerformanceProfile(
@@ -166,6 +342,7 @@ export function validateMoralTradePerformanceProfile(
   const routeFamilyKeys = profile.routeFamilies.map((family) => family.key);
   const releaseGateKeys = profile.releaseGates.map((gate) => gate.key);
   const releaseGateRequirements = profile.releaseGates.flatMap((gate) => gate.requires);
+  const routeRecoveryAudit = auditMoralTradeRouteRecoveryManifest({ profile });
   const checks = [
     check(
       "metric-targets",
@@ -193,6 +370,13 @@ export function validateMoralTradePerformanceProfile(
       hasAll(routeFamilyKeys, REQUIRED_ROUTE_FAMILIES) &&
         profile.routeFamilies.every((family) => family.paths.length > 0 && family.recoveryExpectation),
       routeFamilyKeys.join(", "),
+    ),
+    check(
+      "route-recovery-manifest",
+      "Route recovery manifest covers public Moral Trade route families",
+      routeRecoveryAudit.status === "pass" &&
+        routeRecoveryAudit.coverageRatio >= MORAL_TRADE_PERFORMANCE_AUDIT_DEFAULTS.minSpecificLoadingRecoveryRatio,
+      `${routeRecoveryAudit.coveredRouteCount}/${routeRecoveryAudit.routeCount} route(s), blockers ${routeRecoveryAudit.blockers.length}.`,
     ),
     check(
       "release-gates",
