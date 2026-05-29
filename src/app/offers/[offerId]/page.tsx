@@ -7,7 +7,6 @@ import {
   acceptInterestAction,
   addOfferCommentAction,
   addOfferRecommendationAction,
-  expressGuestInterestAction,
   expressInterestAction,
   removeOfferRecommendationAction,
   toggleCartAction,
@@ -170,6 +169,15 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           offer.donationOffset.pool_id
         }&offset_pool_side=${offer.donationOffset.pool_side === "side_a" ? "side_b" : "side_a"}`
       : null;
+  const offerReturnTo = `/offers/${offer.id}`;
+  const respondReturnTo = `${offerReturnTo}#respond`;
+  const createSimilarHref = `/offers/new?mode=${offer.mode}&source_offer=${offer.id}`;
+  const authCreateSimilarHref = viewer
+    ? createSimilarHref
+    : `/signup?returnTo=${encodeURIComponent(createSimilarHref)}`;
+  const signInToOfferHref = `/login?returnTo=${encodeURIComponent(offerReturnTo)}`;
+  const signInToRespondHref = `/login?returnTo=${encodeURIComponent(respondReturnTo)}`;
+  const signUpToRespondHref = `/signup?returnTo=${encodeURIComponent(respondReturnTo)}`;
   const reviewInput = {
     mode: offer.mode,
     verification: offer.verification,
@@ -253,11 +261,16 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               {viewer && !isOwner ? (
                 <form action={toggleCartAction}>
                   <input name="offer_id" type="hidden" value={offer.id} />
-                  <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
+                  <input name="return_to" type="hidden" value={offerReturnTo} />
                   <button className="button button-primary" type="submit">
-                    {cartState.isInCart ? "Remove from cart" : "Add to cart"}
+                    {cartState.isInCart ? "Remove saved offer" : "Save offer"}
                   </button>
                 </form>
+              ) : null}
+              {!isOwner ? (
+                <Link className="button button-secondary" href={authCreateSimilarHref}>
+                  Create similar
+                </Link>
               ) : null}
               {!viewer ? (
                 <>
@@ -265,27 +278,24 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                     <>
                       <Link
                         className="button button-primary"
-                        href={`/signup?next=${encodeURIComponent(poolJoinHref ?? `/offers/${offer.id}`)}`}
+                        href={`/signup?returnTo=${encodeURIComponent(poolJoinHref ?? offerReturnTo)}`}
                       >
                         Create account to join pool
                       </Link>
                       <Link
                         className="button button-secondary"
-                        href={`/login?next=${encodeURIComponent(poolJoinHref ?? `/offers/${offer.id}`)}`}
+                        href={`/login?returnTo=${encodeURIComponent(poolJoinHref ?? offerReturnTo)}`}
                       >
                         Log in
                       </Link>
                     </>
                   ) : (
                     <>
-                      <a className="button button-primary" href="#respond">
-                        Respond without account
-                      </a>
-                      <Link
-                        className="button button-secondary"
-                        href={`/login?next=${encodeURIComponent(`/offers/${offerId}`)}`}
-                      >
-                        Log in
+                      <Link className="button button-primary" href={signInToRespondHref}>
+                        Contact after sign-in
+                      </Link>
+                      <Link className="button button-secondary" href={signInToOfferHref}>
+                        Sign in
                       </Link>
                     </>
                   )}
@@ -600,7 +610,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
 
                   <form action={updateOfferDiscountAction} className="stack-form">
                     <input name="offer_id" type="hidden" value={offer.id} />
-                    <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
+                    <input name="return_to" type="hidden" value={offerReturnTo} />
                     <label className="field">
                       <span>Discount or reduced burden</span>
                       <textarea
@@ -687,13 +697,13 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                   <div className="form-actions">
                     <Link
                       className="button button-primary"
-                      href={`/signup?next=${encodeURIComponent(poolJoinHref ?? `/offers/${offer.id}`)}`}
+                      href={`/signup?returnTo=${encodeURIComponent(poolJoinHref ?? offerReturnTo)}`}
                     >
                       Create account to join pool
                     </Link>
                     <Link
                       className="button button-secondary"
-                      href={`/login?next=${encodeURIComponent(poolJoinHref ?? `/offers/${offer.id}`)}`}
+                      href={`/login?returnTo=${encodeURIComponent(poolJoinHref ?? offerReturnTo)}`}
                     >
                       Log in
                     </Link>
@@ -702,66 +712,21 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               ) : (
                 <div className="clean-stack">
                   <p className="route-text">
-                    You can respond without creating an account. Leave your email and a short
-                    note, and the offer owner can follow up directly. Create an account later if
-                    you want a public profile, comments, cart, and formal agreement tracking.
+                    Contact and response paths stay sign-in and consent gated. Create an account
+                    or sign in before sending a message so private wishes, contact details, and
+                    agreement history remain tied to a member-controlled record.
                   </p>
-                  <form action={expressGuestInterestAction} className="stack-form">
-                    <input name="offer_id" type="hidden" value={offer.id} />
-                    <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
-                    <label className="field">
-                      <span>Your name</span>
-                      <input
-                        name="display_name"
-                        placeholder="Optional. How should the owner identify you?"
-                        type="text"
-                      />
-                    </label>
-                    <div className="field-grid">
-                      <label className="field compact-field">
-                        <span>Email</span>
-                        <input
-                          name="contact_email"
-                          placeholder="you@example.org"
-                          required
-                          type="email"
-                        />
-                      </label>
-                      <label className="field compact-field">
-                        <span>City</span>
-                        <input name="city" placeholder="Optional" type="text" />
-                      </label>
-                    </div>
-                    <label className="field">
-                      <span>Region</span>
-                      <input name="region" placeholder="State, province, or country" type="text" />
-                    </label>
-                    <label className="field">
-                      <span>Message</span>
-                      <textarea
-                        name="message"
-                        placeholder="Explain why the terms seem prudentially and morally worthwhile to you."
-                        required
-                        rows={5}
-                      />
-                    </label>
-
-                    <div className="form-actions">
-                      <button className="button button-primary" type="submit">
-                        {offer.mode === "offset"
-                          ? offer.donationOffset?.participation_mode === "pool"
-                            ? "Join pool without account"
-                            : "Accept offset without account"
-                          : "Continue without account"}
-                      </button>
-                      <Link
-                        className="button button-secondary"
-                        href={`/login?next=${encodeURIComponent(`/offers/${offer.id}`)}`}
-                      >
-                        Log in instead
-                      </Link>
-                    </div>
-                  </form>
+                  <div className="form-actions">
+                    <Link className="button button-primary" href={signInToRespondHref}>
+                      Sign in to contact
+                    </Link>
+                    <Link className="button button-secondary" href={signUpToRespondHref}>
+                      Create account
+                    </Link>
+                    <Link className="button button-secondary" href={authCreateSimilarHref}>
+                      Create similar
+                    </Link>
+                  </div>
                 </div>
               )}
 
@@ -780,9 +745,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
               <p className="eyebrow">Incoming interest</p>
               <h2>Responses to this offer</h2>
               <p>
-                Signed-in members and guest respondents appear together here. Member responses can
-                be accepted into formal agreements, while guest responses let owners begin by
-                email and invite account creation later.
+                Signed-in member responses appear here. Any previously captured guest records
+                stay owner-visible for continuity, but new public contact paths now require
+                sign-in before private messages or contact details are shared.
               </p>
             </div>
 
@@ -828,7 +793,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                       <form action={acceptInterestAction} className="stack-form compact-form">
                         <input name="interest_id" type="hidden" value={interest.memberInterestId ?? ""} />
                         <input name="offer_id" type="hidden" value={offer.id} />
-                        <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
+                        <input name="return_to" type="hidden" value={offerReturnTo} />
                         <label className="field">
                           <span>Agreement notes</span>
                           <textarea
@@ -855,7 +820,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                           value={interest.guestInterestId ?? ""}
                         />
                         <input name="offer_id" type="hidden" value={offer.id} />
-                        <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
+                        <input name="return_to" type="hidden" value={offerReturnTo} />
                         <label className="field">
                           <span>Agreement notes</span>
                           <textarea

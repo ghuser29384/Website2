@@ -1954,6 +1954,13 @@ test("offer detail and worked examples expose instrumented review workflow cards
   assert.match(offerDetailSource, /Why this record can or cannot be relied on yet/);
   assert.match(offerDetailSource, /reviewWorkflowCards\.map/);
   assert.match(offerDetailSource, /review-factor-list/);
+  assert.match(offerDetailSource, /Contact after sign-in/);
+  assert.match(offerDetailSource, /Save offer/);
+  assert.match(offerDetailSource, /createSimilarHref/);
+  assert.match(offerDetailSource, /returnTo=\$\{encodeURIComponent\(respondReturnTo\)\}/);
+  assert.match(offerDetailSource, /new public contact paths now require\s+sign-in/);
+  assert.equal(offerDetailSource.includes("expressGuestInterestAction"), false);
+  assert.equal(offerDetailSource.includes("Respond without account"), false);
   assert.match(workedExampleSource, /getOfferReviewWorkflowCards/);
   assert.match(workedExampleSource, /Worked example; manual review required before reliance/);
   assert.match(workedExampleSource, /reviewWorkflowCards\.map/);
