@@ -633,6 +633,9 @@ test("cohort page exposes founding progress, referral, and one-counterparty invi
   assert.match(cohortPage, /Start with one concrete action/);
   assert.match(cohortPage, /What counts as progress/);
   assert.match(cohortPage, /Activated account/);
+  assert.match(cohortPage, /Open worked examples/);
+  assert.match(cohortPage, /Request concierge intro/);
+  assert.match(cohortPage, /Open public-good flow/);
   assert.match(cohortPage, /Invite one serious counterparty/);
   assert.match(cohortPage, /Your referral link/);
   assert.match(cohortPage, /Founding progress/);
@@ -645,6 +648,7 @@ test("cohort page exposes founding progress, referral, and one-counterparty invi
   assert.match(signupPage, /Log public-good action/);
   assert.match(actionsSource, /return_to/);
   assert.match(actionsSource, /Choose one low-risk first action/);
+  assert.equal(cohortPage.includes(">Start here<"), false);
 });
 
 test("growth activation surfaces persist attribution, onboarding, webinars, and cloning", () => {
@@ -692,8 +696,13 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(actionsSource, /createWebinarRsvpAction/);
   assert.match(actionsSource, /referral_invite_drafted/);
   assert.match(onboardingPage, /Activation wizard/);
+  assert.match(growthSource, /actionLabel: "Open worked examples"/);
+  assert.match(growthSource, /actionLabel: "Create broad preview"/);
+  assert.match(growthSource, /actionLabel: "Open public-good flow"/);
   assert.match(partnerPage, /generateStaticParams/);
   assert.match(partnerPage, /createWebinarRsvpAction/);
+  assert.match(partnerPage, /action\.actionLabel/);
+  assert.equal(partnerPage.includes(">Start here<"), false);
   assert.match(adminGrowthPage, /Growth dashboard/);
   assert.match(newOfferPage, /getWorkedExampleTemplate/);
   assert.match(newOfferPage, /Cloned from worked example/);

@@ -92,21 +92,25 @@ export const FIRST_ACTIONS = [
     value: "clone_example",
     label: "Clone a worked example",
     href: "/offers?view=examples",
+    actionLabel: "Open worked examples",
   },
   {
     value: "create_broad_preview",
     label: "Create a broad wish preview",
     href: "/dashboard#wish-profile",
+    actionLabel: "Create broad preview",
   },
   {
     value: "log_public_good_action",
     label: "Log a public-good action",
     href: "/mpgf",
+    actionLabel: "Open public-good flow",
   },
   {
     value: "invite_counterparty",
     label: "Invite one serious counterparty",
     href: "/cohort#invite",
+    actionLabel: "Draft one invite",
   },
 ] as const;
 

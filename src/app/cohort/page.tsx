@@ -43,6 +43,7 @@ const cohortStartPaths = [
       "Inspect pledge swaps, donation offsets, and public-good commitments before drafting anything public.",
     href: "/offers?view=examples",
     icon: "example",
+    actionLabel: "Open worked examples",
   },
   {
     title: "Request a private intro",
@@ -50,6 +51,7 @@ const cohortStartPaths = [
       "Use broad previews and concierge review before exact wishes, identities, or contact details are shared.",
     href: "/background-networking#concierge-intake",
     icon: "profile",
+    actionLabel: "Request concierge intro",
   },
   {
     title: "Start a public-good action",
@@ -57,6 +59,7 @@ const cohortStartPaths = [
       "Coordinate around thresholded commitments and external evidence without platform custody claims.",
     href: "/mpgf",
     icon: "fund",
+    actionLabel: "Open public-good flow",
   },
 ] as const;
 
@@ -183,7 +186,7 @@ export default async function CohortPage({ searchParams }: CohortPageProps) {
                   <h3>{path.title}</h3>
                   <p>{path.description}</p>
                 </div>
-                <span className="inline-link">Start here</span>
+                <span className="inline-link">{path.actionLabel}</span>
               </Link>
             ))}
           </div>

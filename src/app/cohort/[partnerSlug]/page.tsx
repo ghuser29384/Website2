@@ -141,7 +141,7 @@ export default async function PartnerCohortPage({
                   <h3>{action.label}</h3>
                   <p>{action.href}</p>
                 </div>
-                <span className="inline-link">Start here</span>
+                <span className="inline-link">{action.actionLabel}</span>
               </Link>
             ))}
           </div>
