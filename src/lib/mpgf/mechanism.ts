@@ -2,6 +2,10 @@ import {
   demoAlternatives,
   demoBallots,
   demoCycle,
+  demoMpgfAssurancePledges,
+  demoMpgfAssuranceRound,
+  demoMpgfMatchPool,
+  demoMpgfPublicGoodsCampaigns,
   demoPledges,
   demoRecurringCommitments,
   MPGF_COPY,
@@ -17,6 +21,15 @@ import type {
   MpgfLedgerTransaction,
   MpgfPledge,
   MpgfProtocolSnapshot,
+  MpgfPublicGoodsAllocationLine,
+  MpgfPublicGoodsAssuranceStatus,
+  MpgfPublicGoodsCampaign,
+  MpgfPublicGoodsCampaignStatus,
+  MpgfPublicGoodsCaptureMode,
+  MpgfPublicGoodsMatchPool,
+  MpgfPublicGoodsPledge,
+  MpgfPublicGoodsRound,
+  MpgfPublicGoodsRoundAllocation,
   MpgfPublicSummary,
   MpgfRationalJson,
   MpgfRecurringContributionCommitment,
@@ -117,6 +130,296 @@ export function clampBasisPoints(value: number) {
   }
 
   return Math.max(0, Math.min(10_000, Math.round(value)));
+}
+
+function clampNonNegativeInteger(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round(value));
+}
+
+function sortedRemainderIndexes(values: Array<{ id: string; remainder: number }>) {
+  return [...values]
+    .map((value, index) => ({ ...value, index }))
+    .sort((left, right) => right.remainder - left.remainder || left.id.localeCompare(right.id));
+}
+
+function distributeIntegerBudget<T extends { id: string }>(
+  items: T[],
+  budgetCents: number,
+  weightForItem: (item: T) => number,
+) {
+  const budget = clampNonNegativeInteger(budgetCents);
+  const totalWeight = items.reduce((sum, item) => sum + Math.max(0, weightForItem(item)), 0);
+
+  if (items.length === 0 || budget <= 0 || totalWeight <= 0) {
+    return new Map(items.map((item) => [item.id, 0]));
+  }
+
+  const rawAllocations = items.map((item) => {
+    const raw = (Math.max(0, weightForItem(item)) / totalWeight) * budget;
+    return {
+      id: item.id,
+      floor: Math.floor(raw),
+      remainder: raw - Math.floor(raw),
+    };
+  });
+  const allocatedFloor = rawAllocations.reduce((sum, item) => sum + item.floor, 0);
+  const result = new Map(rawAllocations.map((item) => [item.id, item.floor]));
+  let remainderToAssign = budget - allocatedFloor;
+
+  for (const item of sortedRemainderIndexes(rawAllocations)) {
+    if (remainderToAssign <= 0) {
+      break;
+    }
+
+    result.set(item.id, (result.get(item.id) ?? 0) + 1);
+    remainderToAssign -= 1;
+  }
+
+  return result;
+}
+
+function isActiveAssurancePledge(pledge: MpgfPublicGoodsPledge) {
+  return pledge.status === "pledged" || pledge.status === "captured";
+}
+
+function isEligibleAssurancePledge(pledge: MpgfPublicGoodsPledge) {
+  return isActiveAssurancePledge(pledge) && pledge.eligibilityState === "eligible" && pledge.amountCents > 0;
+}
+
+function collapseEligiblePledgesByUser(pledges: MpgfPublicGoodsPledge[]) {
+  const byUser = new Map<
+    string,
+    {
+      id: string;
+      userId: string;
+      amountCents: number;
+      humanScoreBps: number;
+      captureModes: Set<MpgfPublicGoodsCaptureMode>;
+    }
+  >();
+
+  for (const pledge of pledges.filter(isEligibleAssurancePledge)) {
+    const existing = byUser.get(pledge.userId);
+
+    if (!existing) {
+      byUser.set(pledge.userId, {
+        id: pledge.userId,
+        userId: pledge.userId,
+        amountCents: clampNonNegativeInteger(pledge.amountCents),
+        humanScoreBps: clampBasisPoints(pledge.humanScoreBps),
+        captureModes: new Set([pledge.captureMode]),
+      });
+      continue;
+    }
+
+    existing.amountCents += clampNonNegativeInteger(pledge.amountCents);
+    existing.humanScoreBps = Math.max(existing.humanScoreBps, clampBasisPoints(pledge.humanScoreBps));
+    existing.captureModes.add(pledge.captureMode);
+  }
+
+  return [...byUser.values()];
+}
+
+function weightedQuadraticContributionScore(input: { amountCents: number; humanScoreBps: number }) {
+  const boundedHumanScore = clampBasisPoints(input.humanScoreBps) / 10_000;
+  const boundedIdentityWeight = 0.5 + 0.5 * boundedHumanScore;
+
+  return Math.sqrt(Math.max(0, input.amountCents)) * boundedIdentityWeight;
+}
+
+function proofRequirementForCaptureModes(captureModes: MpgfPublicGoodsCaptureMode[]) {
+  if (captureModes.includes("stored_payment_method")) {
+    return "provider_webhook_and_review" as const;
+  }
+
+  if (captureModes.includes("external_handoff")) {
+    return "external_destination_receipt" as const;
+  }
+
+  return "signed_intent_review" as const;
+}
+
+export function getMpgfCampaignAssuranceStatus(
+  campaign: MpgfPublicGoodsCampaign,
+  pledges: MpgfPublicGoodsPledge[] = demoMpgfAssurancePledges,
+  now: Date = new Date("2026-05-29T12:00:00.000Z"),
+): MpgfPublicGoodsAssuranceStatus {
+  const campaignPledges = pledges.filter((pledge) => pledge.campaignId === campaign.id);
+  const eligibleSupporters = collapseEligiblePledgesByUser(campaignPledges);
+  const directEligibleCents = eligibleSupporters.reduce((sum, supporter) => sum + supporter.amountCents, 0);
+  const verifiedSupporterCount = eligibleSupporters.length;
+  const thresholdPassed =
+    directEligibleCents >= campaign.thresholdAmountCents &&
+    verifiedSupporterCount >= campaign.thresholdSupporters;
+  const reviewPassed = campaign.reviewStatus === "approved" || campaign.reviewStatus === "finalized";
+  const deadlinePassed = Number.isFinite(Date.parse(campaign.deadlineAt)) && now.getTime() > Date.parse(campaign.deadlineAt);
+  const captureModes = [...new Set(eligibleSupporters.flatMap((supporter) => [...supporter.captureModes]))].sort();
+  const blockers: string[] = [];
+  let status: MpgfPublicGoodsCampaignStatus = "threshold_pending";
+
+  if (!thresholdPassed) {
+    blockers.push("amount_or_verified_supporter_threshold_not_met");
+    status = deadlinePassed ? "expired" : "threshold_pending";
+  } else if (campaign.reviewStatus === "blocked") {
+    blockers.push("review_blocked");
+    status = "blocked";
+  } else if (!reviewPassed) {
+    blockers.push(`review_status_${campaign.reviewStatus}`);
+    status =
+      campaign.reviewStatus === "needs_evidence" || campaign.reviewStatus === "challenge_window"
+        ? "review_pending"
+        : "threshold_met";
+  } else {
+    status = "payable";
+  }
+
+  return {
+    campaignId: campaign.id,
+    status,
+    directEligibleCents,
+    verifiedSupporterCount,
+    thresholdAmountCents: campaign.thresholdAmountCents,
+    thresholdSupporters: campaign.thresholdSupporters,
+    amountProgressBps:
+      campaign.thresholdAmountCents <= 0
+        ? 10_000
+        : clampBasisPoints((directEligibleCents / campaign.thresholdAmountCents) * 10_000),
+    supporterProgressBps:
+      campaign.thresholdSupporters <= 0
+        ? 10_000
+        : clampBasisPoints((verifiedSupporterCount / campaign.thresholdSupporters) * 10_000),
+    thresholdPassed,
+    reviewPassed,
+    deadlinePassed,
+    eligiblePledgeCount: campaignPledges.filter(isEligibleAssurancePledge).length,
+    excludedPledgeCount: campaignPledges.length - campaignPledges.filter(isEligibleAssurancePledge).length,
+    captureModes,
+    blockers,
+  };
+}
+
+export function computeMpgfCampaignQfScore(
+  campaign: MpgfPublicGoodsCampaign,
+  pledges: MpgfPublicGoodsPledge[] = demoMpgfAssurancePledges,
+) {
+  const campaignPledges = pledges.filter((pledge) => pledge.campaignId === campaign.id);
+  const weightedRootSum = collapseEligiblePledgesByUser(campaignPledges).reduce(
+    (sum, contribution) => sum + weightedQuadraticContributionScore(contribution),
+    0,
+  );
+
+  return weightedRootSum ** 2;
+}
+
+export function allocateMpgfAssuranceRound({
+  campaigns = demoMpgfPublicGoodsCampaigns,
+  pledges = demoMpgfAssurancePledges,
+  round = demoMpgfAssuranceRound,
+  matchPool = demoMpgfMatchPool,
+  now = new Date("2026-05-29T12:00:00.000Z"),
+}: {
+  campaigns?: MpgfPublicGoodsCampaign[];
+  pledges?: MpgfPublicGoodsPledge[];
+  round?: MpgfPublicGoodsRound;
+  matchPool?: MpgfPublicGoodsMatchPool;
+  now?: Date;
+} = {}): MpgfPublicGoodsRoundAllocation {
+  const statuses = new Map(campaigns.map((campaign) => [campaign.id, getMpgfCampaignAssuranceStatus(campaign, pledges, now)]));
+  const payableCampaigns = campaigns.filter((campaign) => statuses.get(campaign.id)?.status === "payable");
+  const baseMatchBudgetCents = Math.max(0, matchPool.budgetCents - matchPool.qfBonusCents);
+  const baseMatchRawByCampaign = new Map(
+    payableCampaigns.map((campaign) => {
+      const status = statuses.get(campaign.id);
+      return [campaign.id, Math.floor((status?.directEligibleCents ?? 0) * matchPool.baseMatchRatio)];
+    }),
+  );
+  const totalRawBaseMatch = [...baseMatchRawByCampaign.values()].reduce((sum, amount) => sum + amount, 0);
+  const baseMatchByCampaign =
+    totalRawBaseMatch > baseMatchBudgetCents
+      ? distributeIntegerBudget(payableCampaigns, baseMatchBudgetCents, (campaign) => baseMatchRawByCampaign.get(campaign.id) ?? 0)
+      : new Map(payableCampaigns.map((campaign) => [campaign.id, baseMatchRawByCampaign.get(campaign.id) ?? 0]));
+  const qfScoresByCampaign = new Map(
+    payableCampaigns.map((campaign) => [campaign.id, round.qfEnabled ? computeMpgfCampaignQfScore(campaign, pledges) : 0]),
+  );
+  const uncappedQfByCampaign = distributeIntegerBudget(
+    payableCampaigns,
+    round.qfEnabled ? matchPool.qfBonusCents : 0,
+    (campaign) => qfScoresByCampaign.get(campaign.id) ?? 0,
+  );
+  const qfByCampaign = new Map(
+    payableCampaigns.map((campaign) => {
+      const status = statuses.get(campaign.id);
+      const qfBonusCapCents = Math.floor((status?.directEligibleCents ?? 0) * round.qfCapMultiple);
+
+      return [campaign.id, Math.min(uncappedQfByCampaign.get(campaign.id) ?? 0, qfBonusCapCents)];
+    }),
+  );
+
+  const lines: MpgfPublicGoodsAllocationLine[] = campaigns.map((campaign) => {
+    const status = statuses.get(campaign.id) ?? getMpgfCampaignAssuranceStatus(campaign, pledges, now);
+    const baseMatchCents = baseMatchByCampaign.get(campaign.id) ?? 0;
+    const qfBonusCents = qfByCampaign.get(campaign.id) ?? 0;
+    const qfBonusCapCents = Math.floor(status.directEligibleCents * round.qfCapMultiple);
+    const proofRequired = proofRequirementForCaptureModes(status.captureModes);
+
+    return {
+      campaignId: campaign.id,
+      status: status.status,
+      directEligibleCents: status.directEligibleCents,
+      verifiedSupporterCount: status.verifiedSupporterCount,
+      baseMatchCents,
+      qfScore: qfScoresByCampaign.get(campaign.id) ?? 0,
+      qfBonusCents,
+      totalPayoutCents: status.directEligibleCents + baseMatchCents + qfBonusCents,
+      qfBonusCapCents,
+      custodyMode:
+        status.captureModes.includes("stored_payment_method")
+          ? "provider_or_fiscal_host_required"
+          : "no_custody_external_handoff",
+      proofRequired,
+      blockers: status.blockers,
+    };
+  });
+  const baseMatchAllocatedCents = lines.reduce((sum, line) => sum + line.baseMatchCents, 0);
+  const qfBonusAllocatedCents = lines.reduce((sum, line) => sum + line.qfBonusCents, 0);
+
+  return {
+    roundId: round.id,
+    matchPoolId: matchPool.id,
+    baseMatchBudgetCents,
+    qfBonusBudgetCents: round.qfEnabled ? matchPool.qfBonusCents : 0,
+    baseMatchAllocatedCents,
+    qfBonusAllocatedCents,
+    totalDirectEligibleCents: lines.reduce((sum, line) => sum + (line.status === "payable" ? line.directEligibleCents : 0), 0),
+    totalPayoutCents: lines.reduce((sum, line) => sum + (line.status === "payable" ? line.totalPayoutCents : 0), 0),
+    unallocatedMatchPoolCents: Math.max(0, matchPool.budgetCents - baseMatchAllocatedCents - qfBonusAllocatedCents),
+    proofPageRequired: true,
+    lines,
+  };
+}
+
+export function summarizeMpgfAssuranceRound(
+  allocation: MpgfPublicGoodsRoundAllocation = allocateMpgfAssuranceRound(),
+) {
+  const payableLines = allocation.lines.filter((line) => line.status === "payable");
+
+  return {
+    roundId: allocation.roundId,
+    payableCampaignCount: payableLines.length,
+    thresholdClearedCampaignCount: allocation.lines.filter((line) => line.status === "payable" || line.status === "review_pending").length,
+    verifiedSupporterCount: payableLines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
+    sponsorPoolCents: allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
+    baseMatchAllocatedCents: allocation.baseMatchAllocatedCents,
+    qfBonusAllocatedCents: allocation.qfBonusAllocatedCents,
+    totalPayoutCents: allocation.totalPayoutCents,
+    unallocatedMatchPoolCents: allocation.unallocatedMatchPoolCents,
+    noCustodyLines: allocation.lines.filter((line) => line.custodyMode === "no_custody_external_handoff").length,
+    proofPageRequired: allocation.proofPageRequired,
+  };
 }
 
 export function normalizeBallotWeights(weights: MpgfBallotWeight[]) {

@@ -4,7 +4,12 @@ import Link from "next/link";
 import { MpgfConsole } from "@/components/mpgf/mpgf-console";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
-import { demoAlternatives } from "@/lib/mpgf/data";
+import { demoAlternatives, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
+import {
+  allocateMpgfAssuranceRound,
+  formatUsd,
+  getMpgfCampaignAssuranceStatus,
+} from "@/lib/mpgf/mechanism";
 import { loadMpgfParticipantState } from "@/lib/mpgf/persistence";
 import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
@@ -108,6 +113,7 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
     userId: viewer?.authUser.id,
     displayName: viewer?.displayName,
   });
+  const assuranceAllocation = allocateMpgfAssuranceRound();
   const manualEvidenceReadiness = await loadMpgfManualEvidenceReadiness();
   const realMoneyReadiness = await loadMpgfRealMoneyReadiness();
 
@@ -170,23 +176,54 @@ export default async function MpgfPoolsPage({ searchParams }: MpgfPoolsPageProps
       </form>
 
       <section className="mpgf-pool-directory">
-        {visibleAlternatives.map((alternative) => (
-          <article key={alternative.id} className="mpgf-panel">
-            <p className="eyebrow">{alternative.causeArea}</p>
-            <h2>{alternative.name}</h2>
-            <div className="tag-row">
-              <span className="badge" title={alternative.expectedMoralImpactTooltip}>
-                {getGoodTypeLabel(alternative)} good
-              </span>
-              <span className="badge badge-secondary" title={alternative.preferenceIntensityHint}>
-                Default intensity {formatBasisPoints(alternative.demoPriorityBps)}
-              </span>
-            </div>
-            <p>{alternative.description}</p>
-            <p>{alternative.moralPublicGoodRationale}</p>
-            <Link className="inline-link" href={`/mpgf/pools/${alternative.id}`}>View pool</Link>
-          </article>
-        ))}
+        {visibleAlternatives.map((alternative) => {
+          const campaign = demoMpgfPublicGoodsCampaigns.find((candidate) => candidate.poolAlternativeId === alternative.id);
+          const status = campaign ? getMpgfCampaignAssuranceStatus(campaign) : null;
+          const line = campaign
+            ? assuranceAllocation.lines.find((candidate) => candidate.campaignId === campaign.id)
+            : null;
+
+          return (
+            <article key={alternative.id} className="mpgf-panel">
+              <p className="eyebrow">{alternative.causeArea}</p>
+              <h2>{alternative.name}</h2>
+              <div className="tag-row">
+                <span className="badge" title={alternative.expectedMoralImpactTooltip}>
+                  {getGoodTypeLabel(alternative)} good
+                </span>
+                <span className="badge badge-secondary" title={alternative.preferenceIntensityHint}>
+                  Default intensity {formatBasisPoints(alternative.demoPriorityBps)}
+                </span>
+                {status ? <span className="badge badge-secondary">{status.status.replaceAll("_", " ")}</span> : null}
+              </div>
+              <p>{alternative.description}</p>
+              <p>{alternative.moralPublicGoodRationale}</p>
+              {campaign && status ? (
+                <dl className="mpgf-summary-grid">
+                  <div>
+                    <dt>Threshold</dt>
+                    <dd>{formatUsd(campaign.thresholdAmountCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Verified supporters</dt>
+                    <dd>
+                      {status.verifiedSupporterCount}/{campaign.thresholdSupporters}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Sponsor match</dt>
+                    <dd>{formatUsd(line?.baseMatchCents ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt>QF bonus</dt>
+                    <dd>{formatUsd(line?.qfBonusCents ?? 0)}</dd>
+                  </div>
+                </dl>
+              ) : null}
+              <Link className="inline-link" href={`/mpgf/pools/${alternative.id}`}>View pool</Link>
+            </article>
+          );
+        })}
         {visibleAlternatives.length === 0 ? (
           <article className="mpgf-panel">
             <p className="eyebrow">No matching demo pools</p>

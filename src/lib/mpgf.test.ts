@@ -13,10 +13,12 @@ import {
   fallbackAllocate,
   generateMpgfDemoAllocationCertificate,
   aggregateSaeAssessments,
+  allocateMpgfAssuranceRound,
   approveInternalPayoutAuthorization,
   carryOverVoidedPayout,
   compareMpgfDryRunToLive,
   createMpgfRecurringContributionCommitment,
+  computeMpgfCampaignQfScore,
   isLedgerBalanced,
   materializeMpgfRecurringPledgeForCycle,
   pauseMpgfRecurringContributionCommitment,
@@ -28,14 +30,22 @@ import {
   selectMpgfLiveSolver,
   solveMpgfByCertifiedBranchAndBound,
   solveMpgfByCompleteRegionEnumeration,
+  getMpgfCampaignAssuranceStatus,
   submitMpgfBallot,
   submitMpgfPoolProposalDraft,
+  summarizeMpgfAssuranceRound,
   cancelMpgfRecurringContributionCommitment,
   verifyExternalPaymentEvidence,
   verifyMpgfOptimalityCertificate,
   voidPayoutAuthorization,
 } from "./mpgf/mechanism";
-import { mpgfPublicRoutes } from "./mpgf/data";
+import {
+  demoMpgfAssurancePledges,
+  demoMpgfAssuranceRound,
+  demoMpgfMatchPool,
+  demoMpgfPublicGoodsCampaigns,
+  mpgfPublicRoutes,
+} from "./mpgf/data";
 import {
   evaluateMpgfExactPilotGate,
   evaluateMpgfGovernanceMachineryGate,
@@ -254,6 +264,102 @@ test("MPGF canonical hash normalizes optional JSON edge fields", () => {
 
 test("MPGF public route evidence includes pool proposal route", () => {
   assert.ok(mpgfPublicRoutes.includes("/mpgf/pools/new"));
+});
+
+test("MPGF verified assurance campaigns gate on amount, supporters, and review", () => {
+  const [globalHealth, resilience] = demoMpgfPublicGoodsCampaigns;
+
+  assert.ok(globalHealth);
+  assert.ok(resilience);
+
+  const globalHealthStatus = getMpgfCampaignAssuranceStatus(globalHealth);
+  const resilienceStatus = getMpgfCampaignAssuranceStatus(resilience);
+
+  assert.equal(globalHealthStatus.status, "payable");
+  assert.equal(globalHealthStatus.thresholdPassed, true);
+  assert.equal(globalHealthStatus.reviewPassed, true);
+  assert.equal(globalHealthStatus.verifiedSupporterCount, 3);
+  assert.equal(globalHealthStatus.directEligibleCents, 27_500);
+
+  assert.equal(resilienceStatus.status, "threshold_pending");
+  assert.equal(resilienceStatus.thresholdPassed, false);
+  assert.ok(resilienceStatus.blockers.includes("amount_or_verified_supporter_threshold_not_met"));
+});
+
+test("MPGF assurance matching allocates sponsor match and capped identity-aware QF only to payable campaigns", () => {
+  const allocation = allocateMpgfAssuranceRound();
+  const summary = summarizeMpgfAssuranceRound(allocation);
+  const globalHealth = allocation.lines.find((line) => line.campaignId === "campaign-global-health-basic-needs");
+  const animalWelfare = allocation.lines.find((line) => line.campaignId === "campaign-animal-welfare-transition");
+  const resilience = allocation.lines.find((line) => line.campaignId === "campaign-existential-risk-resilience");
+
+  assert.ok(globalHealth);
+  assert.ok(animalWelfare);
+  assert.ok(resilience);
+  assert.equal(summary.payableCampaignCount, 2);
+  assert.equal(summary.proofPageRequired, true);
+  assert.equal(globalHealth.status, "payable");
+  assert.equal(animalWelfare.status, "payable");
+  assert.equal(resilience.baseMatchCents, 0);
+  assert.equal(resilience.qfBonusCents, 0);
+  assert.ok(globalHealth.baseMatchCents > 0);
+  assert.ok(globalHealth.qfBonusCents > 0);
+  assert.ok(globalHealth.qfBonusCents <= globalHealth.qfBonusCapCents);
+  assert.ok(animalWelfare.qfBonusCents <= animalWelfare.qfBonusCapCents);
+  assert.equal(allocation.baseMatchAllocatedCents, globalHealth.baseMatchCents + animalWelfare.baseMatchCents);
+  assert.equal(allocation.qfBonusAllocatedCents, globalHealth.qfBonusCents + animalWelfare.qfBonusCents);
+});
+
+test("MPGF assurance QF collapses duplicate identities and expires missed thresholds", () => {
+  const animalWelfare = demoMpgfPublicGoodsCampaigns.find((campaign) => campaign.id === "campaign-animal-welfare-transition");
+  const knowledge = demoMpgfPublicGoodsCampaigns.find((campaign) => campaign.id === "campaign-public-interest-knowledge");
+
+  assert.ok(animalWelfare);
+  assert.ok(knowledge);
+
+  const animalStatus = getMpgfCampaignAssuranceStatus(animalWelfare);
+  const knowledgeStatus = getMpgfCampaignAssuranceStatus(knowledge);
+  const animalPledges = demoMpgfAssurancePledges.filter((pledge) => pledge.campaignId === animalWelfare.id);
+
+  assert.equal(animalPledges.length, 4);
+  assert.equal(animalStatus.verifiedSupporterCount, 3);
+  assert.equal(animalStatus.excludedPledgeCount, 1);
+  assert.equal(knowledgeStatus.status, "expired");
+  assert.ok(computeMpgfCampaignQfScore(animalWelfare) > animalStatus.directEligibleCents);
+});
+
+test("MPGF assurance match budget scales down deterministically when raw base match exceeds sponsor budget", () => {
+  const globalHealth = demoMpgfPublicGoodsCampaigns[0];
+  const animalWelfare = demoMpgfPublicGoodsCampaigns[2];
+
+  assert.ok(globalHealth);
+  assert.ok(animalWelfare);
+
+  const constrained = allocateMpgfAssuranceRound({
+    campaigns: [globalHealth, animalWelfare],
+    pledges: demoMpgfAssurancePledges,
+    round: demoMpgfAssuranceRound,
+    matchPool: {
+      ...demoMpgfMatchPool,
+      budgetCents: 30_000,
+      qfBonusCents: 0,
+    },
+  });
+
+  assert.equal(constrained.baseMatchBudgetCents, 30_000);
+  assert.equal(constrained.baseMatchAllocatedCents, 30_000);
+  assert.equal(constrained.qfBonusAllocatedCents, 0);
+  assert.ok(constrained.lines.every((line) => line.baseMatchCents <= line.directEligibleCents));
+});
+
+test("MPGF assurance output preserves the no-custody external-handoff posture", () => {
+  const allocation = allocateMpgfAssuranceRound();
+  const payable = allocation.lines.filter((line) => line.status === "payable");
+
+  assert.ok(payable.length > 0);
+  assert.ok(payable.every((line) => line.custodyMode === "no_custody_external_handoff"));
+  assert.ok(payable.every((line) => line.proofRequired === "external_destination_receipt" || line.proofRequired === "signed_intent_review"));
+  assert.ok(allocation.proofPageRequired);
 });
 
 test("MPGF production completion gate fails while production evidence is only pending", () => {

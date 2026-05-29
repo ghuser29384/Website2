@@ -3,11 +3,20 @@ import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
-import { demoAlternatives, MPGF_COPY } from "@/lib/mpgf/data";
 import {
+  demoAlternatives,
+  demoMpgfAssuranceRound,
+  demoMpgfMatchPool,
+  demoMpgfPublicGoodsCampaigns,
+  MPGF_COPY,
+} from "@/lib/mpgf/data";
+import {
+  allocateMpgfAssuranceRound,
   buildPublicSummary,
   computeExactMpgfAllocation,
   formatUsd,
+  getMpgfCampaignAssuranceStatus,
+  summarizeMpgfAssuranceRound,
 } from "@/lib/mpgf/mechanism";
 import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
@@ -34,6 +43,8 @@ export default async function MpgfPage() {
   const viewer = await getViewer();
   const allocation = computeExactMpgfAllocation();
   const publicSummary = buildPublicSummary({ allocation });
+  const assuranceAllocation = allocateMpgfAssuranceRound();
+  const assuranceSummary = summarizeMpgfAssuranceRound(assuranceAllocation);
   const manualEvidenceReadiness = await loadMpgfManualEvidenceReadiness();
   const realMoneyReadiness = await loadMpgfRealMoneyReadiness();
 
@@ -60,6 +71,7 @@ export default async function MpgfPage() {
         <a href="#why-this-matters">Why this matters</a>
         <a href="#why-this-is-hard">Why this is hard</a>
         <a href="#what-this-pilot-tests">What this pilot tests</a>
+        <a href="#assurance-matching">Assurance matching</a>
         <a href="#evidence-review">Evidence review</a>
         <a href="#candidate-pools">Candidate pools</a>
         <a href="#allocation-process">Allocation process</a>
@@ -152,28 +164,102 @@ export default async function MpgfPage() {
           <p>
             The Fund tests threshold commitments, external-payment evidence, dissent notes,
             candidate pools, reviewer verification, and non-custodial coordination in one public
-            workflow.
+            workflow. Its motivating layer is verified assurance matching: pledges count only
+            after amount, supporter, review, and evidence gates are satisfied.
           </p>
         </div>
       </section>
 
       <section className="mpgf-kpi-grid" aria-label="Public Goods Fund current summary">
         <div className="mpgf-kpi">
-          <span>Demo budget</span>
-          <strong>{formatUsd(publicSummary.budgetCents)}</strong>
+          <span>Sponsor pool</span>
+          <strong>{formatUsd(assuranceSummary.sponsorPoolCents)}</strong>
         </div>
         <div className="mpgf-kpi">
-          <span>Allocated internally</span>
-          <strong>{formatUsd(allocation.allocatedCents)}</strong>
+          <span>Payable campaigns</span>
+          <strong>{assuranceSummary.payableCampaignCount}</strong>
         </div>
         <div className="mpgf-kpi">
-          <span>External payouts</span>
-          <strong>{formatUsd(publicSummary.externallyPaidCents)}</strong>
+          <span>QF bonus allocated</span>
+          <strong>{formatUsd(assuranceSummary.qfBonusAllocatedCents)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Review status</span>
           <strong>{manualEvidenceReadiness.ready ? "Open" : "Persistence check"}</strong>
         </div>
+      </section>
+
+      <section className="section section-white" id="assurance-matching">
+        <div className="section-head section-head-compact">
+          <p className="eyebrow">Verified Assurance Matching</p>
+          <h2>Pledges execute only after enough verified people join</h2>
+          <p>
+            {demoMpgfMatchPool.visibleCommitment} The capped QF bonus is applied only to
+            threshold-cleared, review-approved campaigns, so broad support allocates sponsor
+            dollars without replacing review or destination proof.
+          </p>
+        </div>
+        <div className="mpgf-pool-directory">
+          {demoMpgfPublicGoodsCampaigns.map((campaign) => {
+            const status = getMpgfCampaignAssuranceStatus(campaign);
+            const line = assuranceAllocation.lines.find((candidate) => candidate.campaignId === campaign.id);
+
+            return (
+              <article className="mpgf-panel" key={campaign.id}>
+                <p className="eyebrow">{status.status.replaceAll("_", " ")}</p>
+                <h2>{campaign.title}</h2>
+                <p>{campaign.publicSummary}</p>
+                <dl className="mpgf-summary-grid">
+                  <div>
+                    <dt>Eligible pledges</dt>
+                    <dd>{formatUsd(status.directEligibleCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Verified supporters</dt>
+                    <dd>
+                      {status.verifiedSupporterCount}/{campaign.thresholdSupporters}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Base match</dt>
+                    <dd>{formatUsd(line?.baseMatchCents ?? 0)}</dd>
+                  </div>
+                  <div>
+                    <dt>QF bonus</dt>
+                    <dd>{formatUsd(line?.qfBonusCents ?? 0)}</dd>
+                  </div>
+                </dl>
+                <div className="mpgf-allocation-row">
+                  <div>
+                    <span>Amount threshold</span>
+                    <strong>{Math.round(status.amountProgressBps / 100)}%</strong>
+                  </div>
+                  <meter max={10_000} value={status.amountProgressBps} />
+                </div>
+                <div className="mpgf-allocation-row">
+                  <div>
+                    <span>Supporter threshold</span>
+                    <strong>{Math.round(status.supporterProgressBps / 100)}%</strong>
+                  </div>
+                  <meter max={10_000} value={status.supporterProgressBps} />
+                </div>
+                <div className="tag-row">
+                  <span className="badge badge-secondary">
+                    Deadline {new Date(campaign.deadlineAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                  <span className="badge badge-secondary">{campaign.destinationType.replaceAll("_", " ")}</span>
+                </div>
+                <Link className="inline-link" href={`/mpgf/pools/${campaign.slug}`}>
+                  View public proof path
+                </Link>
+              </article>
+            );
+          })}
+        </div>
+        <p className="mpgf-small">
+          Round: {demoMpgfAssuranceRound.name}. Demo budget for the older ballot allocation remains{" "}
+          {formatUsd(publicSummary.budgetCents)} and external payouts remain {formatUsd(publicSummary.externallyPaidCents)}.
+        </p>
       </section>
 
       <section className="section section-subtle" id="evidence-review">

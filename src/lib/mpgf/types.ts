@@ -439,6 +439,143 @@ export interface MpgfRecurringContributionCommitment {
   cancelledAt?: string;
 }
 
+export type MpgfPublicGoodsCampaignStatus =
+  | "threshold_pending"
+  | "threshold_met"
+  | "review_pending"
+  | "payable"
+  | "expired"
+  | "blocked";
+
+export type MpgfPublicGoodsCampaignReviewStatus =
+  | "draft"
+  | "submitted"
+  | "needs_evidence"
+  | "challenge_window"
+  | "approved"
+  | "blocked"
+  | "finalized";
+
+export type MpgfPublicGoodsDestinationType =
+  | "external_charity"
+  | "fiscal_host"
+  | "internal_demo_pool"
+  | "signed_sponsor_route";
+
+export type MpgfPublicGoodsCaptureMode = "external_handoff" | "stored_payment_method" | "signed_intent";
+
+export type MpgfPublicGoodsVisibilityMode = "private_amount" | "public_supporter" | "public_reason";
+
+export interface MpgfPublicGoodsCampaign {
+  id: string;
+  slug: string;
+  poolAlternativeId?: string;
+  title: string;
+  destinationType: MpgfPublicGoodsDestinationType;
+  destinationRef: string;
+  causeTags: string[];
+  publicSummary: string;
+  thresholdAmountCents: number;
+  thresholdSupporters: number;
+  deadlineAt: string;
+  verificationMethod: string;
+  baselineRule: string;
+  exitRule: string;
+  reviewStatus: MpgfPublicGoodsCampaignReviewStatus;
+  challengeWindowEndsAt?: string;
+}
+
+export interface MpgfPublicGoodsRound {
+  id: string;
+  name: string;
+  startsAt: string;
+  endsAt: string;
+  matchPoolId: string;
+  qfEnabled: boolean;
+  qfCapMultiple: number;
+  supporterGate: "demo_self_attestation" | "verified_human" | "repository_existing_verification";
+}
+
+export interface MpgfPublicGoodsMatchPool {
+  id: string;
+  funderType: "demo_common_ground_pool" | "sponsor" | "subscription_pool" | "institution";
+  budgetCents: number;
+  baseMatchRatio: number;
+  qfBonusCents: number;
+  visibleCommitment: string;
+  restrictionsJson: Record<string, unknown>;
+}
+
+export interface MpgfPublicGoodsPledge {
+  id: string;
+  campaignId: string;
+  userId: string;
+  amountCents: number;
+  visibilityMode: MpgfPublicGoodsVisibilityMode;
+  captureMode: MpgfPublicGoodsCaptureMode;
+  eligibilityState: "eligible" | "pending_review" | "duplicate_identity" | "below_minimum" | "blocked";
+  humanScoreBps: number;
+  status: "pledged" | "captured" | "voided" | "expired";
+  supporterReason?: string;
+  createdAt: string;
+}
+
+export interface MpgfPublicGoodsIdentityAttestation {
+  userId: string;
+  provider: "demo_self_attestation" | "repository_profile" | "external_proof_of_personhood";
+  humanScoreBps: number;
+  expiresAt: string;
+  status: "active" | "expired" | "revoked" | "pending_review";
+  redactedReference: string;
+}
+
+export interface MpgfPublicGoodsAssuranceStatus {
+  campaignId: string;
+  status: MpgfPublicGoodsCampaignStatus;
+  directEligibleCents: number;
+  verifiedSupporterCount: number;
+  thresholdAmountCents: number;
+  thresholdSupporters: number;
+  amountProgressBps: number;
+  supporterProgressBps: number;
+  thresholdPassed: boolean;
+  reviewPassed: boolean;
+  deadlinePassed: boolean;
+  eligiblePledgeCount: number;
+  excludedPledgeCount: number;
+  captureModes: MpgfPublicGoodsCaptureMode[];
+  blockers: string[];
+}
+
+export interface MpgfPublicGoodsAllocationLine {
+  campaignId: string;
+  status: MpgfPublicGoodsCampaignStatus;
+  directEligibleCents: number;
+  verifiedSupporterCount: number;
+  baseMatchCents: number;
+  qfScore: number;
+  qfBonusCents: number;
+  totalPayoutCents: number;
+  qfBonusCapCents: number;
+  custodyMode: "no_custody_external_handoff" | "provider_or_fiscal_host_required";
+  proofRequired: "external_destination_receipt" | "provider_webhook_and_review" | "signed_intent_review";
+  blockers: string[];
+}
+
+export interface MpgfPublicGoodsRoundAllocation {
+  roundId: string;
+  matchPoolId: string;
+  baseMatchBudgetCents: number;
+  qfBonusBudgetCents: number;
+  baseMatchAllocatedCents: number;
+  qfBonusAllocatedCents: number;
+  totalDirectEligibleCents: number;
+  totalPayoutCents: number;
+  unallocatedMatchPoolCents: number;
+  proofPageRequired: true;
+  lines: MpgfPublicGoodsAllocationLine[];
+}
+
 export interface MpgfAllocationLine {
   alternativeId: string;
   name: string;

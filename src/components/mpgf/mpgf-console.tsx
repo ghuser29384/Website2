@@ -10,8 +10,17 @@ import {
   saveMpgfPoolProposalAction,
   submitMpgfManualExternalPaymentEvidenceAction,
 } from "@/app/mpgf/actions";
-import { demoAlternatives, demoBallots, demoCycle, demoPledges, MPGF_COPY } from "@/lib/mpgf/data";
 import {
+  demoAlternatives,
+  demoBallots,
+  demoCycle,
+  demoMpgfMatchPool,
+  demoMpgfPublicGoodsCampaigns,
+  demoPledges,
+  MPGF_COPY,
+} from "@/lib/mpgf/data";
+import {
+  allocateMpgfAssuranceRound,
   buildDemoBallotFromWeights,
   buildDemoLedgerTransactions,
   buildPublicSummary,
@@ -153,6 +162,7 @@ export function MpgfConsole({
   );
   const publicSummary = useMemo(() => buildPublicSummary({ allocation }), [allocation]);
   const ledgerTransactions = useMemo(() => buildDemoLedgerTransactions(demoPledges), []);
+  const assuranceAllocation = useMemo(() => allocateMpgfAssuranceRound(), []);
   const ledgerBalanced = ledgerTransactions.every(isLedgerBalanced);
 
   function updateWeight(alternativeId: string, value: number) {
@@ -707,6 +717,33 @@ export function MpgfConsole({
               <li>Demo ledger templates are double-entry balanced: {ledgerBalanced ? "yes" : "no"}.</li>
               <li>Authenticated participant records are saved to MPGF account state.</li>
             </ul>
+          </section>
+
+          <section className="mpgf-panel">
+            <p className="eyebrow">Assurance match preview</p>
+            <h2>{formatUsd(demoMpgfMatchPool.budgetCents)} sponsor pool</h2>
+            <p>
+              Base match and capped QF bonus appear only for campaigns that pass amount,
+              verified-supporter, and review gates.
+            </p>
+            <div className="mpgf-allocation-bars">
+              {assuranceAllocation.lines.map((line) => {
+                const campaign = demoMpgfPublicGoodsCampaigns.find((candidate) => candidate.id === line.campaignId);
+
+                return (
+                  <div key={line.campaignId} className="mpgf-allocation-row">
+                    <div>
+                      <span>{campaign?.title ?? line.campaignId}</span>
+                      <strong>{formatUsd(line.status === "payable" ? line.totalPayoutCents : 0)}</strong>
+                    </div>
+                    <meter max={demoMpgfMatchPool.budgetCents} value={line.baseMatchCents + line.qfBonusCents} />
+                    <p className="mpgf-small">
+                      {line.status.replaceAll("_", " ")}; {line.verifiedSupporterCount} verified supporter(s).
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </section>
         </div>
       ) : null}
