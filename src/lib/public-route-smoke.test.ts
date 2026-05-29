@@ -889,7 +889,16 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   const siteSearchSource = readRepoFile("src/lib/site-search.ts");
 
   assert.match(primerPage, /What is moral trade/);
+  assert.match(primerPage, /One-screen explainer/);
+  assert.match(primerPage, /What it is/);
   assert.match(primerPage, /What it is not/);
+  assert.match(primerPage, /Who it is for/);
+  assert.match(primerPage, /Plain-English glossary/);
+  assert.match(primerPage, /Pledge swap/);
+  assert.match(primerPage, /Donation offset/);
+  assert.match(primerPage, /Threshold/);
+  assert.match(primerPage, /Manual review/);
+  assert.match(primerPage, /Public good/);
   assert.match(primerPage, /Why it is hard/);
   assert.match(primerPage, /Personal pledge swap/);
   assert.match(primerPage, /Instrumented workflow/);

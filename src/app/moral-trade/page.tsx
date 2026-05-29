@@ -55,6 +55,24 @@ const examples = [
   },
 ] as const;
 
+const explainerCards = [
+  {
+    title: "What it is",
+    detail:
+      "A pilot for small, voluntary commitments between people who disagree morally but can still improve the outcome by their own lights.",
+  },
+  {
+    title: "What it is not",
+    detail:
+      "Not a moral authority, escrow, custody service, legal promise, tax product, automated matchmaker, or way to buy off threats.",
+  },
+  {
+    title: "Who it is for",
+    detail:
+      "Effective givers, organizers, founders, reviewers, and serious counterparties who can start with one low-risk, reviewable example.",
+  },
+] as const;
+
 const exclusions = [
   "Not charity evaluation or a claim that the platform knows the objectively best cause.",
   "Not escrow, custody, legal advice, tax advice, or enforceable contract formation.",
@@ -67,6 +85,34 @@ const hardProblems = [
   "Counterfactual trust: would they have done it anyway?",
   "Perverse incentives: does the mechanism reward worsening a baseline?",
   "Third-party externalities: could the trade harm people or values not represented by the parties?",
+] as const;
+
+const glossaryTerms = [
+  {
+    term: "Pledge swap",
+    definition:
+      "Two parties make bounded promises each side values, then name evidence and exit rules before anyone relies on the promise.",
+  },
+  {
+    term: "Donation offset",
+    definition:
+      "Participants redirect or match gifts so opposed giving is replaced with a clearer shared or reciprocal action.",
+  },
+  {
+    term: "Threshold",
+    definition:
+      "The point at which a participant says the trade is worthwhile on their own view; it is not a platform moral ranking.",
+  },
+  {
+    term: "Manual review",
+    definition:
+      "A human check of baselines, evidence, safety, privacy, and externalities before a draft becomes something to rely on.",
+  },
+  {
+    term: "Public good",
+    definition:
+      "A shared benefit many moral views can value somewhat, even when participants disagree about ultimate priorities.",
+  },
 ] as const;
 
 const workflowSteps = [
@@ -190,6 +236,39 @@ export default async function MoralTradePrimerPage() {
             disagreement. It helps people test low-risk pledge swaps, donation offsets, and shared
             public-good commitments without escrow, custody, legal advice, or hidden automation.
           </SectionHeader>
+          <div className="data-grid" aria-label="One-screen explainer">
+            {explainerCards.map((card) => (
+              <article className="panel data-card" key={card.title}>
+                <p className="detail-kicker">Explainer</p>
+                <h3>{card.title}</h3>
+                <p className="route-text">{card.detail}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="glossary-heading">
+          <SectionHeader
+            eyebrow="Plain-English glossary"
+            id="glossary-heading"
+            title="Translate the terms before reading the protocol."
+          >
+            These definitions keep the first reading grounded in user action rather than internal
+            mechanism language.
+          </SectionHeader>
+          <div className="data-grid">
+            {glossaryTerms.map((item) => (
+              <article className="panel data-card" key={item.term}>
+                <p className="detail-kicker">Term</p>
+                <h3>{item.term}</h3>
+                <p className="route-text">{item.definition}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="examples-heading">
+          <SectionHeader eyebrow="Examples" id="examples-heading" title="Concrete cases make the concept legible." />
           <div className="data-grid">
             {examples.map((example) => (
               <article className="panel data-card" key={example.title}>
