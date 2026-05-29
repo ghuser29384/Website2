@@ -712,6 +712,14 @@ export default async function MoralTradeTechnicalSpecPage() {
                 ))}
               </ul>
             </article>
+            <article className="panel protocol-contract-card">
+              <h3>Search privacy controls</h3>
+              <ul className="clean-list">
+                {disclosureContract.searchPrivacyControls.map((control) => (
+                  <li key={control.key}>{control.label}</li>
+                ))}
+              </ul>
+            </article>
           </div>
           <div className="data-grid">
             {disclosureContract.disclosureFields.map((field) => (

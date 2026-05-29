@@ -8,6 +8,10 @@ import {
   type DisclosureAccessLevel,
   type DisclosureAudienceStage,
 } from "@/lib/background-disclosure";
+import {
+  BACKGROUND_QUERY_COSTS,
+  BACKGROUND_QUERY_DAILY_LIMITS,
+} from "@/lib/background-query-budget";
 
 export const MORAL_TRADE_DISCLOSURE_CONTRACT_VERSION =
   "moral-trade-disclosure-grants-v0.1";
@@ -90,6 +94,17 @@ export interface MoralTradeDisclosureContractValidation {
   blockers: string[];
 }
 
+export interface MoralTradeDisclosureSearchPrivacyControl {
+  key: string;
+  label: string;
+  rule: string;
+  cost?: number;
+  dailyLimit?: number;
+  minResultCount?: number;
+  minSpecificity?: number;
+  scope?: string;
+}
+
 export interface MoralTradeDisclosureContract {
   version: string;
   purpose: string;
@@ -100,6 +115,7 @@ export interface MoralTradeDisclosureContract {
   grantStatuses: MoralTradeDisclosureGrantStatus[];
   disclosureFields: typeof BACKGROUND_DISCLOSURE_FIELDS;
   redactedFields: string[];
+  searchPrivacyControls: MoralTradeDisclosureSearchPrivacyControl[];
   approvedFactorCodes: MoralTradeDisclosureFactorCode[];
   invariants: string[];
   sampleInput: MoralTradeDisclosureGrantInput;
@@ -132,9 +148,51 @@ const APPROVED_FACTOR_CODES = [
   "expiry_window_named",
 ] as const satisfies readonly MoralTradeDisclosureFactorCode[];
 
+const REQUIRED_SEARCH_PRIVACY_CONTROLS = [
+  "daily_registry_query_budget",
+  "sparse_result_privacy_floor",
+  "stable_query_fingerprint",
+  "redacted_overlap_tokens",
+  "risk_signal_logging",
+] as const;
+
+const SEARCH_PRIVACY_CONTROLS = [
+  {
+    key: "daily_registry_query_budget",
+    label: "Daily registry query budget",
+    scope: "registry_search",
+    dailyLimit: BACKGROUND_QUERY_DAILY_LIMITS.registry_search,
+    cost: BACKGROUND_QUERY_COSTS.registry_search,
+    rule: "Every registry search spends a bounded daily query budget before broad previews are returned.",
+  },
+  {
+    key: "sparse_result_privacy_floor",
+    label: "Sparse-result privacy floor",
+    minResultCount: 3,
+    minSpecificity: 3,
+    rule: "Highly specific searches with fewer than three results return no profiles and ask the user to broaden the query.",
+  },
+  {
+    key: "stable_query_fingerprint",
+    label: "Stable query fingerprint",
+    rule: "Normalized query and filter tuples are hashed for budget accounting without storing raw query text as the budget identity.",
+  },
+  {
+    key: "redacted_overlap_tokens",
+    label: "Redacted overlap tokens",
+    rule: "Search results expose broad overlap labels instead of exact matching words from private or semi-private wish text.",
+  },
+  {
+    key: "risk_signal_logging",
+    label: "Risk signal logging",
+    rule: "Budget pressure and sparse searches are logged as redacted risk signals for operator review without revealing exact wishes.",
+  },
+] as const satisfies readonly MoralTradeDisclosureSearchPrivacyControl[];
+
 const CONTRACT_TESTS = [
   "disclosure_grant_contract_validator",
   "disclosure_grant_evaluate_route_contract",
+  "disclosure_query_budget_contract_smoke",
   "background_disclosure_lattice_smoke",
   "technical_spec_disclosure_grant_smoke",
 ] as const;
@@ -348,6 +406,7 @@ export function getMoralTradeDisclosureContract(): MoralTradeDisclosureContract 
     grantStatuses: [...GRANT_STATUSES],
     disclosureFields: BACKGROUND_DISCLOSURE_FIELDS,
     redactedFields: [...REDACTED_FIELDS],
+    searchPrivacyControls: [...SEARCH_PRIVACY_CONTROLS],
     approvedFactorCodes: [...APPROVED_FACTOR_CODES],
     invariants: [
       "Registry-stage disclosure is limited to broad previews such as cause areas and coarse location.",
@@ -355,6 +414,7 @@ export function getMoralTradeDisclosureContract(): MoralTradeDisclosureContract 
       "Contact details require the introduced stage and explicit owner approval.",
       "Raw source notes, private feed payloads, exact private wishes before consent, and sensitive constraints in public previews stay redacted.",
       "Disclosure grants are field-level, purpose-bound, stage-bound, expiry-aware, and scoped to owner, counterparty, or match context.",
+      "Registry search must enforce query budgets, sparse-result privacy floors, redacted overlap tokens, and risk-signal logging before broad previews can be relied on.",
       "Evaluators cannot disclose, introduce, contact, approve, revoke, or mutate records; live grants require authenticated owner-controlled actions.",
     ],
     sampleInput: SAMPLE_INPUT,
@@ -370,6 +430,13 @@ export function validateMoralTradeDisclosureContract(
     contract.sampleDecision,
   );
   const fieldKeys = contract.disclosureFields.map((field) => field.key);
+  const searchPrivacyControlKeys = contract.searchPrivacyControls.map((control) => control.key);
+  const queryBudgetControl = contract.searchPrivacyControls.find(
+    (control) => control.key === "daily_registry_query_budget",
+  );
+  const sparseResultControl = contract.searchPrivacyControls.find(
+    (control) => control.key === "sparse_result_privacy_floor",
+  );
   const checks = [
     check(
       "lattice-coverage",
@@ -417,6 +484,20 @@ export function validateMoralTradeDisclosureContract(
       hasAll(contract.redactedFields, REDACTED_FIELDS) &&
         contract.invariants.some((entry) => /Raw source notes.*stay redacted/i.test(entry)),
       contract.redactedFields.join(", "),
+    ),
+    check(
+      "search-privacy-controls",
+      "Contract publishes query budget, sparse-result, fingerprint, overlap-token, and risk controls",
+      hasAll(searchPrivacyControlKeys, REQUIRED_SEARCH_PRIVACY_CONTROLS) &&
+        queryBudgetControl?.scope === "registry_search" &&
+        queryBudgetControl.dailyLimit === BACKGROUND_QUERY_DAILY_LIMITS.registry_search &&
+        queryBudgetControl.cost === BACKGROUND_QUERY_COSTS.registry_search &&
+        sparseResultControl?.minResultCount === 3 &&
+        sparseResultControl.minSpecificity === 3 &&
+        contract.invariants.some((entry) =>
+          /query budgets.*sparse-result privacy floors.*redacted overlap tokens/i.test(entry),
+        ),
+      searchPrivacyControlKeys.join(", "),
     ),
     check(
       "nonmutating-owner-control",

@@ -239,6 +239,9 @@ export async function GET() {
       disclosureGrantStatuses: disclosureContract.grantStatuses,
       disclosureFieldKeys: disclosureContract.disclosureFields.map((field) => field.key),
       disclosureRedactedFields: disclosureContract.redactedFields,
+      disclosureSearchPrivacyControls: disclosureContract.searchPrivacyControls.map(
+        (control) => control.key,
+      ),
       disclosureFactorCodes: disclosureContract.approvedFactorCodes,
       disclosureContractTests: disclosureContract.contractTests,
       reviewWorkflowContractVersion: reviewWorkflowContract.version,

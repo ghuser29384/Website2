@@ -25,6 +25,7 @@ export async function GET() {
       grantStatuses: contract.grantStatuses,
       disclosureFields: contract.disclosureFields,
       redactedFields: contract.redactedFields,
+      searchPrivacyControls: contract.searchPrivacyControls,
       approvedFactorCodes: contract.approvedFactorCodes,
       invariants: contract.invariants,
       sampleDecision: contract.sampleDecision,

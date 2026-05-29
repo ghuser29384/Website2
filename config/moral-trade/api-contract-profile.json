@@ -508,14 +508,14 @@
     },
     {
       "key": "disclosure_contract_response",
-      "purpose": "Public consent-gated disclosure and privacy-grant contract for access levels, audience stages, field boundaries, redactions, invariants, sample decision, and validator result.",
+      "purpose": "Public consent-gated disclosure and privacy-grant contract for access levels, audience stages, field boundaries, redactions, search privacy controls, invariants, sample decision, and validator result.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the disclosure grant contract validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the contract validation run." },
         { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Disclosure grant contract version." },
         { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable disclosure contract purpose." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for disclosure lattice, field boundaries, sample decision, stage/contact rules, redactions, owner control, and non-mutation." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Decisioning mode, state mutation flag, access levels, audience stages, grant statuses, disclosure fields, redacted fields, factor codes, invariants, sample decision, and test hooks." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Decisioning mode, state mutation flag, access levels, audience stages, grant statuses, disclosure fields, redacted fields, search privacy controls, factor codes, invariants, sample decision, and test hooks." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on disclosure grant routing." }
       ]
     },

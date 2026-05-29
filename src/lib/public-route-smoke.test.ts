@@ -1030,6 +1030,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(disclosureSource, /contact_details_before_introduction/);
   assert.match(disclosureSource, /raw_source_notes_redacted/);
   assert.match(disclosureSource, /owner_approval_required/);
+  assert.match(disclosureSource, /searchPrivacyControls/);
+  assert.match(disclosureSource, /daily_registry_query_budget/);
+  assert.match(disclosureSource, /sparse_result_privacy_floor/);
+  assert.match(disclosureSource, /disclosure_query_budget_contract_smoke/);
   assert.match(disclosureSource, /disclosure_grant_evaluate_route_contract/);
   assert.match(operationsSource, /validateMoralTradeOperationsProfile/);
   assert.match(operationsSource, /decideMoralTradeFallback/);
@@ -1190,6 +1194,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /disclosure_evaluate_response/);
   assert.match(apiContractProfile, /deterministic_disclosure_grant_scope_only/);
   assert.match(apiContractProfile, /field-level stage grants/);
+  assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
   assert.match(apiContractProfile, /review_workflow_evaluate_request/);
@@ -1271,6 +1276,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Disclosure grant contract/);
   assert.match(technicalSpecPage, /Privacy grants now have a staged, field-level contract/);
   assert.match(technicalSpecPage, /disclosureContract\.disclosureFields/);
+  assert.match(technicalSpecPage, /Search privacy controls/);
+  assert.match(technicalSpecPage, /disclosureContract\.searchPrivacyControls/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/disclosure\/contract/);
   assert.match(technicalSpecPage, /POST \/api\/moral-trade\/disclosure\/evaluate/);
   assert.match(technicalSpecPage, /Review workflow contract/);
@@ -1359,6 +1366,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /disclosureValidation/);
   assert.match(healthRoute, /disclosureAudienceStages/);
   assert.match(healthRoute, /disclosureRedactedFields/);
+  assert.match(healthRoute, /disclosureSearchPrivacyControls/);
   assert.match(healthRoute, /reviewWorkflowValidation/);
   assert.match(healthRoute, /reviewWorkflowCardKeys/);
   assert.match(healthRoute, /reviewWorkflowMarketplaceFactorPriority/);
@@ -1422,6 +1430,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(challengeAppealEvaluateRoute, /private, no-store/);
   assert.match(disclosureContractRoute, /validateMoralTradeDisclosureContract/);
   assert.match(disclosureContractRoute, /disclosureFields/);
+  assert.match(disclosureContractRoute, /searchPrivacyControls/);
   assert.match(disclosureEvaluateRoute, /evaluateMoralTradeDisclosureGrant/);
   assert.match(disclosureEvaluateRoute, /disclosure_grant_packet/);
   assert.match(disclosureEvaluateRoute, /stateMutation: false/);

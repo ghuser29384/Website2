@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  BACKGROUND_QUERY_COSTS,
+  BACKGROUND_QUERY_DAILY_LIMITS,
+} from "../background-query-budget";
+import {
   evaluateMoralTradeDisclosureGrant,
   getMoralTradeDisclosureContract,
   validateMoralTradeDisclosureContract,
@@ -90,7 +94,25 @@ test("disclosure contract validates staged disclosure and privacy grant boundari
   assert.ok(contract.disclosureFields.some((field) => field.key === "exact_wish"));
   assert.ok(contract.disclosureFields.some((field) => field.key === "contact_email"));
   assert.ok(contract.redactedFields.includes("raw_source_notes"));
+  assert.ok(
+    contract.searchPrivacyControls.some(
+      (control) =>
+        control.key === "daily_registry_query_budget" &&
+        control.scope === "registry_search" &&
+        control.dailyLimit === BACKGROUND_QUERY_DAILY_LIMITS.registry_search &&
+        control.cost === BACKGROUND_QUERY_COSTS.registry_search,
+    ),
+  );
+  assert.ok(
+    contract.searchPrivacyControls.some(
+      (control) =>
+        control.key === "sparse_result_privacy_floor" &&
+        control.minResultCount === 3 &&
+        control.minSpecificity === 3,
+    ),
+  );
   assert.ok(contract.approvedFactorCodes.includes("owner_approval_required"));
+  assert.ok(contract.contractTests.includes("disclosure_query_budget_contract_smoke"));
   assert.ok(contract.contractTests.includes("disclosure_grant_evaluate_route_contract"));
 });
 
@@ -100,6 +122,7 @@ test("disclosure contract validation fails when consent and redaction safeguards
     audienceStages: ["registry"],
     disclosureFields: [],
     redactedFields: ["contact_details_before_introduction"],
+    searchPrivacyControls: [],
     approvedFactorCodes: ["field_level_grant"],
     invariants: ["Everything may be disclosed publicly."],
     sampleDecision: {
@@ -117,6 +140,7 @@ test("disclosure contract validation fails when consent and redaction safeguards
   assert.ok(validation.blockers.some((blocker) => blocker.includes("sample-decision-validation")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("stage-and-contact-invariants")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("redaction-invariants")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("search-privacy-controls")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("approved-factor-codes")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("contract-tests")));
 });
