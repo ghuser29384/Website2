@@ -493,6 +493,11 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="section-head section-head-compact">
             <p className="eyebrow">Explanation layer</p>
             <h2 id="factor-heading">Factor codes explain matches without private-text leakage.</h2>
+            <p>
+              The match inbox turns those codes into participant-facing reason labels, trust badges,
+              risk badges, and next safe actions so suggestions can be declined, reported, or moved
+              toward consent without exposing exact wishes.
+            </p>
           </div>
           <div className="data-grid">
             {profile.factorCodes.map((factor) => (

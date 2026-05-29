@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildMatchInboxBadges,
   buildMatchExplanationSnapshot,
   buildPrivacySafeMatchAuditMetadata,
   buildMatchExplanation,
@@ -48,7 +49,54 @@ test("match explanations list safe surfaces and redact sensitive surfaces", () =
   assert.ok(explanation.scannedSurfaces.includes("Saved wish profile"));
   assert.ok(explanation.scannedSurfaces.includes("Manual source summaries"));
   assert.ok(explanation.redactedSurfaces.includes("Exact wishes"));
+  assert.deepEqual(explanation.reasonCodes.sort(), [
+    "Deterministic scan",
+    "Privacy aligned",
+    "Source supported",
+  ]);
   assert.equal(explanation.workflowStage.key, "suggested");
+});
+
+test("match inbox badges expose trust, risk, and safe action labels", () => {
+  const badges = buildMatchInboxBadges({
+    canRevealIdentity: false,
+    counterpartyConsented: false,
+    generatedBy: "rule-based",
+    hasConciergeReview: true,
+    matchBasis: ["Compatibility tag: privacy_aligned"],
+    riskNotes: "Needs operator check before introduction.",
+    score: 64,
+    sharedCauses: ["Climate"],
+    status: "suggested",
+    suggestedFirstStep: "Ask one narrow mutual question.",
+    viewerConsented: true,
+  });
+
+  assert.equal(badges.trustBadge.key, "operator_triage");
+  assert.equal(badges.riskBadge.key, "risk_note_present");
+  assert.ok(badges.participantActions.includes("Request narrower disclosure"));
+  assert.ok(badges.participantActions.includes("Report"));
+});
+
+test("match inbox badges pause reported suggestions before more disclosure", () => {
+  const badges = buildMatchInboxBadges({
+    canRevealIdentity: true,
+    counterpartyConsented: true,
+    generatedBy: "saved-search-cron",
+    hasOpenReport: true,
+    matchBasis: ["Compatibility tag: verification_ready"],
+    riskNotes: "",
+    score: 82,
+    sharedCauses: ["Animal welfare"],
+    status: "suggested",
+    suggestedFirstStep: "Compare a bounded proposal.",
+    viewerConsented: true,
+  });
+
+  assert.equal(badges.trustBadge.key, "review_paused");
+  assert.equal(badges.riskBadge.key, "report_open");
+  assert.equal(badges.trustBadge.tone, "blocked");
+  assert.equal(badges.riskBadge.tone, "blocked");
 });
 
 test("workflow stages reflect consent state", () => {

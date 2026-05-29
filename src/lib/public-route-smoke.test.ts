@@ -816,6 +816,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
   const copilotSource = readRepoFile("src/lib/moral-trade/copilot.ts");
   const copilotContract = readRepoFile("config/moral-trade/copilot-contract.json");
+  const backgroundExplanationsSource = readRepoFile("src/lib/background-explanations.ts");
   const matchSignalSource = readRepoFile("src/lib/moral-trade/match-signal.ts");
   const challengeAppealSource = readRepoFile("src/lib/moral-trade/challenge-appeal.ts");
   const disclosureSource = readRepoFile("src/lib/moral-trade/disclosure.ts");
@@ -837,6 +838,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const reasoningPacketSource = readRepoFile("src/lib/moral-trade/reasoning-packets.ts");
   const dataModelProfile = readRepoFile("config/moral-trade/data-model-profile.json");
   const protocolProfile = readRepoFile("config/moral-trade/protocol-profile.json");
+  const backgroundNetworkingPage = readRepoFile("src/app/background-networking/page.tsx");
+  const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
   const technicalSpecPage = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const dataModelContractRoute = readRepoFile(
@@ -1012,6 +1015,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(matchSignalSource, /ideology_or_psychology_inferences/);
   assert.match(matchSignalSource, /redacted_profile_match_preview_only/);
   assert.match(matchSignalSource, /match_signal_evaluate_route_contract/);
+  assert.match(backgroundExplanationsSource, /buildMatchInboxBadges/);
+  assert.match(backgroundExplanationsSource, /trustBadge/);
+  assert.match(backgroundExplanationsSource, /riskBadge/);
+  assert.match(backgroundExplanationsSource, /participantActions/);
+  assert.match(backgroundNetworkingPage, /trust and risk badges/);
+  assert.match(dashboardPage, /Trust and risk badges/);
+  assert.match(dashboardPage, /Next safe actions/);
+  assert.match(dashboardPage, /Reason codes/);
   assert.match(challengeAppealSource, /evaluateMoralTradeChallengeAppeal/);
   assert.match(challengeAppealSource, /validateMoralTradeChallengeAppealContract/);
   assert.match(challengeAppealSource, /affected_party_standing/);
@@ -1339,6 +1350,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Field-level schema/);
   assert.match(technicalSpecPage, /State transitions/);
   assert.match(technicalSpecPage, /factor codes/i);
+  assert.match(technicalSpecPage, /trust badges/);
+  assert.match(technicalSpecPage, /risk badges/);
   assert.match(healthRoute, /publicContract/);
   assert.match(healthRoute, /dataModelValidation/);
   assert.match(healthRoute, /dataModelEntities/);

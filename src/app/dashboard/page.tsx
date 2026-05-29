@@ -43,8 +43,8 @@ import { ProfilePortabilityPanel } from "@/components/dashboard/profile-portabil
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
+  buildMatchInboxBadges,
   buildMatchExplanation,
-  formatFactorCode,
   formatGrantExpiry,
 } from "@/lib/background-explanations";
 import {
@@ -2196,7 +2196,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ) : dashboardData?.matchSuggestions.length ? (
               dashboardData.matchSuggestions.map((match) => {
                 const latestSnapshot = latestSnapshotByMatchId.get(match.id) ?? null;
-                const explanation = buildMatchExplanation({
+                const explanationInput = {
                   canRevealIdentity: match.canRevealIdentity,
                   counterpartyConsented: match.counterpartyConsented,
                   generatedBy: match.generatedBy,
@@ -2210,7 +2210,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   status: match.status,
                   suggestedFirstStep: match.suggestedFirstStep,
                   viewerConsented: match.viewerConsented,
-                });
+                };
+                const explanation = buildMatchExplanation(explanationInput);
+                const inboxBadges = buildMatchInboxBadges(explanationInput);
 
                 return (
                 <article key={match.id} className="panel data-card">
@@ -2235,6 +2237,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <span className="source-pill">{explanation.workflowStage.label}</span>
                     <span className="impact-pill">Fit score {match.score}/100</span>
                     <span className="source-pill">{explanation.confidenceBand} confidence</span>
+                    <span className="source-pill">Trust: {inboxBadges.trustBadge.label}</span>
+                    <span className="source-pill">Risk: {inboxBadges.riskBadge.label}</span>
                     <span className="source-pill">{match.generatedBy}</span>
                     {match.counterpartyPreview?.causes?.slice(0, 3).map((cause) => (
                       <span className="source-pill" key={`${match.id}-${cause}`}>
@@ -2249,12 +2253,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <span>{explanation.workflowStage.description}</span>
                     </div>
                     <div className="mini-list-item">
-                      <strong>Factors</strong>
+                      <strong>Reason codes</strong>
                       <span>
-                        {explanation.factorCodes.length
-                          ? explanation.factorCodes.map(formatFactorCode).join(", ")
+                        {explanation.reasonCodes.length
+                          ? explanation.reasonCodes.join(", ")
                           : "Broad preview compatibility"}
                       </span>
+                    </div>
+                    <div className="mini-list-item">
+                      <strong>Trust and risk badges</strong>
+                      <span>
+                        {inboxBadges.trustBadge.label}: {inboxBadges.trustBadge.description}
+                      </span>
+                      <span>
+                        {inboxBadges.riskBadge.label}: {inboxBadges.riskBadge.description}
+                      </span>
+                    </div>
+                    <div className="mini-list-item">
+                      <strong>Next safe actions</strong>
+                      <span>{inboxBadges.participantActions.join(", ")}</span>
                     </div>
                     <div className="mini-list-item">
                       <strong>What was scanned</strong>

@@ -145,9 +145,9 @@ export default async function BackgroundNetworkingPage({
             <article className="panel concept-card">
               <h3>Match explanations</h3>
               <p>
-                Match cards show coarse factor codes, confidence bands, scanned surfaces, and
-                redacted surfaces. They explain why a suggestion exists without exposing raw wish
-                text, contact details, or source notes.
+                Match cards show coarse reason codes, confidence bands, trust and risk badges,
+                scanned surfaces, and redacted surfaces. They explain why a suggestion exists
+                without exposing raw wish text, contact details, or source notes.
               </p>
             </article>
             <article className="panel concept-card">
