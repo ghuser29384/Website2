@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { MoralTradeAnimations } from "@/components/home/moral-trade-animations";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import {
@@ -221,6 +222,8 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             ))}
           </div>
         </section>
+
+        <MoralTradeAnimations />
 
         <section className="growth-start-section section section-white" aria-labelledby="start-heading">
           <div className="section-head section-head-compact">

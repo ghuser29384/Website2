@@ -335,6 +335,7 @@ test("home page is a focused marketplace landing page with pilot metrics and mar
   const heroIndex = homeSource.indexOf("Cooperate across deep value differences.");
   const metricsIndex = homeSource.indexOf("growth-progress-card");
   const searchIndex = homeSource.indexOf("Search the marketplace");
+  const animationIndex = homeSource.indexOf("<MoralTradeAnimations");
   const routeIndex = homeSource.indexOf("Choose the right first path");
   const activationIndex = homeSource.indexOf("Start with one low-risk action");
   const previewIndex = homeSource.indexOf("Marketplace preview");
@@ -342,7 +343,8 @@ test("home page is a focused marketplace landing page with pilot metrics and mar
   assert.ok(heroIndex > -1);
   assert.ok(metricsIndex > heroIndex);
   assert.ok(searchIndex > metricsIndex);
-  assert.ok(routeIndex > searchIndex);
+  assert.ok(animationIndex > searchIndex);
+  assert.ok(routeIndex > animationIndex);
   assert.ok(activationIndex > routeIndex);
   assert.ok(previewIndex > activationIndex);
   assert.match(homeSource, /See a worked example/);
@@ -373,6 +375,56 @@ test("home page is a focused marketplace landing page with pilot metrics and mar
   assert.equal(homeSource.includes("deterministic synthesis layer"), false);
   assert.equal(homeSource.includes("As featured in"), false);
   assert.equal(homeSource.includes("Hear their stories"), false);
+});
+
+test("home page includes the accessible moral trade animation typology", () => {
+  const homeSource = readRepoFile("src/components/home/home-page.tsx");
+  const animationSource = readRepoFile("src/components/home/moral-trade-animations.tsx");
+  const globalCss = readRepoFile("src/app/globals.css");
+
+  assert.match(homeSource, /MoralTradeAnimations/);
+  assert.match(animationSource, /Eight moral trade types, in motion/);
+  assert.match(animationSource, /role="img"/);
+  assert.match(animationSource, /aria-label=\{card\.alt\}/);
+  assert.match(animationSource, /Pause motion/);
+  assert.match(animationSource, /Resume motion/);
+
+  for (const label of [
+    "A. Reciprocal mixed trade",
+    "B. Moral-for-prudential trade",
+    "C. Pure opposed-cause trade",
+    "D. Intrapersonal trade",
+    "E. Bargained coordination",
+    "F. Lottery-mediated trade",
+    "G. Side-payment trade",
+    "H. Market-mediated trade",
+  ]) {
+    assert.match(animationSource, new RegExp(label.replace(/[.]/g, "\\.")));
+  }
+
+  assert.match(animationSource, /moral-animation-frame-\$\{card\.scene\}/);
+
+  for (const scene of [
+    "reciprocal",
+    "prudential",
+    "pure",
+    "intrapersonal",
+    "bargained",
+    "lottery",
+    "sidePayment",
+    "market",
+  ]) {
+    assert.match(animationSource, new RegExp(`scene: "${scene}"`));
+  }
+
+  assert.match(globalCss, /\.moral-animation-grid/);
+  assert.match(globalCss, /\.moral-animation-pause-input:checked/);
+  assert.match(globalCss, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(globalCss, /@media \(max-width: 760px\)/);
+  assert.match(globalCss, /--mt-orange/);
+  assert.match(globalCss, /--mt-green/);
+  assert.match(globalCss, /--mt-sky/);
+  assert.match(globalCss, /--mt-purple/);
 });
 
 test("homepage metrics use live counts when available and avoid fake impact totals", () => {
