@@ -106,6 +106,23 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     ],
   },
   {
+    href: "/privacy",
+    label: "Privacy practices",
+    summary: "Public/private fields, cookies, analytics redaction, processors, retention, and data request routes.",
+    kind: "learn",
+    keywords: [
+      "privacy",
+      "cookies",
+      "analytics",
+      "processors",
+      "retention",
+      "deletion",
+      "export",
+      "data request",
+      "source connections",
+    ],
+  },
+  {
     href: "/reasoning-center",
     label: "Reasoning Center",
     summary: "Forum-style essays, quick takes, questions, and reviewer notes for moral trade design.",

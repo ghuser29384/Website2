@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -63,6 +64,23 @@ export default async function TermsPage() {
             participants. They are not a guarantee that an action occurred, that a commitment is
             enforceable, or that a trade was morally correct.
           </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Privacy, processors, and data requests</h2>
+          <p>
+            Privacy requests, processor questions, profile export, correction, deletion, and
+            restriction workflows are handled through the Privacy page, dashboard portability
+            tools, and contact route. Some audit, payment, safety, or dispute records may need to
+            be retained to preserve review integrity.
+          </p>
+          <div className="offer-actions">
+            <Link className="button button-primary" href="/privacy">
+              Read privacy practices
+            </Link>
+            <Link className="button button-secondary" href="/contact">
+              Contact support
+            </Link>
+          </div>
         </section>
       </main>
       <SiteFooter />

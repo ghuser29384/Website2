@@ -717,6 +717,30 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   );
 });
 
+test("privacy and terms publish processor retention and data-request transparency", () => {
+  const privacyPage = readRepoFile("src/app/privacy/page.tsx");
+  const termsPage = readRepoFile("src/app/terms/page.tsx");
+  const siteSearchSource = readRepoFile("src/lib/site-search.ts");
+
+  assert.match(privacyPage, /Data, processors, and retention summary/);
+  assert.match(privacyPage, /Account and profile data/);
+  assert.match(privacyPage, /Private wish and source data/);
+  assert.match(privacyPage, /Payment and donation references/);
+  assert.match(privacyPage, /Analytics and attribution/);
+  assert.match(privacyPage, /Notifications/);
+  assert.match(privacyPage, /Supabase for authentication and database storage/);
+  assert.match(privacyPage, /Stripe for participant payment objects; Every\.org for off-site donation routes/);
+  assert.match(privacyPage, /future analytics tools must follow the same redaction rules/);
+  assert.match(privacyPage, /exact wishes, contact details, report bodies, and raw source notes are excluded/);
+  assert.match(privacyPage, /Open data request tools/);
+  assert.match(privacyPage, /Contact privacy support/);
+  assert.match(privacyPage, /correction, deletion, restriction, or processor clarification/);
+  assert.match(termsPage, /Privacy, processors, and data requests/);
+  assert.match(termsPage, /Some audit, payment, safety, or dispute records may need to/);
+  assert.match(siteSearchSource, /Privacy practices/);
+  assert.match(siteSearchSource, /cookies, analytics redaction, processors, retention/);
+});
+
 test("activation loop includes concierge intake, admin triage, SLA, and audit trail", () => {
   const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
   const registryPage = readRepoFile("src/app/wish-registry/page.tsx");

@@ -1,19 +1,66 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { BACKGROUND_DATA_INVENTORY } from "@/lib/background-privacy-controls";
 import { getViewer } from "@/lib/app-data";
+import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Privacy",
   description:
-    "Privacy practices for Moral Trade profiles, wish previews, source connections, and consent-gated background networking.",
+    "Privacy practices for Moral Trade profiles, wish previews, source connections, analytics, cookies, processors, retention, and data requests.",
   alternates: {
     canonical: "/privacy",
   },
+  openGraph: {
+    title: "Moral Trade privacy practices",
+    description:
+      "How Moral Trade handles public profiles, private wishes, analytics, cookies, processors, retention, and user data requests.",
+    url: getAbsoluteUrl("/privacy"),
+    type: "website",
+  },
 };
+
+const transparencyRows = [
+  {
+    title: "Account and profile data",
+    purpose: "Authenticate users, show opt-in public profiles, and preserve profile portability.",
+    processors: "Supabase for authentication and database storage.",
+    retention:
+      "Kept while the account or review record needs it; export, correction, deletion, and restriction requests start from the dashboard or contact route.",
+  },
+  {
+    title: "Private wish and source data",
+    purpose: "Support broad previews, consent-gated introductions, and manual source summaries.",
+    processors: "Stored in Moral Trade records backed by Supabase; raw external feeds are not automatically ingested.",
+    retention:
+      "Kept only for the consent scope or review workflow that needs it, with exact wishes and source notes excluded from public cards and analytics.",
+  },
+  {
+    title: "Payment and donation references",
+    purpose: "Reconcile agreement payments, donation-route handoffs, and optional evidence records.",
+    processors: "Stripe for participant payment objects; Every.org for off-site donation routes.",
+    retention:
+      "Payment identifiers, status, amount, cadence, and evidence notes may be retained for reconciliation, disputes, audit integrity, and compliance needs.",
+  },
+  {
+    title: "Analytics and attribution",
+    purpose: "Measure whether visitors understand the pilot and reach the right next step.",
+    processors: "Internal funnel records; future analytics tools must follow the same redaction rules.",
+    retention:
+      "Uses path, event type, coarse counts, buckets, partner codes, and attribution cookies; exact wishes, contact details, report bodies, and raw source notes are excluded.",
+  },
+  {
+    title: "Notifications",
+    purpose: "Send account, evidence, review, background-networking, and digest updates.",
+    processors: "Email delivery may use an external provider; in-app and web-push preferences live in Moral Trade records.",
+    retention:
+      "Preference rows and delivery records are retained to honor opt-outs, diagnose failed delivery, and avoid exposing private wish text by email.",
+  },
+] as const;
 
 export default async function PrivacyPage() {
   const viewer = await getViewer();
@@ -34,6 +81,30 @@ export default async function PrivacyPage() {
           asks, constraints, and verification preferences should stay private unless a user chooses
           to share more.
         </p>
+        <section className="privacy-transparency-section">
+          <h2>Data, processors, and retention summary</h2>
+          <p>
+            This pilot uses a small set of operational data categories. The summary below is meant
+            to make the processor, purpose, and retention story readable before users create
+            private wishes, payment records, or evidence notes.
+          </p>
+          <div className="privacy-transparency-grid">
+            {transparencyRows.map((row) => (
+              <article className="panel data-card" key={row.title}>
+                <h3>{row.title}</h3>
+                <p className="route-text">
+                  <strong>Purpose:</strong> {row.purpose}
+                </p>
+                <p className="route-text">
+                  <strong>Processors:</strong> {row.processors}
+                </p>
+                <p className="route-text">
+                  <strong>Retention:</strong> {row.retention}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
         <section className="panel data-card data-card-wide">
           <h2>Public and private fields</h2>
           <p>
@@ -130,6 +201,14 @@ export default async function PrivacyPage() {
             payment references, or safety records may need to be retained to preserve review
             integrity.
           </p>
+          <div className="offer-actions">
+            <Link className="button button-primary" href={viewer ? "/dashboard" : "/login?returnTo=/dashboard"}>
+              Open data request tools
+            </Link>
+            <Link className="button button-secondary" href="/contact">
+              Contact privacy support
+            </Link>
+          </div>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Notifications</h2>
@@ -155,6 +234,11 @@ export default async function PrivacyPage() {
             and coercive-baseline concerns should be routed as review issues rather than ordinary
             support questions.
           </p>
+          <ul className="compact-list">
+            <li>Export or import profile data from the dashboard portability tools.</li>
+            <li>Ask for correction, deletion, restriction, or processor clarification through the contact route.</li>
+            <li>Escalate coercion, harassment, fraud, or unsafe disclosure through safety review.</li>
+          </ul>
         </section>
       </main>
       <SiteFooter />
