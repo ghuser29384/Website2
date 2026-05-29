@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-data-model-v0.1.1-2026-05",
+  "version": "moral-trade-data-model-v0.1.2-2026-05",
   "purpose": "Public contract for the core Moral Trade domain entities, required fields, privacy classes, relationship boundaries, and non-claims named by the product audit.",
   "entities": [
     {
@@ -281,6 +281,7 @@
   "contractTests": [
     "data_model_profile_validator",
     "data_model_entity_coverage",
+    "data_model_profile_json_schema",
     "offer_required_field_contract",
     "source_note_privacy_boundary",
     "public_data_model_contract_route",

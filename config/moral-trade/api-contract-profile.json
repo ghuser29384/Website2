@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.1-2026-05",
+  "version": "moral-trade-api-contract-v0.2-2026-05",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -49,6 +49,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return schema metadata, validator status, sample-bundle summary, and blockers; never expose submitted evidence artifacts."
+    },
+    {
+      "key": "moral_trade_schema_registry",
+      "method": "GET",
+      "path": "/api/moral-trade/schemas",
+      "auth": "public",
+      "privacyClass": "public_schema",
+      "requestSchema": "empty_request",
+      "responseSchema": "schema_registry_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return schema registry validation blockers and public schema documents; never hide the data-model schema behind prose-only contracts."
     },
     {
       "key": "moral_trade_copilot_contract",
@@ -335,7 +347,7 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, data-model, policy-bundle, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, and API-contract validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, and API-contract validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
@@ -343,6 +355,7 @@
         { "key": "dataModelValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Core data model entity and privacy-boundary validator result." },
         { "key": "policyBundleValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Strict copilot input bundle, policy registry, prohibited-pattern, factor-code, verification-method, and redaction-policy validator result." },
         { "key": "provenanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Provenance object contract validator result." },
+        { "key": "schemaRegistryValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Public JSON Schema registry validator result, including the data-model profile schema and schema-document route coverage." },
         { "key": "copilotValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Copilot contract validator result." },
         { "key": "matchSignalValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Redacted match-signal contract validator result." },
         { "key": "challengeAppealValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Challenge and appeal scope contract validator result." },
@@ -403,6 +416,20 @@
         { "key": "validationRuleCodes", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Stable rule codes used by the provenance validator." },
         { "key": "sampleBundleSummary", "type": "object", "required": true, "privacy": "public_contract", "description": "Synthetic non-user evidence bundle counts and validation status proving the contract is executable without exposing submitted evidence." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Provenance contract blockers that prevent reliance on evidence-object claims." }
+      ]
+    },
+    {
+      "key": "schema_registry_response",
+      "purpose": "Public validator-backed registry for exact Moral Trade JSON Schema documents and canonical schema URLs.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the schema registry validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the schema-registry validation run." },
+        { "key": "registryVersion", "type": "string", "required": true, "privacy": "public", "description": "Schema registry version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable schema-registry purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for schema coverage, public paths, canonical IDs, strict schema shapes, and test hooks." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_schema", "description": "Schema document manifest, count, and registry-test hooks." },
+        { "key": "schemaDocuments", "type": "schema_document_array", "required": true, "privacy": "public_schema", "description": "Public paths, canonical IDs, titles, top-level required fields, and property counts for every Moral Trade schema document." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Schema-registry blockers that prevent relying on public JSON Schema coverage." }
       ]
     },
     {

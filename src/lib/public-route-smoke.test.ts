@@ -1106,6 +1106,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const externalityProfile = readRepoFile("config/moral-trade/externality-profile.json");
   const aiGovernanceSource = readRepoFile("src/lib/moral-trade/ai-governance.ts");
   const aiGovernanceProfile = readRepoFile("config/moral-trade/ai-governance-profile.json");
+  const schemaRegistrySource = readRepoFile("src/lib/moral-trade/schema-registry.ts");
+  const dataModelProfileSchema = readRepoFile("config/moral-trade/data-model-profile.schema.json");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const provenanceSource = readRepoFile("src/lib/moral-trade/provenance.ts");
@@ -1162,6 +1164,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const aiGovernanceHealthRoute = readRepoFile("src/app/api/moral-trade/ai-governance/health/route.ts");
   const apiContractRoute = readRepoFile("src/app/api/moral-trade/api-contract/route.ts");
   const provenanceSchemaRoute = readRepoFile("src/app/api/moral-trade/provenance/schema/route.ts");
+  const schemaRegistryRoute = readRepoFile("src/app/api/moral-trade/schemas/route.ts");
+  const schemaDocumentRoute = readRepoFile("src/app/schemas/moral-trade/[schema]/route.ts");
   const nextConfig = readRepoFile("next.config.ts");
 
   assert.match(validationPage, /VALIDATOR_REVIEW_ROLES/);
@@ -1447,6 +1451,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_policy_bundle_contract/);
   assert.match(apiContractSource, /policy-bundle-contract-route/);
   assert.match(apiContractSource, /provenance-schema-validator/);
+  assert.match(apiContractSource, /moral_trade_schema_registry/);
+  assert.match(apiContractSource, /schema-registry-route/);
   assert.match(apiContractSource, /moral_trade_copilot_review/);
   assert.match(apiContractSource, /moral_trade_match_signal_contract/);
   assert.match(apiContractSource, /moral_trade_match_signal_evaluate/);
@@ -1477,6 +1483,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /moral_trade_policy_bundle_contract/);
   assert.match(apiContractProfile, /policy-bundle validation blockers/);
   assert.match(apiContractProfile, /unseeded prohibited patterns/);
+  assert.match(apiContractProfile, /schema_registry_response/);
+  assert.match(apiContractProfile, /moral_trade_schema_registry/);
+  assert.match(apiContractProfile, /data-model schema/);
   assert.match(apiContractProfile, /profile_export/);
   assert.match(apiContractProfile, /copilot_review_request/);
   assert.match(apiContractProfile, /copilot_review_response/);
@@ -1552,6 +1561,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Core entities, privacy classes, and relationships are validator-backed/);
   assert.match(technicalSpecPage, /dataModelProfile\.entities/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/data-model\/contract/);
+  assert.match(technicalSpecPage, /Schema registry/);
+  assert.match(technicalSpecPage, /schemaRegistry\.schemaDocuments/);
+  assert.match(technicalSpecPage, /\/api\/moral-trade\/schemas/);
   assert.match(technicalSpecPage, /Policy bundle contract/);
   assert.match(technicalSpecPage, /Copilot inputs are concrete registries, not broad application context/);
   assert.match(technicalSpecPage, /Evidence metadata boundary/);
@@ -1674,6 +1686,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /provenanceValidation/);
   assert.match(healthRoute, /provenanceValidationRules/);
   assert.match(healthRoute, /provenanceSampleBundleSummary/);
+  assert.match(healthRoute, /schemaRegistryValidation/);
+  assert.match(healthRoute, /schemaRegistryDocuments/);
+  assert.match(healthRoute, /schemaRegistryDataModelSchema/);
   assert.match(healthRoute, /copilotValidation/);
   assert.match(healthRoute, /copilotPromptTemplates/);
   assert.match(healthRoute, /copilotOutputSections/);
@@ -1811,6 +1826,16 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(provenanceSchemaRoute, /publicContract/);
   assert.match(provenanceSchemaRoute, /validationRuleCodes/);
   assert.match(provenanceSchemaRoute, /sampleBundleSummary/);
+  assert.match(schemaRegistrySource, /validateMoralTradeSchemaRegistry/);
+  assert.match(schemaRegistrySource, /data_model_profile_schema/);
+  assert.match(schemaRegistrySource, /schemaPublicPath/);
+  assert.match(dataModelProfileSchema, /Moral Trade Data Model Profile/);
+  assert.match(dataModelProfileSchema, /relationshipBoundaries/);
+  assert.match(dataModelProfileSchema, /additionalProperties/);
+  assert.match(schemaRegistryRoute, /validateMoralTradeSchemaRegistry/);
+  assert.match(schemaRegistryRoute, /schemaDocuments/);
+  assert.match(schemaDocumentRoute, /getMoralTradeSchemaDocumentBySlug/);
+  assert.match(schemaDocumentRoute, /availableSchemas/);
 });
 
 test("pooled donation offset creation has visible path and server-side guardrails", () => {

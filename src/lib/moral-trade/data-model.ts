@@ -1,7 +1,7 @@
 import dataModelProfileJson from "../../../config/moral-trade/data-model-profile.json";
 
 export const MORAL_TRADE_DATA_MODEL_VALIDATOR_VERSION =
-  "moral-trade-data-model-validator-v0.1";
+  "moral-trade-data-model-validator-v0.2";
 
 export type MoralTradeDataModelCategory =
   | "identity"
@@ -119,6 +119,7 @@ const REQUIRED_BOUNDARIES = [
 const REQUIRED_CONTRACT_TESTS = [
   "data_model_profile_validator",
   "data_model_entity_coverage",
+  "data_model_profile_json_schema",
   "offer_required_field_contract",
   "source_note_privacy_boundary",
   "public_data_model_contract_route",

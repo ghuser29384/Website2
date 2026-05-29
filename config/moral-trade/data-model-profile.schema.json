@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.moraltrade.org/schemas/moral-trade/data-model-profile.schema.json",
+  "title": "Moral Trade Data Model Profile",
+  "type": "object",
+  "required": [
+    "version",
+    "purpose",
+    "entities",
+    "privacyClasses",
+    "offerRequiredFields",
+    "relationshipBoundaries",
+    "nonClaims",
+    "contractTests"
+  ],
+  "properties": {
+    "version": { "type": "string", "minLength": 1 },
+    "purpose": { "type": "string", "minLength": 1 },
+    "entities": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/entity" }
+    },
+    "privacyClasses": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/rule" }
+    },
+    "offerRequiredFields": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "relationshipBoundaries": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/rule" }
+    },
+    "nonClaims": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "contractTests": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "entity": {
+      "type": "object",
+      "required": [
+        "key",
+        "label",
+        "category",
+        "privacyClass",
+        "requiredFields",
+        "relationships",
+        "publicExposure"
+      ],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "category": {
+          "enum": [
+            "identity",
+            "profile",
+            "proposal",
+            "privacy",
+            "evidence",
+            "review",
+            "matching",
+            "operations",
+            "payment",
+            "provenance"
+          ]
+        },
+        "privacyClass": { "type": "string", "minLength": 1 },
+        "requiredFields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "relationships": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "publicExposure": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "rule": {
+      "type": "object",
+      "required": ["key", "rule"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "rule": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

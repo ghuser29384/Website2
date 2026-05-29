@@ -1,7 +1,7 @@
 import apiContractProfileJson from "../../../config/moral-trade/api-contract-profile.json";
 
 export const MORAL_TRADE_API_CONTRACT_VALIDATOR_VERSION =
-  "moral-trade-api-contract-validator-v0.1";
+  "moral-trade-api-contract-validator-v0.2";
 
 export type MoralTradeApiRouteContract = {
   key: string;
@@ -60,6 +60,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_data_model_contract",
   "moral_trade_policy_bundle_contract",
   "moral_trade_provenance_schema",
+  "moral_trade_schema_registry",
   "moral_trade_copilot_contract",
   "moral_trade_copilot_review",
   "moral_trade_match_signal_contract",
@@ -136,6 +137,12 @@ export function validateMoralTradeApiContractProfile(
   );
   const provenanceSchemaResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "provenance_schema_response",
+  );
+  const schemaRegistryRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_schema_registry",
+  );
+  const schemaRegistryResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "schema_registry_response",
   );
   const dataModelContractRoute = profile.routes.find(
     (route) => route.key === "moral_trade_data_model_contract",
@@ -292,6 +299,30 @@ export function validateMoralTradeApiContractProfile(
         ),
       provenanceSchemaRoute
         ? `${provenanceSchemaRoute.key}:${provenanceSchemaRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
+      "schema-registry-route",
+      "Schema registry route publishes exact JSON Schema documents",
+      schemaRegistryRoute?.method === "GET" &&
+        schemaRegistryRoute.cacheControl === "no_store_dynamic" &&
+        schemaRegistryRoute.privacyClass === "public_schema" &&
+        /schema registry|schema documents|data-model schema|blockers/i.test(
+          schemaRegistryRoute.fallback,
+        ) &&
+        Boolean(
+          schemaRegistryResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          schemaRegistryResponse?.fields.some(
+            (field) =>
+              field.key === "schemaDocuments" && field.privacy === "public_schema",
+          ),
+        ),
+      schemaRegistryRoute
+        ? `${schemaRegistryRoute.key}:${schemaRegistryRoute.cacheControl}`
         : "missing",
     ),
     check(

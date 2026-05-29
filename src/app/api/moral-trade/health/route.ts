@@ -17,6 +17,10 @@ import {
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
 import {
+  getMoralTradeSchemaRegistry,
+  validateMoralTradeSchemaRegistry,
+} from "@/lib/moral-trade/schema-registry";
+import {
   getMoralTradeReasoningPacketContract,
   getMoralTradeReasoningPackets,
   validateMoralTradeReasoningPacketContract,
@@ -88,6 +92,8 @@ export async function GET() {
     validateMoralTradePolicyBundleContract(policyBundleContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
+  const schemaRegistry = getMoralTradeSchemaRegistry();
+  const schemaRegistryValidation = validateMoralTradeSchemaRegistry(schemaRegistry);
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
   const copilotRolloutReadiness =
@@ -137,6 +143,7 @@ export async function GET() {
       dataModelValidation.status === "pass" &&
       policyBundleValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
+      schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
       matchSignalValidation.status === "pass" &&
       challengeAppealValidation.status === "pass" &&
@@ -158,6 +165,7 @@ export async function GET() {
     dataModelValidation,
     policyBundleValidation,
     provenanceValidation,
+    schemaRegistryValidation,
     copilotValidation,
     matchSignalValidation,
     challengeAppealValidation,
@@ -214,6 +222,14 @@ export async function GET() {
       provenanceValidationRules: provenanceContract.validationRules.map((rule) => rule.key),
       provenanceSampleBundleSummary: provenanceContract.sampleBundleSummary,
       provenanceContractTests: provenanceContract.contractTests,
+      schemaRegistryVersion: schemaRegistry.version,
+      schemaRegistryDocuments: schemaRegistry.schemaDocuments.map((entry) => entry.key),
+      schemaRegistryPublicPaths: schemaRegistry.schemaDocuments.map((entry) => entry.publicPath),
+      schemaRegistryDataModelSchema:
+        schemaRegistry.schemaDocuments.find(
+          (entry) => entry.key === "data_model_profile_schema",
+        ) ?? null,
+      schemaRegistryTests: schemaRegistry.registryTests,
       copilotContractVersion: copilotContract.version,
       copilotPromptTemplates: copilotContract.promptTemplates.map((template) => template.key),
       copilotInputBundle: copilotContract.strictInputBundle,
@@ -352,6 +368,7 @@ export async function GET() {
       ...dataModelValidation.blockers,
       ...policyBundleValidation.blockers,
       ...provenanceValidation.blockers,
+      ...schemaRegistryValidation.blockers,
       ...copilotValidation.blockers,
       ...matchSignalValidation.blockers,
       ...challengeAppealValidation.blockers,

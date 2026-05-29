@@ -43,6 +43,10 @@ import {
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
 import {
+  getMoralTradeSchemaRegistry,
+  validateMoralTradeSchemaRegistry,
+} from "@/lib/moral-trade/schema-registry";
+import {
   getMoralTradeReasoningPacketContract,
   getMoralTradeReasoningPackets,
   validateMoralTradeReasoningPacketContract,
@@ -113,6 +117,8 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradePolicyBundleContract(policyBundleContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
+  const schemaRegistry = getMoralTradeSchemaRegistry();
+  const schemaRegistryValidation = validateMoralTradeSchemaRegistry(schemaRegistry);
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
   const copilotRolloutReadiness =
@@ -192,6 +198,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/provenance/schema">
                 View provenance schema
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/schemas">
+                View schema registry
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/data-model/contract">
                 View data model
@@ -1582,7 +1591,32 @@ export default async function MoralTradeTechnicalSpecPage() {
               Open API contract JSON
             </Link>
           </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Schema registry {schemaRegistry.version}</p>
+              <h3>Status {schemaRegistryValidation.status}</h3>
+              <p>
+                {schemaRegistryValidation.checks.length} check(s),{" "}
+                {schemaRegistryValidation.blockers.length} blocker(s),{" "}
+                {schemaRegistry.schemaDocuments.length} public schema document(s), including the
+                core data-model profile schema.
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/schemas">
+              Open schema registry JSON
+            </Link>
+          </div>
           <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Public schema documents</h3>
+              <ul className="clean-list">
+                {schemaRegistry.schemaDocuments.slice(0, 5).map((schema) => (
+                  <li key={schema.key}>
+                    <Link href={schema.publicPath}>{schema.slug}</Link>
+                  </li>
+                ))}
+              </ul>
+            </article>
             <article className="panel protocol-contract-card">
               <h3>Route catalog</h3>
               <ul className="clean-list">
