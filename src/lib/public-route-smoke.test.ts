@@ -47,6 +47,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(browseMenu?.items?.every((item) => item.description));
   assert.ok(createMenu?.items?.some((item) => item.label === "Trade"));
   assert.ok(hrefs.includes("/projects"));
+  assert.ok(hrefs.includes("/start"));
   assert.ok(hrefs.includes("/about"));
   assert.ok(hrefs.includes("/how-it-works"));
   assert.ok(hrefs.includes("/offers"));
@@ -73,6 +74,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(siteSource, /\/status/);
   assert.match(siteSource, /\/trust/);
   assert.match(siteSource, /\/projects/);
+  assert.match(siteSource, /\/start/);
   assert.match(siteSource, /\/updates/);
   assert.match(siteSource, /\/measurement/);
   assert.match(siteSource, /href: "\/sources", label: "Sources"/);
@@ -366,6 +368,7 @@ test("global search and offers search expose real marketplace discovery", () => 
 
 test("home page is a focused marketplace landing page with pilot metrics and marketplace preview", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
+  const visitorPathsSource = readRepoFile("src/lib/visitor-paths.ts");
   const heroIndex = homeSource.indexOf("Cooperate across deep value differences.");
   const metricsIndex = homeSource.indexOf("growth-progress-card");
   const searchIndex = homeSource.indexOf("Search the marketplace");
@@ -382,9 +385,13 @@ test("home page is a focused marketplace landing page with pilot metrics and mar
   assert.ok(activationIndex > routeIndex);
   assert.ok(previewIndex > activationIndex);
   assert.match(homeSource, /See a worked example/);
-  assert.match(homeSource, /Donate through a vetted route/);
-  assert.match(homeSource, /Join the founding cohort/);
-  assert.match(homeSource, /Open worked examples/);
+  assert.match(homeSource, /Choose your path/);
+  assert.match(homeSource, /VISITOR_PATHS/);
+  assert.match(visitorPathsSource, /Learn the idea/);
+  assert.match(visitorPathsSource, /Test an example/);
+  assert.match(visitorPathsSource, /Donate through a vetted route/);
+  assert.match(visitorPathsSource, /Join the founding cohort/);
+  assert.match(visitorPathsSource, /Open worked examples/);
   assert.match(homeSource, /SearchBar/);
   assert.match(homeSource, /Search by cause, action, or trade type/);
   assert.match(homeSource, /Invite one serious counterparty/);
@@ -409,6 +416,29 @@ test("home page is a focused marketplace landing page with pilot metrics and mar
   assert.equal(homeSource.includes("deterministic synthesis layer"), false);
   assert.equal(homeSource.includes("As featured in"), false);
   assert.equal(homeSource.includes("Hear their stories"), false);
+});
+
+test("visitor router exposes four intent paths before deeper marketplace mechanics", () => {
+  const startPage = readRepoFile("src/app/start/page.tsx");
+  const visitorPathsSource = readRepoFile("src/lib/visitor-paths.ts");
+  const siteSearchSource = readRepoFile("src/lib/site-search.ts");
+  const sitemapSource = readRepoFile("src/app/sitemap.ts");
+
+  assert.match(startPage, /Choose the right first path/);
+  assert.match(startPage, /learn, test an example, donate, or join\/build/i);
+  assert.match(startPage, /Learn, test, donate, or join\/build/);
+  assert.match(startPage, /No liquidity assumption/);
+  assert.match(startPage, /No account pressure/);
+  assert.match(startPage, /No hidden automation/);
+  assert.match(visitorPathsSource, /key: "learn"/);
+  assert.match(visitorPathsSource, /key: "test"/);
+  assert.match(visitorPathsSource, /key: "donate"/);
+  assert.match(visitorPathsSource, /key: "join-build"/);
+  assert.match(visitorPathsSource, /\/offers\?view=examples/);
+  assert.match(visitorPathsSource, /\/cohort/);
+  assert.match(siteSearchSource, /Choose your path/);
+  assert.match(siteSearchSource, /visitor router/);
+  assert.match(sitemapSource, /\/start/);
 });
 
 test("home page includes the accessible moral trade animation typology", () => {

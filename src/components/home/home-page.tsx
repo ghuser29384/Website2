@@ -14,6 +14,7 @@ import type { MarketplaceOverview } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_COUNT, CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { VISITOR_PATHS } from "@/lib/visitor-paths";
 import {
   getActionEvidenceSummary,
   getBaselineConfidence,
@@ -26,43 +27,6 @@ interface HomePageProps {
   isAuthenticated: boolean;
   marketplaceOverview: MarketplaceOverview;
 }
-
-const startPaths: ReadonlyArray<{
-  actionLabel: string;
-  description: string;
-  href: string;
-  icon: IconName;
-  title: string;
-}> = [
-  {
-    title: "Read what exists today",
-    description: "See what the pilot supports, what it does not promise, and why review matters.",
-    href: "/moral-trade",
-    icon: "source",
-    actionLabel: "Read the plain-language primer",
-  },
-  {
-    title: "See a worked example",
-    description: "Inspect a complete, non-live example before drafting or relying on a real trade.",
-    href: "/offers?view=examples",
-    icon: "example",
-    actionLabel: "Open worked examples",
-  },
-  {
-    title: "Donate through a vetted route",
-    description: "Choose a cause, complete payment on Every.org, and optionally record the gift here.",
-    href: "/donate",
-    icon: "fund",
-    actionLabel: "Open donation routes",
-  },
-  {
-    title: "Join or build",
-    description: "Enter the founding cohort, invite one serious counterparty, and start small.",
-    href: "/cohort",
-    icon: "profile",
-    actionLabel: "Join the founding cohort",
-  },
-] as const;
 
 const categoryPills = [
   { label: "Global health", href: "/offers?search=Global%20health" },
@@ -151,11 +115,8 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
               <Link className="button button-primary" href="/offers?view=examples">
                 See a worked example
               </Link>
-              <Link className="button button-secondary" href={cohortHref}>
-                Join the founding cohort
-              </Link>
-              <Link className="button button-secondary" href="/donate">
-                Donate through a vetted route
+              <Link className="button button-secondary" href={isAuthenticated ? cohortHref : "/start"}>
+                {isAuthenticated ? "Open dashboard" : "Choose your path"}
               </Link>
             </div>
           </section>
@@ -234,11 +195,11 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             </p>
           </div>
           <div className="growth-start-grid">
-            {startPaths.map((path) => (
+            {VISITOR_PATHS.map((path) => (
               <Link className="growth-path-card panel" href={path.href} key={path.title}>
                 <IconMark name={path.icon} />
                 <div>
-                  <h3>{path.title}</h3>
+                  <h3>{path.homeTitle}</h3>
                   <p>{path.description}</p>
                 </div>
                 <span className="inline-link">{path.actionLabel}</span>

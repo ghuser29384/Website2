@@ -4,6 +4,7 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
       label: "Browse",
       summary: "See current projects, public offers, and worked examples.",
       items: [
+        { href: "/start", label: "Choose your path", description: "Route by intent: learn, test an example, donate, or join/build." },
         { href: "/projects", label: "Projects", description: "What is live, illustrative, or upcoming." },
         { href: "/offers", label: "All offers", description: "Live offers and worked examples." },
         { href: "/offers?view=examples", label: "Worked examples", description: "Seeded structures, not live offers." },
@@ -89,6 +90,7 @@ export const FOOTER_LINK_GROUPS = [
     title: "Marketplace",
     links: [
       { href: "/projects", label: "Projects" },
+      { href: "/start", label: "Choose your path" },
       { href: "/offers", label: "Browse offers" },
       { href: "/offers?view=examples", label: "Worked examples" },
       { href: "/pledge-swaps", label: "Pledge swaps" },

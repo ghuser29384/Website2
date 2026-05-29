@@ -24,6 +24,22 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["projects", "what are you doing", "worked examples", "public goods", "pilot", "upcoming"],
   },
   {
+    href: "/start",
+    label: "Choose your path",
+    summary: "Route yourself by intent: learn the idea, test an example, donate, or join/build.",
+    kind: "learn",
+    keywords: [
+      "start",
+      "choose path",
+      "visitor router",
+      "learn",
+      "test example",
+      "donate",
+      "join",
+      "build",
+    ],
+  },
+  {
     href: "/about",
     label: "About Moral Trade",
     summary: "What exists today, what does not exist yet, who is accountable, and what comes next.",
