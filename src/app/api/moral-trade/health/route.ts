@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
-
 import {
+  buildMoralTradeApiJsonResponse,
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
@@ -55,6 +54,7 @@ import {
   validateMoralTradeExternalityProfile,
 } from "@/lib/moral-trade/externality";
 import {
+  auditMoralTradeApiImplementationContract,
   getMoralTradeApiContractProfile,
   validateMoralTradeApiContractProfile,
 } from "@/lib/moral-trade/api-contract";
@@ -147,10 +147,12 @@ export async function GET(request: Request) {
   const externalityValidation = validateMoralTradeExternalityProfile(externalityProfile);
   const apiContractProfile = getMoralTradeApiContractProfile();
   const apiContractValidation = validateMoralTradeApiContractProfile(apiContractProfile);
+  const apiContractImplementationAudit =
+    auditMoralTradeApiImplementationContract(apiContractProfile);
   const aiGovernanceProfile = getMoralTradeAiGovernanceProfile();
   const aiGovernanceValidation = validateMoralTradeAiGovernanceProfile(aiGovernanceProfile);
 
-  return NextResponse.json({
+  return buildMoralTradeApiJsonResponse({
     ok:
       validation.status === "pass" &&
       dataModelValidation.status === "pass" &&
@@ -170,6 +172,7 @@ export async function GET(request: Request) {
       performanceValidation.status === "pass" &&
       externalityValidation.status === "pass" &&
       apiContractValidation.status === "pass" &&
+      apiContractImplementationAudit.status === "pass" &&
       aiGovernanceValidation.status === "pass",
     checkedAt: new Date().toISOString(),
     profileVersion: profile.version,
@@ -192,6 +195,7 @@ export async function GET(request: Request) {
     performanceValidation,
     externalityValidation,
     apiContractValidation,
+    apiContractImplementationAudit,
     aiGovernanceValidation,
     publicContract: {
       requiredProposalFields: profile.requiredProposalFields,
@@ -358,7 +362,18 @@ export async function GET(request: Request) {
       ),
       externalityRemedyControls: externalityProfile.remedyControls.map((control) => control.key),
       apiContractProfileVersion: apiContractProfile.version,
+      apiContractImplementationAuditStatus: apiContractImplementationAudit.status,
       apiRoutes: apiContractProfile.routes.map((route) => route.key),
+      apiContractRoute:
+        apiContractProfile.routes.find(
+          (route) => route.key === "moral_trade_api_contract",
+        ) ?? null,
+      apiImplementationRouteCount: apiContractImplementationAudit.routeCount,
+      apiImplementationRateLimitSurfaces:
+        apiContractImplementationAudit.implementedRateLimitSurfaces,
+      apiImplementationCacheControls:
+        apiContractImplementationAudit.implementedCacheControls,
+      apiImplementationBlockers: apiContractImplementationAudit.blockers,
       apiPrivacyClasses: apiContractProfile.privacyClasses.map((entry) => entry.key),
       apiSchemaDefinitions: apiContractProfile.schemaDefinitions.map((schema) => schema.key),
       apiSchemaFieldCounts: Object.fromEntries(
@@ -398,6 +413,7 @@ export async function GET(request: Request) {
       ...performanceValidation.blockers,
       ...externalityValidation.blockers,
       ...apiContractValidation.blockers,
+      ...apiContractImplementationAudit.blockers,
       ...aiGovernanceValidation.blockers,
     ],
   });

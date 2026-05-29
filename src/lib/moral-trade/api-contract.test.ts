@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  auditMoralTradeApiImplementationContract,
   getMoralTradeApiContractProfile,
   validateMoralTradeApiContractProfile,
   type MoralTradeApiContractProfile,
@@ -13,6 +14,14 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
 
   assert.equal(validation.status, "pass");
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_health"));
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_api_contract" &&
+        route.path === "/api/moral-trade/api-contract" &&
+        route.responseSchema === "api_contract_response",
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "public_offers_collection"));
   assert.ok(profile.routes.some((route) => route.key === "public_offer_detail"));
   assert.ok(profile.routes.some((route) => route.key === "public_offers_facets"));
@@ -45,6 +54,14 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.routes.some((route) => route.key === "funnel_events"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_export_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "empty_request"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "api_contract_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "implementationAudit" && field.type === "implementation_audit",
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offers_collection_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offers_collection_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offer_detail_request"));
@@ -110,6 +127,32 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.privacyClasses.some((entry) => entry.key === "authenticated_private"));
   assert.ok(profile.privacyClasses.some((entry) => entry.key === "ephemeral_private_draft_review"));
   assert.ok(profile.privacyClasses.some((entry) => entry.key === "redacted_analytics"));
+});
+
+test("api contract implementation audit proves route metadata is backed by executable tables", () => {
+  const profile = getMoralTradeApiContractProfile();
+  const audit = auditMoralTradeApiImplementationContract(profile);
+
+  assert.equal(audit.status, "pass");
+  assert.equal(audit.blockers.length, 0);
+  assert.equal(audit.routeCount, profile.routes.length);
+  assert.deepEqual(audit.missingRateLimitSurfaces, []);
+  assert.deepEqual(audit.missingCacheControls, []);
+  assert.deepEqual(audit.orphanedRateLimitSurfaces, []);
+  assert.ok(audit.implementedRateLimitSurfaces.includes("public_contract_read"));
+  assert.ok(audit.implementedRateLimitSurfaces.includes("offer_collection_read"));
+  assert.ok(audit.implementedRateLimitSurfaces.includes("analytics_ingest"));
+  assert.ok(audit.implementedCacheControls.includes("no_store_dynamic"));
+  assert.ok(audit.implementedCacheControls.includes("private_no_store"));
+  assert.ok(audit.implementedCacheControls.includes("public_contract_static"));
+  assert.ok(
+    audit.routeFindings.every(
+      (finding) =>
+        finding.status === "pass" &&
+        finding.rateLimitLimit !== null &&
+        finding.cacheControlHeader !== null,
+    ),
+  );
 });
 
 test("api contract schema definitions cover every route request and response schema", () => {

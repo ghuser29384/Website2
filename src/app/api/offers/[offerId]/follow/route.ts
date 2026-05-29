@@ -7,10 +7,9 @@ import {
   validateOfferFollowPayload,
 } from "@/lib/offer-follows";
 import {
-  getRequestRateLimitKey,
-  getRetryAfterSeconds,
-  takeRateLimitSlot,
-} from "@/lib/rate-limit";
+  buildMoralTradeApiRateLimitResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,29 +23,13 @@ interface OfferFollowRouteContext {
 }
 
 export async function POST(request: Request, context: OfferFollowRouteContext) {
-  const rateLimit = takeRateLimitSlot(
-    getRequestRateLimitKey(request, "offer_follow_write"),
-    {
-      limit: 30,
-      windowMs: 60_000,
-    },
-  );
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "offer_follow_write");
 
   if (rateLimit.limited) {
-    return NextResponse.json(
-      {
-        ok: false,
-        checkedAt: new Date().toISOString(),
-        error: "rate_limited",
-        blockers: ["rate_limit_exceeded:offer_follow_write"],
-      },
-      {
-        headers: {
-          "Cache-Control": "private, no-store",
-          "Retry-After": String(getRetryAfterSeconds(rateLimit.resetAt)),
-        },
-        status: 429,
-      },
+    return buildMoralTradeApiRateLimitResponse(
+      rateLimit,
+      "Rate-limited offer follow writes return no saved-offer result until the window resets.",
+      "private, no-store",
     );
   }
 

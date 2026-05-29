@@ -4,6 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { MORAL_TRADE_API_RATE_LIMITS } from "./api-rate-limit";
+import { getMoralTradeApiContractProfile } from "./api-contract";
 import {
   decideMoralTradeFallback,
   evaluateMoralTradeFallbackDecision,
@@ -18,6 +19,9 @@ function readRepoFile(path: string) {
 test("operations profile publishes security, rate-limit, observability, fallback, and rollout contracts", () => {
   const profile = getMoralTradeOperationsProfile();
   const validation = validateMoralTradeOperationsProfile();
+  const apiContractSurfaces = Array.from(
+    new Set(getMoralTradeApiContractProfile().routes.map((route) => route.rateLimitSurface)),
+  );
 
   assert.equal(validation.status, "pass");
   assert.equal(validation.blockers.length, 0);
@@ -45,6 +49,17 @@ test("operations profile publishes security, rate-limit, observability, fallback
     ),
     [],
   );
+  assert.deepEqual(
+    apiContractSurfaces.filter((surface) => !(surface in MORAL_TRADE_API_RATE_LIMITS)),
+    [],
+  );
+  for (const [surface, config] of Object.entries(MORAL_TRADE_API_RATE_LIMITS)) {
+    assert.equal(
+      profile.rateLimitSurfaces.find((entry) => entry.key === surface)?.limit,
+      config.limit,
+      surface,
+    );
+  }
   assert.ok(profile.privacyAndSessionControls.some((control) => control.key === "data_right_requests"));
   assert.ok(profile.observabilityMetrics.includes("copilot_fallback_rate"));
   assert.ok(profile.fallbackControls.some((control) => control.key === "invalid_copilot_output_no_state_change"));

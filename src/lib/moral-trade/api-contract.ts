@@ -1,7 +1,14 @@
 import apiContractProfileJson from "../../../config/moral-trade/api-contract-profile.json";
 
+import {
+  MORAL_TRADE_API_CACHE_CONTROL_HEADERS,
+  MORAL_TRADE_API_RATE_LIMITS,
+} from "./api-rate-limit";
+
 export const MORAL_TRADE_API_CONTRACT_VALIDATOR_VERSION =
   "moral-trade-api-contract-validator-v0.2";
+export const MORAL_TRADE_API_IMPLEMENTATION_AUDIT_VERSION =
+  "moral-trade-api-implementation-audit-v0.1";
 
 export type MoralTradeApiRouteContract = {
   key: string;
@@ -53,10 +60,36 @@ export interface MoralTradeApiContractValidation {
   blockers: string[];
 }
 
+export interface MoralTradeApiImplementationRouteFinding {
+  routeKey: string;
+  rateLimitSurface: string;
+  rateLimitLimit: number | null;
+  rateLimitWindowMs: number | null;
+  cacheControl: string;
+  cacheControlHeader: string | null;
+  status: "pass" | "fail";
+}
+
+export interface MoralTradeApiImplementationAudit {
+  status: "pass" | "fail";
+  validatorName: "moral-trade-api-implementation";
+  validatorVersion: string;
+  profileVersion: string;
+  routeCount: number;
+  implementedRateLimitSurfaces: string[];
+  implementedCacheControls: string[];
+  missingRateLimitSurfaces: string[];
+  missingCacheControls: string[];
+  orphanedRateLimitSurfaces: string[];
+  routeFindings: MoralTradeApiImplementationRouteFinding[];
+  blockers: string[];
+}
+
 const apiContractProfile = apiContractProfileJson as MoralTradeApiContractProfile;
 
 const REQUIRED_ROUTES = [
   "moral_trade_health",
+  "moral_trade_api_contract",
   "public_offers_collection",
   "public_offer_detail",
   "public_offers_facets",
@@ -125,6 +158,70 @@ export function getMoralTradeApiContractProfile() {
   return apiContractProfile;
 }
 
+export function auditMoralTradeApiImplementationContract(
+  profile: MoralTradeApiContractProfile = apiContractProfile,
+): MoralTradeApiImplementationAudit {
+  const implementedRateLimits = MORAL_TRADE_API_RATE_LIMITS as Record<
+    string,
+    { limit: number; windowMs: number } | undefined
+  >;
+  const implementedCacheControls = MORAL_TRADE_API_CACHE_CONTROL_HEADERS as Record<
+    string,
+    string | undefined
+  >;
+  const implementedRateLimitSurfaces = Object.keys(implementedRateLimits).sort();
+  const implementedCacheControlKeys = Object.keys(implementedCacheControls).sort();
+  const publishedRateLimitSurfaces = Array.from(
+    new Set(profile.routes.map((route) => route.rateLimitSurface)),
+  ).sort();
+  const publishedCacheControls = Array.from(
+    new Set(profile.routes.map((route) => route.cacheControl)),
+  ).sort();
+  const missingRateLimitSurfaces = publishedRateLimitSurfaces.filter(
+    (surface) => !implementedRateLimits[surface],
+  );
+  const missingCacheControls = publishedCacheControls.filter(
+    (cacheControl) => !implementedCacheControls[cacheControl],
+  );
+  const orphanedRateLimitSurfaces = implementedRateLimitSurfaces.filter(
+    (surface) => !publishedRateLimitSurfaces.includes(surface),
+  );
+  const routeFindings = profile.routes.map((route) => {
+    const rateLimit = implementedRateLimits[route.rateLimitSurface];
+    const cacheControlHeader = implementedCacheControls[route.cacheControl] ?? null;
+
+    return {
+      routeKey: route.key,
+      rateLimitSurface: route.rateLimitSurface,
+      rateLimitLimit: rateLimit?.limit ?? null,
+      rateLimitWindowMs: rateLimit?.windowMs ?? null,
+      cacheControl: route.cacheControl,
+      cacheControlHeader,
+      status: rateLimit && cacheControlHeader ? ("pass" as const) : ("fail" as const),
+    };
+  });
+  const blockers = [
+    ...missingRateLimitSurfaces.map((surface) => `missing_rate_limit_surface:${surface}`),
+    ...missingCacheControls.map((cacheControl) => `missing_cache_control:${cacheControl}`),
+    ...orphanedRateLimitSurfaces.map((surface) => `orphaned_rate_limit_surface:${surface}`),
+  ];
+
+  return {
+    status: blockers.length ? "fail" : "pass",
+    validatorName: "moral-trade-api-implementation",
+    validatorVersion: MORAL_TRADE_API_IMPLEMENTATION_AUDIT_VERSION,
+    profileVersion: profile.version,
+    routeCount: profile.routes.length,
+    implementedRateLimitSurfaces,
+    implementedCacheControls: implementedCacheControlKeys,
+    missingRateLimitSurfaces,
+    missingCacheControls,
+    orphanedRateLimitSurfaces,
+    routeFindings,
+    blockers,
+  };
+}
+
 export function validateMoralTradeApiContractProfile(
   profile: MoralTradeApiContractProfile = apiContractProfile,
 ): MoralTradeApiContractValidation {
@@ -140,6 +237,12 @@ export function validateMoralTradeApiContractProfile(
   );
   const provenanceSchemaRoute = profile.routes.find(
     (route) => route.key === "moral_trade_provenance_schema",
+  );
+  const apiContractRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_api_contract",
+  );
+  const apiContractResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "api_contract_response",
   );
   const provenanceSchemaResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "provenance_schema_response",
@@ -286,6 +389,7 @@ export function validateMoralTradeApiContractProfile(
   const funnelEventSchema = profile.schemaDefinitions.find(
     (schema) => schema.key === "funnel_event_request",
   );
+  const implementationAudit = auditMoralTradeApiImplementationContract(profile);
   const checks = [
     check(
       "core-api-routes",
@@ -370,6 +474,39 @@ export function validateMoralTradeApiContractProfile(
           /suppress|sparse|broad previews/i.test(route.fallback),
       ),
       publicPreviewRoutes.map((route) => `${route.key}:${route.rateLimitSurface}`).join(", "),
+    ),
+    check(
+      "api-contract-route",
+      "API contract route is cataloged and implementation-audited",
+      apiContractRoute?.method === "GET" &&
+        apiContractRoute.path === "/api/moral-trade/api-contract" &&
+        apiContractRoute.cacheControl === "no_store_dynamic" &&
+        apiContractRoute.rateLimitSurface === "public_contract_read" &&
+        /validator blockers|implementation audit|route catalog|schema definitions|privacy classes|test hooks|private participant records/i.test(
+          apiContractRoute.fallback,
+        ) &&
+        Boolean(
+          apiContractResponse?.fields.some(
+            (field) =>
+              field.key === "implementationAudit" &&
+              field.type === "implementation_audit",
+          ),
+        ) &&
+        implementationAudit.status === "pass",
+      apiContractRoute
+        ? `${apiContractRoute.key}:${apiContractRoute.rateLimitSurface}:${apiContractRoute.cacheControl}:${implementationAudit.status}`
+        : "missing",
+    ),
+    check(
+      "implementation-backed-rate-limits-and-cache",
+      "Published rate-limit and cache names have executable tables",
+      implementationAudit.status === "pass",
+      [
+        `routes=${implementationAudit.routeCount}`,
+        `missingRateLimits=${implementationAudit.missingRateLimitSurfaces.join("|") || "none"}`,
+        `missingCacheControls=${implementationAudit.missingCacheControls.join("|") || "none"}`,
+        `orphanedRateLimits=${implementationAudit.orphanedRateLimitSurfaces.join("|") || "none"}`,
+      ].join(", "),
     ),
     check(
       "provenance-schema-validator",

@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
-
 import {
+  buildMoralTradeApiJsonResponse,
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
 import {
+  auditMoralTradeApiImplementationContract,
   getMoralTradeApiContractProfile,
   validateMoralTradeApiContractProfile,
 } from "@/lib/moral-trade/api-contract";
@@ -23,13 +23,15 @@ export async function GET(request: Request) {
 
   const profile = getMoralTradeApiContractProfile();
   const validation = validateMoralTradeApiContractProfile(profile);
+  const implementationAudit = auditMoralTradeApiImplementationContract(profile);
 
-  return NextResponse.json({
-    ok: validation.status === "pass",
+  return buildMoralTradeApiJsonResponse({
+    ok: validation.status === "pass" && implementationAudit.status === "pass",
     checkedAt: new Date().toISOString(),
     profileVersion: profile.version,
     purpose: profile.purpose,
     validation,
+    implementationAudit,
     publicContract: {
       routes: profile.routes.map((route) => ({
         key: route.key,
@@ -45,7 +47,14 @@ export async function GET(request: Request) {
       schemaDefinitions: profile.schemaDefinitions,
       privacyClasses: profile.privacyClasses.map((entry) => entry.key),
       apiTests: profile.apiTests,
+      implementationAudit: {
+        status: implementationAudit.status,
+        routeCount: implementationAudit.routeCount,
+        implementedRateLimitSurfaces: implementationAudit.implementedRateLimitSurfaces,
+        implementedCacheControls: implementationAudit.implementedCacheControls,
+        blockers: implementationAudit.blockers,
+      },
     },
-    blockers: validation.blockers,
+    blockers: [...validation.blockers, ...implementationAudit.blockers],
   });
 }

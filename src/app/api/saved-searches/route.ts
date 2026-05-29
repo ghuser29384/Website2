@@ -6,10 +6,9 @@ import {
   validateOfferSavedSearchPayload,
 } from "@/lib/offer-saved-searches";
 import {
-  getRequestRateLimitKey,
-  getRetryAfterSeconds,
-  takeRateLimitSlot,
-} from "@/lib/rate-limit";
+  buildMoralTradeApiRateLimitResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -20,29 +19,13 @@ export const runtime = "nodejs";
 type SavedSearchInsert = Database["public"]["Tables"]["saved_searches"]["Insert"];
 
 export async function POST(request: Request) {
-  const rateLimit = takeRateLimitSlot(
-    getRequestRateLimitKey(request, "saved_search_write"),
-    {
-      limit: 30,
-      windowMs: 60_000,
-    },
-  );
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "saved_search_write");
 
   if (rateLimit.limited) {
-    return NextResponse.json(
-      {
-        ok: false,
-        checkedAt: new Date().toISOString(),
-        error: "rate_limited",
-        blockers: ["rate_limit_exceeded:saved_search_write"],
-      },
-      {
-        headers: {
-          "Cache-Control": "private, no-store",
-          "Retry-After": String(getRetryAfterSeconds(rateLimit.resetAt)),
-        },
-        status: 429,
-      },
+    return buildMoralTradeApiRateLimitResponse(
+      rateLimit,
+      "Rate-limited saved search writes return no storage result until the window resets.",
+      "private, no-store",
     );
   }
 

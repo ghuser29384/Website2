@@ -1,10 +1,3 @@
-import { NextResponse } from "next/server";
-
-import {
-  getRequestRateLimitKey,
-  getRetryAfterSeconds,
-  takeRateLimitSlot,
-} from "@/lib/rate-limit";
 import {
   completeBackgroundQueryEvent,
   recordBackgroundQueryRiskSignal,
@@ -15,6 +8,10 @@ import {
   getBackgroundQueryFingerprint,
   shouldApplySparseResultPrivacyFloor,
 } from "@/lib/background-query-budget";
+import {
+  buildMoralTradeApiJsonResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { searchWishRegistryPreviews } from "@/lib/wish-registry";
@@ -23,21 +20,23 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   if (!hasSupabaseEnv()) {
-    return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
+    return buildMoralTradeApiJsonResponse(
+      { error: "Supabase is not configured." },
+      "no_store_dynamic",
+      { status: 503 },
+    );
   }
 
   const url = new URL(request.url);
-  const rateLimit = takeRateLimitSlot(getRequestRateLimitKey(request, "wish-registry-search"), {
-    limit: 60,
-    windowMs: 60_000,
-  });
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "wish_registry_search");
 
   if (rateLimit.limited) {
-    return NextResponse.json(
+    return buildMoralTradeApiJsonResponse(
       { error: "Too many registry searches. Try again shortly." },
+      "no_store_dynamic",
       {
         headers: {
-          "Retry-After": String(getRetryAfterSeconds(rateLimit.resetAt)),
+          "Retry-After": String(rateLimit.retryAfterSeconds),
         },
         status: 429,
       },
@@ -114,8 +113,9 @@ export async function GET(request: Request) {
       supabase: serviceClient,
     });
 
-    return NextResponse.json(
+    return buildMoralTradeApiJsonResponse(
       { error: "Daily registry search budget reached. Try again after the budget window resets." },
+      "no_store_dynamic",
       { status: 429 },
     );
   }
@@ -175,7 +175,7 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json({
+    return buildMoralTradeApiJsonResponse({
       results: floorApplied ? [] : results,
       privacyNotice:
         floorApplied
@@ -183,8 +183,9 @@ export async function GET(request: Request) {
           : "Only broad preview fields are returned. Exact wishes, asks, constraints, contact details, and private sources are never exposed by this endpoint.",
     });
   } catch (error) {
-    return NextResponse.json(
+    return buildMoralTradeApiJsonResponse(
       { error: error instanceof Error ? error.message : "Registry search failed." },
+      "no_store_dynamic",
       { status: 500 },
     );
   }

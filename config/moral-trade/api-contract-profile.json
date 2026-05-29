@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.2-2026-05",
+  "version": "moral-trade-api-contract-v0.3-2026-05",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -13,6 +13,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return ok:false with validator blockers; never silently claim readiness."
+    },
+    {
+      "key": "moral_trade_api_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/api-contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "api_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return API contract validator blockers, implementation audit, route catalog, schema definitions, privacy classes, and test hooks; never expose private participant records."
     },
     {
       "key": "public_offers_collection",
@@ -594,6 +606,20 @@
       ]
     },
     {
+      "key": "api_contract_response",
+      "purpose": "Public validator-backed API route catalog, implementation audit, schema definitions, privacy classes, rate-limit surfaces, cache posture, and test hooks.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when the API contract profile validator and implementation audit both pass." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the API contract validation run." },
+        { "key": "profileVersion", "type": "string", "required": true, "privacy": "public", "description": "API contract profile version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable API contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Route catalog, schema coverage, privacy, cache, rate-limit, and fallback validator result." },
+        { "key": "implementationAudit", "type": "implementation_audit", "required": true, "privacy": "public_contract", "description": "Executable audit proving published rate-limit and cache-control names are backed by implementation tables." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Published route catalog, schema definition keys, privacy classes, API tests, and implementation audit summary." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Validator and implementation blockers that prevent relying on the API contract." }
+      ]
+    },
+    {
       "key": "data_model_contract_response",
       "purpose": "Public validator-backed data model contract for core Moral Trade entities, required fields, privacy classes, relationship boundaries, non-claims, and test hooks.",
       "fields": [
@@ -1047,6 +1073,7 @@
   ],
   "apiTests": [
     "api_contract_profile_validator",
+    "api_contract_route_contract",
     "health_route_contract_smoke",
     "technical_spec_api_contract_smoke",
     "security_route_contract",

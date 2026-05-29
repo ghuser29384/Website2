@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
-
 import {
+  buildMoralTradeApiJsonResponse,
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
@@ -27,7 +26,7 @@ export async function GET(request: Request) {
   const validation = validateMoralTradePerformanceProfile(profile);
   const routeRecoveryAudit = auditMoralTradeRouteRecoveryManifest({ profile });
 
-  return NextResponse.json({
+  return buildMoralTradeApiJsonResponse({
     ok: validation.status === "pass",
     checkedAt: new Date().toISOString(),
     profileVersion: profile.version,

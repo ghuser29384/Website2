@@ -1,16 +1,14 @@
-import { NextResponse } from "next/server";
-
 import { getOfferById } from "@/lib/app-data";
+import {
+  buildMoralTradeApiJsonResponse,
+  buildMoralTradeApiRateLimitResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import {
   buildPublicOfferDetailPayload,
   getPublicOfferSlugFromSegments,
   validatePublicOfferDetailPayload,
 } from "@/lib/public-offers";
-import {
-  getRequestRateLimitKey,
-  getRetryAfterSeconds,
-  takeRateLimitSlot,
-} from "@/lib/rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const dynamic = "force-dynamic";
@@ -22,29 +20,12 @@ interface PublicOfferDetailRouteContext {
 }
 
 export async function GET(request: Request, context: PublicOfferDetailRouteContext) {
-  const rateLimit = takeRateLimitSlot(
-    getRequestRateLimitKey(request, "offer_detail_read"),
-    {
-      limit: 120,
-      windowMs: 60_000,
-    },
-  );
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "offer_detail_read");
 
   if (rateLimit.limited) {
-    return NextResponse.json(
-      {
-        ok: false,
-        checkedAt: new Date().toISOString(),
-        error: "rate_limited",
-        blockers: ["rate_limit_exceeded:offer_detail_read"],
-      },
-      {
-        headers: {
-          "Cache-Control": "no-store",
-          "Retry-After": String(getRetryAfterSeconds(rateLimit.resetAt)),
-        },
-        status: 429,
-      },
+    return buildMoralTradeApiRateLimitResponse(
+      rateLimit,
+      "Rate-limited offer detail reads return no listing payload until the window resets.",
     );
   }
 
@@ -66,7 +47,7 @@ export async function GET(request: Request, context: PublicOfferDetailRouteConte
   const validation = validatePublicOfferDetailPayload(payload);
   const status = payload.item ? 200 : 404;
 
-  return NextResponse.json(
+  return buildMoralTradeApiJsonResponse(
     {
       ok: validation.status === "pass",
       checkedAt: new Date().toISOString(),
@@ -74,10 +55,8 @@ export async function GET(request: Request, context: PublicOfferDetailRouteConte
       validation,
       blockers: validation.blockers,
     },
+    "no_store_dynamic",
     {
-      headers: {
-        "Cache-Control": "no-store",
-      },
       status,
     },
   );

@@ -7,10 +7,9 @@ import {
 } from "@/lib/offer-create-similar";
 import { isPublicLiveOfferId } from "@/lib/offer-follows";
 import {
-  getRequestRateLimitKey,
-  getRetryAfterSeconds,
-  takeRateLimitSlot,
-} from "@/lib/rate-limit";
+  buildMoralTradeApiRateLimitResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -24,29 +23,13 @@ interface OfferCreateSimilarRouteContext {
 }
 
 export async function POST(request: Request, context: OfferCreateSimilarRouteContext) {
-  const rateLimit = takeRateLimitSlot(
-    getRequestRateLimitKey(request, "offer_create_similar"),
-    {
-      limit: 30,
-      windowMs: 60_000,
-    },
-  );
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "offer_create_similar");
 
   if (rateLimit.limited) {
-    return NextResponse.json(
-      {
-        ok: false,
-        checkedAt: new Date().toISOString(),
-        error: "rate_limited",
-        blockers: ["rate_limit_exceeded:offer_create_similar"],
-      },
-      {
-        headers: {
-          "Cache-Control": "private, no-store",
-          "Retry-After": String(getRetryAfterSeconds(rateLimit.resetAt)),
-        },
-        status: 429,
-      },
+    return buildMoralTradeApiRateLimitResponse(
+      rateLimit,
+      "Rate-limited create-similar requests return no draft prefill until the window resets.",
+      "private, no-store",
     );
   }
 

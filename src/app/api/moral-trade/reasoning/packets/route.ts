@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
-
 import {
+  buildMoralTradeApiJsonResponse,
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
@@ -26,7 +25,7 @@ export async function GET(request: Request) {
   const contract = getMoralTradeReasoningPacketContract(packets);
   const validation = validateMoralTradeReasoningPacketContract(contract, packets);
 
-  return NextResponse.json(
+  return buildMoralTradeApiJsonResponse(
     {
       ok: validation.status === "pass",
       checkedAt: new Date().toISOString(),
@@ -45,11 +44,6 @@ export async function GET(request: Request) {
       },
       packets,
       blockers: validation.blockers,
-    },
-    {
-      headers: {
-        "Cache-Control": "no-store",
-      },
     },
   );
 }

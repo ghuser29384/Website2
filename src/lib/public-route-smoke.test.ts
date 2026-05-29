@@ -757,8 +757,9 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(migrationSource, /webinar_rsvps/);
   assert.match(migrationSource, /email_nurture_subscriptions/);
   assert.match(apiSource, /parseAttributionCookie/);
-  assert.match(apiSource, /takeRateLimitSlot/);
-  assert.match(apiSource, /analytics-ingest/);
+  assert.match(apiSource, /takeMoralTradeApiRateLimitSlot\(request, "analytics_ingest"\)/);
+  assert.match(apiSource, /buildMoralTradeApiJsonResponse/);
+  assert.match(apiSource, /MORAL_TRADE_API_CACHE_CONTROL_HEADERS\.no_store_dynamic/);
   assert.match(apiSource, /buildPrivacySafeFunnelEventRecord/);
   assert.match(actionsSource, /buildPrivacySafeFunnelEventRecord/);
   assert.match(funnelTracker, /useReportWebVitals/);
@@ -1145,54 +1146,134 @@ test("dashboard exposes existing profile portability endpoints", () => {
 
 test("public contract APIs enforce the documented public contract read throttle", () => {
   const apiRateLimitSource = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const wishRegistrySearchRoute = readRepoFile("src/app/api/wish-registry/search/route.ts");
+  const funnelEventsRoute = readRepoFile("src/app/api/funnel-events/route.ts");
   const publicContractReadRoutes = [
-    "src/app/api/moral-trade/health/route.ts",
-    "src/app/api/moral-trade/api-contract/route.ts",
-    "src/app/api/moral-trade/data-model/contract/route.ts",
-    "src/app/api/moral-trade/policy-bundle/contract/route.ts",
-    "src/app/api/moral-trade/provenance/schema/route.ts",
-    "src/app/api/moral-trade/schemas/route.ts",
-    "src/app/api/moral-trade/copilot/contract/route.ts",
-    "src/app/api/moral-trade/match-signal/contract/route.ts",
-    "src/app/api/moral-trade/challenge-appeal/contract/route.ts",
-    "src/app/api/moral-trade/disclosure/contract/route.ts",
-    "src/app/api/moral-trade/review-workflow/contract/route.ts",
-    "src/app/api/moral-trade/reasoning/packets/route.ts",
-    "src/app/api/moral-trade/operations/health/route.ts",
-    "src/app/api/moral-trade/security/health/route.ts",
-    "src/app/api/moral-trade/incident-response/health/route.ts",
-    "src/app/api/moral-trade/evaluation/health/route.ts",
-    "src/app/api/moral-trade/performance/health/route.ts",
-    "src/app/api/moral-trade/externality/health/route.ts",
-    "src/app/api/moral-trade/ai-governance/health/route.ts",
-    "src/app/api/profile/schema/route.ts",
+    { path: "src/app/api/moral-trade/health/route.ts", cacheControl: "no_store_dynamic" },
+    { path: "src/app/api/moral-trade/api-contract/route.ts", cacheControl: "no_store_dynamic" },
+    {
+      path: "src/app/api/moral-trade/data-model/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/policy-bundle/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/provenance/schema/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    { path: "src/app/api/moral-trade/schemas/route.ts", cacheControl: "no_store_dynamic" },
+    {
+      path: "src/app/api/moral-trade/copilot/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/match-signal/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/challenge-appeal/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/disclosure/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/review-workflow/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/reasoning/packets/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/operations/health/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/security/health/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/incident-response/health/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/evaluation/health/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/performance/health/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/externality/health/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/ai-governance/health/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    { path: "src/app/api/profile/schema/route.ts", cacheControl: "public_contract_static" },
   ];
 
   assert.match(
     apiRateLimitSource,
     /public_contract_read: \{ limit: 240, windowMs: 60_000 \}/,
   );
+  assert.match(apiRateLimitSource, /MORAL_TRADE_API_CACHE_CONTROL_HEADERS/);
+  assert.match(apiRateLimitSource, /no_store_dynamic: "no-store"/);
+  assert.match(apiRateLimitSource, /private_no_store: "private, no-store"/);
+  assert.match(
+    apiRateLimitSource,
+    /public_contract_static: "public, max-age=300, stale-while-revalidate=3600"/,
+  );
+  assert.match(apiRateLimitSource, /wish_registry_search: \{ limit: 60, windowMs: 60_000 \}/);
+  assert.match(apiRateLimitSource, /analytics_ingest: \{ limit: 120, windowMs: 60_000 \}/);
+  assert.match(apiRateLimitSource, /headers\.set\("Cache-Control"/);
   assert.match(apiRateLimitSource, /buildMoralTradeApiRateLimitResponse/);
   assert.match(apiRateLimitSource, /buildMoralTradeApiRateLimitBlocker\(rateLimit\.surface\)/);
   assert.match(apiRateLimitSource, /"Retry-After"/);
   assert.match(apiRateLimitSource, /"Cache-Control": cacheControl/);
 
-  for (const routePath of publicContractReadRoutes) {
-    const routeSource = readRepoFile(routePath);
+  for (const route of publicContractReadRoutes) {
+    const routeSource = readRepoFile(route.path);
 
-    assert.match(routeSource, /export async function GET\(request: Request\)/, routePath);
+    assert.match(routeSource, /export async function GET\(request: Request\)/, route.path);
     assert.match(
       routeSource,
       /takeMoralTradeApiRateLimitSlot\(request, "public_contract_read"\)/,
-      routePath,
+      route.path,
     );
-    assert.match(routeSource, /buildMoralTradeApiRateLimitResponse\(/, routePath);
+    assert.match(routeSource, /buildMoralTradeApiRateLimitResponse\(/, route.path);
+    assert.match(routeSource, /return buildMoralTradeApiJsonResponse\(/, route.path);
+    if (route.cacheControl === "public_contract_static") {
+      assert.match(routeSource, /"public_contract_static"/, route.path);
+    }
     assert.ok(
       routeSource.indexOf('takeMoralTradeApiRateLimitSlot(request, "public_contract_read")') <
-        routeSource.indexOf("NextResponse.json"),
-      routePath,
+        routeSource.indexOf("return buildMoralTradeApiJsonResponse"),
+      route.path,
     );
   }
+
+  assert.match(
+    wishRegistrySearchRoute,
+    /takeMoralTradeApiRateLimitSlot\(request, "wish_registry_search"\)/,
+  );
+  assert.match(wishRegistrySearchRoute, /buildMoralTradeApiJsonResponse/);
+  assert.match(wishRegistrySearchRoute, /"Retry-After": String\(rateLimit\.retryAfterSeconds\)/);
+  assert.equal(wishRegistrySearchRoute.includes("wish-registry-search"), false);
+  assert.match(
+    funnelEventsRoute,
+    /takeMoralTradeApiRateLimitSlot\(request, "analytics_ingest"\)/,
+  );
+  assert.match(funnelEventsRoute, /buildMoralTradeApiJsonResponse/);
+  assert.match(funnelEventsRoute, /MORAL_TRADE_API_CACHE_CONTROL_HEADERS\.no_store_dynamic/);
+  assert.match(funnelEventsRoute, /"Retry-After": String\(rateLimit\.retryAfterSeconds\)/);
+  assert.equal(funnelEventsRoute.includes("analytics-ingest"), false);
 });
 
 test("public guidance describes verification pipelines without custody overclaims", () => {
@@ -1690,7 +1771,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_performance_health/);
   assert.match(apiContractSource, /moral_trade_externality_health/);
   assert.match(apiContractSource, /moral_trade_ai_governance_health/);
+  assert.match(apiContractSource, /moral_trade_api_contract/);
+  assert.match(apiContractSource, /auditMoralTradeApiImplementationContract/);
+  assert.match(apiContractSource, /implementation-backed-rate-limits-and-cache/);
   assert.match(apiContractSource, /field-level-schema-contracts/);
+  assert.match(apiContractProfile, /moral_trade_api_contract/);
+  assert.match(apiContractProfile, /api_contract_response/);
+  assert.match(apiContractProfile, /api_contract_route_contract/);
   assert.match(apiContractProfile, /data_model_contract_response/);
   assert.match(apiContractProfile, /moral_trade_data_model_contract/);
   assert.match(apiContractProfile, /data-model contract validation blockers/);
@@ -1963,10 +2050,17 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /externalityDueDiligenceSteps/);
   assert.match(healthRoute, /externalityRemedyControls/);
   assert.match(healthRoute, /apiContractValidation/);
+  assert.match(healthRoute, /apiContractImplementationAudit/);
+  assert.match(healthRoute, /apiContractImplementationAuditStatus/);
   assert.match(healthRoute, /aiGovernanceValidation/);
   assert.match(healthRoute, /aiGovernanceDocumentationBeforeMl/);
   assert.match(healthRoute, /aiGovernanceExplanationControls/);
   assert.match(healthRoute, /apiRoutes/);
+  assert.match(healthRoute, /apiContractRoute/);
+  assert.match(healthRoute, /apiImplementationRouteCount/);
+  assert.match(healthRoute, /apiImplementationRateLimitSurfaces/);
+  assert.match(healthRoute, /apiImplementationCacheControls/);
+  assert.match(healthRoute, /apiImplementationBlockers/);
   assert.match(healthRoute, /apiSchemaFieldCounts/);
   assert.match(dataModelContractRoute, /validateMoralTradeDataModelProfile/);
   assert.match(dataModelContractRoute, /entities/);
@@ -2021,7 +2115,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(reasoningPacketsRoute, /getMoralTradeReasoningPackets/);
   assert.match(reasoningPacketsRoute, /validateMoralTradeReasoningPacketContract/);
   assert.match(reasoningPacketsRoute, /packets/);
-  assert.match(reasoningPacketsRoute, /Cache-Control/);
+  assert.match(reasoningPacketsRoute, /buildMoralTradeApiJsonResponse/);
   assert.match(operationsHealthRoute, /validateMoralTradeOperationsProfile/);
   assert.match(operationsHealthRoute, /resilienceFallbackTests/);
   assert.match(securityHealthRoute, /validateMoralTradeSecurityProfile/);
@@ -2054,6 +2148,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiGovernanceHealthRoute, /explanationControls/);
   assert.match(aiGovernanceHealthRoute, /prohibitedUses/);
   assert.match(apiContractRoute, /validateMoralTradeApiContractProfile/);
+  assert.match(apiContractRoute, /auditMoralTradeApiImplementationContract/);
+  assert.match(apiContractRoute, /implementationAudit/);
+  assert.match(
+    apiContractRoute,
+    /validation\.status === "pass" && implementationAudit\.status === "pass"/,
+  );
   assert.match(apiContractRoute, /requestSchema/);
   assert.match(provenanceSchemaRoute, /validateMoralTradeProvenanceContract/);
   assert.match(provenanceSchemaRoute, /publicContract/);
@@ -2096,23 +2196,40 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaDocumentRoute, /getMoralTradeSchemaDocumentBySlug/);
   assert.match(schemaDocumentRoute, /availableSchemas/);
   assert.match(publicOffersRoute, /buildPublicOffersCollectionPayload/);
-  assert.match(publicOffersRoute, /takeRateLimitSlot/);
+  assert.match(publicOffersRoute, /takeMoralTradeApiRateLimitSlot\(request, "offer_collection_read"\)/);
+  assert.match(publicOffersRoute, /buildMoralTradeApiRateLimitResponse/);
+  assert.match(publicOffersRoute, /buildMoralTradeApiJsonResponse/);
   assert.match(publicOffersRoute, /offer_collection_read/);
   assert.match(publicOfferDetailRoute, /buildPublicOfferDetailPayload/);
   assert.match(publicOfferDetailRoute, /validatePublicOfferDetailPayload/);
+  assert.match(publicOfferDetailRoute, /takeMoralTradeApiRateLimitSlot\(request, "offer_detail_read"\)/);
+  assert.match(publicOfferDetailRoute, /buildMoralTradeApiRateLimitResponse/);
+  assert.match(publicOfferDetailRoute, /buildMoralTradeApiJsonResponse/);
   assert.match(publicOfferDetailRoute, /offer_detail_read/);
   assert.match(publicOffersFacetsRoute, /buildPublicOffersFacetsPayload/);
   assert.match(publicOffersFacetsRoute, /validatePublicOffersFacetsPayload/);
+  assert.match(publicOffersFacetsRoute, /takeMoralTradeApiRateLimitSlot\(request, "offer_facets_read"\)/);
+  assert.match(publicOffersFacetsRoute, /buildMoralTradeApiRateLimitResponse/);
+  assert.match(publicOffersFacetsRoute, /buildMoralTradeApiJsonResponse/);
   assert.match(publicOffersFacetsRoute, /offer_facets_read/);
   assert.match(publicOfferFollowRoute, /validateOfferFollowPayload/);
+  assert.match(publicOfferFollowRoute, /takeMoralTradeApiRateLimitSlot\(request, "offer_follow_write"\)/);
+  assert.match(publicOfferFollowRoute, /buildMoralTradeApiRateLimitResponse/);
   assert.match(publicOfferFollowRoute, /offer_follow_write/);
   assert.match(publicOfferFollowRoute, /offer_carts/);
   assert.match(publicOfferFollowRoute, /private, no-store/);
   assert.match(publicOfferCreateSimilarRoute, /validateOfferCreateSimilarPayload/);
+  assert.match(
+    publicOfferCreateSimilarRoute,
+    /takeMoralTradeApiRateLimitSlot\(request, "offer_create_similar"\)/,
+  );
+  assert.match(publicOfferCreateSimilarRoute, /buildMoralTradeApiRateLimitResponse/);
   assert.match(publicOfferCreateSimilarRoute, /offer_create_similar/);
   assert.match(publicOfferCreateSimilarRoute, /getOfferById/);
   assert.match(publicOfferCreateSimilarRoute, /private, no-store/);
   assert.match(savedSearchesRoute, /normalizeOfferSavedSearchDraft/);
+  assert.match(savedSearchesRoute, /takeMoralTradeApiRateLimitSlot\(request, "saved_search_write"\)/);
+  assert.match(savedSearchesRoute, /buildMoralTradeApiRateLimitResponse/);
   assert.match(savedSearchesRoute, /saved_search_write/);
   assert.match(savedSearchesRoute, /private, no-store/);
   assert.match(savedSearchesRoute, /auth_required/);

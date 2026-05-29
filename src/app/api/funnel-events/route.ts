@@ -7,10 +7,10 @@ import {
   parseAttributionCookie,
 } from "@/lib/growth";
 import {
-  getRequestRateLimitKey,
-  getRetryAfterSeconds,
-  takeRateLimitSlot,
-} from "@/lib/rate-limit";
+  MORAL_TRADE_API_CACHE_CONTROL_HEADERS,
+  buildMoralTradeApiJsonResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -22,7 +22,12 @@ function cleanText(value: unknown, maxLength = 500) {
 
 export async function POST(request: NextRequest) {
   if (!hasSupabaseEnv()) {
-    return new NextResponse(null, { status: 204 });
+    return new NextResponse(null, {
+      headers: {
+        "Cache-Control": MORAL_TRADE_API_CACHE_CONTROL_HEADERS.no_store_dynamic,
+      },
+      status: 204,
+    });
   }
 
   let payload: Record<string, unknown>;
@@ -30,25 +35,31 @@ export async function POST(request: NextRequest) {
   try {
     payload = (await request.json()) as Record<string, unknown>;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
+    return buildMoralTradeApiJsonResponse(
+      { error: "Invalid JSON payload." },
+      "no_store_dynamic",
+      { status: 400 },
+    );
   }
 
   const eventType = cleanText(payload.eventType);
   if (!isFunnelEventType(eventType)) {
-    return NextResponse.json({ error: "Unknown funnel event type." }, { status: 400 });
+    return buildMoralTradeApiJsonResponse(
+      { error: "Unknown funnel event type." },
+      "no_store_dynamic",
+      { status: 400 },
+    );
   }
 
-  const rateLimit = takeRateLimitSlot(getRequestRateLimitKey(request, "analytics-ingest"), {
-    limit: 120,
-    windowMs: 60_000,
-  });
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "analytics_ingest");
 
   if (rateLimit.limited) {
-    return NextResponse.json(
+    return buildMoralTradeApiJsonResponse(
       { error: "Too many analytics events. Try again shortly." },
+      "no_store_dynamic",
       {
         headers: {
-          "Retry-After": String(getRetryAfterSeconds(rateLimit.resetAt)),
+          "Retry-After": String(rateLimit.retryAfterSeconds),
         },
         status: 429,
       },
@@ -77,8 +88,13 @@ export async function POST(request: NextRequest) {
       eventType,
       message: error.message,
     });
-    return new NextResponse(null, { status: 204 });
+    return new NextResponse(null, {
+      headers: {
+        "Cache-Control": MORAL_TRADE_API_CACHE_CONTROL_HEADERS.no_store_dynamic,
+      },
+      status: 204,
+    });
   }
 
-  return NextResponse.json({ ok: true });
+  return buildMoralTradeApiJsonResponse({ ok: true });
 }
