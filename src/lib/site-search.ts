@@ -45,6 +45,13 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["technical", "spec", "validator", "protocol", "schema", "factor codes", "provenance"],
   },
   {
+    href: "/sources",
+    label: "Sources",
+    summary: "Primary references and product-boundary notes for the Moral Trade pilot.",
+    kind: "learn",
+    keywords: ["sources", "references", "ord", "forethought", "moral public goods", "methodology"],
+  },
+  {
     href: "/how-it-works",
     label: "How it works",
     summary: "Start with one low-risk example, write the baseline, agree on proof, and review risks.",

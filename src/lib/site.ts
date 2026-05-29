@@ -49,6 +49,7 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
         { href: "/research", label: "Research", description: "Pilot questions, governance, and transparency." },
         { href: "/reasoning-center", label: "Reasoning Center", description: "Inspect the reasoning workspace." },
         { href: "/methodology", label: "Methodology", description: "Moral trade sources and safeguards." },
+        { href: "/sources", label: "Sources", description: "Primary references and product-boundary notes." },
         { href: "/paid-action-offers", label: "Deferred paid offers", description: "Why paid actions are review-only for now." },
         { href: "/faq", label: "FAQ", description: "Common questions and operating limits." },
       ],
@@ -110,7 +111,7 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/reasoning-standards", label: "Evidence standards" },
       { href: "/faq", label: "FAQ" },
       { href: "/paid-action-offers", label: "Deferred paid offers" },
-      { href: "/methodology#sources", label: "Sources" },
+      { href: "/sources", label: "Sources" },
     ],
   },
   {

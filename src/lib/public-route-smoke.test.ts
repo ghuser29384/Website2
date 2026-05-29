@@ -53,6 +53,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(hrefs.includes("/moral-trade/technical-spec"));
   assert.ok(hrefs.includes("/offers?view=examples"));
   assert.ok(hrefs.includes("/faq"));
+  assert.ok(hrefs.includes("/sources"));
   assert.ok(hrefs.includes("/wish-registry"));
   assert.ok(hrefs.includes("/background-networking"));
   assert.ok(hrefs.includes("/research"));
@@ -67,6 +68,8 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(siteSource, /\/trust/);
   assert.match(siteSource, /\/projects/);
   assert.match(siteSource, /\/updates/);
+  assert.match(siteSource, /href: "\/sources", label: "Sources"/);
+  assert.equal(siteSource.includes("/methodology#sources"), false);
   assert.match(topbarSource, /topbar-menu-heading/);
   assert.match(topbarSource, /topbar-menu-icon/);
   assert.match(topbarSource, /topbar-with-search/);
@@ -732,6 +735,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   const aboutPage = readRepoFile("src/app/about/page.tsx");
   const howItWorksPage = readRepoFile("src/app/how-it-works/page.tsx");
   const projectsPage = readRepoFile("src/app/projects/page.tsx");
+  const sourcesPage = readRepoFile("src/app/sources/page.tsx");
   const updatesPage = readRepoFile("src/app/updates/page.tsx");
   const teamPage = readRepoFile("src/app/team/page.tsx");
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
@@ -779,6 +783,11 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(aboutPage, /What exists today, and what does not/);
   assert.match(howItWorksPage, /One reviewable commitment at a time/);
   assert.match(projectsPage, /What Moral Trade is actually doing/);
+  assert.match(sourcesPage, /Reference points for the pilot/);
+  assert.match(sourcesPage, /https:\/\/doi\.org\/10\.1086\/682187/);
+  assert.match(sourcesPage, /Convergence and Compromise/);
+  assert.match(sourcesPage, /Moral Public Goods/);
+  assert.match(sourcesPage, /product-boundary notes/);
   assert.match(updatesPage, /public archive for what changed/);
   assert.match(teamPage, /Who is publicly accountable for the pilot/);
   assert.match(sitemapSource, /\/moral-trade/);
@@ -788,6 +797,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(sitemapSource, /\/projects/);
   assert.match(sitemapSource, /\/anti-threat-baseline/);
   assert.match(sitemapSource, /\/research/);
+  assert.match(sitemapSource, /\/sources/);
   assert.match(sitemapSource, /\/trust/);
   assert.match(sitemapSource, /\/contact/);
   assert.match(sitemapSource, /\/status/);
@@ -797,6 +807,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(siteSearchSource, /How it works/);
   assert.match(siteSearchSource, /Team and governance/);
   assert.match(siteSearchSource, /Pilot updates/);
+  assert.match(siteSearchSource, /Primary references and product-boundary notes/);
   assert.match(siteSearchSource, /Anti-threat and baseline integrity/);
   assert.match(siteSearchSource, /What you can rely on/);
 });
