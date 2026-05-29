@@ -381,12 +381,12 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.ok(validationResults.some((result) => result.href === "/validation"));
 });
 
-test("home page is a focused marketplace landing page with pilot metrics and marketplace preview", () => {
+test("home page is a focused pilot landing page with pilot metrics and example-first search", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
   const visitorPathsSource = readRepoFile("src/lib/visitor-paths.ts");
-  const heroIndex = homeSource.indexOf("Cooperate across deep value differences.");
+  const heroIndex = homeSource.indexOf("Make voluntary trades across moral disagreement.");
   const metricsIndex = homeSource.indexOf("growth-progress-card");
-  const searchIndex = homeSource.indexOf("Search the marketplace");
+  const searchIndex = homeSource.indexOf("Find a worked example or live offer");
   const animationIndex = homeSource.indexOf("<MoralTradeAnimations");
   const routeIndex = homeSource.indexOf("Choose the right first path");
   const activationIndex = homeSource.indexOf("Start with one low-risk action");
@@ -400,7 +400,9 @@ test("home page is a focused marketplace landing page with pilot metrics and mar
   assert.ok(activationIndex > routeIndex);
   assert.ok(previewIndex > activationIndex);
   assert.match(homeSource, /See a worked example/);
-  assert.match(homeSource, /Choose your path/);
+  assert.match(homeSource, /Join the pilot/);
+  assert.match(homeSource, /Start with one pledge swap, donation offset, or public-good commitment/);
+  assert.match(homeSource, /Live offers only count once/);
   assert.match(homeSource, /VISITOR_PATHS/);
   assert.match(visitorPathsSource, /Learn the idea/);
   assert.match(visitorPathsSource, /Test an example/);

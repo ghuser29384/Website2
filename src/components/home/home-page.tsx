@@ -105,18 +105,18 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
 
         <div className="growth-hero-inner">
           <section className="growth-hero-copy">
-            <h1>Cooperate across deep value differences.</h1>
+            <h1>Make voluntary trades across moral disagreement.</h1>
             <p className="hero-text">
-              Moral Trade helps serious participants test one small, reviewable commitment, such
-              as a pledge swap, donation offset, or public-good contribution, without pretending
-              this is already a mature marketplace.
+              Start with one pledge swap, donation offset, or public-good commitment. Moral Trade
+              keeps the terms, baselines, evidence rules, and manual review explicit before
+              anyone relies on the result.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="/offers?view=examples">
                 See a worked example
               </Link>
-              <Link className="button button-secondary" href={isAuthenticated ? cohortHref : "/start"}>
-                {isAuthenticated ? "Open dashboard" : "Choose your path"}
+              <Link className="button button-secondary" href={isAuthenticated ? cohortHref : "/cohort"}>
+                {isAuthenticated ? "Open dashboard" : "Join the pilot"}
               </Link>
             </div>
           </section>
@@ -161,10 +161,10 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white" aria-labelledby="marketplace-search-heading">
           <div className="section-head section-head-compact">
-            <h2 id="marketplace-search-heading">Search the marketplace</h2>
+            <h2 id="marketplace-search-heading">Find a worked example or live offer</h2>
             <p>
-              Start with broad categories, then inspect exact terms, baselines, and evidence states
-              before relying on any offer.
+              Start with broad categories and inspect examples first. Live offers only count once
+              they have public terms, baselines, and review states.
             </p>
           </div>
           <SearchBar placeholder="Search by cause, action, or trade type" />
