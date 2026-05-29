@@ -757,6 +757,8 @@ test("public SEO metadata includes FAQ and breadcrumb structured data", () => {
   const layoutSource = readRepoFile("src/app/layout.tsx");
   const homePage = readRepoFile("src/app/page.tsx");
   const faqPage = readRepoFile("src/app/faq/page.tsx");
+  const methodologyPage = readRepoFile("src/app/methodology/page.tsx");
+  const safetyPage = readRepoFile("src/app/safety/page.tsx");
   const sitemapSource = readRepoFile("src/app/sitemap.ts");
 
   assert.match(layoutSource, /"@type": "WebSite"/);
@@ -773,6 +775,22 @@ test("public SEO metadata includes FAQ and breadcrumb structured data", () => {
   assert.match(faqPage, /buildBreadcrumbJsonLd/);
   assert.match(faqPage, /Breadcrumbs items/);
   assert.match(faqPage, /application\/ld\+json/);
+  assert.match(methodologyPage, /methodologyDescription/);
+  assert.match(methodologyPage, /openGraph/);
+  assert.match(methodologyPage, /twitter/);
+  assert.match(methodologyPage, /buildBreadcrumbJsonLd/);
+  assert.match(methodologyPage, /Breadcrumbs items/);
+  assert.match(methodologyPage, /Public validator evidence/);
+  assert.match(methodologyPage, /\/moral-trade\/technical-spec/);
+  assert.match(methodologyPage, /\/api\/moral-trade\/api-contract/);
+  assert.match(safetyPage, /safetyDescription/);
+  assert.match(safetyPage, /openGraph/);
+  assert.match(safetyPage, /twitter/);
+  assert.match(safetyPage, /buildBreadcrumbJsonLd/);
+  assert.match(safetyPage, /Breadcrumbs items/);
+  assert.match(safetyPage, /Validator-backed safety evidence/);
+  assert.match(safetyPage, /\/api\/moral-trade\/security\/health/);
+  assert.match(safetyPage, /\/api\/moral-trade\/disclosure\/contract/);
   assert.match(sitemapSource, /\/faq/);
 });
 

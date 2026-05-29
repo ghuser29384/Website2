@@ -1,30 +1,56 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import { buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+
+const methodologyDescription =
+  "How Moral Trade structures offers, wish profiling, registry search, matching, verification, and validator-backed review without AI-first automation.";
 
 export const metadata: Metadata = {
   title: "Methodology",
-  description:
-    "How Moral Trade structures offers, wish profiling, registry search, matching, and verification without AI-first automation.",
+  description: methodologyDescription,
   alternates: {
     canonical: "/methodology",
+  },
+  openGraph: {
+    title: "Methodology | Moral Trade",
+    description: methodologyDescription,
+    url: getAbsoluteUrl("/methodology"),
+    type: "article",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Methodology | Moral Trade",
+    description: methodologyDescription,
   },
 };
 
 export default async function MethodologyPage() {
   const viewer = await getViewer();
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([
+    { href: "/methodology", label: "Methodology" },
+  ]);
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <SiteTopbar
         brandHref="/"
         links={getPrimaryNavLinks(Boolean(viewer))}
         {...getTopbarActions(Boolean(viewer))}
         showLogout={Boolean(viewer)}
       />
+      <Breadcrumbs items={[{ href: "/methodology", label: "Methodology" }]} />
       <main className="legal-page" id="main-content" tabIndex={-1}>
         <p className="eyebrow">Methodology</p>
         <h1>How Moral Trade structures reasoning</h1>
@@ -103,6 +129,26 @@ export default async function MethodologyPage() {
             payment updates. The goal is disciplined review rather than engagement-maximizing
             discourse.
           </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Public validator evidence</h2>
+          <p>
+            The core proposal contract, review workflow, factor-code vocabulary, API route
+            catalog, and provenance schema are published as validator-backed technical evidence.
+            These contracts are the inspectable version of the methodology: they show which fields,
+            privacy classes, fallbacks, and review states the product is allowed to rely on.
+          </p>
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/moral-trade/technical-spec">
+              Inspect technical spec
+            </Link>
+            <Link className="button button-secondary" href="/api/moral-trade/api-contract">
+              View API contract
+            </Link>
+            <Link className="button button-secondary" href="/api/moral-trade/review-workflow/contract">
+              View review workflow
+            </Link>
+          </div>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Centralized first, portable later</h2>

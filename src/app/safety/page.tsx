@@ -3,29 +3,54 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import { buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+
+const safetyDescription =
+  "Safety standards for Moral Trade proposals, background networking, payments, consent-gated introductions, and validator-backed review.";
 
 export const metadata: Metadata = {
   title: "Safety",
-  description:
-    "Safety standards for Moral Trade proposals, background networking, payments, and consent-gated introductions.",
+  description: safetyDescription,
   alternates: {
     canonical: "/safety",
+  },
+  openGraph: {
+    title: "Safety | Moral Trade",
+    description: safetyDescription,
+    url: getAbsoluteUrl("/safety"),
+    type: "article",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Safety | Moral Trade",
+    description: safetyDescription,
   },
 };
 
 export default async function SafetyPage() {
   const viewer = await getViewer();
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([
+    { href: "/safety", label: "Safety" },
+  ]);
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <SiteTopbar
         brandHref="/"
         links={getPrimaryNavLinks(Boolean(viewer))}
         {...getTopbarActions(Boolean(viewer))}
         showLogout={Boolean(viewer)}
       />
+      <Breadcrumbs items={[{ href: "/safety", label: "Safety" }]} />
       <main className="legal-page" id="main-content" tabIndex={-1}>
         <p className="eyebrow">Safety</p>
         <h1>Safety rules for voluntary moral trade</h1>
@@ -50,6 +75,26 @@ export default async function SafetyPage() {
             The platform should reject or review proposals involving violence, illegal acts, fraud,
             extortion, doxxing, harassment, exploitation, or pressure on vulnerable people.
           </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Validator-backed safety evidence</h2>
+          <p>
+            Public health endpoints expose whether the security, disclosure, challenge-appeal,
+            performance, and AI-governance contracts pass their current validators. Safety claims
+            should stay tied to these checks rather than implying hidden automation, escrow, or
+            unrestricted reviewer authority.
+          </p>
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/api/moral-trade/security/health">
+              View security health
+            </Link>
+            <Link className="button button-secondary" href="/api/moral-trade/disclosure/contract">
+              View disclosure contract
+            </Link>
+            <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
+              View appeal contract
+            </Link>
+          </div>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Background networking boundaries</h2>
