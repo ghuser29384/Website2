@@ -24,6 +24,7 @@ export async function GET() {
       optionalInputFields: contract.optionalInputFields,
       approvedFactorCodes: contract.approvedFactorCodes,
       redactedFields: contract.redactedFields,
+      participantExplanationTemplate: contract.participantExplanationTemplate,
       invariants: contract.invariants,
       sampleSignal: contract.sampleSignal,
       contractTests: contract.contractTests,

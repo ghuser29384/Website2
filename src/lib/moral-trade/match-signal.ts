@@ -52,6 +52,7 @@ export interface MoralTradeMatchSignal {
   factorCodes: MoralTradeMatchFactorCode[];
   redactedFields: string[];
   humanReviewRequired: boolean;
+  participantExplanation: MoralTradeMatchParticipantExplanation;
   counts: {
     sharedCauseAreas: number;
     causeAreaComplementarity: number;
@@ -59,6 +60,23 @@ export interface MoralTradeMatchSignal {
     compatibleVerificationPreferences: number;
   };
   blockers: string[];
+}
+
+export interface MoralTradeMatchParticipantExplanation {
+  headline: "Why you are seeing this match" | "Why this match is paused";
+  summary: string;
+  visibleFactorCodes: MoralTradeMatchFactorCode[];
+  redactionNotice: string;
+  humanReviewNotice: string;
+}
+
+export interface MoralTradeMatchParticipantExplanationTemplate {
+  matchableHeadline: MoralTradeMatchParticipantExplanation["headline"];
+  notMatchableHeadline: MoralTradeMatchParticipantExplanation["headline"];
+  matchableSummary: string;
+  notMatchableSummary: string;
+  redactionNotice: string;
+  humanReviewNotice: string;
 }
 
 export interface MoralTradeMatchSignalContract {
@@ -70,6 +88,7 @@ export interface MoralTradeMatchSignalContract {
   optionalInputFields: Array<keyof MoralTradeRedactedProfile>;
   approvedFactorCodes: MoralTradeMatchFactorCode[];
   redactedFields: string[];
+  participantExplanationTemplate: MoralTradeMatchParticipantExplanationTemplate;
   invariants: string[];
   sampleInput: MoralTradeRedactedProfileMatchInput;
   sampleSignal: MoralTradeMatchSignal;
@@ -134,9 +153,23 @@ const MATCH_SIGNAL_OPTIONAL_INPUT_FIELDS = [
 const MATCH_SIGNAL_CONTRACT_TESTS = [
   "match_signal_contract_validator",
   "redacted_profile_match_signal_smoke",
+  "participant_explanation_copy_smoke",
   "match_signal_evaluate_route_contract",
   "technical_spec_match_signal_smoke",
 ] as const;
+
+const PARTICIPANT_EXPLANATION_TEMPLATE: MoralTradeMatchParticipantExplanationTemplate = {
+  matchableHeadline: "Why you are seeing this match",
+  notMatchableHeadline: "Why this match is paused",
+  matchableSummary:
+    "You are seeing this suggestion because public cause areas, trade mode, and verification preferences are compatible. Exact wishes and contact details are still hidden.",
+  notMatchableSummary:
+    "This profile pair is not matchable yet because one or more public compatibility checks are unresolved. Exact wishes and contact details are still hidden.",
+  redactionNotice:
+    "Exact wishes, contact details, sensitive constraints, raw profile notes, protected traits, and ideology or psychology inferences stay hidden until a valid consent stage.",
+  humanReviewNotice:
+    "Human review is mandatory before disclosure, contact, reliance, or state changes.",
+};
 
 const MATCH_SIGNAL_SAMPLE_INPUT: MoralTradeRedactedProfileMatchInput = {
   left: {
@@ -278,6 +311,48 @@ function uniqueFactorCodes(values: MoralTradeMatchFactorCode[]) {
   return [...new Set(values)];
 }
 
+function buildParticipantExplanation({
+  blockers,
+  factorCodes,
+  redactedFields,
+  status,
+}: {
+  blockers: readonly string[];
+  factorCodes: readonly MoralTradeMatchFactorCode[];
+  redactedFields: readonly string[];
+  status: MoralTradeMatchStatus;
+}): MoralTradeMatchParticipantExplanation {
+  const visibleFactorCodes = factorCodes.filter(
+    (code) =>
+      code !== "human_review_required" &&
+      (code === "cause_area_overlap" ||
+        code === "cause_area_complementarity" ||
+        code === "trade_mode_compatible" ||
+        code === "verification_preference_compatible" ||
+        code === "location_constraint_satisfied" ||
+        code === "privacy_stage_compatible" ||
+        code === "privacy_safe_preview" ||
+        code === "stated_exclusions_clear"),
+  );
+  const unresolved = blockers.length
+    ? ` Unresolved checks: ${blockers.join(", ")}.`
+    : "";
+
+  return {
+    headline:
+      status === "matchable"
+        ? PARTICIPANT_EXPLANATION_TEMPLATE.matchableHeadline
+        : PARTICIPANT_EXPLANATION_TEMPLATE.notMatchableHeadline,
+    summary:
+      status === "matchable"
+        ? PARTICIPANT_EXPLANATION_TEMPLATE.matchableSummary
+        : `${PARTICIPANT_EXPLANATION_TEMPLATE.notMatchableSummary}${unresolved}`,
+    visibleFactorCodes,
+    redactionNotice: `${PARTICIPANT_EXPLANATION_TEMPLATE.redactionNotice} Redacted fields: ${redactedFields.join(", ")}.`,
+    humanReviewNotice: PARTICIPANT_EXPLANATION_TEMPLATE.humanReviewNotice,
+  };
+}
+
 export function evaluateMoralTradeRedactedProfileMatch({
   left,
   right,
@@ -315,6 +390,7 @@ export function evaluateMoralTradeRedactedProfileMatch({
     !exclusionConflict ? "stated_exclusions_clear" : "",
     humanReviewRequired ? "human_review_required" : "",
   ].filter(Boolean) as MoralTradeMatchFactorCode[]);
+  const redactedFields = [...MORAL_TRADE_MATCH_SIGNAL_REDACTED_FIELDS];
 
   return {
     signalVersion: MORAL_TRADE_MATCH_SIGNAL_VERSION,
@@ -329,8 +405,14 @@ export function evaluateMoralTradeRedactedProfileMatch({
       sharedCauseAreas,
     }),
     factorCodes,
-    redactedFields: [...MORAL_TRADE_MATCH_SIGNAL_REDACTED_FIELDS],
+    redactedFields,
     humanReviewRequired,
+    participantExplanation: buildParticipantExplanation({
+      blockers,
+      factorCodes,
+      redactedFields,
+      status,
+    }),
     counts: {
       sharedCauseAreas,
       causeAreaComplementarity,
@@ -365,6 +447,36 @@ export function validateMoralTradeMatchSignal(signal: MoralTradeMatchSignal) {
   for (const code of signal.factorCodes) {
     if (!MATCH_SIGNAL_FACTOR_CODES.has(code)) {
       blockers.push(`factor_codes: unapproved ${code}`);
+    }
+  }
+
+  const explanation = signal.participantExplanation;
+
+  if (!explanation) {
+    blockers.push("participant_explanation: required for match-signal display");
+  } else {
+    if (
+      signal.status === "matchable" &&
+      !/public cause areas/i.test(explanation.summary)
+    ) {
+      blockers.push("participant_explanation: matchable summary must name public cause-area basis");
+    }
+
+    if (
+      !/Exact wishes/i.test(explanation.redactionNotice) ||
+      !/contact details/i.test(explanation.redactionNotice)
+    ) {
+      blockers.push("participant_explanation: redaction copy must name exact wishes and contact details");
+    }
+
+    if (!/Human review/i.test(explanation.humanReviewNotice) || !/state changes/i.test(explanation.humanReviewNotice)) {
+      blockers.push("participant_explanation: human-review copy must block autonomous state changes");
+    }
+
+    for (const code of explanation.visibleFactorCodes) {
+      if (!signal.factorCodes.includes(code)) {
+        blockers.push(`participant_explanation: visible factor not present on signal ${code}`);
+      }
     }
   }
 
@@ -426,6 +538,7 @@ export function getMoralTradeMatchSignalContract(): MoralTradeMatchSignalContrac
     optionalInputFields: [...MATCH_SIGNAL_OPTIONAL_INPUT_FIELDS],
     approvedFactorCodes: Array.from(MATCH_SIGNAL_FACTOR_CODES),
     redactedFields: [...MORAL_TRADE_MATCH_SIGNAL_REDACTED_FIELDS],
+    participantExplanationTemplate: PARTICIPANT_EXPLANATION_TEMPLATE,
     invariants: [
       "Use only redacted profile fields: cause areas, trade modes, verification preferences, location sensitivity, privacy constraints, and stated exclusions.",
       "Do not infer protected traits, ideology, psychology, hidden preferences, exact private wishes, raw notes, or contact details.",
@@ -499,6 +612,19 @@ export function validateMoralTradeMatchSignalContract(
         contract.invariants.some((invariant) => /hidden preferences/i.test(invariant)) &&
         contract.redactedFields.includes("ideology_or_psychology_inferences"),
       contract.invariants.join(" | "),
+    ),
+    matchSignalContractCheck(
+      "participant-explanation-template",
+      "Contract publishes participant copy that names match basis, redactions, and human review",
+      /public cause areas/i.test(contract.participantExplanationTemplate.matchableSummary) &&
+        /trade mode/i.test(contract.participantExplanationTemplate.matchableSummary) &&
+        /verification preferences/i.test(contract.participantExplanationTemplate.matchableSummary) &&
+        /Exact wishes/i.test(contract.participantExplanationTemplate.redactionNotice) &&
+        /contact details/i.test(contract.participantExplanationTemplate.redactionNotice) &&
+        /Human review/i.test(contract.participantExplanationTemplate.humanReviewNotice) &&
+        /state changes/i.test(contract.participantExplanationTemplate.humanReviewNotice) &&
+        /Exact wishes/i.test(contract.sampleSignal.participantExplanation.redactionNotice),
+      `${contract.participantExplanationTemplate.matchableHeadline}; ${contract.participantExplanationTemplate.redactionNotice}`,
     ),
     matchSignalContractCheck(
       "contract-tests",

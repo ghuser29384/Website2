@@ -10,6 +10,8 @@ import {
   type MoralTradeMatchSignalContract,
   type MoralTradeRedactedProfile,
 } from "./match-signal";
+import { GET as contractRoute } from "../../app/api/moral-trade/match-signal/contract/route";
+import { POST as evaluateRoute } from "../../app/api/moral-trade/match-signal/evaluate/route";
 
 const leftProfile = {
   profileId: "profile-left",
@@ -55,6 +57,15 @@ test("redacted profile match signals use factor codes, redactions, and human rev
   assert.ok(signal.factorCodes.includes("human_review_required"));
   assert.ok(signal.redactedFields.includes("exact_private_wishes"));
   assert.ok(signal.redactedFields.includes("ideology_or_psychology_inferences"));
+  assert.equal(signal.participantExplanation.headline, "Why you are seeing this match");
+  assert.match(signal.participantExplanation.summary, /public cause areas/i);
+  assert.match(signal.participantExplanation.summary, /trade mode/i);
+  assert.match(signal.participantExplanation.summary, /verification preferences/i);
+  assert.match(signal.participantExplanation.summary, /Exact wishes and contact details are still hidden/i);
+  assert.ok(signal.participantExplanation.visibleFactorCodes.includes("cause_area_overlap"));
+  assert.ok(signal.participantExplanation.visibleFactorCodes.includes("privacy_safe_preview"));
+  assert.match(signal.participantExplanation.redactionNotice, /protected traits/i);
+  assert.match(signal.participantExplanation.humanReviewNotice, /before disclosure, contact, reliance, or state changes/i);
   assert.equal(validateMoralTradeMatchSignal(signal).status, "pass");
 });
 
@@ -107,6 +118,9 @@ test("redacted profile matching blocks unresolved location, privacy, and exclusi
   assert.ok(signal.blockers.includes("stated_exclusion_conflict"));
   assert.ok(!signal.factorCodes.includes("privacy_safe_preview"));
   assert.ok(!signal.factorCodes.includes("privacy_stage_compatible"));
+  assert.equal(signal.participantExplanation.headline, "Why this match is paused");
+  assert.match(signal.participantExplanation.summary, /Unresolved checks/i);
+  assert.match(signal.participantExplanation.redactionNotice, /Exact wishes/i);
   assert.equal(validateMoralTradeMatchSignal(signal).status, "pass");
 });
 
@@ -135,6 +149,7 @@ test("match signal validation rejects autonomous disclosure and unapproved facto
   signal.humanReviewRequired = false;
   signal.redactedFields = [];
   signal.factorCodes = [...signal.factorCodes, "raw_private_text_overlap" as MoralTradeMatchSignal["factorCodes"][number]];
+  signal.participantExplanation.redactionNotice = "Nothing is hidden.";
 
   const validation = validateMoralTradeMatchSignal(signal);
 
@@ -142,6 +157,7 @@ test("match signal validation rejects autonomous disclosure and unapproved facto
   assert.ok(validation.blockers.some((blocker) => blocker.includes("human_review_required")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("redacted_fields")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("factor_codes")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("participant_explanation")));
 });
 
 test("match signal validation rejects privacy-safe preview without compatible privacy stage", () => {
@@ -173,7 +189,14 @@ test("match signal contract validates the redacted matching boundary", () => {
   assert.ok(contract.approvedFactorCodes.includes("cause_area_complementarity"));
   assert.ok(contract.redactedFields.includes("exact_private_wishes"));
   assert.ok(contract.redactedFields.includes("ideology_or_psychology_inferences"));
+  assert.equal(
+    contract.participantExplanationTemplate.matchableHeadline,
+    "Why you are seeing this match",
+  );
+  assert.match(contract.participantExplanationTemplate.matchableSummary, /public cause areas/i);
+  assert.match(contract.participantExplanationTemplate.redactionNotice, /contact details/i);
   assert.ok(contract.contractTests.includes("match_signal_evaluate_route_contract"));
+  assert.ok(contract.contractTests.includes("participant_explanation_copy_smoke"));
 });
 
 test("match signal contract validation fails if human review and redactions are weakened", () => {
@@ -186,6 +209,12 @@ test("match signal contract validation fails if human review and redactions are 
       humanReviewRequired: false,
       redactedFields: [],
     },
+    participantExplanationTemplate: {
+      ...getMoralTradeMatchSignalContract().participantExplanationTemplate,
+      matchableSummary: "Compatible.",
+      redactionNotice: "Nothing hidden.",
+      humanReviewNotice: "Can proceed automatically.",
+    },
     contractTests: [],
   };
   const validation = validateMoralTradeMatchSignalContract(contract);
@@ -195,5 +224,40 @@ test("match signal contract validation fails if human review and redactions are 
   assert.ok(validation.blockers.some((blocker) => blocker.includes("sample-signal-validation")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("nonmutating-human-review")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("no-private-inference")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("participant-explanation-template")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("contract-tests")));
+});
+
+test("match signal routes publish participant explanation copy", async () => {
+  const contractResponse = await contractRoute();
+  const contractBody = await contractResponse.json();
+
+  assert.equal(contractResponse.status, 200);
+  assert.equal(
+    contractBody.publicContract.participantExplanationTemplate.matchableHeadline,
+    "Why you are seeing this match",
+  );
+  assert.match(
+    contractBody.publicContract.sampleSignal.participantExplanation.summary,
+    /public cause areas/i,
+  );
+
+  const evaluateResponse = await evaluateRoute(
+    new Request("http://localhost/api/moral-trade/match-signal/evaluate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        profilePair: {
+          left: leftProfile,
+          right: rightProfile,
+        },
+      }),
+    }),
+  );
+  const evaluateBody = await evaluateResponse.json();
+
+  assert.equal(evaluateResponse.status, 200);
+  assert.equal(evaluateBody.signal.participantExplanation.headline, "Why you are seeing this match");
+  assert.match(evaluateBody.signal.participantExplanation.summary, /Exact wishes and contact details are still hidden/i);
+  assert.match(evaluateBody.signal.participantExplanation.humanReviewNotice, /Human review is mandatory/i);
 });

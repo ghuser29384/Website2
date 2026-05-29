@@ -215,6 +215,8 @@ export async function GET() {
       matchSignalRequiredInputFields: matchSignalContract.requiredInputFields,
       matchSignalFactorCodes: matchSignalContract.approvedFactorCodes,
       matchSignalRedactedFields: matchSignalContract.redactedFields,
+      matchSignalParticipantExplanation:
+        matchSignalContract.participantExplanationTemplate.matchableHeadline,
       matchSignalContractTests: matchSignalContract.contractTests,
       challengeAppealContractVersion: challengeAppealContract.version,
       challengeAppealDecisioningMode: challengeAppealContract.decisioningMode,

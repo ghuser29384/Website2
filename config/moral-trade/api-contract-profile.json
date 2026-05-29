@@ -437,7 +437,7 @@
         { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Match signal contract version." },
         { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable match-signal purpose." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for input boundaries, redactions, approved factor codes, non-mutating preview, human review, and no private inference." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Required input fields, optional input fields, approved factor codes, redacted fields, invariants, sample signal, and contract tests." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Required input fields, optional input fields, approved factor codes, redacted fields, participant explanation template, invariants, sample signal, and contract tests." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on redacted match previews." }
       ]
     },
@@ -459,7 +459,7 @@
         { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." },
         { "key": "inputBundleUsed", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Strict local bundle sources used to produce the match signal." },
         { "key": "profilePair", "type": "redacted_profile_pair", "required": false, "privacy": "private_response", "description": "Normalized redacted profiles returned only to the requester for inspection." },
-        { "key": "signal", "type": "match_signal", "required": false, "privacy": "private_response", "description": "Status, confidence band, factor codes, redacted fields, human review flag, counts, and blockers." },
+        { "key": "signal", "type": "match_signal", "required": false, "privacy": "private_response", "description": "Status, confidence band, factor codes, participant explanation copy, redacted fields, human review flag, counts, and blockers." },
         { "key": "signalValidation", "type": "validator_result", "required": false, "privacy": "public_contract", "description": "Validation result for the generated match signal." },
         { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "public_contract", "description": "Validation result for the match-signal contract." },
         { "key": "fallback", "type": "string", "required": false, "privacy": "public_contract", "description": "Safe fallback reason for malformed, missing, or incomplete redacted profile requests." },

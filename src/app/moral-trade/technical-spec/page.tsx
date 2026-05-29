@@ -540,9 +540,13 @@ export default async function MoralTradeTechnicalSpecPage() {
               <h3>Evaluation route</h3>
               <p>
                 POST /api/moral-trade/match-signal/evaluate returns redacted factor codes,
-                blockers, confidence band, redacted fields, and humanReviewRequired with
-                stateMutation false.
+                blockers, confidence band, participant explanation copy, redacted fields, and
+                humanReviewRequired with stateMutation false.
               </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Participant explanation</h3>
+              <p>{matchSignalContract.participantExplanationTemplate.matchableSummary}</p>
             </article>
             <article className="panel protocol-contract-card">
               <h3>Contract tests</h3>

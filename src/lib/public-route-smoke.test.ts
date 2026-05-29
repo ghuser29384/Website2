@@ -935,6 +935,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(matchSignalSource, /cause_area_overlap_or_complementarity_required/);
   assert.match(matchSignalSource, /causeAreaComplementarity/);
   assert.match(matchSignalSource, /humanReviewRequired/);
+  assert.match(matchSignalSource, /participantExplanation/);
+  assert.match(matchSignalSource, /Why you are seeing this match/);
+  assert.match(matchSignalSource, /Exact wishes and contact details are still hidden/);
   assert.match(matchSignalSource, /ideology_or_psychology_inferences/);
   assert.match(matchSignalSource, /redacted_profile_match_preview_only/);
   assert.match(matchSignalSource, /match_signal_evaluate_route_contract/);
@@ -1113,6 +1116,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /fixed verification loop/);
   assert.match(apiContractProfile, /ephemeral_private_draft_review/);
   assert.match(apiContractProfile, /copilot_draft_review/);
+  assert.match(apiContractProfile, /participant explanation copy/);
   assert.match(apiContractProfile, /empty_request/);
   assert.match(apiContractProfile, /profile_import_response/);
   assert.match(apiContractProfile, /wish_registry_search_request/);
@@ -1162,6 +1166,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Match signal contract/);
   assert.match(technicalSpecPage, /Redacted profile matching is preview-only and human-reviewed/);
   assert.match(technicalSpecPage, /matchSignalContract\.requiredInputFields/);
+  assert.match(technicalSpecPage, /Participant explanation/);
+  assert.match(technicalSpecPage, /matchSignalContract\.participantExplanationTemplate/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/match-signal\/contract/);
   assert.match(technicalSpecPage, /POST \/api\/moral-trade\/match-signal\/evaluate/);
   assert.match(technicalSpecPage, /Challenge appeal contract/);
@@ -1246,6 +1252,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /matchSignalValidation/);
   assert.match(healthRoute, /matchSignalRequiredInputFields/);
   assert.match(healthRoute, /matchSignalRedactedFields/);
+  assert.match(healthRoute, /matchSignalParticipantExplanation/);
   assert.match(healthRoute, /challengeAppealValidation/);
   assert.match(healthRoute, /challengeAppealStandingCategories/);
   assert.match(healthRoute, /challengeAppealAllowedOutcomes/);
@@ -1299,6 +1306,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotReviewRoute, /private, no-store/);
   assert.match(matchSignalContractRoute, /validateMoralTradeMatchSignalContract/);
   assert.match(matchSignalContractRoute, /approvedFactorCodes/);
+  assert.match(matchSignalContractRoute, /participantExplanationTemplate/);
   assert.match(matchSignalEvaluateRoute, /evaluateMoralTradeRedactedProfileMatch/);
   assert.match(matchSignalEvaluateRoute, /redacted_profile_pair/);
   assert.match(matchSignalEvaluateRoute, /stateMutation: false/);
