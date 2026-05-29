@@ -36,8 +36,10 @@ test("evaluation profile publishes Codex quality, privacy, fairness, and reviewe
 test("evaluation contract publishes executable sample audit evidence", () => {
   const validation = validateMoralTradeEvaluationProfile();
   const sampleAudits = getMoralTradeEvaluationSampleAudits();
+  const sampleAuditCheck = validation.checks.find((check) => check.id === "sample-audits");
 
-  assert.ok(validation.checks.some((check) => check.id === "sample-audits"));
+  assert.equal(validation.status, "pass");
+  assert.equal(sampleAuditCheck?.status, "pass");
   assert.equal(sampleAudits.surfacingParityAudit.status, "pass");
   assert.equal(sampleAudits.surfacingParityAudit.overallSurfacingRate, 0.6);
   assert.equal(sampleAudits.uxReadinessAudit.status, "pass");

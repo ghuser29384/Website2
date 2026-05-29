@@ -971,6 +971,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(evaluationSource, /validateMoralTradeEvaluationProfile/);
   assert.match(evaluationSource, /auditMoralTradeSurfacingParity/);
   assert.match(evaluationSource, /auditMoralTradeUxReadiness/);
+  assert.match(evaluationSource, /getMoralTradeEvaluationSampleAudits/);
+  assert.match(evaluationSource, /sample-audits/);
   assert.match(evaluationSource, /MORAL_TRADE_SURFACING_PARITY_DEFAULTS/);
   assert.match(evaluationSource, /MORAL_TRADE_UX_READINESS_DEFAULTS/);
   assert.match(evaluationProfile, /draft_completion_rate/);
@@ -1177,6 +1179,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /\/api\/moral-trade\/security\/health/);
   assert.match(technicalSpecPage, /Evaluation contract/);
   assert.match(technicalSpecPage, /Quality metrics are public, privacy-bounded, and rollout-gated/);
+  assert.match(technicalSpecPage, /Sample surfacing parity audit/);
+  assert.match(technicalSpecPage, /Sample UX readiness audit/);
+  assert.match(technicalSpecPage, /sample-audits check/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/evaluation\/health/);
   assert.match(technicalSpecPage, /Performance contract/);
   assert.match(
@@ -1307,6 +1312,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(evaluationHealthRoute, /validateMoralTradeEvaluationProfile/);
   assert.match(evaluationHealthRoute, /surfacingParityAuditDefaults/);
   assert.match(evaluationHealthRoute, /uxReadinessAuditDefaults/);
+  assert.match(evaluationHealthRoute, /getMoralTradeEvaluationSampleAudits/);
+  assert.match(evaluationHealthRoute, /sampleAudits/);
+  assert.match(healthRoute, /evaluationSampleAuditStatuses/);
   assert.match(performanceHealthRoute, /validateMoralTradePerformanceProfile/);
   assert.match(performanceHealthRoute, /auditDefaults/);
   assert.match(performanceHealthRoute, /publicNonClaims/);

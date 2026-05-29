@@ -30,6 +30,7 @@ import {
   validateMoralTradeSecurityProfile,
 } from "@/lib/moral-trade/security";
 import {
+  getMoralTradeEvaluationSampleAudits,
   getMoralTradeEvaluationProfile,
   validateMoralTradeEvaluationProfile,
 } from "@/lib/moral-trade/evaluation";
@@ -110,6 +111,7 @@ export async function GET() {
   const securityValidation = validateMoralTradeSecurityProfile(securityProfile);
   const evaluationProfile = getMoralTradeEvaluationProfile();
   const evaluationValidation = validateMoralTradeEvaluationProfile(evaluationProfile);
+  const evaluationSampleAudits = getMoralTradeEvaluationSampleAudits();
   const performanceProfile = getMoralTradePerformanceProfile();
   const performanceValidation = validateMoralTradePerformanceProfile(performanceProfile);
   const externalityProfile = getMoralTradeExternalityProfile();
@@ -249,6 +251,10 @@ export async function GET() {
       evaluationMetrics: evaluationProfile.metrics.map((metric) => metric.key),
       evaluationCohortSlices: evaluationProfile.cohortSlices,
       evaluationPromotionGates: evaluationProfile.promotionGates.map((gate) => gate.stage),
+      evaluationSampleAuditStatuses: {
+        surfacingParity: evaluationSampleAudits.surfacingParityAudit.status,
+        uxReadiness: evaluationSampleAudits.uxReadinessAudit.status,
+      },
       performanceProfileVersion: performanceProfile.version,
       performanceMetricTargets: performanceProfile.metricTargets.map((metric) => metric.key),
       performanceInstrumentationControls: performanceProfile.instrumentationControls.map(

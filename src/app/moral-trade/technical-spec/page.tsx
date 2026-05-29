@@ -56,6 +56,7 @@ import {
   validateMoralTradeSecurityProfile,
 } from "@/lib/moral-trade/security";
 import {
+  getMoralTradeEvaluationSampleAudits,
   getMoralTradeEvaluationProfile,
   validateMoralTradeEvaluationProfile,
 } from "@/lib/moral-trade/evaluation";
@@ -133,6 +134,7 @@ export default async function MoralTradeTechnicalSpecPage() {
   const securityValidation = validateMoralTradeSecurityProfile(securityProfile);
   const evaluationProfile = getMoralTradeEvaluationProfile();
   const evaluationValidation = validateMoralTradeEvaluationProfile(evaluationProfile);
+  const evaluationSampleAudits = getMoralTradeEvaluationSampleAudits();
   const performanceProfile = getMoralTradePerformanceProfile();
   const performanceValidation = validateMoralTradePerformanceProfile(performanceProfile);
   const externalityProfile = getMoralTradeExternalityProfile();
@@ -1152,6 +1154,33 @@ export default async function MoralTradeTechnicalSpecPage() {
             <Link className="button button-secondary" href="/api/moral-trade/evaluation/health">
               Open evaluation JSON
             </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Sample surfacing parity audit</h3>
+              <p>
+                Status {evaluationSampleAudits.surfacingParityAudit.status};{" "}
+                {evaluationSampleAudits.surfacingParityAudit.eligibleCount} eligible,{" "}
+                {evaluationSampleAudits.surfacingParityAudit.surfacedCount} surfaced, overall
+                rate {evaluationSampleAudits.surfacingParityAudit.overallSurfacingRate}.
+              </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Sample UX readiness audit</h3>
+              <p>
+                Status {evaluationSampleAudits.uxReadinessAudit.status}; current period{" "}
+                {evaluationSampleAudits.uxReadinessAudit.currentPeriod}, previous period{" "}
+                {evaluationSampleAudits.uxReadinessAudit.previousPeriod}, blockers{" "}
+                {evaluationSampleAudits.uxReadinessAudit.blockers.length}.
+              </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Executable audit check</h3>
+              <p>
+                The validator includes a sample-audits check so fairness and UX audit code must
+                execute successfully before the evaluation contract reports pass.
+              </p>
+            </article>
           </div>
           <div className="protocol-contract-grid">
             <article className="panel protocol-contract-card">
