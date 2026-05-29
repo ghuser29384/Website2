@@ -6,6 +6,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import { getSafeInternalPath } from "@/lib/paths";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -25,6 +26,10 @@ interface PasswordResetPageProps {
 export default async function PasswordResetPage({ searchParams }: PasswordResetPageProps) {
   const [viewer, resolvedSearchParams] = await Promise.all([getViewer(), searchParams]);
   const formMessage = getFormMessage(resolvedSearchParams);
+  const requestedReturnTo = Array.isArray(resolvedSearchParams.returnTo)
+    ? resolvedSearchParams.returnTo[0]
+    : resolvedSearchParams.returnTo;
+  const returnTo = getSafeInternalPath(requestedReturnTo, "/dashboard");
   const supabaseReady = hasSupabaseEnv();
 
   return (
@@ -39,8 +44,8 @@ export default async function PasswordResetPage({ searchParams }: PasswordResetP
         <p className="eyebrow">Account access</p>
         <h1>Reset your password.</h1>
         <p>
-          Enter your account email and Moral Trade will send a reset link. The link opens a
-          password-update form after email confirmation.
+          Enter your account email and Moral Trade will send a reset link. The response does not
+          reveal whether the address already has an account.
         </p>
 
         <section className="panel data-card data-card-wide">
@@ -59,6 +64,7 @@ export default async function PasswordResetPage({ searchParams }: PasswordResetP
             </div>
           ) : null}
           <form action={requestPasswordResetAction} className="stack-form">
+            <input name="return_to" type="hidden" value={returnTo} />
             <label className="field">
               <span>Email</span>
               <input name="email" placeholder="you@example.com" type="email" />

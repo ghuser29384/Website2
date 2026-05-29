@@ -34,6 +34,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     ? resolvedSearchParams.next[0]
     : resolvedSearchParams.next;
   const next = getSafeInternalPath(requestedReturnTo || requestedNext, "/dashboard");
+  const resetHref =
+    next === "/dashboard" ? "/password-reset" : `/password-reset?returnTo=${encodeURIComponent(next)}`;
   const supabaseReady = hasSupabaseEnv();
   const viewer = await getViewer();
 
@@ -127,6 +129,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   <span>Password</span>
                   <input name="password" placeholder="Your password" type="password" />
                 </label>
+
+                <p className="auth-recovery-link">
+                  <Link href={resetHref}>Forgot password?</Link>
+                </p>
 
                 <div className="form-actions">
                   <button className="button button-primary" type="submit">

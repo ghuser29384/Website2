@@ -5808,6 +5808,16 @@ output {
   margin-bottom: 1rem;
 }
 
+.auth-recovery-link {
+  margin: -0.25rem 0 0;
+  font-size: 0.9rem;
+}
+
+.auth-recovery-link a {
+  color: var(--accent-deep);
+  font-weight: 700;
+}
+
 .clean-stack h3,
 .data-card h3 {
   margin-bottom: 0.3rem;

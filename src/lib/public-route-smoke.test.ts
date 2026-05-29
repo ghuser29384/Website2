@@ -226,6 +226,30 @@ test("login supports MPGF return-to routes used by participant onboarding", () =
   assert.match(smokeProfile, /"authRoute": "\/login\?returnTo=\/mpgf"/);
 });
 
+test("login exposes a Supabase password recovery flow", () => {
+  const loginPageSource = readRepoFile("src/app/login/page.tsx");
+  const passwordResetPageSource = readRepoFile("src/app/password-reset/page.tsx");
+  const passwordUpdatePageSource = readRepoFile("src/app/password-update/page.tsx");
+  const actionSource = readRepoFile("src/app/actions.ts");
+  const confirmRouteSource = readRepoFile("src/app/auth/confirm/route.ts");
+
+  assert.match(loginPageSource, /Forgot password\?/);
+  assert.match(loginPageSource, /\/password-reset\?returnTo=/);
+  assert.match(passwordResetPageSource, /requestPasswordResetAction/);
+  assert.match(passwordResetPageSource, /name="return_to"/);
+  assert.match(passwordResetPageSource, /does not\s+reveal whether the address already has an account/);
+  assert.match(passwordUpdatePageSource, /updatePasswordAction/);
+  assert.match(passwordUpdatePageSource, /name="confirm_password"/);
+  assert.match(actionSource, /resetPasswordForEmail/);
+  assert.match(actionSource, /\/auth\/confirm/);
+  assert.match(actionSource, /\/password-update/);
+  assert.match(actionSource, /updateUser\(\{ password \}\)/);
+  assert.match(actionSource, /password-reset:/);
+  assert.match(actionSource, /password-update:/);
+  assert.match(confirmRouteSource, /verifyOtp/);
+  assert.match(confirmRouteSource, /could not confirm that link/);
+});
+
 test("public offer and registry pages include seeded examples instead of empty-only states", () => {
   assert.equal(CANONICAL_WORKED_CASE_COUNT, 8);
   assert.equal(getAllOffers([]).length, CANONICAL_WORKED_CASE_COUNT);

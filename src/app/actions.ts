@@ -2034,6 +2034,130 @@ export async function signInAction(formData: FormData) {
   redirect(next);
 }
 
+export async function requestPasswordResetAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const resetPath =
+    returnTo === "/dashboard"
+      ? "/password-reset"
+      : `/password-reset?returnTo=${encodeURIComponent(returnTo)}`;
+
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage(resetPath, "error", "Supabase is not configured yet.");
+  }
+
+  const email = readRequired(formData, "email").toLowerCase();
+
+  if (!email) {
+    redirectWithMessage(resetPath, "error", "Email is required to request a reset link.");
+  }
+
+  enforceActionRateLimit({
+    key: `password-reset:${email}`,
+    limit: 4,
+    message: "Too many reset requests. Wait a few minutes before trying again.",
+    returnTo: resetPath,
+    windowMs: 15 * 60 * 1000,
+  });
+
+  const headerStore = await headers();
+  const origin = headerStore.get("origin") ?? getSiteUrl();
+  const updatePath =
+    returnTo === "/dashboard"
+      ? "/password-update"
+      : `/password-update?returnTo=${encodeURIComponent(returnTo)}`;
+  const confirmUrl = new URL("/auth/confirm", origin);
+  confirmUrl.searchParams.set("next", updatePath);
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: confirmUrl.toString(),
+  });
+
+  if (error) {
+    const emailDomain = email.includes("@") ? email.split("@").at(-1) : "invalid-format";
+    logSupabaseActionError("Failed to request password reset", error, {
+      emailDomain,
+    });
+  }
+
+  redirectWithMessage(
+    resetPath,
+    "message",
+    "If an account exists for that email, a reset link is on its way.",
+  );
+}
+
+export async function updatePasswordAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const updatePath =
+    returnTo === "/dashboard"
+      ? "/password-update"
+      : `/password-update?returnTo=${encodeURIComponent(returnTo)}`;
+  const resetPath =
+    returnTo === "/dashboard"
+      ? "/password-reset"
+      : `/password-reset?returnTo=${encodeURIComponent(returnTo)}`;
+  const loginPath =
+    returnTo === "/dashboard" ? "/login" : `/login?returnTo=${encodeURIComponent(returnTo)}`;
+
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage(updatePath, "error", "Supabase is not configured yet.");
+  }
+
+  const password = readRequired(formData, "password");
+  const confirmPassword = readRequired(formData, "confirm_password");
+
+  if (!password || !confirmPassword) {
+    redirectWithMessage(updatePath, "error", "Enter and confirm your new password.");
+  }
+
+  if (password.length < 12) {
+    redirectWithMessage(updatePath, "error", "Use at least 12 characters for your new password.");
+  }
+
+  if (password !== confirmPassword) {
+    redirectWithMessage(updatePath, "error", "The password fields do not match.");
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    if (userError) {
+      logSupabaseActionError("Failed to read user before password update", userError);
+    }
+
+    redirectWithMessage(
+      resetPath,
+      "error",
+      "Open a fresh reset link before choosing a new password.",
+    );
+  }
+
+  enforceActionRateLimit({
+    key: `password-update:${user.id}`,
+    limit: 5,
+    message: "Too many password update attempts. Wait a few minutes before trying again.",
+    returnTo: updatePath,
+    windowMs: 15 * 60 * 1000,
+  });
+
+  const { error } = await supabase.auth.updateUser({ password });
+
+  if (error) {
+    logSupabaseActionError("Failed to update password", error, {
+      profileId: user.id,
+    });
+    redirectWithMessage(updatePath, "error", error.message);
+  }
+
+  await supabase.auth.signOut();
+  redirectWithMessage(loginPath, "message", "Password updated. Sign in with your new password.");
+}
+
 export async function signOutAction() {
   if (!hasSupabaseEnv()) {
     redirect("/");

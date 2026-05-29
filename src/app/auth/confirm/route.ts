@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
   const loginUrl = new URL("/login", origin);
   loginUrl.searchParams.set(
     "error",
-    "We could not confirm your email. Please try signing in again.",
+    "We could not confirm that link. Please try signing in again.",
   );
   return NextResponse.redirect(loginUrl);
 }
