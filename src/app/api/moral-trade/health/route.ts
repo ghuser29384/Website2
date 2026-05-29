@@ -241,6 +241,9 @@ export async function GET() {
       reviewWorkflowCardKeys: reviewWorkflowContract.detailWorkflowCards.map((card) => card.key),
       reviewWorkflowMarketplaceFactorPriority:
         reviewWorkflowContract.marketplaceFactorPriority,
+      reviewWorkflowParticipantCopyKeys: Object.keys(
+        reviewWorkflowContract.participantCopyTemplates,
+      ),
       reviewWorkflowContractTests: reviewWorkflowContract.contractTests,
       reasoningPacketContractVersion: reasoningPacketContract.version,
       reasoningPacketCount: reasoningPacketContract.packetCount,

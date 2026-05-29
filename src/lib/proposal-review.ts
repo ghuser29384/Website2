@@ -65,12 +65,21 @@ export interface OfferReviewWorkflowCardContract {
   nextStepRule: string;
 }
 
+export interface OfferReviewWorkflowCopyTemplates {
+  baselineHelperText: string;
+  needsEvidenceStatusCopy: string;
+  safetyWarningCopy: string;
+  importanceScoreNote: string;
+  appealCopy: string;
+}
+
 export interface OfferReviewWorkflowContract {
   version: string;
   purpose: string;
   statuses: MoralTradeVerificationStepStatus[];
   detailWorkflowCards: OfferReviewWorkflowCardContract[];
   marketplaceFactorPriority: string[];
+  participantCopyTemplates: OfferReviewWorkflowCopyTemplates;
   invariants: string[];
   sampleDetailCards: OfferReviewWorkflowCard[];
   sampleMarketplaceCard: OfferReviewCardInstrumentation;
@@ -238,6 +247,19 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     nextStepRule: "Do not reopen unrelated moral disagreements by default.",
   },
 ];
+
+export const REVIEW_WORKFLOW_PARTICIPANT_COPY: OfferReviewWorkflowCopyTemplates = {
+  baselineHelperText:
+    "What would you do if this trade did not happen? Be concrete. Mention your current intention, prior behavior, or any evidence that makes your baseline credible.",
+  needsEvidenceStatusCopy:
+    "Status: Needs evidence. Your draft is structurally complete, but no reviewable proof method has been attached yet.",
+  safetyWarningCopy:
+    "This proposal cannot be published because it resembles a threat, coercive compensation request, or newly escalated harmful behavior.",
+  importanceScoreNote:
+    "This score reflects the participant's own stated priorities. It is not a platform judgment about objective moral value.",
+  appealCopy:
+    "If you think this review decision is wrong, appeal the specific claim that was reviewed. Appeals do not reopen unrelated moral disagreements by default.",
+};
 
 const WORKED_EXAMPLE_ORDER_MAP = new Map<string, number>(
   WORKED_EXAMPLE_LAUNCH_ORDER.map((id, index) => [id, index]),
@@ -1492,10 +1514,12 @@ function workflowStatusFromExternality(input: ProposalReviewInput): MoralTradeVe
 export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): OfferReviewWorkflowCard[] {
   const currentStatus = input.currentStatus?.trim() || "Manual review required before reliance";
   const actionEvidence = getActionEvidenceSummary(input);
+  const evidenceStatus = workflowStatusFromEvidence(input);
   const baselineConfidence = getBaselineConfidence(input);
   const baselineEvidence = getBaselineEvidenceSummary(input);
   const externalityReview = getExternalityReviewSummary(input);
   const scoreConfidence = getScoreConfidence(input);
+  const currentStatusWorkflowStatus = workflowStatusFromCurrentStatus(currentStatus);
   const scoreSummary =
     input.offerImpact && input.minCounterpartyImpact
       ? `Participant-stated importance ${input.offerImpact}/10; counterparty minimum ${input.minCounterpartyImpact}/10. Confidence: ${scoreConfidence}.`
@@ -1505,18 +1529,24 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
     {
       key: "current_status",
       label: "Status card",
-      status: workflowStatusFromCurrentStatus(currentStatus),
+      status: currentStatusWorkflowStatus,
       factorCodes: ["status_visible", "human_review_required"],
-      summary: `Status: ${currentStatus}.`,
+      summary:
+        currentStatusWorkflowStatus === "blocked"
+          ? REVIEW_WORKFLOW_PARTICIPANT_COPY.safetyWarningCopy
+          : `Status: ${currentStatus}.`,
       nextStep:
         "Treat this as a review state, not a claim of completion, legal enforceability, custody, or moral endorsement.",
     },
     {
       key: "action_evidence",
       label: "Action evidence",
-      status: workflowStatusFromEvidence(input),
+      status: evidenceStatus,
       factorCodes: ["evidence_rule_named", "evidence_sufficiency"],
-      summary: actionEvidence,
+      summary:
+        evidenceStatus === "needs_input"
+          ? REVIEW_WORKFLOW_PARTICIPANT_COPY.needsEvidenceStatusCopy
+          : actionEvidence,
       nextStep:
         "Attach or inspect one scoped artifact for each factual action claim before relying on the record.",
     },
@@ -1526,8 +1556,7 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
       status: workflowStatusFromBaseline(baselineConfidence),
       factorCodes: ["baseline_stated", "baseline_credibility"],
       summary: `${baselineConfidence}: ${baselineEvidence}`,
-      nextStep:
-        "State what would happen without the trade, then support it with prior intent, past behavior, or a dated baseline record.",
+      nextStep: REVIEW_WORKFLOW_PARTICIPANT_COPY.baselineHelperText,
     },
     {
       key: "externality_review",
@@ -1544,8 +1573,7 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
       status: "pass",
       factorCodes: ["participant_relative_scores", "no_global_moral_ranking"],
       summary: scoreSummary,
-      nextStep:
-        "Use these scores only as participant-stated priorities; do not treat them as a platform ranking of moral value.",
+      nextStep: REVIEW_WORKFLOW_PARTICIPANT_COPY.importanceScoreNote,
     },
     {
       key: "appeal_scope",
@@ -1554,8 +1582,7 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
       factorCodes: ["appealable_review_scope", "reviewer_summary"],
       summary:
         "Appeals should target the specific reviewed claim, evidence row, baseline concern, disclosure decision, or policy flag.",
-      nextStep:
-        "Do not reopen unrelated moral disagreements by default; route the appealed claim with reason codes and redacted evidence scope.",
+      nextStep: REVIEW_WORKFLOW_PARTICIPANT_COPY.appealCopy,
     },
   ];
 }
@@ -1635,6 +1662,7 @@ export function getOfferReviewWorkflowContract(): OfferReviewWorkflowContract {
     statuses: ["pass", "needs_input", "human_review", "blocked"],
     detailWorkflowCards: OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS,
     marketplaceFactorPriority: [...MARKETPLACE_REVIEW_FACTOR_PRIORITY],
+    participantCopyTemplates: REVIEW_WORKFLOW_PARTICIPANT_COPY,
     invariants: [
       "Every detail workflow card must expose at least one factor code and one next-step instruction.",
       "Marketplace cards must show prioritized factor codes derived from the same workflow contract.",
@@ -1704,6 +1732,22 @@ export function validateOfferReviewWorkflowContract(
         contractKeys.includes("baseline_confidence") &&
         contractKeys.includes("externality_review"),
       contractKeys.join(", "),
+    ),
+    workflowContractCheck(
+      "participant-copy-templates",
+      "Participant copy preserves baseline, evidence, safety, score, and appeal boundaries",
+      /What would you do if this trade did not happen/i.test(
+        contract.participantCopyTemplates.baselineHelperText,
+      ) &&
+        /Status: Needs evidence/i.test(contract.participantCopyTemplates.needsEvidenceStatusCopy) &&
+        /reviewable proof method/i.test(contract.participantCopyTemplates.needsEvidenceStatusCopy) &&
+        /cannot be published/i.test(contract.participantCopyTemplates.safetyWarningCopy) &&
+        /threat|coercive|newly escalated/i.test(contract.participantCopyTemplates.safetyWarningCopy) &&
+        /participant's own stated priorities/i.test(contract.participantCopyTemplates.importanceScoreNote) &&
+        /not a platform judgment/i.test(contract.participantCopyTemplates.importanceScoreNote) &&
+        /appeal the specific claim/i.test(contract.participantCopyTemplates.appealCopy) &&
+        /unrelated moral disagreements/i.test(contract.participantCopyTemplates.appealCopy),
+      Object.values(contract.participantCopyTemplates).join(" | "),
     ),
     workflowContractCheck(
       "contract-tests",

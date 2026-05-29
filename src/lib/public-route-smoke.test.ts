@@ -854,6 +854,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(proposalReviewSource, /getOfferReviewWorkflowContract/);
   assert.match(proposalReviewSource, /validateOfferReviewWorkflowContract/);
   assert.match(proposalReviewSource, /MARKETPLACE_REVIEW_FACTOR_PRIORITY/);
+  assert.match(proposalReviewSource, /REVIEW_WORKFLOW_PARTICIPANT_COPY/);
+  assert.match(proposalReviewSource, /What would you do if this trade did not happen/);
+  assert.match(proposalReviewSource, /Status: Needs evidence/);
+  assert.match(proposalReviewSource, /This proposal cannot be published/);
   assert.match(proposalReviewSource, /technical_spec_review_workflow_smoke/);
   assert.match(protocolSource, /validateMoralTradeProtocolProfile/);
   assert.match(protocolSource, /validateMoralTradeProposalStateTransition/);
@@ -1110,6 +1114,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /Reasoning Center packet contract validator result/);
   assert.match(apiContractProfile, /never expose live private offers/);
   assert.match(apiContractProfile, /deterministic_review_workflow_only/);
+  assert.match(apiContractProfile, /participant copy templates/);
   assert.match(apiContractProfile, /marketplace cards must not invent factor codes/);
   assert.match(apiContractProfile, /Review workflow card contract validator result/);
   assert.match(apiContractProfile, /never store submitted review input/);
@@ -1183,6 +1188,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Review workflow contract/);
   assert.match(technicalSpecPage, /Marketplace cards and detail pages share one factor-code source/);
   assert.match(technicalSpecPage, /reviewWorkflowContract\.marketplaceFactorPriority/);
+  assert.match(technicalSpecPage, /Participant copy/);
+  assert.match(technicalSpecPage, /reviewWorkflowContract\.participantCopyTemplates/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/review-workflow\/contract/);
   assert.match(technicalSpecPage, /POST \/api\/moral-trade\/review-workflow\/evaluate/);
   assert.match(technicalSpecPage, /stateMutation false/);
@@ -1262,6 +1269,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /reviewWorkflowValidation/);
   assert.match(healthRoute, /reviewWorkflowCardKeys/);
   assert.match(healthRoute, /reviewWorkflowMarketplaceFactorPriority/);
+  assert.match(healthRoute, /reviewWorkflowParticipantCopyKeys/);
   assert.match(healthRoute, /reasoningPacketValidation/);
   assert.match(healthRoute, /reasoningPacketRequiredFields/);
   assert.match(healthRoute, /reasoningPacketLinkedContracts/);
@@ -1326,6 +1334,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(reviewWorkflowContractRoute, /validateOfferReviewWorkflowContract/);
   assert.match(reviewWorkflowContractRoute, /detailWorkflowCards/);
   assert.match(reviewWorkflowContractRoute, /marketplaceFactorPriority/);
+  assert.match(reviewWorkflowContractRoute, /participantCopyTemplates/);
   assert.match(reviewWorkflowEvaluateRoute, /getOfferReviewWorkflowCards/);
   assert.match(reviewWorkflowEvaluateRoute, /getOfferReviewCardInstrumentation/);
   assert.match(reviewWorkflowEvaluateRoute, /stateMutation: false/);

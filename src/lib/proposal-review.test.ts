@@ -12,6 +12,8 @@ import {
   PROHIBITED_PROPOSAL_FIXTURES,
   validateOfferReviewWorkflowContract,
 } from "./proposal-review";
+import { GET as reviewWorkflowContractRoute } from "../app/api/moral-trade/review-workflow/contract/route";
+import { POST as reviewWorkflowEvaluateRoute } from "../app/api/moral-trade/review-workflow/evaluate/route";
 
 test("protocol draft review requests missing required fields without ranking moral value", () => {
   const review = evaluateMoralTradeProtocolDraft({
@@ -255,16 +257,59 @@ test("offer review workflow cards expose status, factor codes, next steps, and a
     ],
   );
   assert.ok(cards.every((card) => card.factorCodes.length > 0));
-  assert.ok(cards.every((card) => /Next step|Treat|Attach|State|Ask|Use|Do not/.test(card.nextStep)));
+  assert.ok(
+    cards.every((card) =>
+      /Treat|Attach|What would you do|Ask|This score reflects|If you think/.test(
+        card.nextStep,
+      ),
+    ),
+  );
   assert.equal(cards.find((card) => card.key === "action_evidence")?.status, "pass");
   assert.equal(cards.find((card) => card.key === "baseline_confidence")?.status, "pass");
   assert.equal(cards.find((card) => card.key === "externality_review")?.status, "human_review");
+  assert.match(
+    cards.find((card) => card.key === "baseline_confidence")?.nextStep ?? "",
+    /What would you do if this trade did not happen/i,
+  );
   assert.ok(
     cards
       .find((card) => card.key === "participant_relative_scores")
       ?.factorCodes.includes("no_global_moral_ranking"),
   );
+  assert.match(
+    cards.find((card) => card.key === "participant_relative_scores")?.nextStep ?? "",
+    /participant's own stated priorities/i,
+  );
   assert.match(cards.find((card) => card.key === "appeal_scope")?.summary ?? "", /specific reviewed claim/);
+  assert.match(
+    cards.find((card) => card.key === "appeal_scope")?.nextStep ?? "",
+    /Appeals do not reopen unrelated moral disagreements/i,
+  );
+});
+
+test("offer review workflow cards use approved needs-evidence and safety copy", () => {
+  const cards = getOfferReviewWorkflowCards({
+    mode: "offset",
+    verification: "",
+    currentStatus: "Blocked by anti-threat policy",
+    offerImpact: 6,
+    minCounterpartyImpact: 5,
+  });
+
+  assert.equal(cards.find((card) => card.key === "current_status")?.status, "blocked");
+  assert.match(
+    cards.find((card) => card.key === "current_status")?.summary ?? "",
+    /cannot be published because it resembles a threat/i,
+  );
+  assert.equal(cards.find((card) => card.key === "action_evidence")?.status, "needs_input");
+  assert.match(
+    cards.find((card) => card.key === "action_evidence")?.summary ?? "",
+    /Status: Needs evidence/i,
+  );
+  assert.match(
+    cards.find((card) => card.key === "action_evidence")?.summary ?? "",
+    /no reviewable proof method/i,
+  );
 });
 
 test("offer review card instrumentation exposes prioritized factor codes and next action", () => {
@@ -303,7 +348,52 @@ test("offer review workflow contract validates public card and marketplace instr
   assert.ok(contract.detailWorkflowCards.some((card) => card.key === "baseline_confidence"));
   assert.ok(contract.detailWorkflowCards.some((card) => card.key === "externality_review"));
   assert.ok(contract.marketplaceFactorPriority.includes("no_global_moral_ranking"));
+  assert.match(contract.participantCopyTemplates.baselineHelperText, /current intention/i);
+  assert.match(contract.participantCopyTemplates.needsEvidenceStatusCopy, /Status: Needs evidence/i);
+  assert.match(contract.participantCopyTemplates.safetyWarningCopy, /newly escalated harmful behavior/i);
+  assert.match(contract.participantCopyTemplates.importanceScoreNote, /not a platform judgment/i);
+  assert.match(contract.participantCopyTemplates.appealCopy, /specific claim/i);
   assert.ok(contract.invariants.some((entry) => /Marketplace cards/.test(entry)));
   assert.ok(contract.sampleMarketplaceCard.factorCodes.length <= 5);
   assert.ok(contract.contractTests.includes("technical_spec_review_workflow_smoke"));
+});
+
+test("review workflow routes publish participant copy templates", async () => {
+  const contractResponse = await reviewWorkflowContractRoute();
+  const contractBody = await contractResponse.json();
+
+  assert.equal(contractResponse.status, 200);
+  assert.match(
+    contractBody.publicContract.participantCopyTemplates.baselineHelperText,
+    /What would you do if this trade did not happen/i,
+  );
+
+  const evaluateResponse = await reviewWorkflowEvaluateRoute(
+    new Request("http://localhost/api/moral-trade/review-workflow/evaluate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        reviewInput: {
+          mode: "offset",
+          verification: "",
+          currentStatus: "Blocked by anti-threat policy",
+          offerImpact: 7,
+          minCounterpartyImpact: 6,
+        },
+      }),
+    }),
+  );
+  const evaluateBody = await evaluateResponse.json();
+
+  assert.equal(evaluateResponse.status, 200);
+  assert.match(
+    evaluateBody.workflowCards.find((card: { key: string }) => card.key === "current_status")
+      ?.summary ?? "",
+    /cannot be published because it resembles a threat/i,
+  );
+  assert.match(
+    evaluateBody.workflowCards.find((card: { key: string }) => card.key === "action_evidence")
+      ?.summary ?? "",
+    /Status: Needs evidence/i,
+  );
 });

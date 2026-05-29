@@ -21,6 +21,7 @@ export async function GET() {
       statuses: contract.statuses,
       detailWorkflowCards: contract.detailWorkflowCards,
       marketplaceFactorPriority: contract.marketplaceFactorPriority,
+      participantCopyTemplates: contract.participantCopyTemplates,
       invariants: contract.invariants,
       sampleDetailCardKeys: contract.sampleDetailCards.map((card) => card.key),
       sampleMarketplaceFactorCodes: contract.sampleMarketplaceCard.factorCodes,

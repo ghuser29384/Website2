@@ -773,6 +773,10 @@ export default async function MoralTradeTechnicalSpecPage() {
                 cards and marketplace factors with stateMutation false.
               </p>
             </article>
+            <article className="panel protocol-contract-card">
+              <h3>Participant copy</h3>
+              <p>{reviewWorkflowContract.participantCopyTemplates.baselineHelperText}</p>
+            </article>
           </div>
           <div className="data-grid">
             {reviewWorkflowContract.detailWorkflowCards.map((card) => (
