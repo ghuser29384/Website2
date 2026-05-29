@@ -256,6 +256,8 @@ export async function GET() {
       reasoningPacketCount: reasoningPacketContract.packetCount,
       reasoningPacketRequiredFields:
         reasoningPacketContract.requiredPacketFields,
+      reasoningPacketDecisionStepKeys:
+        reasoningPacketContract.samplePackets[0]?.decisionSteps.map((step) => step.key) ?? [],
       reasoningPacketLinkedContracts: reasoningPacketContract.linkedContracts,
       reasoningPacketContractTests: reasoningPacketContract.contractTests,
       operationsProfileVersion: operationsProfile.version,

@@ -828,9 +828,9 @@ export default async function MoralTradeTechnicalSpecPage() {
             </h2>
             <p>
               Public packets are derived from canonical worked examples and expose only structured
-              summaries, cited evidence rows, uncertainty flags, reviewer scope, factor codes, and
-              the next human-controlled step. The packet route is validator-backed and does not
-              export live private offers.
+              summaries, cited evidence rows, step-by-step decision gates, uncertainty flags,
+              reviewer scope, factor codes, and the next human-controlled step. The packet route is
+              validator-backed and does not export live private offers.
             </p>
           </div>
           <div className="protocol-validator-card panel">
@@ -873,6 +873,16 @@ export default async function MoralTradeTechnicalSpecPage() {
                   Provenance sample:{" "}
                   {reasoningPacketContract.linkedContracts.provenanceSampleBundleStatus}
                 </li>
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Decision steps</h3>
+              <ul className="clean-list">
+                {reasoningPacketContract.samplePackets[0]?.decisionSteps.slice(0, 4).map((step) => (
+                  <li key={step.key}>
+                    {step.status}: {step.label}
+                  </li>
+                ))}
               </ul>
             </article>
             <article className="panel protocol-contract-card">

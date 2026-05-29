@@ -38,6 +38,10 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "**/*.icloud",
+    "config.icloud-placeholder-backup",
+    "public.current-source",
+    "src.before-*"
   ]
 }

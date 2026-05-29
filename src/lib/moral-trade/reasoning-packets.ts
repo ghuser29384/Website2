@@ -4,7 +4,9 @@ import {
   formatProtocolReviewStatus,
   getOfferReviewCardInstrumentation,
   getOfferReviewWorkflowContract,
+  MORAL_TRADE_VERIFICATION_LOOP_STEPS,
   type MoralTradeCitedEvidenceRow,
+  type MoralTradeVerificationLoopStep,
   type ProtocolReviewStatus,
 } from "@/lib/proposal-review";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
@@ -36,6 +38,7 @@ export interface MoralTradeReasoningPacket {
   factorCodes: string[];
   summary: string;
   nextStep: string;
+  decisionSteps: MoralTradeVerificationLoopStep[];
   evidenceRows: MoralTradeCitedEvidenceRow[];
   uncertaintyFlags: string[];
   reviewScope: string[];
@@ -94,6 +97,7 @@ const REQUIRED_REASONING_PACKET_FIELDS = [
   "factorCodes",
   "summary",
   "nextStep",
+  "decisionSteps",
   "evidenceRows",
   "uncertaintyFlags",
   "reviewScope",
@@ -196,6 +200,7 @@ export function getMoralTradeReasoningPackets(
       factorCodes,
       summary: protocolReview.summary,
       nextStep: protocolReview.nextStepChecklist[0] ?? marketplaceInstrumentation.nextStep,
+      decisionSteps: protocolReview.verificationLoop,
       evidenceRows: protocolReview.citedEvidenceTable.slice(0, 3),
       uncertaintyFlags: protocolReview.uncertaintyFlags.slice(0, 4),
       reviewScope: protocolReview.reviewInstructions.reviewScope.slice(0, 3),
@@ -231,6 +236,7 @@ export function getMoralTradeReasoningPacketContract(
     },
     invariants: [
       "Packets expose only structured summaries, cited evidence rows, uncertainty flags, reviewer scope, factor codes, and required next steps.",
+      "Packets publish step-by-step decision gates with pass, needs_input, human_review, or blocked statuses before any public reliance.",
       "Packets must not expose chain-of-thought, private wish text, contact details, raw source notes, or autonomous outreach fields.",
       "Packets must preserve no_global_moral_ranking and participant-relative language.",
       "Packets are derived from canonical worked examples; live private offers are not exported.",
@@ -274,6 +280,23 @@ function packetContainsContactLikeText(packet: MoralTradeReasoningPacket) {
   return (
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(text) ||
     /\b(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b/.test(text)
+  );
+}
+
+function packetHasDecisionSteps(packet: MoralTradeReasoningPacket) {
+  const requiredStepKeys = MORAL_TRADE_VERIFICATION_LOOP_STEPS.map((step) => step.key);
+  const packetStepKeys = packet.decisionSteps.map((step) => step.key);
+
+  return (
+    packet.decisionSteps.length === MORAL_TRADE_VERIFICATION_LOOP_STEPS.length &&
+    requiredStepKeys.every((key) => packetStepKeys.includes(key)) &&
+    packet.decisionSteps.every(
+      (step) =>
+        step.label &&
+        step.detail &&
+        ["pass", "needs_input", "human_review", "blocked"].includes(step.status) &&
+        typeof step.blocksMatchable === "boolean",
+    )
   );
 }
 
@@ -329,6 +352,20 @@ export function validateMoralTradeReasoningPacketContract(
           packet.nextStep.length >= 20,
       ),
       packets.map((packet) => `${packet.id}:${packet.factorCodes.join("|")}`).join("; "),
+    ),
+    reasoningPacketCheck(
+      "decision-step-output",
+      "Packets include step-by-step pass/fail review gates",
+      packets.every(packetHasDecisionSteps) &&
+        contract.invariants.some((invariant) => /step-by-step decision gates/i.test(invariant)),
+      packets
+        .map(
+          (packet) =>
+            `${packet.id}:${packet.decisionSteps
+              .map((step) => `${step.key}=${step.status}`)
+              .join("|")}`,
+        )
+        .join("; "),
     ),
     reasoningPacketCheck(
       "public-link-and-contract-source",

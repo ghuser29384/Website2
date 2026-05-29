@@ -221,6 +221,16 @@ export default async function ReasoningCenterPage() {
                       </ul>
                     </div>
                     <div>
+                      <strong>Decision steps</strong>
+                      <ul>
+                        {record.decisionSteps.map((step) => (
+                          <li key={`${record.title}:${step.key}`}>
+                            {step.status}: {step.label}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
                       <strong>Uncertainty flags</strong>
                       {record.uncertaintyFlags.length ? (
                         <ul>

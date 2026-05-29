@@ -18,6 +18,8 @@ test("reasoning packets publish deterministic structured review output", () => {
   assert.equal(contract.packetCount, packets.length);
   assert.ok(packets.every((packet) => packet.href.startsWith("/offers/examples/")));
   assert.ok(packets.every((packet) => packet.factorCodes.includes("no_global_moral_ranking")));
+  assert.ok(packets.every((packet) => packet.decisionSteps.length >= 8));
+  assert.ok(packets.every((packet) => packet.decisionSteps.some((step) => step.key === "privacy_redaction")));
   assert.ok(packets.every((packet) => packet.evidenceRows.length > 0));
   assert.ok(packets.some((packet) => packet.uncertaintyFlags.length > 0));
   assert.ok(
@@ -51,6 +53,7 @@ test("reasoning packet validation fails when public packet safeguards are weaken
         (code) => code !== "no_global_moral_ranking",
       ),
       evidenceRows: [],
+      decisionSteps: [],
       href: "/offers/private/secret",
       contractSources: ["canonical_worked_case_offer"],
     },
@@ -64,6 +67,7 @@ test("reasoning packet validation fails when public packet safeguards are weaken
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("evidence-and-uncertainty-output")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("factor-code-and-next-step-output")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("decision-step-output")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("public-link-and-contract-source")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("privacy-and-no-hidden-reasoning")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("contract-tests")));

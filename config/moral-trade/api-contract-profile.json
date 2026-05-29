@@ -558,15 +558,15 @@
     },
     {
       "key": "reasoning_packets_response",
-      "purpose": "Public validator-backed Reasoning Center packet contract and deterministic worked-example packets.",
+      "purpose": "Public validator-backed Reasoning Center packet contract and deterministic worked-example packets with step-by-step decision gates.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the reasoning-packet contract validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the reasoning-packet validation run." },
         { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Reasoning packet contract version." },
         { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
-        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for packet count, field shape, cited evidence rows, uncertainty flags, factor codes, privacy, and linked contracts." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for packet count, field shape, cited evidence rows, decision gates, uncertainty flags, factor codes, privacy, and linked contracts." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Required packet fields, linked contract versions, invariants, sample packet ids, and contract-test hooks." },
-        { "key": "packets", "type": "reasoning_packet_array", "required": true, "privacy": "public_contract", "description": "Deterministic public worked-example packets with structured summaries, evidence rows, uncertainty flags, reviewer scope, and next steps." },
+        { "key": "packets", "type": "reasoning_packet_array", "required": true, "privacy": "public_contract", "description": "Deterministic public worked-example packets with structured summaries, evidence rows, decision steps, uncertainty flags, reviewer scope, and next steps." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Reasoning-packet blockers that prevent relying on public review explanations." }
       ]
     },

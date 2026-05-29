@@ -468,6 +468,8 @@ test("background networking and reasoning routes are distinct resilient public r
   assert.match(reasoningCenterPage, /getMoralTradeReasoningPackets/);
   assert.match(reasoningCenterPage, /getMoralTradeReasoningPacketContract/);
   assert.match(reasoningCenterPage, /Cited evidence rows/);
+  assert.match(reasoningCenterPage, /Decision steps/);
+  assert.match(reasoningCenterPage, /record\.decisionSteps/);
   assert.match(reasoningCenterPage, /Uncertainty flags/);
   assert.match(reasoningCenterPage, /Reviewer scope/);
   assert.match(reasoningCenterPage, /\/api\/moral-trade\/provenance\/schema/);
@@ -977,6 +979,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(reasoningPacketSource, /getMoralTradeReasoningPackets/);
   assert.match(reasoningPacketSource, /validateMoralTradeReasoningPacketContract/);
   assert.match(reasoningPacketSource, /cited evidence rows/i);
+  assert.match(reasoningPacketSource, /decisionSteps/);
+  assert.match(reasoningPacketSource, /decision-step-output/);
+  assert.match(reasoningPacketSource, /step-by-step decision gates/);
   assert.match(reasoningPacketSource, /uncertainty flags/i);
   assert.match(reasoningPacketSource, /live private offers are not exported/);
   assert.match(reasoningPacketSource, /no_global_moral_ranking/);
@@ -1213,6 +1218,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /reasoning_packets_response/);
   assert.match(apiContractProfile, /moral_trade_reasoning_packets/);
   assert.match(apiContractProfile, /Reasoning Center packet contract validator result/);
+  assert.match(apiContractProfile, /decision steps/);
   assert.match(apiContractProfile, /never expose live private offers/);
   assert.match(apiContractProfile, /deterministic_review_workflow_only/);
   assert.match(apiContractProfile, /participant copy templates/);
@@ -1302,6 +1308,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Reasoning packet contract/);
   assert.match(technicalSpecPage, /The Reasoning Center publishes structured packets/);
   assert.match(technicalSpecPage, /reasoningPacketContract\.requiredPacketFields/);
+  assert.match(technicalSpecPage, /step-by-step decision gates/);
+  assert.match(technicalSpecPage, /reasoningPacketContract\.samplePackets/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/reasoning\/packets/);
   assert.match(technicalSpecPage, /live private offers/);
   assert.match(technicalSpecPage, /Operations contract/);
@@ -1386,6 +1394,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /reviewWorkflowParticipantCopyKeys/);
   assert.match(healthRoute, /reasoningPacketValidation/);
   assert.match(healthRoute, /reasoningPacketRequiredFields/);
+  assert.match(healthRoute, /reasoningPacketDecisionStepKeys/);
   assert.match(healthRoute, /reasoningPacketLinkedContracts/);
   assert.match(healthRoute, /operationsValidation/);
   assert.match(healthRoute, /rateLimitSurfaces/);
