@@ -1,21 +1,31 @@
 export function getPrimaryNavLinks(isAuthenticated = false) {
   const links = [
     {
-      label: "Browse",
-      summary: "See current projects, public offers, and worked examples.",
+      label: "Understand",
+      summary: "Start with the idea, source, and safest first route.",
       items: [
         { href: "/start", label: "Choose your path", description: "Route by intent: learn, test an example, donate, or join/build." },
-        { href: "/projects", label: "Projects", description: "What is live, illustrative, or upcoming." },
-        { href: "/offers", label: "All offers", description: "Live offers and worked examples." },
-        { href: "/offers?view=examples", label: "Worked examples", description: "Seeded structures, not live offers." },
-        { href: "/pledge-swaps", label: "Pledge swaps", description: "Exchange bounded commitments." },
-        { href: "/donation-offsets", label: "Donation offsets", description: "Redirect matched opposed donations." },
-        { href: "/mpgf", label: "Public Goods Fund", description: "Pool support for shared moral goods." },
+        { href: "/moral-trade", label: "What is Moral Trade?", description: "A plain-language primer for new visitors." },
+        { href: "/how-it-works", label: "How it works", description: "A simple walkthrough from example to review." },
+        { href: "/sources", label: "Sources", description: "Primary references and product-boundary notes." },
+        { href: "/faq", label: "FAQ", description: "Common questions and operating limits." },
       ],
     },
     {
-      label: "Create",
-      summary: "Start with structured terms and review gates.",
+      label: "Explore",
+      summary: "Inspect what is live enough to read, clone, or donate through.",
+      items: [
+        { href: "/projects", label: "Projects", description: "What is live, illustrative, or upcoming." },
+        { href: "/offers?view=examples", label: "Worked examples", description: "Seeded structures, not live offers." },
+        { href: "/offers", label: "All offers", description: "Live offers and worked examples." },
+        { href: "/pledge-swaps", label: "Pledge swaps", description: "Exchange bounded commitments." },
+        { href: "/donation-offsets", label: "Donation offsets", description: "Redirect matched opposed donations." },
+        { href: "/donate", label: "Donate through a route", description: "Use a vetted external donation handoff." },
+      ],
+    },
+    {
+      label: "Join",
+      summary: "Move from examples into one supported pilot action.",
       items: [
         {
           href: isAuthenticated ? "/offers/new" : "/signup?returnTo=/offers/new",
@@ -26,7 +36,7 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
           href: isAuthenticated
             ? "/offers/new?mode=offset"
             : "/signup?returnTo=/offers/new%3Fmode%3Doffset",
-          label: "Trade",
+          label: "Create donation offset",
           description: "Set baseline, match, destination, surplus, and evidence rules.",
         },
         {
@@ -34,38 +44,25 @@ export function getPrimaryNavLinks(isAuthenticated = false) {
           label: "Create wish profile",
           description: "Describe broad wishes before mutual disclosure.",
         },
+        { href: "/cohort", label: "Founding cohort", description: "Invite one serious counterparty and start small." },
+        { href: "/background-networking", label: "Private matching", description: "Consent-gated counterparty discovery." },
+        { href: isAuthenticated ? "/dashboard" : "/signup", label: isAuthenticated ? "Open dashboard" : "Create account", description: "Use member workflows after the public primer." },
       ],
     },
     {
-      label: "Learn",
-      summary: "Understand standards before proposing or accepting terms.",
+      label: "Trust",
+      summary: "Check status, review rules, safety boundaries, and recourse.",
       items: [
         { href: "/about", label: "About", description: "What exists today, what does not, and what comes next." },
-        { href: "/moral-trade", label: "What is Moral Trade?", description: "A plain-language primer for new visitors." },
-        { href: "/how-it-works", label: "How it works", description: "A simple walkthrough from example to review." },
+        { href: "/trust", label: "What you can rely on", description: "Prototype guarantees, review states, and non-guarantees." },
+        { href: "/status", label: "Pilot status", description: "What is real, reviewed, or still prototype-stage." },
         { href: "/validation", label: "Validation", description: "Evidence states, challenge windows, and review scopes." },
-        { href: "/moral-trade/technical-spec", label: "Moral Trade spec", description: "Core protocol validators and public health JSON." },
         { href: "/safety", label: "Safety", description: "Coercion, fraud, and pressure boundaries." },
         { href: "/anti-threat-baseline", label: "Anti-threat rules", description: "Baseline integrity and externality checks." },
-        { href: "/research", label: "Research", description: "Pilot questions, governance, and transparency." },
-        { href: "/reasoning-center", label: "Reasoning Center", description: "Inspect the reasoning workspace." },
-        { href: "/methodology", label: "Methodology", description: "Moral trade sources and safeguards." },
         { href: "/measurement", label: "Measurement", description: "Privacy-safe event taxonomy and performance baselines." },
-        { href: "/sources", label: "Sources", description: "Primary references and product-boundary notes." },
-        { href: "/paid-action-offers", label: "Deferred paid offers", description: "Why paid actions are review-only for now." },
-        { href: "/faq", label: "FAQ", description: "Common questions and operating limits." },
-      ],
-    },
-    {
-      label: "Community",
-      summary: "Browse opt-in participants, operators, cohorts, and updates.",
-      items: [
         { href: "/team", label: "Team and governance", description: "Operator routes, reviewer roles, and public gaps." },
-        { href: "/people", label: "People", description: "Privacy-limited public profiles." },
-        { href: "/wish-registry", label: "Wish registry", description: "Search broad wishes before consent gates." },
-        { href: "/background-networking", label: "Private matching", description: "Consent-gated counterparty discovery." },
-        { href: "/cohort", label: "Founding cohort", description: "Invite one serious counterparty and start small." },
         { href: "/updates", label: "Pilot updates", description: "Public logs, governance updates, and case-study notes." },
+        { href: "/contact", label: "Contact", description: "Reach the pilot operators or report a support issue." },
       ],
     },
   ];

@@ -16,7 +16,7 @@ import {
   CANONICAL_WORKED_CASE_OFFERS,
 } from "@/lib/seed-data";
 import { filterSiteSearchItems } from "@/lib/site-search";
-import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { FOOTER_LINK_GROUPS, getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 function readRepoFile(path: string) {
   return readFileSync(join(process.cwd(), path), "utf8");
@@ -32,41 +32,56 @@ function flattenPrimaryNavHrefs() {
 test("public navigation exposes professional marketplace routes", () => {
   const labels = getPrimaryNavLinks(false).map((link) => link.label);
   const hrefs = flattenPrimaryNavHrefs();
-  const browseMenu = getPrimaryNavLinks(false).find((link) => link.label === "Browse");
-  const createMenu = getPrimaryNavLinks(false).find((link) => link.label === "Create");
+  const footerHrefs = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));
+  const understandMenu = getPrimaryNavLinks(false).find((link) => link.label === "Understand");
+  const exploreMenu = getPrimaryNavLinks(false).find((link) => link.label === "Explore");
+  const joinMenu = getPrimaryNavLinks(false).find((link) => link.label === "Join");
+  const trustMenu = getPrimaryNavLinks(false).find((link) => link.label === "Trust");
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
 
-  assert.deepEqual(labels, ["Browse", "Create", "Learn", "Community"]);
+  assert.deepEqual(labels, ["Understand", "Explore", "Join", "Trust"]);
   assert.equal(getTopbarActions(false).primaryAction.href, "/offers?view=examples");
   assert.equal(getTopbarActions(false).primaryAction.label, "See example");
   assert.equal(getTopbarActions(true).primaryAction.href, "/offers/new?mode=offset");
   assert.equal(getTopbarActions(true).primaryAction.label, "Trade");
   assert.equal(getTopbarActions(false).authLink.label, "Sign in");
-  assert.match(browseMenu?.summary ?? "", /See current projects/);
-  assert.ok(browseMenu?.items?.every((item) => item.description));
-  assert.ok(createMenu?.items?.some((item) => item.label === "Trade"));
+  assert.match(understandMenu?.summary ?? "", /Start with the idea/);
+  assert.match(exploreMenu?.summary ?? "", /live enough/);
+  assert.match(joinMenu?.summary ?? "", /one supported pilot action/);
+  assert.match(trustMenu?.summary ?? "", /review rules/);
+  assert.ok(getPrimaryNavLinks(false).every((link) => link.items?.every((item) => item.description)));
+  assert.ok(joinMenu?.items?.some((item) => item.label === "Create donation offset"));
   assert.ok(hrefs.includes("/projects"));
   assert.ok(hrefs.includes("/start"));
   assert.ok(hrefs.includes("/about"));
   assert.ok(hrefs.includes("/how-it-works"));
   assert.ok(hrefs.includes("/offers"));
   assert.ok(hrefs.includes("/pledge-swaps"));
-  assert.ok(hrefs.includes("/paid-action-offers"));
   assert.ok(hrefs.includes("/donation-offsets"));
-  assert.ok(hrefs.includes("/mpgf"));
+  assert.ok(hrefs.includes("/donate"));
   assert.ok(hrefs.includes("/validation"));
-  assert.ok(hrefs.includes("/moral-trade/technical-spec"));
   assert.ok(hrefs.includes("/offers?view=examples"));
   assert.ok(hrefs.includes("/measurement"));
   assert.ok(hrefs.includes("/faq"));
   assert.ok(hrefs.includes("/sources"));
-  assert.ok(hrefs.includes("/wish-registry"));
   assert.ok(hrefs.includes("/background-networking"));
-  assert.ok(hrefs.includes("/research"));
   assert.ok(hrefs.includes("/cohort"));
   assert.ok(hrefs.includes("/team"));
   assert.ok(hrefs.includes("/updates"));
+  assert.ok(hrefs.includes("/contact"));
+  assert.ok(hrefs.includes("/trust"));
+  assert.ok(hrefs.includes("/status"));
+  assert.equal(hrefs.includes("/paid-action-offers"), false);
+  assert.equal(hrefs.includes("/mpgf"), false);
+  assert.equal(hrefs.includes("/moral-trade/technical-spec"), false);
+  assert.equal(hrefs.includes("/reasoning-center"), false);
+  assert.equal(hrefs.includes("/priority-correction-fund"), false);
+  assert.equal(footerHrefs.includes("/paid-action-offers"), true);
+  assert.equal(footerHrefs.includes("/mpgf"), true);
+  assert.equal(footerHrefs.includes("/moral-trade/technical-spec"), true);
+  assert.equal(footerHrefs.includes("/reasoning-center"), true);
+  assert.equal(footerHrefs.includes("/priority-correction-fund"), true);
   assert.ok(!hrefs.includes("/cart"));
   assert.equal(siteSource.includes("label: \"MPGF\""), false);
   assert.equal(siteSource.includes("label: \"Advanced\""), false);
