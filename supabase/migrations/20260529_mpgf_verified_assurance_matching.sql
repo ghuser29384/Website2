@@ -83,6 +83,7 @@ create table if not exists public.mpgf_public_goods_pledges (
   visibility_mode text not null check (
     visibility_mode in ('private_amount', 'public_supporter', 'public_reason')
   ),
+  is_recurring boolean not null default false,
   capture_mode text not null check (
     capture_mode in ('external_handoff', 'stored_payment_method', 'signed_intent')
   ),
@@ -137,21 +138,242 @@ create table if not exists public.mpgf_public_goods_payment_proofs (
   created_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.mpgf_public_goods_review_cases (
+  id uuid primary key default gen_random_uuid(),
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  state text not null check (
+    state in ('draft', 'submitted', 'needs_evidence', 'challenge_window', 'approved', 'blocked', 'finalized')
+  ),
+  action text not null check (
+    action in ('approve', 'needs_evidence', 'block', 'challenge', 'finalize')
+  ),
+  reason_code text not null check (
+    reason_code in (
+      'destination_verified',
+      'needs_destination_evidence',
+      'needs_identity_evidence',
+      'blocked_threat_baseline',
+      'blocked_destination_risk',
+      'challenge_opened',
+      'challenge_resolved',
+      'external_handoff_verified',
+      'external_handoff_failed',
+      'duplicate_identity_blocked',
+      'appeal_requested',
+      'appeal_denied',
+      'appeal_upheld'
+    )
+  ),
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  opened_at timestamptz not null default timezone('utc', now()),
+  closed_at timestamptz,
+  appeal_status text not null default 'none' check (
+    appeal_status in ('none', 'appeal_requested', 'appeal_denied', 'appeal_upheld')
+  ),
+  challenge_window_ends_at timestamptz,
+  public_notes text not null default '',
+  allowed_next_actions text[] not null default '{}'
+);
+
+create table if not exists public.mpgf_public_goods_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete cascade,
+  user_ref text not null,
+  pool_id text not null references public.mpgf_public_goods_match_pools (id) on delete cascade,
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  interval text not null check (interval in ('monthly', 'annual')),
+  status text not null default 'active' check (
+    status in ('active', 'paused', 'cancelled', 'past_due', 'expired')
+  ),
+  capture_mode text not null default 'external_handoff' check (
+    capture_mode in ('external_handoff', 'stored_payment_method', 'signed_intent')
+  ),
+  mode text not null default 'pledge_only' check (mode in ('pledge_only', 'test_payment', 'real_money')),
+  provider_subscription_ref text,
+  next_charge_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_subscription_no_hidden_provider check (
+    mode = 'pledge_only' or provider_subscription_ref is not null
+  )
+);
+
+create table if not exists public.mpgf_public_goods_experiment_assignments (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete cascade,
+  user_ref_hash text not null,
+  experiment_key text not null,
+  variant text not null,
+  analytics_policy text not null default 'privacy_safe_no_raw_private_text' check (
+    analytics_policy = 'privacy_safe_no_raw_private_text'
+  ),
+  assigned_at timestamptz not null default timezone('utc', now()),
+  unique (experiment_key, user_ref_hash)
+);
+
+create table if not exists public.mpgf_public_goods_analytics_events (
+  id uuid primary key default gen_random_uuid(),
+  user_ref_hash text,
+  experiment_assignment_id uuid references public.mpgf_public_goods_experiment_assignments (id) on delete set null,
+  event_type text not null,
+  campaign_id text references public.mpgf_public_goods_campaigns (id) on delete set null,
+  event_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_analytics_no_raw_contact check (
+    not (event_json ? 'email') and
+    not (event_json ? 'phone') and
+    not (event_json ? 'private_wish') and
+    not (event_json ? 'raw_evidence_text')
+  )
+);
+
 grant select on
   public.mpgf_public_goods_match_pools,
   public.mpgf_public_goods_rounds,
   public.mpgf_public_goods_campaigns,
-  public.mpgf_public_goods_allocation_results
+  public.mpgf_public_goods_allocation_results,
+  public.mpgf_public_goods_review_cases
 to anon, authenticated;
 
-grant select, insert on
+grant select, insert, update on
   public.mpgf_public_goods_pledges,
   public.mpgf_public_goods_identity_attestations,
-  public.mpgf_public_goods_payment_proofs
+  public.mpgf_public_goods_payment_proofs,
+  public.mpgf_public_goods_subscriptions
 to authenticated;
+
+grant select on
+  public.mpgf_public_goods_experiment_assignments
+to authenticated;
+
+grant all on
+  public.mpgf_public_goods_match_pools,
+  public.mpgf_public_goods_rounds,
+  public.mpgf_public_goods_campaigns,
+  public.mpgf_public_goods_identity_attestations,
+  public.mpgf_public_goods_pledges,
+  public.mpgf_public_goods_allocation_results,
+  public.mpgf_public_goods_payment_proofs,
+  public.mpgf_public_goods_review_cases,
+  public.mpgf_public_goods_subscriptions,
+  public.mpgf_public_goods_experiment_assignments,
+  public.mpgf_public_goods_analytics_events
+to service_role;
 
 alter table public.mpgf_public_goods_pledges enable row level security;
 alter table public.mpgf_public_goods_identity_attestations enable row level security;
 alter table public.mpgf_public_goods_payment_proofs enable row level security;
+alter table public.mpgf_public_goods_review_cases enable row level security;
+alter table public.mpgf_public_goods_subscriptions enable row level security;
+alter table public.mpgf_public_goods_experiment_assignments enable row level security;
+alter table public.mpgf_public_goods_analytics_events enable row level security;
+
+drop policy if exists "mpgf_public_goods_pledges_select_own" on public.mpgf_public_goods_pledges;
+create policy "mpgf_public_goods_pledges_select_own"
+on public.mpgf_public_goods_pledges
+for select
+to authenticated
+using (profile_id = auth.uid());
+
+drop policy if exists "mpgf_public_goods_pledges_insert_own" on public.mpgf_public_goods_pledges;
+create policy "mpgf_public_goods_pledges_insert_own"
+on public.mpgf_public_goods_pledges
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+drop policy if exists "mpgf_public_goods_pledges_update_own" on public.mpgf_public_goods_pledges;
+create policy "mpgf_public_goods_pledges_update_own"
+on public.mpgf_public_goods_pledges
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
+
+drop policy if exists "mpgf_public_goods_identity_select_own" on public.mpgf_public_goods_identity_attestations;
+create policy "mpgf_public_goods_identity_select_own"
+on public.mpgf_public_goods_identity_attestations
+for select
+to authenticated
+using (profile_id = auth.uid());
+
+drop policy if exists "mpgf_public_goods_identity_insert_own" on public.mpgf_public_goods_identity_attestations;
+create policy "mpgf_public_goods_identity_insert_own"
+on public.mpgf_public_goods_identity_attestations
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+drop policy if exists "mpgf_public_goods_identity_update_own" on public.mpgf_public_goods_identity_attestations;
+create policy "mpgf_public_goods_identity_update_own"
+on public.mpgf_public_goods_identity_attestations
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
+
+drop policy if exists "mpgf_public_goods_payment_proofs_select_own" on public.mpgf_public_goods_payment_proofs;
+create policy "mpgf_public_goods_payment_proofs_select_own"
+on public.mpgf_public_goods_payment_proofs
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.mpgf_public_goods_pledges
+    where mpgf_public_goods_pledges.id = mpgf_public_goods_payment_proofs.pledge_id
+      and mpgf_public_goods_pledges.profile_id = auth.uid()
+  )
+);
+
+drop policy if exists "mpgf_public_goods_payment_proofs_insert_own" on public.mpgf_public_goods_payment_proofs;
+create policy "mpgf_public_goods_payment_proofs_insert_own"
+on public.mpgf_public_goods_payment_proofs
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.mpgf_public_goods_pledges
+    where mpgf_public_goods_pledges.id = mpgf_public_goods_payment_proofs.pledge_id
+      and mpgf_public_goods_pledges.profile_id = auth.uid()
+  )
+);
+
+drop policy if exists "mpgf_public_goods_review_cases_public_select" on public.mpgf_public_goods_review_cases;
+create policy "mpgf_public_goods_review_cases_public_select"
+on public.mpgf_public_goods_review_cases
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_public_goods_subscriptions_select_own" on public.mpgf_public_goods_subscriptions;
+create policy "mpgf_public_goods_subscriptions_select_own"
+on public.mpgf_public_goods_subscriptions
+for select
+to authenticated
+using (profile_id = auth.uid());
+
+drop policy if exists "mpgf_public_goods_subscriptions_insert_own" on public.mpgf_public_goods_subscriptions;
+create policy "mpgf_public_goods_subscriptions_insert_own"
+on public.mpgf_public_goods_subscriptions
+for insert
+to authenticated
+with check (profile_id = auth.uid());
+
+drop policy if exists "mpgf_public_goods_subscriptions_update_own" on public.mpgf_public_goods_subscriptions;
+create policy "mpgf_public_goods_subscriptions_update_own"
+on public.mpgf_public_goods_subscriptions
+for update
+to authenticated
+using (profile_id = auth.uid())
+with check (profile_id = auth.uid());
+
+drop policy if exists "mpgf_public_goods_experiment_assignments_select_own" on public.mpgf_public_goods_experiment_assignments;
+create policy "mpgf_public_goods_experiment_assignments_select_own"
+on public.mpgf_public_goods_experiment_assignments
+for select
+to authenticated
+using (profile_id = auth.uid());
 
 commit;

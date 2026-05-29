@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -10,6 +11,9 @@ import {
   createMpgfPaymentIntent,
   createMpgfPledge,
   createMpgfPledgeOnlyRecord,
+  createMpgfPublicGoodsIdentityAttestation,
+  createMpgfPublicGoodsPledge,
+  createMpgfPublicGoodsSponsorSubscription,
   fallbackAllocate,
   generateMpgfDemoAllocationCertificate,
   aggregateSaeAssessments,
@@ -19,11 +23,14 @@ import {
   compareMpgfDryRunToLive,
   createMpgfRecurringContributionCommitment,
   computeMpgfCampaignQfScore,
+  assignMpgfPublicGoodsExperiment,
+  getMpgfPublicGoodsFeatureFlagStatus,
   isLedgerBalanced,
   materializeMpgfRecurringPledgeForCycle,
   pauseMpgfRecurringContributionCommitment,
   preflightMpgfSolverSupport,
   resumeMpgfRecurringContributionCommitment,
+  reviewMpgfPublicGoodsCampaign,
   revokeMpgfCompletionProfile,
   runMpgfPublicRuntimeReadinessCheck,
   saveMpgfBallotDraft,
@@ -31,10 +38,13 @@ import {
   solveMpgfByCertifiedBranchAndBound,
   solveMpgfByCompleteRegionEnumeration,
   getMpgfCampaignAssuranceStatus,
+  reconcileMpgfPublicGoodsExternalHandoff,
   submitMpgfBallot,
   submitMpgfPoolProposalDraft,
   summarizeMpgfAssuranceRound,
+  summarizeMpgfPublicGoodsReviewConsole,
   cancelMpgfRecurringContributionCommitment,
+  validateMpgfPublicGoodsCampaign,
   verifyExternalPaymentEvidence,
   verifyMpgfOptimalityCertificate,
   voidPayoutAuthorization,
@@ -44,6 +54,9 @@ import {
   demoMpgfAssuranceRound,
   demoMpgfMatchPool,
   demoMpgfPublicGoodsCampaigns,
+  demoMpgfPublicGoodsPaymentProofs,
+  demoMpgfPublicGoodsReviewCases,
+  demoMpgfPublicGoodsSubscriptions,
   mpgfPublicRoutes,
 } from "./mpgf/data";
 import {
@@ -360,6 +373,185 @@ test("MPGF assurance output preserves the no-custody external-handoff posture", 
   assert.ok(payable.every((line) => line.custodyMode === "no_custody_external_handoff"));
   assert.ok(payable.every((line) => line.proofRequired === "external_destination_receipt" || line.proofRequired === "signed_intent_review"));
   assert.ok(allocation.proofPageRequired);
+});
+
+test("MPGF public-goods campaign service validates schema, deadlines, and prohibited claims", () => {
+  const campaign = demoMpgfPublicGoodsCampaigns[0];
+
+  assert.ok(campaign);
+  assert.equal(validateMpgfPublicGoodsCampaign(campaign).passed, true);
+  assert.equal(
+    validateMpgfPublicGoodsCampaign({
+      ...campaign,
+      thresholdAmountCents: 0,
+      publicSummary: "Tradeable token escrow guaranteed.",
+    }).passed,
+    false,
+  );
+  assert.equal(
+    validateMpgfPublicGoodsCampaign(campaign, {
+      requireFutureDeadline: true,
+      now: new Date("2026-06-01T00:00:00.000Z"),
+    }).errors.some((error) => error.id === "campaign-deadline-not-future"),
+    true,
+  );
+});
+
+test("MPGF public-goods pledge service supports capture modes and identity gating", () => {
+  const campaign = demoMpgfPublicGoodsCampaigns[0];
+
+  assert.ok(campaign);
+
+  const identity = createMpgfPublicGoodsIdentityAttestation({
+    userId: "test-public-goods-user",
+    provider: "demo_self_attestation",
+    humanScoreBps: 8_400,
+    expiresAt: "2026-12-31T23:59:59.000Z",
+    redactedReference: "demo-attestation:test-public-goods-user",
+  });
+  const pledge = createMpgfPublicGoodsPledge({
+    campaign,
+    userId: identity.userId,
+    amountCents: 2_500,
+    identityAttestation: identity,
+    captureMode: "external_handoff",
+  });
+  const duplicate = createMpgfPublicGoodsPledge({
+    campaign,
+    userId: identity.userId,
+    amountCents: 2_500,
+    identityAttestation: identity,
+    duplicateUserRefs: [identity.userId],
+  });
+
+  assert.equal(pledge.eligibilityState, "eligible");
+  assert.equal(pledge.visibilityMode, "private_amount");
+  assert.equal(pledge.isRecurring, false);
+  assert.equal(pledge.captureMode, "external_handoff");
+  assert.equal(duplicate.eligibilityState, "duplicate_identity");
+  assert.throws(
+    () =>
+      createMpgfPublicGoodsPledge({
+        campaign,
+        userId: identity.userId,
+        amountCents: 2_500,
+        captureMode: "stored_payment_method",
+        identityAttestation: identity,
+      }),
+    /payment intent reference/,
+  );
+});
+
+test("MPGF public-goods review console uses bounded reason codes and appeal states", () => {
+  const campaign = demoMpgfPublicGoodsCampaigns[0];
+
+  assert.ok(campaign);
+
+  const reviewed = reviewMpgfPublicGoodsCampaign({
+    campaign,
+    action: "challenge",
+    reasonCode: "challenge_opened",
+    reviewerId: "reviewer-test",
+    publicNotes: "Open challenge window for destination proof review.",
+  });
+  const consoleSummary = summarizeMpgfPublicGoodsReviewConsole();
+
+  assert.equal(reviewed.campaign.reviewStatus, "challenge_window");
+  assert.equal(reviewed.reviewCase.allowedNextActions.includes("finalize"), true);
+  assert.equal(reviewed.createsPayoutAuthorization, false);
+  assert.ok(consoleSummary.reasonCodes.includes("blocked_threat_baseline"));
+  assert.equal(consoleSummary.privacySafeAnalyticsOnly, true);
+  assert.equal(consoleSummary.rawPrivateTextStoredInAnalytics, false);
+  assert.equal(demoMpgfPublicGoodsReviewCases.some((reviewCase) => reviewCase.reasonCode === "needs_destination_evidence"), true);
+  assert.throws(
+    () =>
+      reviewMpgfPublicGoodsCampaign({
+        campaign,
+        action: "approve",
+        reasonCode: "blocked_destination_risk",
+        reviewerId: "reviewer-test",
+        publicNotes: "Mismatched reason code.",
+      }),
+    /not allowed/,
+  );
+});
+
+test("MPGF public-goods reconciliation writes payment proof records and failed-handoff recovery cases", () => {
+  const campaign = demoMpgfPublicGoodsCampaigns[0];
+  const pledge = demoMpgfAssurancePledges.find((candidate) => candidate.campaignId === campaign?.id);
+
+  assert.ok(campaign);
+  assert.ok(pledge);
+
+  const verified = reconcileMpgfPublicGoodsExternalHandoff({
+    campaign,
+    pledge,
+    amountVerifiedCents: pledge.amountCents,
+    externalReceiptRef: "receipt:test",
+    charityReceiptRef: "charity:test",
+    verified: true,
+  });
+  const failed = reconcileMpgfPublicGoodsExternalHandoff({
+    campaign,
+    pledge,
+    amountVerifiedCents: 0,
+    verified: false,
+  });
+
+  assert.equal(verified.paymentProof.status, "verified");
+  assert.equal(verified.paymentProof.reasonCode, "external_handoff_verified");
+  assert.equal(verified.writesPaymentProofRecord, true);
+  assert.equal(verified.createsCustody, false);
+  assert.equal(failed.paymentProof.status, "rejected");
+  assert.equal(failed.reviewCase.reasonCode, "external_handoff_failed");
+  assert.equal(demoMpgfPublicGoodsPaymentProofs.some((proof) => proof.status === "verified"), true);
+});
+
+test("MPGF public-goods subscriptions, experiments, and feature flag stay optional and privacy-safe", () => {
+  const subscription = createMpgfPublicGoodsSponsorSubscription({
+    userId: "test-sponsor",
+    amountCents: 1_500,
+  });
+  const assignment = assignMpgfPublicGoodsExperiment({
+    userId: "private-user-id",
+    experimentKey: "public_goods_visibility_default_v1",
+    variants: ["private_default", "public_reason_prompt"],
+  });
+  const featureFlag = getMpgfPublicGoodsFeatureFlagStatus();
+
+  assert.equal(subscription.mode, "pledge_only");
+  assert.equal(subscription.captureMode, "external_handoff");
+  assert.equal(subscription.status, "active");
+  assert.equal(assignment.analyticsPolicy, "privacy_safe_no_raw_private_text");
+  assert.equal(assignment.userRefHash.includes("private-user-id"), false);
+  assert.equal(featureFlag.defaultCaptureMode, "external_handoff");
+  assert.equal(featureFlag.widensPublicAccessAutomatically, false);
+  assert.ok(demoMpgfPublicGoodsSubscriptions.some((row) => row.poolId === demoMpgfMatchPool.id));
+});
+
+test("MPGF public-goods migration covers required entities and RLS policies", () => {
+  const migration = readFileSync("supabase/migrations/20260529_mpgf_verified_assurance_matching.sql", "utf8");
+
+  for (const tableName of [
+    "mpgf_public_goods_campaigns",
+    "mpgf_public_goods_rounds",
+    "mpgf_public_goods_pledges",
+    "mpgf_public_goods_identity_attestations",
+    "mpgf_public_goods_match_pools",
+    "mpgf_public_goods_allocation_results",
+    "mpgf_public_goods_payment_proofs",
+    "mpgf_public_goods_review_cases",
+    "mpgf_public_goods_subscriptions",
+    "mpgf_public_goods_experiment_assignments",
+  ]) {
+    assert.match(migration, new RegExp(`create table if not exists public\\.${tableName}`));
+  }
+
+  assert.match(migration, /is_recurring boolean not null default false/);
+  assert.match(migration, /enable row level security/);
+  assert.match(migration, /mpgf_public_goods_pledges_insert_own/);
+  assert.match(migration, /mpgf_public_goods_payment_proofs_insert_own/);
+  assert.match(migration, /mpgf_public_goods_analytics_no_raw_contact/);
 });
 
 test("MPGF production completion gate fails while production evidence is only pending", () => {

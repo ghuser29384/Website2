@@ -4,7 +4,14 @@ import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
-import { demoAlternatives, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
+import {
+  demoAlternatives,
+  demoMpgfMatchPool,
+  demoMpgfPublicGoodsCampaigns,
+  demoMpgfPublicGoodsPaymentProofs,
+  demoMpgfPublicGoodsReviewCases,
+  demoMpgfPublicGoodsSubscriptions,
+} from "@/lib/mpgf/data";
 import {
   allocateMpgfAssuranceRound,
   formatUsd,
@@ -67,6 +74,21 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
     ? assuranceAllocation.lines.find((candidate) => candidate.campaignId === campaign.id)
     : null;
   const assuranceStatus = campaign ? getMpgfCampaignAssuranceStatus(campaign) : null;
+  const reviewCases = campaign
+    ? demoMpgfPublicGoodsReviewCases
+        .filter((reviewCase) => reviewCase.campaignId === campaign.id)
+        .sort((left, right) => Date.parse(right.openedAt) - Date.parse(left.openedAt))
+    : [];
+  const latestReviewCase = reviewCases[0];
+  const paymentProofs = campaign
+    ? demoMpgfPublicGoodsPaymentProofs.filter((paymentProof) => paymentProof.campaignId === campaign.id)
+    : [];
+  const verifiedAmountCents = paymentProofs
+    .filter((paymentProof) => paymentProof.status === "verified")
+    .reduce((sum, paymentProof) => sum + paymentProof.amountVerifiedCents, 0);
+  const sponsorSubscriptionCents = demoMpgfPublicGoodsSubscriptions
+    .filter((subscription) => subscription.poolId === demoMpgfMatchPool.id && subscription.status === "active")
+    .reduce((sum, subscription) => sum + subscription.amountCents, 0);
 
   if (!alternative) {
     notFound();
@@ -195,9 +217,63 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                   <dt>Sponsor pool</dt>
                   <dd>{formatUsd(demoMpgfMatchPool.budgetCents)}</dd>
                 </div>
+                <div>
+                  <dt>Monthly pool refill</dt>
+                  <dd>{formatUsd(sponsorSubscriptionCents)}</dd>
+                </div>
+                <div>
+                  <dt>Challenge window</dt>
+                  <dd>
+                    {campaign.challengeWindowEndsAt
+                      ? new Date(campaign.challengeWindowEndsAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })
+                      : "Not opened"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Verified proof amount</dt>
+                  <dd>{formatUsd(verifiedAmountCents)}</dd>
+                </div>
+                <div>
+                  <dt>Excluded pledges</dt>
+                  <dd>{assuranceStatus.excludedPledgeCount}</dd>
+                </div>
+                <div>
+                  <dt>Latest reason code</dt>
+                  <dd>{latestReviewCase?.reasonCode.replaceAll("_", " ") ?? "pending review"}</dd>
+                </div>
               </dl>
               <p>{campaign.baselineRule}</p>
               <p>{campaign.exitRule}</p>
+            </article>
+            <article className="mpgf-panel">
+              <p className="eyebrow">Visibility controls</p>
+              <h3>Private by default, opt-in recognition</h3>
+              <p>
+                Pledges can remain private amount, show supporter name only, or publish a short
+                public reason. Duplicate identities and below-minimum pledges are excluded from
+                supporter count and QF breadth.
+              </p>
+              <dl className="mpgf-summary-grid">
+                <div>
+                  <dt>Default visibility</dt>
+                  <dd>private amount</dd>
+                </div>
+                <div>
+                  <dt>Recognition</dt>
+                  <dd>opt-in public supporter or reason</dd>
+                </div>
+                <div>
+                  <dt>Analytics</dt>
+                  <dd>privacy-safe experiment assignment only</dd>
+                </div>
+                <div>
+                  <dt>Appeal status</dt>
+                  <dd>{latestReviewCase?.appealStatus.replaceAll("_", " ") ?? "none"}</dd>
+                </div>
+              </dl>
             </article>
           </section>
         </section>

@@ -12,8 +12,14 @@ import {
 import { mpgfAdminSections } from "@/lib/mpgf/data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import {
+  MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES,
+  summarizeMpgfPublicGoodsReviewConsole,
+} from "@/lib/mpgf/mechanism";
+import type { MpgfPublicGoodsReviewAction, MpgfPublicGoodsReviewReasonCode } from "@/lib/mpgf/types";
+import {
   approveMpgfRealMoneyGateAction,
   recordMpgfAdminApprovalRecordAction,
+  recordMpgfPublicGoodsReviewAction,
   runMpgfProductionHealthCheckAction,
 } from "../actions";
 
@@ -156,6 +162,14 @@ const adminApprovalControls: Record<string, Array<{
 
 const productionVerificationControls = new Set(["launch", "incidents", "conformance"]);
 
+const publicGoodsDefaultReasonByAction: Record<MpgfPublicGoodsReviewAction, MpgfPublicGoodsReviewReasonCode> = {
+  approve: "destination_verified",
+  needs_evidence: "needs_destination_evidence",
+  block: "blocked_destination_risk",
+  challenge: "challenge_opened",
+  finalize: "challenge_resolved",
+};
+
 export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionPageProps) {
   const { section } = await params;
   const viewer = await getViewer();
@@ -169,6 +183,7 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
   const sectionGates = controlPlane ? mpgfGatesForAdminSection(section, controlPlane.gates) : [];
   const gateControls = gateApprovalControls[section] ?? [];
   const approvalControls = adminApprovalControls[section] ?? [];
+  const publicGoodsReviewConsole = section === "public-goods" ? summarizeMpgfPublicGoodsReviewConsole() : null;
 
   return (
     <MpgfPageFrame
@@ -264,6 +279,84 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
                     </form>
                   ))}
                 </div>
+              </div>
+            ) : null}
+            {publicGoodsReviewConsole ? (
+              <div className="mpgf-admin-action-panel">
+                <p className="eyebrow">Verified assurance review</p>
+                <h3>Public goods campaign review queue</h3>
+                <p>
+                  This console uses the same public review states as the route cards: submitted,
+                  needs evidence, challenge window, approved, blocked, and finalized. Actions record
+                  public reason codes and do not authorize custody or payout.
+                </p>
+                <div className="mpgf-control-summary">
+                  <div>
+                    <span>Open cases</span>
+                    <strong>{publicGoodsReviewConsole.openCaseCount}</strong>
+                  </div>
+                  <div>
+                    <span>Challenge windows</span>
+                    <strong>{publicGoodsReviewConsole.challengedCampaignCount}</strong>
+                  </div>
+                  <div>
+                    <span>Sponsor subscriptions</span>
+                    <strong>{publicGoodsReviewConsole.activeSponsorSubscriptionCount}</strong>
+                  </div>
+                  <div>
+                    <span>Verified proofs</span>
+                    <strong>{publicGoodsReviewConsole.verifiedPaymentProofCount}</strong>
+                  </div>
+                </div>
+                <div className="mpgf-gate-list">
+                  {publicGoodsReviewConsole.queue.map((item) => (
+                    <article key={item.campaignId} className="mpgf-gate-row">
+                      <div>
+                        <p className="eyebrow">{item.reviewStatus.replaceAll("_", " ")}</p>
+                        <h3>{item.title}</h3>
+                        <p>
+                          Assurance status: {item.assuranceStatus.replaceAll("_", " ")}. Latest
+                          reason code: {item.latestReasonCode?.replaceAll("_", " ") ?? "none"}.
+                        </p>
+                        {item.blockers.length > 0 ? (
+                          <ul className="mpgf-check-list">
+                            {item.blockers.map((blocker) => (
+                              <li key={blocker}>{blocker}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        <div className="mpgf-admin-action-grid">
+                          {item.allowedNextActions.map((action) => (
+                            <form key={`${item.campaignId}-${action}`} action={recordMpgfPublicGoodsReviewAction}>
+                              <input name="campaign_id" type="hidden" value={item.campaignId} />
+                              <input name="review_action" type="hidden" value={action} />
+                              <input
+                                name="reason_code"
+                                type="hidden"
+                                value={publicGoodsDefaultReasonByAction[action]}
+                              />
+                              <input
+                                name="public_notes"
+                                type="hidden"
+                                value={`Admin recorded ${action.replaceAll("_", " ")} for public-goods assurance review.`}
+                              />
+                              <button className="button button-secondary" type="submit">
+                                {action.replaceAll("_", " ")}
+                              </button>
+                            </form>
+                          ))}
+                        </div>
+                      </div>
+                      <span className="mpgf-gate-status mpgf-gate-status-pending_review">
+                        {item.appealStatus.replaceAll("_", " ")}
+                      </span>
+                    </article>
+                  ))}
+                </div>
+                <p className="mpgf-small">
+                  Reason codes: {MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES.map((code) => code.replaceAll("_", " ")).join(", ")}.
+                  Analytics policy: privacy-safe only; no raw private wish text is stored.
+                </p>
               </div>
             ) : null}
           </>

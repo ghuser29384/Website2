@@ -4,9 +4,12 @@ import { revalidatePath } from "next/cache";
 
 import { isAdminEmail } from "@/lib/admin";
 import { getViewer } from "@/lib/app-data";
+import { demoMpgfAssuranceRound, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
+import { MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES, reviewMpgfPublicGoodsCampaign } from "@/lib/mpgf/mechanism";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createServiceClient } from "@/lib/supabase/server";
 import { runAndPersistMpgfProductionHealthCheck } from "@/lib/mpgf/production-verification";
+import type { MpgfPublicGoodsReviewAction, MpgfPublicGoodsReviewReasonCode } from "@/lib/mpgf/types";
 
 type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
   from: (table: string) => any;
@@ -28,6 +31,16 @@ const approvableAdminActions = new Set([
   "mpgf.real_money.enable",
   "mpgf.production_enablement.approve",
 ]);
+
+const publicGoodsReviewActions = new Set<MpgfPublicGoodsReviewAction>([
+  "approve",
+  "needs_evidence",
+  "block",
+  "challenge",
+  "finalize",
+]);
+
+const publicGoodsReviewReasonCodes = new Set(MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES);
 
 async function requireMpgfAdmin() {
   const viewer = await getViewer();
@@ -180,4 +193,131 @@ export async function runMpgfProductionHealthCheckAction() {
   if (!result.passed) {
     throw new Error(`MPGF production health check failed: ${result.blockers.join(" ")}`);
   }
+}
+
+export async function recordMpgfPublicGoodsReviewAction(formData: FormData) {
+  const viewer = await requireMpgfAdmin();
+  const campaignId = readRequired(formData, "campaign_id");
+  const action = readRequired(formData, "review_action") as MpgfPublicGoodsReviewAction;
+  const reasonCode = readRequired(formData, "reason_code");
+  const publicNotes = readRequired(formData, "public_notes");
+  const campaign = demoMpgfPublicGoodsCampaigns.find((candidate) => candidate.id === campaignId);
+
+  if (!campaign) {
+    throw new Error(`Unknown MPGF public-goods campaign: ${campaignId}.`);
+  }
+
+  if (!publicGoodsReviewActions.has(action)) {
+    throw new Error(`Unsupported MPGF public-goods review action: ${action}.`);
+  }
+
+  if (!publicGoodsReviewReasonCodes.has(reasonCode as MpgfPublicGoodsReviewReasonCode)) {
+    throw new Error(`Unsupported MPGF public-goods reason code: ${reasonCode}.`);
+  }
+
+  const result = reviewMpgfPublicGoodsCampaign({
+    campaign,
+    action,
+    reasonCode: reasonCode as MpgfPublicGoodsReviewReasonCode,
+    reviewerId: viewer.authUser.id,
+    publicNotes,
+  });
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const matchPoolPersist = await supabase
+    .from("mpgf_public_goods_match_pools")
+    .upsert({
+      id: demoMpgfMatchPool.id,
+      funder_type: demoMpgfMatchPool.funderType,
+      budget_cents: demoMpgfMatchPool.budgetCents,
+      base_match_ratio: demoMpgfMatchPool.baseMatchRatio,
+      qf_bonus_cents: demoMpgfMatchPool.qfBonusCents,
+      visible_commitment: demoMpgfMatchPool.visibleCommitment,
+      restrictions_json: demoMpgfMatchPool.restrictionsJson,
+      status: "active",
+    }, { onConflict: "id" });
+
+  if (matchPoolPersist.error) {
+    throw new Error(`Could not persist MPGF public-goods match pool: ${matchPoolPersist.error.message}`);
+  }
+
+  const roundPersist = await supabase
+    .from("mpgf_public_goods_rounds")
+    .upsert({
+      id: demoMpgfAssuranceRound.id,
+      name: demoMpgfAssuranceRound.name,
+      starts_at: demoMpgfAssuranceRound.startsAt,
+      ends_at: demoMpgfAssuranceRound.endsAt,
+      match_pool_id: demoMpgfAssuranceRound.matchPoolId,
+      qf_enabled: demoMpgfAssuranceRound.qfEnabled,
+      qf_cap_multiple: demoMpgfAssuranceRound.qfCapMultiple,
+      supporter_gate: demoMpgfAssuranceRound.supporterGate,
+      status: "open",
+    }, { onConflict: "id" });
+
+  if (roundPersist.error) {
+    throw new Error(`Could not persist MPGF public-goods round: ${roundPersist.error.message}`);
+  }
+
+  const campaignRow = {
+    id: result.campaign.id,
+    round_id: demoMpgfAssuranceRound.id,
+    slug: result.campaign.slug,
+    pool_alternative_id: result.campaign.poolAlternativeId ?? null,
+    title: result.campaign.title,
+    destination_type: result.campaign.destinationType,
+    destination_ref: result.campaign.destinationRef,
+    cause_tags: result.campaign.causeTags,
+    public_summary: result.campaign.publicSummary,
+    threshold_amount_cents: result.campaign.thresholdAmountCents,
+    threshold_supporters: result.campaign.thresholdSupporters,
+    deadline_at: result.campaign.deadlineAt,
+    verification_method: result.campaign.verificationMethod,
+    baseline_rule: result.campaign.baselineRule,
+    exit_rule: result.campaign.exitRule,
+    review_status: result.campaign.reviewStatus,
+    challenge_window_ends_at: result.campaign.challengeWindowEndsAt ?? null,
+  };
+  const reviewCaseRow = {
+    campaign_id: result.reviewCase.campaignId,
+    state: result.reviewCase.state,
+    action: result.reviewCase.action,
+    reason_code: result.reviewCase.reasonCode,
+    reviewer_id: viewer.authUser.id,
+    opened_at: result.reviewCase.openedAt,
+    closed_at: result.reviewCase.closedAt ?? null,
+    appeal_status: result.reviewCase.appealStatus,
+    challenge_window_ends_at: result.reviewCase.challengeWindowEndsAt ?? null,
+    public_notes: result.reviewCase.publicNotes,
+    allowed_next_actions: result.reviewCase.allowedNextActions,
+  };
+  const campaignPersist = await supabase
+    .from("mpgf_public_goods_campaigns")
+    .upsert(campaignRow, { onConflict: "id" });
+
+  if (campaignPersist.error) {
+    throw new Error(`Could not persist MPGF public-goods campaign review state: ${campaignPersist.error.message}`);
+  }
+
+  const casePersist = await supabase.from("mpgf_public_goods_review_cases").insert(reviewCaseRow);
+
+  if (casePersist.error) {
+    throw new Error(`Could not persist MPGF public-goods review case: ${casePersist.error.message}`);
+  }
+
+  await recordAdminAuditLog({
+    actorUserId: viewer.authUser.id,
+    action: "mpgf.public_goods.review",
+    targetType: "mpgf_public_goods_campaign",
+    targetId: campaignId,
+    auditJson: {
+      reviewAction: action,
+      reasonCode,
+      reviewStatus: result.campaign.reviewStatus,
+    },
+  });
+
+  revalidatePath("/mpgf");
+  revalidatePath("/mpgf/pools");
+  revalidatePath(`/mpgf/pools/${result.campaign.slug}`);
+  revalidatePath("/mpgf/admin/public-goods");
 }

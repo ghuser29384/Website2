@@ -5,7 +5,10 @@ import {
   demoMpgfAssurancePledges,
   demoMpgfAssuranceRound,
   demoMpgfMatchPool,
+  demoMpgfPublicGoodsPaymentProofs,
   demoMpgfPublicGoodsCampaigns,
+  demoMpgfPublicGoodsReviewCases,
+  demoMpgfPublicGoodsSubscriptions,
   demoPledges,
   demoRecurringCommitments,
   MPGF_COPY,
@@ -25,15 +28,26 @@ import type {
   MpgfPublicGoodsAssuranceStatus,
   MpgfPublicGoodsCampaign,
   MpgfPublicGoodsCampaignStatus,
+  MpgfPublicGoodsCampaignValidationResult,
   MpgfPublicGoodsCaptureMode,
+  MpgfPublicGoodsDestinationType,
+  MpgfPublicGoodsExperimentAssignment,
+  MpgfPublicGoodsIdentityAttestation,
   MpgfPublicGoodsMatchPool,
+  MpgfPublicGoodsPaymentProof,
   MpgfPublicGoodsPledge,
+  MpgfPublicGoodsReviewAction,
+  MpgfPublicGoodsReviewCase,
+  MpgfPublicGoodsReviewReasonCode,
   MpgfPublicGoodsRound,
   MpgfPublicGoodsRoundAllocation,
+  MpgfPublicGoodsSubscription,
+  MpgfPublicGoodsVisibilityMode,
   MpgfPublicSummary,
   MpgfRationalJson,
   MpgfRecurringContributionCommitment,
   MpgfStage,
+  MpgfValidationIssue,
   SafeFallbackRecord,
 } from "./types";
 
@@ -241,6 +255,644 @@ function proofRequirementForCaptureModes(captureModes: MpgfPublicGoodsCaptureMod
   }
 
   return "signed_intent_review" as const;
+}
+
+export const MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES: readonly MpgfPublicGoodsReviewReasonCode[] = [
+  "destination_verified",
+  "needs_destination_evidence",
+  "needs_identity_evidence",
+  "blocked_threat_baseline",
+  "blocked_destination_risk",
+  "challenge_opened",
+  "challenge_resolved",
+  "external_handoff_verified",
+  "external_handoff_failed",
+  "duplicate_identity_blocked",
+  "appeal_requested",
+  "appeal_denied",
+  "appeal_upheld",
+] as const;
+
+const publicGoodsDestinationTypes = new Set<MpgfPublicGoodsDestinationType>([
+  "external_charity",
+  "fiscal_host",
+  "internal_demo_pool",
+  "signed_sponsor_route",
+]);
+
+const publicGoodsCaptureModes = new Set<MpgfPublicGoodsCaptureMode>([
+  "external_handoff",
+  "stored_payment_method",
+  "signed_intent",
+]);
+
+const publicGoodsVisibilityModes = new Set<MpgfPublicGoodsVisibilityMode>([
+  "private_amount",
+  "public_supporter",
+  "public_reason",
+]);
+
+const publicGoodsReasonCodes = new Set<MpgfPublicGoodsReviewReasonCode>(MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES);
+
+const publicGoodsAllowedReviewReasons: Record<MpgfPublicGoodsReviewAction, readonly MpgfPublicGoodsReviewReasonCode[]> = {
+  approve: ["destination_verified", "challenge_resolved", "external_handoff_verified", "appeal_upheld"],
+  needs_evidence: ["needs_destination_evidence", "needs_identity_evidence", "external_handoff_failed"],
+  block: ["blocked_threat_baseline", "blocked_destination_risk", "duplicate_identity_blocked"],
+  challenge: ["challenge_opened", "appeal_requested"],
+  finalize: ["challenge_resolved", "external_handoff_verified", "destination_verified"],
+};
+
+const publicGoodsReviewActionToStatus: Record<MpgfPublicGoodsReviewAction, MpgfPublicGoodsCampaign["reviewStatus"]> = {
+  approve: "approved",
+  needs_evidence: "needs_evidence",
+  block: "blocked",
+  challenge: "challenge_window",
+  finalize: "finalized",
+};
+
+function publicGoodsIssue(
+  code: string,
+  id: string,
+  message: string,
+  path?: string,
+): MpgfValidationIssue {
+  return { code, id, message, path };
+}
+
+function hasValidDate(value: string) {
+  return Number.isFinite(Date.parse(value));
+}
+
+function stablePublicGoodsHash(value: string) {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
+function redactedPublicGoodsUserRef(userId: string) {
+  return `demo-hash:${stablePublicGoodsHash(userId).toString(16).padStart(8, "0")}`;
+}
+
+function challengeWindowFrom(now: Date) {
+  return new Date(now.getTime() + 72 * 60 * 60 * 1000).toISOString();
+}
+
+function allowedNextReviewActions(status: MpgfPublicGoodsCampaign["reviewStatus"]): MpgfPublicGoodsReviewAction[] {
+  if (status === "draft") {
+    return ["needs_evidence", "block"];
+  }
+
+  if (status === "submitted" || status === "needs_evidence") {
+    return ["approve", "needs_evidence", "block", "challenge"];
+  }
+
+  if (status === "challenge_window") {
+    return ["approve", "needs_evidence", "block", "finalize"];
+  }
+
+  if (status === "approved") {
+    return ["challenge", "finalize"];
+  }
+
+  return [];
+}
+
+export function validateMpgfPublicGoodsCampaign(
+  campaign: MpgfPublicGoodsCampaign,
+  options: { requireFutureDeadline?: boolean; now?: Date } = {},
+): MpgfPublicGoodsCampaignValidationResult {
+  const errors: MpgfValidationIssue[] = [];
+  const warnings: MpgfValidationIssue[] = [];
+  const now = options.now ?? new Date("2026-05-29T12:00:00.000Z");
+
+  if (!campaign.id.trim()) {
+    errors.push(publicGoodsIssue("mpgf-public-goods-campaign", "campaign-id-required", "Campaign id is required.", "id"));
+  }
+
+  if (!/^[a-z0-9-]{3,120}$/.test(campaign.slug)) {
+    errors.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-slug-invalid",
+        "Campaign slug must be a stable lowercase route segment.",
+        "slug",
+      ),
+    );
+  }
+
+  if (!campaign.title.trim()) {
+    errors.push(publicGoodsIssue("mpgf-public-goods-campaign", "campaign-title-required", "Campaign title is required.", "title"));
+  }
+
+  if (!publicGoodsDestinationTypes.has(campaign.destinationType)) {
+    errors.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-destination-type-invalid",
+        "Campaign destination type must be one of the public-goods destination modes.",
+        "destinationType",
+      ),
+    );
+  }
+
+  if (campaign.destinationRef.trim().length < 8) {
+    errors.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-destination-ref-required",
+        "Campaign destination reference must be specific enough for review.",
+        "destinationRef",
+      ),
+    );
+  }
+
+  if (!Number.isInteger(campaign.thresholdAmountCents) || campaign.thresholdAmountCents <= 0) {
+    errors.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-threshold-amount-invalid",
+        "Campaign threshold amount must be a positive integer number of cents.",
+        "thresholdAmountCents",
+      ),
+    );
+  }
+
+  if (!Number.isInteger(campaign.thresholdSupporters) || campaign.thresholdSupporters <= 0) {
+    errors.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-threshold-supporters-invalid",
+        "Campaign supporter threshold must be a positive integer.",
+        "thresholdSupporters",
+      ),
+    );
+  }
+
+  if (!hasValidDate(campaign.deadlineAt)) {
+    errors.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-deadline-invalid",
+        "Campaign deadline must be an ISO timestamp.",
+        "deadlineAt",
+      ),
+    );
+  } else if (options.requireFutureDeadline && Date.parse(campaign.deadlineAt) <= now.getTime()) {
+    errors.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-deadline-not-future",
+        "New pledge intake requires a future campaign deadline.",
+        "deadlineAt",
+      ),
+    );
+  }
+
+  if (campaign.publicSummary.trim().length < 40 || campaign.publicSummary.trim().length > 700) {
+    errors.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-public-summary-invalid",
+        "Campaign public summary must be concise but specific enough for public review.",
+        "publicSummary",
+      ),
+    );
+  }
+
+  for (const [path, value] of [
+    ["verificationMethod", campaign.verificationMethod],
+    ["baselineRule", campaign.baselineRule],
+    ["exitRule", campaign.exitRule],
+  ] as const) {
+    if (value.trim().length < 12) {
+      errors.push(
+        publicGoodsIssue(
+          "mpgf-public-goods-campaign",
+          `campaign-${path}-required`,
+          `Campaign ${path} must be explicit for review.`,
+          path,
+        ),
+      );
+    }
+  }
+
+  if (/\b(token|coin|tradable|investment return|escrow guaranteed)\b/i.test(campaign.publicSummary)) {
+    errors.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-prohibited-market-claim",
+        "Public-goods campaigns must not promise tokens, investment returns, or escrow guarantees.",
+        "publicSummary",
+      ),
+    );
+  }
+
+  if (/\bpay me or\b|\bunless paid\b|\bnewly harmful\b/i.test(campaign.baselineRule)) {
+    errors.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-threat-baseline",
+        "Campaign baseline rule cannot encode a threat or newly harmful fallback.",
+        "baselineRule",
+      ),
+    );
+  }
+
+  if (!campaign.challengeWindowEndsAt && campaign.reviewStatus === "approved") {
+    warnings.push(
+      publicGoodsIssue(
+        "mpgf-public-goods-campaign",
+        "campaign-challenge-window-missing",
+        "Approved public-goods campaigns should publish a challenge window.",
+        "challengeWindowEndsAt",
+      ),
+    );
+  }
+
+  return {
+    passed: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
+export function createMpgfPublicGoodsIdentityAttestation(input: {
+  userId: string;
+  provider: MpgfPublicGoodsIdentityAttestation["provider"];
+  humanScoreBps: number;
+  expiresAt: string;
+  status?: MpgfPublicGoodsIdentityAttestation["status"];
+  redactedReference: string;
+}): MpgfPublicGoodsIdentityAttestation {
+  if (!input.userId.trim()) {
+    throw new Error("MPGF public-goods identity attestations require a user id.");
+  }
+
+  if (!Number.isInteger(input.humanScoreBps) || input.humanScoreBps < 0 || input.humanScoreBps > 10_000) {
+    throw new Error("MPGF public-goods identity human score must be 0..10000 basis points.");
+  }
+
+  if (!hasValidDate(input.expiresAt)) {
+    throw new Error("MPGF public-goods identity attestations require an ISO expiration timestamp.");
+  }
+
+  if (!input.redactedReference.trim() || /secret|token|password|private[_-]?key/i.test(input.redactedReference)) {
+    throw new Error("MPGF public-goods identity attestations require a redacted, non-secret reference.");
+  }
+
+  return {
+    userId: input.userId,
+    provider: input.provider,
+    humanScoreBps: input.humanScoreBps,
+    expiresAt: input.expiresAt,
+    status: input.status ?? "active",
+    redactedReference: input.redactedReference.trim(),
+  };
+}
+
+export function createMpgfPublicGoodsPledge(input: {
+  campaign: MpgfPublicGoodsCampaign;
+  userId: string;
+  amountCents: number;
+  visibilityMode?: MpgfPublicGoodsVisibilityMode;
+  captureMode?: MpgfPublicGoodsCaptureMode;
+  identityAttestation?: MpgfPublicGoodsIdentityAttestation;
+  isRecurring?: boolean;
+  paymentIntentRef?: string;
+  supporterReason?: string;
+  duplicateUserRefs?: string[];
+  now?: Date;
+}): MpgfPublicGoodsPledge {
+  const now = input.now ?? new Date("2026-05-29T12:00:00.000Z");
+  const campaignValidation = validateMpgfPublicGoodsCampaign(input.campaign, {
+    requireFutureDeadline: true,
+    now,
+  });
+
+  if (!campaignValidation.passed) {
+    throw new Error(`MPGF public-goods pledge rejected: ${campaignValidation.errors[0]?.message ?? "campaign invalid"}`);
+  }
+
+  if (!input.userId.trim()) {
+    throw new Error("MPGF public-goods pledges require a user id.");
+  }
+
+  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
+    throw new Error("MPGF public-goods pledge amount must be a positive integer number of cents.");
+  }
+
+  const visibilityMode = input.visibilityMode ?? "private_amount";
+  const captureMode = input.captureMode ?? "external_handoff";
+
+  if (!publicGoodsVisibilityModes.has(visibilityMode)) {
+    throw new Error("MPGF public-goods pledge visibility mode is invalid.");
+  }
+
+  if (!publicGoodsCaptureModes.has(captureMode)) {
+    throw new Error("MPGF public-goods pledge capture mode is invalid.");
+  }
+
+  if (captureMode === "stored_payment_method" && !input.paymentIntentRef?.trim()) {
+    throw new Error("Stored-payment-method public-goods pledges require a provider payment intent reference.");
+  }
+
+  const attestationActive =
+    input.identityAttestation?.status === "active" &&
+    input.identityAttestation.userId === input.userId &&
+    Date.parse(input.identityAttestation.expiresAt) > now.getTime();
+  const duplicateUser = input.duplicateUserRefs?.includes(input.userId) ?? false;
+  const eligibilityState = duplicateUser
+    ? "duplicate_identity"
+    : input.amountCents < 100
+      ? "below_minimum"
+      : attestationActive
+        ? "eligible"
+        : "pending_review";
+
+  return {
+    id: `pledge-public-goods-${input.campaign.slug}-${input.userId}-${input.amountCents}`,
+    campaignId: input.campaign.id,
+    userId: input.userId,
+    amountCents: input.amountCents,
+    visibilityMode,
+    isRecurring: input.isRecurring ?? false,
+    captureMode,
+    paymentIntentRef: input.paymentIntentRef?.trim() || undefined,
+    eligibilityState,
+    humanScoreBps: attestationActive ? clampBasisPoints(input.identityAttestation?.humanScoreBps ?? 0) : 0,
+    status: "pledged",
+    supporterReason: input.supporterReason?.trim() || undefined,
+    createdAt: now.toISOString(),
+  };
+}
+
+export function reviewMpgfPublicGoodsCampaign(input: {
+  campaign: MpgfPublicGoodsCampaign;
+  action: MpgfPublicGoodsReviewAction;
+  reasonCode: MpgfPublicGoodsReviewReasonCode;
+  reviewerId: string;
+  publicNotes: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date("2026-05-29T12:00:00.000Z");
+  const campaignValidation = validateMpgfPublicGoodsCampaign(input.campaign);
+
+  if (!campaignValidation.passed) {
+    throw new Error(`MPGF public-goods review rejected: ${campaignValidation.errors[0]?.message ?? "campaign invalid"}`);
+  }
+
+  if (!input.reviewerId.trim()) {
+    throw new Error("MPGF public-goods review requires a reviewer id.");
+  }
+
+  if (!input.publicNotes.trim()) {
+    throw new Error("MPGF public-goods review requires public notes.");
+  }
+
+  if (!publicGoodsReasonCodes.has(input.reasonCode)) {
+    throw new Error(`Unsupported MPGF public-goods reason code: ${input.reasonCode}.`);
+  }
+
+  if (!publicGoodsAllowedReviewReasons[input.action].includes(input.reasonCode)) {
+    throw new Error(`Reason code ${input.reasonCode} is not allowed for ${input.action}.`);
+  }
+
+  if (input.action === "finalize" && !["approved", "challenge_window"].includes(input.campaign.reviewStatus)) {
+    throw new Error("MPGF public-goods finalization requires approved or challenge-window review state.");
+  }
+
+  const nextStatus = publicGoodsReviewActionToStatus[input.action];
+  const challengeWindowEndsAt =
+    input.action === "challenge"
+      ? challengeWindowFrom(now)
+      : input.campaign.challengeWindowEndsAt;
+  const updatedCampaign: MpgfPublicGoodsCampaign = {
+    ...input.campaign,
+    reviewStatus: nextStatus,
+    challengeWindowEndsAt,
+  };
+  const reviewCase: MpgfPublicGoodsReviewCase = {
+    id: `review-${input.campaign.id}-${input.action}-${now.toISOString()}`,
+    campaignId: input.campaign.id,
+    state: nextStatus,
+    action: input.action,
+    reasonCode: input.reasonCode,
+    reviewerId: input.reviewerId,
+    openedAt: now.toISOString(),
+    closedAt: input.action === "challenge" || input.action === "needs_evidence" ? undefined : now.toISOString(),
+    appealStatus: input.reasonCode === "appeal_requested" ? "appeal_requested" : "none",
+    challengeWindowEndsAt,
+    publicNotes: input.publicNotes.trim(),
+    allowedNextActions: allowedNextReviewActions(nextStatus),
+  };
+
+  return {
+    campaign: updatedCampaign,
+    reviewCase,
+    createsLiveAllocation: false,
+    createsPayoutAuthorization: false,
+  };
+}
+
+export function createMpgfPublicGoodsSponsorSubscription(input: {
+  userId: string;
+  poolId?: string;
+  amountCents: number;
+  interval?: MpgfPublicGoodsSubscription["interval"];
+  captureMode?: MpgfPublicGoodsCaptureMode;
+  mode?: MpgfPublicGoodsSubscription["mode"];
+  nextChargeAt?: string;
+  now?: Date;
+}): MpgfPublicGoodsSubscription {
+  const mode = input.mode ?? "pledge_only";
+
+  if (!input.userId.trim()) {
+    throw new Error("MPGF public-goods sponsor subscriptions require a user id.");
+  }
+
+  if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) {
+    throw new Error("MPGF public-goods sponsor subscription amount must be a positive integer number of cents.");
+  }
+
+  if (mode === "test_payment" || mode === "real_money") {
+    assertMpgfPaymentModeEnabled(mode);
+  }
+
+  const captureMode = input.captureMode ?? "external_handoff";
+  if (!publicGoodsCaptureModes.has(captureMode)) {
+    throw new Error("MPGF public-goods sponsor subscription capture mode is invalid.");
+  }
+
+  const now = input.now ?? new Date("2026-05-29T12:00:00.000Z");
+  const nextChargeAt =
+    input.nextChargeAt ??
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0)).toISOString();
+
+  if (!hasValidDate(nextChargeAt)) {
+    throw new Error("MPGF public-goods sponsor subscription requires an ISO next-charge timestamp.");
+  }
+
+  return {
+    id: `subscription-public-goods-${input.userId}-${input.poolId ?? demoMpgfMatchPool.id}`,
+    userId: input.userId,
+    poolId: input.poolId ?? demoMpgfMatchPool.id,
+    amountCents: input.amountCents,
+    interval: input.interval ?? "monthly",
+    status: "active",
+    captureMode,
+    mode,
+    nextChargeAt,
+    createdAt: now.toISOString(),
+  };
+}
+
+export function assignMpgfPublicGoodsExperiment(input: {
+  userId: string;
+  experimentKey: string;
+  variants: readonly string[];
+  assignedAt?: string;
+}): MpgfPublicGoodsExperimentAssignment {
+  if (!input.userId.trim() || !input.experimentKey.trim()) {
+    throw new Error("MPGF public-goods experiment assignment requires user id and experiment key.");
+  }
+
+  if (input.variants.length === 0) {
+    throw new Error("MPGF public-goods experiment assignment requires at least one variant.");
+  }
+
+  const hash = stablePublicGoodsHash(`${input.experimentKey}:${input.userId}`);
+  const variant = input.variants[hash % input.variants.length];
+
+  if (!variant) {
+    throw new Error("MPGF public-goods experiment assignment could not choose a variant.");
+  }
+
+  return {
+    id: `experiment-${input.experimentKey}-${hash.toString(16)}`,
+    userRefHash: redactedPublicGoodsUserRef(input.userId),
+    experimentKey: input.experimentKey,
+    variant,
+    assignedAt: input.assignedAt ?? new Date("2026-05-29T12:00:00.000Z").toISOString(),
+    analyticsPolicy: "privacy_safe_no_raw_private_text",
+  };
+}
+
+export function reconcileMpgfPublicGoodsExternalHandoff(input: {
+  campaign: MpgfPublicGoodsCampaign;
+  pledge: MpgfPublicGoodsPledge;
+  amountVerifiedCents: number;
+  reconciliationSource?: MpgfPublicGoodsPaymentProof["reconciliationSource"];
+  externalReceiptRef?: string;
+  charityReceiptRef?: string;
+  verified?: boolean;
+  reviewerId?: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date("2026-05-29T12:00:00.000Z");
+
+  if (input.pledge.campaignId !== input.campaign.id) {
+    throw new Error("MPGF public-goods payment proof must reference a pledge for the same campaign.");
+  }
+
+  if (!Number.isInteger(input.amountVerifiedCents) || input.amountVerifiedCents < 0) {
+    throw new Error("MPGF public-goods payment proof amount must be a non-negative integer number of cents.");
+  }
+
+  const verified = Boolean(input.verified) && input.amountVerifiedCents > 0;
+  const reasonCode: MpgfPublicGoodsReviewReasonCode = verified
+    ? "external_handoff_verified"
+    : "external_handoff_failed";
+  const paymentProof: MpgfPublicGoodsPaymentProof = {
+    id: `payment-proof-${input.pledge.id}-${now.toISOString()}`,
+    pledgeId: input.pledge.id,
+    campaignId: input.campaign.id,
+    externalReceiptRef: input.externalReceiptRef?.trim() || undefined,
+    charityReceiptRef: input.charityReceiptRef?.trim() || undefined,
+    amountVerifiedCents: input.amountVerifiedCents,
+    status: verified ? "verified" : "rejected",
+    reasonCode,
+    reconciliationSource:
+      input.reconciliationSource ??
+      (input.pledge.captureMode === "signed_intent" ? "sponsor_signed_intent" : "external_receipt"),
+    verifiedAt: verified ? now.toISOString() : undefined,
+    createdAt: now.toISOString(),
+  };
+  const reviewCase = reviewMpgfPublicGoodsCampaign({
+    campaign: input.campaign,
+    action: verified ? "approve" : "needs_evidence",
+    reasonCode,
+    reviewerId: input.reviewerId ?? "mpgf-reconciliation-worker",
+    publicNotes: verified
+      ? "External handoff proof reconciled to a verified payment proof record."
+      : "External handoff proof could not be reconciled; participant or destination evidence is required.",
+    now,
+  }).reviewCase;
+
+  return {
+    paymentProof,
+    reviewCase,
+    writesPaymentProofRecord: true,
+    createsCustody: false,
+  };
+}
+
+export function summarizeMpgfPublicGoodsReviewConsole({
+  campaigns = demoMpgfPublicGoodsCampaigns,
+  reviewCases = demoMpgfPublicGoodsReviewCases,
+  subscriptions = demoMpgfPublicGoodsSubscriptions,
+  paymentProofs = demoMpgfPublicGoodsPaymentProofs,
+  now = new Date("2026-05-29T12:00:00.000Z"),
+}: {
+  campaigns?: MpgfPublicGoodsCampaign[];
+  reviewCases?: MpgfPublicGoodsReviewCase[];
+  subscriptions?: MpgfPublicGoodsSubscription[];
+  paymentProofs?: MpgfPublicGoodsPaymentProof[];
+  now?: Date;
+} = {}) {
+  const queue = campaigns.map((campaign) => {
+    const latestCase = [...reviewCases]
+      .filter((reviewCase) => reviewCase.campaignId === campaign.id)
+      .sort((left, right) => Date.parse(right.openedAt) - Date.parse(left.openedAt))[0];
+    const assuranceStatus = getMpgfCampaignAssuranceStatus(campaign, demoMpgfAssurancePledges, now);
+
+    return {
+      campaignId: campaign.id,
+      title: campaign.title,
+      reviewStatus: campaign.reviewStatus,
+      assuranceStatus: assuranceStatus.status,
+      latestReasonCode: latestCase?.reasonCode ?? null,
+      appealStatus: latestCase?.appealStatus ?? "none",
+      allowedNextActions: latestCase?.allowedNextActions ?? allowedNextReviewActions(campaign.reviewStatus),
+      blockers: assuranceStatus.blockers,
+    };
+  });
+
+  return {
+    reasonCodes: MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES,
+    queue,
+    openCaseCount: reviewCases.filter((reviewCase) => !reviewCase.closedAt).length,
+    challengedCampaignCount: campaigns.filter((campaign) => campaign.reviewStatus === "challenge_window").length,
+    activeSponsorSubscriptionCount: subscriptions.filter((subscription) => subscription.status === "active").length,
+    verifiedPaymentProofCount: paymentProofs.filter((proof) => proof.status === "verified").length,
+    privacySafeAnalyticsOnly: true,
+    rawPrivateTextStoredInAnalytics: false,
+  };
+}
+
+export function getMpgfPublicGoodsFeatureFlagStatus() {
+  const enabled = process.env.FEATURE_MPGF_ENABLED !== "false" && process.env.MPGF_PUBLIC_GOODS_ENABLED !== "false";
+
+  return {
+    enabled,
+    cohort: process.env.MPGF_PUBLIC_GOODS_COHORT || "invited_demo",
+    defaultCaptureMode: "external_handoff" as const,
+    widensPublicAccessAutomatically: false,
+  };
 }
 
 export function getMpgfCampaignAssuranceStatus(

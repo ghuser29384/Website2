@@ -108,6 +108,8 @@ export interface MpgfServerConfig {
   MPGF_DIRECT_WORKING_BOOTSTRAP_ENABLED: boolean;
   MPGF_WWW_SMOKE_TEST_ENABLED?: boolean;
   MPGF_PARTICIPANT_ONBOARDING_ENABLED?: boolean;
+  MPGF_PUBLIC_GOODS_ENABLED?: boolean;
+  MPGF_PUBLIC_GOODS_COHORT?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PUBLISHABLE_KEY?: string;
@@ -466,6 +468,25 @@ export type MpgfPublicGoodsCaptureMode = "external_handoff" | "stored_payment_me
 
 export type MpgfPublicGoodsVisibilityMode = "private_amount" | "public_supporter" | "public_reason";
 
+export type MpgfPublicGoodsReviewAction = "approve" | "needs_evidence" | "block" | "challenge" | "finalize";
+
+export type MpgfPublicGoodsReviewReasonCode =
+  | "destination_verified"
+  | "needs_destination_evidence"
+  | "needs_identity_evidence"
+  | "blocked_threat_baseline"
+  | "blocked_destination_risk"
+  | "challenge_opened"
+  | "challenge_resolved"
+  | "external_handoff_verified"
+  | "external_handoff_failed"
+  | "duplicate_identity_blocked"
+  | "appeal_requested"
+  | "appeal_denied"
+  | "appeal_upheld";
+
+export type MpgfPublicGoodsAppealStatus = "none" | "appeal_requested" | "appeal_denied" | "appeal_upheld";
+
 export interface MpgfPublicGoodsCampaign {
   id: string;
   slug: string;
@@ -512,7 +533,9 @@ export interface MpgfPublicGoodsPledge {
   userId: string;
   amountCents: number;
   visibilityMode: MpgfPublicGoodsVisibilityMode;
+  isRecurring: boolean;
   captureMode: MpgfPublicGoodsCaptureMode;
+  paymentIntentRef?: string;
   eligibilityState: "eligible" | "pending_review" | "duplicate_identity" | "below_minimum" | "blocked";
   humanScoreBps: number;
   status: "pledged" | "captured" | "voided" | "expired";
@@ -527,6 +550,63 @@ export interface MpgfPublicGoodsIdentityAttestation {
   expiresAt: string;
   status: "active" | "expired" | "revoked" | "pending_review";
   redactedReference: string;
+}
+
+export interface MpgfPublicGoodsPaymentProof {
+  id: string;
+  pledgeId?: string;
+  campaignId: string;
+  externalReceiptRef?: string;
+  charityReceiptRef?: string;
+  amountVerifiedCents: number;
+  status: "pending_review" | "verified" | "rejected" | "superseded";
+  reasonCode: MpgfPublicGoodsReviewReasonCode;
+  reconciliationSource: "external_receipt" | "fiscal_host_webhook" | "sponsor_signed_intent";
+  verifiedAt?: string;
+  createdAt: string;
+}
+
+export interface MpgfPublicGoodsReviewCase {
+  id: string;
+  campaignId: string;
+  state: MpgfPublicGoodsCampaignReviewStatus;
+  action: MpgfPublicGoodsReviewAction;
+  reasonCode: MpgfPublicGoodsReviewReasonCode;
+  reviewerId: string;
+  openedAt: string;
+  closedAt?: string;
+  appealStatus: MpgfPublicGoodsAppealStatus;
+  challengeWindowEndsAt?: string;
+  publicNotes: string;
+  allowedNextActions: MpgfPublicGoodsReviewAction[];
+}
+
+export interface MpgfPublicGoodsSubscription {
+  id: string;
+  userId: string;
+  poolId: string;
+  amountCents: number;
+  interval: "monthly" | "annual";
+  status: "active" | "paused" | "cancelled" | "past_due" | "expired";
+  captureMode: MpgfPublicGoodsCaptureMode;
+  mode: "pledge_only" | "test_payment" | "real_money";
+  nextChargeAt: string;
+  createdAt: string;
+}
+
+export interface MpgfPublicGoodsExperimentAssignment {
+  id: string;
+  userRefHash: string;
+  experimentKey: string;
+  variant: string;
+  assignedAt: string;
+  analyticsPolicy: "privacy_safe_no_raw_private_text";
+}
+
+export interface MpgfPublicGoodsCampaignValidationResult {
+  passed: boolean;
+  errors: MpgfValidationIssue[];
+  warnings: MpgfValidationIssue[];
 }
 
 export interface MpgfPublicGoodsAssuranceStatus {

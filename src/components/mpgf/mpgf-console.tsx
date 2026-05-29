@@ -16,6 +16,7 @@ import {
   demoCycle,
   demoMpgfMatchPool,
   demoMpgfPublicGoodsCampaigns,
+  demoMpgfPublicGoodsSubscriptions,
   demoPledges,
   MPGF_COPY,
 } from "@/lib/mpgf/data";
@@ -25,6 +26,7 @@ import {
   buildDemoLedgerTransactions,
   buildPublicSummary,
   computeExactMpgfAllocation,
+  createMpgfPublicGoodsSponsorSubscription,
   createMpgfPledgeOnlyRecord,
   createMpgfRecurringContributionCommitment,
   formatUsd,
@@ -163,6 +165,17 @@ export function MpgfConsole({
   const publicSummary = useMemo(() => buildPublicSummary({ allocation }), [allocation]);
   const ledgerTransactions = useMemo(() => buildDemoLedgerTransactions(demoPledges), []);
   const assuranceAllocation = useMemo(() => allocateMpgfAssuranceRound(), []);
+  const sponsorPoolSubscriptionPreview = useMemo(
+    () =>
+      createMpgfPublicGoodsSponsorSubscription({
+        userId: "browser-preview-sponsor",
+        amountCents: Math.max(100, Math.round(monthlyPledge * 100)),
+      }),
+    [monthlyPledge],
+  );
+  const sponsorPoolMonthlyCents = demoMpgfPublicGoodsSubscriptions
+    .filter((subscription) => subscription.status === "active")
+    .reduce((sum, subscription) => sum + subscription.amountCents, 0);
   const ledgerBalanced = ledgerTransactions.every(isLedgerBalanced);
 
   function updateWeight(alternativeId: string, value: number) {
@@ -705,6 +718,37 @@ export function MpgfConsole({
             <Link className="inline-link" href="/mpgf/real-money-terms">
               Review real-money terms and refund policy
             </Link>
+          </section>
+
+          <section className="mpgf-panel">
+            <p className="eyebrow">Sponsor pool circle</p>
+            <h2>Optional monthly sponsor-pool refill</h2>
+            <p>
+              Recurring support refills future challenge budgets after the assurance mechanism is
+              understood. It stays opt-in and separate from one-time pledge conversion.
+            </p>
+            <dl className="mpgf-summary-grid">
+              <div>
+                <dt>Demo monthly refill</dt>
+                <dd>{formatUsd(sponsorPoolMonthlyCents)}</dd>
+              </div>
+              <div>
+                <dt>Preview amount</dt>
+                <dd>{formatUsd(sponsorPoolSubscriptionPreview.amountCents)}</dd>
+              </div>
+              <div>
+                <dt>Default capture</dt>
+                <dd>{sponsorPoolSubscriptionPreview.captureMode.replaceAll("_", " ")}</dd>
+              </div>
+              <div>
+                <dt>Mode</dt>
+                <dd>{sponsorPoolSubscriptionPreview.mode.replaceAll("_", " ")}</dd>
+              </div>
+            </dl>
+            <p className="mpgf-small">
+              Preview only: no subscription, charge, donation receipt, custody claim, or payment-provider
+              object is created unless a later provider-approved flow explicitly says so.
+            </p>
           </section>
 
           <section className="mpgf-panel">
