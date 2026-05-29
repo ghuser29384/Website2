@@ -61,9 +61,9 @@
       "label": "Saved search",
       "category": "matching",
       "privacyClass": "private_authenticated",
-      "requiredFields": ["id", "owner_id", "query_scope", "cause_filters", "privacy_threshold", "created_at"],
+      "requiredFields": ["id", "owner_id", "query_scope", "cause_filters", "filters_json", "notify_on_live_match", "source_route", "privacy_threshold", "created_at"],
       "relationships": ["participant", "private_wish_profile", "match_suggestion", "notification"],
-      "publicExposure": "Search terms and private query text remain viewer-owned; public search returns broad previews only."
+      "publicExposure": "Search terms, offer browse filters, and notification choices remain viewer-owned; public search returns broad previews only."
     },
     {
       "key": "trade_format",

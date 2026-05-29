@@ -46,6 +46,11 @@
     { "key": "match_concierge_request", "window": "1 day", "limit": 10 },
     { "key": "offer_comment", "window": "15 minutes", "limit": 12 },
     { "key": "offer_collection_read", "window": "1 minute", "limit": 120 },
+    { "key": "offer_detail_read", "window": "1 minute", "limit": 120 },
+    { "key": "offer_facets_read", "window": "1 minute", "limit": 120 },
+    { "key": "offer_follow_write", "window": "1 minute", "limit": 30 },
+    { "key": "offer_create_similar", "window": "1 minute", "limit": 30 },
+    { "key": "saved_search_write", "window": "1 minute", "limit": 30 },
     { "key": "wish_registry_search", "window": "1 minute", "limit": 60 },
     { "key": "analytics_ingest", "window": "1 minute", "limit": 120 }
   ],

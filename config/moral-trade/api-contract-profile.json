@@ -27,6 +27,66 @@
       "fallback": "Return filtered worked-example and live listing payloads, visible facets, validator blockers, and zero-live guidance; never expose private wishes, contact details, raw evidence artifacts, personalized cart state, or global moral ranking."
     },
     {
+      "key": "public_offer_detail",
+      "method": "GET",
+      "path": "/api/offers/:slug",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "public_offer_detail_request",
+      "responseSchema": "public_offer_detail_response",
+      "rateLimitSurface": "offer_detail_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return a validator-backed public listing detail or 404 blockers; never expose contact details, private wishes, raw evidence artifacts, personalized cart state, or agreement formation claims."
+    },
+    {
+      "key": "public_offers_facets",
+      "method": "GET",
+      "path": "/api/offers/facets",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "public_offers_facets_request",
+      "responseSchema": "public_offers_facets_response",
+      "rateLimitSurface": "offer_facets_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return positive-count public facets, current default-tab behavior, and validator blockers; never expose zero-count private-sensitive facets or personalized browse state."
+    },
+    {
+      "key": "saved_search_create",
+      "method": "POST",
+      "path": "/api/saved-searches",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "saved_search_create_request",
+      "responseSchema": "saved_search_create_response",
+      "rateLimitSurface": "saved_search_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication to store a saved search; unauthenticated requests return a sign-in draft without storage. Never expose private wishes, contact details, raw source notes, personalized cart state, autonomous outreach, or platform moral ranking."
+    },
+    {
+      "key": "public_offer_follow",
+      "method": "POST",
+      "path": "/api/offers/:id/follow",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "public_offer_follow_request",
+      "responseSchema": "public_offer_follow_response",
+      "rateLimitSurface": "offer_follow_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication and a live public offer id before writing a viewer-owned saved-offer record. Never expose private wishes, contact details, raw source notes, personalized cart state, public social-follow counts, autonomous outreach, or agreement formation claims."
+    },
+    {
+      "key": "public_offer_create_similar",
+      "method": "POST",
+      "path": "/api/offers/:id/create-similar",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "public_offer_create_similar_request",
+      "responseSchema": "public_offer_create_similar_response",
+      "rateLimitSurface": "offer_create_similar",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication and a live public offer id before returning a review-required draft prefill. Never store before auth, copy private wishes, contact details, raw source notes, evidence URLs, personalized cart state, autonomous outreach, global moral ranking, escrow, or agreement formation claims."
+    },
+    {
       "key": "moral_trade_data_model_contract",
       "method": "GET",
       "path": "/api/moral-trade/data-model/contract",
@@ -383,6 +443,125 @@
         { "key": "items", "type": "public_offer_listing_array", "required": true, "privacy": "public_contract", "description": "Public listing payloads with actions, review state, verification method, duration, canonical URL, and non-claims." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for contract shape, default-tab behavior, listing shape, hidden zero-count facets, privacy, and non-claims." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Public-offers blockers that prevent relying on the collection API." }
+      ]
+    },
+    {
+      "key": "public_offer_detail_request",
+      "purpose": "Public offer detail slug path for a live public offer id or worked-example slug.",
+      "fields": [
+        { "key": "slug", "type": "path_slug", "required": true, "privacy": "public", "description": "Live offer id, worked example id, or examples/{id} slug." }
+      ]
+    },
+    {
+      "key": "public_offer_detail_response",
+      "purpose": "Validator-backed public detail payload for one live offer or worked example, with sign-in/consent-gated actions and non-claims.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the public offer detail validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the public detail validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Public offers API contract version." },
+        { "key": "slug", "type": "path_slug", "required": true, "privacy": "public", "description": "Requested public offer slug." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Source route, detail API route, listing schema id, and non-claims." },
+        { "key": "item", "type": "public_offer_listing_or_null", "required": true, "privacy": "public_contract", "description": "Approved public listing fields only; null when the slug is not public." },
+        { "key": "actions", "type": "array", "required": true, "privacy": "public_contract", "description": "Sign-in and consent-gated public action descriptors for save, create-similar, and contact-after-sign-in." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for detail route shape, listing shape, action gating, privacy, and non-claims." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Public-offer detail blockers, including not-found blockers." }
+      ]
+    },
+    {
+      "key": "public_offers_facets_request",
+      "purpose": "Public facet query parameters for the current tab/search scope without pagination.",
+      "fields": [
+        { "key": "q", "type": "string", "required": false, "privacy": "public", "description": "Search text used to scope visible facet counts." },
+        { "key": "tab", "type": "enum", "required": false, "privacy": "public", "description": "live, examples, or all; defaults to examples when live inventory is zero." },
+        { "key": "cause", "type": "string_array", "required": false, "privacy": "public", "description": "Optional cause scope for compatible collection queries." },
+        { "key": "format", "type": "enum_array", "required": false, "privacy": "public", "description": "Optional format scope for compatible collection queries." },
+        { "key": "reviewState", "type": "enum_array", "required": false, "privacy": "public", "description": "Optional review-state scope for compatible collection queries." },
+        { "key": "sort", "type": "enum", "required": false, "privacy": "public", "description": "Optional collection-compatible sort parameter; facet output remains count-based." }
+      ]
+    },
+    {
+      "key": "public_offers_facets_response",
+      "purpose": "Validator-backed public facet payload with positive-count facets and zero-live default behavior.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the public facets validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the public facets validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Public offers API contract version." },
+        { "key": "meta", "type": "object", "required": true, "privacy": "public_contract", "description": "Tab, query, counts, and hidden-zero-facet/defaulting state." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Source route, facets API route, listing schema id, supported filters, and non-claims." },
+        { "key": "availableFacets", "type": "object", "required": true, "privacy": "public_contract", "description": "Positive-count cause, format, verification method, review state, and duration facets." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for route shape, positive facets, zero-live defaulting, privacy, and non-claims." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Public-offers facet blockers." }
+      ]
+    },
+    {
+      "key": "saved_search_create_request",
+      "purpose": "Authenticated saved-search creation payload for offer browse memory, cause following, and live-offer notifications.",
+      "fields": [
+        { "key": "query", "type": "string", "required": false, "privacy": "private_authenticated", "description": "Viewer-owned public browse query copied from /offers, capped and stored only for the authenticated viewer." },
+        { "key": "cause", "type": "string_array", "required": false, "privacy": "private_authenticated", "description": "Public cause filters; a cause-only request functions as follow-cause browse memory." },
+        { "key": "format", "type": "enum_array", "required": false, "privacy": "private_authenticated", "description": "Public offer format filters such as pledge-swap or donation-offset." },
+        { "key": "reviewState", "type": "enum_array", "required": false, "privacy": "private_authenticated", "description": "Public review-state filters such as manual-review-required." },
+        { "key": "notifyOnLiveMatch", "type": "boolean", "required": false, "privacy": "private_authenticated", "description": "Whether the saved search should be eligible for live-offer notification workflows." },
+        { "key": "cadence", "type": "enum", "required": false, "privacy": "private_authenticated", "description": "manual, daily, weekly, or monthly scan cadence." }
+      ]
+    },
+    {
+      "key": "saved_search_create_response",
+      "purpose": "Private no-store saved-search response with validator status, sign-in draft handling, and no public disclosure.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private_authenticated", "description": "True only when the saved-search payload is valid and stored for the authenticated viewer." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private_authenticated", "description": "Server time for the saved-search validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Offer saved-search API contract version." },
+        { "key": "mode", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "validated, auth_required, or created." },
+        { "key": "savedSearch", "type": "object", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned saved-search draft or created summary with public filters only." },
+        { "key": "signInUrl", "type": "path_or_null", "required": true, "privacy": "private_authenticated", "description": "Returned only for unauthenticated sign-in draft mode; no search is stored before auth." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "private_authenticated", "description": "Validation result for browse scope, safe filter shape, logged-out boundary, privacy, and non-claims." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Saved-search blockers, including auth, rate-limit, validation, or storage blockers." }
+      ]
+    },
+    {
+      "key": "public_offer_follow_request",
+      "purpose": "Authenticated saved-offer request for following or unfollowing one live public offer.",
+      "fields": [
+        { "key": "id", "type": "uuid_path", "required": true, "privacy": "private_authenticated", "description": "Live public offer id from the route path; worked-example slugs are rejected." },
+        { "key": "action", "type": "enum", "required": false, "privacy": "private_authenticated", "description": "follow, unfollow, or toggle; defaults to follow." }
+      ]
+    },
+    {
+      "key": "public_offer_follow_response",
+      "purpose": "Private no-store saved-offer response backed by offer_carts and validator non-claims.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private_authenticated", "description": "True only when the offer-follow payload is valid and the viewer-owned saved-offer state is resolved." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private_authenticated", "description": "Server time for the offer-follow validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Offer-follow API contract version." },
+        { "key": "mode", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "validated, auth_required, followed, already_followed, unfollowed, or not_following." },
+        { "key": "offerId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Live public offer id." },
+        { "key": "savedOffer", "type": "object", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned saved-offer state only; no public social counters or contact details." },
+        { "key": "signInUrl", "type": "path_or_null", "required": true, "privacy": "private_authenticated", "description": "Returned only for unauthenticated sign-in draft mode; no follow record is stored before auth." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "private_authenticated", "description": "Validation result for live-offer id shape, viewer-owned state, action bounds, privacy, and non-claims." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Offer-follow blockers, including auth, ownership, live-offer, rate-limit, or storage blockers." }
+      ]
+    },
+    {
+      "key": "public_offer_create_similar_request",
+      "purpose": "Authenticated draft-prefill request for creating a similar offer from one live public offer.",
+      "fields": [
+        { "key": "id", "type": "uuid_path", "required": true, "privacy": "private_authenticated", "description": "Live public offer id from the route path; worked-example slugs are rejected." }
+      ]
+    },
+    {
+      "key": "public_offer_create_similar_response",
+      "purpose": "Private no-store create-similar response with a review-required draft template and no storage side effects.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private_authenticated", "description": "True only when the create-similar payload is valid and a review-required draft prefill is ready." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private_authenticated", "description": "Server time for the create-similar validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Offer create-similar API contract version." },
+        { "key": "mode", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "validated, auth_required, ready, or source_unavailable." },
+        { "key": "offerId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Live public source offer id." },
+        { "key": "draft", "type": "object", "required": true, "privacy": "private_authenticated", "description": "Viewer-local draft URL, copied public fields, review-required flag, and stateMutation:false; no offer is stored before auth." },
+        { "key": "signInUrl", "type": "path_or_null", "required": true, "privacy": "private_authenticated", "description": "Returned only for unauthenticated sign-in draft mode; no draft or follow record is stored before auth." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "private_authenticated", "description": "Validation result for live-offer id shape, draft boundary, safe template shape, privacy, and non-claims." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Create-similar blockers, including auth, source-offer, rate-limit, validation, or storage-availability blockers." }
       ]
     },
     {
@@ -877,6 +1056,11 @@
     "data_model_contract_route",
     "policy_bundle_contract_route",
     "public_offers_collection_route",
+    "public_offer_detail_route",
+    "public_offers_facets_route",
+    "saved_search_create_route",
+    "public_offer_follow_route",
+    "public_offer_create_similar_route",
     "reasoning_packet_route_contract",
     "match_signal_route_contract",
     "challenge_appeal_route_contract",

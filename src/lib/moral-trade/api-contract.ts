@@ -58,6 +58,11 @@ const apiContractProfile = apiContractProfileJson as MoralTradeApiContractProfil
 const REQUIRED_ROUTES = [
   "moral_trade_health",
   "public_offers_collection",
+  "public_offer_detail",
+  "public_offers_facets",
+  "saved_search_create",
+  "public_offer_follow",
+  "public_offer_create_similar",
   "moral_trade_data_model_contract",
   "moral_trade_policy_bundle_contract",
   "moral_trade_provenance_schema",
@@ -153,6 +158,51 @@ export function validateMoralTradeApiContractProfile(
   );
   const publicOffersResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "public_offers_collection_response",
+  );
+  const publicOfferDetailRoute = profile.routes.find(
+    (route) => route.key === "public_offer_detail",
+  );
+  const publicOfferDetailRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "public_offer_detail_request",
+  );
+  const publicOfferDetailResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "public_offer_detail_response",
+  );
+  const publicOffersFacetsRoute = profile.routes.find(
+    (route) => route.key === "public_offers_facets",
+  );
+  const publicOffersFacetsRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "public_offers_facets_request",
+  );
+  const publicOffersFacetsResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "public_offers_facets_response",
+  );
+  const savedSearchCreateRoute = profile.routes.find(
+    (route) => route.key === "saved_search_create",
+  );
+  const savedSearchCreateRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "saved_search_create_request",
+  );
+  const savedSearchCreateResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "saved_search_create_response",
+  );
+  const publicOfferFollowRoute = profile.routes.find(
+    (route) => route.key === "public_offer_follow",
+  );
+  const publicOfferFollowRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "public_offer_follow_request",
+  );
+  const publicOfferFollowResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "public_offer_follow_response",
+  );
+  const publicOfferCreateSimilarRoute = profile.routes.find(
+    (route) => route.key === "public_offer_create_similar",
+  );
+  const publicOfferCreateSimilarRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "public_offer_create_similar_request",
+  );
+  const publicOfferCreateSimilarResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "public_offer_create_similar_response",
   );
   const dataModelContractRoute = profile.routes.find(
     (route) => route.key === "moral_trade_data_model_contract",
@@ -365,6 +415,164 @@ export function validateMoralTradeApiContractProfile(
         ),
       publicOffersRoute
         ? `${publicOffersRoute.key}:${publicOffersRoute.rateLimitSurface}:${publicOffersRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
+      "public-offer-detail-route",
+      "Public offer detail route exposes one public listing without private state",
+      publicOfferDetailRoute?.method === "GET" &&
+        publicOfferDetailRoute.path === "/api/offers/:slug" &&
+        publicOfferDetailRoute.cacheControl === "no_store_dynamic" &&
+        publicOfferDetailRoute.rateLimitSurface === "offer_detail_read" &&
+        publicOfferDetailRoute.privacyClass === "public_contract" &&
+        /validator-backed public listing detail|404 blockers|contact details|private wishes|personalized cart state|agreement formation/i.test(
+          publicOfferDetailRoute.fallback,
+        ) &&
+        Boolean(
+          publicOfferDetailRequest?.fields.some(
+            (field) => field.key === "slug" && field.required,
+          ),
+        ) &&
+        Boolean(
+          publicOfferDetailResponse?.fields.some(
+            (field) => field.key === "item" && field.type === "public_offer_listing_or_null",
+          ),
+        ) &&
+        Boolean(
+          publicOfferDetailResponse?.fields.some(
+            (field) => field.key === "actions" && /sign-in|consent/i.test(field.description),
+          ),
+        ),
+      publicOfferDetailRoute
+        ? `${publicOfferDetailRoute.key}:${publicOfferDetailRoute.rateLimitSurface}:${publicOfferDetailRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
+      "public-offers-facets-route",
+      "Public offer facets route exposes positive-count browse facets safely",
+      publicOffersFacetsRoute?.method === "GET" &&
+        publicOffersFacetsRoute.path === "/api/offers/facets" &&
+        publicOffersFacetsRoute.cacheControl === "no_store_dynamic" &&
+        publicOffersFacetsRoute.rateLimitSurface === "offer_facets_read" &&
+        publicOffersFacetsRoute.privacyClass === "public_contract" &&
+        /positive-count public facets|default-tab|zero-count private-sensitive facets|personalized browse state/i.test(
+          publicOffersFacetsRoute.fallback,
+        ) &&
+        Boolean(
+          publicOffersFacetsRequest?.fields.some(
+            (field) => field.key === "tab" && /defaults to examples/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          publicOffersFacetsResponse?.fields.some(
+            (field) => field.key === "availableFacets" && /positive-count/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          publicOffersFacetsResponse?.fields.some(
+            (field) => field.key === "meta" && /hidden-zero-facet|defaulting/i.test(field.description),
+          ),
+        ),
+      publicOffersFacetsRoute
+        ? `${publicOffersFacetsRoute.key}:${publicOffersFacetsRoute.rateLimitSurface}:${publicOffersFacetsRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
+      "saved-search-create-route",
+      "Saved-search create route stores viewer-owned browse memory only",
+      savedSearchCreateRoute?.method === "POST" &&
+        savedSearchCreateRoute.path === "/api/saved-searches" &&
+        savedSearchCreateRoute.auth === "authenticated" &&
+        savedSearchCreateRoute.cacheControl === "private_no_store" &&
+        savedSearchCreateRoute.rateLimitSurface === "saved_search_write" &&
+        savedSearchCreateRoute.privacyClass === "authenticated_private" &&
+        /viewer authentication|sign-in draft without storage|private wishes|contact details|autonomous outreach|platform moral ranking/i.test(
+          savedSearchCreateRoute.fallback,
+        ) &&
+        Boolean(
+          savedSearchCreateRequest?.fields.some(
+            (field) => field.key === "notifyOnLiveMatch" && field.type === "boolean",
+          ),
+        ) &&
+        Boolean(
+          savedSearchCreateRequest?.fields.some(
+            (field) => field.key === "cause" && /follow-cause/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          savedSearchCreateResponse?.fields.some(
+            (field) => field.key === "signInUrl" && /no search is stored before auth/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          savedSearchCreateResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ),
+      savedSearchCreateRoute
+        ? `${savedSearchCreateRoute.key}:${savedSearchCreateRoute.rateLimitSurface}:${savedSearchCreateRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
+      "public-offer-follow-route",
+      "Offer follow route stores viewer-owned saved-offer state only",
+      publicOfferFollowRoute?.method === "POST" &&
+        publicOfferFollowRoute.path === "/api/offers/:id/follow" &&
+        publicOfferFollowRoute.auth === "authenticated" &&
+        publicOfferFollowRoute.cacheControl === "private_no_store" &&
+        publicOfferFollowRoute.rateLimitSurface === "offer_follow_write" &&
+        publicOfferFollowRoute.privacyClass === "authenticated_private" &&
+        /viewer authentication|live public offer id|viewer-owned saved-offer record|private wishes|contact details|public social-follow counts|autonomous outreach|agreement formation/i.test(
+          publicOfferFollowRoute.fallback,
+        ) &&
+        Boolean(
+          publicOfferFollowRequest?.fields.some(
+            (field) => field.key === "id" && /worked-example slugs are rejected/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          publicOfferFollowResponse?.fields.some(
+            (field) => field.key === "savedOffer" && /no public social counters|contact details/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          publicOfferFollowResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ),
+      publicOfferFollowRoute
+        ? `${publicOfferFollowRoute.key}:${publicOfferFollowRoute.rateLimitSurface}:${publicOfferFollowRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
+      "public-offer-create-similar-route",
+      "Offer create-similar route returns only review-required draft prefills",
+      publicOfferCreateSimilarRoute?.method === "POST" &&
+        publicOfferCreateSimilarRoute.path === "/api/offers/:id/create-similar" &&
+        publicOfferCreateSimilarRoute.auth === "authenticated" &&
+        publicOfferCreateSimilarRoute.cacheControl === "private_no_store" &&
+        publicOfferCreateSimilarRoute.rateLimitSurface === "offer_create_similar" &&
+        publicOfferCreateSimilarRoute.privacyClass === "authenticated_private" &&
+        /viewer authentication|live public offer id|review-required draft prefill|Never store before auth|private wishes|contact details|raw source notes|evidence URLs|global moral ranking|escrow|agreement formation/i.test(
+          publicOfferCreateSimilarRoute.fallback,
+        ) &&
+        Boolean(
+          publicOfferCreateSimilarRequest?.fields.some(
+            (field) => field.key === "id" && /worked-example slugs are rejected/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          publicOfferCreateSimilarResponse?.fields.some(
+            (field) => field.key === "draft" && /stateMutation:false|no offer is stored before auth/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          publicOfferCreateSimilarResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ),
+      publicOfferCreateSimilarRoute
+        ? `${publicOfferCreateSimilarRoute.key}:${publicOfferCreateSimilarRoute.rateLimitSurface}:${publicOfferCreateSimilarRoute.cacheControl}`
         : "missing",
     ),
     check(

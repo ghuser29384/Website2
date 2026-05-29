@@ -980,6 +980,9 @@ export interface Database {
           cadence: "manual" | "daily" | "weekly" | "monthly";
           status: "active" | "paused";
           last_scanned_at: string | null;
+          filters_json: Json;
+          notify_on_live_match: boolean;
+          source_route: string;
           created_at: string;
           updated_at: string;
         };
@@ -993,6 +996,9 @@ export interface Database {
           cadence?: "manual" | "daily" | "weekly" | "monthly";
           status?: "active" | "paused";
           last_scanned_at?: string | null;
+          filters_json?: Json;
+          notify_on_live_match?: boolean;
+          source_route?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -1004,6 +1010,9 @@ export interface Database {
           cadence?: "manual" | "daily" | "weekly" | "monthly";
           status?: "active" | "paused";
           last_scanned_at?: string | null;
+          filters_json?: Json;
+          notify_on_live_match?: boolean;
+          source_route?: string;
           updated_at?: string;
         };
         Relationships: [];

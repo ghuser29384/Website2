@@ -18,6 +18,11 @@ test("operations profile publishes security, rate-limit, observability, fallback
   assert.ok(profile.securityHeaders.some((header) => header.code === "private_no_store"));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_create" && surface.limit > 0));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_collection_read" && surface.limit === 120));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_detail_read" && surface.limit === 120));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_facets_read" && surface.limit === 120));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_follow_write" && surface.limit === 30));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "offer_create_similar" && surface.limit === 30));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "saved_search_write" && surface.limit === 30));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "wish_registry_search" && surface.limit > 0));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "analytics_ingest" && surface.limit === 120));
   assert.ok(profile.privacyAndSessionControls.some((control) => control.key === "data_right_requests"));

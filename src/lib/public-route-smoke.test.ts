@@ -1112,6 +1112,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
     "config/moral-trade/public-offer-listing.schema.json",
   );
   const publicOffersSource = readRepoFile("src/lib/public-offers.ts");
+  const offerFollowSource = readRepoFile("src/lib/offer-follows.ts");
+  const offerCreateSimilarSource = readRepoFile("src/lib/offer-create-similar.ts");
+  const offerSavedSearchSource = readRepoFile("src/lib/offer-saved-searches.ts");
+  const offerSavedSearchMigration = readRepoFile(
+    "supabase/migrations/20260529_offer_saved_search_capture.sql",
+  );
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const provenanceSource = readRepoFile("src/lib/moral-trade/provenance.ts");
@@ -1158,6 +1164,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
     "src/app/api/moral-trade/reasoning/packets/route.ts",
   );
   const publicOffersRoute = readRepoFile("src/app/api/offers/route.ts");
+  const publicOfferDetailRoute = readRepoFile("src/app/api/offers/[...slug]/route.ts");
+  const publicOffersFacetsRoute = readRepoFile("src/app/api/offers/facets/route.ts");
+  const publicOfferFollowRoute = readRepoFile("src/app/api/offers/[offerId]/follow/route.ts");
+  const publicOfferCreateSimilarRoute = readRepoFile(
+    "src/app/api/offers/[offerId]/create-similar/route.ts",
+  );
+  const savedSearchesRoute = readRepoFile("src/app/api/saved-searches/route.ts");
   const operationsHealthRoute = readRepoFile("src/app/api/moral-trade/operations/health/route.ts");
   const securityHealthRoute = readRepoFile("src/app/api/moral-trade/security/health/route.ts");
   const incidentResponseHealthRoute = readRepoFile(
@@ -1555,7 +1568,16 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /external entity dedupe/);
   assert.match(apiContractProfile, /Provenance object contract validator result/);
   assert.match(apiContractProfile, /public_offers_collection_response/);
+  assert.match(apiContractProfile, /public_offer_detail_response/);
+  assert.match(apiContractProfile, /public_offers_facets_response/);
+  assert.match(apiContractProfile, /public_offer_follow_response/);
+  assert.match(apiContractProfile, /public_offer_create_similar_response/);
+  assert.match(apiContractProfile, /saved_search_create_response/);
   assert.match(apiContractProfile, /offer_collection_read/);
+  assert.match(apiContractProfile, /offer_detail_read/);
+  assert.match(apiContractProfile, /offer_facets_read/);
+  assert.match(apiContractProfile, /offer_create_similar/);
+  assert.match(apiContractProfile, /saved_search_write/);
   assert.match(apiContractProfile, /sample-bundle summary/);
   assert.match(apiContractProfile, /undocumented ML cannot rank/);
   assert.match(apiContractProfile, /private_no_store/);
@@ -1845,9 +1867,26 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(publicOfferListingSchema, /offeredAction/);
   assert.match(publicOfferListingSchema, /noEscrow/);
   assert.match(publicOffersSource, /buildPublicOffersCollectionPayload/);
+  assert.match(publicOffersSource, /buildPublicOfferDetailPayload/);
+  assert.match(publicOffersSource, /buildPublicOffersFacetsPayload/);
   assert.match(publicOffersSource, /defaultedToWorkedExamples/);
   assert.match(publicOffersSource, /hiddenZeroCountFacets/);
   assert.match(publicOffersSource, /public-offer-listing/);
+  assert.match(offerFollowSource, /buildOfferFollowPayload/);
+  assert.match(offerFollowSource, /offer_carts/);
+  assert.match(offerFollowSource, /not public social follows/);
+  assert.match(offerFollowSource, /worked-example slugs/);
+  assert.match(offerCreateSimilarSource, /buildOfferCreateSimilarPayload/);
+  assert.match(offerCreateSimilarSource, /none_draft_prefill/);
+  assert.match(offerCreateSimilarSource, /No create-similar storage/);
+  assert.match(offerCreateSimilarSource, /evidence URLs/);
+  assert.match(offerSavedSearchSource, /normalizeOfferSavedSearchDraft/);
+  assert.match(offerSavedSearchSource, /notifyOnLiveMatch/);
+  assert.match(offerSavedSearchSource, /sign-in draft/);
+  assert.match(offerSavedSearchSource, /cause following/i);
+  assert.match(offerSavedSearchMigration, /filters_json/);
+  assert.match(offerSavedSearchMigration, /notify_on_live_match/);
+  assert.match(offerSavedSearchMigration, /source_route/);
   assert.match(schemaRegistryRoute, /validateMoralTradeSchemaRegistry/);
   assert.match(schemaRegistryRoute, /schemaDocuments/);
   assert.match(schemaDocumentRoute, /getMoralTradeSchemaDocumentBySlug/);
@@ -1855,6 +1894,24 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(publicOffersRoute, /buildPublicOffersCollectionPayload/);
   assert.match(publicOffersRoute, /takeRateLimitSlot/);
   assert.match(publicOffersRoute, /offer_collection_read/);
+  assert.match(publicOfferDetailRoute, /buildPublicOfferDetailPayload/);
+  assert.match(publicOfferDetailRoute, /validatePublicOfferDetailPayload/);
+  assert.match(publicOfferDetailRoute, /offer_detail_read/);
+  assert.match(publicOffersFacetsRoute, /buildPublicOffersFacetsPayload/);
+  assert.match(publicOffersFacetsRoute, /validatePublicOffersFacetsPayload/);
+  assert.match(publicOffersFacetsRoute, /offer_facets_read/);
+  assert.match(publicOfferFollowRoute, /validateOfferFollowPayload/);
+  assert.match(publicOfferFollowRoute, /offer_follow_write/);
+  assert.match(publicOfferFollowRoute, /offer_carts/);
+  assert.match(publicOfferFollowRoute, /private, no-store/);
+  assert.match(publicOfferCreateSimilarRoute, /validateOfferCreateSimilarPayload/);
+  assert.match(publicOfferCreateSimilarRoute, /offer_create_similar/);
+  assert.match(publicOfferCreateSimilarRoute, /getOfferById/);
+  assert.match(publicOfferCreateSimilarRoute, /private, no-store/);
+  assert.match(savedSearchesRoute, /normalizeOfferSavedSearchDraft/);
+  assert.match(savedSearchesRoute, /saved_search_write/);
+  assert.match(savedSearchesRoute, /private, no-store/);
+  assert.match(savedSearchesRoute, /auth_required/);
 });
 
 test("pooled donation offset creation has visible path and server-side guardrails", () => {
@@ -2020,8 +2077,9 @@ test("create trade route family has stable signed-out entry points", () => {
   assert.match(createRoute, /NewOfferPage/);
   assert.equal(createRoute.includes("redirect("), false);
   assert.match(newOfferPage, /Create an account to save and publish a structured trade proposal/);
-  assert.match(newOfferPage, /\/signup\?returnTo=\/offers\/new/);
-  assert.match(newOfferPage, /\/login\?returnTo=\/offers\/new/);
+  assert.match(newOfferPage, /buildOfferCreationReturnTo/);
+  assert.match(newOfferPage, /encodeURIComponent\(offerCreationReturnTo\)/);
+  assert.match(newOfferPage, /source_offer/);
   assert.equal(newOfferPage.includes("requireViewer"), false);
 });
 

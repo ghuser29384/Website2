@@ -31,6 +31,10 @@ export type PublicOffersSort =
   | "reviewed"
   | "highest-offered-impact"
   | "best-fit";
+export type PublicOffersApiRoute =
+  | "/api/offers"
+  | "/api/offers/:slug"
+  | "/api/offers/facets";
 
 export interface PublicOfferDuration {
   value: number | null;
@@ -96,7 +100,7 @@ export interface PublicOffersMeta {
 export interface PublicOffersContract {
   version: string;
   sourceRoute: "/offers";
-  publicApiRoute: "/api/offers";
+  publicApiRoute: PublicOffersApiRoute;
   listingSchemaId: string;
   supportedFilters: string[];
   nonClaims: string[];
@@ -109,6 +113,41 @@ export interface PublicOffersCollectionPayload {
   items: PublicOfferListing[];
 }
 
+export interface PublicOfferDetailAction {
+  key: "save" | "create-similar" | "contact-after-sign-in";
+  label: string;
+  href: string;
+  method: "GET";
+  authRequired: boolean;
+  available: boolean;
+  description: string;
+}
+
+export interface PublicOfferDetailPayload {
+  contractVersion: string;
+  slug: string;
+  publicContract: PublicOffersContract;
+  item: PublicOfferListing | null;
+  actions: PublicOfferDetailAction[];
+}
+
+export interface PublicOffersFacetsPayload {
+  contractVersion: string;
+  meta: Pick<
+    PublicOffersMeta,
+    | "tab"
+    | "defaultTab"
+    | "total"
+    | "query"
+    | "liveOfferCount"
+    | "workedExampleCount"
+    | "defaultedToWorkedExamples"
+    | "hiddenZeroCountFacets"
+  >;
+  publicContract: PublicOffersContract;
+  availableFacets: PublicOffersMeta["availableFacets"];
+}
+
 export interface PublicOffersValidationCheck {
   id: string;
   label: string;
@@ -118,7 +157,10 @@ export interface PublicOffersValidationCheck {
 
 export interface PublicOffersValidation {
   status: "pass" | "fail";
-  validatorName: "public-offers-collection-api";
+  validatorName:
+    | "public-offers-collection-api"
+    | "public-offers-detail-api"
+    | "public-offers-facets-api";
   validatorVersion: string;
   contractVersion: string;
   checks: PublicOffersValidationCheck[];
@@ -148,6 +190,10 @@ const PUBLIC_OFFER_NON_CLAIMS = [
   "Participant scores are participant-stated context, not platform moral rankings.",
   "Worked examples are not live liquidity and require manual review before reliance.",
   "The collection response must not expose private wishes, contact details, raw source notes, raw evidence artifacts, or personalized cart state.",
+] as const;
+const PUBLIC_OFFER_DETAIL_NON_CLAIMS = [
+  ...PUBLIC_OFFER_NON_CLAIMS,
+  "The detail response is a public display record only; it does not grant contact access, create a saved search, or form an agreement.",
 ] as const;
 const REQUIRED_LISTING_KEYS = [
   "id",
@@ -322,6 +368,25 @@ function safeDisplayName(value: string, fallback: string) {
   return normalized.slice(0, 80);
 }
 
+function buildPublicOffersContract({
+  publicApiRoute,
+  supportedFilters = [...SUPPORTED_FILTERS],
+  nonClaims = [...PUBLIC_OFFER_NON_CLAIMS],
+}: {
+  publicApiRoute: PublicOffersApiRoute;
+  supportedFilters?: string[];
+  nonClaims?: string[];
+}): PublicOffersContract {
+  return {
+    version: PUBLIC_OFFERS_API_CONTRACT_VERSION,
+    sourceRoute: "/offers",
+    publicApiRoute,
+    listingSchemaId: LISTING_SCHEMA_ID,
+    supportedFilters,
+    nonClaims,
+  };
+}
+
 function workedExampleToPublicListing(
   offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number],
 ): PublicOfferListing {
@@ -429,6 +494,10 @@ function liveOfferToPublicListing(offer: OfferRecord): PublicOfferListing {
   };
 }
 
+export function buildPublicOfferListingFromLiveOffer(offer: OfferRecord) {
+  return liveOfferToPublicListing(offer);
+}
+
 function listingMatchesSearch(listing: PublicOfferListing, query: string) {
   const normalizedQuery = query.toLowerCase().trim();
 
@@ -533,6 +602,140 @@ export function getPublicWorkedExampleOfferListings() {
   return CANONICAL_WORKED_CASE_OFFERS.map(workedExampleToPublicListing);
 }
 
+function normalizePublicOfferSlug(slug: string) {
+  try {
+    return decodeURIComponent(slug);
+  } catch {
+    return slug;
+  }
+}
+
+function publicOfferLookupKeys(listing: PublicOfferListing) {
+  const canonicalPath = (() => {
+    try {
+      return new URL(listing.canonicalUrl).pathname.replace(/^\/offers\/?/, "");
+    } catch {
+      return "";
+    }
+  })();
+
+  return [listing.id, listing.slug, canonicalPath]
+    .map((value) => value.replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+}
+
+export function getPublicOfferSlugFromSegments(segments: readonly string[]) {
+  return normalizePublicOfferSlug(segments.join("/")).replace(/^\/+|\/+$/g, "");
+}
+
+export function getPublicOfferListingBySlug({
+  liveOffers,
+  slug,
+}: {
+  liveOffers: readonly OfferRecord[];
+  slug: string;
+}) {
+  const lookup = normalizePublicOfferSlug(slug).replace(/^\/+|\/+$/g, "");
+  const listings = [
+    ...liveOffers
+      .filter((offer) => offer.status === "open")
+      .map(liveOfferToPublicListing),
+    ...getPublicWorkedExampleOfferListings(),
+  ];
+
+  return (
+    listings.find((listing) =>
+      publicOfferLookupKeys(listing).some((key) => key === lookup),
+    ) ?? null
+  );
+}
+
+function canonicalPathForListing(listing: PublicOfferListing) {
+  try {
+    return new URL(listing.canonicalUrl).pathname;
+  } catch {
+    return listing.isWorkedExample
+      ? `/offers/${listing.slug}`
+      : `/offers/${encodeURIComponent(listing.id)}`;
+  }
+}
+
+function modeFromPublicFormat(format: PublicOfferFormat) {
+  if (format === "pledge-swap") return "pledge";
+  if (format === "donation-offset") return "offset";
+  if (format === "paid-action") return "payment";
+  return "pledge";
+}
+
+function buildPublicOfferDetailActions(
+  listing: PublicOfferListing | null,
+): PublicOfferDetailAction[] {
+  if (!listing) {
+    return [] as PublicOfferDetailAction[];
+  }
+
+  const canonicalPath = canonicalPathForListing(listing);
+  const signInReturnTo = encodeURIComponent(canonicalPath);
+  const createSimilarHref = listing.isWorkedExample
+    ? `/offers/new?mode=${modeFromPublicFormat(listing.format)}&example=${encodeURIComponent(listing.id)}`
+    : `/offers/new?mode=${modeFromPublicFormat(listing.format)}&source_offer=${encodeURIComponent(listing.id)}`;
+
+  return [
+    {
+      key: "save",
+      label: "Save",
+      href: `/signup?returnTo=${signInReturnTo}`,
+      method: "GET",
+      authRequired: true,
+      available: true,
+      description:
+        "Signed-in users can save interest or create a saved search without exposing private wishes.",
+    },
+    {
+      key: "create-similar",
+      label: "Create similar",
+      href: createSimilarHref,
+      method: "GET",
+      authRequired: true,
+      available: true,
+      description:
+        "Start a new offer draft from the public terms without copying private evidence or contact details.",
+    },
+    {
+      key: "contact-after-sign-in",
+      label: "Contact after sign-in",
+      href: `/signup?returnTo=${signInReturnTo}`,
+      method: "GET",
+      authRequired: true,
+      available: !listing.isWorkedExample,
+      description:
+        "Contact paths remain sign-in and consent gated; the public API never releases contact details.",
+    },
+  ];
+}
+
+export function buildPublicOfferDetailPayload({
+  liveOffers,
+  slug,
+}: {
+  liveOffers: readonly OfferRecord[];
+  slug: string;
+}): PublicOfferDetailPayload {
+  const item = getPublicOfferListingBySlug({ liveOffers, slug });
+
+  return {
+    contractVersion: PUBLIC_OFFERS_API_CONTRACT_VERSION,
+    slug,
+    publicContract: buildPublicOffersContract({
+      publicApiRoute: "/api/offers/:slug",
+      supportedFilters: [],
+      nonClaims: [...PUBLIC_OFFER_DETAIL_NON_CLAIMS],
+    }),
+    item,
+    actions: buildPublicOfferDetailActions(item),
+  };
+}
+
 export function buildPublicOffersCollectionPayload({
   liveOffers,
   searchParams,
@@ -615,15 +818,44 @@ export function buildPublicOffersCollectionPayload({
         duration: buildFacet(facetScope, (listing) => [listing.duration.label]),
       },
     },
-    publicContract: {
-      version: PUBLIC_OFFERS_API_CONTRACT_VERSION,
-      sourceRoute: "/offers",
+    publicContract: buildPublicOffersContract({
       publicApiRoute: "/api/offers",
-      listingSchemaId: LISTING_SCHEMA_ID,
-      supportedFilters: [...SUPPORTED_FILTERS],
-      nonClaims: [...PUBLIC_OFFER_NON_CLAIMS],
-    },
+    }),
     items,
+  };
+}
+
+export function buildPublicOffersFacetsPayload({
+  liveOffers,
+  searchParams,
+}: {
+  liveOffers: readonly OfferRecord[];
+  searchParams: URLSearchParams;
+}): PublicOffersFacetsPayload {
+  const collection = buildPublicOffersCollectionPayload({
+    liveOffers,
+    searchParams,
+  });
+
+  return {
+    contractVersion: PUBLIC_OFFERS_API_CONTRACT_VERSION,
+    meta: {
+      tab: collection.meta.tab,
+      defaultTab: collection.meta.defaultTab,
+      total: collection.meta.total,
+      query: collection.meta.query,
+      liveOfferCount: collection.meta.liveOfferCount,
+      workedExampleCount: collection.meta.workedExampleCount,
+      defaultedToWorkedExamples: collection.meta.defaultedToWorkedExamples,
+      hiddenZeroCountFacets: collection.meta.hiddenZeroCountFacets,
+    },
+    publicContract: buildPublicOffersContract({
+      publicApiRoute: "/api/offers/facets",
+      supportedFilters: [...SUPPORTED_FILTERS].filter(
+        (filter) => filter !== "page" && filter !== "pageSize",
+      ),
+    }),
+    availableFacets: collection.meta.availableFacets,
   };
 }
 
@@ -666,6 +898,24 @@ function listingLeaksPrivateFields(listing: PublicOfferListing) {
   return /owner_id|authUser|contactEmail|isInCart|privateWish|rawSourceNotes|cartState/i.test(
     serialized,
   );
+}
+
+function actionsPreservePublicBoundaries(actions: readonly PublicOfferDetailAction[]) {
+  return actions.every(
+    (action) =>
+      action.authRequired &&
+      action.method === "GET" &&
+      action.href.startsWith("/") &&
+      !/contactEmail|privateWish|rawSourceNotes|cartState/i.test(JSON.stringify(action)),
+  );
+}
+
+function visibleFacetsHavePositiveCounts(
+  facets: PublicOffersMeta["availableFacets"],
+) {
+  return Object.values(facets)
+    .flat()
+    .every((facet) => facet.count > 0);
 }
 
 export function validatePublicOffersCollectionPayload(
@@ -728,6 +978,115 @@ export function validatePublicOffersCollectionPayload(
   return {
     status: blockers.length ? "fail" : "pass",
     validatorName: "public-offers-collection-api",
+    validatorVersion: PUBLIC_OFFERS_API_VALIDATOR_VERSION,
+    contractVersion: payload.contractVersion,
+    checks,
+    blockers,
+  };
+}
+
+export function validatePublicOfferDetailPayload(
+  payload: PublicOfferDetailPayload,
+): PublicOffersValidation {
+  const checks = [
+    validationCheck(
+      "contract-shape",
+      "Public offer detail contract and schema id are published",
+      payload.contractVersion === PUBLIC_OFFERS_API_CONTRACT_VERSION &&
+        payload.publicContract.publicApiRoute === "/api/offers/:slug" &&
+        payload.publicContract.sourceRoute === "/offers" &&
+        payload.publicContract.listingSchemaId === LISTING_SCHEMA_ID,
+      `${payload.publicContract.publicApiRoute}; ${payload.publicContract.listingSchemaId}`,
+    ),
+    validationCheck(
+      "listing-found",
+      "Requested public offer slug resolves to a live listing or worked example",
+      Boolean(payload.item),
+      payload.item ? payload.item.slug : payload.slug,
+    ),
+    validationCheck(
+      "listing-field-shape",
+      "Detail response reuses the approved public listing fields",
+      payload.item ? listingHasRequiredFields(payload.item) : false,
+      payload.item ? payload.item.canonicalUrl : "No public item.",
+    ),
+    validationCheck(
+      "actions-consent-gated",
+      "Detail actions are sign-in and consent gated",
+      Boolean(payload.item) && actionsPreservePublicBoundaries(payload.actions),
+      `${payload.actions.length} action(s).`,
+    ),
+    validationCheck(
+      "privacy-and-nonclaims",
+      "Detail omits private fields and preserves non-claims",
+      Boolean(payload.item) &&
+        !listingLeaksPrivateFields(payload.item as PublicOfferListing) &&
+        payload.publicContract.nonClaims.some((claim) => /does not grant contact access/i.test(claim)) &&
+        payload.publicContract.nonClaims.some((claim) => /not escrow|custody/i.test(claim)),
+      payload.publicContract.nonClaims.join(" | "),
+    ),
+  ];
+  const blockers = checks
+    .filter((check) => check.status === "fail")
+    .map((check) => `${check.id}: ${check.label}`);
+
+  return {
+    status: blockers.length ? "fail" : "pass",
+    validatorName: "public-offers-detail-api",
+    validatorVersion: PUBLIC_OFFERS_API_VALIDATOR_VERSION,
+    contractVersion: payload.contractVersion,
+    checks,
+    blockers,
+  };
+}
+
+export function validatePublicOffersFacetsPayload(
+  payload: PublicOffersFacetsPayload,
+): PublicOffersValidation {
+  const checks = [
+    validationCheck(
+      "contract-shape",
+      "Public offer facets contract and schema id are published",
+      payload.contractVersion === PUBLIC_OFFERS_API_CONTRACT_VERSION &&
+        payload.publicContract.publicApiRoute === "/api/offers/facets" &&
+        payload.publicContract.sourceRoute === "/offers" &&
+        payload.publicContract.listingSchemaId === LISTING_SCHEMA_ID &&
+        payload.publicContract.supportedFilters.includes("q") &&
+        payload.publicContract.supportedFilters.includes("tab"),
+      `${payload.publicContract.publicApiRoute}; ${payload.publicContract.listingSchemaId}`,
+    ),
+    validationCheck(
+      "facet-zero-counts-hidden",
+      "Facet endpoint hides zero-count options",
+      payload.meta.hiddenZeroCountFacets &&
+        visibleFacetsHavePositiveCounts(payload.availableFacets),
+      `${Object.values(payload.availableFacets).flat().length} visible facet(s).`,
+    ),
+    validationCheck(
+      "zero-live-default",
+      "Zero live inventory defaults facets to worked examples",
+      payload.meta.liveOfferCount > 0 ||
+        payload.meta.defaultTab === "examples",
+      `live=${payload.meta.liveOfferCount}; default=${payload.meta.defaultTab}`,
+    ),
+    validationCheck(
+      "privacy-and-nonclaims",
+      "Facets expose counts only and preserve non-claims",
+      !/owner_id|authUser|contactEmail|privateWish|rawSourceNotes|cartState/i.test(
+        JSON.stringify(payload.availableFacets),
+      ) &&
+        payload.publicContract.nonClaims.some((claim) => /not escrow|custody/i.test(claim)) &&
+        payload.publicContract.nonClaims.some((claim) => /not platform moral rankings/i.test(claim)),
+      payload.publicContract.nonClaims.join(" | "),
+    ),
+  ];
+  const blockers = checks
+    .filter((check) => check.status === "fail")
+    .map((check) => `${check.id}: ${check.label}`);
+
+  return {
+    status: blockers.length ? "fail" : "pass",
+    validatorName: "public-offers-facets-api",
     validatorVersion: PUBLIC_OFFERS_API_VALIDATOR_VERSION,
     contractVersion: payload.contractVersion,
     checks,

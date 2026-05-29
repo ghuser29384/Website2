@@ -606,11 +606,17 @@ create table if not exists public.saved_searches (
   cadence text not null default 'weekly' check (cadence in ('manual', 'daily', 'weekly', 'monthly')),
   status text not null default 'active' check (status in ('active', 'paused')),
   last_scanned_at timestamptz,
+  filters_json jsonb not null default '{}'::jsonb,
+  notify_on_live_match boolean not null default true,
+  source_route text not null default '/dashboard',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
 
 alter table public.saved_searches add column if not exists last_scanned_at timestamptz;
+alter table public.saved_searches add column if not exists filters_json jsonb not null default '{}'::jsonb;
+alter table public.saved_searches add column if not exists notify_on_live_match boolean not null default true;
+alter table public.saved_searches add column if not exists source_route text not null default '/dashboard';
 
 -- Social and marketplace extensions used by the current app code.
 -- Exact table names matter here:

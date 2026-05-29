@@ -14,6 +14,11 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.equal(validation.status, "pass");
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_health"));
   assert.ok(profile.routes.some((route) => route.key === "public_offers_collection"));
+  assert.ok(profile.routes.some((route) => route.key === "public_offer_detail"));
+  assert.ok(profile.routes.some((route) => route.key === "public_offers_facets"));
+  assert.ok(profile.routes.some((route) => route.key === "saved_search_create"));
+  assert.ok(profile.routes.some((route) => route.key === "public_offer_follow"));
+  assert.ok(profile.routes.some((route) => route.key === "public_offer_create_similar"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_data_model_contract"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_policy_bundle_contract"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_provenance_schema"));
@@ -40,6 +45,16 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "empty_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offers_collection_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offers_collection_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offer_detail_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offer_detail_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offers_facets_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offers_facets_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "saved_search_create_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "saved_search_create_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offer_follow_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offer_follow_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offer_create_similar_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "public_offer_create_similar_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_import_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "data_model_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "policy_bundle_contract_response"));
@@ -146,6 +161,51 @@ test("api contract validation fails when private or sparse-preview protections a
         };
       }
 
+      if (route.key === "public_offer_detail") {
+        return {
+          ...route,
+          cacheControl: "public_cache",
+          fallback: "Return private details.",
+          rateLimitSurface: "public_contract_read",
+        };
+      }
+
+      if (route.key === "public_offers_facets") {
+        return {
+          ...route,
+          cacheControl: "public_cache",
+          fallback: "Return all facets.",
+          rateLimitSurface: "public_contract_read",
+        };
+      }
+
+      if (route.key === "saved_search_create") {
+        return {
+          ...route,
+          cacheControl: "public_cache",
+          fallback: "Store anonymous searches and contact users.",
+          rateLimitSurface: "public_contract_read",
+        };
+      }
+
+      if (route.key === "public_offer_follow") {
+        return {
+          ...route,
+          cacheControl: "public_cache",
+          fallback: "Publish all follow counts.",
+          rateLimitSurface: "public_contract_read",
+        };
+      }
+
+      if (route.key === "public_offer_create_similar") {
+        return {
+          ...route,
+          cacheControl: "public_cache",
+          fallback: "Store cloned offers and copy contact details.",
+          rateLimitSurface: "public_contract_read",
+        };
+      }
+
       if (route.key === "moral_trade_data_model_contract") {
         return { ...route, cacheControl: "public_contract_static", fallback: "Expose all records." };
       }
@@ -193,6 +253,10 @@ test("api contract validation fails when private or sparse-preview protections a
   assert.ok(validation.blockers.some((blocker) => blocker.includes("provenance-schema-validator")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("schema-registry-route")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("public-offers-collection-route")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("public-offer-detail-route")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("public-offers-facets-route")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("saved-search-create-route")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("public-offer-follow-route")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("data-model-contract-route")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("policy-bundle-contract-route")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("copilot-review-nonmutating")));

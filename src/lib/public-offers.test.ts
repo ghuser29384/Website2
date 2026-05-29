@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { GET as publicOfferDetailRoute } from "../app/api/offers/[...slug]/route";
+import { GET as publicOffersFacetsRoute } from "../app/api/offers/facets/route";
 import { GET as publicOffersRoute } from "../app/api/offers/route";
 
 import {
+  buildPublicOfferDetailPayload,
   buildPublicOffersCollectionPayload,
+  buildPublicOffersFacetsPayload,
   getPublicOffersLiveModeFromSearchParams,
+  getPublicOfferSlugFromSegments,
+  validatePublicOfferDetailPayload,
   validatePublicOffersCollectionPayload,
+  validatePublicOffersFacetsPayload,
 } from "./public-offers";
 
 test("public offers collection defaults to worked examples when live inventory is empty", () => {
@@ -80,6 +87,38 @@ test("public offers live-mode parser maps public formats to internal offer modes
   );
 });
 
+test("public offer detail resolves worked-example slugs and keeps actions consent gated", () => {
+  const slug = getPublicOfferSlugFromSegments(["examples", "seed-victoria"]);
+  const payload = buildPublicOfferDetailPayload({
+    liveOffers: [],
+    slug,
+  });
+  const validation = validatePublicOfferDetailPayload(payload);
+
+  assert.equal(slug, "examples/seed-victoria");
+  assert.equal(validation.status, "pass");
+  assert.equal(payload.item?.isWorkedExample, true);
+  assert.equal(payload.publicContract.publicApiRoute, "/api/offers/:slug");
+  assert.ok(payload.actions.some((action) => action.key === "create-similar"));
+  assert.ok(payload.actions.every((action) => action.authRequired));
+  assert.ok(payload.publicContract.nonClaims.some((claim) => claim.includes("does not grant contact access")));
+});
+
+test("public offer facets endpoint payload hides zero-count options", () => {
+  const payload = buildPublicOffersFacetsPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("tab=examples&q=vegetarian"),
+  });
+  const validation = validatePublicOffersFacetsPayload(payload);
+  const allFacets = Object.values(payload.availableFacets).flat();
+
+  assert.equal(validation.status, "pass");
+  assert.equal(payload.publicContract.publicApiRoute, "/api/offers/facets");
+  assert.equal(payload.meta.tab, "examples");
+  assert.ok(allFacets.length > 0);
+  assert.ok(allFacets.every((facet) => facet.count > 0));
+});
+
 test("public offers API route returns validator-backed collection JSON", async () => {
   const response = await publicOffersRoute(
     new Request("http://localhost/api/offers?tab=examples&pageSize=3"),
@@ -96,6 +135,60 @@ test("public offers API route returns validator-backed collection JSON", async (
     body.publicContract.listingSchemaId,
     "https://www.moraltrade.org/schemas/moral-trade/public-offer-listing.schema.json",
   );
+  assert.equal(body.validation.status, "pass");
+  assert.deepEqual(body.blockers, []);
+});
+
+test("public offer detail API route returns validator-backed worked example JSON", async () => {
+  const response = await publicOfferDetailRoute(
+    new Request("http://localhost/api/offers/examples/seed-victoria"),
+    {
+      params: Promise.resolve({
+        slug: ["examples", "seed-victoria"],
+      }),
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(body.ok, true);
+  assert.equal(body.item.slug, "examples/seed-victoria");
+  assert.equal(body.item.noEscrow, true);
+  assert.equal(body.publicContract.publicApiRoute, "/api/offers/:slug");
+  assert.equal(body.validation.status, "pass");
+  assert.deepEqual(body.blockers, []);
+});
+
+test("public offer detail API route returns 404 blockers for non-public slugs", async () => {
+  const response = await publicOfferDetailRoute(
+    new Request("http://localhost/api/offers/not-a-public-offer"),
+    {
+      params: Promise.resolve({
+        slug: ["not-a-public-offer"],
+      }),
+    },
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.item, null);
+  assert.ok(body.blockers.some((blocker: string) => blocker.includes("listing-found")));
+});
+
+test("public offer facets API route returns validator-backed facets JSON", async () => {
+  const response = await publicOffersFacetsRoute(
+    new Request("http://localhost/api/offers/facets?tab=examples&q=vegetarian"),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal(body.ok, true);
+  assert.equal(body.meta.tab, "examples");
+  assert.equal(body.publicContract.publicApiRoute, "/api/offers/facets");
   assert.equal(body.validation.status, "pass");
   assert.deepEqual(body.blockers, []);
 });

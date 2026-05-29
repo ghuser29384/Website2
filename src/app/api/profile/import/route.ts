@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { buildDeterministicSynthesis } from "@/lib/background-networking";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
-import type { Database } from "@/lib/supabase/database.types";
+import type { Database, Json } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
 
@@ -384,7 +384,16 @@ export async function POST(request: Request) {
           row.cadence === "weekly" || row.cadence === "monthly"
             ? (row.cadence as SavedSearchInsert["cadence"])
             : "manual",
+        filters_json:
+          typeof row.filters_json === "object" && row.filters_json
+            ? (row.filters_json as Json)
+            : {},
         min_score: Math.max(0, Math.min(100, Number(row.min_score ?? 50) || 50)),
+        notify_on_live_match: row.notify_on_live_match !== false,
+        source_route:
+          typeof row.source_route === "string" && row.source_route.startsWith("/offers")
+            ? row.source_route.slice(0, 500)
+            : "/dashboard",
         status: row.status === "paused" ? "paused" : "active",
       }),
     });

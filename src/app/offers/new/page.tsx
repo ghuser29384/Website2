@@ -4,8 +4,10 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { OfferCreateForm, type OfferTemplate } from "@/components/offers/offer-create-form";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getFormMessage } from "@/lib/form-state";
-import { getDonationOffsetOverview, getViewer } from "@/lib/app-data";
+import { getDonationOffsetOverview, getOfferById, getViewer } from "@/lib/app-data";
 import { getMoralTradeProvenanceContract } from "@/lib/moral-trade/provenance";
+import { buildCreateSimilarTemplateFromLiveOffer } from "@/lib/offer-create-similar";
+import { isPublicLiveOfferId } from "@/lib/offer-follows";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
@@ -17,6 +19,26 @@ export const metadata: Metadata = {
     follow: false,
   },
 };
+
+function getSingleSearchParam(value: string | string[] | undefined) {
+  return typeof value === "string" ? value : undefined;
+}
+
+function buildOfferCreationReturnTo(searchParams: Record<string, string | string[] | undefined>) {
+  const params = new URLSearchParams();
+
+  for (const key of ["mode", "example", "source_offer"] as const) {
+    const value = getSingleSearchParam(searchParams[key]);
+
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  const query = params.toString();
+
+  return query ? `/offers/new?${query}` : "/offers/new";
+}
 
 function getWorkedExampleTemplate(exampleId: string | undefined): OfferTemplate | null {
   if (!exampleId) {
@@ -70,6 +92,20 @@ function getWorkedExampleTemplate(exampleId: string | undefined): OfferTemplate 
   };
 }
 
+async function getLiveOfferTemplate(sourceOfferId: string | undefined): Promise<OfferTemplate | null> {
+  if (!sourceOfferId || !isPublicLiveOfferId(sourceOfferId)) {
+    return null;
+  }
+
+  const offer = await getOfferById(sourceOfferId);
+
+  if (!offer || offer.status !== "open") {
+    return null;
+  }
+
+  return buildCreateSimilarTemplateFromLiveOffer(offer);
+}
+
 interface NewOfferPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
@@ -91,18 +127,17 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
       ? resolvedSearchParams.offset_participation_mode
       : "direct";
   const initialOffsetPoolId =
-    typeof resolvedSearchParams.offset_pool_id === "string"
-      ? resolvedSearchParams.offset_pool_id
-      : "";
+    getSingleSearchParam(resolvedSearchParams.offset_pool_id) ?? "";
   const initialOffsetPoolSide =
     typeof resolvedSearchParams.offset_pool_side === "string" &&
     (resolvedSearchParams.offset_pool_side === "side_a" ||
       resolvedSearchParams.offset_pool_side === "side_b")
       ? resolvedSearchParams.offset_pool_side
       : "";
-  const requestedExampleId =
-    typeof resolvedSearchParams.example === "string" ? resolvedSearchParams.example : undefined;
+  const requestedExampleId = getSingleSearchParam(resolvedSearchParams.example);
+  const requestedSourceOfferId = getSingleSearchParam(resolvedSearchParams.source_offer);
   const initialExampleTemplate = getWorkedExampleTemplate(requestedExampleId);
+  const offerCreationReturnTo = buildOfferCreationReturnTo(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidationRules = provenanceContract.validationRules.map((rule) => ({
@@ -111,6 +146,10 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
     rule: rule.rule,
   }));
   const viewer = supabaseReady ? await getViewer() : null;
+  const initialLiveOfferTemplate = viewer
+    ? await getLiveOfferTemplate(requestedSourceOfferId)
+    : null;
+  const initialTemplate = initialExampleTemplate ?? initialLiveOfferTemplate;
   const donationOffsetOverview = supabaseReady && viewer ? await getDonationOffsetOverview() : null;
   const availablePools =
     donationOffsetOverview?.pools.map((pool) => ({
@@ -160,10 +199,10 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
             </p>
             {!viewer ? (
               <div className="hero-actions">
-                <Link className="button button-primary" href="/signup?returnTo=/offers/new">
+                <Link className="button button-primary" href={`/signup?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}>
                   Create account
                 </Link>
-                <Link className="button button-secondary" href="/login?returnTo=/offers/new">
+                <Link className="button button-secondary" href={`/login?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}>
                   Sign in
                 </Link>
               </div>
@@ -206,8 +245,8 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
               <OfferCreateForm
                 availablePools={availablePools}
                 formMessage={formMessage}
-                initialMode={initialExampleTemplate?.mode ?? initialMode}
-                initialTemplate={initialExampleTemplate}
+                initialMode={initialTemplate?.mode ?? initialMode}
+                initialTemplate={initialTemplate}
                 initialOffsetParticipationMode={initialOffsetParticipationMode}
                 initialOffsetPoolId={initialOffsetPoolId}
                 initialOffsetPoolSide={initialOffsetPoolSide}
@@ -224,10 +263,10 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                   sign-in.
                 </p>
                 <div className="hero-actions">
-                  <Link className="button button-primary" href="/signup?returnTo=/offers/new">
+                  <Link className="button button-primary" href={`/signup?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}>
                     Create account
                   </Link>
-                  <Link className="button button-secondary" href="/login?returnTo=/offers/new">
+                  <Link className="button button-secondary" href={`/login?returnTo=${encodeURIComponent(offerCreationReturnTo)}`}>
                     Sign in
                   </Link>
                 </div>
