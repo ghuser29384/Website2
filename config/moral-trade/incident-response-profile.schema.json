@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.moraltrade.org/schemas/moral-trade/incident-response-profile.schema.json",
+  "type": "object",
+  "required": [
+    "version",
+    "purpose",
+    "intakeChannels",
+    "incidentCategories",
+    "severityLevels",
+    "responsePhases",
+    "disclosureRules",
+    "readinessGates",
+    "publicNonClaims",
+    "incidentTests"
+  ],
+  "properties": {
+    "version": { "type": "string", "minLength": 1 },
+    "purpose": { "type": "string", "minLength": 1 },
+    "intakeChannels": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/intakeChannel" },
+      "minItems": 1
+    },
+    "incidentCategories": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/incidentCategory" },
+      "minItems": 1
+    },
+    "severityLevels": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/severity" },
+      "minItems": 1
+    },
+    "responsePhases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/responsePhase" },
+      "minItems": 1
+    },
+    "disclosureRules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/disclosureRule" },
+      "minItems": 1
+    },
+    "readinessGates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/readinessGate" },
+      "minItems": 1
+    },
+    "publicNonClaims": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    },
+    "incidentTests": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "intakeChannel": {
+      "type": "object",
+      "required": ["key", "label", "audience", "rule"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "audience": { "type": "string", "minLength": 1 },
+        "rule": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "incidentCategory": {
+      "type": "object",
+      "required": ["key", "label", "owner", "examples"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "examples": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "severity": {
+      "type": "object",
+      "required": ["key", "label", "responseSlaHours", "notificationSlaHours", "publicSummary"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "responseSlaHours": { "type": "number", "exclusiveMinimum": 0 },
+        "notificationSlaHours": { "type": "number", "exclusiveMinimum": 0 },
+        "publicSummary": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "responsePhase": {
+      "type": "object",
+      "required": ["key", "label", "requiredForSeverity", "rule"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "requiredForSeverity": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "rule": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "disclosureRule": {
+      "type": "object",
+      "required": ["key", "label", "rule"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "rule": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "readinessGate": {
+      "type": "object",
+      "required": ["key", "label", "requires", "rule"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "label": { "type": "string", "minLength": 1 },
+        "requires": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        },
+        "rule": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

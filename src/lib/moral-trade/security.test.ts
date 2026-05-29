@@ -25,6 +25,11 @@ test("security profile publishes headers, sessions, provider boundaries, non-cla
     "not_claimed",
   );
   assert.ok(profile.publicNonClaims.some((entry) => /MFA|2FA/i.test(entry)));
+  assert.equal(
+    profile.controls.find((control) => control.key === "incident_response_reporting")?.status,
+    "implemented",
+  );
+  assert.ok(profile.publicNonClaims.some((entry) => /24\/7 staffed security operations/i.test(entry)));
   assert.ok(profile.scaleGates.some((gate) => gate.key === "sensitive_admin_scale"));
 });
 
@@ -47,7 +52,7 @@ test("security validation fails if provider boundaries are overclaimed or scale 
   assert.ok(validation.blockers.some((blocker) => blocker.includes("scale-gates")));
 });
 
-test("security scale readiness blocks sensitive admin expansion until 2FA, sessions, keys, and incidents are ready", () => {
+test("security scale readiness blocks sensitive admin expansion until 2FA, sessions, and keys are ready", () => {
   const readiness = auditMoralTradeSecurityScaleReadiness({
     gateKey: "sensitive_admin_scale",
   });
@@ -56,7 +61,7 @@ test("security scale readiness blocks sensitive admin expansion until 2FA, sessi
   assert.ok(readiness.blockers.includes("scale_control_not_ready:two_factor_admin_gate"));
   assert.ok(readiness.blockers.includes("scale_control_not_ready:device_session_review_gate"));
   assert.ok(readiness.blockers.includes("scale_control_not_ready:key_rotation_gate"));
-  assert.ok(readiness.blockers.includes("scale_control_not_ready:incident_response_reporting"));
+  assert.equal(readiness.blockers.includes("scale_control_not_ready:incident_response_reporting"), false);
 });
 
 test("security scale readiness passes when a gate's required controls are implemented or provider-boundary controls", () => {

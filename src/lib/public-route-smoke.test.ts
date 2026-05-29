@@ -823,6 +823,7 @@ test("public SEO metadata includes FAQ and breadcrumb structured data", () => {
   assert.match(safetyPage, /Validator-backed safety evidence/);
   assert.match(safetyPage, /\/api\/moral-trade\/security\/health/);
   assert.match(safetyPage, /\/api\/moral-trade\/disclosure\/contract/);
+  assert.match(safetyPage, /\/api\/moral-trade\/incident-response\/health/);
   assert.match(sitemapSource, /\/faq/);
 });
 
@@ -1095,6 +1096,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
   const securitySource = readRepoFile("src/lib/moral-trade/security.ts");
   const securityProfile = readRepoFile("config/moral-trade/security-profile.json");
+  const incidentResponseSource = readRepoFile("src/lib/moral-trade/incident-response.ts");
+  const incidentResponseProfile = readRepoFile("config/moral-trade/incident-response-profile.json");
   const evaluationSource = readRepoFile("src/lib/moral-trade/evaluation.ts");
   const evaluationProfile = readRepoFile("config/moral-trade/evaluation-profile.json");
   const performanceSource = readRepoFile("src/lib/moral-trade/performance.ts");
@@ -1150,6 +1153,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const operationsHealthRoute = readRepoFile("src/app/api/moral-trade/operations/health/route.ts");
   const securityHealthRoute = readRepoFile("src/app/api/moral-trade/security/health/route.ts");
+  const incidentResponseHealthRoute = readRepoFile(
+    "src/app/api/moral-trade/incident-response/health/route.ts",
+  );
   const evaluationHealthRoute = readRepoFile("src/app/api/moral-trade/evaluation/health/route.ts");
   const performanceHealthRoute = readRepoFile("src/app/api/moral-trade/performance/health/route.ts");
   const externalityHealthRoute = readRepoFile("src/app/api/moral-trade/externality/health/route.ts");
@@ -1343,6 +1349,19 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(securityProfile, /incident_response_reporting/);
   assert.match(securityProfile, /platform_abuse_throttling/);
   assert.match(securityProfile, /Moral Trade does not claim custom field-level encryption/);
+  assert.match(incidentResponseSource, /validateMoralTradeIncidentResponseProfile/);
+  assert.match(incidentResponseSource, /auditMoralTradeIncidentReadinessGate/);
+  assert.match(incidentResponseSource, /incident_response_profile_validator/);
+  assert.match(incidentResponseSource, /raw private records stay redacted/);
+  assert.match(incidentResponseProfile, /privacy_leakage/);
+  assert.match(incidentResponseProfile, /security_control_failure/);
+  assert.match(incidentResponseProfile, /payment_provider_error/);
+  assert.match(incidentResponseProfile, /copilot_output_violation/);
+  assert.match(incidentResponseProfile, /sev0_active_sensitive_exposure/);
+  assert.match(incidentResponseProfile, /affected_participant_notice_required/);
+  assert.match(incidentResponseProfile, /public_aggregate_only/);
+  assert.match(incidentResponseProfile, /validator_blockers_linked/);
+  assert.match(incidentResponseProfile, /Moral Trade does not claim 24\/7 staffed security operations/);
   assert.match(evaluationSource, /validateMoralTradeEvaluationProfile/);
   assert.match(evaluationSource, /auditMoralTradeSurfacingParity/);
   assert.match(evaluationSource, /auditMoralTradeUxReadiness/);
@@ -1444,6 +1463,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_reasoning_packets/);
   assert.match(apiContractSource, /reasoning-packets-validator/);
   assert.match(apiContractSource, /moral_trade_security_health/);
+  assert.match(apiContractSource, /moral_trade_incident_response_health/);
+  assert.match(apiContractSource, /incident-response-health-route/);
   assert.match(apiContractSource, /moral_trade_performance_health/);
   assert.match(apiContractSource, /moral_trade_externality_health/);
   assert.match(apiContractSource, /moral_trade_ai_governance_health/);
@@ -1507,6 +1528,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /privacy_thresholded_public_preview/);
   assert.match(apiContractProfile, /security_health_response/);
   assert.match(apiContractProfile, /field-level encryption, MFA, key rotation, or zero risk/);
+  assert.match(apiContractProfile, /incident_response_health_response/);
+  assert.match(apiContractProfile, /moral_trade_incident_response_health/);
+  assert.match(apiContractProfile, /Incident-response validator result/);
+  assert.match(apiContractProfile, /raw private wishes, source notes, contact details, payment secrets/);
   assert.match(apiContractProfile, /performance_health_response/);
   assert.match(apiContractProfile, /Core Web Vitals, API latency, or loading-state readiness/);
   assert.match(apiContractProfile, /externality_health_response/);
@@ -1589,6 +1614,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /securityProfile\.publicNonClaims/);
   assert.match(technicalSpecPage, /Public non-claim/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/security\/health/);
+  assert.match(technicalSpecPage, /Incident response contract/);
+  assert.match(technicalSpecPage, /Incident intake, disclosure, and reopening rules are validator-backed/);
+  assert.match(technicalSpecPage, /incidentResponseProfile\.severityLevels/);
+  assert.match(technicalSpecPage, /auditMoralTradeIncidentReadinessGate/);
+  assert.match(technicalSpecPage, /Incident non-claim/);
+  assert.match(technicalSpecPage, /\/api\/moral-trade\/incident-response\/health/);
   assert.match(technicalSpecPage, /Evaluation contract/);
   assert.match(technicalSpecPage, /Quality metrics are public, privacy-bounded, and rollout-gated/);
   assert.match(technicalSpecPage, /Sample surfacing parity audit/);
@@ -1671,6 +1702,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /securityControls/);
   assert.match(healthRoute, /securityScaleGates/);
   assert.match(healthRoute, /securityPublicNonClaims/);
+  assert.match(healthRoute, /incidentResponseValidation/);
+  assert.match(healthRoute, /incidentResponseIntakeChannels/);
+  assert.match(healthRoute, /incidentResponseSeverityLevels/);
+  assert.match(healthRoute, /incidentResponseDisclosureRules/);
+  assert.match(healthRoute, /incidentResponseReadinessGates/);
   assert.match(healthRoute, /evaluationValidation/);
   assert.match(healthRoute, /evaluationMetrics/);
   assert.match(healthRoute, /performanceValidation/);
@@ -1743,6 +1779,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(securityHealthRoute, /validateMoralTradeSecurityProfile/);
   assert.match(securityHealthRoute, /auditMoralTradeSecurityScaleReadiness/);
   assert.match(securityHealthRoute, /publicNonClaims/);
+  assert.match(incidentResponseHealthRoute, /validateMoralTradeIncidentResponseProfile/);
+  assert.match(incidentResponseHealthRoute, /auditMoralTradeIncidentReadinessGate/);
+  assert.match(incidentResponseHealthRoute, /incidentCategories/);
+  assert.match(incidentResponseHealthRoute, /publicNonClaims/);
   assert.match(evaluationHealthRoute, /validateMoralTradeEvaluationProfile/);
   assert.match(evaluationHealthRoute, /surfacingParityAuditDefaults/);
   assert.match(evaluationHealthRoute, /uxReadinessAuditDefaults/);

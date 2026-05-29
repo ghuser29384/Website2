@@ -207,6 +207,18 @@
       "fallback": "Return security blockers and scale-gate readiness; do not claim field-level encryption, MFA, key rotation, or zero risk unless verified."
     },
     {
+      "key": "moral_trade_incident_response_health",
+      "method": "GET",
+      "path": "/api/moral-trade/incident-response/health",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "incident_response_health_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return incident response blockers, intake categories, severity SLAs, readiness gates, and privacy-safe non-claims; never expose raw private wishes, source notes, contact details, payment secrets, or provider payloads."
+    },
+    {
       "key": "moral_trade_evaluation_health",
       "method": "GET",
       "path": "/api/moral-trade/evaluation/health",
@@ -323,7 +335,7 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, data-model, policy-bundle, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, evaluation, and API-contract validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, and API-contract validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
@@ -339,6 +351,7 @@
         { "key": "reasoningPacketValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Reasoning Center packet contract validator result." },
         { "key": "operationsValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Operations contract validator result." },
         { "key": "securityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Security posture validator result for headers, sessions, encryption boundaries, keys, MFA gates, and abuse controls." },
+        { "key": "incidentResponseValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Incident-response validator result for intake, severity, response phases, public disclosure boundaries, and readiness gates." },
         { "key": "evaluationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Evaluation contract validator result." },
         { "key": "performanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Performance and route-resilience validator result." },
         { "key": "externalityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Externality due-diligence validator result." },
@@ -616,6 +629,19 @@
       ]
     },
     {
+      "key": "incident_response_health_response",
+      "purpose": "Public incident-response intake, severity, response-phase, disclosure-rule, readiness-gate, and non-claim contract.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the incident-response profile validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the incident-response validation run." },
+        { "key": "profileVersion", "type": "string", "required": true, "privacy": "public", "description": "Incident-response profile version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable incident-response contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for intake channels, categories, severity SLAs, phases, disclosure rules, readiness gates, and non-claims." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Published intake channel keys, category owners, severity SLAs, response phases, disclosure rules, readiness gates, and incident tests." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Incident-response blockers that prevent relying on public incident-lane readiness." }
+      ]
+    },
+    {
       "key": "evaluation_health_response",
       "purpose": "Evaluation metrics, privacy boundaries, cohort slices, promotion gates, and blockers.",
       "fields": [
@@ -777,6 +803,7 @@
     "health_route_contract_smoke",
     "technical_spec_api_contract_smoke",
     "security_route_contract",
+    "incident_response_route_contract",
     "performance_route_contract",
     "externality_route_contract",
     "ai_governance_route_contract",

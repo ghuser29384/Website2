@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-security-v0.1-2026-05",
+  "version": "moral-trade-security-v0.2-2026-05",
   "purpose": "Public security posture contract for Moral Trade headers, session boundaries, provider encryption assumptions, secret/key management, abuse throttling, and scale gates.",
   "controls": [
     {
@@ -75,9 +75,9 @@
     {
       "key": "incident_response_reporting",
       "label": "Incident response reporting",
-      "status": "required_before_scale",
-      "evidence": "Evaluation and operations profiles name privacy incident count and route error metrics, but a full public incident runbook is not claimed.",
-      "publicClaim": "Scaling trust badges, paid actions, or sensitive admin roles requires a public incident-response and disclosure lane."
+      "status": "implemented",
+      "evidence": "config/moral-trade/incident-response-profile.json and /api/moral-trade/incident-response/health publish intake, severity, disclosure, response-phase, and readiness-gate checks.",
+      "publicClaim": "Incident intake, response phases, public aggregate disclosure rules, and non-claims are validator-backed; this does not complete MFA, key rotation, device/session review, or field-level encryption."
     }
   ],
   "scaleGates": [
@@ -120,6 +120,7 @@
     "Moral Trade does not claim custom field-level encryption for all private wish/source-note rows.",
     "Moral Trade does not claim verified MFA/2FA enforcement for every sensitive admin user until the admin gate passes.",
     "Moral Trade does not claim a completed key-rotation program until provider rotation records are published.",
+    "Moral Trade does not claim 24/7 staffed security operations or zero incidents; incident summaries stay aggregate and privacy-redacted.",
     "Moral Trade does not claim zero security risk; public health endpoints expose blockers instead."
   ],
   "securityTests": [
@@ -127,6 +128,7 @@
     "security_scale_gate_audit",
     "no_overclaim_nonclaim_smoke",
     "private_cache_header_smoke",
+    "security_profile_incident_lane_smoke",
     "security_health_route_contract_smoke",
     "technical_spec_security_smoke"
   ]

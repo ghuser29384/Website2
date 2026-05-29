@@ -1,7 +1,7 @@
 import securityProfileJson from "../../../config/moral-trade/security-profile.json";
 
 export const MORAL_TRADE_SECURITY_VALIDATOR_VERSION =
-  "moral-trade-security-validator-v0.1";
+  "moral-trade-security-validator-v0.2";
 
 export type MoralTradeSecurityControlStatus =
   | "implemented"
@@ -90,6 +90,7 @@ const REQUIRED_SECURITY_TESTS = [
   "security_scale_gate_audit",
   "no_overclaim_nonclaim_smoke",
   "private_cache_header_smoke",
+  "security_profile_incident_lane_smoke",
   "security_health_route_contract_smoke",
 ] as const;
 
@@ -197,14 +198,23 @@ export function validateMoralTradeSecurityProfile(
     ),
     check(
       "admin-and-key-scale-gates",
-      "2FA, device/session review, key rotation, and incident response gate sensitive scale",
+      "2FA, device/session review, and key rotation gate sensitive scale",
       controlMap.get("two_factor_admin_gate")?.status === "required_before_scale" &&
         controlMap.get("device_session_review_gate")?.status === "required_before_scale" &&
-        controlMap.get("key_rotation_gate")?.status === "required_before_scale" &&
-        controlMap.get("incident_response_reporting")?.status === "required_before_scale",
-      ["two_factor_admin_gate", "device_session_review_gate", "key_rotation_gate", "incident_response_reporting"]
+        controlMap.get("key_rotation_gate")?.status === "required_before_scale",
+      ["two_factor_admin_gate", "device_session_review_gate", "key_rotation_gate"]
         .map((key) => `${key}:${controlMap.get(key)?.status ?? "missing"}`)
         .join(", "),
+    ),
+    check(
+      "incident-response-lane",
+      "Incident response is published without overclaiming security completion",
+      controlMap.get("incident_response_reporting")?.status === "implemented" &&
+        /incident-response-profile\.json|incident-response\/health/i.test(
+          controlMap.get("incident_response_reporting")?.evidence ?? "",
+        ) &&
+        profile.publicNonClaims.some((entry) => /24\/7 staffed security operations|zero incidents/i.test(entry)),
+      `${controlMap.get("incident_response_reporting")?.status ?? "missing"}; ${profile.publicNonClaims.join(" | ")}`,
     ),
     check(
       "scale-gates",

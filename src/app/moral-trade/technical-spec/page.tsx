@@ -57,6 +57,11 @@ import {
   validateMoralTradeSecurityProfile,
 } from "@/lib/moral-trade/security";
 import {
+  auditMoralTradeIncidentReadinessGate,
+  getMoralTradeIncidentResponseProfile,
+  validateMoralTradeIncidentResponseProfile,
+} from "@/lib/moral-trade/incident-response";
+import {
   getMoralTradeEvaluationSampleAudits,
   getMoralTradeEvaluationProfile,
   validateMoralTradeEvaluationProfile,
@@ -136,6 +141,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const operationsValidation = validateMoralTradeOperationsProfile(operationsProfile);
   const securityProfile = getMoralTradeSecurityProfile();
   const securityValidation = validateMoralTradeSecurityProfile(securityProfile);
+  const incidentResponseProfile = getMoralTradeIncidentResponseProfile();
+  const incidentResponseValidation =
+    validateMoralTradeIncidentResponseProfile(incidentResponseProfile);
   const evaluationProfile = getMoralTradeEvaluationProfile();
   const evaluationValidation = validateMoralTradeEvaluationProfile(evaluationProfile);
   const evaluationSampleAudits = getMoralTradeEvaluationSampleAudits();
@@ -214,6 +222,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/security/health">
                 View security health
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/incident-response/health">
+                View incident response
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/evaluation/health">
                 View evaluation health
@@ -1210,6 +1221,94 @@ export default async function MoralTradeTechnicalSpecPage() {
             {securityProfile.publicNonClaims.map((nonClaim) => (
               <article className="panel data-card" key={nonClaim}>
                 <p className="detail-kicker">Public non-claim</p>
+                <p>{nonClaim}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="incident-response-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Incident response contract</p>
+            <h2 id="incident-response-contract-heading">
+              Incident intake, disclosure, and reopening rules are validator-backed.
+            </h2>
+            <p>
+              The report flagged incident response as a scale prerequisite. This profile publishes
+              the public incident lane: intake channels, severity SLAs, containment phases,
+              affected-participant notices, aggregate public updates, validator backlog updates,
+              and privacy-safe non-claims.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Incident response {incidentResponseProfile.version}
+              </p>
+              <h3>Status {incidentResponseValidation.status}</h3>
+              <p>
+                {incidentResponseValidation.checks.length} check(s),{" "}
+                {incidentResponseValidation.blockers.length} blocker(s),{" "}
+                {incidentResponseProfile.readinessGates.length} readiness gate(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/incident-response/health">
+              Open incident response JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Incident categories</h3>
+              <ul className="clean-list">
+                {incidentResponseProfile.incidentCategories.map((category) => (
+                  <li key={category.key}>
+                    {category.label}: {category.owner.replaceAll("_", " ")}
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Severity SLAs</h3>
+              <ul className="clean-list">
+                {incidentResponseProfile.severityLevels.map((severity) => (
+                  <li key={severity.key}>
+                    {severity.label}: response {severity.responseSlaHours}h, notice{" "}
+                    {severity.notificationSlaHours}h
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Readiness gates</h3>
+              <ul className="clean-list">
+                {incidentResponseProfile.readinessGates.map((gate) => {
+                  const readiness = auditMoralTradeIncidentReadinessGate({
+                    gateKey: gate.key,
+                    profile: incidentResponseProfile,
+                  });
+
+                  return (
+                    <li key={gate.key}>
+                      {gate.label}: {readiness.status}
+                    </li>
+                  );
+                })}
+              </ul>
+            </article>
+          </div>
+          <div className="data-grid">
+            {incidentResponseProfile.disclosureRules.map((rule) => (
+              <article className="panel data-card" key={rule.key}>
+                <p className="detail-kicker">{rule.key}</p>
+                <h3>{rule.label}</h3>
+                <p>{rule.rule}</p>
+              </article>
+            ))}
+          </div>
+          <div className="data-grid">
+            {incidentResponseProfile.publicNonClaims.map((nonClaim) => (
+              <article className="panel data-card" key={nonClaim}>
+                <p className="detail-kicker">Incident non-claim</p>
                 <p>{nonClaim}</p>
               </article>
             ))}

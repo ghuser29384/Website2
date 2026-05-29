@@ -30,6 +30,10 @@ import {
   validateMoralTradeSecurityProfile,
 } from "@/lib/moral-trade/security";
 import {
+  getMoralTradeIncidentResponseProfile,
+  validateMoralTradeIncidentResponseProfile,
+} from "@/lib/moral-trade/incident-response";
+import {
   getMoralTradeEvaluationSampleAudits,
   getMoralTradeEvaluationProfile,
   validateMoralTradeEvaluationProfile,
@@ -112,6 +116,9 @@ export async function GET() {
   const operationsValidation = validateMoralTradeOperationsProfile(operationsProfile);
   const securityProfile = getMoralTradeSecurityProfile();
   const securityValidation = validateMoralTradeSecurityProfile(securityProfile);
+  const incidentResponseProfile = getMoralTradeIncidentResponseProfile();
+  const incidentResponseValidation =
+    validateMoralTradeIncidentResponseProfile(incidentResponseProfile);
   const evaluationProfile = getMoralTradeEvaluationProfile();
   const evaluationValidation = validateMoralTradeEvaluationProfile(evaluationProfile);
   const evaluationSampleAudits = getMoralTradeEvaluationSampleAudits();
@@ -138,6 +145,7 @@ export async function GET() {
       reasoningPacketValidation.status === "pass" &&
       operationsValidation.status === "pass" &&
       securityValidation.status === "pass" &&
+      incidentResponseValidation.status === "pass" &&
       evaluationValidation.status === "pass" &&
       performanceValidation.status === "pass" &&
       externalityValidation.status === "pass" &&
@@ -158,6 +166,7 @@ export async function GET() {
     reasoningPacketValidation,
     operationsValidation,
     securityValidation,
+    incidentResponseValidation,
     evaluationValidation,
     performanceValidation,
     externalityValidation,
@@ -268,6 +277,26 @@ export async function GET() {
       securityControls: securityProfile.controls.map((control) => control.key),
       securityScaleGates: securityProfile.scaleGates.map((gate) => gate.key),
       securityPublicNonClaims: securityProfile.publicNonClaims,
+      incidentResponseProfileVersion: incidentResponseProfile.version,
+      incidentResponseIntakeChannels: incidentResponseProfile.intakeChannels.map(
+        (channel) => channel.key,
+      ),
+      incidentResponseCategories: incidentResponseProfile.incidentCategories.map(
+        (category) => category.key,
+      ),
+      incidentResponseSeverityLevels: incidentResponseProfile.severityLevels.map(
+        (severity) => severity.key,
+      ),
+      incidentResponsePhases: incidentResponseProfile.responsePhases.map(
+        (phase) => phase.key,
+      ),
+      incidentResponseDisclosureRules: incidentResponseProfile.disclosureRules.map(
+        (rule) => rule.key,
+      ),
+      incidentResponseReadinessGates: incidentResponseProfile.readinessGates.map(
+        (gate) => gate.key,
+      ),
+      incidentResponsePublicNonClaims: incidentResponseProfile.publicNonClaims,
       evaluationProfileVersion: evaluationProfile.version,
       evaluationMetrics: evaluationProfile.metrics.map((metric) => metric.key),
       evaluationCohortSlices: evaluationProfile.cohortSlices,
@@ -331,6 +360,7 @@ export async function GET() {
       ...reasoningPacketValidation.blockers,
       ...operationsValidation.blockers,
       ...securityValidation.blockers,
+      ...incidentResponseValidation.blockers,
       ...evaluationValidation.blockers,
       ...performanceValidation.blockers,
       ...externalityValidation.blockers,

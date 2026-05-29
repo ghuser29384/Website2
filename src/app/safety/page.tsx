@@ -80,9 +80,9 @@ export default async function SafetyPage() {
           <h2>Validator-backed safety evidence</h2>
           <p>
             Public health endpoints expose whether the security, disclosure, challenge-appeal,
-            performance, and AI-governance contracts pass their current validators. Safety claims
-            should stay tied to these checks rather than implying hidden automation, escrow, or
-            unrestricted reviewer authority.
+            incident-response, performance, and AI-governance contracts pass their current
+            validators. Safety claims should stay tied to these checks rather than implying hidden
+            automation, escrow, or unrestricted reviewer authority.
           </p>
           <div className="hero-actions">
             <Link className="button button-primary" href="/api/moral-trade/security/health">
@@ -93,6 +93,9 @@ export default async function SafetyPage() {
             </Link>
             <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
               View appeal contract
+            </Link>
+            <Link className="button button-secondary" href="/api/moral-trade/incident-response/health">
+              View incident response
             </Link>
           </div>
         </section>

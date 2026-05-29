@@ -1,0 +1,215 @@
+{
+  "version": "moral-trade-incident-response-v0.1-2026-05",
+  "purpose": "Public incident-response and disclosure-lane contract for privacy, security, payment-provider, evidence-integrity, unsafe-disclosure, availability, and copilot-output incidents.",
+  "intakeChannels": [
+    {
+      "key": "safety_page_report",
+      "label": "Safety page report",
+      "audience": "participants_and_public",
+      "rule": "Route safety, coercion, disclosure, and externality concerns into human review without publishing private details."
+    },
+    {
+      "key": "privacy_data_request",
+      "label": "Privacy or data-right request",
+      "audience": "participants",
+      "rule": "Route access, correction, deletion, and suspected leakage issues through the privacy/data-right lane."
+    },
+    {
+      "key": "admin_console_report",
+      "label": "Admin console report",
+      "audience": "operators",
+      "rule": "Route blocked wish profiles, payment-review requests, failed notifications, and abuse reports into an operator queue."
+    },
+    {
+      "key": "provider_alert",
+      "label": "Provider alert",
+      "audience": "operators",
+      "rule": "Capture Supabase, Vercel, Stripe, Every.org, email, or monitoring alerts as provider-boundary incident inputs."
+    },
+    {
+      "key": "validator_health_blocker",
+      "label": "Validator health blocker",
+      "audience": "operators_and_reviewers",
+      "rule": "Escalate failing public health validators when they could affect reliance, disclosure, completion, or public trust claims."
+    }
+  ],
+  "incidentCategories": [
+    {
+      "key": "privacy_leakage",
+      "label": "Privacy leakage",
+      "owner": "privacy_reviewer",
+      "examples": ["exact wish disclosed before consent", "raw source note exposed", "contact detail shown too early"]
+    },
+    {
+      "key": "security_control_failure",
+      "label": "Security control failure",
+      "owner": "security_reviewer",
+      "examples": ["private route cached publicly", "security header missing", "auth boundary unexpectedly bypassed"]
+    },
+    {
+      "key": "payment_provider_error",
+      "label": "Payment provider error",
+      "owner": "payment_reviewer",
+      "examples": ["Stripe or donation provider webhook failure", "payment-review queue mismatch", "receipt mismatch"]
+    },
+    {
+      "key": "evidence_integrity_issue",
+      "label": "Evidence integrity issue",
+      "owner": "evidence_reviewer",
+      "examples": ["duplicate proof", "wrong-scope evidence", "stale artifact used for reliance"]
+    },
+    {
+      "key": "unsafe_matching_or_disclosure",
+      "label": "Unsafe matching or disclosure",
+      "owner": "safety_reviewer",
+      "examples": ["coercive baseline surfaced", "private matching preview exceeded grant", "unreviewed externality trigger"]
+    },
+    {
+      "key": "availability_route_failure",
+      "label": "Availability or route failure",
+      "owner": "operations_reviewer",
+      "examples": ["public contract route failing", "Reasoning Center unavailable", "route recovery absent"]
+    },
+    {
+      "key": "copilot_output_violation",
+      "label": "Copilot output violation",
+      "owner": "copilot_reviewer",
+      "examples": ["hidden ranking language", "unapproved factor code", "private field echoed in summary"]
+    }
+  ],
+  "severityLevels": [
+    {
+      "key": "sev0_active_sensitive_exposure",
+      "label": "SEV0 active sensitive exposure",
+      "responseSlaHours": 1,
+      "notificationSlaHours": 24,
+      "publicSummary": "Active exposure of private wishes, source notes, contact details, payment-sensitive data, or auth bypass."
+    },
+    {
+      "key": "sev1_control_or_payment_failure",
+      "label": "SEV1 control or payment failure",
+      "responseSlaHours": 4,
+      "notificationSlaHours": 48,
+      "publicSummary": "Security, payment, disclosure, or evidence-control failure that may affect participant trust or reliance."
+    },
+    {
+      "key": "sev2_review_integrity_issue",
+      "label": "SEV2 review integrity issue",
+      "responseSlaHours": 24,
+      "notificationSlaHours": 120,
+      "publicSummary": "Incorrect review, challenge, evidence, or copilot-assistance result requiring correction before reliance."
+    },
+    {
+      "key": "sev3_service_degradation",
+      "label": "SEV3 service degradation",
+      "responseSlaHours": 72,
+      "notificationSlaHours": 168,
+      "publicSummary": "Route, validator, or provider degradation with no known sensitive-data exposure."
+    }
+  ],
+  "responsePhases": [
+    {
+      "key": "triage_and_severity",
+      "label": "Triage and severity",
+      "requiredForSeverity": ["sev0_active_sensitive_exposure", "sev1_control_or_payment_failure", "sev2_review_integrity_issue", "sev3_service_degradation"],
+      "rule": "Classify category, severity, affected surfaces, reviewer owner, and whether disclosure or reliance must pause."
+    },
+    {
+      "key": "containment_and_pause",
+      "label": "Containment and pause",
+      "requiredForSeverity": ["sev0_active_sensitive_exposure", "sev1_control_or_payment_failure", "sev2_review_integrity_issue"],
+      "rule": "Pause affected matching, disclosure, completion, trust-badge, or payment reliance paths before continuing review."
+    },
+    {
+      "key": "affected_participant_notice",
+      "label": "Affected participant notice",
+      "requiredForSeverity": ["sev0_active_sensitive_exposure", "sev1_control_or_payment_failure"],
+      "rule": "Notify affected participants with scoped facts, recommended actions, and what private data may have been involved."
+    },
+    {
+      "key": "provider_escalation",
+      "label": "Provider escalation",
+      "requiredForSeverity": ["sev0_active_sensitive_exposure", "sev1_control_or_payment_failure"],
+      "rule": "Escalate provider-boundary failures to Supabase, Vercel, Stripe, Every.org, email, or monitoring providers as relevant."
+    },
+    {
+      "key": "root_cause_and_correction",
+      "label": "Root cause and correction",
+      "requiredForSeverity": ["sev0_active_sensitive_exposure", "sev1_control_or_payment_failure", "sev2_review_integrity_issue", "sev3_service_degradation"],
+      "rule": "Record root cause, fixed control, regression check, reviewer approval, and unresolved residual risk."
+    },
+    {
+      "key": "public_aggregate_update",
+      "label": "Public aggregate update",
+      "requiredForSeverity": ["sev0_active_sensitive_exposure", "sev1_control_or_payment_failure", "sev2_review_integrity_issue"],
+      "rule": "Publish aggregate incident counts and category/severity summaries without raw private wishes, source notes, contact details, or payment secrets."
+    },
+    {
+      "key": "validator_and_backlog_update",
+      "label": "Validator and backlog update",
+      "requiredForSeverity": ["sev0_active_sensitive_exposure", "sev1_control_or_payment_failure", "sev2_review_integrity_issue", "sev3_service_degradation"],
+      "rule": "Add or update validator checks, tests, or scale-gate blockers so the same incident cannot silently recur."
+    }
+  ],
+  "disclosureRules": [
+    {
+      "key": "affected_participant_notice_required",
+      "label": "Affected participant notice required",
+      "rule": "SEV0 and SEV1 incidents require affected-participant notice unless doing so would increase harm or conflict with law."
+    },
+    {
+      "key": "public_aggregate_only",
+      "label": "Public aggregate only",
+      "rule": "Public reporting uses counts, category, severity, status, and remediation class; raw private records stay redacted."
+    },
+    {
+      "key": "no_private_details_in_public_postmortem",
+      "label": "No private details in public postmortem",
+      "rule": "Do not publish private wishes, source notes, exact contact details, payment secrets, hidden reviewer notes, or raw provider payloads."
+    },
+    {
+      "key": "validator_blockers_linked",
+      "label": "Validator blockers linked",
+      "rule": "If the incident exposed a contract gap, link the public blocker, test, or scale gate that now tracks the fix."
+    },
+    {
+      "key": "human_review_before_reopening",
+      "label": "Human review before reopening",
+      "rule": "Affected matching, disclosure, completion, payment, or trust-badge paths reopen only after human review confirms containment."
+    }
+  ],
+  "readinessGates": [
+    {
+      "key": "trust_badge_incident_lane",
+      "label": "Trust-badge incident lane",
+      "requires": ["triage_and_severity", "containment_and_pause", "public_aggregate_update", "validator_and_backlog_update"],
+      "rule": "Do not expand trust badges without a published incident lane for review errors, privacy leakage, and contract blockers."
+    },
+    {
+      "key": "paid_action_incident_lane",
+      "label": "Paid-action incident lane",
+      "requires": ["triage_and_severity", "containment_and_pause", "affected_participant_notice", "provider_escalation", "root_cause_and_correction"],
+      "rule": "Do not expand paid actions without payment-provider escalation, participant notice, and correction records."
+    },
+    {
+      "key": "copilot_assist_incident_lane",
+      "label": "Copilot-assist incident lane",
+      "requires": ["triage_and_severity", "containment_and_pause", "root_cause_and_correction", "validator_and_backlog_update"],
+      "rule": "Do not promote copilot assistance unless output violations are routed to containment and regression checks."
+    }
+  ],
+  "publicNonClaims": [
+    "Moral Trade does not claim 24/7 staffed security operations.",
+    "Moral Trade does not claim zero incidents or zero residual security risk.",
+    "Moral Trade does not publish raw private wishes, source notes, contact details, payment secrets, or provider payloads in public incident summaries.",
+    "Moral Trade does not treat incident-response publication as proof that MFA, device/session review, key rotation, or field-level encryption are complete."
+  ],
+  "incidentTests": [
+    "incident_response_profile_validator",
+    "incident_readiness_gate_audit",
+    "incident_privacy_boundary_smoke",
+    "incident_health_route_contract_smoke",
+    "security_profile_incident_lane_smoke",
+    "technical_spec_incident_response_smoke"
+  ]
+}

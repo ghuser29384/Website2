@@ -73,6 +73,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_review_workflow_evaluate",
   "moral_trade_operations_health",
   "moral_trade_security_health",
+  "moral_trade_incident_response_health",
   "moral_trade_evaluation_health",
   "moral_trade_performance_health",
   "moral_trade_externality_health",
@@ -192,6 +193,12 @@ export function validateMoralTradeApiContractProfile(
   );
   const disclosureEvaluateResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "disclosure_evaluate_response",
+  );
+  const incidentResponseHealthRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_incident_response_health",
+  );
+  const incidentResponseHealthResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "incident_response_health_response",
   );
   const reviewWorkflowEvaluateRoute = profile.routes.find(
     (route) => route.key === "moral_trade_review_workflow_evaluate",
@@ -460,6 +467,30 @@ export function validateMoralTradeApiContractProfile(
         : "missing",
     ),
     check(
+      "incident-response-health-route",
+      "Incident response health route is validator-backed and privacy-redacted",
+      incidentResponseHealthRoute?.method === "GET" &&
+        incidentResponseHealthRoute.cacheControl === "no_store_dynamic" &&
+        incidentResponseHealthRoute.privacyClass === "public_contract" &&
+        /incident response blockers|raw private wishes|source notes|contact details|payment secrets|provider payloads/i.test(
+          incidentResponseHealthRoute.fallback,
+        ) &&
+        Boolean(
+          incidentResponseHealthResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          incidentResponseHealthResponse?.fields.some(
+            (field) =>
+              field.key === "publicContract" && field.privacy === "public_contract",
+          ),
+        ),
+      incidentResponseHealthRoute
+        ? `${incidentResponseHealthRoute.key}:${incidentResponseHealthRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
       "reasoning-packets-validator",
       "Reasoning packets route is public and validator-backed",
       reasoningPacketsRoute?.method === "GET" &&
@@ -516,7 +547,8 @@ export function validateMoralTradeApiContractProfile(
         profile.apiTests.includes("technical_spec_api_contract_smoke") &&
         profile.apiTests.includes("data_model_contract_route") &&
         profile.apiTests.includes("policy_bundle_contract_route") &&
-        profile.apiTests.includes("performance_route_contract"),
+        profile.apiTests.includes("performance_route_contract") &&
+        profile.apiTests.includes("incident_response_route_contract"),
       profile.apiTests.join(", "),
     ),
   ];
