@@ -1,6 +1,10 @@
+import { createHash } from "node:crypto";
+
 import protocolProfileJson from "../../../config/moral-trade/protocol-profile.json";
 
 export const MORAL_TRADE_PROTOCOL_VALIDATOR_VERSION = "moral-trade-core-validator-v0.1";
+export const MORAL_TRADE_TRANSITION_EVENT_SCHEMA_VERSION =
+  "moral-trade-transition-event-v0.1";
 
 export type MoralTradeProtocolProfile = {
   version: string;
@@ -41,6 +45,7 @@ export interface MoralTradeProposalStateTransitionInput {
   policyScreenReviewed?: boolean;
   privacyRedactionReviewed?: boolean;
   provenanceActivityRecorded?: boolean;
+  transitionEventRecord?: MoralTradeStateTransitionEventRecord;
   policyConflictCodes?: string[];
 }
 
@@ -52,7 +57,41 @@ export interface MoralTradeProposalStateTransitionValidation {
   missingRequiredFields: string[];
   appliedRule: MoralTradeStateTransitionRule | null;
   requiredChecks: string[];
+  transitionEventRecord: MoralTradeStateTransitionEventRecord | null;
   blockers: string[];
+}
+
+export interface MoralTradeStateTransitionEventRecordInput {
+  from: string;
+  to: string;
+  subjectId: string;
+  subjectKind?: string;
+  provenanceActivity?: string;
+  actorAgentId: string;
+  actorAgentKind?: string;
+  recordedAt?: string;
+  usedEntityIds?: string[];
+  generatedEntityIds?: string[];
+  idempotencyKey: string;
+  previousEventHash?: string | null;
+}
+
+export interface MoralTradeStateTransitionEventRecord {
+  schemaVersion: typeof MORAL_TRADE_TRANSITION_EVENT_SCHEMA_VERSION;
+  id: string;
+  subjectId: string;
+  subjectKind: string;
+  from: string;
+  to: string;
+  provenanceActivity: string;
+  recordedAt: string;
+  actorAgentId: string;
+  actorAgentKind: string;
+  usedEntityIds: string[];
+  generatedEntityIds: string[];
+  idempotencyKey: string;
+  previousEventHash: string | null;
+  eventHash: string;
 }
 
 export interface MoralTradeProtocolValidatorCheck {
@@ -129,6 +168,7 @@ const REQUIRED_PROVENANCE_OBJECT_SCHEMAS = [
   "review_decision",
   "provenance_activity",
   "provenance_agent",
+  "state_transition_event_record",
 ] as const;
 
 const COMPLETE_PROPOSAL_REQUIRED_STATUSES = [
@@ -225,6 +265,230 @@ function getStateTransitionRule(from: string, profile: MoralTradeProtocolProfile
   return profile.stateTransitionRules.find((rule) => rule.from === from) ?? null;
 }
 
+function canonicalizeForProtocolHash(value: unknown): string {
+  if (value === null) {
+    return "null";
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => canonicalizeForProtocolHash(entry ?? null)).join(",")}]`;
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .filter((key) => record[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalizeForProtocolHash(record[key])}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+function hashProtocolPayload(value: unknown) {
+  return createHash("sha256").update(canonicalizeForProtocolHash(value)).digest("hex");
+}
+
+function transitionEventHashPayload(record: Omit<MoralTradeStateTransitionEventRecord, "eventHash" | "id">) {
+  return {
+    actorAgentId: record.actorAgentId,
+    actorAgentKind: record.actorAgentKind,
+    from: record.from,
+    generatedEntityIds: record.generatedEntityIds,
+    idempotencyKey: record.idempotencyKey,
+    previousEventHash: record.previousEventHash,
+    provenanceActivity: record.provenanceActivity,
+    recordedAt: record.recordedAt,
+    schemaVersion: record.schemaVersion,
+    subjectId: record.subjectId,
+    subjectKind: record.subjectKind,
+    to: record.to,
+    usedEntityIds: record.usedEntityIds,
+  };
+}
+
+function transitionEventIdFromHash(eventHash: string) {
+  return `moral-trade-transition-event:${eventHash.slice(0, 20)}`;
+}
+
+function tokenIsPrivacySafe(value: string) {
+  return (
+    value.trim() === value &&
+    value.length > 0 &&
+    value.length <= 240 &&
+    /^[A-Za-z0-9._:@/-]+$/.test(value) &&
+    !/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(value)
+  );
+}
+
+function isIsoInstant(value: string) {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+function isSha256(value: string | null | undefined) {
+  return typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+}
+
+export function buildMoralTradeStateTransitionEventRecord(
+  input: MoralTradeStateTransitionEventRecordInput,
+  profile: MoralTradeProtocolProfile = protocolProfile,
+): MoralTradeStateTransitionEventRecord {
+  const appliedRule = getStateTransitionRule(input.from, profile);
+  const provenanceActivity =
+    input.provenanceActivity ?? appliedRule?.provenanceActivity ?? "state_transition_recorded";
+  const recordedAt = input.recordedAt ?? new Date().toISOString();
+  const subjectKind = input.subjectKind ?? "proposal_record";
+  const actorAgentKind = input.actorAgentKind ?? "operator";
+  const usedEntityIds = input.usedEntityIds?.length ? input.usedEntityIds : [input.subjectId];
+  const generatedEntityIds = input.generatedEntityIds?.length
+    ? input.generatedEntityIds
+    : [`${input.subjectId}:${input.to}`];
+  const payload = {
+    actorAgentId: input.actorAgentId,
+    actorAgentKind,
+    from: input.from,
+    generatedEntityIds,
+    idempotencyKey: input.idempotencyKey,
+    previousEventHash: input.previousEventHash ?? null,
+    provenanceActivity,
+    recordedAt,
+    schemaVersion: MORAL_TRADE_TRANSITION_EVENT_SCHEMA_VERSION,
+    subjectId: input.subjectId,
+    subjectKind,
+    to: input.to,
+    usedEntityIds,
+  } satisfies Omit<MoralTradeStateTransitionEventRecord, "eventHash" | "id">;
+  const eventHash = hashProtocolPayload(transitionEventHashPayload(payload));
+
+  return {
+    ...payload,
+    id: transitionEventIdFromHash(eventHash),
+    eventHash,
+  };
+}
+
+export function validateMoralTradeStateTransitionEventRecord({
+  expectedFrom,
+  expectedTo,
+  expectedProvenanceActivity,
+  record,
+  profile = protocolProfile,
+}: {
+  expectedFrom: string;
+  expectedTo: string;
+  expectedProvenanceActivity?: string;
+  record: MoralTradeStateTransitionEventRecord | null | undefined;
+  profile?: MoralTradeProtocolProfile;
+}) {
+  const blockers: string[] = [];
+
+  if (!record) {
+    return ["transition_event_record_required"];
+  }
+
+  if (record.schemaVersion !== MORAL_TRADE_TRANSITION_EVENT_SCHEMA_VERSION) {
+    blockers.push("transition_event_record_schema_version_mismatch");
+  }
+
+  if (record.from !== expectedFrom) {
+    blockers.push(`transition_event_record_from_mismatch:${record.from}`);
+  }
+
+  if (record.to !== expectedTo) {
+    blockers.push(`transition_event_record_to_mismatch:${record.to}`);
+  }
+
+  if (
+    expectedProvenanceActivity &&
+    record.provenanceActivity !== expectedProvenanceActivity
+  ) {
+    blockers.push(
+      `transition_event_record_activity_mismatch:${record.provenanceActivity}`,
+    );
+  }
+
+  if (!profile.provenanceModel.activities.includes(record.provenanceActivity)) {
+    blockers.push(`transition_event_record_unknown_activity:${record.provenanceActivity}`);
+  }
+
+  if (!profile.provenanceModel.entities.includes(record.subjectKind)) {
+    blockers.push(`transition_event_record_unknown_subject_kind:${record.subjectKind}`);
+  }
+
+  if (!profile.provenanceModel.agents.includes(record.actorAgentKind)) {
+    blockers.push(`transition_event_record_unknown_actor_kind:${record.actorAgentKind}`);
+  }
+
+  for (const [field, value] of [
+    ["id", record.id],
+    ["subjectId", record.subjectId],
+    ["actorAgentId", record.actorAgentId],
+    ["idempotencyKey", record.idempotencyKey],
+  ] as const) {
+    if (!tokenIsPrivacySafe(value)) {
+      blockers.push(`transition_event_record_unsafe_${field}`);
+    }
+  }
+
+  const unsafeUsedEntityIds = record.usedEntityIds.filter((id) => !tokenIsPrivacySafe(id));
+  const unsafeGeneratedEntityIds = record.generatedEntityIds.filter(
+    (id) => !tokenIsPrivacySafe(id),
+  );
+
+  if (!record.usedEntityIds.length || unsafeUsedEntityIds.length) {
+    blockers.push("transition_event_record_used_entities_invalid");
+  }
+
+  if (!record.generatedEntityIds.length || unsafeGeneratedEntityIds.length) {
+    blockers.push("transition_event_record_generated_entities_invalid");
+  }
+
+  if (!isIsoInstant(record.recordedAt)) {
+    blockers.push("transition_event_record_recorded_at_invalid");
+  }
+
+  if (record.previousEventHash !== null && !isSha256(record.previousEventHash)) {
+    blockers.push("transition_event_record_previous_hash_invalid");
+  }
+
+  if (!isSha256(record.eventHash)) {
+    blockers.push("transition_event_record_hash_invalid");
+  } else {
+    const { eventHash: _eventHash, id: _id, ...payload } = record;
+    const expectedHash = hashProtocolPayload(transitionEventHashPayload(payload));
+    if (record.eventHash !== expectedHash) {
+      blockers.push("transition_event_record_hash_mismatch");
+    }
+
+    if (record.id !== transitionEventIdFromHash(expectedHash)) {
+      blockers.push("transition_event_record_id_mismatch");
+    }
+  }
+
+  return blockers;
+}
+
+export function summarizeMoralTradeStateTransitionEventRecord(
+  record: MoralTradeStateTransitionEventRecord | null | undefined,
+) {
+  if (!record) {
+    return "";
+  }
+
+  return [
+    "Transition event record:",
+    `id=${record.id};`,
+    `schema=${record.schemaVersion};`,
+    `activity=${record.provenanceActivity};`,
+    `from=${record.from};`,
+    `to=${record.to};`,
+    `recorded_at=${record.recordedAt};`,
+    `hash=${record.eventHash}.`,
+  ].join(" ");
+}
+
 export function validateMoralTradeProposalStateTransition(
   input: MoralTradeProposalStateTransitionInput,
   profile: MoralTradeProtocolProfile = protocolProfile,
@@ -301,19 +565,32 @@ export function validateMoralTradeProposalStateTransition(
     blockers.push("policy_or_human_review_required_before:blocked");
   }
 
-  if (!input.provenanceActivityRecorded) {
+  if (input.provenanceActivityRecorded === false) {
     blockers.push("transition_event_record_required");
   }
 
+  blockers.push(
+    ...validateMoralTradeStateTransitionEventRecord({
+      expectedFrom: input.from,
+      expectedTo: input.to,
+      expectedProvenanceActivity: appliedRule?.provenanceActivity,
+      record: input.transitionEventRecord,
+      profile,
+    }),
+  );
+
+  const uniqueBlockers = [...new Set(blockers)];
+
   return {
-    status: blockers.length ? "fail" : "pass",
+    status: uniqueBlockers.length ? "fail" : "pass",
     from: input.from,
     to: input.to,
-    allowed: blockers.length === 0,
+    allowed: uniqueBlockers.length === 0,
     missingRequiredFields,
     appliedRule,
     requiredChecks,
-    blockers,
+    transitionEventRecord: input.transitionEventRecord ?? null,
+    blockers: uniqueBlockers,
   };
 }
 

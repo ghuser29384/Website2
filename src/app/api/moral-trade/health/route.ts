@@ -197,6 +197,10 @@ export async function GET() {
       factorCodes: profile.factorCodes.map((factor) => factor.code),
       evidenceSchemas: profile.evidenceSchemas.map((schema) => schema.key),
       provenanceObjectSchemas: profile.provenanceObjectSchemas.map((schema) => schema.key),
+      stateTransitionEventRecordSchema:
+        profile.provenanceObjectSchemas.find(
+          (schema) => schema.key === "state_transition_event_record",
+        ) ?? null,
       provenanceSchemaVersion: provenanceContract.schemaVersion,
       provenanceValidationRules: provenanceContract.validationRules.map((rule) => rule.key),
       provenanceSampleBundleSummary: provenanceContract.sampleBundleSummary,

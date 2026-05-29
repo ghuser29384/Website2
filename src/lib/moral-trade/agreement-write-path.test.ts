@@ -85,6 +85,26 @@ test("agreement review completion requires challenge window, evidence review, an
   });
 
   assert.equal(validCompletion.status, "pass");
+  assert.equal(validCompletion.transitionEventRecord?.subjectKind, "review_decision");
+  assert.equal(validCompletion.transitionEventRecord?.provenanceActivity, "challenge_window_opened");
+  assert.equal(validCompletion.transitionEventRecord?.eventHash.length, 64);
+});
+
+test("agreement review protocol transition requires a structured event record", () => {
+  const validation = validateAgreementReviewProtocolTransition({
+    currentCompletionState: "challenge_window_open",
+    currentReviewCaseStatus: "challenge_window_open",
+    nextReviewCaseStatus: "reviewed_complete",
+    terms: completeTerms,
+    hasEvidenceItem: true,
+    reviewerConfidence: 80,
+    evidenceReviewReadiness: completeEvidenceReviewReadiness,
+    provenanceActivityRecorded: false,
+  });
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.includes("transition_event_record_required"));
+  assert.equal(validation.transitionEventRecord, null);
 });
 
 test("agreement review completion requires scoped evidence readiness checks", () => {

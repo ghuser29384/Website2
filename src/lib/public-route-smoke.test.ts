@@ -863,11 +863,15 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(proposalReviewSource, /technical_spec_review_workflow_smoke/);
   assert.match(protocolSource, /validateMoralTradeProtocolProfile/);
   assert.match(protocolSource, /validateMoralTradeProposalStateTransition/);
+  assert.match(protocolSource, /buildMoralTradeStateTransitionEventRecord/);
+  assert.match(protocolSource, /validateMoralTradeStateTransitionEventRecord/);
   assert.match(protocolProfile, /anti_threat_baseline/);
   assert.match(protocolProfile, /stateTransitionRules/);
   assert.match(protocolProfile, /completion_reviewed/);
   assert.match(protocolProfile, /disputed_unresolved/);
   assert.match(protocolProfile, /transition_event_recorded/);
+  assert.match(protocolProfile, /state_transition_event_record/);
+  assert.match(protocolProfile, /eventHash/);
   assert.match(protocolProfile, /privacy_safe_preview/);
   assert.match(protocolProfile, /baseline_challenge_recommended/);
   assert.match(protocolProfile, /match_signal/);

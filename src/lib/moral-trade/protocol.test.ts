@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildMoralTradeStateTransitionEventRecord,
   getMissingMoralTradeRequiredProposalFields,
   getMoralTradeProtocolProfile,
+  validateMoralTradeStateTransitionEventRecord,
   validateMoralTradeProposalStateTransition,
   validateMoralTradeProtocolProfile,
 } from "./protocol";
@@ -35,6 +37,11 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
   assert.ok(profile.provenanceObjectSchemas.some((schema) => schema.key === "external_entity_reference"));
   assert.ok(profile.provenanceObjectSchemas.some((schema) => schema.key === "match_signal"));
   assert.ok(profile.provenanceObjectSchemas.some((schema) => schema.key === "traceability_event"));
+  assert.ok(
+    profile.provenanceObjectSchemas.some(
+      (schema) => schema.key === "state_transition_event_record",
+    ),
+  );
   assert.ok(profile.qualityMetrics.includes("privacy_leakage_incidents"));
   assert.ok(profile.statusValues.includes("completion_reviewed"));
   assert.ok(profile.statusValues.includes("disputed_unresolved"));
@@ -68,6 +75,18 @@ const completeProposal = {
   public_description: "A voluntary pledge swap with explicit exit conditions and no custody claim.",
 };
 
+function transitionEvent(from: string, to: string) {
+  return buildMoralTradeStateTransitionEventRecord({
+    actorAgentId: "operator:protocol-test",
+    actorAgentKind: "operator",
+    from,
+    idempotencyKey: `protocol-test:${from}:${to}`,
+    recordedAt: "2026-05-29T00:00:00.000Z",
+    subjectId: "proposal_record:protocol-test",
+    to,
+  });
+}
+
 test("proposal state transitions reject illegal jumps and incomplete reliance states", () => {
   const validation = validateMoralTradeProposalStateTransition({
     from: "draft",
@@ -76,6 +95,7 @@ test("proposal state transitions reject illegal jumps and incomplete reliance st
     humanReviewApproved: true,
     evidenceReviewed: true,
     provenanceActivityRecorded: true,
+    transitionEventRecord: transitionEvent("draft", "completion_reviewed"),
   });
 
   assert.equal(validation.status, "fail");
@@ -96,6 +116,7 @@ test("proposal state transitions reject illegal jumps and incomplete reliance st
       baseline_statement: "",
     },
     provenanceActivityRecorded: true,
+    transitionEventRecord: transitionEvent("draft", "submitted"),
   });
 
   assert.equal(incompleteTransition.status, "fail");
@@ -108,6 +129,7 @@ test("proposal state transitions require human review, evidence review, and even
     to: "submitted",
     proposal: completeProposal,
     provenanceActivityRecorded: true,
+    transitionEventRecord: transitionEvent("draft", "submitted"),
   });
 
   assert.equal(validSubmission.status, "pass");
@@ -118,6 +140,7 @@ test("proposal state transitions require human review, evidence review, and even
     to: "matchable",
     proposal: completeProposal,
     provenanceActivityRecorded: true,
+    transitionEventRecord: transitionEvent("submitted", "matchable"),
   });
 
   assert.equal(missingHumanReview.status, "fail");
@@ -129,6 +152,7 @@ test("proposal state transitions require human review, evidence review, and even
     proposal: completeProposal,
     humanReviewApproved: true,
     provenanceActivityRecorded: true,
+    transitionEventRecord: transitionEvent("submitted", "matchable"),
   });
 
   assert.equal(missingMatchableEvidence.status, "fail");
@@ -143,6 +167,7 @@ test("proposal state transitions require human review, evidence review, and even
     humanReviewApproved: true,
     evidenceReviewed: true,
     provenanceActivityRecorded: true,
+    transitionEventRecord: transitionEvent("submitted", "matchable"),
   });
 
   assert.equal(incompleteMatchableVerificationLoop.status, "fail");
@@ -185,6 +210,7 @@ test("proposal state transitions require human review, evidence review, and even
     policyScreenReviewed: true,
     privacyRedactionReviewed: true,
     provenanceActivityRecorded: true,
+    transitionEventRecord: transitionEvent("submitted", "matchable"),
   });
 
   assert.equal(policyConflictMatchable.status, "fail");
@@ -206,6 +232,7 @@ test("proposal state transitions require human review, evidence review, and even
     policyScreenReviewed: true,
     privacyRedactionReviewed: true,
     provenanceActivityRecorded: true,
+    transitionEventRecord: transitionEvent("submitted", "matchable"),
   });
 
   assert.equal(validMatchable.status, "pass");
@@ -216,6 +243,7 @@ test("proposal state transitions require human review, evidence review, and even
     proposal: completeProposal,
     humanReviewApproved: true,
     provenanceActivityRecorded: true,
+    transitionEventRecord: transitionEvent("challenge_window", "completion_reviewed"),
   });
 
   assert.equal(missingEvidence.status, "fail");
@@ -229,4 +257,52 @@ test("proposal state transitions require human review, evidence review, and even
 
   assert.equal(missingEvent.status, "fail");
   assert.ok(missingEvent.blockers.includes("transition_event_record_required"));
+});
+
+test("state transition event records are immutable and bound to the expected edge", () => {
+  const event = transitionEvent("submitted", "matchable");
+
+  assert.equal(
+    validateMoralTradeStateTransitionEventRecord({
+      expectedFrom: "submitted",
+      expectedTo: "matchable",
+      expectedProvenanceActivity: "risk_screened",
+      record: event,
+    }).length,
+    0,
+  );
+  assert.equal(event.eventHash.length, 64);
+  assert.match(event.id, /^moral-trade-transition-event:/);
+
+  const mismatchedEdge = validateMoralTradeProposalStateTransition({
+    from: "submitted",
+    to: "matchable",
+    proposal: completeProposal,
+    baselineCredibilityReviewed: true,
+    evidenceReviewed: true,
+    externalityTriggerReviewed: true,
+    humanReviewApproved: true,
+    matchExplanationGenerated: true,
+    policyScreenReviewed: true,
+    privacyRedactionReviewed: true,
+    transitionEventRecord: transitionEvent("submitted", "needs_evidence"),
+  });
+
+  assert.equal(mismatchedEdge.status, "fail");
+  assert.ok(
+    mismatchedEdge.blockers.includes("transition_event_record_to_mismatch:needs_evidence"),
+  );
+
+  const tamperedEvent = {
+    ...event,
+    eventHash: "a".repeat(64),
+  };
+  const tamperedValidation = validateMoralTradeStateTransitionEventRecord({
+    expectedFrom: "submitted",
+    expectedTo: "matchable",
+    expectedProvenanceActivity: "risk_screened",
+    record: tamperedEvent,
+  });
+
+  assert.ok(tamperedValidation.includes("transition_event_record_hash_mismatch"));
 });

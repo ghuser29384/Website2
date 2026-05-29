@@ -1,5 +1,7 @@
 import {
+  buildMoralTradeStateTransitionEventRecord,
   validateMoralTradeProposalStateTransition,
+  type MoralTradeStateTransitionEventRecord,
   type MoralTradeProposalStateTransitionValidation,
 } from "@/lib/moral-trade/protocol";
 
@@ -174,7 +176,15 @@ export function validateAgreementReviewProtocolTransition({
   evidenceReviewReadiness,
   disputeRecordCreated = false,
   humanReviewApproved = true,
+  actorAgentId = "operator:protocol-validator",
+  actorAgentKind = "operator",
+  idempotencyKey,
+  previousEventHash = null,
   provenanceActivityRecorded = true,
+  recordedAt,
+  subjectId = "review_decision:pending",
+  subjectKind = "review_decision",
+  transitionEventRecord,
 }: {
   currentCompletionState: AgreementCompletionState;
   currentReviewCaseStatus: AgreementReviewCaseStatus;
@@ -185,7 +195,15 @@ export function validateAgreementReviewProtocolTransition({
   evidenceReviewReadiness?: AgreementEvidenceReviewReadinessInput;
   disputeRecordCreated?: boolean;
   humanReviewApproved?: boolean;
+  actorAgentId?: string;
+  actorAgentKind?: string;
+  idempotencyKey?: string;
+  previousEventHash?: string | null;
   provenanceActivityRecorded?: boolean;
+  recordedAt?: string;
+  subjectId?: string;
+  subjectKind?: string;
+  transitionEventRecord?: MoralTradeStateTransitionEventRecord;
 }): MoralTradeProposalStateTransitionValidation {
   const from =
     currentReviewCaseStatus === "open" || currentReviewCaseStatus === "under_review"
@@ -204,6 +222,7 @@ export function validateAgreementReviewProtocolTransition({
       missingRequiredFields: [],
       appliedRule: null,
       requiredChecks: ["no_state_change"],
+      transitionEventRecord: null,
       blockers: [],
     };
   }
@@ -217,6 +236,7 @@ export function validateAgreementReviewProtocolTransition({
           },
         )
       : null;
+  const transitionRecordedAt = recordedAt ?? new Date().toISOString();
 
   const transition = validateMoralTradeProposalStateTransition({
     from,
@@ -227,6 +247,23 @@ export function validateAgreementReviewProtocolTransition({
     disputeRecordCreated,
     provenanceActivityRecorded,
     policyConflictCodes: to === "blocked" ? ["human_review_block"] : [],
+    transitionEventRecord:
+      transitionEventRecord ??
+      (provenanceActivityRecorded
+        ? buildMoralTradeStateTransitionEventRecord({
+            actorAgentId,
+            actorAgentKind,
+            from,
+            idempotencyKey:
+              idempotencyKey ??
+              `agreement-review:${subjectId}:${from}:${to}:${transitionRecordedAt}`,
+            previousEventHash,
+            recordedAt: transitionRecordedAt,
+            subjectId,
+            subjectKind,
+            to,
+          })
+        : undefined),
   });
 
   if (!readiness || readiness.blockers.length === 0) {

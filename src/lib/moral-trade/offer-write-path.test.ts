@@ -38,6 +38,8 @@ test("offer create write path validates draft-to-submitted protocol transition",
   assert.equal(transition.status, "pass");
   assert.equal(transition.from, "draft");
   assert.equal(transition.to, "submitted");
+  assert.equal(transition.transitionEventRecord?.provenanceActivity, "draft_created");
+  assert.equal(transition.transitionEventRecord?.eventHash.length, 64);
   assert.equal(getMoralTradeOfferPersistenceStatus({ protocolReviewStatus: protocolReview.status }), "open");
   assert.deepEqual(buildMoralTradeProtocolProposalRecord(completeDraft).cause_areas, [
     "Animal welfare",
@@ -62,6 +64,19 @@ test("offer create write path blocks missing required fields before write", () =
     getMoralTradeOfferPersistenceStatus({ protocolReviewStatus: protocolReview.status }),
     "paused",
   );
+});
+
+test("offer create write path requires an immutable transition event record", () => {
+  const protocolReview = evaluateMoralTradeProtocolDraft(completeDraft);
+  const transition = validateMoralTradeOfferCreateTransition({
+    draft: completeDraft,
+    protocolReview,
+    provenanceActivityRecorded: false,
+  });
+
+  assert.equal(transition.status, "fail");
+  assert.ok(transition.blockers.includes("transition_event_record_required"));
+  assert.equal(transition.transitionEventRecord, null);
 });
 
 test("offer create write path pauses challenge-window drafts and records protocol notes", () => {
@@ -90,4 +105,5 @@ test("offer create write path pauses challenge-window drafts and records protoco
   );
   assert.match(notes, /Protocol review status: challenge_window/);
   assert.match(notes, /Protocol transition accepted: draft->submitted/);
+  assert.match(notes, /Transition event record:/);
 });

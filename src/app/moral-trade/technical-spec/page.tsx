@@ -1573,12 +1573,16 @@ export default async function MoralTradeTechnicalSpecPage() {
         <section className="section section-white" aria-labelledby="provenance-schema-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Evidence object contract</p>
-            <h2 id="provenance-schema-heading">Claims now have typed artifacts, traceability events, and review records.</h2>
+            <h2 id="provenance-schema-heading">
+              Claims now have typed artifacts, traceability events, review records, and state
+              changes.
+            </h2>
             <p>
               The provenance layer uses fixed object schemas so duplicate proof, wrong-scope
               evidence, stale artifacts, missing agents, external entity dedupe failures, and
-              external payment or charity-routing events without what/where/why links can be caught
-              before any reviewed completion claim is published.
+              external payment or charity-routing events without what/where/why links can be caught,
+              while state transitions carry immutable event hashes before any reviewed completion
+              claim is published.
             </p>
           </div>
           <div className="protocol-validator-card panel">

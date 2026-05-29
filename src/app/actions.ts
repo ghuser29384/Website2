@@ -91,6 +91,7 @@ import {
   validateMoralTradeOfferCreateTransition,
 } from "@/lib/moral-trade/offer-write-path";
 import { validateAgreementReviewProtocolTransition } from "@/lib/moral-trade/agreement-write-path";
+import { summarizeMoralTradeStateTransitionEventRecord } from "@/lib/moral-trade/protocol";
 
 type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
 type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
@@ -2178,9 +2179,15 @@ export async function createOfferAction(formData: FormData) {
     counterpartyThreshold: minCounterpartyImpact,
   };
   const protocolReview = evaluateMoralTradeProtocolDraft(protocolDraft);
+  const protocolTransitionRecordedAt = new Date().toISOString();
   const protocolTransition = validateMoralTradeOfferCreateTransition({
     draft: protocolDraft,
     protocolReview,
+    actorAgentId: viewer.authUser.id,
+    actorAgentKind: "participant",
+    idempotencyKey: `offer-create:${viewer.authUser.id}:${protocolTransitionRecordedAt}`,
+    recordedAt: protocolTransitionRecordedAt,
+    subjectId: "proposal_record:new_offer",
   });
 
   if (protocolReview.policyConflicts.length) {
@@ -6296,6 +6303,7 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
     agentLinksRecorded: readBoolean(formData, "evidence_agent_links_recorded"),
   };
 
+  const protocolTransitionRecordedAt = new Date().toISOString();
   const protocolTransition = validateAgreementReviewProtocolTransition({
     currentCompletionState: currentAgreement.completion_state,
     currentReviewCaseStatus: currentReviewCase.status,
@@ -6321,7 +6329,13 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
         currentReviewCase.appeal_reason,
     ),
     humanReviewApproved: true,
+    actorAgentId: admin.authUser.id,
+    actorAgentKind: "operator",
+    idempotencyKey: `agreement-review:${reviewCaseId}:${nextStatus}:${protocolTransitionRecordedAt}`,
     provenanceActivityRecorded: true,
+    recordedAt: protocolTransitionRecordedAt,
+    subjectId: `review_decision:${reviewCaseId}`,
+    subjectKind: "review_decision",
   });
 
   if (protocolTransition.status === "fail") {
@@ -6423,6 +6437,8 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
           `agent_links_recorded=${evidenceReviewReadiness.agentLinksRecorded}.`,
         ].join(" ")
       : "";
+  const protocolTransitionEventDetails =
+    summarizeMoralTradeStateTransitionEventRecord(protocolTransition.transitionEventRecord);
 
   await supabase.from("agreement_events").insert({
     agreement_id: reviewCase.agreement_id,
@@ -6435,6 +6451,7 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
     details: [
       updatePayload.public_reasoning_summary || updatePayload.reviewer_notes || "",
       evidenceReadinessAuditDetails,
+      protocolTransitionEventDetails,
     ]
       .filter(Boolean)
       .join("\n\n"),
