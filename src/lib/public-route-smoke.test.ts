@@ -741,6 +741,30 @@ test("privacy and terms publish processor retention and data-request transparenc
   assert.match(siteSearchSource, /cookies, analytics redaction, processors, retention/);
 });
 
+test("public SEO metadata includes FAQ and breadcrumb structured data", () => {
+  const seoSource = readRepoFile("src/lib/seo.ts");
+  const layoutSource = readRepoFile("src/app/layout.tsx");
+  const homePage = readRepoFile("src/app/page.tsx");
+  const faqPage = readRepoFile("src/app/faq/page.tsx");
+  const sitemapSource = readRepoFile("src/app/sitemap.ts");
+
+  assert.match(layoutSource, /"@type": "WebSite"/);
+  assert.match(layoutSource, /"@type": "Organization"/);
+  assert.match(layoutSource, /SearchAction/);
+  assert.match(seoSource, /buildBreadcrumbJsonLd/);
+  assert.match(seoSource, /"@type": "BreadcrumbList"/);
+  assert.match(seoSource, /buildFaqPageJsonLd/);
+  assert.match(seoSource, /"@type": "FAQPage"/);
+  assert.match(seoSource, /acceptedAnswer/);
+  assert.match(homePage, /Reviewable moral cooperation pilot/);
+  assert.match(homePage, /Moral Trade: reviewable moral cooperation pilot/);
+  assert.match(faqPage, /buildFaqPageJsonLd/);
+  assert.match(faqPage, /buildBreadcrumbJsonLd/);
+  assert.match(faqPage, /Breadcrumbs items/);
+  assert.match(faqPage, /application\/ld\+json/);
+  assert.match(sitemapSource, /\/faq/);
+});
+
 test("activation loop includes concierge intake, admin triage, SLA, and audit trail", () => {
   const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
   const registryPage = readRepoFile("src/app/wish-registry/page.tsx");

@@ -9,20 +9,20 @@ const homeDescription = truncateDescription(
 );
 
 export const metadata: Metadata = {
-  title: "Cooperate across deep value differences",
+  title: "Reviewable moral cooperation pilot",
   description: homeDescription,
   alternates: {
     canonical: "/",
   },
   openGraph: {
-    title: "Cooperate across deep value differences",
+    title: "Moral Trade: reviewable moral cooperation pilot",
     description: homeDescription,
     url: getAbsoluteUrl("/"),
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Cooperate across deep value differences",
+    title: "Moral Trade: reviewable moral cooperation pilot",
     description: homeDescription,
   },
 };

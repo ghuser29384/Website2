@@ -13,6 +13,65 @@ export function getAbsoluteUrl(path = "/") {
   return new URL(path, `${SITE_URL}/`).toString();
 }
 
+export type BreadcrumbJsonLdItem = {
+  href: string;
+  label: string;
+};
+
+export type FaqJsonLdItem = {
+  answer: string;
+  question: string;
+};
+
+export function buildBreadcrumbJsonLd(items: readonly BreadcrumbJsonLdItem[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: getAbsoluteUrl("/"),
+      },
+      ...items.map((item, index) => ({
+        "@type": "ListItem",
+        position: index + 2,
+        name: item.label,
+        item: getAbsoluteUrl(item.href),
+      })),
+    ],
+  };
+}
+
+export function buildFaqPageJsonLd({
+  description,
+  faqs,
+  name,
+  path,
+}: {
+  description: string;
+  faqs: readonly FaqJsonLdItem[];
+  name: string;
+  path: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    name,
+    url: getAbsoluteUrl(path),
+    description,
+    mainEntity: faqs.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
+    })),
+  };
+}
+
 export function truncateDescription(text: string, maxLength = 160) {
   const normalized = text.replace(/\s+/g, " ").trim();
 

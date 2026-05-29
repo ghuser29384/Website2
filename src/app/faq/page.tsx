@@ -3,14 +3,17 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { SectionHeader } from "@/components/ui/page-primitives";
+import { Breadcrumbs, SectionHeader } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import { buildBreadcrumbJsonLd, buildFaqPageJsonLd } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+
+const faqDescription =
+  "Plain-language answers about Moral Trade offers, worked examples, evidence review, payments, privacy, and safety.";
 
 export const metadata: Metadata = {
   title: "FAQ",
-  description:
-    "Plain-language answers about Moral Trade offers, worked examples, evidence review, payments, privacy, and safety.",
+  description: faqDescription,
   alternates: {
     canonical: "/faq",
   },
@@ -41,15 +44,35 @@ const faqs = [
 
 export default async function FaqPage() {
   const viewer = await getViewer();
+  const faqStructuredData = buildFaqPageJsonLd({
+    description: faqDescription,
+    faqs,
+    name: "Moral Trade FAQ",
+    path: "/faq",
+  });
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([{ href: "/faq", label: "FAQ" }]);
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(faqStructuredData),
+        }}
+        type="application/ld+json"
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <SiteTopbar
         brandHref="/"
         links={getPrimaryNavLinks(Boolean(viewer))}
         {...getTopbarActions(Boolean(viewer))}
         showLogout={Boolean(viewer)}
       />
+      <Breadcrumbs items={[{ href: "/faq", label: "FAQ" }]} />
       <main className="legal-page" id="main-content" tabIndex={-1}>
         <p className="eyebrow">FAQ</p>
         <h1>Common questions about Moral Trade</h1>
