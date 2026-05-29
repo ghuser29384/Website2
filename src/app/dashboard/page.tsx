@@ -266,7 +266,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <Link className="button button-primary" href={`/people/${viewer.authUser.id}`}>
                   View public profile
                 </Link>
-                <Link className="button button-secondary" href="/cart">
+                <Link className="button button-secondary" href="/saved-offers">
                   Open saved offers
                 </Link>
               </div>
@@ -2910,7 +2910,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <Link className="text-button" href={`/offers/${item.offer.id}`}>
                           View offer
                         </Link>
-                        <Link className="text-button" href="/cart">
+                        <Link className="text-button" href="/saved-offers">
                           Open saved offers
                         </Link>
                       </div>

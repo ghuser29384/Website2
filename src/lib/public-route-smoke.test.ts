@@ -75,6 +75,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(hrefs.includes("/trust"));
   assert.ok(hrefs.includes("/status"));
   assert.equal(hrefs.includes("/paid-action-offers"), false);
+  assert.equal(hrefs.includes("/saved-offers"), false);
   assert.equal(hrefs.includes("/mpgf"), false);
   assert.equal(hrefs.includes("/moral-trade/technical-spec"), false);
   assert.equal(hrefs.includes("/reasoning-center"), false);
@@ -104,17 +105,19 @@ test("public navigation exposes professional marketplace routes", () => {
 });
 
 test("offer save surfaces avoid shopping-cart framing", () => {
-  const cartPage = readRepoFile("src/app/cart/page.tsx");
+  const savedOffersPage = readRepoFile("src/app/saved-offers/page.tsx");
+  const cartRedirectPage = readRepoFile("src/app/cart/page.tsx");
   const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
   const offerDetailPage = readRepoFile("src/app/offers/[offerId]/page.tsx");
   const notFoundPage = readRepoFile("src/app/not-found.tsx");
   const actionsSource = readRepoFile("src/app/actions.ts");
+  const robotsSource = readRepoFile("src/app/robots.ts");
   const publicOffersSource = readRepoFile("src/lib/public-offers.ts");
   const offerFollowsSource = readRepoFile("src/lib/offer-follows.ts");
   const offerCreateSimilarSource = readRepoFile("src/lib/offer-create-similar.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const publicCopySources = [
-    cartPage,
+    savedOffersPage,
     dashboardPage,
     offerDetailPage,
     notFoundPage,
@@ -127,12 +130,18 @@ test("offer save surfaces avoid shopping-cart framing", () => {
     apiContractProfile,
   ].join("\n");
 
-  assert.match(cartPage, /title: "Saved offers"/);
-  assert.match(cartPage, /<p className="eyebrow">Saved offers<\/p>/);
-  assert.match(cartPage, /Your saved offers/);
+  assert.match(savedOffersPage, /title: "Saved offers"/);
+  assert.match(savedOffersPage, /<p className="eyebrow">Saved offers<\/p>/);
+  assert.match(savedOffersPage, /Your saved offers/);
+  assert.match(savedOffersPage, /requireViewer\("\/saved-offers"\)/);
+  assert.match(savedOffersPage, /value="\/saved-offers"/);
+  assert.match(cartRedirectPage, /redirect\("\/saved-offers"\)/);
   assert.match(dashboardPage, /Open saved offers/);
+  assert.match(dashboardPage, /href="\/saved-offers"/);
+  assert.match(robotsSource, /"\/saved-offers"/);
   assert.match(offerDetailPage, /Interest and saved-offer activity/);
   assert.match(actionsSource, /Saved offer/);
+  assert.match(actionsSource, /revalidatePath\("\/saved-offers"\)/);
   assert.match(contractSources, /personalized saved-offer state/);
 
   for (const forbidden of [
@@ -149,6 +158,9 @@ test("offer save surfaces avoid shopping-cart framing", () => {
     "personalized cart state",
     "cart state, or source notes",
     "Dashboards, carts",
+    "href=\"/cart\"",
+    "value=\"/cart\"",
+    "requireViewer(\"/cart\")",
   ]) {
     assert.equal(publicCopySources.includes(forbidden), false);
     assert.equal(contractSources.includes(forbidden), false);

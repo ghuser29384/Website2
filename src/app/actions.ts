@@ -6848,6 +6848,7 @@ export async function toggleCartAction(formData: FormData) {
       redirectWithMessage(returnTo, "error", error.message);
     }
 
+    revalidatePath("/saved-offers");
     revalidatePath("/cart");
     revalidatePath("/dashboard");
     revalidatePath(`/offers/${offerId}`);
@@ -6867,6 +6868,7 @@ export async function toggleCartAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", error.message);
   }
 
+  revalidatePath("/saved-offers");
   revalidatePath("/cart");
   revalidatePath("/dashboard");
   revalidatePath(`/offers/${offerId}`);
