@@ -1303,20 +1303,22 @@ export function OfferCreateForm({
           </small>
         </label>
 
-        <label className="field">
-          <span>Compromise destination (offset only)</span>
-          <select
-            name="compromise_cause"
-            value={compromiseCause}
-            onChange={(event) => setCompromiseCause(readFormControlValue(event))}
-          >
-            {COMPROMISE_CAUSE_OPTIONS.map((cause) => (
-              <option key={cause} value={cause}>
-                {cause}
-              </option>
-            ))}
-          </select>
-        </label>
+        {isOffset ? (
+          <label className="field">
+            <span>Compromise destination (offset only)</span>
+            <select
+              name="compromise_cause"
+              value={compromiseCause}
+              onChange={(event) => setCompromiseCause(readFormControlValue(event))}
+            >
+              {COMPROMISE_CAUSE_OPTIONS.map((cause) => (
+                <option key={cause} value={cause}>
+                  {cause}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
 
         {isOffset ? (
           <div className="panel subtle-panel offset-fieldset">

@@ -2770,6 +2770,20 @@ test("offer creation form exposes preset templates without weakening validation"
   assert.match(offerForm, /liveOfferErrors/);
 });
 
+test("offer creation hides offset-only compromise destination for non-offset modes", () => {
+  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+
+  assert.match(
+    offerForm,
+    /\{isOffset \? \(\s*<label className="field">\s*<span>Compromise destination \(offset only\)<\/span>[\s\S]*name="compromise_cause"[\s\S]*\) : null\}/,
+  );
+  assert.match(
+    actionsSource,
+    /compromise_cause: normalizedMode === "offset" \? compromiseCause : "Not needed"/,
+  );
+});
+
 test("offer creation form exposes a guided reviewable-trade wizard", () => {
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
   const offerNewPage = readRepoFile("src/app/offers/new/page.tsx");
