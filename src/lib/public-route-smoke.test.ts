@@ -45,6 +45,7 @@ test("public navigation exposes professional marketplace routes", () => {
   const trustMenu = getPrimaryNavLinks(false).find((link) => link.label === "Trust");
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
+  const globalCss = readRepoFile("src/app/globals.css");
 
   assert.deepEqual(labels, ["Understand", "Explore", "Join", "Trust"]);
   assert.equal(getTopbarActions(false).primaryAction.href, "/offers?view=examples");
@@ -107,6 +108,10 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(topbarSource, /topbar-menu-icon/);
   assert.match(topbarSource, /topbar-with-search/);
   assert.match(topbarSource, /showSearch = true/);
+  assert.match(
+    globalCss,
+    /\.button-secondary\.button-nav\.is-active\s*\{[^}]*background:\s*var\(--accent-soft\);[^}]*color:\s*var\(--accent-deep\);/s,
+  );
 });
 
 test("offer save surfaces avoid shopping-cart framing", () => {
