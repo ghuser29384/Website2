@@ -429,7 +429,7 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
                 </div>
                 <div className="mpgf-admin-action-panel">
                   <p className="eyebrow">Milestone release queue</p>
-                  <h3>Review-state confirmation before partner release</h3>
+                  <h3>Dual-control confirmation before partner release</h3>
                   <div className="mpgf-gate-list">
                     {publicGoodsReviewConsole.milestoneReleaseQueue.map((item) => (
                       <article key={item.campaignId} className="mpgf-gate-row">
@@ -453,6 +453,14 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
                                 {item.reviewStateConfirmedRequired
                                   ? "review-state confirmation required"
                                   : "already confirmed"}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Dual control</dt>
+                              <dd>
+                                {item.dualControlApproverRequired
+                                  ? "distinct release approver required"
+                                  : "second approval recorded"}
                               </dd>
                             </div>
                           </dl>

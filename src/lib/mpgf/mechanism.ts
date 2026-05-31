@@ -948,7 +948,8 @@ export function summarizeMpgfPublicGoodsReviewConsole({
       key: "milestone_release",
       label: "Milestone release readiness",
       reviewerRole: "payout_reviewer",
-      requiredEvidence: "Milestone evidence, review-state confirmation, no active appeal, and partner execution only.",
+      requiredEvidence:
+        "Milestone evidence, review-state confirmation, distinct second approver, no active appeal, and partner execution only.",
     },
     {
       key: "appeals_and_audit",
@@ -1002,6 +1003,7 @@ export function summarizeMpgfPublicGoodsReviewConsole({
             ? ("review_required" as const)
             : ("not_payable" as const),
       reviewStateConfirmedRequired: true,
+      dualControlApproverRequired: true,
       webhookCanAuthorizeFinalPayout: false as const,
       blockers,
     };

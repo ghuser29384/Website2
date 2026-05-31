@@ -840,6 +840,7 @@ test("MPGF public-goods review console uses bounded reason codes and appeal stat
   assert.ok(consoleSummary.rubric.some((item) => item.key === "milestone_release"));
   assert.ok(consoleSummary.queue.every((item) => item.conflictCheckStatus === "clear"));
   assert.ok(consoleSummary.milestoneReleaseQueue.some((item) => item.webhookCanAuthorizeFinalPayout === false));
+  assert.ok(consoleSummary.milestoneReleaseQueue.every((item) => item.dualControlApproverRequired === true));
   assert.ok(consoleSummary.milestoneReleaseQueue.some((item) => item.status === "paused_by_dispute"));
   assert.ok(consoleSummary.disputeQueue.some((item) => item.state === "challenge_window"));
   assert.ok(consoleSummary.auditTrail.every((item) => !item.publicSummary.includes("http")));
@@ -848,6 +849,7 @@ test("MPGF public-goods review console uses bounded reason codes and appeal stat
   assert.match(adminPage, /appeal_denied/);
   assert.match(adminPage, /Conflict check banner/);
   assert.match(adminPage, /Milestone release queue/);
+  assert.match(adminPage, /Dual-control confirmation/);
   assert.match(adminPage, /Dispute queue/);
   assert.match(adminPage, /Audit trail viewer/);
   assert.throws(
@@ -919,6 +921,7 @@ test("MPGF public-goods milestone releases require review confirmation and pause
     milestone: schedule[0]!,
     reviewCases: demoMpgfPublicGoodsReviewCases.filter((reviewCase) => reviewCase.campaignId === campaign.id),
     reviewerId: "reviewer-test",
+    dualControlApproverId: "approver-test",
     evidenceSummary: "Reviewer confirmed partner release evidence for the first tranche.",
     reviewStateConfirmed: true,
     now: "2026-06-05T12:00:00.000Z",
@@ -938,7 +941,18 @@ test("MPGF public-goods milestone releases require review confirmation and pause
       },
     ],
     reviewerId: "reviewer-test",
+    dualControlApproverId: "approver-test",
     evidenceSummary: "Reviewer cannot release while appeal is open.",
+    reviewStateConfirmed: true,
+    now: "2026-06-05T12:00:00.000Z",
+  });
+  const missingDualControl = authorizeMpgfPublicGoodsMilestoneRelease({
+    campaign,
+    allocationLine,
+    milestone: schedule[2]!,
+    reviewCases: demoMpgfPublicGoodsReviewCases.filter((reviewCase) => reviewCase.campaignId === campaign.id),
+    reviewerId: "reviewer-test",
+    evidenceSummary: "Reviewer confirmed evidence but a distinct release approver has not signed off.",
     reviewStateConfirmed: true,
     now: "2026-06-05T12:00:00.000Z",
   });
@@ -947,27 +961,43 @@ test("MPGF public-goods milestone releases require review confirmation and pause
   const demoDecision = buildDemoMpgfPublicGoodsMilestoneReleaseDecision();
   const route = readFileSync("src/app/api/mpgf/milestones/[milestoneId]/release/route.ts", "utf8");
   const migration = readFileSync("supabase/migrations/20260531_mpgf_public_goods_milestone_release.sql", "utf8");
+  const dualControlMigration = readFileSync(
+    "supabase/migrations/20260531_mpgf_public_goods_dual_control_release.sql",
+    "utf8",
+  );
 
   assert.equal(schedule.map((milestone) => milestone.releasePct).join(","), "40,30,30");
   assert.equal(authorized.status, "authorized_for_partner_release");
+  assert.equal(authorized.dualControlConfirmed, true);
   assert.equal(authorized.webhookCanAuthorizeFinalPayout, false);
   assert.equal(authorized.createsCustody, false);
   assert.equal(authorized.requiresPartnerExecution, true);
   assert.equal(authorized.releaseAmountCents, Math.floor((authorized.approvedMatchCents * 40) / 100));
   assert.equal(rows.disbursementReviewRow.status, "partner_release_pending");
   assert.equal(rows.disbursementReviewRow.reviewer_id, null);
+  assert.equal(rows.disbursementReviewRow.approver_id, null);
+  assert.equal(rows.disbursementReviewRow.dual_control_confirmed, true);
+  assert.equal(rows.auditRow.event_json.dualControlConfirmed, true);
   assert.equal(rows.auditRow.event_type, "milestone_release_authorized");
   assert.equal(dryRun.status, "dry_run");
   assert.equal(demoDecision.status, "authorized_for_partner_release");
+  assert.equal(demoDecision.dualControlConfirmed, true);
   assert.equal(paused.status, "paused");
   assert.ok(paused.blockerCodes.includes("appeal_requested"));
   assert.ok(paused.blockerCodes.includes("challenge_window_open"));
+  assert.equal(missingDualControl.status, "paused");
+  assert.ok(missingDualControl.blockerCodes.includes("dual_control_approver_required"));
   assert.match(route, /MPGF_PUBLIC_GOODS_MILESTONE_SECRET/);
+  assert.match(route, /dualControlApproverId/);
+  assert.match(route, /dualControlConfirmed/);
   assert.match(route, /webhookCanAuthorizeFinalPayout/);
   assert.match(migration, /mpgf_public_goods_milestones/);
   assert.match(migration, /mpgf_public_goods_disbursements/);
   assert.match(migration, /mpgf_public_goods_release_audit_events/);
   assert.match(migration, /append-only/);
+  assert.match(dualControlMigration, /dual_control_confirmed/);
+  assert.match(dualControlMigration, /distinct_reviewer_approver/);
+  assert.match(dualControlMigration, /payout destinations require dual control/);
   assert.throws(
     () =>
       buildMpgfPublicGoodsMilestoneSchedule({

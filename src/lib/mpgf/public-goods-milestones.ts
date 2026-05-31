@@ -39,8 +39,10 @@ export interface MpgfPublicGoodsMilestoneReleaseDecision {
   status: "authorized_for_partner_release" | "paused" | "rejected";
   blockerCodes: string[];
   reviewerId: string;
+  dualControlApproverId: string;
   evidenceSummary: string;
   reviewStateConfirmed: boolean;
+  dualControlConfirmed: boolean;
   webhookCanAuthorizeFinalPayout: false;
   createsCustody: false;
   requiresPartnerExecution: true;
@@ -62,7 +64,9 @@ export interface MpgfPublicGoodsDisbursementReviewRow {
   amount_cents: number;
   status: "partner_release_pending" | "paused" | "rejected";
   reviewer_id: string | null;
+  approver_id: string | null;
   review_state_confirmed: boolean;
+  dual_control_confirmed: boolean;
   blocker_codes: string[];
   public_notes: string;
   created_at: string;
@@ -159,7 +163,13 @@ export function buildMpgfPublicGoodsMilestoneSchedule(input: {
     campaignId: input.campaignId,
     ordinal: index + 1,
     releasePct,
-    evidenceRequirements: [...(input.evidenceRequirements ?? ["reviewer evidence summary", "partner release confirmation"])],
+    evidenceRequirements: [
+      ...(input.evidenceRequirements ?? [
+        "reviewer evidence summary",
+        "distinct second approver confirmation",
+        "partner release confirmation",
+      ]),
+    ],
     status: "pending" as const,
   }));
 }
@@ -172,11 +182,13 @@ export function authorizeMpgfPublicGoodsMilestoneRelease(input: {
   releasedPctBefore?: number;
   incidentStatus?: MpgfPublicGoodsIncidentStatus;
   reviewerId: string;
+  dualControlApproverId?: string;
   evidenceSummary: string;
   reviewStateConfirmed: boolean;
   now?: string;
 }): MpgfPublicGoodsMilestoneReleaseDecision {
   const reviewerId = input.reviewerId.trim();
+  const dualControlApproverId = input.dualControlApproverId?.trim() ?? "";
   const evidenceSummary = input.evidenceSummary.trim();
   const approvedMatchCents = input.allocationLine.baseMatchCents + input.allocationLine.qfBonusCents;
   const blockerCodes = new Set<string>();
@@ -213,6 +225,12 @@ export function authorizeMpgfPublicGoodsMilestoneRelease(input: {
     blockerCodes.add("review_state_not_confirmed");
   }
 
+  if (!dualControlApproverId) {
+    blockerCodes.add("dual_control_approver_required");
+  } else if (dualControlApproverId.toLowerCase() === reviewerId.toLowerCase()) {
+    blockerCodes.add("dual_control_approver_must_be_distinct");
+  }
+
   if (input.incidentStatus === "frozen") {
     blockerCodes.add("incident_frozen");
   }
@@ -235,8 +253,11 @@ export function authorizeMpgfPublicGoodsMilestoneRelease(input: {
     status,
     blockerCodes: [...blockerCodes].sort(),
     reviewerId,
+    dualControlApproverId,
     evidenceSummary,
     reviewStateConfirmed: input.reviewStateConfirmed,
+    dualControlConfirmed:
+      Boolean(dualControlApproverId) && dualControlApproverId.toLowerCase() !== reviewerId.toLowerCase(),
     webhookCanAuthorizeFinalPayout: false,
     createsCustody: false,
     requiresPartnerExecution: true,
@@ -253,6 +274,7 @@ export function buildMpgfPublicGoodsMilestoneReleaseRows(decision: MpgfPublicGoo
     status: decision.status,
     blockerCodes: decision.blockerCodes,
     reviewStateConfirmed: decision.reviewStateConfirmed,
+    dualControlConfirmed: decision.dualControlConfirmed,
     webhookCanAuthorizeFinalPayout: decision.webhookCanAuthorizeFinalPayout,
   };
   const eventHash = createHash("sha256")
@@ -272,7 +294,9 @@ export function buildMpgfPublicGoodsMilestoneReleaseRows(decision: MpgfPublicGoo
     amount_cents: decision.releaseAmountCents,
     status: releaseStatusForDecision(decision.status),
     reviewer_id: isUuid(decision.reviewerId) ? decision.reviewerId : null,
+    approver_id: isUuid(decision.dualControlApproverId) ? decision.dualControlApproverId : null,
     review_state_confirmed: decision.reviewStateConfirmed,
+    dual_control_confirmed: decision.dualControlConfirmed,
     blocker_codes: decision.blockerCodes,
     public_notes: decision.evidenceSummary,
     created_at: decision.decidedAt,
@@ -359,6 +383,7 @@ export function buildDemoMpgfPublicGoodsMilestoneReleaseDecision(input: {
   campaignId?: string;
   milestoneOrdinal?: number;
   reviewerId?: string;
+  dualControlApproverId?: string;
   evidenceSummary?: string;
   reviewStateConfirmed?: boolean;
   incidentStatus?: MpgfPublicGoodsIncidentStatus;
@@ -392,6 +417,7 @@ export function buildDemoMpgfPublicGoodsMilestoneReleaseDecision(input: {
     milestone,
     reviewCases: demoMpgfPublicGoodsReviewCases.filter((reviewCase) => reviewCase.campaignId === campaign.id),
     reviewerId: input.reviewerId ?? "demo-reviewer-public-goods",
+    dualControlApproverId: input.dualControlApproverId ?? "demo-release-approver-public-goods",
     evidenceSummary: input.evidenceSummary ?? "Reviewer confirmed destination evidence and partner release conditions.",
     reviewStateConfirmed: input.reviewStateConfirmed ?? true,
     incidentStatus: input.incidentStatus ?? "clear",
