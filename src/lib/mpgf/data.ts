@@ -284,7 +284,9 @@ export const demoMpgfMatchPool: MpgfPublicGoodsMatchPool = {
     noCustody: true,
     baseMatchDefault: "1:1",
     qfCapMultiple: 1.5,
+    perDonorQfCapCents: 10_000,
     qfAfterThresholdOnly: true,
+    verificationWeightPolicy: "identity_confidence_only_no_moral_reputation",
     transferableTokens: false,
   },
 };

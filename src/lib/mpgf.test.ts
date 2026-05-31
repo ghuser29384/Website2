@@ -23,11 +23,14 @@ import {
   compareMpgfDryRunToLive,
   createMpgfRecurringContributionCommitment,
   computeMpgfCampaignQfScore,
+  computeMpgfVerifiedQfRawScore,
+  countMpgfQfContributionCents,
   assignMpgfPublicGoodsExperiment,
   evaluateMpgfPublicGoodsCohortAccess,
   getMpgfPublicGoodsFeatureFlagStatus,
   isLedgerBalanced,
   materializeMpgfRecurringPledgeForCycle,
+  mpgfVerificationWeightFromHumanScoreBps,
   pauseMpgfRecurringContributionCommitment,
   preflightMpgfSolverSupport,
   resumeMpgfRecurringContributionCommitment,
@@ -90,6 +93,13 @@ import {
   buildMpgfPublicGoodsExperimentAssignmentRow,
   persistMpgfPublicGoodsExperimentAssignment,
 } from "./mpgf/public-goods-experiments";
+import {
+  authorizeMpgfPublicGoodsMilestoneRelease,
+  buildDemoMpgfPublicGoodsMilestoneReleaseDecision,
+  buildMpgfPublicGoodsMilestoneReleaseRows,
+  buildMpgfPublicGoodsMilestoneSchedule,
+  persistMpgfPublicGoodsMilestoneRelease,
+} from "./mpgf/public-goods-milestones";
 import {
   evaluateMpgfExactPilotGate,
   evaluateMpgfGovernanceMachineryGate,
@@ -364,12 +374,26 @@ test("MPGF assurance QF collapses duplicate identities and expires missed thresh
   const animalStatus = getMpgfCampaignAssuranceStatus(animalWelfare);
   const knowledgeStatus = getMpgfCampaignAssuranceStatus(knowledge);
   const animalPledges = demoMpgfAssurancePledges.filter((pledge) => pledge.campaignId === animalWelfare.id);
+  const animalQfScore = computeMpgfCampaignQfScore(animalWelfare);
+  const exactTwoDonorScore = computeMpgfVerifiedQfRawScore(
+    [
+      { donorId: "donor-a", grossCents: 10_000, verificationWeight: 1 },
+      { donorId: "donor-b", grossCents: 10_000, verificationWeight: 1 },
+    ],
+    10_000,
+  );
 
   assert.equal(animalPledges.length, 4);
   assert.equal(animalStatus.verifiedSupporterCount, 3);
   assert.equal(animalStatus.excludedPledgeCount, 1);
   assert.equal(knowledgeStatus.status, "expired");
-  assert.ok(computeMpgfCampaignQfScore(animalWelfare) > animalStatus.directEligibleCents);
+  assert.ok(animalQfScore > animalStatus.directEligibleCents);
+  assert.equal(exactTwoDonorScore, 20_000);
+  assert.equal(countMpgfQfContributionCents(25_000, 10_000), 10_000);
+  assert.equal(computeMpgfVerifiedQfRawScore([{ donorId: "solo", grossCents: 25_000, verificationWeight: 1 }], 10_000), 0);
+  assert.equal(mpgfVerificationWeightFromHumanScoreBps(8_000), 1);
+  assert.equal(mpgfVerificationWeightFromHumanScoreBps(5_000), 0.5);
+  assert.equal(mpgfVerificationWeightFromHumanScoreBps(4_999), 0);
 });
 
 test("MPGF assurance match budget scales down deterministically when raw base match exceeds sponsor budget", () => {
@@ -713,6 +737,80 @@ test("MPGF public-goods reconciliation writes payment proof records and failed-h
   assert.equal(failed.paymentProof.status, "rejected");
   assert.equal(failed.reviewCase.reasonCode, "external_handoff_failed");
   assert.equal(demoMpgfPublicGoodsPaymentProofs.some((proof) => proof.status === "verified"), true);
+});
+
+test("MPGF public-goods milestone releases require review confirmation and pause on disputes", async () => {
+  const campaign = demoMpgfPublicGoodsCampaigns[0];
+  const allocation = allocateMpgfAssuranceRound();
+  const allocationLine = allocation.lines.find((line) => line.campaignId === campaign?.id);
+
+  assert.ok(campaign);
+  assert.ok(allocationLine);
+
+  const schedule = buildMpgfPublicGoodsMilestoneSchedule({ campaignId: campaign.id });
+  const authorized = authorizeMpgfPublicGoodsMilestoneRelease({
+    campaign,
+    allocationLine,
+    milestone: schedule[0]!,
+    reviewCases: demoMpgfPublicGoodsReviewCases.filter((reviewCase) => reviewCase.campaignId === campaign.id),
+    reviewerId: "reviewer-test",
+    evidenceSummary: "Reviewer confirmed partner release evidence for the first tranche.",
+    reviewStateConfirmed: true,
+    now: "2026-06-05T12:00:00.000Z",
+  });
+  const paused = authorizeMpgfPublicGoodsMilestoneRelease({
+    campaign,
+    allocationLine,
+    milestone: schedule[1]!,
+    reviewCases: [
+      {
+        ...demoMpgfPublicGoodsReviewCases[0]!,
+        id: "review-case-appeal-open",
+        action: "challenge",
+        state: "challenge_window",
+        appealStatus: "appeal_requested",
+        closedAt: undefined,
+      },
+    ],
+    reviewerId: "reviewer-test",
+    evidenceSummary: "Reviewer cannot release while appeal is open.",
+    reviewStateConfirmed: true,
+    now: "2026-06-05T12:00:00.000Z",
+  });
+  const rows = buildMpgfPublicGoodsMilestoneReleaseRows(authorized);
+  const dryRun = await persistMpgfPublicGoodsMilestoneRelease({ decision: authorized, dryRun: true });
+  const demoDecision = buildDemoMpgfPublicGoodsMilestoneReleaseDecision();
+  const route = readFileSync("src/app/api/mpgf/milestones/[milestoneId]/release/route.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260531_mpgf_public_goods_milestone_release.sql", "utf8");
+
+  assert.equal(schedule.map((milestone) => milestone.releasePct).join(","), "40,30,30");
+  assert.equal(authorized.status, "authorized_for_partner_release");
+  assert.equal(authorized.webhookCanAuthorizeFinalPayout, false);
+  assert.equal(authorized.createsCustody, false);
+  assert.equal(authorized.requiresPartnerExecution, true);
+  assert.equal(authorized.releaseAmountCents, Math.floor((authorized.approvedMatchCents * 40) / 100));
+  assert.equal(rows.disbursementReviewRow.status, "partner_release_pending");
+  assert.equal(rows.disbursementReviewRow.reviewer_id, null);
+  assert.equal(rows.auditRow.event_type, "milestone_release_authorized");
+  assert.equal(dryRun.status, "dry_run");
+  assert.equal(demoDecision.status, "authorized_for_partner_release");
+  assert.equal(paused.status, "paused");
+  assert.ok(paused.blockerCodes.includes("appeal_requested"));
+  assert.ok(paused.blockerCodes.includes("challenge_window_open"));
+  assert.match(route, /MPGF_PUBLIC_GOODS_MILESTONE_SECRET/);
+  assert.match(route, /webhookCanAuthorizeFinalPayout/);
+  assert.match(migration, /mpgf_public_goods_milestones/);
+  assert.match(migration, /mpgf_public_goods_disbursements/);
+  assert.match(migration, /mpgf_public_goods_release_audit_events/);
+  assert.match(migration, /append-only/);
+  assert.throws(
+    () =>
+      buildMpgfPublicGoodsMilestoneSchedule({
+        campaignId: campaign.id,
+        releasePercents: [50, 60],
+      }),
+    /must sum to 100/,
+  );
 });
 
 test("MPGF public-goods subscriptions, experiments, and feature flag stay optional and privacy-safe", () => {
@@ -1088,6 +1186,8 @@ test("MPGF public-goods migration covers required entities and RLS policies", ()
   assert.match(migration, /source_event_ref text/);
   assert.match(migration, /mpgf_public_goods_payment_proofs_source_event_idx/);
   assert.match(migration, /mpgf_public_goods_analytics_no_raw_contact/);
+  assert.match(migration, /perDonorQfCapCents/);
+  assert.match(migration, /identity_confidence_only_no_moral_reputation/);
   assert.match(migration, /public_goods_threshold_amount_cents/);
   assert.match(migration, /public_goods_destination_type/);
   assert.match(migration, /insert into public\.mpgf_public_goods_campaigns/);

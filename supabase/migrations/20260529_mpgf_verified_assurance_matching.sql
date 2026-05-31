@@ -319,7 +319,7 @@ insert into public.mpgf_public_goods_match_pools (
   1,
   50000,
   'A demo common-ground sponsor pool releases a 1:1 challenge match only after assurance and review gates pass.',
-  '{"noCustody": true, "baseMatchDefault": "1:1", "qfCapMultiple": 1.5, "qfAfterThresholdOnly": true, "transferableTokens": false}'::jsonb,
+  '{"noCustody": true, "baseMatchDefault": "1:1", "qfCapMultiple": 1.5, "perDonorQfCapCents": 10000, "qfAfterThresholdOnly": true, "verificationWeightPolicy": "identity_confidence_only_no_moral_reputation", "transferableTokens": false}'::jsonb,
   'active'
 ) on conflict (id) do update set
   funder_type = excluded.funder_type,

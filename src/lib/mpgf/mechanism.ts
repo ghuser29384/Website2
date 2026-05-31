@@ -239,11 +239,43 @@ function collapseEligiblePledgesByUser(pledges: MpgfPublicGoodsPledge[]) {
   return [...byUser.values()];
 }
 
-function weightedQuadraticContributionScore(input: { amountCents: number; humanScoreBps: number }) {
-  const boundedHumanScore = clampBasisPoints(input.humanScoreBps) / 10_000;
-  const boundedIdentityWeight = 0.5 + 0.5 * boundedHumanScore;
+export const DEFAULT_MPGF_PUBLIC_GOODS_PER_DONOR_QF_CAP_CENTS = 10_000;
 
-  return Math.sqrt(Math.max(0, input.amountCents)) * boundedIdentityWeight;
+export function countMpgfQfContributionCents(grossCents: number, perDonorCapCents = DEFAULT_MPGF_PUBLIC_GOODS_PER_DONOR_QF_CAP_CENTS) {
+  return Math.min(clampNonNegativeInteger(grossCents), Math.max(0, Math.floor(perDonorCapCents)));
+}
+
+export function mpgfVerificationWeightFromHumanScoreBps(humanScoreBps: number) {
+  const score = clampBasisPoints(humanScoreBps);
+
+  if (score >= 8_000) {
+    return 1;
+  }
+
+  if (score >= 5_000) {
+    return 0.5;
+  }
+
+  return 0;
+}
+
+export function computeMpgfVerifiedQfRawScore(
+  contributions: {
+    donorId: string;
+    grossCents: number;
+    verificationWeight: number;
+  }[],
+  perDonorCapCents = DEFAULT_MPGF_PUBLIC_GOODS_PER_DONOR_QF_CAP_CENTS,
+) {
+  const weighted = contributions.map((contribution) => {
+    const verificationWeight = Math.max(0, Math.min(1, contribution.verificationWeight));
+
+    return verificationWeight * countMpgfQfContributionCents(contribution.grossCents, perDonorCapCents);
+  });
+  const sumRoots = weighted.reduce((sum, amount) => sum + Math.sqrt(amount), 0);
+  const sumLinear = weighted.reduce((sum, amount) => sum + amount, 0);
+
+  return Math.max(0, sumRoots * sumRoots - sumLinear);
 }
 
 function proofRequirementForCaptureModes(captureModes: MpgfPublicGoodsCaptureMode[]) {
@@ -1055,14 +1087,28 @@ export function getMpgfCampaignAssuranceStatus(
 export function computeMpgfCampaignQfScore(
   campaign: MpgfPublicGoodsCampaign,
   pledges: MpgfPublicGoodsPledge[] = demoMpgfAssurancePledges,
+  perDonorCapCents = DEFAULT_MPGF_PUBLIC_GOODS_PER_DONOR_QF_CAP_CENTS,
 ) {
   const campaignPledges = pledges.filter((pledge) => pledge.campaignId === campaign.id);
-  const weightedRootSum = collapseEligiblePledgesByUser(campaignPledges).reduce(
-    (sum, contribution) => sum + weightedQuadraticContributionScore(contribution),
-    0,
-  );
 
-  return weightedRootSum ** 2;
+  return computeMpgfVerifiedQfRawScore(
+    collapseEligiblePledgesByUser(campaignPledges).map((contribution) => ({
+      donorId: contribution.userId,
+      grossCents: contribution.amountCents,
+      verificationWeight: mpgfVerificationWeightFromHumanScoreBps(contribution.humanScoreBps),
+    })),
+    perDonorCapCents,
+  );
+}
+
+function getMpgfPerDonorQfCapCents(campaign: MpgfPublicGoodsCampaign, matchPool: MpgfPublicGoodsMatchPool) {
+  const configured = matchPool.restrictionsJson.perDonorQfCapCents;
+
+  if (typeof configured === "number" && Number.isFinite(configured) && configured > 0) {
+    return Math.floor(configured);
+  }
+
+  return Math.max(1, Math.min(DEFAULT_MPGF_PUBLIC_GOODS_PER_DONOR_QF_CAP_CENTS, campaign.thresholdAmountCents));
 }
 
 export function allocateMpgfAssuranceRound({
@@ -1093,7 +1139,10 @@ export function allocateMpgfAssuranceRound({
       ? distributeIntegerBudget(payableCampaigns, baseMatchBudgetCents, (campaign) => baseMatchRawByCampaign.get(campaign.id) ?? 0)
       : new Map(payableCampaigns.map((campaign) => [campaign.id, baseMatchRawByCampaign.get(campaign.id) ?? 0]));
   const qfScoresByCampaign = new Map(
-    payableCampaigns.map((campaign) => [campaign.id, round.qfEnabled ? computeMpgfCampaignQfScore(campaign, pledges) : 0]),
+    payableCampaigns.map((campaign) => [
+      campaign.id,
+      round.qfEnabled ? computeMpgfCampaignQfScore(campaign, pledges, getMpgfPerDonorQfCapCents(campaign, matchPool)) : 0,
+    ]),
   );
   const uncappedQfByCampaign = distributeIntegerBudget(
     payableCampaigns,
