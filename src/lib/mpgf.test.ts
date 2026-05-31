@@ -110,6 +110,12 @@ import {
   getMpgfPublicGoodsRoundReleasePlanApi,
 } from "./mpgf/public-goods-finalization";
 import {
+  MPGF_PUBLIC_GOODS_PROCEDURAL_BADGE_POLICY,
+  MPGF_PUBLIC_GOODS_PROCEDURAL_BADGE_PRIVACY_POLICY,
+  buildMpgfPublicGoodsProceduralBadgeLedger,
+  getMpgfPublicGoodsProceduralBadgesApi,
+} from "./mpgf/public-goods-procedural-badges";
+import {
   MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY,
   buildMpgfPublicGoodsSponsorPoolFlywheel,
   getMpgfPublicGoodsSponsorPoolFlywheelApi,
@@ -615,6 +621,10 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.finalization.policy, MPGF_PUBLIC_GOODS_FINALIZATION_POLICY);
   assert.equal(round.round.finalization.previewPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize-preview`);
   assert.equal(round.round.finalization.proofPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`);
+  assert.ok(round.round.proceduralBadges);
+  assert.equal(round.round.proceduralBadges.policy, MPGF_PUBLIC_GOODS_PROCEDURAL_BADGE_POLICY);
+  assert.equal(round.round.proceduralBadges.hiddenSignals.moralKarmaScore, false);
+  assert.ok(round.round.proceduralBadges.counters.verified_supporter > 0);
   assert.match(round.round.sponsorPool.visibleCommitment, /challenge match/i);
   assert.ok(Number(round.round.sponsorPool.perDonorQfCapCents) > 0);
   assert.equal(round.round.sponsorPool.verificationWeightPolicy, "identity_confidence_only_no_moral_reputation");
@@ -704,6 +714,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/rounds/[roundId]/release/route.ts", /getMpgfPublicGoodsRoundReleasePlanApi/],
     ["src/app/api/mpgf/rounds/[roundId]/proof/route.ts", /getMpgfPublicGoodsFinalizationReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/hash/route.ts", /calculationHash/],
+    ["src/app/api/mpgf/procedural-badges/route.ts", /getMpgfPublicGoodsProceduralBadgesApi/],
     ["src/app/api/mpgf/sponsor-pools/[poolId]/route.ts", /getMpgfPublicGoodsSponsorPoolFlywheelApi/],
     ["src/app/api/mpgf/audit/ledger/route.ts", /getMpgfPublicGoodsLedgerApi/],
     ["src/app/api/mpgf/providers/stripe/webhook/route.ts", /webhookCanAuthorizeFinalPayout: false/],
@@ -955,6 +966,60 @@ test("MPGF finalization applies deterministic coordination penalties and proof h
     "pledge-assurance-animal-duplicate",
     "charityReceiptRef",
     "externalReceiptRef",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("MPGF procedural badges expose record facts without moral karma", () => {
+  const ledger = buildMpgfPublicGoodsProceduralBadgeLedger();
+  const api = getMpgfPublicGoodsProceduralBadgesApi(demoMpgfAssuranceRound.id);
+  const unknown = getMpgfPublicGoodsProceduralBadgesApi("unknown-round");
+  const serialized = JSON.stringify(ledger);
+  const route = readFileSync("src/app/api/mpgf/procedural-badges/route.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260531_mpgf_procedural_badges.sql", "utf8");
+  const peoplePage = readFileSync("src/app/people/page.tsx", "utf8");
+  const profileTrust = readFileSync("src/lib/public-profile-trust.ts", "utf8");
+
+  assert.ok(api);
+  assert.equal(unknown, null);
+  assert.equal(ledger.policy, MPGF_PUBLIC_GOODS_PROCEDURAL_BADGE_POLICY);
+  assert.equal(ledger.privacyPolicy, MPGF_PUBLIC_GOODS_PROCEDURAL_BADGE_PRIVACY_POLICY);
+  assert.equal(ledger.hiddenSignals.moralKarmaScore, false);
+  assert.equal(ledger.hiddenSignals.transferableGovernanceWeight, false);
+  assert.equal(ledger.definitions.length, 5);
+  assert.ok(ledger.definitions.some((definition) => definition.badgeType === "verified_supporter"));
+  assert.ok(ledger.definitions.some((definition) => definition.badgeType === "fulfilled_pledge"));
+  assert.ok(ledger.definitions.some((definition) => definition.badgeType === "sponsor_contributor"));
+  assert.ok(ledger.definitions.some((definition) => definition.badgeType === "appeal_cleared_contribution"));
+  assert.ok(ledger.definitions.some((definition) => definition.badgeType === "early_supporter"));
+  assert.ok(ledger.counters.verified_supporter > 0);
+  assert.ok(ledger.counters.fulfilled_pledge > 0);
+  assert.ok(ledger.counters.sponsor_contributor > 0);
+  assert.ok(ledger.counters.early_supporter > 0);
+  assert.equal(ledger.counters.appeal_cleared_contribution, 0);
+  assert.ok(ledger.badges.every((badge) => badge.noScoreIssued === true));
+  assert.ok(ledger.badges.every((badge) => badge.userRefHash.startsWith("sha256:")));
+  assert.ok(ledger.badges.every((badge) => badge.sourceRecordHash.startsWith("sha256:")));
+  assert.match(ledger.calcHash, /^sha256:/);
+  assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(route, /getMpgfPublicGoodsProceduralBadgesApi/);
+  assert.match(migration, /mpgf_public_goods_procedural_badges/);
+  assert.match(migration, /verified_supporter/);
+  assert.match(migration, /fulfilled_pledge/);
+  assert.match(migration, /sponsor_contributor/);
+  assert.match(migration, /appeal_cleared_contribution/);
+  assert.match(migration, /early_supporter/);
+  assert.match(migration, /no_score_issued boolean not null default true check \(no_score_issued = true\)/);
+  assert.match(peoplePage, /not follower,\s+karma, or comment leaderboards/);
+  assert.match(profileTrust, /reviewed proof badge/);
+
+  for (const forbidden of [
+    "demo-supporter-alix",
+    "demo-sponsor-circle-member",
+    "payment-proof-global-health-demo",
+    "pledge-assurance-global-health-1",
+    "moralKarmaScore\":true",
   ]) {
     assert.equal(serialized.includes(forbidden), false);
   }

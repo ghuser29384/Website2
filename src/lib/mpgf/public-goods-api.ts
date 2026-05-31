@@ -17,6 +17,7 @@ import { buildMpgfPublicGoodsAllocationSourceProofMap } from "./public-goods-all
 import { getMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
 import { MPGF_PUBLIC_GOODS_FINALIZATION_POLICY } from "./public-goods-finalization";
 import { buildMpgfPublicGoodsMilestoneSchedule } from "./public-goods-milestones";
+import { getMpgfPublicGoodsProceduralBadgesApi } from "./public-goods-procedural-badges";
 import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
 import type {
   MpgfPublicGoodsCampaign,
@@ -189,6 +190,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
   const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
   const sponsorPoolFlywheel = buildMpgfPublicGoodsSponsorPoolFlywheel();
   const contributionFlow = getMpgfPublicGoodsContributionFlowApi(roundId);
+  const proceduralBadges = getMpgfPublicGoodsProceduralBadgesApi(roundId);
 
   return {
     ok: true,
@@ -226,6 +228,14 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
         antiCollusionFactorUnit: "basis_points",
         proofPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`,
       },
+      proceduralBadges: proceduralBadges
+        ? {
+            policy: proceduralBadges.policy,
+            path: `/api/mpgf/procedural-badges?roundId=${demoMpgfAssuranceRound.id}`,
+            counters: proceduralBadges.counters,
+            hiddenSignals: proceduralBadges.hiddenSignals,
+          }
+        : null,
       campaignCount: demoMpgfPublicGoodsCampaigns.length,
       verifiedDonorCount: allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
       calcHash: publicCalcHash(allocation.lines.map((line) => [line.campaignId, line.qfScore, line.totalPayoutCents])),
