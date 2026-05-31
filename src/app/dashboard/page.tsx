@@ -38,6 +38,7 @@ import {
   createProfileDataRightRequestAction,
   saveBackgroundNotificationPreferencesAction,
 } from "@/app/background-networking/actions";
+import { BackgroundAccountSecurityPanel } from "@/components/dashboard/background-account-security-panel";
 import { BackgroundLocalDraftsPanel } from "@/components/dashboard/background-local-drafts-panel";
 import { ProfilePortabilityPanel } from "@/components/dashboard/profile-portability-panel";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -63,6 +64,7 @@ import {
   formatBackgroundNotificationEventKind,
   getBackgroundNotificationPreferenceKey,
 } from "@/lib/background-privacy-controls";
+import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { hasBackgroundFieldEncryptionKey } from "@/lib/background-field-encryption";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
@@ -140,6 +142,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const backgroundFieldEncryptionReady = hasBackgroundFieldEncryptionKey();
   const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
   const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
+  const accountSecuritySummary = viewer ? await loadBackgroundAccountSecuritySummary() : null;
   const priorityFundSummary =
     viewer && supabaseReady ? await getPriorityCorrectionSummary(viewer.authUser.id) : null;
   const collectiveNameById = new Map(
@@ -691,7 +694,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </div>
                 <div>
                   <dt>Account security</dt>
-                  <dd>Use MFA before storing high-sensitivity wishes</dd>
+                  <dd>{accountSecuritySummary?.statusLabel ?? "MFA unavailable"}</dd>
                 </div>
               </dl>
               <div className="mini-list">
@@ -816,6 +819,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </ul>
               ) : null}
             </article>
+
+            <BackgroundAccountSecurityPanel initialSummary={accountSecuritySummary} />
           </div>
 
           <div className="panel data-card data-card-wide">

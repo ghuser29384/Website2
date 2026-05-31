@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 
 import { isAdminEmail } from "@/lib/admin";
 import {
+  type BackgroundMfaActionState,
+  normalizeBackgroundTotpCode,
+} from "@/lib/background-account-security";
+import {
   buildBackgroundNotificationPreferenceRows,
   getDataRightRequestDueAt,
   validateProfileDataRightRequest,
@@ -159,4 +163,126 @@ export async function updateProfileDataRightRequestAction(formData: FormData) {
 
   revalidatePath("/admin");
   redirectWithMessage(returnTo, "message", "Data-right request updated.");
+}
+
+export async function enrollBackgroundNetworkingMfaAction(
+  _previousState: BackgroundMfaActionState,
+  formData: FormData,
+): Promise<BackgroundMfaActionState> {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  await requireViewer(returnTo);
+
+  const friendlyName = readOptional(formData, "friendly_name").slice(0, 80) || "Moral Trade";
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.mfa.enroll({
+    factorType: "totp",
+    friendlyName,
+    issuer: "Moral Trade",
+  });
+
+  if (error) {
+    return {
+      error: error.message,
+      status: "error",
+    };
+  }
+
+  revalidatePath("/dashboard");
+
+  return {
+    factorId: data.id,
+    message: "Authenticator setup created. Verify the code before relying on this factor.",
+    qrCode: data.totp.qr_code,
+    secret: data.totp.secret,
+    status: "enrolled",
+  };
+}
+
+export async function verifyBackgroundNetworkingMfaAction(
+  _previousState: BackgroundMfaActionState,
+  formData: FormData,
+): Promise<BackgroundMfaActionState> {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  await requireViewer(returnTo);
+
+  const factorId = readOptional(formData, "factor_id");
+  const normalizedCode = normalizeBackgroundTotpCode(readOptional(formData, "code"));
+
+  if (!factorId) {
+    return {
+      error: "Choose an authenticator factor to verify.",
+      status: "error",
+    };
+  }
+
+  if (normalizedCode.error) {
+    return {
+      error: normalizedCode.error,
+      status: "error",
+    };
+  }
+
+  const supabase = await createClient();
+  const challenge = await supabase.auth.mfa.challenge({ factorId });
+
+  if (challenge.error || !challenge.data) {
+    return {
+      error: challenge.error?.message ?? "Could not start MFA verification.",
+      status: "error",
+    };
+  }
+
+  const verification = await supabase.auth.mfa.verify({
+    challengeId: challenge.data.id,
+    code: normalizedCode.code,
+    factorId,
+  });
+
+  if (verification.error) {
+    return {
+      error: verification.error.message,
+      status: "error",
+    };
+  }
+
+  revalidatePath("/dashboard");
+
+  return {
+    message: "MFA verified for this session.",
+    status: "verified",
+  };
+}
+
+export async function removeBackgroundNetworkingMfaAction(
+  _previousState: BackgroundMfaActionState,
+  formData: FormData,
+): Promise<BackgroundMfaActionState> {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  await requireViewer(returnTo);
+
+  const factorId = readOptional(formData, "factor_id");
+
+  if (!factorId) {
+    return {
+      error: "Choose an authenticator factor to remove.",
+      status: "error",
+    };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.mfa.unenroll({ factorId });
+
+  if (error) {
+    return {
+      error: error.message,
+      status: "error",
+    };
+  }
+
+  revalidatePath("/dashboard");
+
+  return {
+    message: "Authenticator factor removed.",
+    status: "removed",
+  };
 }
