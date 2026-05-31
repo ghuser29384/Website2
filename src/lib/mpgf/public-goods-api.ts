@@ -157,6 +157,7 @@ function publicCampaignProgress(campaign: MpgfPublicGoodsCampaign, options: Mpgf
     appealState: reviewSummary.appealOpen ? "appeal_requested" : "none",
     campaignPath: `/mpgf/campaigns/${campaign.slug}`,
     proofPath: `/mpgf/pools/${campaign.slug}`,
+    proofPathApiPath: `/api/mpgf/campaigns/${campaign.slug}/proof-path`,
   };
 }
 
@@ -300,6 +301,70 @@ export function getMpgfPublicGoodsCampaignApi(
         verificationMethod: campaign.verificationMethod,
       },
     },
+  };
+}
+
+export function getMpgfPublicGoodsCampaignProofPathApi(
+  campaignIdOrSlug: string,
+  options: MpgfPublicGoodsPublicApiOptions = {},
+) {
+  const campaign = demoMpgfPublicGoodsCampaigns.find(
+    (candidate) => candidate.id === campaignIdOrSlug || candidate.slug === campaignIdOrSlug,
+  );
+
+  if (!campaign) {
+    return null;
+  }
+
+  const progress = publicCampaignProgress(campaign, options);
+  const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
+  const line = allocation.lines.find((candidate) => candidate.campaignId === campaign.id);
+  const sourceProofByCampaignId = buildMpgfPublicGoodsAllocationSourceProofMap({
+    allocation,
+    pledges: demoMpgfAssurancePledges,
+  });
+  const sourceProof = sourceProofByCampaignId.get(campaign.id);
+  const aggregateProof = {
+    directEligibleCents: line?.directEligibleCents ?? progress.directEligibleCents,
+    verifiedDonorCount: line?.verifiedSupporterCount ?? progress.verifiedDonorCount,
+    baseMatchCents: line?.baseMatchCents ?? 0,
+    qfBonusCents: line?.qfBonusCents ?? 0,
+    totalPayoutCents: line?.status === "payable" ? line.totalPayoutCents : 0,
+    proofRequired: line?.proofRequired ?? true,
+    sourceContributionDigest: sourceProof?.sourceContributionDigest ?? publicCalcHash(["missing-source-proof", campaign.id]),
+    regeneratedFromContributionRecords: sourceProof?.regeneratedFromContributionRecords ?? false,
+  };
+
+  return {
+    ok: true,
+    privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+    cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
+    proofPathPolicy: "aggregate_campaign_proof_no_private_donor_rows_or_receipt_urls",
+    campaignId: campaign.id,
+    slug: campaign.slug,
+    roundId: demoMpgfAssuranceRound.id,
+    proofPathId: `mpgf-proof-path-${campaign.slug}`,
+    proofPath: progress.proofPath,
+    campaignPath: progress.campaignPath,
+    roundProofPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`,
+    roundHashPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/hash`,
+    challengePath: "/api/mpgf/challenges",
+    publicProofIncludes: [
+      "threshold_status",
+      "aggregate_counted_contributions",
+      "verified_supporter_count",
+      "base_match_and_qf_bonus",
+      "source_contribution_digest",
+      "milestone_release_status",
+    ],
+    privateRowsExcluded: true,
+    aggregateProof,
+    calcHash: publicCalcHash([
+      campaign.id,
+      progress.proofPath,
+      aggregateProof,
+      progress.milestoneSchedule.map((milestone) => [milestone.id, milestone.status, milestone.releasePct]),
+    ]),
   };
 }
 

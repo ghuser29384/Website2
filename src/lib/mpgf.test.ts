@@ -149,6 +149,7 @@ import {
   MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
   getMpgfPublicGoodsAllocationReportApi,
   getMpgfPublicGoodsCampaignApi,
+  getMpgfPublicGoodsCampaignProofPathApi,
   getMpgfPublicGoodsLedgerApi,
   getMpgfPublicGoodsMatchPreviewApi,
   getMpgfPublicGoodsRoundApi,
@@ -610,6 +611,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   const round = getMpgfPublicGoodsRoundApi(demoMpgfAssuranceRound.id);
   const campaigns = listMpgfPublicGoodsCampaignsApi(demoMpgfAssuranceRound.id);
   const detail = getMpgfPublicGoodsCampaignApi(demoMpgfPublicGoodsCampaigns[0]?.slug ?? "");
+  const proofPath = getMpgfPublicGoodsCampaignProofPathApi(demoMpgfPublicGoodsCampaigns[0]?.slug ?? "");
   const preview = getMpgfPublicGoodsMatchPreviewApi(demoMpgfAssuranceRound.id);
   const frozenCampaignId = demoMpgfPublicGoodsCampaigns[0]?.id ?? "";
   const frozenPreview = getMpgfPublicGoodsMatchPreviewApi(demoMpgfAssuranceRound.id, {
@@ -657,12 +659,22 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(campaigns.campaigns.some((campaign) => campaign.thresholdPassed));
   assert.ok(detail);
   assert.equal(detail.campaign.proofPath, `/mpgf/pools/${detail.campaign.slug}`);
+  assert.equal(detail.campaign.proofPathApiPath, `/api/mpgf/campaigns/${detail.campaign.slug}/proof-path`);
   assert.equal(detail.campaign.campaignPath, `/mpgf/campaigns/${detail.campaign.slug}`);
   assert.equal(detail.campaign.incidentState, "clear");
   assert.equal(detail.campaign.appealState, "none");
   assert.equal(detail.campaign.destinationProof.destinationRef.includes("Demo"), true);
   assert.equal("supporterReason" in detail.campaign, false);
   assert.equal("userId" in detail.campaign, false);
+  assert.ok(proofPath);
+  assert.equal(proofPath.privacyPolicy, MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY);
+  assert.equal(proofPath.proofPathPolicy, "aggregate_campaign_proof_no_private_donor_rows_or_receipt_urls");
+  assert.equal(proofPath.proofPath, detail.campaign.proofPath);
+  assert.equal(proofPath.roundProofPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`);
+  assert.equal(proofPath.roundHashPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/hash`);
+  assert.equal(proofPath.privateRowsExcluded, true);
+  assert.match(proofPath.aggregateProof.sourceContributionDigest, /^sha256:/);
+  assert.match(proofPath.calcHash, /^sha256:/);
   assert.ok(preview);
   assert.equal(preview.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.equal(preview.final, false);
@@ -701,10 +713,11 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(ledger.rows.every((row) => row.releasedTotalCents === 0));
   assert.equal(getMpgfPublicGoodsRoundApi("unknown-round"), null);
   assert.equal(getMpgfPublicGoodsCampaignApi("unknown-campaign"), null);
+  assert.equal(getMpgfPublicGoodsCampaignProofPathApi("unknown-campaign"), null);
   assert.equal(getMpgfPublicGoodsMatchPreviewApi("unknown-round"), null);
   assert.equal(getMpgfPublicGoodsAllocationReportApi("unknown-round"), null);
 
-  const publicApiJson = JSON.stringify({ rounds, round, campaigns, detail, preview, allocations, ledger });
+  const publicApiJson = JSON.stringify({ rounds, round, campaigns, detail, proofPath, preview, allocations, ledger });
 
   for (const forbidden of [
     "demo-supporter",
@@ -721,6 +734,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/rounds/[roundId]/route.ts", /getMpgfPublicGoodsRoundApi/],
     ["src/app/api/mpgf/rounds/[roundId]/campaigns/route.ts", /listMpgfPublicGoodsCampaignsApi/],
     ["src/app/api/mpgf/campaigns/[campaignId]/route.ts", /getMpgfPublicGoodsCampaignApi/],
+    ["src/app/api/mpgf/campaigns/[campaignId]/proof-path/route.ts", /getMpgfPublicGoodsCampaignProofPathApi/],
     ["src/app/api/mpgf/rounds/[roundId]/match-preview/route.ts", /getMpgfPublicGoodsMatchPreviewApi/],
     ["src/app/api/mpgf/rounds/[roundId]/allocations/route.ts", /getMpgfPublicGoodsAllocationReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/pledge-intents/route.ts", /createMpgfPublicGoodsPledgeIntent/],
