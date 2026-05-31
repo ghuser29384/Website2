@@ -61,6 +61,9 @@ export default async function MpgfPage() {
           <Link className="button button-secondary" href="/mpgf/pools">
             Review candidate pools
           </Link>
+          <Link className="button button-secondary" href="/mpgf/governance">
+            Governance and rules
+          </Link>
         </>
       }
       description="The Public Goods Fund is the pilot's main test of moral-public-goods coordination: threshold commitments, external-payment evidence, dissent notes, and reviewer verification for goods many moral views can value."
@@ -76,6 +79,7 @@ export default async function MpgfPage() {
         <a href="#what-this-pilot-tests">What this pilot tests</a>
         <a href="#assurance-matching">Assurance matching</a>
         <Link href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>Public round</Link>
+        <Link href="/mpgf/governance">Governance</Link>
         <a href="#evidence-review">Evidence review</a>
         <a href="#candidate-pools">Candidate pools</a>
         <a href="#allocation-process">Allocation process</a>

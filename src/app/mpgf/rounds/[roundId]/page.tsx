@@ -125,6 +125,9 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
           <Link className="button button-secondary" href="/mpgf/pools">
             Review campaign proof paths
           </Link>
+          <Link className="button button-secondary" href="/mpgf/governance">
+            Governance and rules
+          </Link>
         </>
       }
       description="A public round landing page for verified quadratic assurance funding: sponsor-pool size, close time, donor breadth, thresholds, match preview, final allocation, milestones, dissent status, and appeal paths."

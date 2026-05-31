@@ -111,6 +111,10 @@ import {
   listMpgfPublicGoodsRoundsApi,
 } from "./mpgf/public-goods-api";
 import {
+  MPGF_PUBLIC_GOODS_GOVERNANCE_PRIVACY_POLICY,
+  getMpgfPublicGoodsGovernanceApi,
+} from "./mpgf/public-goods-governance";
+import {
   evaluateMpgfExactPilotGate,
   evaluateMpgfGovernanceMachineryGate,
   evaluateMpgfPayoutComplianceGate,
@@ -328,6 +332,7 @@ test("MPGF canonical hash normalizes optional JSON edge fields", () => {
 
 test("MPGF public route evidence includes pool proposal route", () => {
   assert.ok(mpgfPublicRoutes.includes("/mpgf/pools/new"));
+  assert.ok(mpgfPublicRoutes.includes("/mpgf/governance"));
 });
 
 test("MPGF verified assurance campaigns gate on amount, supporters, and review", () => {
@@ -613,6 +618,57 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   }
 
   assert.match(mpgfHubPage, new RegExp(`/mpgf/rounds/\\$\\{demoMpgfAssuranceRound\\.id\\}`));
+});
+
+test("MPGF public-goods governance publication covers roles, rules, disputes, and no-ranking boundaries", () => {
+  const governance = getMpgfPublicGoodsGovernanceApi();
+  const governanceJson = JSON.stringify(governance);
+  const governancePage = readFileSync("src/app/mpgf/governance/page.tsx", "utf8");
+  const governanceRoute = readFileSync("src/app/api/mpgf/governance/route.ts", "utf8");
+  const mpgfHubPage = readFileSync("src/app/mpgf/page.tsx", "utf8");
+  const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+
+  assert.equal(governance.privacyPolicy, MPGF_PUBLIC_GOODS_GOVERNANCE_PRIVACY_POLICY);
+  assert.equal(governance.operatorRoster.length >= 3, true);
+  assert.ok(governance.operatorRoster.every((operator) => operator.publicName.includes("Moral Trade MPGF")));
+  assert.equal(governance.reviewerPanel.structurePublished, true);
+  assert.ok(governance.reviewerPanel.roles.some((role) => role.role === "payout_release_reviewer" && role.minimumCount >= 2));
+  assert.equal(governance.roundRules.parametersLockedBeforeDonationsOpen, true);
+  assert.equal(governance.roundRules.perDonorQfCapCents, demoMpgfMatchPool.restrictionsJson.perDonorQfCapCents);
+  assert.equal(governance.roundRules.campaignThresholds.length, demoMpgfPublicGoodsCampaigns.length);
+  assert.match(governance.roundRules.parameterChangePolicy, /never mid-round/);
+  assert.match(governance.conflictAndRecusalRules.recusalEnforcement, /reviewer_recusals/);
+  assert.equal(governance.incidentAndDisputeLane.pausesUnreleasedMilestones, true);
+  assert.ok(governance.whatRoundDoesNotDecide.some((note) => /No global moral ranking/i.test(note)));
+  assert.ok(governance.prohibitedGovernanceMechanisms.includes("token_voting"));
+  assert.ok(governance.prohibitedGovernanceMechanisms.includes("public_reputation_weighted_donor_power"));
+  assert.ok(
+    governance.deploymentChecklist.beforeProd.some(
+      (item) => item.key === "legal_review" && item.status === "pending_external_review",
+    ),
+  );
+
+  for (const forbidden of ["private@example", "charityReceiptRef", "externalReceiptRef", "supporterReason"]) {
+    assert.equal(governanceJson.includes(forbidden), false);
+  }
+
+  for (const expected of [
+    /Named operator roster/,
+    /Reviewer panel structure/,
+    /Locked round parameters/,
+    /Campaign thresholds/,
+    /Public incident and dispute lane/,
+    /What this round does not decide/,
+    /No global moral ranking/,
+    /Prohibited governance mechanisms/,
+    /Deployment checklist/,
+  ]) {
+    assert.match(governancePage, expected);
+  }
+
+  assert.match(governanceRoute, /getMpgfPublicGoodsGovernanceApi/);
+  assert.match(mpgfHubPage, /\/mpgf\/governance/);
+  assert.match(roundPage, /\/mpgf\/governance/);
 });
 
 test("MPGF public-goods campaign service validates schema, deadlines, and prohibited claims", () => {

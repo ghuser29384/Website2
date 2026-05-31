@@ -629,6 +629,7 @@ export const demoMpgfPublicGoodsPaymentProofs: MpgfPublicGoodsPaymentProof[] = [
 export const mpgfPublicRoutes = [
   "/mpgf",
   "/mpgf/about",
+  "/mpgf/governance",
   "/mpgf/contribute",
   "/mpgf/contribute/success",
   "/mpgf/contribute/cancel",
