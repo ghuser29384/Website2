@@ -12,6 +12,10 @@ import {
 } from "./data";
 import { createMpgfPublicGoodsIdentityAttestation, createMpgfPublicGoodsPledge } from "./mechanism";
 import type { MpgfParticipantState, MpgfPoolProposalRecord } from "./participant-types";
+import {
+  bucketMpgfPublicGoodsAmountCents,
+  recordMpgfPublicGoodsAnalyticsEvent,
+} from "./public-goods-analytics";
 import type {
   MpgfBallot,
   MpgfBallotWeight,
@@ -1108,6 +1112,28 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
         visibilityMode: pledge.visibilityMode,
       },
     });
+
+    try {
+      await recordMpgfPublicGoodsAnalyticsEvent({
+        eventType: "pledge_intent_recorded",
+        userId: input.userId,
+        campaignId: campaign.id,
+        eventJson: {
+          amountBucket: bucketMpgfPublicGoodsAmountCents(amountCents),
+          visibilityMode: pledge.visibilityMode,
+          captureMode: pledge.captureMode,
+          isRecurring: pledge.isRecurring,
+          eligibilityState: savedPledge.eligibilityState,
+          surface: "mpgf_participant_action",
+        },
+      });
+    } catch (error) {
+      warnings.push(
+        `Public-goods analytics event was not recorded: ${
+          error instanceof Error ? error.message : "unknown analytics error"
+        }`,
+      );
+    }
 
     if (input.isRecurring) {
       const subscriptionInsert = await supabase

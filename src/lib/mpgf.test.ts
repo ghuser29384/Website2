@@ -63,6 +63,11 @@ import {
   buildMpgfPublicGoodsAllocationResultRows,
   persistMpgfPublicGoodsAllocationResults,
 } from "./mpgf/public-goods-allocation-results";
+import {
+  bucketMpgfPublicGoodsAmountCents,
+  buildMpgfPublicGoodsAnalyticsEvent,
+  recordMpgfPublicGoodsAnalyticsEvent,
+} from "./mpgf/public-goods-analytics";
 import { buildMpgfPublicGoodsReconciliationRows } from "./mpgf/public-goods-reconciliation";
 import {
   normalizeMpgfPublicGoodsReasonCode,
@@ -578,6 +583,65 @@ test("MPGF public-goods subscriptions, experiments, and feature flag stay option
   assert.equal(featureFlag.defaultCaptureMode, "external_handoff");
   assert.equal(featureFlag.widensPublicAccessAutomatically, false);
   assert.ok(demoMpgfPublicGoodsSubscriptions.some((row) => row.poolId === demoMpgfMatchPool.id));
+});
+
+test("MPGF public-goods analytics keeps only privacy-safe buckets and factor codes", async () => {
+  const event = buildMpgfPublicGoodsAnalyticsEvent({
+    eventType: "pledge_intent_recorded",
+    userId: "private-user@example.com",
+    campaignId: "campaign-global-health-basic-needs",
+    createdAt: "2026-05-30T12:00:00.000Z",
+    eventJson: {
+      amountBucket: bucketMpgfPublicGoodsAmountCents(12_345),
+      visibilityMode: "public_reason",
+      captureMode: "external_handoff",
+      isRecurring: false,
+      eligibilityState: "eligible",
+      surface: "mpgf_participant_action",
+    },
+  });
+  const dryRun = await recordMpgfPublicGoodsAnalyticsEvent({
+    eventType: "threshold_status_evaluated",
+    userId: "demo-user",
+    campaignId: "campaign-global-health-basic-needs",
+    dryRun: true,
+    eventJson: {
+      campaignStatus: "payable",
+      thresholdPassed: true,
+      surface: "protected_job",
+    },
+  });
+  const route = readFileSync("src/app/api/mpgf/public-goods/analytics/route.ts", "utf8");
+  const persistence = readFileSync("src/lib/mpgf/persistence.ts", "utf8");
+
+  assert.equal(event.event_json.amountBucket, "50_to_249");
+  assert.equal(event.user_ref_hash?.includes("private-user"), false);
+  assert.equal("amountCents" in event.event_json, false);
+  assert.equal(dryRun.status, "dry_run");
+  assert.equal(dryRun.row.event_json.thresholdPassed, true);
+  assert.throws(
+    () =>
+      buildMpgfPublicGoodsAnalyticsEvent({
+        eventType: "pledge_intent_recorded",
+        eventJson: { email: "private@example.com" } as never,
+      }),
+    /cannot store raw or sensitive field/,
+  );
+  assert.throws(
+    () =>
+      buildMpgfPublicGoodsAnalyticsEvent({
+        eventType: "pledge_intent_recorded",
+        eventJson: { variant: "private@example.com" },
+      }),
+    /looks like contact data/,
+  );
+  assert.match(route, /MPGF_ANALYTICS_SECRET/);
+  assert.match(route, /bucketMpgfPublicGoodsAmountCents/);
+  assert.match(route, /recordMpgfPublicGoodsAnalyticsEvent/);
+  assert.doesNotMatch(route, /supporterReason/);
+  assert.match(persistence, /pledge_intent_recorded/);
+  assert.match(persistence, /amountBucket/);
+  assert.match(persistence, /bucketMpgfPublicGoodsAmountCents/);
 });
 
 test("MPGF public-goods migration covers required entities and RLS policies", () => {
