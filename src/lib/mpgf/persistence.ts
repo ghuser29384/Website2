@@ -17,6 +17,7 @@ import {
   recordMpgfPublicGoodsAnalyticsEvent,
 } from "./public-goods-analytics";
 import { evaluateMpgfPublicGoodsIdentityAdapter } from "./public-goods-identity";
+import { resolveMpgfPublicGoodsPaymentAdapter } from "./public-goods-payment-adapter";
 import type {
   MpgfBallot,
   MpgfBallotWeight,
@@ -1010,6 +1011,15 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
     redactedReference: undefined,
   });
   const identityAttestation = identityAdapter.attestation;
+  const paymentAdapter = resolveMpgfPublicGoodsPaymentAdapter({
+    campaign,
+    captureMode: input.captureMode,
+  });
+
+  if (paymentAdapter.blockers.length > 0) {
+    throw new Error(`MPGF public-goods payment adapter rejected pledge: ${paymentAdapter.blockers[0]}`);
+  }
+
   const pledge = createMpgfPublicGoodsPledge({
     campaign,
     userId: input.userId,
@@ -1045,7 +1055,7 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
     return reservation.result;
   }
 
-  const warnings: string[] = [...identityAdapter.warnings];
+  const warnings: string[] = [...identityAdapter.warnings, ...paymentAdapter.warnings];
 
   try {
     const attestationInsert = await supabase.from("mpgf_public_goods_identity_attestations").insert({
@@ -1112,6 +1122,8 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
         amountCents,
         captureMode: pledge.captureMode,
         visibilityMode: pledge.visibilityMode,
+        paymentAdapterMode: paymentAdapter.mode,
+        proofRequired: paymentAdapter.proofRequired,
       },
     });
 

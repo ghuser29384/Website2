@@ -69,6 +69,7 @@ import {
   recordMpgfPublicGoodsAnalyticsEvent,
 } from "./mpgf/public-goods-analytics";
 import { evaluateMpgfPublicGoodsIdentityAdapter } from "./mpgf/public-goods-identity";
+import { resolveMpgfPublicGoodsPaymentAdapter } from "./mpgf/public-goods-payment-adapter";
 import { buildMpgfPublicGoodsReconciliationRows } from "./mpgf/public-goods-reconciliation";
 import {
   normalizeMpgfPublicGoodsReasonCode,
@@ -534,6 +535,65 @@ test("MPGF public-goods identity adapter supports external proof scores without 
   );
   assert.match(persistence, /evaluateMpgfPublicGoodsIdentityAdapter/);
   assert.match(persistence, /identityAdapter\.duplicateUserRefs/);
+});
+
+test("MPGF public-goods payment adapter keeps handoff, fiscal-host, and signed-intent paths no-custody", () => {
+  const charityCampaign = demoMpgfPublicGoodsCampaigns[0];
+  const fiscalCampaign = demoMpgfPublicGoodsCampaigns[1];
+  const persistence = readFileSync("src/lib/mpgf/persistence.ts", "utf8");
+  const mechanism = readFileSync("src/lib/mpgf/mechanism.ts", "utf8");
+
+  assert.ok(charityCampaign);
+  assert.ok(fiscalCampaign);
+
+  const charityHandoff = resolveMpgfPublicGoodsPaymentAdapter({
+    campaign: charityCampaign,
+    captureMode: "external_handoff",
+    externalDestinationUrl: "https://donate.example.org/funds/global-health",
+  });
+  const fiscalHandoff = resolveMpgfPublicGoodsPaymentAdapter({
+    campaign: fiscalCampaign,
+    captureMode: "external_handoff",
+    fiscalHostUrl: "https://fiscalhost.example.org/funds/resilience",
+  });
+  const signedIntent = resolveMpgfPublicGoodsPaymentAdapter({
+    campaign: charityCampaign,
+    captureMode: "signed_intent",
+  });
+  const storedWithoutIntent = resolveMpgfPublicGoodsPaymentAdapter({
+    campaign: charityCampaign,
+    captureMode: "stored_payment_method",
+  });
+  const unsafeDestination = resolveMpgfPublicGoodsPaymentAdapter({
+    campaign: charityCampaign,
+    captureMode: "external_handoff",
+    externalDestinationUrl: "javascript:alert(1)",
+  });
+  const storedWithIntent = resolveMpgfPublicGoodsPaymentAdapter({
+    campaign: fiscalCampaign,
+    captureMode: "stored_payment_method",
+    paymentIntentRef: "provider-intent:redacted-test",
+  });
+
+  assert.equal(charityHandoff.mode, "external_destination_redirect");
+  assert.equal(charityHandoff.opensExternalDestination, true);
+  assert.equal(charityHandoff.proofRequired, "external_destination_receipt");
+  assert.equal(charityHandoff.reconciliationSource, "external_receipt");
+  assert.equal(charityHandoff.createsCustody, false);
+  assert.equal(fiscalHandoff.reconciliationSource, "fiscal_host_webhook");
+  assert.equal(fiscalHandoff.requiresProviderWebhook, true);
+  assert.equal(signedIntent.mode, "signed_intent_review_required");
+  assert.equal(signedIntent.requiresSignedIntentReview, true);
+  assert.equal(signedIntent.reconciliationSource, "sponsor_signed_intent");
+  assert.equal(storedWithIntent.mode, "provider_webhook_required");
+  assert.equal(storedWithIntent.proofRequired, "provider_webhook_and_review");
+  assert.equal(storedWithIntent.createsCustody, false);
+  assert.equal(storedWithoutIntent.mode, "blocked");
+  assert.match(storedWithoutIntent.blockers.join("\n"), /payment intent reference/);
+  assert.equal(unsafeDestination.mode, "blocked");
+  assert.match(unsafeDestination.blockers.join("\n"), /HTTPS/);
+  assert.match(persistence, /resolveMpgfPublicGoodsPaymentAdapter/);
+  assert.match(mechanism, /payment adapter rejected pledge/);
 });
 
 test("MPGF public-goods review console uses bounded reason codes and appeal states", () => {

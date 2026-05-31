@@ -13,6 +13,7 @@ import {
   demoRecurringCommitments,
   MPGF_COPY,
 } from "./data";
+import { resolveMpgfPublicGoodsPaymentAdapter } from "./public-goods-payment-adapter";
 import type {
   MpgfAllocationLine,
   MpgfAllocationResult,
@@ -597,8 +598,14 @@ export function createMpgfPublicGoodsPledge(input: {
     throw new Error("MPGF public-goods pledge capture mode is invalid.");
   }
 
-  if (captureMode === "stored_payment_method" && !input.paymentIntentRef?.trim()) {
-    throw new Error("Stored-payment-method public-goods pledges require a provider payment intent reference.");
+  const paymentAdapter = resolveMpgfPublicGoodsPaymentAdapter({
+    campaign: input.campaign,
+    captureMode,
+    paymentIntentRef: input.paymentIntentRef,
+  });
+
+  if (paymentAdapter.blockers.length > 0) {
+    throw new Error(`MPGF public-goods payment adapter rejected pledge: ${paymentAdapter.blockers[0]}`);
   }
 
   const attestationActive =
