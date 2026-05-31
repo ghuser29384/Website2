@@ -1038,8 +1038,8 @@ export default async function MoralTradeTechnicalSpecPage() {
             <p>
               The core feature now publishes the operating controls that were previously scattered
               across code and policy pages: security headers, private-cache rules, abuse throttles,
-              retention lifecycle boundaries, observability metrics, safe fallbacks, and rollout
-              gates.
+              privacy/session controls, email-outbox safety gates, retention lifecycle boundaries,
+              observability metrics, safe fallbacks, and rollout gates.
             </p>
           </div>
           <div className="protocol-validator-card panel">
@@ -1079,6 +1079,14 @@ export default async function MoralTradeTechnicalSpecPage() {
               <ul className="clean-list">
                 {operationsProfile.observabilityMetrics.map((metric) => (
                   <li key={metric}>{metric}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Privacy/session controls</h3>
+              <ul className="clean-list">
+                {operationsProfile.privacyAndSessionControls.map((control) => (
+                  <li key={control.key}>{control.label}</li>
                 ))}
               </ul>
             </article>
@@ -1399,10 +1407,21 @@ export default async function MoralTradeTechnicalSpecPage() {
             <article className="panel protocol-contract-card">
               <h3>Executable audit check</h3>
               <p>
-                The validator includes a sample-audits check so fairness and UX audit code must
-                execute successfully before the evaluation contract reports pass. Material
-                surfacing parity deviations need a redacted review-log entry before they count as
-                reviewed.
+                The validator includes a sample-audits check so fairness, UX, and workflow quality
+                audit code must execute successfully before the evaluation contract reports pass.
+                Material surfacing parity deviations need a redacted review-log entry before they
+                count as reviewed.
+              </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Sample workflow quality audit</h3>
+              <p>
+                Status {evaluationSampleAudits.workflowQualityAudit.status}; blocked precision{" "}
+                {evaluationSampleAudits.workflowQualityAudit.blockedProposalPrecision}, false
+                match rate {evaluationSampleAudits.workflowQualityAudit.falseMatchRate}, human
+                overrule rate {evaluationSampleAudits.workflowQualityAudit.humanOverruleRate},
+                reason coverage{" "}
+                {evaluationSampleAudits.workflowQualityAudit.overruleReasonCoverageRate}.
               </p>
             </article>
           </div>

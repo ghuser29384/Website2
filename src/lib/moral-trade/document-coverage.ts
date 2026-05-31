@@ -85,7 +85,7 @@ function check(
 }
 
 export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfile = {
-  version: "moral-trade-document-coverage-v0.1-2026-05",
+  version: "moral-trade-document-coverage-v0.2-2026-05",
   purpose:
     "Requirement-to-evidence coverage map for the Moral Trade improvement documents: the public validator suite should show which implementation artifacts answer each recommendation without inventing production evidence.",
   sourceDocuments: [
@@ -265,6 +265,7 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
         "src/lib/moral-trade/transparency-report.ts",
         "src/lib/moral-trade/ai-governance.ts",
         "src/lib/moral-trade/api-contract.ts",
+        "src/lib/moral-trade/email-copy.ts",
       ],
       testFiles: [
         "src/lib/moral-trade/evaluation.test.ts",
@@ -275,6 +276,7 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
         "src/lib/moral-trade/transparency-report.test.ts",
         "src/lib/moral-trade/ai-governance.test.ts",
         "src/lib/moral-trade/api-contract.test.ts",
+        "src/lib/moral-trade/email-copy.test.ts",
       ],
       routeEvidence: [
         "/api/moral-trade/evaluation/health",

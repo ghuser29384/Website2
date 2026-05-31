@@ -6,7 +6,7 @@ import {
 } from "./api-rate-limit";
 
 export const MORAL_TRADE_API_CONTRACT_VALIDATOR_VERSION =
-  "moral-trade-api-contract-validator-v0.2";
+  "moral-trade-api-contract-validator-v0.3";
 export const MORAL_TRADE_API_IMPLEMENTATION_AUDIT_VERSION =
   "moral-trade-api-implementation-audit-v0.1";
 
@@ -1019,7 +1019,7 @@ export function validateMoralTradeApiContractProfile(
         reasoningPacketsRoute.requestSchema === "reasoning_packets_request" &&
         reasoningPacketsRoute.cacheControl === "no_store_dynamic" &&
         reasoningPacketsRoute.privacyClass === "public_contract" &&
-        /validator|filter facets|private offers|hidden reasoning|global moral ranking/i.test(
+        /validator|filter facets|packet_generation_failed|route crash|private offers|hidden reasoning|global moral ranking/i.test(
           reasoningPacketsRoute.fallback,
         ) &&
         Boolean(
@@ -1028,6 +1028,11 @@ export function validateMoralTradeApiContractProfile(
               field.key === "status" &&
               field.type === "enum" &&
               field.required === false,
+          ),
+        ) &&
+        Boolean(
+          reasoningPacketsResponse?.fields.some(
+            (field) => field.key === "recoveryMode" && /packet_generation_failed/i.test(field.description),
           ),
         ) &&
         Boolean(

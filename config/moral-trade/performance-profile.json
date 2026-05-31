@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-performance-v0.2-2026-05",
+  "version": "moral-trade-performance-v0.3-2026-05",
   "purpose": "Public performance and route-resilience contract for the core Moral Trade experience, including loading-state recovery, Web Vitals, API latency, error-rate measurement, cache posture, and honest non-claims.",
   "measurementCadence": "weekly_internal_monthly_public_aggregate",
   "observedFriction": [
@@ -132,8 +132,8 @@
     },
     {
       "key": "reasoning_and_review",
-      "paths": ["/reasoning-center", "/validation", "/trust"],
-      "recoveryExpectation": "Review and reasoning pages expose safe navigation and retry paths if a route fails."
+      "paths": ["/reasoning-center", "/api/moral-trade/reasoning/packets", "/validation", "/trust"],
+      "recoveryExpectation": "Review and reasoning pages expose safe navigation and retry paths if a route fails; packet JSON returns validator blockers instead of a public route crash."
     }
   ],
   "releaseGates": [

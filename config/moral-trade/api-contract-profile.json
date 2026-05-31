@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.8-2026-05",
+  "version": "moral-trade-api-contract-v0.9-2026-05",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -264,7 +264,7 @@
       "responseSchema": "reasoning_packets_response",
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
-      "fallback": "Return reasoning-packet validator blockers, public filter facets, and public worked-example packets; never expose live private offers, hidden reasoning, contact details, or global moral ranking."
+      "fallback": "Return reasoning-packet validator blockers, public filter facets, and public worked-example packets; if packet generation fails, return a packet_generation_failed recovery payload with zero packets and validator blockers instead of a route crash; never expose live private offers, hidden reasoning, contact details, or global moral ranking."
     },
     {
       "key": "moral_trade_review_workflow_evaluate",
@@ -1018,6 +1018,7 @@
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the reasoning-packet contract validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the reasoning-packet validation run." },
+        { "key": "recoveryMode", "type": "enum", "required": true, "privacy": "public", "description": "normal for healthy packet generation, or packet_generation_failed when the route returns validator blockers without packet bodies." },
         { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Reasoning packet contract version." },
         { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
         { "key": "activeFilter", "type": "enum", "required": true, "privacy": "public", "description": "Applied public packet filter after normalizing the status query." },

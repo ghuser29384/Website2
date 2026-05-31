@@ -1,7 +1,7 @@
 import operationsProfileJson from "../../../config/moral-trade/operations-profile.json";
 
 export const MORAL_TRADE_OPERATIONS_VALIDATOR_VERSION =
-  "moral-trade-operations-validator-v0.1";
+  "moral-trade-operations-validator-v0.2";
 
 type OperationsEntry = {
   key?: string;
@@ -143,6 +143,7 @@ const REQUIRED_PRIVACY_CONTROLS = [
   "private_route_cache_control",
   "data_right_requests",
   "field_level_disclosure_grants",
+  "email_outbox_safety_gate",
   "audit_events",
 ] as const;
 
@@ -161,6 +162,7 @@ const REQUIRED_OBSERVABILITY_METRICS = [
   "route_error_rate",
   "api_latency_p95",
   "web_vitals",
+  "email_outbox_suppression_count",
   "privacy_incident_count",
   "copilot_fallback_rate",
   "evidence_review_sla",
@@ -170,6 +172,7 @@ const REQUIRED_FALLBACK_CONTROLS = [
   "deterministic_manual_fallback",
   "invalid_copilot_output_no_state_change",
   "provider_timeout_no_state_change",
+  "unsafe_email_no_provider_send",
   "replay_safe_state_transitions",
 ] as const;
 
@@ -360,6 +363,7 @@ export function validateMoralTradeOperationsProfile(
       "Operational test hooks",
       profile.operationalTests.includes("security_header_source_smoke") &&
         profile.operationalTests.includes("production_build") &&
+        profile.operationalTests.includes("email_outbox_safety_gate_smoke") &&
         profile.operationalTests.includes("resilience_fallback_audit") &&
         profile.operationalTests.includes("health_route_contract_smoke"),
       profile.operationalTests.join(", "),

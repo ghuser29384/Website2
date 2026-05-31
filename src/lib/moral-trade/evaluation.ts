@@ -1,7 +1,7 @@
 import evaluationProfileJson from "../../../config/moral-trade/evaluation-profile.json";
 
 export const MORAL_TRADE_EVALUATION_VALIDATOR_VERSION =
-  "moral-trade-evaluation-validator-v0.2";
+  "moral-trade-evaluation-validator-v0.3";
 
 export type MoralTradeEvaluationMetric = {
   key: string;
@@ -101,9 +101,33 @@ export interface MoralTradeUxReadinessAudit {
   blockers: string[];
 }
 
+export interface MoralTradeWorkflowQualitySnapshot {
+  period: string;
+  blockedProposalReviewCount: number;
+  confirmedCorrectBlockCount: number;
+  privacyLeakageIncidentCount: number;
+  matchPreviewReviewCount: number;
+  falseMatchRejectionCount: number;
+  suggestionReviewCount: number;
+  humanOverruleCount: number;
+  overruleReasonCodeCount: number;
+}
+
+export interface MoralTradeWorkflowQualityAudit {
+  status: "pass" | "fail" | "insufficient_data";
+  period: string;
+  blockedProposalPrecision: number | null;
+  falseMatchRate: number | null;
+  humanOverruleRate: number | null;
+  overruleReasonCoverageRate: number | null;
+  checks: MoralTradeEvaluationCheck[];
+  blockers: string[];
+}
+
 export interface MoralTradeEvaluationSampleAudits {
   surfacingParityAudit: MoralTradeSurfacingParityAudit;
   uxReadinessAudit: MoralTradeUxReadinessAudit;
+  workflowQualityAudit: MoralTradeWorkflowQualityAudit;
 }
 
 const evaluationProfile = evaluationProfileJson as MoralTradeEvaluationProfile;
@@ -126,6 +150,17 @@ export const MORAL_TRADE_UX_READINESS_DEFAULTS = {
   minExplanationHelpfulMedianRating: 4,
   maxReviewerMedianMinutesPerDecision: 20,
   maxReviewerOverruleRateIncrease: 0.03,
+} as const;
+
+export const MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS = {
+  minBlockedProposalReviewCount: 5,
+  minMatchPreviewReviewCount: 5,
+  minSuggestionReviewCount: 5,
+  minBlockedProposalPrecision: 0.8,
+  maxPrivacyLeakageIncidentCount: 0,
+  maxFalseMatchRate: 0.25,
+  maxHumanOverruleRate: 0.35,
+  minOverruleReasonCoverageRate: 0.95,
 } as const;
 
 const REQUIRED_METRICS = [
@@ -520,6 +555,133 @@ export function auditMoralTradeUxReadiness({
   };
 }
 
+function rateOrNull(numerator: number, denominator: number) {
+  if (denominator <= 0) {
+    return null;
+  }
+
+  return roundRate(numerator / denominator);
+}
+
+export function auditMoralTradeWorkflowQuality({
+  maxFalseMatchRate = MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS.maxFalseMatchRate,
+  maxHumanOverruleRate = MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS.maxHumanOverruleRate,
+  maxPrivacyLeakageIncidentCount =
+    MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS.maxPrivacyLeakageIncidentCount,
+  minBlockedProposalPrecision =
+    MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS.minBlockedProposalPrecision,
+  minBlockedProposalReviewCount =
+    MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS.minBlockedProposalReviewCount,
+  minMatchPreviewReviewCount =
+    MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS.minMatchPreviewReviewCount,
+  minOverruleReasonCoverageRate =
+    MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS.minOverruleReasonCoverageRate,
+  minSuggestionReviewCount =
+    MORAL_TRADE_WORKFLOW_QUALITY_DEFAULTS.minSuggestionReviewCount,
+  snapshot,
+}: {
+  snapshot: MoralTradeWorkflowQualitySnapshot;
+  maxFalseMatchRate?: number;
+  maxHumanOverruleRate?: number;
+  maxPrivacyLeakageIncidentCount?: number;
+  minBlockedProposalPrecision?: number;
+  minBlockedProposalReviewCount?: number;
+  minMatchPreviewReviewCount?: number;
+  minOverruleReasonCoverageRate?: number;
+  minSuggestionReviewCount?: number;
+}): MoralTradeWorkflowQualityAudit {
+  const blockedProposalPrecision = rateOrNull(
+    snapshot.confirmedCorrectBlockCount,
+    snapshot.blockedProposalReviewCount,
+  );
+  const falseMatchRate = rateOrNull(
+    snapshot.falseMatchRejectionCount,
+    snapshot.matchPreviewReviewCount,
+  );
+  const humanOverruleRate = rateOrNull(
+    snapshot.humanOverruleCount,
+    snapshot.suggestionReviewCount,
+  );
+  const overruleReasonCoverageRate = rateOrNull(
+    snapshot.overruleReasonCodeCount,
+    snapshot.humanOverruleCount,
+  );
+  const sampleReady =
+    snapshot.blockedProposalReviewCount >= minBlockedProposalReviewCount &&
+    snapshot.matchPreviewReviewCount >= minMatchPreviewReviewCount &&
+    snapshot.suggestionReviewCount >= minSuggestionReviewCount;
+  const blockedPrecisionReady =
+    hasNumber(blockedProposalPrecision) &&
+    blockedProposalPrecision >= minBlockedProposalPrecision;
+  const privacyReady =
+    snapshot.privacyLeakageIncidentCount <= maxPrivacyLeakageIncidentCount;
+  const falseMatchReady =
+    hasNumber(falseMatchRate) && falseMatchRate <= maxFalseMatchRate;
+  const overruleRateReady =
+    hasNumber(humanOverruleRate) && humanOverruleRate <= maxHumanOverruleRate;
+  const overruleReasonReady =
+    snapshot.humanOverruleCount === 0 ||
+    (hasNumber(overruleReasonCoverageRate) &&
+      overruleReasonCoverageRate >= minOverruleReasonCoverageRate);
+  const checks = [
+    check(
+      "workflow-quality-sample-size",
+      "Workflow quality sample is large enough to evaluate",
+      sampleReady,
+      `${snapshot.blockedProposalReviewCount} block review(s), ${snapshot.matchPreviewReviewCount} match preview review(s), ${snapshot.suggestionReviewCount} suggestion review(s).`,
+    ),
+    check(
+      "blocked-proposal-precision",
+      "Blocked-proposal precision is reviewer-confirmed",
+      blockedPrecisionReady,
+      `${blockedProposalPrecision ?? "missing"} precision.`,
+    ),
+    check(
+      "privacy-leakage-incidents",
+      "Privacy leakage incidents stay at zero before promotion",
+      privacyReady,
+      `${snapshot.privacyLeakageIncidentCount} confirmed incident(s).`,
+    ),
+    check(
+      "false-match-rate",
+      "False match rate is bounded",
+      falseMatchReady,
+      `${falseMatchRate ?? "missing"} false-match rate.`,
+    ),
+    check(
+      "human-overrule-rate",
+      "Human overrule rate is bounded before promotion",
+      overruleRateReady,
+      `${humanOverruleRate ?? "missing"} human-overrule rate.`,
+    ),
+    check(
+      "human-overrule-reason-coverage",
+      "Human overruling is covered by structured reason codes",
+      overruleReasonReady,
+      `${overruleReasonCoverageRate ?? "not_applicable"} reason coverage.`,
+    ),
+  ];
+  const blockers = [
+    ...(sampleReady ? [] : ["workflow_quality_sample_too_small"]),
+    ...(blockedPrecisionReady ? [] : ["blocked_proposal_precision_below_target"]),
+    ...(privacyReady ? [] : ["privacy_leakage_incident_present"]),
+    ...(falseMatchReady ? [] : ["false_match_rate_above_target"]),
+    ...(overruleRateReady ? [] : ["human_overrule_rate_above_target"]),
+    ...(overruleReasonReady ? [] : ["human_overrule_reason_coverage_incomplete"]),
+  ];
+
+  return {
+    status: sampleReady ? (blockers.length ? "fail" : "pass") : "insufficient_data",
+    period: snapshot.period,
+    blockedProposalPrecision,
+    falseMatchRate,
+    humanOverruleRate,
+    overruleReasonCoverageRate,
+    checks,
+    blockers,
+  };
+}
+
 export function getMoralTradeEvaluationSampleAudits(): MoralTradeEvaluationSampleAudits {
   return {
     surfacingParityAudit: auditMoralTradeSurfacingParity({
@@ -590,6 +752,19 @@ export function getMoralTradeEvaluationSampleAudits(): MoralTradeEvaluationSampl
         reviewerOverruleRate: 0.17,
       },
     }),
+    workflowQualityAudit: auditMoralTradeWorkflowQuality({
+      snapshot: {
+        period: "2026-05",
+        blockedProposalReviewCount: 12,
+        confirmedCorrectBlockCount: 11,
+        privacyLeakageIncidentCount: 0,
+        matchPreviewReviewCount: 20,
+        falseMatchRejectionCount: 3,
+        suggestionReviewCount: 18,
+        humanOverruleCount: 4,
+        overruleReasonCodeCount: 4,
+      },
+    }),
   };
 }
 
@@ -651,6 +826,7 @@ export function validateMoralTradeEvaluationProfile(
       "evaluation-tests",
       "Evaluation test hooks",
       profile.evaluationTests.includes("evaluation_profile_validator") &&
+        profile.evaluationTests.includes("workflow_quality_audit") &&
         profile.evaluationTests.includes("surfacing_parity_audit") &&
         profile.evaluationTests.includes("surfacing_deviation_review_log") &&
         profile.evaluationTests.includes("ux_readiness_audit") &&
@@ -664,8 +840,9 @@ export function validateMoralTradeEvaluationProfile(
       sampleAudits.surfacingParityAudit.status === "pass" &&
         sampleAudits.surfacingParityAudit.reviewedDeviationCount > 0 &&
         sampleAudits.surfacingParityAudit.unreviewedDeviationCount === 0 &&
-        sampleAudits.uxReadinessAudit.status === "pass",
-      `surfacing ${sampleAudits.surfacingParityAudit.status}; reviewed deviations ${sampleAudits.surfacingParityAudit.reviewedDeviationCount}; ux ${sampleAudits.uxReadinessAudit.status}`,
+        sampleAudits.uxReadinessAudit.status === "pass" &&
+        sampleAudits.workflowQualityAudit.status === "pass",
+      `surfacing ${sampleAudits.surfacingParityAudit.status}; reviewed deviations ${sampleAudits.surfacingParityAudit.reviewedDeviationCount}; ux ${sampleAudits.uxReadinessAudit.status}; workflow ${sampleAudits.workflowQualityAudit.status}`,
     ),
   ];
   const blockers = checks

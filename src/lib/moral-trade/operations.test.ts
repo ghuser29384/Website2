@@ -65,6 +65,7 @@ test("operations profile publishes security, rate-limit, retention, fallback, an
     );
   }
   assert.ok(profile.privacyAndSessionControls.some((control) => control.key === "data_right_requests"));
+  assert.ok(profile.privacyAndSessionControls.some((control) => control.key === "email_outbox_safety_gate"));
   assert.ok(profile.retentionControls.some((control) => control.key === "account_profile_lifecycle"));
   assert.ok(profile.retentionControls.some((control) => control.key === "private_wish_source_lifecycle"));
   assert.ok(profile.retentionControls.some((control) => control.key === "evidence_provenance_lifecycle"));
@@ -76,7 +77,9 @@ test("operations profile publishes security, rate-limit, retention, fallback, an
       (control) =>
         control.key === "notification_delivery_lifecycle" &&
         /source cooldown/i.test(control.scope) &&
-        /discovery cooldowns/i.test(control.retentionWindow),
+        /discovery cooldowns/i.test(control.retentionWindow) &&
+        /payment amounts/i.test(control.retentionWindow) &&
+        /agreement IDs/i.test(control.retentionWindow),
     ),
   );
   assert.ok(profile.retentionControls.some((control) => control.key === "data_right_request_lifecycle"));
@@ -84,8 +87,11 @@ test("operations profile publishes security, rate-limit, retention, fallback, an
     profile.retentionControls.every((control) => control.scope && control.retentionWindow && control.evidence),
   );
   assert.ok(profile.observabilityMetrics.includes("copilot_fallback_rate"));
+  assert.ok(profile.observabilityMetrics.includes("email_outbox_suppression_count"));
   assert.ok(profile.fallbackControls.some((control) => control.key === "invalid_copilot_output_no_state_change"));
+  assert.ok(profile.fallbackControls.some((control) => control.key === "unsafe_email_no_provider_send"));
   assert.ok(profile.operationalTests.includes("retention_lifecycle_contract_smoke"));
+  assert.ok(profile.operationalTests.includes("email_outbox_safety_gate_smoke"));
   assert.ok(profile.operationalTests.includes("resilience_fallback_audit"));
   assert.ok(profile.rolloutGates.some((gate) => gate.key === "human_controlled_safety"));
 });
@@ -114,6 +120,32 @@ test("operations profile validation fails if retention lifecycle boundaries are 
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("retention-lifecycle-controls")));
+});
+
+test("operations profile validation fails if email outbox suppression controls are missing", () => {
+  const baseProfile = getMoralTradeOperationsProfile();
+  const profile = {
+    ...baseProfile,
+    privacyAndSessionControls: baseProfile.privacyAndSessionControls.filter(
+      (control) => control.key !== "email_outbox_safety_gate",
+    ),
+    fallbackControls: baseProfile.fallbackControls.filter(
+      (control) => control.key !== "unsafe_email_no_provider_send",
+    ),
+    observabilityMetrics: baseProfile.observabilityMetrics.filter(
+      (metric) => metric !== "email_outbox_suppression_count",
+    ),
+    operationalTests: baseProfile.operationalTests.filter(
+      (testName) => testName !== "email_outbox_safety_gate_smoke",
+    ),
+  };
+  const validation = validateMoralTradeOperationsProfile(profile);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("privacy-session-controls")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("observability-metrics")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("fallback-controls")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("operational-tests")));
 });
 
 test("private Moral Trade advisory routes enforce named rate limits before reading drafts", () => {

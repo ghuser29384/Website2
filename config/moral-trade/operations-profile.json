@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-operations-v0.2-2026-05",
-  "purpose": "Public operating contract for core Moral Trade security headers, private-cache controls, rate-limit surfaces, retention lifecycle controls, observability metrics, fallback behavior, and rollout gates.",
+  "version": "moral-trade-operations-v0.3-2026-05",
+  "purpose": "Public operating contract for core Moral Trade security headers, private-cache controls, rate-limit surfaces, email-outbox safety gates, retention lifecycle controls, observability metrics, fallback behavior, and rollout gates.",
   "securityHeaders": [
     {
       "code": "strict_transport_security",
@@ -87,6 +87,11 @@
       "evidence": "Background networking grants stage public previews, detail requests, and mutual consent."
     },
     {
+      "key": "email_outbox_safety_gate",
+      "label": "Email outbox safety gate",
+      "evidence": "src/lib/moral-trade/email-copy.ts centralizes generic dashboard-directed Moral Trade email copy and src/app/api/jobs/email/route.ts suppresses unsafe rows before provider send when body text contains contact details, exact offer terms, payment amounts, agreement or payment identifiers, evidence, raw source notes, or private wish markers."
+    },
+    {
       "key": "audit_events",
       "label": "Audit events",
       "evidence": "Match, privacy, and admin actions record audit events where disclosure is safe."
@@ -131,9 +136,9 @@
     {
       "key": "notification_delivery_lifecycle",
       "label": "Notification delivery lifecycle",
-      "scope": "Email/in-app delivery rows, digest preferences, quiet-hour windows, source cooldown state, opt-out state, and failed-delivery diagnostics.",
-      "retentionWindow": "Preference rows and delivery records are retained to honor opt-outs, enforce discovery cooldowns, diagnose failed delivery, and avoid exposing private wish text in notifications.",
-      "evidence": "Privacy page publishes notification processor boundaries and notification retention purpose."
+      "scope": "Email/in-app delivery rows, digest preferences, quiet-hour windows, source cooldown state, opt-out state, suppression status, and failed-delivery diagnostics.",
+      "retentionWindow": "Preference rows and delivery records are retained to honor opt-outs, enforce discovery cooldowns, diagnose failed or suppressed delivery, and avoid exposing private wish text, contact details, exact terms, payment amounts, agreement IDs, evidence, or source notes in notifications.",
+      "evidence": "Privacy page publishes notification processor boundaries and notification retention purpose; email-copy tests cover generic copy and sender-side suppression before provider delivery."
     },
     {
       "key": "data_right_request_lifecycle",
@@ -149,6 +154,7 @@
     "api_latency_p95",
     "web_vitals",
     "blocked_proposal_rate",
+    "email_outbox_suppression_count",
     "privacy_incident_count",
     "copilot_fallback_rate",
     "evidence_review_sla",
@@ -169,6 +175,11 @@
       "key": "provider_timeout_no_state_change",
       "label": "Provider timeout cannot change state",
       "rule": "Provider or payment/evidence timeouts remain pending or manual-review states."
+    },
+    {
+      "key": "unsafe_email_no_provider_send",
+      "label": "Unsafe email rows cannot reach the provider",
+      "rule": "Core Moral Trade email outbox rows with contact details, exact offer terms, payment amounts, agreement or payment identifiers, evidence, raw source notes, or private wish markers are marked suppressed before provider send."
     },
     {
       "key": "replay_safe_state_transitions",
@@ -203,6 +214,7 @@
     "private_cache_header_smoke",
     "rate_limit_surface_smoke",
     "retention_lifecycle_contract_smoke",
+    "email_outbox_safety_gate_smoke",
     "operations_profile_validator",
     "resilience_fallback_audit",
     "health_route_contract_smoke",

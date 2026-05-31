@@ -7,11 +7,7 @@ import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import {
   MORAL_TRADE_REASONING_PACKET_FILTERS,
-  filterMoralTradeReasoningPackets,
-  getMoralTradeReasoningPacketFilterCounts,
-  getMoralTradeReasoningPacketFilterKey,
-  getMoralTradeReasoningPacketContract,
-  getMoralTradeReasoningPackets,
+  buildMoralTradeReasoningPacketRoutePayload,
 } from "@/lib/moral-trade/reasoning-packets";
 import { buildBreadcrumbJsonLd, getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -55,9 +51,6 @@ const topics = [
   "Evidence design",
   "Moral uncertainty",
 ] as const;
-
-const reviewRecords = getMoralTradeReasoningPackets();
-const reasoningPacketContract = getMoralTradeReasoningPacketContract(reviewRecords);
 
 const reviewNotes = [
   {
@@ -103,18 +96,23 @@ export default async function ReasoningCenterPage({
   searchParams,
 }: ReasoningCenterPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const activeFilterKey = getMoralTradeReasoningPacketFilterKey(
-    resolvedSearchParams.status,
-  );
+  const packetState = buildMoralTradeReasoningPacketRoutePayload({
+    status: resolvedSearchParams.status,
+    onRecovery(error) {
+      console.warn(
+        "[reasoning-center] Rendering packet recovery state after packet generation failed.",
+        error,
+      );
+    },
+  });
+  const activeFilterKey = packetState.activeFilter;
   const activeFilter =
     MORAL_TRADE_REASONING_PACKET_FILTERS.find(
       (filter) => filter.key === activeFilterKey,
     ) ?? MORAL_TRADE_REASONING_PACKET_FILTERS[0];
-  const filterCounts = getMoralTradeReasoningPacketFilterCounts(reviewRecords);
-  const filteredReviewRecords = filterMoralTradeReasoningPackets(
-    reviewRecords,
-    activeFilterKey,
-  );
+  const filterCounts = packetState.filterCounts;
+  const filteredReviewRecords = packetState.packets;
+  const reasoningPacketContract = packetState.publicContract;
   const viewer = await getOptionalViewerForReasoningCenter();
   const isAuthenticated = Boolean(viewer);
   const breadcrumbStructuredData = buildBreadcrumbJsonLd([
@@ -197,14 +195,25 @@ export default async function ReasoningCenterPage({
                 them.
               </p>
               <p className="reasoning-filter-summary">
-                Showing {filteredReviewRecords.length} of {reviewRecords.length} public packet
-                {reviewRecords.length === 1 ? "" : "s"} for {activeFilter.label.toLowerCase()}.
+                Showing {filteredReviewRecords.length} of {packetState.packetCount} public packet
+                {packetState.packetCount === 1 ? "" : "s"} for {activeFilter.label.toLowerCase()}.
               </p>
             </div>
             <Link className="button button-primary" href="/reasoning-standards">
               Standards
             </Link>
           </header>
+
+          {packetState.recoveryMode === "packet_generation_failed" ? (
+            <section
+              className="status-banner status-banner-warning"
+              aria-label="Reasoning packet recovery"
+            >
+              Packet generation is in recovery mode. The page is showing safe navigation and
+              validator blockers only; no proposal status, disclosure, outreach, evidence decision,
+              or ranking changed.
+            </section>
+          ) : null}
 
           <div className="reasoning-tabs" aria-label="Review filters">
             {MORAL_TRADE_REASONING_PACKET_FILTERS.map((filter) => (

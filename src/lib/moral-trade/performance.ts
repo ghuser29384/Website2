@@ -1,7 +1,7 @@
 import performanceProfileJson from "../../../config/moral-trade/performance-profile.json";
 
 export const MORAL_TRADE_PERFORMANCE_VALIDATOR_VERSION =
-  "moral-trade-performance-validator-v0.2";
+  "moral-trade-performance-validator-v0.3";
 
 export type MoralTradePerformanceThreshold = {
   operator: "lte" | "gte" | "eq";
@@ -246,10 +246,18 @@ const SAMPLE_ROUTE_RECOVERY_MANIFEST = [
     serverRenderable: true,
     recoverySurfaces: [
       "route_specific_viewer_fallback",
+      "packet_generation_recovery_notice",
       "global_error_boundary",
       "packet_json_fallback",
       "safe_navigation",
     ],
+    stateMutationOnFallback: false,
+  },
+  {
+    routeFamilyKey: "reasoning_and_review",
+    path: "/api/moral-trade/reasoning/packets",
+    serverRenderable: true,
+    recoverySurfaces: ["validator_blockers", "packet_generation_failed_contract", "no_store_dynamic"],
     stateMutationOnFallback: false,
   },
   {

@@ -14,10 +14,10 @@ import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getMoralTradeProvenanceContract } from "./provenance";
 
 export const MORAL_TRADE_REASONING_PACKET_CONTRACT_VERSION =
-  "moral-trade-reasoning-packets-v0.2-2026-05";
+  "moral-trade-reasoning-packets-v0.3-2026-05";
 
 export const MORAL_TRADE_REASONING_PACKET_VALIDATOR_VERSION =
-  "moral-trade-reasoning-packet-validator-v0.1";
+  "moral-trade-reasoning-packet-validator-v0.2";
 
 export type MoralTradeReasoningStatusTone =
   | "blocked"
@@ -98,6 +98,33 @@ export interface MoralTradeReasoningPacketContractValidation {
   blockers: string[];
 }
 
+export interface MoralTradeReasoningPacketRoutePayload {
+  ok: boolean;
+  checkedAt: string;
+  recoveryMode: "normal" | "packet_generation_failed";
+  contractVersion: string;
+  purpose: string;
+  activeFilter: MoralTradeReasoningPacketFilterKey;
+  packetCount: number;
+  filteredPacketCount: number;
+  filterCounts: Record<MoralTradeReasoningPacketFilterKey, number>;
+  validation: MoralTradeReasoningPacketContractValidation;
+  publicContract: {
+    sourceRoute: MoralTradeReasoningPacketContract["sourceRoute"];
+    publicApiRoute: MoralTradeReasoningPacketContract["publicApiRoute"];
+    packetCount: number;
+    supportedFilters: readonly MoralTradeReasoningPacketFilter[];
+    filterCounts: Record<MoralTradeReasoningPacketFilterKey, number>;
+    requiredPacketFields: Array<keyof MoralTradeReasoningPacket>;
+    linkedContracts: MoralTradeReasoningPacketContract["linkedContracts"];
+    invariants: string[];
+    samplePacketIds: string[];
+    contractTests: string[];
+  };
+  packets: MoralTradeReasoningPacket[];
+  blockers: string[];
+}
+
 const PUBLIC_REASONING_PACKET_COUNT = 5;
 
 export const MORAL_TRADE_REASONING_PACKET_FILTERS: readonly MoralTradeReasoningPacketFilter[] =
@@ -159,6 +186,7 @@ const REASONING_PACKET_CONTRACT_TESTS = [
   "reasoning_packet_contract_validator",
   "reasoning_center_public_packet_smoke",
   "reasoning_packets_api_route_smoke",
+  "reasoning_packets_recovery_payload_smoke",
   "technical_spec_reasoning_packet_smoke",
 ] as const;
 
@@ -349,6 +377,122 @@ export function getMoralTradeReasoningPacketContract(
     samplePackets: packets.slice(0, 2),
     contractTests: [...REASONING_PACKET_CONTRACT_TESTS],
   };
+}
+
+export function getMoralTradeReasoningPacketRecoveryContract(): MoralTradeReasoningPacketContract {
+  const filterCounts = Object.fromEntries(
+    MORAL_TRADE_REASONING_PACKET_FILTERS.map((filter) => [filter.key, 0]),
+  ) as Record<MoralTradeReasoningPacketFilterKey, number>;
+
+  return {
+    version: MORAL_TRADE_REASONING_PACKET_CONTRACT_VERSION,
+    purpose:
+      "Recovery contract for Reasoning Center packets when deterministic packet generation fails before public rendering.",
+    sourceRoute: "/reasoning-center",
+    publicApiRoute: "/api/moral-trade/reasoning/packets",
+    packetCount: 0,
+    requiredPacketFields: [...REQUIRED_REASONING_PACKET_FIELDS],
+    supportedFilters: MORAL_TRADE_REASONING_PACKET_FILTERS,
+    filterCounts,
+    linkedContracts: {
+      reviewWorkflowContractVersion: "unavailable",
+      reviewWorkflowCardCount: 0,
+      reviewWorkflowMarketplaceFactorCount: 0,
+      provenanceSchemaVersion: "unavailable",
+      provenanceValidationRuleCount: 0,
+      provenanceSampleBundleStatus: "unavailable",
+    },
+    invariants: [
+      "Recovery mode returns validator blockers instead of throwing a public route error.",
+      "Recovery mode does not export live private offers, exact wishes, contact details, raw source notes, or hidden reasoning.",
+      "Recovery mode performs no state mutation, disclosure, outreach, evidence decision, or ranking.",
+    ],
+    samplePackets: [],
+    contractTests: [...REASONING_PACKET_CONTRACT_TESTS],
+  };
+}
+
+function buildReasoningPacketPublicContract(
+  contract: MoralTradeReasoningPacketContract,
+): MoralTradeReasoningPacketRoutePayload["publicContract"] {
+  return {
+    sourceRoute: contract.sourceRoute,
+    publicApiRoute: contract.publicApiRoute,
+    packetCount: contract.packetCount,
+    supportedFilters: contract.supportedFilters,
+    filterCounts: contract.filterCounts,
+    requiredPacketFields: contract.requiredPacketFields,
+    linkedContracts: contract.linkedContracts,
+    invariants: contract.invariants,
+    samplePacketIds: contract.samplePackets.map((packet) => packet.id),
+    contractTests: contract.contractTests,
+  };
+}
+
+export function buildMoralTradeReasoningPacketRoutePayload({
+  status,
+  checkedAt = new Date().toISOString(),
+  packetBuilder = getMoralTradeReasoningPackets,
+  onRecovery,
+}: {
+  status?: unknown;
+  checkedAt?: string;
+  packetBuilder?: () => readonly MoralTradeReasoningPacket[];
+  onRecovery?: (error: unknown) => void;
+} = {}): MoralTradeReasoningPacketRoutePayload {
+  const activeFilter = getMoralTradeReasoningPacketFilterKey(status);
+
+  try {
+    const allPackets = [...packetBuilder()];
+    const packets = filterMoralTradeReasoningPackets(allPackets, activeFilter);
+    const contract = getMoralTradeReasoningPacketContract(allPackets);
+    const validation = validateMoralTradeReasoningPacketContract(contract, allPackets);
+
+    return {
+      ok: validation.status === "pass",
+      checkedAt,
+      recoveryMode: "normal",
+      contractVersion: contract.version,
+      purpose: contract.purpose,
+      activeFilter,
+      packetCount: contract.packetCount,
+      filteredPacketCount: packets.length,
+      filterCounts: contract.filterCounts,
+      validation,
+      publicContract: buildReasoningPacketPublicContract(contract),
+      packets,
+      blockers: validation.blockers,
+    };
+  } catch (error) {
+    onRecovery?.(error);
+
+    const allPackets: MoralTradeReasoningPacket[] = [];
+    const packets = filterMoralTradeReasoningPackets(allPackets, activeFilter);
+    const contract = getMoralTradeReasoningPacketRecoveryContract();
+    const validation = validateMoralTradeReasoningPacketContract(contract, allPackets);
+    const blockers = Array.from(
+      new Set(["packet_generation_failed", ...validation.blockers]),
+    );
+
+    return {
+      ok: false,
+      checkedAt,
+      recoveryMode: "packet_generation_failed",
+      contractVersion: contract.version,
+      purpose: contract.purpose,
+      activeFilter,
+      packetCount: contract.packetCount,
+      filteredPacketCount: packets.length,
+      filterCounts: contract.filterCounts,
+      validation: {
+        ...validation,
+        blockers,
+      },
+      publicContract: buildReasoningPacketPublicContract(contract),
+      packets,
+      blockers,
+    };
+  }
 }
 
 function packetHasRequiredFields(packet: MoralTradeReasoningPacket) {

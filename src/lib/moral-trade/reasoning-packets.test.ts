@@ -4,10 +4,12 @@ import test from "node:test";
 import { GET as reasoningPacketsRoute } from "../../app/api/moral-trade/reasoning/packets/route";
 import {
   MORAL_TRADE_REASONING_PACKET_FILTERS,
+  buildMoralTradeReasoningPacketRoutePayload,
   filterMoralTradeReasoningPackets,
   getMoralTradeReasoningPacketFilterCounts,
   getMoralTradeReasoningPacketFilterKey,
   getMoralTradeReasoningPacketContract,
+  getMoralTradeReasoningPacketRecoveryContract,
   getMoralTradeReasoningPackets,
   validateMoralTradeReasoningPacketContract,
   type MoralTradeReasoningPacketContract,
@@ -29,6 +31,9 @@ test("reasoning packets publish deterministic structured review output", () => {
   assert.ok(packets.some((packet) => packet.uncertaintyFlags.length > 0));
   assert.ok(
     contract.contractTests.includes("reasoning_packets_api_route_smoke"),
+  );
+  assert.ok(
+    contract.contractTests.includes("reasoning_packets_recovery_payload_smoke"),
   );
 });
 
@@ -78,6 +83,7 @@ test("reasoning packet API applies public status filters", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
+  assert.equal(payload.recoveryMode, "normal");
   assert.equal(payload.activeFilter, "needs-evidence");
   assert.equal(payload.packetCount, 5);
   assert.equal(payload.filteredPacketCount, 1);
@@ -91,6 +97,34 @@ test("reasoning packet API applies public status filters", async () => {
   );
   assert.equal(payload.packets.length, 1);
   assert.equal(payload.packets[0].sourceOfferId, "seed-lina");
+});
+
+test("reasoning packet payload fails closed when packet generation fails", () => {
+  const payload = buildMoralTradeReasoningPacketRoutePayload({
+    status: "needs-evidence",
+    checkedAt: "2026-05-31T00:00:00.000Z",
+    packetBuilder() {
+      throw new Error("simulated packet builder failure with internal details");
+    },
+  });
+  const recoveryContract = getMoralTradeReasoningPacketRecoveryContract();
+
+  assert.equal(payload.ok, false);
+  assert.equal(payload.recoveryMode, "packet_generation_failed");
+  assert.equal(payload.checkedAt, "2026-05-31T00:00:00.000Z");
+  assert.equal(payload.activeFilter, "needs-evidence");
+  assert.equal(payload.packetCount, 0);
+  assert.equal(payload.filteredPacketCount, 0);
+  assert.equal(payload.filterCounts.all, 0);
+  assert.deepEqual(payload.packets, []);
+  assert.equal(payload.publicContract.packetCount, 0);
+  assert.deepEqual(payload.publicContract.samplePacketIds, []);
+  assert.deepEqual(payload.publicContract.linkedContracts, recoveryContract.linkedContracts);
+  assert.ok(payload.blockers.includes("packet_generation_failed"));
+  assert.ok(payload.validation.blockers.includes("packet_generation_failed"));
+  assert.equal(JSON.stringify(payload).includes("simulated packet builder failure"), false);
+  assert.match(JSON.stringify(payload), /validator blockers/i);
+  assert.match(JSON.stringify(payload), /no state mutation/i);
 });
 
 test("reasoning packet validation fails when public packet safeguards are weakened", () => {

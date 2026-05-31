@@ -275,6 +275,15 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.schemaDefinitions
       .find((schema) => schema.key === "reasoning_packets_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "recoveryMode" &&
+          /packet_generation_failed/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "reasoning_packets_response")
       ?.fields.some((field) => field.key === "activeFilter" && field.type === "enum"),
   );
   assert.ok(

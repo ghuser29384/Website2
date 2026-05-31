@@ -32,13 +32,20 @@ test("performance profile publishes route resilience, Web Vitals, latency, and n
 test("route recovery manifest covers Reasoning Center and public route families", () => {
   const audit = auditMoralTradeRouteRecoveryManifest();
   const reasoningEntry = audit.entries.find((entry) => entry.path === "/reasoning-center");
+  const reasoningPacketJsonEntry = audit.entries.find(
+    (entry) => entry.path === "/api/moral-trade/reasoning/packets",
+  );
 
   assert.equal(audit.status, "pass");
   assert.equal(audit.coveredRouteCount, audit.routeCount);
   assert.equal(audit.coverageRatio, 1);
   assert.equal(reasoningEntry?.stateMutationOnFallback, false);
   assert.ok(reasoningEntry?.recoverySurfaces.includes("route_specific_viewer_fallback"));
+  assert.ok(reasoningEntry?.recoverySurfaces.includes("packet_generation_recovery_notice"));
   assert.ok(reasoningEntry?.recoverySurfaces.includes("packet_json_fallback"));
+  assert.equal(reasoningPacketJsonEntry?.stateMutationOnFallback, false);
+  assert.ok(reasoningPacketJsonEntry?.recoverySurfaces.includes("validator_blockers"));
+  assert.ok(reasoningPacketJsonEntry?.recoverySurfaces.includes("packet_generation_failed_contract"));
 });
 
 test("route recovery manifest fails missing routes, thin fallbacks, or mutating recovery", () => {
