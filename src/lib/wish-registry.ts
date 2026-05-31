@@ -29,6 +29,14 @@ export interface WishRegistrySearchResult {
   sharedTokens: string[];
 }
 
+export type WishRegistryCompatibilityBand = "High" | "Moderate" | "Tentative" | "Exploratory";
+
+export interface PublicWishRegistrySearchResult
+  extends Omit<WishRegistrySearchResult, "score"> {
+  compatibilityBand: WishRegistryCompatibilityBand;
+  compatibilityExplanation: string;
+}
+
 export interface WishRegistryExamplePreview {
   causes: readonly string[];
   location: string;
@@ -54,6 +62,34 @@ export function getWishRegistryTokens(value: string) {
 
 export function getWishRegistryRedactedOverlapTokens(tokens: readonly string[]) {
   return tokens.map((_, index) => `broad_language_overlap_${index + 1}`);
+}
+
+export function getWishRegistryCompatibilityBand(score: number): WishRegistryCompatibilityBand {
+  if (score >= 75) {
+    return "High";
+  }
+
+  if (score >= 50) {
+    return "Moderate";
+  }
+
+  if (score > 0) {
+    return "Tentative";
+  }
+
+  return "Exploratory";
+}
+
+export function toPublicWishRegistrySearchResult({
+  score,
+  ...result
+}: WishRegistrySearchResult): PublicWishRegistrySearchResult {
+  return {
+    ...result,
+    compatibilityBand: getWishRegistryCompatibilityBand(score),
+    compatibilityExplanation:
+      "Broad compatibility band from public preview fields; not moral worth or a platform ranking.",
+  };
 }
 
 export function filterWishRegistryExamplePreviews<TPreview extends WishRegistryExamplePreview>(

@@ -8,6 +8,8 @@ import {
 import {
   buildMatchExplanationSnapshot,
   buildPrivacySafeMatchAuditMetadata,
+  buildPrivacySafeMatchAuditSummary,
+  buildPrivacySafeMatchDigestLine,
 } from "@/lib/background-explanations";
 import {
   PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
@@ -719,7 +721,10 @@ async function processDelegates(request: Request) {
         compatibleMatches.push({
           evaluation,
           preview,
-          summary: `${preview.public_preview || "Broad preview only"} (${evaluation.score}/100)`,
+          summary: buildPrivacySafeMatchDigestLine({
+            publicPreview: preview.public_preview,
+            score: evaluation.score,
+          }),
         });
       }
 
@@ -889,7 +894,10 @@ async function processDelegates(request: Request) {
           match_id: upsertedMatch.id,
           actor_profile_id: delegate.profile_id,
           event_type: existingMatch ? "match_refreshed" : "match_created",
-          summary: `Delegate helper scan found compatibility with score ${evaluation.score}.`,
+          summary: buildPrivacySafeMatchAuditSummary({
+            score: evaluation.score,
+            sourceLabel: "Delegate helper scan",
+          }),
           metadata: buildPrivacySafeMatchAuditMetadata({
             compatibilityTags: evaluation.compatibilityTags,
             runReason: "delegate-cron",

@@ -19,7 +19,11 @@ import {
   reserveBackgroundQueryBudget,
 } from "@/lib/background-operations";
 import { createServiceClient } from "@/lib/supabase/server";
-import { filterWishRegistryExamplePreviews, searchWishRegistryPreviews } from "@/lib/wish-registry";
+import {
+  filterWishRegistryExamplePreviews,
+  getWishRegistryCompatibilityBand,
+  searchWishRegistryPreviews,
+} from "@/lib/wish-registry";
 import type { WishRegistrySearchResult } from "@/lib/wish-registry";
 
 export const metadata: Metadata = {
@@ -299,8 +303,8 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
             <p className="eyebrow">Search</p>
             <h2>Find possible counterparties without exposing private wishes</h2>
             <p>
-              Use a cause area, keyword query, or openness filter. Results are ranked by cause
-              overlap, shared query terms, and payment/pledge openness.
+              Use a cause area, keyword query, or openness filter. Results are ordered by broad
+              compatibility signals, not by moral worth or hidden private wishes.
             </p>
           </div>
 
@@ -391,7 +395,9 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                       <p className="detail-kicker">{result.participantKind}</p>
                       <h3>{result.collectiveName || "Individual participant"}</h3>
                     </div>
-                    <span className="badge">{result.score} match score</span>
+                    <span className="badge">
+                      {getWishRegistryCompatibilityBand(result.score)} compatibility
+                    </span>
                   </div>
                   <p className="route-text">
                     {result.publicPreview || "This participant has shared broad causes only."}

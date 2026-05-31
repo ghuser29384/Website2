@@ -5,6 +5,8 @@ import {
   buildMatchInboxBadges,
   buildMatchExplanationSnapshot,
   buildPrivacySafeMatchAuditMetadata,
+  buildPrivacySafeMatchAuditSummary,
+  buildPrivacySafeMatchDigestLine,
   buildMatchExplanation,
   formatGrantExpiry,
   getMatchWorkflowStage,
@@ -49,6 +51,7 @@ test("match explanations list safe surfaces and redact sensitive surfaces", () =
   assert.ok(explanation.scannedSurfaces.includes("Saved wish profile"));
   assert.ok(explanation.scannedSurfaces.includes("Manual source summaries"));
   assert.ok(explanation.redactedSurfaces.includes("Exact wishes"));
+  assert.match(explanation.provenance, /confidence band is a review prompt/);
   assert.deepEqual(explanation.reasonCodes.sort(), [
     "Deterministic scan",
     "Privacy aligned",
@@ -176,4 +179,22 @@ test("privacy-safe audit metadata keeps counts instead of raw shared terms", () 
   assert.equal(metadata.sharedCauseCount, 2);
   assert.equal(metadata.sharedTokenCount, 4);
   assert.equal(getMatchScoreBucket(30), "25-44");
+});
+
+test("privacy-safe match run summaries expose confidence bands without exact scores", () => {
+  const auditSummary = buildPrivacySafeMatchAuditSummary({
+    score: 83,
+    sourceLabel: "Saved-search scan",
+  });
+  const digestLine = buildPrivacySafeMatchDigestLine({
+    publicPreview: "Broad animal welfare preview for a possible pledge swap.",
+    score: 83,
+  });
+
+  assert.match(auditSummary, /high confidence compatibility/);
+  assert.match(auditSummary, /no automatic introduction or moral ranking/);
+  assert.doesNotMatch(auditSummary, /83|score|\/100/);
+  assert.match(digestLine, /high confidence/);
+  assert.match(digestLine, /broad-preview only/);
+  assert.doesNotMatch(digestLine, /83|score|\/100/);
 });

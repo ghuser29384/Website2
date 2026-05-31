@@ -4,7 +4,12 @@ import {
   BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS,
   shouldSendBackgroundNotificationImmediately,
 } from "@/lib/background-notification-policy";
-import { getBackgroundNotificationEventKindForWishNotification } from "@/lib/background-privacy-controls";
+import {
+  getBackgroundNotificationEventKindForWishNotification,
+  type BackgroundNotificationChannel,
+  type BackgroundNotificationDigestCadence,
+  type BackgroundNotificationEventKind,
+} from "@/lib/background-privacy-controls";
 import { getSiteUrl } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -30,6 +35,21 @@ export interface InsertWishNotificationsResult {
   notificationError: PostgrestError | null;
 }
 
+export interface SafeWishNotificationEmailPreference {
+  channel: BackgroundNotificationChannel;
+  daily_cap?: number | null;
+  digest_cadence: BackgroundNotificationDigestCadence;
+  enabled: boolean;
+  event_kind: BackgroundNotificationEventKind;
+  id?: string;
+  last_discovery_sent_at?: string | null;
+  profile_id: string;
+  quiet_hours_end?: number | null;
+  quiet_hours_start?: number | null;
+  quiet_until?: string | null;
+  source_cooldown_hours?: number | null;
+}
+
 const SAFE_EMAIL_SUBJECTS: Record<WishNotificationRow["kind"], string> = {
   consent: "Moral Trade: consent update",
   match: "Moral Trade: possible counterparty update",
@@ -52,6 +72,57 @@ export function buildSafeWishNotificationEmailCopy(
   ].join("\n");
 
   return { body, subject };
+}
+
+export function shouldQueueSafeWishNotificationEmail({
+  emailEnabledFallback = false,
+  eventKind,
+  now = new Date(),
+  preference,
+  recipientEmail,
+}: {
+  emailEnabledFallback?: boolean;
+  eventKind: BackgroundNotificationEventKind;
+  now?: Date;
+  preference?: SafeWishNotificationEmailPreference | null;
+  recipientEmail?: string | null;
+}) {
+  if (!recipientEmail) {
+    return false;
+  }
+
+  if (preference) {
+    return shouldSendBackgroundNotificationImmediately({
+      channel: "email_digest",
+      dailyCap: preference.daily_cap,
+      digestCadence: preference.digest_cadence,
+      enabled: preference.enabled,
+      eventKind,
+      lastSourceNotificationAt: preference.last_discovery_sent_at,
+      now,
+      quietHoursEnd: preference.quiet_hours_end,
+      quietHoursStart: preference.quiet_hours_start,
+      quietUntil: preference.quiet_until,
+      sourceCooldownHours: preference.source_cooldown_hours,
+    });
+  }
+
+  if (BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS.has(eventKind)) {
+    return false;
+  }
+
+  return (
+    emailEnabledFallback &&
+    shouldSendBackgroundNotificationImmediately({
+      channel: "email_digest",
+      digestCadence: "immediate",
+      enabled: true,
+      eventKind,
+      now,
+      quietHoursEnd: 8,
+      quietHoursStart: 22,
+    })
+  );
 }
 
 export async function queueSafeWishNotificationEmails({
@@ -106,7 +177,7 @@ export async function queueSafeWishNotificationEmails({
   }
 
   const emailPreferenceByKey = new Map(
-    (channelPrefs ?? []).map((preference) => [
+    ((channelPrefs ?? []) as SafeWishNotificationEmailPreference[]).map((preference) => [
       `${preference.profile_id}:${preference.event_kind}`,
       preference,
     ]),
@@ -123,51 +194,17 @@ export async function queueSafeWishNotificationEmails({
       const recipientEmail = emailByProfileId.get(notification.profile_id) ?? "";
       const copy = buildSafeWishNotificationEmailCopy(notification, siteUrl);
 
-      if (preference) {
-        const sendNow = shouldSendBackgroundNotificationImmediately({
-          channel: "email_digest",
-          dailyCap: preference.daily_cap,
-          digestCadence: preference.digest_cadence,
-          enabled: preference.enabled,
-          eventKind,
-          lastSourceNotificationAt: preference.last_discovery_sent_at,
-          now,
-          quietHoursEnd: preference.quiet_hours_end,
-          quietHoursStart: preference.quiet_hours_start,
-          quietUntil: preference.quiet_until,
-          sourceCooldownHours: preference.source_cooldown_hours,
-        });
+      const sendNow = shouldQueueSafeWishNotificationEmail({
+        emailEnabledFallback: emailEnabledProfileIds.has(notification.profile_id),
+        eventKind,
+        now,
+        preference,
+        recipientEmail,
+      });
 
-        return sendNow && recipientEmail
-          ? [{
-              discoveryPreferenceId,
-              row: {
-                body: copy.body,
-                profile_id: notification.profile_id,
-                provider: "background-networking",
-                recipient_email: recipientEmail,
-                subject: copy.subject,
-              },
-            }]
-          : [];
-      }
-
-      const sendNow =
-        emailEnabledProfileIds.has(notification.profile_id) &&
-        shouldSendBackgroundNotificationImmediately({
-          channel: "email_digest",
-          digestCadence: eventKind === "match_suggestions" ? "daily" : "immediate",
-          enabled: true,
-          eventKind,
-          now,
-          quietHoursEnd: 8,
-          quietHoursStart: 22,
-          sourceCooldownHours: eventKind === "match_suggestions" ? 24 : null,
-        });
-
-      return sendNow && recipientEmail
+      return sendNow
         ? [{
-            discoveryPreferenceId: null,
+            discoveryPreferenceId,
             row: {
               body: copy.body,
               profile_id: notification.profile_id,

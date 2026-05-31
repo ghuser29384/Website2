@@ -16,7 +16,10 @@ import {
 } from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { searchWishRegistryPreviews } from "@/lib/wish-registry";
+import {
+  searchWishRegistryPreviews,
+  toPublicWishRegistrySearchResult,
+} from "@/lib/wish-registry";
 
 export const runtime = "nodejs";
 
@@ -226,7 +229,7 @@ export async function GET(request: Request) {
     }
 
     return buildMoralTradeApiJsonResponse({
-      results: floorApplied ? [] : results,
+      results: floorApplied ? [] : results.map(toPublicWishRegistrySearchResult),
       privacyNotice:
         floorApplied
           ? "Broaden the search to protect sparse profiles. Only broad preview fields are returned, and exact wishes, asks, constraints, contact details, and private sources are never exposed by this endpoint."

@@ -1946,7 +1946,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <input defaultValue={3} max={5} min={1} name="priority" type="number" />
                 </label>
                 <label className="field">
-                  <span>Minimum score</span>
+                  <span>Minimum compatibility threshold</span>
                   <input defaultValue={55} max={100} min={0} name="min_score" type="number" />
                 </label>
                 <label className="field">
@@ -2855,7 +2855,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </label>
                 <div className="field-grid">
                   <label className="field">
-                    <span>Minimum score</span>
+                    <span>Minimum compatibility threshold</span>
                     <input defaultValue={50} max={100} min={0} name="min_score" type="number" />
                   </label>
                   <label className="field">
@@ -2877,7 +2877,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ul className="clean-list">
                   {dashboardData.savedSearches.slice(0, 4).map((search) => (
                     <li key={search.id}>
-                      {search.label} ({search.cadence}, score {search.min_score}+)
+                      {search.label} ({search.cadence}, threshold {search.min_score}+)
                       {search.last_scanned_at
                         ? `; last scanned ${new Date(search.last_scanned_at).toLocaleDateString()}`
                         : ""}
@@ -3083,8 +3083,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <div className="tag-row">
                     <span className="badge">{match.status}</span>
                     <span className="source-pill">{explanation.workflowStage.label}</span>
-                    <span className="impact-pill">Fit score {match.score}/100</span>
-                    <span className="source-pill">{explanation.confidenceBand} confidence</span>
+                    <span className="impact-pill">
+                      {explanation.confidenceBand} compatibility signal
+                    </span>
                     <span className="source-pill">Trust: {inboxBadges.trustBadge.label}</span>
                     <span className="source-pill">Risk: {inboxBadges.riskBadge.label}</span>
                     <span className="source-pill">{match.generatedBy}</span>

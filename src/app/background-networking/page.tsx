@@ -178,9 +178,9 @@ export default async function BackgroundNetworkingPage({
             <article className="panel concept-card">
               <h3>Deterministic matching</h3>
               <p>
-                Candidate matches are scored from declared cause areas, trade modes, constraints,
-                location sensitivity, and verification preferences. Scores are prompts for human
-                review, not automatic rankings of people.
+                Candidate matches are banded from declared cause areas, trade modes, constraints,
+                location sensitivity, and verification preferences. Compatibility bands are prompts
+                for human review, not automatic rankings of people.
               </p>
             </article>
             <article className="panel concept-card">

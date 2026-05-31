@@ -31,6 +31,7 @@ import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-s
 import {
   buildMatchExplanationSnapshot,
   buildPrivacySafeMatchAuditMetadata,
+  buildPrivacySafeMatchAuditSummary,
   type MatchExplanationSnapshotPayload,
 } from "@/lib/background-explanations";
 import { normalizeBackgroundConciergeAppealStatus } from "@/lib/background-concierge-appeals";
@@ -166,6 +167,7 @@ import {
   isMoralTradeOfferCreateProvenanceUniqueViolation,
   validateMoralTradeOfferCreateTransition,
 } from "@/lib/moral-trade/offer-write-path";
+import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
 import { persistBaselineBondStatusTransition } from "@/lib/moral-trade/baseline-bond-transitions";
 import { persistMoralTradeEvidenceSubmission } from "@/lib/moral-trade/evidence-persistence";
 import type {
@@ -2640,7 +2642,10 @@ async function generateWishMatchSuggestions({
       match_id: match.match_id,
       actor_profile_id: profileId,
       event_type: match.was_created ? "match_created" : "match_refreshed",
-      summary: `Deterministic scan found compatibility with score ${evaluation.score}.`,
+      summary: buildPrivacySafeMatchAuditSummary({
+        score: evaluation.score,
+        sourceLabel: "Deterministic scan",
+      }),
       metadata: buildPrivacySafeMatchAuditMetadata({
         compatibilityTags: evaluation.compatibilityTags,
         runReason,
@@ -4092,11 +4097,12 @@ export async function expressInterestAction(formData: FormData) {
     .eq("id", offer.owner_id)
     .maybeSingle();
 
+  const offerResponseEmail = buildMoralTradeSafeEmailCopy("offer_response_received");
   await queueEmailOutbox({
     profileId: viewer.authUser.id,
     recipientEmail: ownerProfile?.email,
-    subject: "New response to your Moral Trade offer",
-    body: `${interestedAlias} responded to ${offer.offered_cause} for ${offer.requested_cause}. Sign in to review the message and decide whether to form an agreement.`,
+    subject: offerResponseEmail.subject,
+    body: offerResponseEmail.body,
   });
 
   revalidatePath(`/offers/${offerId}`);
@@ -9858,11 +9864,12 @@ export async function acceptInterestAction(formData: FormData) {
     .eq("id", interest.user_id)
     .maybeSingle();
 
+  const responseAcceptedEmail = buildMoralTradeSafeEmailCopy("response_accepted");
   await queueEmailOutbox({
     profileId: viewer.authUser.id,
     recipientEmail: responderProfile?.email,
-    subject: "Your Moral Trade response was accepted",
-    body: `An agreement was created for ${offer.offered_cause} for ${offer.requested_cause}. Sign in to review payment, evidence, verification, and status options.`,
+    subject: responseAcceptedEmail.subject,
+    body: responseAcceptedEmail.body,
   });
 
   const { error: offerUpdateError } = await supabase
@@ -10139,11 +10146,12 @@ export async function acceptGuestInterestAction(formData: FormData) {
     }
   }
 
+  const responseAcceptedEmail = buildMoralTradeSafeEmailCopy("response_accepted");
   await queueEmailOutbox({
     profileId: viewer.authUser.id,
     recipientEmail: guestInterest.contact_email,
-    subject: "Your Moral Trade response was accepted",
-    body: `An agreement was created for ${offer.offered_cause} for ${offer.requested_cause}. Sign in with the same email to manage the agreement.`,
+    subject: responseAcceptedEmail.subject,
+    body: responseAcceptedEmail.body,
   });
 
   const { error: offerUpdateError } = await supabase

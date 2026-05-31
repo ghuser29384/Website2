@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 
 import type { Database } from "@/lib/supabase/database.types";
 import { handleMpgfStripeWebhookEvent, hashStripeWebhookBody } from "@/lib/mpgf/real-money";
+import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
 
@@ -58,15 +59,15 @@ async function markPaymentFromSession(
   const outboxRows: EmailOutboxInsert[] = [payment.payer_id, payment.payee_id]
     .map((profileId) => {
       const recipientEmail = profileEmails.get(profileId) ?? "";
+      const emailCopy = buildMoralTradeSafeEmailCopy(
+        status === "paid" ? "payment_confirmed" : "payment_failed",
+      );
 
       return {
         profile_id: profileId,
         recipient_email: recipientEmail,
-        subject: status === "paid" ? "Moral Trade payment confirmed" : "Moral Trade payment failed",
-        body:
-          status === "paid"
-            ? `Stripe confirmed a ${payment.currency.toUpperCase()} payment for agreement ${payment.agreement_id}.`
-            : `Stripe reported that payment ${payment.id} failed. Sign in to review the agreement.`,
+        subject: emailCopy.subject,
+        body: emailCopy.body,
         status: recipientEmail ? "queued" : "suppressed",
       } satisfies EmailOutboxInsert;
     })

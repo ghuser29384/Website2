@@ -7,6 +7,7 @@ import {
 import {
   buildMatchExplanationSnapshot,
   buildPrivacySafeMatchAuditMetadata,
+  buildPrivacySafeMatchAuditSummary,
 } from "@/lib/background-explanations";
 import {
   PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
@@ -380,7 +381,10 @@ async function processSavedSearches(request: Request) {
         match_id: matchId,
         actor_profile_id: search.profile_id,
         event_type: existingMatch ? "match_refreshed" : "match_created",
-        summary: `Saved-search scan found compatibility with score ${evaluation.score}.`,
+        summary: buildPrivacySafeMatchAuditSummary({
+          score: evaluation.score,
+          sourceLabel: "Saved-search scan",
+        }),
         metadata: buildPrivacySafeMatchAuditMetadata({
           compatibilityTags: evaluation.compatibilityTags,
           runReason: "saved-search-cron",

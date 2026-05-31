@@ -373,8 +373,12 @@ test("public offer and registry pages include seeded examples instead of empty-o
   const wishRegistrySource = readRepoFile("src/lib/wish-registry.ts");
   assert.match(registryPage, /EXAMPLE_WISH_PREVIEWS/);
   assert.match(registryPage, /filterWishRegistryExamplePreviews/);
+  assert.match(registryPage, /getWishRegistryCompatibilityBand/);
+  assert.match(registryPage, /not by moral worth/);
   assert.match(registryPage, /Example preview/);
+  assert.equal(registryPage.includes("match score"), false);
   assert.match(wishRegistrySource, /getWishRegistryRedactedOverlapTokens/);
+  assert.match(wishRegistrySource, /getWishRegistryCompatibilityBand/);
   assert.match(wishRegistrySource, /broad_language_overlap_/);
 });
 
@@ -842,6 +846,8 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(backgroundNotificationPolicySource, /quietHoursStart/);
   assert.match(backgroundNotificationPolicySource, /sourceCooldownHours/);
   assert.match(backgroundNotificationsSource, /shouldSendBackgroundNotificationImmediately/);
+  assert.match(backgroundNotificationsSource, /shouldQueueSafeWishNotificationEmail/);
+  assert.match(backgroundNotificationsSource, /BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS\.has\(eventKind\)/);
   assert.match(backgroundNotificationsSource, /last_discovery_sent_at/);
   assert.match(backgroundNotificationsSource, /source_cooldown_hours/);
   assert.match(apiRateLimitSource, /background_source_summary_write: \{ limit: 12/);
@@ -1696,6 +1702,7 @@ test("public contract APIs enforce the documented public contract read throttle"
     /takeMoralTradeApiRateLimitSlot\(request, "wish_registry_search"\)/,
   );
   assert.match(wishRegistrySearchRoute, /buildMoralTradeApiJsonResponse/);
+  assert.match(wishRegistrySearchRoute, /toPublicWishRegistrySearchResult/);
   assert.match(wishRegistrySearchRoute, /"Retry-After": String\(rateLimit\.retryAfterSeconds\)/);
   assert.equal(wishRegistrySearchRoute.includes("wish-registry-search"), false);
   assert.match(
@@ -2051,13 +2058,20 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(matchSignalSource, /redacted_profile_match_preview_only/);
   assert.match(matchSignalSource, /match_signal_evaluate_route_contract/);
   assert.match(backgroundExplanationsSource, /buildMatchInboxBadges/);
+  assert.match(backgroundExplanationsSource, /buildPrivacySafeMatchAuditSummary/);
+  assert.match(backgroundExplanationsSource, /buildPrivacySafeMatchDigestLine/);
+  assert.match(backgroundExplanationsSource, /confidence band is a review prompt/);
   assert.match(backgroundExplanationsSource, /trustBadge/);
   assert.match(backgroundExplanationsSource, /riskBadge/);
   assert.match(backgroundExplanationsSource, /participantActions/);
+  assert.match(backgroundNetworkingPage, /Compatibility bands are prompts/);
   assert.match(backgroundNetworkingPage, /trust and risk badges/);
   assert.match(dashboardPage, /Trust and risk badges/);
   assert.match(dashboardPage, /Next safe actions/);
   assert.match(dashboardPage, /Reason codes/);
+  assert.match(dashboardPage, /Minimum compatibility threshold/);
+  assert.match(dashboardPage, /compatibility signal/);
+  assert.equal(dashboardPage.includes("Fit score"), false);
   assert.match(challengeAppealSource, /evaluateMoralTradeChallengeAppeal/);
   assert.match(challengeAppealSource, /validateMoralTradeChallengeAppealContract/);
   assert.match(challengeAppealSource, /affected_party_standing/);
@@ -3064,4 +3078,34 @@ test("worked examples have canonical detail pages and sitemap coverage", () => {
   assert.match(exampleDetailPage, /Third-party externality review/);
   assert.match(exampleDetailPage, /Read primer/);
   assert.match(sitemapSource, /\/offers\/examples\/\$\{offer\.id\}/);
+});
+
+test("core Moral Trade email outbox copy stays generic and dashboard-directed", () => {
+  const actionsSource = readRepoFile("src/app/actions.ts");
+  const emailCopySource = readRepoFile("src/lib/moral-trade/email-copy.ts");
+  const emailJobRoute = readRepoFile("src/app/api/jobs/email/route.ts");
+  const paymentReminderRoute = readRepoFile("src/app/api/jobs/payment-reminders/route.ts");
+  const stripeWebhookRoute = readRepoFile("src/app/api/stripe/webhook/route.ts");
+
+  assert.match(actionsSource, /buildMoralTradeSafeEmailCopy\("offer_response_received"\)/);
+  assert.match(actionsSource, /buildMoralTradeSafeEmailCopy\("response_accepted"\)/);
+  assert.match(paymentReminderRoute, /buildMoralTradeSafeEmailCopy\("payment_reminder"\)/);
+  assert.match(paymentReminderRoute, /buildMoralTradeSafeEmailCopy\("payment_schedule_update"\)/);
+  assert.match(stripeWebhookRoute, /buildMoralTradeSafeEmailCopy\(/);
+  assert.match(emailCopySource, /leaves out participant aliases/);
+  assert.match(emailCopySource, /payment amounts/);
+  assert.match(emailCopySource, /agreement IDs/);
+  assert.match(emailCopySource, /source notes/);
+  assert.match(emailCopySource, /evaluateMoralTradeEmailOutboxSafety/);
+  assert.match(emailCopySource, /contact_email_in_body/);
+  assert.match(emailCopySource, /payment_amount_in_body/);
+  assert.match(emailJobRoute, /evaluateMoralTradeEmailOutboxSafety/);
+  assert.match(emailJobRoute, /status: "suppressed"/);
+  assert.match(emailJobRoute, /resend_safety_gate/);
+  assert.equal(actionsSource.includes("responded to ${offer.offered_cause}"), false);
+  assert.equal(actionsSource.includes("An agreement was created for ${offer.offered_cause}"), false);
+  assert.equal(paymentReminderRoute.includes("A negotiated payment of ${amount}"), false);
+  assert.equal(paymentReminderRoute.includes("A scheduled ${amount} payment"), false);
+  assert.equal(stripeWebhookRoute.includes("for agreement ${payment.agreement_id}"), false);
+  assert.equal(stripeWebhookRoute.includes("payment ${payment.id} failed"), false);
 });
