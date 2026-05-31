@@ -56,12 +56,33 @@ function NavItem({ href, label, className }: { href: string; label: string; clas
   );
 }
 
-function NavMenu({ label, summary, items }: { label: string; summary?: string; items: NavRouteItem[] }) {
+function NavMenu({
+  isOpen,
+  items,
+  label,
+  onOpenChange,
+  summary,
+}: {
+  isOpen: boolean;
+  items: NavRouteItem[];
+  label: string;
+  onOpenChange: (isOpen: boolean) => void;
+  summary?: string;
+}) {
   const pathname = usePathname();
   const hasActiveItem = items.some((item) => (item.href ? isHrefActive(pathname, item.href) : false));
 
   return (
-    <details className={["topbar-menu", hasActiveItem ? "is-active" : ""].filter(Boolean).join(" ")}>
+    <details
+      className={["topbar-menu", hasActiveItem ? "is-active" : ""].filter(Boolean).join(" ")}
+      open={isOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          onOpenChange(false);
+        }
+      }}
+      onToggle={(event) => onOpenChange(event.currentTarget.open)}
+    >
       <summary className="topbar-menu-trigger">
         <span>{label}</span>
         <span aria-hidden="true" className="topbar-menu-caret">
@@ -81,6 +102,7 @@ function NavMenu({ label, summary, items }: { label: string; summary?: string; i
                 .filter(Boolean)
                 .join(" ")}
               href={item.href}
+              onClick={() => onOpenChange(false)}
             >
               <span className="topbar-menu-icon" aria-hidden="true" />
               <span className="topbar-menu-copy">
@@ -109,11 +131,23 @@ export function SiteTopbar({
   const [isLoggingOut, startLogoutTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [openMenuKey, setOpenMenuKey] = useState<string | null>(null);
   const searchResults = useMemo(() => filterSiteSearchItems(searchQuery, 6), [searchQuery]);
+
+  function handleMenuOpenChange(menuKey: string, isOpen: boolean) {
+    if (isOpen) {
+      setSearchOpen(false);
+      setOpenMenuKey(menuKey);
+      return;
+    }
+
+    setOpenMenuKey((currentMenuKey) => (currentMenuKey === menuKey ? null : currentMenuKey));
+  }
 
   function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedQuery = searchQuery.trim();
+    setOpenMenuKey(null);
 
     if (!trimmedQuery) {
       router.push("/offers");
@@ -142,7 +176,14 @@ export function SiteTopbar({
       <div className="topbar-links">
         {links.map((link) =>
           link.items?.length ? (
-            <NavMenu key={link.label} items={link.items} label={link.label} summary={link.summary} />
+            <NavMenu
+              isOpen={openMenuKey === `primary-${link.label}`}
+              items={link.items}
+              key={link.label}
+              label={link.label}
+              summary={link.summary}
+              onOpenChange={(isOpen) => handleMenuOpenChange(`primary-${link.label}`, isOpen)}
+            />
           ) : link.href ? (
             <NavItem key={`${link.href}-${link.label}`} href={link.href} label={link.label} />
           ) : null,
@@ -169,8 +210,12 @@ export function SiteTopbar({
               onChange={(event) => {
                 setSearchQuery(event.target.value);
                 setSearchOpen(true);
+                setOpenMenuKey(null);
               }}
-              onFocus={() => setSearchOpen(true)}
+              onFocus={() => {
+                setSearchOpen(true);
+                setOpenMenuKey(null);
+              }}
             />
             {searchQuery ? (
               <button
@@ -217,6 +262,7 @@ export function SiteTopbar({
         <div className="topbar-actions">
           {showLogout ? (
             <NavMenu
+              isOpen={openMenuKey === "account"}
               items={[
                 { href: "/dashboard#my-trades", label: "My trades", description: "Review owned and engaged offers." },
                 { href: "/dashboard#data-portability", label: "Profile data", description: "Export or import account data." },
@@ -224,6 +270,7 @@ export function SiteTopbar({
               ]}
               label="Account"
               summary="Manage your saved and private workspace."
+              onOpenChange={(isOpen) => handleMenuOpenChange("account", isOpen)}
             />
           ) : null}
           {primaryAction ? (

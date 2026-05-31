@@ -2686,6 +2686,9 @@ test("pooled donation offset creation has visible path and server-side guardrail
   const actionsSource = readRepoFile("src/app/actions.ts");
   const offerDetailSource = readRepoFile("src/app/offers/[offerId]/page.tsx");
   const adminSource = readRepoFile("src/app/admin/page.tsx");
+  const evidencePersistenceSource = readRepoFile(
+    "src/lib/moral-trade/evidence-persistence.ts",
+  );
 
   assert.match(donationOffsetsPage, /Create offset/);
   assert.match(donationOffsetsPage, /Match ratio/);
@@ -2698,8 +2701,18 @@ test("pooled donation offset creation has visible path and server-side guardrail
   assert.match(actionsSource, /validateMoralTradeOfferCreateTransition/);
   assert.match(actionsSource, /getMoralTradeOfferPersistenceStatus/);
   assert.match(actionsSource, /buildMoralTradeOfferProtocolNotes/);
+  assert.match(actionsSource, /persistMoralTradeEvidenceSubmission/);
+  assert.match(actionsSource, /getDonationOffsetEvidencePersistenceShape/);
+  assert.match(actionsSource, /donation-offset:\$\{data\.id\}:initial-evidence/);
+  assert.match(actionsSource, /counterfactual_baseline/);
+  assert.match(actionsSource, /baseline_credibility_bond/);
   assert.match(offerDetailSource, /getDonationOffsetEvidenceState/);
   assert.match(offerDetailSource, /One proof, one claim/);
+  assert.match(offerDetailSource, /Baseline evidence was submitted for reviewer-only provenance review/);
+  assert.match(evidencePersistenceSource, /moral_trade_evidence_artifacts/);
+  assert.match(evidencePersistenceSource, /moral_trade_evidence_claims/);
+  assert.match(evidencePersistenceSource, /moral_trade_traceability_events/);
+  assert.match(evidencePersistenceSource, /moral_trade_provenance_activities/);
   assert.match(adminSource, /duplicate proof/);
   assert.match(adminSource, /One proof, one claim/);
 });

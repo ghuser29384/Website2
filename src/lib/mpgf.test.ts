@@ -540,6 +540,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   }
 
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const contributionModal = readFileSync("src/components/mpgf/mpgf-contribution-modal.tsx", "utf8");
+  const realMoneyCheckout = readFileSync("src/lib/mpgf/real-money.ts", "utf8");
   const mpgfHubPage = readFileSync("src/app/mpgf/page.tsx", "utf8");
 
   for (const expected of [
@@ -557,6 +559,35 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     /getMpgfPublicGoodsAllocationReportApi/,
   ]) {
     assert.match(roundPage, expected);
+  }
+
+  assert.match(roundPage, /MpgfContributionModal/);
+  for (const expected of [
+    /role="dialog"/,
+    /aria-modal="true"/,
+    /One-time contribution/,
+    /Monthly sponsor-pool sustainer/,
+    /Optional campaign gift/,
+    /Sponsor pool only/,
+    /Count my gift for matching up to cap/,
+    /Receipts and refunds/,
+    /Verification and identity/,
+    /\/api\/mpgf\/contributions\/checkout-session/,
+    /\/api\/mpgf\/contributions\/subscription-session/,
+    /perDonorCapCents/,
+    /countForMatching/,
+    /campaignId/,
+  ]) {
+    assert.match(contributionModal, expected);
+  }
+  for (const expected of [
+    /mpgf_public_goods_round_id/,
+    /mpgf_public_goods_campaign_id/,
+    /mpgf_public_goods_count_for_matching/,
+    /mpgf_public_goods_per_donor_cap_cents/,
+    /mpgf_public_goods_sponsor_pool/,
+  ]) {
+    assert.match(realMoneyCheckout, expected);
   }
 
   assert.match(mpgfHubPage, new RegExp(`/mpgf/rounds/\\$\\{demoMpgfAssuranceRound\\.id\\}`));

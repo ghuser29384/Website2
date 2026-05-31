@@ -52,6 +52,20 @@ function optionalTrimmed(value: string | null | undefined) {
   return trimmed ? trimmed : undefined;
 }
 
+function checkoutMetadataText(value: string | null | undefined) {
+  const trimmed = optionalTrimmed(value);
+
+  if (!trimmed) {
+    return "";
+  }
+
+  return trimmed.replace(/[^a-zA-Z0-9:._-]/g, "").slice(0, 100);
+}
+
+function checkoutMetadataCents(value: number | null | undefined) {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? String(value) : "";
+}
+
 function parseEvidenceUrl(value: string | null | undefined) {
   const trimmed = optionalTrimmed(value);
 
@@ -213,6 +227,11 @@ export async function createMpgfRealMoneyCheckout(input: {
   email?: string | null;
   amountDollars: number;
   cadence: "one_time" | "monthly";
+  publicGoodsCampaignId?: string | null;
+  publicGoodsRoundId?: string | null;
+  publicGoodsSponsorPoolContribution?: boolean;
+  publicGoodsCountForMatching?: boolean;
+  publicGoodsPerDonorCapCents?: number;
 }): Promise<MpgfRealMoneyCheckoutResult> {
   const readiness = await loadMpgfRealMoneyReadiness();
 
@@ -282,6 +301,11 @@ export async function createMpgfRealMoneyCheckout(input: {
     mpgf_user_id: input.userId,
     mpgf_cadence: cadence,
     mpgf_mode: mode,
+    mpgf_public_goods_round_id: checkoutMetadataText(input.publicGoodsRoundId),
+    mpgf_public_goods_campaign_id: checkoutMetadataText(input.publicGoodsCampaignId),
+    mpgf_public_goods_count_for_matching: input.publicGoodsCountForMatching === false ? "false" : "true",
+    mpgf_public_goods_per_donor_cap_cents: checkoutMetadataCents(input.publicGoodsPerDonorCapCents),
+    mpgf_public_goods_sponsor_pool: input.publicGoodsSponsorPoolContribution ? "true" : "false",
   };
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: cadence === "monthly" ? "subscription" : "payment",

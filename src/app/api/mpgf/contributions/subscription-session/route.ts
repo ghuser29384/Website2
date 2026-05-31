@@ -23,6 +23,19 @@ function amountDollars(payload: unknown) {
   return Number.isFinite(dollars) ? dollars : 0;
 }
 
+function publicGoodsCheckoutContext(payload: unknown) {
+  const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+  const perDonorCapCents = Number(record.perDonorCapCents);
+
+  return {
+    publicGoodsCampaignId: typeof record.campaignId === "string" ? record.campaignId : null,
+    publicGoodsCountForMatching: false,
+    publicGoodsPerDonorCapCents: Number.isInteger(perDonorCapCents) ? perDonorCapCents : undefined,
+    publicGoodsRoundId: typeof record.roundId === "string" ? record.roundId : null,
+    publicGoodsSponsorPoolContribution: true,
+  };
+}
+
 export async function POST(request: Request) {
   const viewer = await getViewer();
 
@@ -32,12 +45,14 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json().catch(() => null);
+    const publicGoodsContext = publicGoodsCheckoutContext(payload);
     const result = await createMpgfRealMoneyCheckout({
       userId: viewer.authUser.id,
       displayName: viewer.displayName,
       email: viewer.authUser.email,
       amountDollars: amountDollars(payload),
       cadence: "monthly",
+      ...publicGoodsContext,
     });
 
     return NextResponse.json(
@@ -47,6 +62,12 @@ export async function POST(request: Request) {
         sponsorPoolRefill: true,
         manualEvidenceFallback: true,
         finalPayoutAuthorized: false,
+        publicGoodsContext: {
+          campaignId: publicGoodsContext.publicGoodsCampaignId,
+          countForMatching: publicGoodsContext.publicGoodsCountForMatching,
+          roundId: publicGoodsContext.publicGoodsRoundId,
+          sponsorPoolContribution: publicGoodsContext.publicGoodsSponsorPoolContribution,
+        },
       },
       { status: result.ok ? 200 : 503 },
     );

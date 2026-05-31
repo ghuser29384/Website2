@@ -586,7 +586,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                           </p>
                         ) : null}
                         <p>{offer.donationOffset.baseline_bond_evidence_standard}</p>
-                        {offer.donationOffset.baseline_bond_evidence_url ? (
+                        {isOwner && offer.donationOffset.baseline_bond_evidence_url ? (
                           <p>
                             Baseline evidence:{" "}
                             <a
@@ -596,6 +596,8 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                               open submitted evidence
                             </a>
                           </p>
+                        ) : offer.donationOffset.baseline_bond_evidence_url ? (
+                          <p>Baseline evidence was submitted for reviewer-only provenance review.</p>
                         ) : null}
                         {isOwner && baselineBondStatus === "evidence_due" ? (
                           <form action={submitBaselineBondEvidenceAction} className="stack-form">

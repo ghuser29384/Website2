@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { MpgfContributionModal } from "@/components/mpgf/mpgf-contribution-modal";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
@@ -92,12 +93,33 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
 
   const { round } = roundResult;
   const payableCampaigns = allocation.rows.filter((row) => row.status === "payable");
+  const sponsorPoolCents = round.sponsorPool.baseMatchBudgetCents + round.sponsorPool.qfBonusBudgetCents;
+  const perDonorCapCents = Number(round.sponsorPool.perDonorQfCapCents);
+  const contributionModalCampaigns = campaignResult.campaigns.map((campaign) => ({
+    campaignId: campaign.campaignId,
+    countedForMatchCents: campaign.countedForMatchCents,
+    directEligibleCents: campaign.directEligibleCents,
+    matchEstimateCents: campaign.matchEstimateCents,
+    thresholdAmountCents: campaign.thresholdAmountCents,
+    thresholdDonors: campaign.thresholdDonors,
+    thresholdPassed: campaign.thresholdPassed,
+    title: campaign.title,
+    verifiedDonorCount: campaign.verifiedDonorCount,
+  }));
 
   return (
     <MpgfPageFrame
       actions={
         <>
-          <Link className="button button-primary" href="/mpgf/contribute">
+          <MpgfContributionModal
+            campaigns={contributionModalCampaigns}
+            perDonorCapCents={perDonorCapCents}
+            realMoneyReady={realMoneyReadiness.ready}
+            roundId={round.id}
+            sponsorPoolCents={sponsorPoolCents}
+            viewerPresent={Boolean(viewer)}
+          />
+          <Link className="button button-secondary" href="/mpgf/contribute">
             Contribute or submit evidence
           </Link>
           <Link className="button button-secondary" href="/mpgf/pools">
@@ -114,7 +136,7 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
       <section className="mpgf-kpi-grid" aria-label="Round status">
         <div className="mpgf-kpi">
           <span>Sponsor-pool size</span>
-          <strong>{formatUsd(round.sponsorPool.baseMatchBudgetCents + round.sponsorPool.qfBonusBudgetCents)}</strong>
+          <strong>{formatUsd(sponsorPoolCents)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Round closes</span>

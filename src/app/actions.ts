@@ -118,6 +118,7 @@ import {
   validateMoralTradeOfferCreateTransition,
 } from "@/lib/moral-trade/offer-write-path";
 import { persistBaselineBondStatusTransition } from "@/lib/moral-trade/baseline-bond-transitions";
+import { persistMoralTradeEvidenceSubmission } from "@/lib/moral-trade/evidence-persistence";
 import {
   buildAgreementReviewDecisionConflictSelector,
   buildAgreementReviewDecisionRow,
@@ -1044,6 +1045,38 @@ function normalizeDonationOffsetVerificationMethod(value: string): DonationOffse
   }
 
   return "proof_of_past_donations";
+}
+
+function getDonationOffsetEvidencePersistenceShape(
+  verificationMethod: DonationOffsetVerificationMethod,
+) {
+  switch (verificationMethod) {
+    case "funds_in_escrow":
+      return {
+        claimScope: "payment_or_donation_record" as const,
+        evidenceKind: "payment_event" as const,
+        reasonCodes: ["donation_offset_evidence", "third_party_payment_record"],
+      };
+    case "third_party_audit":
+      return {
+        claimScope: "factual_action" as const,
+        evidenceKind: "attestation" as const,
+        reasonCodes: ["donation_offset_evidence", "third_party_audit"],
+      };
+    case "proof_of_past_donations":
+      return {
+        claimScope: "counterfactual_baseline" as const,
+        evidenceKind: "prior_intent" as const,
+        reasonCodes: ["donation_offset_evidence", "counterfactual_baseline"],
+      };
+    case "receipts_uploaded":
+    default:
+      return {
+        claimScope: "payment_or_donation_record" as const,
+        evidenceKind: "receipt" as const,
+        reasonCodes: ["donation_offset_evidence", "receipt_or_public_log"],
+      };
+  }
 }
 
 function normalizeDonationOffsetUnmatchedRule(value: string): DonationOffsetUnmatchedSurplusRule {
@@ -3210,6 +3243,45 @@ export async function createOfferAction(formData: FormData) {
         ownerId: viewer.authUser.id,
       });
       redirectWithMessage(newOfferReturnPath, "error", offsetError.message);
+    }
+
+    if (donationOffsetFields.evidenceUrl) {
+      const evidencePersistenceShape = getDonationOffsetEvidencePersistenceShape(
+        donationOffsetFields.verificationMethod,
+      );
+      const evidencePersistenceResult = await persistMoralTradeEvidenceSubmission({
+        actorAgentId: viewer.authUser.id,
+        actorAgentKind: "participant",
+        actorLabel: ownerAlias,
+        claimScope: evidencePersistenceShape.claimScope,
+        evidenceKind: evidencePersistenceShape.evidenceKind,
+        evidenceUrl: donationOffsetFields.evidenceUrl,
+        idempotencyKey: `donation-offset:${data.id}:initial-evidence`,
+        offerId: data.id,
+        ownerProfileId: viewer.authUser.id,
+        reasonCodes: evidencePersistenceShape.reasonCodes,
+        recordedAt: protocolTransitionRecordedAt,
+        redactionLevel: "reviewer_only",
+        subjectId: data.id,
+        subjectKind: "offer",
+        supabase,
+      });
+
+      if (evidencePersistenceResult.error) {
+        logSupabaseActionError(
+          "Failed to persist donation offset evidence bundle",
+          toActionError(
+            evidencePersistenceResult.error,
+            "Unable to persist donation offset evidence bundle.",
+          ),
+          { offerId: data.id, ownerId: viewer.authUser.id },
+        );
+        redirectWithMessage(
+          `/offers/${data.id}`,
+          "error",
+          "Offer saved but kept paused because the donation offset evidence bundle could not be recorded.",
+        );
+      }
     }
 
     if (baselineBondEnabled) {
@@ -7803,6 +7875,41 @@ export async function submitBaselineBondEvidenceAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", updateError.message);
   }
 
+  const evidenceRecordedAt = new Date().toISOString();
+  const evidencePersistenceResult = await persistMoralTradeEvidenceSubmission({
+    actorAgentId: viewer.authUser.id,
+    actorAgentKind: "participant",
+    actorLabel: offer.owner_alias,
+    claimScope: "counterfactual_baseline",
+    evidenceKind: "prior_intent",
+    evidenceUrl,
+    idempotencyKey: `baseline-bond:${offerId}:counterfactual-baseline-evidence`,
+    offerId,
+    ownerProfileId: viewer.authUser.id,
+    reasonCodes: ["baseline_credibility_bond", "counterfactual_baseline"],
+    recordedAt: evidenceRecordedAt,
+    redactionLevel: "reviewer_only",
+    subjectId: offerId,
+    subjectKind: "offer",
+    supabase,
+  });
+
+  if (evidencePersistenceResult.error) {
+    logSupabaseActionError(
+      "Failed to persist baseline credibility bond evidence bundle",
+      toActionError(
+        evidencePersistenceResult.error,
+        "Unable to persist baseline credibility bond evidence bundle.",
+      ),
+      { offerId, ownerId: viewer.authUser.id },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Evidence was submitted, but the provenance evidence bundle could not be recorded.",
+    );
+  }
+
   const transitionResult = await persistBaselineBondStatusTransition({
     actorAgentId: viewer.authUser.id,
     actorAgentKind: "participant",
@@ -7812,6 +7919,7 @@ export async function submitBaselineBondEvidenceAction(formData: FormData) {
     offerId,
     ownerProfileId: viewer.authUser.id,
     provenanceActivity: "evidence_submitted",
+    recordedAt: evidenceRecordedAt,
     supabase,
     toStatus: "evidence_submitted",
   });
