@@ -101,6 +101,15 @@ import {
   verifyMpgfPublicGoodsPledgeIntentIdentity,
 } from "./mpgf/public-goods-contribution-intents";
 import {
+  MPGF_PUBLIC_GOODS_COORDINATION_PRIVACY_POLICY,
+  MPGF_PUBLIC_GOODS_FINALIZATION_POLICY,
+  buildMpgfPublicGoodsFinalizationReport,
+  buildMpgfPublicGoodsRoundReleasePlan,
+  detectMpgfPublicGoodsCoordinationFlags,
+  getMpgfPublicGoodsFinalizationReportApi,
+  getMpgfPublicGoodsRoundReleasePlanApi,
+} from "./mpgf/public-goods-finalization";
+import {
   MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY,
   buildMpgfPublicGoodsSponsorPoolFlywheel,
   getMpgfPublicGoodsSponsorPoolFlywheelApi,
@@ -603,6 +612,9 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.contributionFlow?.pledgeIntentPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/pledge-intents`);
   assert.equal(round.round.contributionFlow?.manualEvidenceFallbackPath, "/api/mpgf/evidence/manual");
   assert.ok(round.round.contributionFlow?.stateObjects.includes("provider_payment_event"));
+  assert.equal(round.round.finalization.policy, MPGF_PUBLIC_GOODS_FINALIZATION_POLICY);
+  assert.equal(round.round.finalization.previewPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize-preview`);
+  assert.equal(round.round.finalization.proofPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`);
   assert.match(round.round.sponsorPool.visibleCommitment, /challenge match/i);
   assert.ok(Number(round.round.sponsorPool.perDonorQfCapCents) > 0);
   assert.equal(round.round.sponsorPool.verificationWeightPolicy, "identity_confidence_only_no_moral_reputation");
@@ -687,6 +699,11 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/pledge-intents/[intentId]/authorize-payment/route.ts", /authorizeMpgfPublicGoodsPledgeIntentPayment/],
     ["src/app/api/mpgf/provider-events/webhook/route.ts", /recordMpgfPublicGoodsProviderPaymentEvent/],
     ["src/app/api/mpgf/evidence/manual/route.ts", /manual-evidence\/route/],
+    ["src/app/api/mpgf/rounds/[roundId]/finalize-preview/route.ts", /getMpgfPublicGoodsFinalizationReportApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/finalize/route.ts", /MPGF_ALLOCATION_SECRET/],
+    ["src/app/api/mpgf/rounds/[roundId]/release/route.ts", /getMpgfPublicGoodsRoundReleasePlanApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/proof/route.ts", /getMpgfPublicGoodsFinalizationReportApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/hash/route.ts", /calculationHash/],
     ["src/app/api/mpgf/sponsor-pools/[poolId]/route.ts", /getMpgfPublicGoodsSponsorPoolFlywheelApi/],
     ["src/app/api/mpgf/audit/ledger/route.ts", /getMpgfPublicGoodsLedgerApi/],
     ["src/app/api/mpgf/providers/stripe/webhook/route.ts", /webhookCanAuthorizeFinalPayout: false/],
@@ -867,6 +884,77 @@ test("MPGF contribution intents verify identity before conditional payment autho
     "private-idempotency-key-001",
     "provider-private-payment-intent-001",
     "provider-private-event-001",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("MPGF finalization applies deterministic coordination penalties and proof hashes", () => {
+  const flags = detectMpgfPublicGoodsCoordinationFlags();
+  const preview = buildMpgfPublicGoodsFinalizationReport();
+  const finalization = buildMpgfPublicGoodsFinalizationReport({ final: true });
+  const apiFinalization = getMpgfPublicGoodsFinalizationReportApi(demoMpgfAssuranceRound.id, true);
+  const unknownFinalization = getMpgfPublicGoodsFinalizationReportApi("unknown-round", true);
+  const releasePlan = buildMpgfPublicGoodsRoundReleasePlan({ finalization });
+  const releaseApi = getMpgfPublicGoodsRoundReleasePlanApi(demoMpgfAssuranceRound.id);
+  const serialized = JSON.stringify({ flags, preview, finalization, releasePlan });
+  const animalRow = finalization.rows.find((row) => row.campaignId === "campaign-animal-welfare-transition");
+  const previewRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/finalize-preview/route.ts", "utf8");
+  const finalizeRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/finalize/route.ts", "utf8");
+  const releaseRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/release/route.ts", "utf8");
+  const proofRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/proof/route.ts", "utf8");
+  const hashRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/hash/route.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260531_mpgf_coordination_finalization.sql", "utf8");
+
+  assert.ok(apiFinalization);
+  assert.equal(unknownFinalization, null);
+  assert.equal(preview.final, false);
+  assert.equal(preview.status, "preview");
+  assert.equal(finalization.final, true);
+  assert.equal(finalization.status, "finalized");
+  assert.equal(finalization.policy, MPGF_PUBLIC_GOODS_FINALIZATION_POLICY);
+  assert.equal(finalization.privacyPolicy, MPGF_PUBLIC_GOODS_COORDINATION_PRIVACY_POLICY);
+  assert.match(finalization.calcHash, /^sha256:/);
+  assert.ok(flags.length >= 1);
+  assert.ok(flags.every((flag) => flag.clusterKeyHash.startsWith("sha256:")));
+  assert.ok(flags.every((flag) => flag.appendOnlyHash.startsWith("sha256:")));
+  assert.ok(animalRow);
+  assert.equal(animalRow.antiCollusionFactorBps, 8_500);
+  assert.equal(animalRow.coordinationFlagCount, 1);
+  assert.ok(animalRow.qfBonusCents < animalRow.qfRawCents);
+  assert.equal(animalRow.withheldQfBonusCents, animalRow.qfRawCents - animalRow.qfBonusCents);
+  assert.equal(animalRow.finalTotalCents, animalRow.directEligibleCents + animalRow.baseMatchCents + animalRow.qfBonusCents);
+  assert.match(animalRow.sourceContributionDigest, /^sha256:/);
+  assert.match(animalRow.calculationHash, /^sha256:/);
+  assert.ok(finalization.withheldQfBonusCents > 0);
+  assert.equal(finalization.requiresHumanReviewBeforeIrreversibleStateChange, true);
+  assert.equal(finalization.finalPayoutAuthorized, false);
+  assert.equal(releasePlan.roundId, finalization.roundId);
+  assert.equal(releasePlan.finalizationHash, finalization.calcHash);
+  assert.equal(releasePlan.partnerReleaseAuthorizationRequired, true);
+  assert.equal(releasePlan.dualControlRequired, true);
+  assert.equal(releasePlan.finalPayoutAuthorized, false);
+  assert.ok(releasePlan.releases.every((release) => release.status === "partner_release_pending"));
+  assert.ok(releaseApi);
+  assert.match(previewRoute, /finalization preview/);
+  assert.match(finalizeRoute, /MPGF_PUBLIC_GOODS_ROUND_CLOSE_SECRET/);
+  assert.match(finalizeRoute, /Unauthorized MPGF public-goods finalization request/);
+  assert.match(releaseRoute, /MPGF_PUBLIC_GOODS_RELEASE_SECRET/);
+  assert.match(releaseRoute, /finalPayoutAuthorized/);
+  assert.match(proofRoute, /getMpgfPublicGoodsFinalizationReportApi/);
+  assert.match(hashRoute, /calculationHash/);
+  assert.match(migration, /create table if not exists public\.mpgf_coordination_flags/);
+  assert.match(migration, /create table if not exists public\.mpgf_round_allocations/);
+  assert.match(migration, /anti_collusion_factor_bps/);
+  assert.match(migration, /withheld_qf_bonus_cents/);
+  assert.match(migration, /calculation_hash/);
+  assert.match(migration, /MPGF coordination flags are append-only/);
+
+  for (const forbidden of [
+    "demo-supporter-harper-shadow",
+    "pledge-assurance-animal-duplicate",
+    "charityReceiptRef",
+    "externalReceiptRef",
   ]) {
     assert.equal(serialized.includes(forbidden), false);
   }

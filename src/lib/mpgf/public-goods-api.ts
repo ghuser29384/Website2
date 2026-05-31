@@ -15,6 +15,7 @@ import {
 } from "./mechanism";
 import { buildMpgfPublicGoodsAllocationSourceProofMap } from "./public-goods-allocation-results";
 import { getMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
+import { MPGF_PUBLIC_GOODS_FINALIZATION_POLICY } from "./public-goods-finalization";
 import { buildMpgfPublicGoodsMilestoneSchedule } from "./public-goods-milestones";
 import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
 import type {
@@ -217,6 +218,14 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
         flywheelSourceTypes: sponsorPoolFlywheel.sourceTypes,
       },
       contributionFlow,
+      finalization: {
+        policy: MPGF_PUBLIC_GOODS_FINALIZATION_POLICY,
+        previewPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize-preview`,
+        finalizePath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize`,
+        releasePath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/release`,
+        antiCollusionFactorUnit: "basis_points",
+        proofPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`,
+      },
       campaignCount: demoMpgfPublicGoodsCampaigns.length,
       verifiedDonorCount: allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
       calcHash: publicCalcHash(allocation.lines.map((line) => [line.campaignId, line.qfScore, line.totalPayoutCents])),
