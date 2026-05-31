@@ -134,6 +134,27 @@ create table if not exists public.mpgf_public_goods_payment_proofs (
   status text not null default 'pending_review' check (
     status in ('pending_review', 'verified', 'rejected', 'superseded')
   ),
+  reason_code text not null default 'needs_destination_evidence' check (
+    reason_code in (
+      'destination_verified',
+      'needs_destination_evidence',
+      'needs_identity_evidence',
+      'blocked_threat_baseline',
+      'blocked_destination_risk',
+      'challenge_opened',
+      'challenge_resolved',
+      'external_handoff_verified',
+      'external_handoff_failed',
+      'duplicate_identity_blocked',
+      'appeal_requested',
+      'appeal_denied',
+      'appeal_upheld'
+    )
+  ),
+  reconciliation_source text not null default 'external_receipt' check (
+    reconciliation_source in ('external_receipt', 'fiscal_host_webhook', 'sponsor_signed_intent')
+  ),
+  source_event_ref text,
   verified_at timestamptz,
   created_at timestamptz not null default timezone('utc', now())
 );
@@ -254,6 +275,33 @@ alter table public.mpgf_pool_proposals
     public_goods_payout_method is null or
     public_goods_payout_method in ('external_handoff', 'stored_payment_method', 'signed_intent')
   );
+
+alter table public.mpgf_public_goods_payment_proofs
+  add column if not exists reason_code text not null default 'needs_destination_evidence' check (
+    reason_code in (
+      'destination_verified',
+      'needs_destination_evidence',
+      'needs_identity_evidence',
+      'blocked_threat_baseline',
+      'blocked_destination_risk',
+      'challenge_opened',
+      'challenge_resolved',
+      'external_handoff_verified',
+      'external_handoff_failed',
+      'duplicate_identity_blocked',
+      'appeal_requested',
+      'appeal_denied',
+      'appeal_upheld'
+    )
+  ),
+  add column if not exists reconciliation_source text not null default 'external_receipt' check (
+    reconciliation_source in ('external_receipt', 'fiscal_host_webhook', 'sponsor_signed_intent')
+  ),
+  add column if not exists source_event_ref text;
+
+create unique index if not exists mpgf_public_goods_payment_proofs_source_event_idx
+on public.mpgf_public_goods_payment_proofs (reconciliation_source, source_event_ref)
+where source_event_ref is not null;
 
 insert into public.mpgf_public_goods_match_pools (
   id,

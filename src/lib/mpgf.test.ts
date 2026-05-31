@@ -59,6 +59,7 @@ import {
   demoMpgfPublicGoodsSubscriptions,
   mpgfPublicRoutes,
 } from "./mpgf/data";
+import { buildMpgfPublicGoodsReconciliationRows } from "./mpgf/public-goods-reconciliation";
 import {
   evaluateMpgfExactPilotGate,
   evaluateMpgfGovernanceMachineryGate,
@@ -502,6 +503,16 @@ test("MPGF public-goods reconciliation writes payment proof records and failed-h
   assert.equal(verified.paymentProof.reasonCode, "external_handoff_verified");
   assert.equal(verified.writesPaymentProofRecord, true);
   assert.equal(verified.createsCustody, false);
+  const rows = buildMpgfPublicGoodsReconciliationRows({
+    paymentProof: verified.paymentProof,
+    reviewCase: verified.reviewCase,
+    sourceEventRef: "open-collective:event:test",
+  });
+
+  assert.equal(rows.paymentProofRow.reason_code, "external_handoff_verified");
+  assert.equal(rows.paymentProofRow.reconciliation_source, "external_receipt");
+  assert.equal(rows.paymentProofRow.source_event_ref, "open-collective:event:test");
+  assert.equal(rows.pledgeStatus, "captured");
   assert.equal(failed.paymentProof.status, "rejected");
   assert.equal(failed.reviewCase.reasonCode, "external_handoff_failed");
   assert.equal(demoMpgfPublicGoodsPaymentProofs.some((proof) => proof.status === "verified"), true);
@@ -551,6 +562,10 @@ test("MPGF public-goods migration covers required entities and RLS policies", ()
   assert.match(migration, /enable row level security/);
   assert.match(migration, /mpgf_public_goods_pledges_insert_own/);
   assert.match(migration, /mpgf_public_goods_payment_proofs_insert_own/);
+  assert.match(migration, /reason_code text not null default 'needs_destination_evidence'/);
+  assert.match(migration, /reconciliation_source text not null default 'external_receipt'/);
+  assert.match(migration, /source_event_ref text/);
+  assert.match(migration, /mpgf_public_goods_payment_proofs_source_event_idx/);
   assert.match(migration, /mpgf_public_goods_analytics_no_raw_contact/);
   assert.match(migration, /public_goods_threshold_amount_cents/);
   assert.match(migration, /public_goods_destination_type/);
@@ -572,6 +587,18 @@ test("MPGF public-goods participant paths persist campaign pledges and creation 
   assert.match(consoleSource, /Your pledge only happens if enough verified people join/);
   assert.match(consoleSource, /publicGoodsDestinationType/);
   assert.match(accountSource, /Conditional campaign pledges/);
+});
+
+test("MPGF public-goods reconciliation route writes payment proofs through a protected job surface", () => {
+  const route = readFileSync("src/app/api/mpgf/public-goods/reconcile/route.ts", "utf8");
+  const reconciliation = readFileSync("src/lib/mpgf/public-goods-reconciliation.ts", "utf8");
+
+  assert.match(route, /MPGF_RECONCILIATION_SECRET/);
+  assert.match(route, /reconcileMpgfPublicGoodsPaymentProof/);
+  assert.match(reconciliation, /mpgf_public_goods_payment_proofs/);
+  assert.match(reconciliation, /mpgf_public_goods_review_cases/);
+  assert.match(reconciliation, /source_event_ref/);
+  assert.match(reconciliation, /status: "already_processed"/);
 });
 
 test("MPGF production completion gate fails while production evidence is only pending", () => {

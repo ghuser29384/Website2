@@ -556,6 +556,7 @@ export interface MpgfPublicGoodsPaymentProof {
   id: string;
   pledgeId?: string;
   campaignId: string;
+  sourceEventRef?: string;
   externalReceiptRef?: string;
   charityReceiptRef?: string;
   amountVerifiedCents: number;
