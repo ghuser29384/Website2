@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Rate Limits",
+  "type": "object",
+  "required": ["version", "defaultDenyWhenMissing", "defaultPolicy", "limits"],
+  "properties": {
+    "version": { "type": "string" },
+    "defaultDenyWhenMissing": { "const": true },
+    "defaultPolicy": {
+      "type": "object",
+      "required": [
+        "publicReadPerIpPerMinute",
+        "contributionAttemptsPerUserPerHour",
+        "contributionAttemptsPerIpPerHour",
+        "pledgesPerUserPerHour",
+        "poolProposalSubmissionsPerUserPerDay",
+        "ballotDraftSavesPerUserPerHour",
+        "ballotFinalSubmissionsPerUserPerCycle",
+        "appealsPerUserPerCycle",
+        "adminMutationsPerAdminPerHour",
+        "publicSummaryCacheSeconds",
+        "webhookIdempotencyWindowDays"
+      ],
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["surface", "routes", "windowSeconds", "maxRequests", "identityKey"],
+        "properties": {
+          "windowSeconds": { "type": "integer", "minimum": 1 },
+          "maxRequests": { "type": "integer", "minimum": 1 },
+          "routes": { "type": "array", "minItems": 1 }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

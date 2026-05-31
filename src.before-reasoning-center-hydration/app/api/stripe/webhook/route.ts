@@ -1,0 +1,158 @@
+import { NextResponse } from "next/server";
+import type Stripe from "stripe";
+
+import type { Database } from "@/lib/supabase/database.types";
+import { handleMpgfStripeWebhookEvent, hashStripeWebhookBody } from "@/lib/mpgf/real-money";
+import { createServiceClient } from "@/lib/supabase/server";
+import { getStripe, getStripeWebhookSecret } from "@/lib/stripe";
+
+export const runtime = "nodejs";
+
+type EmailOutboxInsert = Database["public"]["Tables"]["email_outbox"]["Insert"];
+
+async function markPaymentFromSession(
+  session: Stripe.Checkout.Session,
+  status: "paid" | "failed",
+) {
+  const paymentId = session.metadata?.agreement_payment_id;
+
+  if (!paymentId) {
+    return;
+  }
+
+  const supabase = createServiceClient();
+  const paymentIntent =
+    typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
+
+  const { data: payment } = await supabase
+    .from("agreement_payments")
+    .update({
+      status,
+      stripe_payment_intent_id: paymentIntent,
+      paid_at: status === "paid" ? new Date().toISOString() : null,
+    })
+    .eq("id", paymentId)
+    .select("*")
+    .maybeSingle();
+
+  if (!payment) {
+    return;
+  }
+
+  await supabase.from("agreement_events").insert({
+    agreement_id: payment.agreement_id,
+    actor_id: payment.payer_id,
+    event_type: "payment_update",
+    summary:
+      status === "paid"
+        ? `Stripe confirmed payment of ${(payment.amount_cents / 100).toFixed(2)} ${payment.currency.toUpperCase()}.`
+        : "Stripe reported that the payment failed.",
+    details: session.id,
+  });
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, email")
+    .in("id", [payment.payer_id, payment.payee_id]);
+  const profileEmails = new Map((profiles ?? []).map((profile) => [profile.id, profile.email]));
+  const outboxRows: EmailOutboxInsert[] = [payment.payer_id, payment.payee_id]
+    .map((profileId) => {
+      const recipientEmail = profileEmails.get(profileId) ?? "";
+
+      return {
+        profile_id: profileId,
+        recipient_email: recipientEmail,
+        subject: status === "paid" ? "Moral Trade payment confirmed" : "Moral Trade payment failed",
+        body:
+          status === "paid"
+            ? `Stripe confirmed a ${payment.currency.toUpperCase()} payment for agreement ${payment.agreement_id}.`
+            : `Stripe reported that payment ${payment.id} failed. Sign in to review the agreement.`,
+        status: recipientEmail ? "queued" : "suppressed",
+      } satisfies EmailOutboxInsert;
+    })
+    .filter((row) => row.recipient_email || row.status === "suppressed");
+
+  if (outboxRows.length) {
+    await supabase.from("email_outbox").insert(outboxRows);
+  }
+}
+
+function hasMpgfMetadata(metadata: unknown) {
+  if (!metadata || typeof metadata !== "object") {
+    return false;
+  }
+
+  const record = metadata as Record<string, unknown>;
+
+  return (
+    record.purpose === "mpgf_contribution" ||
+    typeof record.mpgf_payment_intent_id === "string" ||
+    typeof record.mpgf_recurring_commitment_id === "string"
+  );
+}
+
+function isPotentialMpgfStripeEvent(event: Stripe.Event) {
+  const object = event.data.object as Record<string, any>;
+
+  if (hasMpgfMetadata(object.metadata) || hasMpgfMetadata(object.subscription_details?.metadata)) {
+    return true;
+  }
+
+  if (event.type === "invoice.paid") {
+    return Boolean(object.subscription);
+  }
+
+  if (event.type === "charge.refunded") {
+    return Boolean(object.payment_intent);
+  }
+
+  return false;
+}
+
+export async function POST(request: Request) {
+  const stripe = getStripe();
+  const webhookSecret = getStripeWebhookSecret();
+  const rawBody = await request.text();
+  const signature = request.headers.get("stripe-signature");
+  const rawBodyHash = hashStripeWebhookBody(rawBody);
+
+  let event: Stripe.Event;
+  let signatureVerified = false;
+
+  try {
+    if (webhookSecret && signature) {
+      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+      signatureVerified = true;
+    } else {
+      event = JSON.parse(rawBody);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid Stripe webhook.";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  if (isPotentialMpgfStripeEvent(event)) {
+    const mpgfResult = await handleMpgfStripeWebhookEvent({
+      event,
+      rawBodyHash,
+      signatureVerified,
+    });
+
+    if (mpgfResult.handled) {
+      return NextResponse.json({ received: true, mpgf: mpgfResult.status });
+    }
+  }
+
+  if (
+    event.type === "checkout.session.completed" ||
+    event.type === "checkout.session.async_payment_succeeded"
+  ) {
+    await markPaymentFromSession(event.data.object as Stripe.Checkout.Session, "paid");
+  }
+
+  if (event.type === "checkout.session.async_payment_failed") {
+    await markPaymentFromSession(event.data.object as Stripe.Checkout.Session, "failed");
+  }
+
+  return NextResponse.json({ received: true });
+}

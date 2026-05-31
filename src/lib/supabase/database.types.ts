@@ -1506,6 +1506,377 @@ export interface Database {
         };
         Relationships: [];
       };
+      background_opportunity_briefs: {
+        Row: {
+          id: string;
+          profile_id: string;
+          candidate_profile_id: string | null;
+          match_id: string | null;
+          title: string;
+          confidence_band: "High" | "Moderate" | "Tentative" | "Exploratory";
+          factor_codes: string[];
+          why_text: string;
+          next_step_type:
+            | "answer_questions"
+            | "request_intro_packet"
+            | "request_detail"
+            | "review_profile"
+            | "mute_or_dismiss";
+          hidden_fields_notice: string;
+          reveal_consequence_notice: string;
+          status: "open" | "opened" | "dismissed" | "muted" | "packet_requested" | "expired";
+          expires_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          candidate_profile_id?: string | null;
+          match_id?: string | null;
+          title?: string;
+          confidence_band?: "High" | "Moderate" | "Tentative" | "Exploratory";
+          factor_codes?: string[];
+          why_text?: string;
+          next_step_type?:
+            | "answer_questions"
+            | "request_intro_packet"
+            | "request_detail"
+            | "review_profile"
+            | "mute_or_dismiss";
+          hidden_fields_notice?: string;
+          reveal_consequence_notice?: string;
+          status?: "open" | "opened" | "dismissed" | "muted" | "packet_requested" | "expired";
+          expires_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          candidate_profile_id?: string | null;
+          match_id?: string | null;
+          title?: string;
+          confidence_band?: "High" | "Moderate" | "Tentative" | "Exploratory";
+          factor_codes?: string[];
+          why_text?: string;
+          next_step_type?:
+            | "answer_questions"
+            | "request_intro_packet"
+            | "request_detail"
+            | "review_profile"
+            | "mute_or_dismiss";
+          hidden_fields_notice?: string;
+          reveal_consequence_notice?: string;
+          status?: "open" | "opened" | "dismissed" | "muted" | "packet_requested" | "expired";
+          expires_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_intro_packets: {
+        Row: {
+          id: string;
+          opportunity_brief_id: string | null;
+          match_id: string | null;
+          requester_profile_id: string;
+          counterparty_profile_id: string | null;
+          purpose: string;
+          requester_answers: Record<string, unknown>;
+          mutual_questions: string[];
+          requested_field_keys: string[];
+          reveal_capsule: string;
+          review_state:
+            | "draft"
+            | "requested"
+            | "under_review"
+            | "approved"
+            | "changes_requested"
+            | "declined"
+            | "sent";
+          reviewer_notes: string;
+          sla_due_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          opportunity_brief_id?: string | null;
+          match_id?: string | null;
+          requester_profile_id: string;
+          counterparty_profile_id?: string | null;
+          purpose?: string;
+          requester_answers?: Record<string, unknown>;
+          mutual_questions?: string[];
+          requested_field_keys?: string[];
+          reveal_capsule?: string;
+          review_state?:
+            | "draft"
+            | "requested"
+            | "under_review"
+            | "approved"
+            | "changes_requested"
+            | "declined"
+            | "sent";
+          reviewer_notes?: string;
+          sla_due_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          opportunity_brief_id?: string | null;
+          match_id?: string | null;
+          counterparty_profile_id?: string | null;
+          purpose?: string;
+          requester_answers?: Record<string, unknown>;
+          mutual_questions?: string[];
+          requested_field_keys?: string[];
+          reveal_capsule?: string;
+          review_state?:
+            | "draft"
+            | "requested"
+            | "under_review"
+            | "approved"
+            | "changes_requested"
+            | "declined"
+            | "sent";
+          reviewer_notes?: string;
+          sla_due_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_grant_receipts: {
+        Row: {
+          id: string;
+          profile_id: string;
+          counterparty_id: string | null;
+          grant_id: string | null;
+          receipt_kind: "disclosure_grant" | "source_summary" | "connector_consent";
+          purpose: string;
+          field_keys: string[];
+          audience_stage: "registry" | "consent" | "introduced";
+          status: "active" | "revoked" | "expired";
+          expires_at: string | null;
+          revoked_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          counterparty_id?: string | null;
+          grant_id?: string | null;
+          receipt_kind?: "disclosure_grant" | "source_summary" | "connector_consent";
+          purpose?: string;
+          field_keys?: string[];
+          audience_stage?: "registry" | "consent" | "introduced";
+          status?: "active" | "revoked" | "expired";
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          counterparty_id?: string | null;
+          grant_id?: string | null;
+          receipt_kind?: "disclosure_grant" | "source_summary" | "connector_consent";
+          purpose?: string;
+          field_keys?: string[];
+          audience_stage?: "registry" | "consent" | "introduced";
+          status?: "active" | "revoked" | "expired";
+          expires_at?: string | null;
+          revoked_at?: string | null;
+        };
+        Relationships: [];
+      };
+      background_source_summaries: {
+        Row: {
+          id: string;
+          profile_id: string;
+          source_connection_id: string | null;
+          consent_receipt_id: string | null;
+          source_type:
+            | "manual"
+            | "social"
+            | "blog"
+            | "email"
+            | "calendar"
+            | "chat_history"
+            | "search_profile"
+            | "other";
+          label: string;
+          summary_text: string;
+          allowed_field_keys: string[];
+          purpose: string;
+          retention_expires_at: string;
+          status: "draft" | "reviewed" | "active" | "expired" | "revoked";
+          raw_ingestion_allowed: false;
+          sensitive_ciphertexts: Record<string, string>;
+          sensitive_encryption_version: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          source_connection_id?: string | null;
+          consent_receipt_id?: string | null;
+          source_type?:
+            | "manual"
+            | "social"
+            | "blog"
+            | "email"
+            | "calendar"
+            | "chat_history"
+            | "search_profile"
+            | "other";
+          label: string;
+          summary_text?: string;
+          allowed_field_keys?: string[];
+          purpose?: string;
+          retention_expires_at: string;
+          status?: "draft" | "reviewed" | "active" | "expired" | "revoked";
+          raw_ingestion_allowed?: false;
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          source_connection_id?: string | null;
+          consent_receipt_id?: string | null;
+          source_type?:
+            | "manual"
+            | "social"
+            | "blog"
+            | "email"
+            | "calendar"
+            | "chat_history"
+            | "search_profile"
+            | "other";
+          label?: string;
+          summary_text?: string;
+          allowed_field_keys?: string[];
+          purpose?: string;
+          retention_expires_at?: string;
+          status?: "draft" | "reviewed" | "active" | "expired" | "revoked";
+          raw_ingestion_allowed?: false;
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_profile_interview_answers: {
+        Row: {
+          id: string;
+          profile_id: string;
+          question_key: string;
+          question_text: string;
+          answer: string;
+          uncertainty_flags: string[];
+          broad_preview_update: string;
+          private_intent_update: string;
+          status: "draft" | "saved" | "dismissed";
+          sensitive_ciphertexts: Record<string, string>;
+          sensitive_encryption_version: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          question_key: string;
+          question_text?: string;
+          answer?: string;
+          uncertainty_flags?: string[];
+          broad_preview_update?: string;
+          private_intent_update?: string;
+          status?: "draft" | "saved" | "dismissed";
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          question_text?: string;
+          answer?: string;
+          uncertainty_flags?: string[];
+          broad_preview_update?: string;
+          private_intent_update?: string;
+          status?: "draft" | "saved" | "dismissed";
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_collective_policies: {
+        Row: {
+          id: string;
+          collective_id: string;
+          approval_threshold: number;
+          approver_roles: string[];
+          max_auto_grant_stage: "registry" | "consent" | "introduced";
+          group_public_preview: string;
+          default_retention_days: 30 | 90 | 180 | 365;
+          disclosure_rules: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          collective_id: string;
+          approval_threshold?: number;
+          approver_roles?: string[];
+          max_auto_grant_stage?: "registry" | "consent" | "introduced";
+          group_public_preview?: string;
+          default_retention_days?: 30 | 90 | 180 | 365;
+          disclosure_rules?: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          approval_threshold?: number;
+          approver_roles?: string[];
+          max_auto_grant_stage?: "registry" | "consent" | "introduced";
+          group_public_preview?: string;
+          default_retention_days?: 30 | 90 | 180 | 365;
+          disclosure_rules?: Record<string, unknown>;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_mute_rules: {
+        Row: {
+          id: string;
+          profile_id: string;
+          candidate_profile_id: string | null;
+          factor_code_pattern: string;
+          cause_pair: string[];
+          status: "active" | "expired" | "revoked";
+          muted_until: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          candidate_profile_id?: string | null;
+          factor_code_pattern?: string;
+          cause_pair?: string[];
+          status?: "active" | "expired" | "revoked";
+          muted_until?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          candidate_profile_id?: string | null;
+          factor_code_pattern?: string;
+          cause_pair?: string[];
+          status?: "active" | "expired" | "revoked";
+          muted_until?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       clarification_questions: {
         Row: {
           id: string;

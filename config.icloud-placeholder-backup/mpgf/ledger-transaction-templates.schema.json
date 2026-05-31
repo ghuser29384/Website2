@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Ledger Transaction Templates",
+  "type": "object",
+  "required": ["version", "currency", "mode", "templates"],
+  "properties": {
+    "version": { "type": "string" },
+    "currency": { "const": "usd" },
+    "mode": { "type": "string" },
+    "templates": {
+      "type": "array",
+      "minItems": 17,
+      "items": {
+        "type": "object",
+        "required": [
+          "transaction_type",
+          "required_related_type",
+          "affects_derived_B_t",
+          "allowed_before_budget_lock",
+          "allowed_after_budget_lock",
+          "real_money_eligible",
+          "debit_entries",
+          "credit_entries",
+          "amount_source",
+          "required_idempotency_key_source",
+          "required_audit_log",
+          "required_approval_or_review_status"
+        ],
+        "properties": {
+          "transaction_type": { "type": "string" },
+          "required_audit_log": { "const": true },
+          "real_money_eligible": { "const": false },
+          "debit_entries": { "type": "array", "minItems": 1 },
+          "credit_entries": { "type": "array", "minItems": 1 }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

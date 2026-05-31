@@ -19,7 +19,9 @@ import {
   insertMatchExplanationSnapshots,
   recordBackgroundQueryRiskSignal,
   reserveBackgroundQueryBudget,
+  upsertBackgroundOpportunityBriefs,
 } from "@/lib/background-operations";
+import { buildOpportunityBriefRow } from "@/lib/background-opportunity-briefs";
 import { getBackgroundQueryFingerprint } from "@/lib/background-query-budget";
 import { isCronRequestAuthorized } from "@/lib/cron";
 import type { Database } from "@/lib/supabase/database.types";
@@ -210,6 +212,7 @@ async function processSavedSearches(request: Request) {
     let runRefreshed = 0;
     let runCandidates = 0;
     const explanationSnapshots: ReturnType<typeof buildMatchExplanationSnapshot>[] = [];
+    const opportunityBriefs: Database["public"]["Tables"]["background_opportunity_briefs"]["Insert"][] = [];
 
     for (const preview of previewRows) {
       if (preview.profile_id === search.profile_id || !preview.background_search_enabled) {
@@ -338,6 +341,40 @@ async function processSavedSearches(request: Request) {
           viewerConsented: false,
         }),
       );
+      opportunityBriefs.push(
+        buildOpportunityBriefRow({
+          canRevealIdentity: false,
+          candidateProfileId: preview.profile_id,
+          counterpartyConsented: false,
+          generatedBy: "saved-search-cron",
+          matchBasis,
+          matchId,
+          profileId: search.profile_id,
+          riskNotes: evaluation.riskNotes,
+          score: evaluation.score,
+          sharedCauses: evaluation.sharedCauses,
+          status: upsertedMatch.status,
+          suggestedFirstStep: evaluation.suggestedFirstStep,
+          title: "Opportunity brief: saved-search lead",
+          viewerConsented: false,
+        }),
+        buildOpportunityBriefRow({
+          canRevealIdentity: false,
+          candidateProfileId: search.profile_id,
+          counterpartyConsented: false,
+          generatedBy: "saved-search-cron",
+          matchBasis,
+          matchId,
+          profileId: preview.profile_id,
+          riskNotes: evaluation.riskNotes,
+          score: evaluation.score,
+          sharedCauses: evaluation.sharedCauses,
+          status: upsertedMatch.status,
+          suggestedFirstStep: evaluation.suggestedFirstStep,
+          title: "Opportunity brief: saved-search lead",
+          viewerConsented: false,
+        }),
+      );
 
       await supabase.from("match_audit_events").insert({
         match_id: matchId,
@@ -361,15 +398,17 @@ async function processSavedSearches(request: Request) {
             {
               profile_id: search.profile_id,
               kind: "match",
-              title: "A potential moral trade was found",
-              body: reasonForSearchOwner,
+              title: "New opportunity brief",
+              body:
+                "A saved search found a privacy-safe opportunity brief. Exact wishes and contact details are still hidden.",
               match_id: matchId,
             },
             {
               profile_id: preview.profile_id,
               kind: "match",
-              title: "A potential moral trade was found",
-              body: reasonForCounterparty,
+              title: "New opportunity brief",
+              body:
+                "A saved search found a privacy-safe opportunity brief. Exact wishes and contact details are still hidden.",
               match_id: matchId,
             },
           ],
@@ -384,6 +423,18 @@ async function processSavedSearches(request: Request) {
           });
         }
       }
+    }
+
+    const opportunityBriefError = await upsertBackgroundOpportunityBriefs({
+      briefs: opportunityBriefs,
+      supabase,
+    });
+
+    if (opportunityBriefError) {
+      console.error("[background-networking] Failed to save saved-search opportunity briefs", {
+        error: opportunityBriefError.message,
+        searchId: search.id,
+      });
     }
 
     const snapshotError = await insertMatchExplanationSnapshots({

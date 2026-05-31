@@ -54,7 +54,9 @@ import {
   insertMatchExplanationSnapshots,
   recordBackgroundQueryRiskSignal,
   reserveBackgroundQueryBudget,
+  upsertBackgroundOpportunityBriefs,
 } from "@/lib/background-operations";
+import { buildOpportunityBriefRow } from "@/lib/background-opportunity-briefs";
 import {
   getBackgroundQueryFingerprint,
   type BackgroundQueryScope,
@@ -119,6 +121,10 @@ import {
 } from "@/lib/moral-trade/offer-write-path";
 import { persistBaselineBondStatusTransition } from "@/lib/moral-trade/baseline-bond-transitions";
 import { persistMoralTradeEvidenceSubmission } from "@/lib/moral-trade/evidence-persistence";
+import type {
+  MoralTradeEvidenceClaimScope,
+  MoralTradeEvidenceClaimType,
+} from "@/lib/moral-trade/provenance";
 import {
   buildAgreementReviewDecisionConflictSelector,
   buildAgreementReviewDecisionRow,
@@ -1642,6 +1648,52 @@ function normalizeEvidenceType(value: string): NonNullable<AgreementEvidenceItem
   return "manual_attestation";
 }
 
+type AgreementEvidencePersistenceShape = {
+  claimScope: MoralTradeEvidenceClaimScope;
+  evidenceKind: MoralTradeEvidenceClaimType;
+  reasonCodes: string[];
+};
+
+function getAgreementEvidencePersistenceShape({
+  evidenceType,
+  tradeType,
+}: {
+  evidenceType: NonNullable<AgreementEvidenceItemInsert["evidence_type"]>;
+  tradeType: NonNullable<AgreementEvidenceItemInsert["trade_type"]>;
+}): AgreementEvidencePersistenceShape {
+  const evidenceKind: MoralTradeEvidenceClaimType =
+    evidenceType === "receipt"
+      ? "receipt"
+      : evidenceType === "provider_record"
+        ? "payment_event"
+        : evidenceType === "public_log"
+          ? "public_log"
+          : evidenceType === "timestamped_commitment"
+            ? "prior_intent"
+            : "attestation";
+  const paymentLikeTrade =
+    tradeType === "donation_offset" || tradeType === "mpgf" || tradeType === "paid_action";
+  const claimScope: MoralTradeEvidenceClaimScope =
+    evidenceType === "timestamped_commitment"
+      ? "counterfactual_baseline"
+      : evidenceType === "third_party_review"
+        ? "externality_review"
+        : (evidenceType === "receipt" || evidenceType === "provider_record") && paymentLikeTrade
+          ? "payment_or_donation_record"
+          : "factual_action";
+
+  return {
+    claimScope,
+    evidenceKind,
+    reasonCodes: [
+      "agreement_evidence",
+      `agreement_${tradeType}`,
+      `evidence_${evidenceType}`,
+      claimScope,
+    ],
+  };
+}
+
 function normalizeReviewCaseStatus(value: string): NonNullable<AgreementReviewCaseUpdate["status"]> {
   if (
     value === "under_review" ||
@@ -2048,6 +2100,7 @@ async function generateWishMatchSuggestions({
   let matchesRefreshed = 0;
   const generatedNotifications: Database["public"]["Tables"]["wish_notifications"]["Insert"][] = [];
   const explanationSnapshots: MatchExplanationSnapshotPayload[] = [];
+  const opportunityBriefs: Database["public"]["Tables"]["background_opportunity_briefs"]["Insert"][] = [];
 
   for (const preview of previewRows) {
     const evaluation = evaluateDeterministicMatch({
@@ -2143,15 +2196,17 @@ async function generateWishMatchSuggestions({
           profile_id: profileId,
           match_id: match.match_id,
           kind: "match",
-          title: "A potential moral trade was found",
-          body: evaluation.viewerReason,
+          title: "New opportunity brief",
+          body:
+            "A privacy-safe opportunity brief is ready in your dashboard. Exact wishes, private asks, and contact details are still hidden.",
         },
         {
           profile_id: preview.profile_id,
           match_id: match.match_id,
           kind: "match",
-          title: "A potential moral trade was found",
-          body: evaluation.counterpartyReason,
+          title: "New opportunity brief",
+          body:
+            "A privacy-safe opportunity brief is ready in your dashboard. Exact wishes, private asks, and contact details are still hidden.",
         },
       );
     } else {
@@ -2192,6 +2247,40 @@ async function generateWishMatchSuggestions({
         viewerConsented: false,
       }),
     );
+    opportunityBriefs.push(
+      buildOpportunityBriefRow({
+        canRevealIdentity: false,
+        candidateProfileId: preview.profile_id,
+        counterpartyConsented: false,
+        generatedBy: "rule-based",
+        matchBasis,
+        matchId: match.match_id,
+        profileId,
+        riskNotes: evaluation.riskNotes,
+        score: evaluation.score,
+        sharedCauses: evaluation.sharedCauses,
+        status: "suggested",
+        suggestedFirstStep: evaluation.suggestedFirstStep,
+        title: "Opportunity brief: possible counterparty",
+        viewerConsented: false,
+      }),
+      buildOpportunityBriefRow({
+        canRevealIdentity: false,
+        candidateProfileId: profileId,
+        counterpartyConsented: false,
+        generatedBy: "rule-based",
+        matchBasis,
+        matchId: match.match_id,
+        profileId: preview.profile_id,
+        riskNotes: evaluation.riskNotes,
+        score: evaluation.score,
+        sharedCauses: evaluation.sharedCauses,
+        status: "suggested",
+        suggestedFirstStep: evaluation.suggestedFirstStep,
+        title: "Opportunity brief: possible counterparty",
+        viewerConsented: false,
+      }),
+    );
 
     const { error: auditError } = await supabase.from("match_audit_events").insert({
       match_id: match.match_id,
@@ -2212,6 +2301,18 @@ async function generateWishMatchSuggestions({
         matchId: match.match_id,
       });
     }
+  }
+
+  const opportunityBriefError = await upsertBackgroundOpportunityBriefs({
+    briefs: opportunityBriefs,
+    supabase: serviceSupabase,
+  });
+
+  if (opportunityBriefError) {
+    logSupabaseActionError("Failed to save opportunity briefs", opportunityBriefError, {
+      profileId,
+      runReason,
+    });
   }
 
   const snapshotError = await insertMatchExplanationSnapshots({
@@ -6831,7 +6932,12 @@ export async function submitAgreementEvidenceAction(formData: FormData) {
 
   const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
-  await loadParticipantAgreementOrRedirect(supabase, agreementId, viewer.authUser.id, returnTo);
+  const agreement = await loadParticipantAgreementOrRedirect(
+    supabase,
+    agreementId,
+    viewer.authUser.id,
+    returnTo,
+  );
 
   const tradeType = normalizeEvidenceTradeType(readOptional(formData, "trade_type"));
   const evidenceType = normalizeEvidenceType(readOptional(formData, "evidence_type"));
@@ -6853,7 +6959,7 @@ export async function submitAgreementEvidenceAction(formData: FormData) {
     title,
     evidence_url: evidenceUrl,
     evidence_summary: evidenceSummary,
-    status: "under_review",
+    status: "pending_evidence",
   };
 
   const { data: evidenceItem, error: evidenceError } = await supabase
@@ -6868,6 +6974,45 @@ export async function submitAgreementEvidenceAction(formData: FormData) {
       userId: viewer.authUser.id,
     });
     redirectWithMessage(returnTo, "error", evidenceError?.message ?? "Unable to submit evidence.");
+  }
+
+  const evidencePersistenceShape = getAgreementEvidencePersistenceShape({
+    evidenceType,
+    tradeType,
+  });
+  const provenanceLocator = evidenceUrl || `moraltrade://agreement-evidence/${evidenceItem.id}`;
+  const evidencePersistenceResult = await persistMoralTradeEvidenceSubmission({
+    actorAgentId: viewer.authUser.id,
+    actorAgentKind: agreement.responder_id === viewer.authUser.id ? "counterparty" : "participant",
+    actorLabel: viewer.displayName,
+    agreementId,
+    claimScope: evidencePersistenceShape.claimScope,
+    evidenceKind: evidencePersistenceShape.evidenceKind,
+    evidenceUrl: provenanceLocator,
+    idempotencyKey: `agreement:${agreementId}:evidence:${evidenceItem.id}`,
+    ownerProfileId: viewer.authUser.id,
+    reasonCodes: [...evidencePersistenceShape.reasonCodes],
+    redactionLevel: "reviewer_only",
+    subjectId: agreementId,
+    subjectKind: "agreement",
+    supabase,
+    traceabilityLocationType: evidenceUrl ? "public_log" : "platform",
+  });
+
+  if (evidencePersistenceResult.error) {
+    logSupabaseActionError(
+      "Failed to persist agreement evidence provenance bundle",
+      toActionError(
+        evidencePersistenceResult.error,
+        "Unable to persist agreement evidence provenance bundle.",
+      ),
+      { agreementId, evidenceItemId: evidenceItem.id, userId: viewer.authUser.id },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Evidence was saved as pending, but review was not opened because the provenance bundle could not be recorded.",
+    );
   }
 
   const reviewPayload: AgreementReviewCaseInsert = {
@@ -6890,6 +7035,19 @@ export async function submitAgreementEvidenceAction(formData: FormData) {
       evidenceItemId: evidenceItem.id,
     });
     redirectWithMessage(returnTo, "error", reviewError.message);
+  }
+
+  const { error: evidenceStatusError } = await supabase
+    .from("agreement_evidence_items")
+    .update({ status: "under_review" })
+    .eq("id", evidenceItem.id);
+
+  if (evidenceStatusError) {
+    logSupabaseActionError("Failed to move agreement evidence into review", evidenceStatusError, {
+      agreementId,
+      evidenceItemId: evidenceItem.id,
+    });
+    redirectWithMessage(returnTo, "error", evidenceStatusError.message);
   }
 
   await supabase

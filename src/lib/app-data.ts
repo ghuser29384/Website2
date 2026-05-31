@@ -6,6 +6,8 @@ import {
   type DonationOffsetPoolProgress,
 } from "@/lib/donation-offsets";
 import {
+  BACKGROUND_PROFILE_INTERVIEW_SENSITIVE_TEXT_FIELDS,
+  BACKGROUND_SOURCE_SUMMARY_SENSITIVE_TEXT_FIELDS,
   PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
   PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
   SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS,
@@ -51,6 +53,20 @@ type ClarificationQuestionRow = Database["public"]["Tables"]["clarification_ques
 type BackgroundMatchRunRow = Database["public"]["Tables"]["background_match_runs"]["Row"];
 type MatchExplanationSnapshotRow =
   Database["public"]["Tables"]["match_explanation_snapshots"]["Row"];
+type BackgroundOpportunityBriefRow =
+  Database["public"]["Tables"]["background_opportunity_briefs"]["Row"];
+type BackgroundIntroPacketRow =
+  Database["public"]["Tables"]["background_intro_packets"]["Row"];
+type BackgroundSourceSummaryRow =
+  Database["public"]["Tables"]["background_source_summaries"]["Row"];
+type BackgroundGrantReceiptRow =
+  Database["public"]["Tables"]["background_grant_receipts"]["Row"];
+type BackgroundProfileInterviewAnswerRow =
+  Database["public"]["Tables"]["background_profile_interview_answers"]["Row"];
+type BackgroundCollectivePolicyRow =
+  Database["public"]["Tables"]["background_collective_policies"]["Row"];
+type BackgroundMuteRuleRow =
+  Database["public"]["Tables"]["background_mute_rules"]["Row"];
 type BackgroundQueryEventRow = Database["public"]["Tables"]["background_query_events"]["Row"];
 type BackgroundNotificationPreferenceRow =
   Database["public"]["Tables"]["background_notification_preferences"]["Row"];
@@ -263,6 +279,13 @@ export interface DashboardDataResult {
   wishNotifications: WishNotificationRecord[];
   backgroundRuns: BackgroundMatchRunRow[];
   matchExplanationSnapshots: MatchExplanationSnapshotRow[];
+  opportunityBriefs: BackgroundOpportunityBriefRow[];
+  introPackets: BackgroundIntroPacketRow[];
+  sourceSummaries: BackgroundSourceSummaryRow[];
+  grantReceipts: BackgroundGrantReceiptRow[];
+  profileInterviewAnswers: BackgroundProfileInterviewAnswerRow[];
+  collectivePolicies: BackgroundCollectivePolicyRow[];
+  muteRules: BackgroundMuteRuleRow[];
   backgroundQueryEvents: BackgroundQueryEventRow[];
   backgroundNotificationPreferences: BackgroundNotificationPreferenceRow[];
   profileDataRightRequests: ProfileDataRightRequestRow[];
@@ -300,6 +323,13 @@ export interface DashboardDataResult {
     wishNotifications: string | null;
     backgroundRuns: string | null;
     matchExplanationSnapshots: string | null;
+    opportunityBriefs: string | null;
+    introPackets: string | null;
+    sourceSummaries: string | null;
+    grantReceipts: string | null;
+    profileInterviewAnswers: string | null;
+    collectivePolicies: string | null;
+    muteRules: string | null;
     backgroundQueryEvents: string | null;
     backgroundNotificationPreferences: string | null;
     profileDataRightRequests: string | null;
@@ -2263,6 +2293,160 @@ async function listMatchExplanationSnapshotsForUser(
   return (data ?? []) as MatchExplanationSnapshotRow[];
 }
 
+async function listOpportunityBriefsForUser(
+  userId: string,
+): Promise<BackgroundOpportunityBriefRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_opportunity_briefs")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundOpportunityBriefRow[];
+}
+
+async function listIntroPacketsForUser(userId: string): Promise<BackgroundIntroPacketRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_intro_packets")
+    .select("*")
+    .or(`requester_profile_id.eq.${userId},counterparty_profile_id.eq.${userId}`)
+    .order("created_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundIntroPacketRow[];
+}
+
+async function listBackgroundSourceSummariesForUser(
+  userId: string,
+): Promise<BackgroundSourceSummaryRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_source_summaries")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as BackgroundSourceSummaryRow[]).map((row) =>
+    overlayBackgroundRecordSensitiveText(row, BACKGROUND_SOURCE_SUMMARY_SENSITIVE_TEXT_FIELDS),
+  );
+}
+
+async function listBackgroundGrantReceiptsForUser(
+  userId: string,
+): Promise<BackgroundGrantReceiptRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_grant_receipts")
+    .select("*")
+    .or(`profile_id.eq.${userId},counterparty_id.eq.${userId}`)
+    .order("created_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundGrantReceiptRow[];
+}
+
+async function listProfileInterviewAnswersForUser(
+  userId: string,
+): Promise<BackgroundProfileInterviewAnswerRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_profile_interview_answers")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as BackgroundProfileInterviewAnswerRow[]).map((row) =>
+    overlayBackgroundRecordSensitiveText(row, BACKGROUND_PROFILE_INTERVIEW_SENSITIVE_TEXT_FIELDS),
+  );
+}
+
+async function listBackgroundCollectivePoliciesForUser(
+  collectiveIds: string[],
+): Promise<BackgroundCollectivePolicyRow[]> {
+  if (!hasSupabaseEnv() || !collectiveIds.length) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_collective_policies")
+    .select("*")
+    .in("collective_id", collectiveIds)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundCollectivePolicyRow[];
+}
+
+async function listBackgroundMuteRulesForUser(userId: string): Promise<BackgroundMuteRuleRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_mute_rules")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundMuteRuleRow[];
+}
+
 async function listBackgroundQueryEventsForUser(
   userId: string,
 ): Promise<BackgroundQueryEventRow[]> {
@@ -2828,6 +3012,13 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       wishNotifications: [],
       backgroundRuns: [],
       matchExplanationSnapshots: [],
+      opportunityBriefs: [],
+      introPackets: [],
+      sourceSummaries: [],
+      grantReceipts: [],
+      profileInterviewAnswers: [],
+      collectivePolicies: [],
+      muteRules: [],
       backgroundQueryEvents: [],
       backgroundNotificationPreferences: [],
       profileDataRightRequests: [],
@@ -2865,6 +3056,13 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         wishNotifications: null,
         backgroundRuns: null,
         matchExplanationSnapshots: null,
+        opportunityBriefs: null,
+        introPackets: null,
+        sourceSummaries: null,
+        grantReceipts: null,
+        profileInterviewAnswers: null,
+        collectivePolicies: null,
+        muteRules: null,
         backgroundQueryEvents: null,
         backgroundNotificationPreferences: null,
         profileDataRightRequests: null,
@@ -2907,6 +3105,13 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     wishNotifications: null,
     backgroundRuns: null,
     matchExplanationSnapshots: null,
+    opportunityBriefs: null,
+    introPackets: null,
+    sourceSummaries: null,
+    grantReceipts: null,
+    profileInterviewAnswers: null,
+    collectivePolicies: null,
+    muteRules: null,
     backgroundQueryEvents: null,
     backgroundNotificationPreferences: null,
     profileDataRightRequests: null,
@@ -3159,6 +3364,61 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load match explanation snapshots", { message, userId });
   }
 
+  let opportunityBriefs: BackgroundOpportunityBriefRow[] = [];
+  try {
+    opportunityBriefs = await listOpportunityBriefsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load opportunity briefs.";
+    errors.opportunityBriefs = message;
+    console.error("[supabase] Failed to load opportunity briefs", { message, userId });
+  }
+
+  let introPackets: BackgroundIntroPacketRow[] = [];
+  try {
+    introPackets = await listIntroPacketsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load intro packets.";
+    errors.introPackets = message;
+    console.error("[supabase] Failed to load intro packets", { message, userId });
+  }
+
+  let sourceSummaries: BackgroundSourceSummaryRow[] = [];
+  try {
+    sourceSummaries = await listBackgroundSourceSummariesForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load source summaries.";
+    errors.sourceSummaries = message;
+    console.error("[supabase] Failed to load source summaries", { message, userId });
+  }
+
+  let grantReceipts: BackgroundGrantReceiptRow[] = [];
+  try {
+    grantReceipts = await listBackgroundGrantReceiptsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load grant receipts.";
+    errors.grantReceipts = message;
+    console.error("[supabase] Failed to load grant receipts", { message, userId });
+  }
+
+  let profileInterviewAnswers: BackgroundProfileInterviewAnswerRow[] = [];
+  try {
+    profileInterviewAnswers = await listProfileInterviewAnswersForUser(userId);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load profile interview answers.";
+    errors.profileInterviewAnswers = message;
+    console.error("[supabase] Failed to load profile interview answers", { message, userId });
+  }
+
+  let muteRules: BackgroundMuteRuleRow[] = [];
+  try {
+    muteRules = await listBackgroundMuteRulesForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load mute rules.";
+    errors.muteRules = message;
+    console.error("[supabase] Failed to load mute rules", { message, userId });
+  }
+
   let backgroundQueryEvents: BackgroundQueryEventRow[] = [];
   try {
     backgroundQueryEvents = await listBackgroundQueryEventsForUser(userId);
@@ -3360,6 +3620,21 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load collective decision responses", { message, userId });
   }
 
+  const collectivePolicyIds = [
+    ...new Set([
+      ...collectives.map((collective) => collective.id),
+      ...collectiveMemberships.map((membership) => membership.collective_id),
+    ]),
+  ];
+  let collectivePolicies: BackgroundCollectivePolicyRow[] = [];
+  try {
+    collectivePolicies = await listBackgroundCollectivePoliciesForUser(collectivePolicyIds);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load collective policies.";
+    errors.collectivePolicies = message;
+    console.error("[supabase] Failed to load collective policies", { message, userId });
+  }
+
   let paymentAccount: ProfilePaymentAccountRow | null = null;
   try {
     paymentAccount = await getPaymentAccountForUser(userId);
@@ -3395,6 +3670,13 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     wishNotifications,
     backgroundRuns,
     matchExplanationSnapshots,
+    opportunityBriefs,
+    introPackets,
+    sourceSummaries,
+    grantReceipts,
+    profileInterviewAnswers,
+    collectivePolicies,
+    muteRules,
     backgroundQueryEvents,
     backgroundNotificationPreferences,
     profileDataRightRequests,

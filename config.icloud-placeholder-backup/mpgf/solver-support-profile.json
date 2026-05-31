@@ -1,0 +1,13 @@
+{
+  "solverSupportProfileVersion": "mpgf-solver-support-exact-pilot-v1",
+  "status": "certified_exact_pilot_supported",
+  "benchmarkEvidencePath": "docs/mpgf/solver-benchmark-report.md",
+  "maxAlternatives": 4,
+  "maxBallots": 4,
+  "maxBreakpointsPerBallot": 2,
+  "maxRegions": 4,
+  "maxBranchAndBoundNodes": 0,
+  "maxCertificateBytes": 32768,
+  "maxVerifierRuntimeMs": 1000,
+  "supportsExactPilotComplete": true
+}

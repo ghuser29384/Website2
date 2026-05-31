@@ -34,13 +34,18 @@ import {
   updateAgreementStatusAction,
 } from "@/app/actions";
 import {
+  createBackgroundIntroPacketAction,
   createProfileDataRightRequestAction,
   deleteBackgroundNetworkingDataAction,
   requestMatchConciergeAppealAction,
   revokeBackgroundSourceConnectionAction,
+  saveBackgroundCollectivePolicyAction,
   saveBackgroundSourceConnectionAction,
+  saveBackgroundSourceSummaryAction,
+  saveBackgroundProfileInterviewAnswerAction,
   saveBackgroundNotificationPreferencesAction,
   syncBackgroundLocalDraftAction,
+  updateOpportunityBriefStatusAction,
 } from "@/app/background-networking/actions";
 import { BackgroundAccountSecurityPanel } from "@/components/dashboard/background-account-security-panel";
 import { BackgroundLocalDraftsPanel } from "@/components/dashboard/background-local-drafts-panel";
@@ -76,6 +81,7 @@ import {
   BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS,
   formatBackgroundSourcePermissionFieldLabel,
 } from "@/lib/background-source-permissions";
+import { formatOpportunityBriefNextStep } from "@/lib/background-opportunity-briefs";
 import { summarizeBackgroundAiShadowReadiness } from "@/lib/background-ai-shadow";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { hasBackgroundFieldEncryptionKey } from "@/lib/background-field-encryption";
@@ -161,6 +167,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const collectiveNameById = new Map(
     (dashboardData?.collectives ?? []).map((collective) => [collective.id, collective.name]),
   );
+  const collectivePolicyById = new Map(
+    (dashboardData?.collectivePolicies ?? []).map((policy) => [policy.collective_id, policy]),
+  );
   const introductionTasksByPlanId = new Map(
     (dashboardData?.introductionPlans ?? []).map((plan) => [
       plan.id,
@@ -223,6 +232,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       latestSnapshotByMatchId.set(snapshot.match_id, snapshot);
     }
   }
+  const opportunityBriefByMatchId = new Map<
+    string,
+    NonNullable<typeof dashboardData>["opportunityBriefs"][number]
+  >();
+  for (const brief of dashboardData?.opportunityBriefs ?? []) {
+    if (brief.match_id && !opportunityBriefByMatchId.has(brief.match_id)) {
+      opportunityBriefByMatchId.set(brief.match_id, brief);
+    }
+  }
+  const openOpportunityBriefCount =
+    dashboardData?.opportunityBriefs.filter((brief) => brief.status === "open").length ?? 0;
+  const introPacketReviewCount =
+    dashboardData?.introPackets.filter((packet) =>
+      ["requested", "under_review", "changes_requested"].includes(packet.review_state),
+    ).length ?? 0;
+  const activeSourceSummaryCount =
+    dashboardData?.sourceSummaries.filter((summary) => summary.status === "active").length ?? 0;
+  const activeGrantReceiptCount =
+    dashboardData?.grantReceipts.filter((receipt) => receipt.status === "active").length ?? 0;
   const queryBudgetEvents = dashboardData?.backgroundQueryEvents ?? [];
   const limitedQueryEventCount = queryBudgetEvents.filter((event) => event.was_limited).length;
   const queryCostUsed = queryBudgetEvents
@@ -953,6 +981,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <span className="source-pill">
                   Runs logged: {dashboardData?.backgroundRuns.length ?? 0}
                 </span>
+                <span className="source-pill">Open briefs: {openOpportunityBriefCount}</span>
+                <span className="source-pill">Intro packets: {introPacketReviewCount}</span>
+                <span className="source-pill">Source summaries: {activeSourceSummaryCount}</span>
+                <span className="source-pill">Receipts: {activeGrantReceiptCount}</span>
               </div>
               <form action={refreshBackgroundMatchesAction}>
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -967,6 +999,116 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 Search broad registry
               </a>
             </div>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Opportunity briefs</p>
+            <h3>Promising leads packaged as privacy-safe next steps</h3>
+            <p className="route-text">
+              Briefs explain why a lead surfaced, what stays hidden, and the next reviewed action
+              without turning a match into an automatic introduction.
+            </p>
+            {dashboardData?.errors.opportunityBriefs ? (
+              <p className="route-text">Could not load opportunity briefs.</p>
+            ) : dashboardData?.opportunityBriefs.length ? (
+              <div className="mini-list">
+                {dashboardData.opportunityBriefs.slice(0, 4).map((brief) => (
+                  <div className="mini-list-item" key={brief.id}>
+                    <strong>{brief.title}</strong>
+                    <span>
+                      {brief.confidence_band} confidence · {brief.status} · next step{" "}
+                      {formatOpportunityBriefNextStep(brief.next_step_type)}
+                    </span>
+                    <span>{brief.why_text}</span>
+                    <span>{brief.hidden_fields_notice}</span>
+                    <span>{brief.reveal_consequence_notice}</span>
+                    <div className="tag-row">
+                      {brief.factor_codes.slice(0, 5).map((code) => (
+                        <span className="source-pill" key={`${brief.id}-${code}`}>
+                          {code.replaceAll("_", " ")}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="offer-actions">
+                      <form action={updateOpportunityBriefStatusAction}>
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                        <input name="status" type="hidden" value="opened" />
+                        <button className="button button-secondary button-mini" type="submit">
+                          Open brief
+                        </button>
+                      </form>
+                      <form action={updateOpportunityBriefStatusAction}>
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                        <input name="status" type="hidden" value="dismissed" />
+                        <button className="button button-secondary button-mini" type="submit">
+                          Not for me
+                        </button>
+                      </form>
+                      <form action={updateOpportunityBriefStatusAction}>
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                        <input name="status" type="hidden" value="muted" />
+                        <input
+                          name="factor_code_pattern"
+                          type="hidden"
+                          value={brief.factor_codes[0] ?? "similar"}
+                        />
+                        <button className="button button-secondary button-mini" type="submit">
+                          Mute similar
+                        </button>
+                      </form>
+                    </div>
+                    <form action={createBackgroundIntroPacketAction} className="compact-form">
+                      <input name="return_to" type="hidden" value="/dashboard" />
+                      <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                      <input name="match_id" type="hidden" value={brief.match_id ?? ""} />
+                      <input
+                        name="counterparty_profile_id"
+                        type="hidden"
+                        value={brief.candidate_profile_id ?? ""}
+                      />
+                      <label className="field">
+                        <span>Purpose for review</span>
+                        <input
+                          name="purpose"
+                          placeholder="What narrow decision should this intro packet support?"
+                        />
+                      </label>
+                      <div className="filter-option-list">
+                        {BACKGROUND_DISCLOSURE_FIELDS.filter(
+                          (field) => field.minStage !== "introduced",
+                        )
+                          .slice(0, 5)
+                          .map((field) => (
+                            <label className="check-row" key={`${brief.id}-${field.key}`}>
+                              <input
+                                name="requested_field_keys"
+                                type="checkbox"
+                                value={field.key}
+                              />
+                              <span>{field.label}</span>
+                            </label>
+                          ))}
+                      </div>
+                      <label className="field">
+                        <span>Boundaries</span>
+                        <textarea
+                          name="boundaries"
+                          placeholder="Disclosure, timing, or safety constraints for reviewer triage."
+                        />
+                      </label>
+                      <button className="button button-primary button-mini" type="submit">
+                        Request reviewed intro packet
+                      </button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="route-text">No opportunity briefs yet.</p>
+            )}
           </div>
 
           <div className="panel data-card data-card-wide">
@@ -1326,6 +1468,75 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           </form>
                         )}
                       </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <form action={saveBackgroundSourceSummaryAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <p className="detail-kicker">Reviewed source summary</p>
+                <label className="field">
+                  <span>Label</span>
+                  <input name="label" placeholder="User-reviewed blog summary" />
+                </label>
+                <label className="field">
+                  <span>Source type</span>
+                  <select name="source_type" defaultValue="manual">
+                    <option value="manual">Manual</option>
+                    <option value="blog">Blog or website</option>
+                    <option value="social">Social media</option>
+                    <option value="email">Email</option>
+                    <option value="calendar">Calendar</option>
+                    <option value="chat_history">Chat history</option>
+                    <option value="search_profile">Search profile</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>User-reviewed summary</span>
+                  <textarea
+                    name="summary_text"
+                    placeholder="A short summary you approve for broad matching signals only."
+                  />
+                </label>
+                <label className="field">
+                  <span>Purpose</span>
+                  <input
+                    name="purpose"
+                    placeholder="What broad matching decision may this summary support?"
+                  />
+                </label>
+                <fieldset className="filter-group">
+                  <legend>Allowed fields</legend>
+                  <div className="filter-option-list">
+                    {BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.map((option) => (
+                      <label className="check-row" key={`summary-${option.value}`}>
+                        <input name="allowed_field_keys" type="checkbox" value={option.value} />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <label className="field">
+                  <span>Retention</span>
+                  <select name="retention_days" defaultValue="90">
+                    {BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.map((days) => (
+                      <option key={`summary-${days}`} value={days}>
+                        {days} days
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save reviewed summary
+                </button>
+              </form>
+              {dashboardData?.sourceSummaries.length ? (
+                <ul className="clean-list">
+                  {dashboardData.sourceSummaries.slice(0, 4).map((summary) => (
+                    <li key={summary.id}>
+                      {summary.label} ({summary.status}) · fields{" "}
+                      {summary.allowed_field_keys.map(formatBackgroundSourcePermissionFieldLabel).join(", ")}
                     </li>
                   ))}
                 </ul>
@@ -1929,10 +2140,70 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dashboardData.collectives.slice(0, 4).map((collective) => (
                     <li key={collective.id}>
                       {collective.name} ({collective.verification_status}) · ID: {collective.id}
+                      {collectivePolicyById.has(collective.id)
+                        ? ` · policy threshold ${collectivePolicyById.get(collective.id)?.approval_threshold}`
+                        : ""}
                     </li>
                   ))}
                 </ul>
               ) : null}
+              <form action={saveBackgroundCollectivePolicyAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Collective ID</span>
+                  <input name="collective_id" placeholder="Paste a collective ID from your list above" />
+                </label>
+                <label className="field">
+                  <span>Group preview</span>
+                  <textarea
+                    name="group_public_preview"
+                    placeholder="Public-safe description of what this collective can discuss."
+                  />
+                </label>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Approval threshold</span>
+                    <input defaultValue={1} min={1} max={20} name="approval_threshold" type="number" />
+                  </label>
+                  <label className="field">
+                    <span>Retention</span>
+                    <select name="default_retention_days" defaultValue="90">
+                      {BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.map((days) => (
+                        <option key={`collective-retention-${days}`} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <fieldset className="filter-group">
+                  <legend>Approver roles</legend>
+                  <div className="filter-option-list">
+                    {["owner", "admin", "member"].map((role) => (
+                      <label className="check-row" key={role}>
+                        <input
+                          defaultChecked={role !== "member"}
+                          name="approver_roles"
+                          type="checkbox"
+                          value={role}
+                        />
+                        <span>{role}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <label className="field">
+                  <span>Maximum automatic grant stage</span>
+                  <select name="max_auto_grant_stage" defaultValue="consent">
+                    <option value="registry">Registry</option>
+                    <option value="consent">Consent</option>
+                    <option value="introduced">Introduced</option>
+                  </select>
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save policy
+                </button>
+              </form>
             </article>
 
             <article className="panel data-card">
@@ -2295,6 +2566,52 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : (
                 <p className="route-text">No open clarification questions.</p>
               )}
+              <form action={saveBackgroundProfileInterviewAnswerAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <input name="question_key" type="hidden" value="guided_wish_composer" />
+                <input
+                  name="question_text"
+                  type="hidden"
+                  value="Guided wish composer broad/private split"
+                />
+                <label className="field">
+                  <span>Wish composer note</span>
+                  <textarea
+                    name="answer"
+                    placeholder="What do you want Moral Trade to notice in future background scans?"
+                  />
+                </label>
+                <label className="field">
+                  <span>Broad preview update</span>
+                  <input
+                    name="broad_preview_update"
+                    placeholder="A public-safe one-line preview"
+                  />
+                </label>
+                <label className="field">
+                  <span>Private intent update</span>
+                  <textarea
+                    name="private_intent_update"
+                    placeholder="Private asks, hard blockers, timing, or uncertainty that should stay hidden."
+                  />
+                </label>
+                <div className="filter-option-list">
+                  {["stated_uncertainty", "needs_evidence", "timing_unclear"].map((flag) => (
+                    <label className="check-row" key={flag}>
+                      <input name="uncertainty_flags" type="checkbox" value={flag} />
+                      <span>{flag.replaceAll("_", " ")}</span>
+                    </label>
+                  ))}
+                </div>
+                <button className="button button-secondary button-mini" type="submit">
+                  Save composer note
+                </button>
+              </form>
+              {dashboardData?.profileInterviewAnswers.length ? (
+                <p className="route-text">
+                  Saved composer notes: {dashboardData.profileInterviewAnswers.length}.
+                </p>
+              ) : null}
             </article>
 
             <article className="panel data-card">
@@ -2368,6 +2685,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             ) : dashboardData?.matchSuggestions.length ? (
               dashboardData.matchSuggestions.map((match) => {
                 const latestSnapshot = latestSnapshotByMatchId.get(match.id) ?? null;
+                const opportunityBrief = opportunityBriefByMatchId.get(match.id) ?? null;
                 const explanationInput = {
                   canRevealIdentity: match.canRevealIdentity,
                   counterpartyConsented: match.counterpartyConsented,
@@ -2461,6 +2779,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           Source: {latestSnapshot.source_run_kind}
                           {latestSnapshot.source_run_id ? `/${latestSnapshot.source_run_id.slice(0, 8)}` : ""}
                         </span>
+                      </div>
+                    ) : null}
+                    {opportunityBrief ? (
+                      <div className="mini-list-item">
+                        <strong>Opportunity brief</strong>
+                        <span>
+                          {opportunityBrief.confidence_band} confidence ·{" "}
+                          {formatOpportunityBriefNextStep(opportunityBrief.next_step_type)}
+                        </span>
+                        <span>{opportunityBrief.hidden_fields_notice}</span>
                       </div>
                     ) : null}
                   </div>

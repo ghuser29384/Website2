@@ -1,0 +1,19 @@
+{
+  "version": "mpgf-payout-provider-profile-v1",
+  "mode": "manual_evidence_only",
+  "automatedPayouts": {
+    "enabled": false,
+    "provider": null,
+    "payoutDestinationVerification": {
+      "requiredWhenAutomated": true,
+      "method": null
+    },
+    "sanctionsScreeningProvider": null
+  },
+  "manualExternalPaymentEvidence": {
+    "enabled": true,
+    "requiresRecipientAccreditation": true,
+    "requiresRecipientComplianceReview": true,
+    "requiresVerifiedExternalPaymentEvidence": true
+  }
+}

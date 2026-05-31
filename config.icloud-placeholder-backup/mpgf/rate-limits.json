@@ -1,0 +1,47 @@
+{
+  "version": "mpgf-rate-limits-v1",
+  "defaultDenyWhenMissing": true,
+  "defaultPolicy": {
+    "publicReadPerIpPerMinute": 120,
+    "contributionAttemptsPerUserPerHour": 30,
+    "contributionAttemptsPerIpPerHour": 100,
+    "pledgesPerUserPerHour": 30,
+    "poolProposalSubmissionsPerUserPerDay": 10,
+    "ballotDraftSavesPerUserPerHour": 120,
+    "ballotFinalSubmissionsPerUserPerCycle": 1,
+    "appealsPerUserPerCycle": 10,
+    "adminMutationsPerAdminPerHour": 120,
+    "publicSummaryCacheSeconds": 60,
+    "webhookIdempotencyWindowDays": 30
+  },
+  "limits": [
+    {
+      "surface": "public_read",
+      "routes": ["/mpgf", "/mpgf/about", "/mpgf/pools", "/mpgf/technical-spec"],
+      "windowSeconds": 60,
+      "maxRequests": 120,
+      "identityKey": "ip"
+    },
+    {
+      "surface": "pledge_only_create",
+      "routes": ["/mpgf/contribute"],
+      "windowSeconds": 3600,
+      "maxRequests": 20,
+      "identityKey": "user_or_ip"
+    },
+    {
+      "surface": "pool_proposal_draft",
+      "routes": ["/mpgf/pools/new"],
+      "windowSeconds": 3600,
+      "maxRequests": 10,
+      "identityKey": "user_or_ip"
+    },
+    {
+      "surface": "admin_read",
+      "routes": ["/mpgf/admin/*"],
+      "windowSeconds": 60,
+      "maxRequests": 60,
+      "identityKey": "user"
+    }
+  ]
+}

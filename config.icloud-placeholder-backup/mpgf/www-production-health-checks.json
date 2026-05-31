@@ -1,0 +1,42 @@
+{
+  "version": "mpgf-www-production-health-checks-v1",
+  "enabledForProductionDomainEvaluation": true,
+  "monitorWindow": "PT5M",
+  "sampleIntervalSeconds": 60,
+  "minimumMonitorWindowSeconds": 300,
+  "minimumSampleCount": 3,
+  "maxUnresolvedCriticalIncidents": 0,
+  "checks": [
+    {
+      "checkId": "mpgf-home-renders",
+      "route": "/mpgf",
+      "severity": "critical",
+      "implementation": "browser_http_and_hydration_check",
+      "accessControl": "public",
+      "timeoutSeconds": 10,
+      "expected": "200 and no hydration error",
+      "conformanceRow": "AC-DEPLOY-009"
+    },
+    {
+      "checkId": "mpgf-contribute-renders",
+      "route": "/mpgf/contribute",
+      "severity": "critical",
+      "implementation": "browser_http_and_hydration_check",
+      "accessControl": "public",
+      "timeoutSeconds": 10,
+      "expected": "pledge-only UI renders",
+      "conformanceRow": "AC-DEPLOY-009"
+    },
+    {
+      "checkId": "mpgf-pools-renders",
+      "route": "/mpgf/pools",
+      "severity": "critical",
+      "implementation": "browser_http_and_hydration_check",
+      "accessControl": "public",
+      "timeoutSeconds": 10,
+      "expected": "visible demo pool renders",
+      "conformanceRow": "AC-DEPLOY-009"
+    }
+  ],
+  "rollbackPolicy": "Disable FEATURE_MPGF_ENABLED or redeploy last known passing build if a critical MPGF check fails."
+}

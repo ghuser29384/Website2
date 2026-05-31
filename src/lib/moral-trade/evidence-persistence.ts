@@ -11,6 +11,7 @@ import {
   type MoralTradeRedactionLevel,
   type MoralTradeTraceabilityBusinessStep,
   type MoralTradeTraceabilityDisposition,
+  type MoralTradeTraceabilityLocationType,
 } from "@/lib/moral-trade/provenance";
 
 export interface MoralTradeEvidenceSubmissionPersistenceInput {
@@ -31,6 +32,7 @@ export interface MoralTradeEvidenceSubmissionPersistenceInput {
   subjectId: string;
   subjectKind: "proposal_record" | "agreement" | "offer";
   supabase: unknown;
+  traceabilityLocationType?: MoralTradeTraceabilityLocationType;
   idFactory?: () => string;
 }
 
@@ -163,6 +165,7 @@ export async function persistMoralTradeEvidenceSubmission({
   subjectId,
   subjectKind,
   supabase,
+  traceabilityLocationType = "public_log",
   idFactory = randomUUID,
 }: MoralTradeEvidenceSubmissionPersistenceInput): Promise<MoralTradeEvidenceSubmissionPersistenceResult> {
   const client = supabase as any;
@@ -210,7 +213,7 @@ export async function persistMoralTradeEvidenceSubmission({
       proposalId: subjectId,
     },
     where: {
-      locationType: "public_log",
+      locationType: traceabilityLocationType,
       locator: evidenceUrl,
     },
     why: {

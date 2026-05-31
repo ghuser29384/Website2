@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Production Auth Session Profile",
+  "type": "object",
+  "required": [
+    "profileVersion",
+    "enabled",
+    "baseUrl",
+    "authProvider",
+    "loginRoute",
+    "signupRoute",
+    "callbackRoute",
+    "signOutRouteOrAction",
+    "returnToParam",
+    "allowedRedirectOrigins",
+    "allowedPostAuthRoutes",
+    "requiredProviderRedirectUrls",
+    "sessionCookieScope",
+    "sessionCookieSameSite",
+    "secureCookiesRequired",
+    "csrfProtectionRequired",
+    "emailConfirmationMode",
+    "inviteDeliveryMode",
+    "accountProvisioningMode",
+    "supportRouteOrEmail"
+  ],
+  "properties": {
+    "enabled": { "const": true },
+    "baseUrl": { "const": "https://www.moraltrade.org" },
+    "authProvider": { "const": "supabase" },
+    "secureCookiesRequired": { "const": true },
+    "csrfProtectionRequired": { "const": true },
+    "createsAdminSession": { "const": false },
+    "createsRealMoneyEligibility": { "const": false }
+  },
+  "additionalProperties": true
+}

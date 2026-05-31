@@ -68,6 +68,8 @@ type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
 
 const REQUIRED_METRIC_KEYS = [
   "reviewed_match_suggestions",
+  "opportunity_briefs_delivered",
+  "intro_packets_created",
   "declined_intro_requests",
   "blocked_safety_records",
   "disclosure_grants_created",
@@ -94,6 +96,20 @@ const METRIC_DEFINITIONS: MoralTradeTransparencyMetricDefinition[] = [
     kind: "count",
     label: "Reviewed match suggestions",
     sourceTables: ["match_suggestions"],
+  },
+  {
+    description: "Privacy-safe opportunity briefs created during the report period.",
+    key: "opportunity_briefs_delivered",
+    kind: "count",
+    label: "Opportunity briefs delivered",
+    sourceTables: ["background_opportunity_briefs"],
+  },
+  {
+    description: "Reviewed introduction packets requested during the report period.",
+    key: "intro_packets_created",
+    kind: "count",
+    label: "Intro packets created",
+    sourceTables: ["background_intro_packets"],
   },
   {
     description: "Introduction requests declined by operator review during the report period.",
@@ -483,6 +499,8 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
     disclosureGrants,
     reportsSubmitted,
     appealsRequested,
+    opportunityBriefs,
+    introPackets,
     evidenceReviewed,
     unresolvedDisputes,
     reviewHourMetrics,
@@ -532,6 +550,16 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
       supabase,
     }),
     safeCount({
+      apply: periodFilter(period),
+      label: "background_opportunity_briefs",
+      supabase,
+    }),
+    safeCount({
+      apply: periodFilter(period),
+      label: "background_intro_packets",
+      supabase,
+    }),
+    safeCount({
       apply: (query) =>
         periodFilter(period, "updated_at")(query).in("status", [
           "reviewed_complete",
@@ -562,6 +590,8 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
     metricErrors,
     metricInputs: [
       { key: "reviewed_match_suggestions", value: reviewedMatches },
+      { key: "opportunity_briefs_delivered", value: opportunityBriefs },
+      { key: "intro_packets_created", value: introPackets },
       { key: "declined_intro_requests", value: declinedIntros },
       {
         key: "blocked_safety_records",

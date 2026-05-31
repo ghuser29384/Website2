@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Completion Profile Evidence",
+  "type": "object",
+  "required": ["profile", "status", "evaluatedEnvironment", "evaluatedBaseUrl", "evidenceGeneratedAt", "validatorName", "instructionArtifactPath", "instructionArtifactHash", "evidenceArtifacts", "gateResults", "blockers"],
+  "properties": {
+    "profile": { "enum": ["demo_complete", "exact_pilot_complete", "real_money_complete"] },
+    "status": { "enum": ["passed", "failed", "blocked", "revoked"] },
+    "productionDomainEvaluation": { "type": "boolean" },
+    "evidenceArtifacts": { "type": "array" },
+    "gateResults": { "type": "array" },
+    "blockers": { "type": "array" }
+  },
+  "additionalProperties": true
+}

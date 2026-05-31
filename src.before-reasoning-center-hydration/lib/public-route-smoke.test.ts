@@ -1,0 +1,668 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import test from "node:test";
+
+import { demoAlternatives, MPGF_COPY } from "@/lib/mpgf/data";
+import { getAllOffers } from "@/lib/offers";
+import {
+  CANONICAL_WORKED_CASE_COUNT,
+  CANONICAL_WORKED_CASE_OFFERS,
+} from "@/lib/seed-data";
+import { filterSiteSearchItems } from "@/lib/site-search";
+import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+
+function readRepoFile(path: string) {
+  return readFileSync(join(process.cwd(), path), "utf8");
+}
+
+function flattenPrimaryNavHrefs() {
+  return getPrimaryNavLinks(false).flatMap((link) => [
+    ...(link.href ? [link.href] : []),
+    ...(link.items?.map((item) => item.href) ?? []),
+  ]);
+}
+
+test("public navigation exposes professional marketplace routes", () => {
+  const labels = getPrimaryNavLinks(false).map((link) => link.label);
+  const hrefs = flattenPrimaryNavHrefs();
+  const siteSource = readRepoFile("src/lib/site.ts");
+  const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
+
+  assert.deepEqual(labels, ["Browse", "Examples", "Cohort", "Learn"]);
+  assert.equal(getTopbarActions(false).primaryAction, undefined);
+  assert.equal(getTopbarActions(false).authLink.label, "Sign in");
+  assert.ok(hrefs.includes("/offers"));
+  assert.ok(hrefs.includes("/offers?view=examples"));
+  assert.ok(hrefs.includes("/cohort"));
+  assert.ok(hrefs.includes("/methodology"));
+  assert.equal(hrefs.length, 4);
+  assert.equal(siteSource.includes("label: \"MPGF\""), false);
+  assert.equal(siteSource.includes("label: \"Advanced\""), false);
+  assert.match(siteSource, /mailto:support@moraltrade\.org/);
+  assert.match(topbarSource, /topbar-menu-heading/);
+  assert.match(topbarSource, /topbar-menu-icon/);
+  assert.match(topbarSource, /topbar-with-search/);
+  assert.match(topbarSource, /showSearch = false/);
+});
+
+test("MPGF public copy leads with manual evidence instead of raw gate/debug wording", () => {
+  assert.match(MPGF_COPY.plainLanguageSummary, /manual external-payment evidence/i);
+  assert.match(MPGF_COPY.manualExternalPaymentEvidence, /review/i);
+
+  const publicMpgfSources = [
+    "src/app/mpgf/page.tsx",
+    "src/app/mpgf/contribute/page.tsx",
+    "src/components/mpgf/mpgf-page-frame.tsx",
+    "src/components/mpgf/mpgf-console.tsx",
+    "src/app/loading.tsx",
+  ].map(readRepoFile).join("\n");
+
+  for (const forbidden of [
+    "Smoke test",
+    "Real money disabled",
+    "MPGF_MANUAL_EVIDENCE",
+    "approval gates must be ready",
+    "Preparing the latest public records",
+  ]) {
+    assert.equal(publicMpgfSources.includes(forbidden), false, `public source leaked: ${forbidden}`);
+  }
+});
+
+test("manual evidence submission is not gated by feature flags or approval rows", () => {
+  const realMoneySource = readRepoFile("src/lib/mpgf/real-money.ts");
+  const consoleSource = readRepoFile("src/components/mpgf/mpgf-console.tsx");
+  const envExample = readRepoFile(".env.example");
+
+  assert.equal(realMoneySource.includes("MPGF_MANUAL_EVIDENCE_ENABLED"), false);
+  assert.equal(realMoneySource.includes("MPGF_MANUAL_EVIDENCE_ACCEPTANCE_ENABLED"), false);
+  assert.equal(realMoneySource.includes("Required MPGF manual evidence gate"), false);
+  assert.equal(realMoneySource.includes("MPGF manual external-payment evidence is not enabled yet"), false);
+  assert.equal(consoleSource.includes("!manualEvidenceReadiness?.ready"), false);
+  assert.equal(envExample.includes("MPGF_MANUAL_EVIDENCE_ENABLED"), false);
+  assert.match(realMoneySource, /from\("mpgf_manual_external_payment_evidence"\)\s*\n\s*\.insert/);
+});
+
+test("MPGF pool reasoning form requires the build-instruction proposal fields", () => {
+  const consoleSource = readRepoFile("src/components/mpgf/mpgf-console.tsx");
+  const actionSource = readRepoFile("src/app/mpgf/actions.ts");
+  const persistenceSource = readRepoFile("src/lib/mpgf/persistence.ts");
+
+  for (const requiredLabel of [
+    "Summary",
+    "Cause area",
+    "Requested maximum funding",
+    "Minimum viable funding",
+    "Output unit label",
+    "Output unit definition",
+    "Measurement method",
+    "Expected effect vs funding",
+    "Timeline",
+    "Milestones",
+    "Risks",
+    "Misuse pathways",
+    "Proposed recipient",
+    "Implementing team",
+  ]) {
+    assert.ok(consoleSource.includes(requiredLabel), `pool reasoning form missing ${requiredLabel}`);
+  }
+
+  for (const requiredField of [
+    "requestedMaximumFundingDollars",
+    "outcomeUnitDefinition",
+    "expectedEffectVsFunding",
+    "misusePathways",
+    "implementingTeam",
+  ]) {
+    assert.ok(actionSource.includes(requiredField), `pool proposal action missing ${requiredField}`);
+  }
+
+  for (const requiredColumn of [
+    "requested_maximum_funding_cents",
+    "outcome_units_summary",
+    "expected_effect_vs_funding",
+    "milestones_json",
+    "risks_json",
+    "implementing_team_json",
+  ]) {
+    assert.ok(persistenceSource.includes(requiredColumn), `pool proposal persistence missing ${requiredColumn}`);
+  }
+});
+
+test("MPGF demo pools distinguish consensus and hybrid goods without changing allocation", () => {
+  const poolsPageSource = readRepoFile("src/app/mpgf/pools/page.tsx");
+  const poolDetailSource = readRepoFile("src/app/mpgf/pools/[poolId]/page.tsx");
+
+  assert.ok(demoAlternatives.some((alternative) => alternative.isConsensus));
+  assert.ok(demoAlternatives.some((alternative) => alternative.isHybrid));
+  assert.ok(
+    demoAlternatives.every(
+      (alternative) =>
+        alternative.preferenceIntensityHint &&
+        alternative.expectedMoralImpactTooltip &&
+        alternative.demoPriorityBps >= 0,
+    ),
+  );
+  assert.match(poolsPageSource, /name="kind"/);
+  assert.match(poolsPageSource, /name="sort"/);
+  assert.match(poolsPageSource, /name="min_intensity"/);
+  assert.match(poolsPageSource, /Consensus goods/);
+  assert.match(poolsPageSource, /Hybrid goods/);
+  assert.match(poolDetailSource, /Good type/);
+  assert.match(poolDetailSource, /expectedMoralImpactTooltip/);
+});
+
+test("MPGF participant mutations require idempotency and audit evidence tables", () => {
+  const actionSource = readRepoFile("src/app/mpgf/actions.ts");
+  const persistenceSource = readRepoFile("src/lib/mpgf/persistence.ts");
+  const consoleSource = readRepoFile("src/components/mpgf/mpgf-console.tsx");
+  const controlsSource = readRepoFile("src/components/mpgf/mpgf-contribution-controls.tsx");
+  const migrationSource = readRepoFile("supabase/migrations/20260516_mpgf_participant_mutation_controls.sql");
+
+  for (const publicAction of [
+    "recordMpgfPledgesAction",
+    "cancelMpgfPledgeAction",
+    "updateMpgfRecurringCommitmentStatusAction",
+    "saveMpgfPoolProposalAction",
+    "saveMpgfBallotAction",
+  ]) {
+    assert.ok(actionSource.includes(publicAction), `missing MPGF public mutation action ${publicAction}`);
+  }
+
+  assert.match(actionSource, /idempotencyKey: string/);
+  assert.match(consoleSource, /createClientMutationKey/);
+  assert.match(controlsSource, /createClientMutationKey/);
+  assert.match(persistenceSource, /reserveIdempotency/);
+  assert.match(persistenceSource, /request_hash/);
+  assert.match(persistenceSource, /recordParticipantMutationEvidence/);
+  assert.match(persistenceSource, /mpgf_state_transition_logs/);
+  assert.match(persistenceSource, /mpgf_operational_events/);
+  assert.match(migrationSource, /create unique index if not exists mpgf_idempotency_keys_scope_key_idx/);
+  assert.match(migrationSource, /mpgf_state_transition_logs/);
+  assert.match(migrationSource, /mpgf_operational_events/);
+});
+
+test("login supports MPGF return-to routes used by participant onboarding", () => {
+  const loginPageSource = readRepoFile("src/app/login/page.tsx");
+  const appDataSource = readRepoFile("src/lib/app-data.ts");
+  const mpfgContributePageSource = readRepoFile("src/app/mpgf/contribute/page.tsx");
+  const mpfgAccountPageSource = readRepoFile("src/app/mpgf/account/contributions/page.tsx");
+  const participantProfile = readRepoFile("config/mpgf/participant-onboarding-profile.json");
+  const smokeProfile = readRepoFile("config/mpgf/www-smoke-test-profile.json");
+
+  assert.match(loginPageSource, /resolvedSearchParams\.returnTo/);
+  assert.match(loginPageSource, /getSafeInternalPath\(requestedReturnTo \|\| requestedNext/);
+  assert.match(appDataSource, /\/login\?returnTo=/);
+  assert.match(mpfgContributePageSource, /\/login\?returnTo=\/mpgf\/contribute/);
+  assert.match(mpfgAccountPageSource, /\/login\?returnTo=\/mpgf\/account\/contributions/);
+  assert.match(participantProfile, /"authEntryRoute": "\/signup\?returnTo=\/mpgf"/);
+  assert.match(smokeProfile, /"authRoute": "\/login\?returnTo=\/mpgf"/);
+});
+
+test("public offer and registry pages include seeded examples instead of empty-only states", () => {
+  assert.equal(CANONICAL_WORKED_CASE_COUNT, 8);
+  assert.equal(getAllOffers([]).length, CANONICAL_WORKED_CASE_COUNT);
+  assert.ok(
+    CANONICAL_WORKED_CASE_OFFERS.every((offer) => offer.offerAction && offer.requestAction && offer.verification),
+  );
+
+  const offersPage = readRepoFile("src/app/offers/page.tsx");
+  assert.match(offersPage, /Worked examples/);
+  assert.match(offersPage, /Illustrative fit ranking/);
+  assert.match(offersPage, /CANONICAL_WORKED_CASE_OFFERS/);
+  assert.equal(offersPage.includes(["Six", "seeded", "offers"].join(" ")), false);
+  assert.equal(offersPage.includes(".slice(0, 6)"), false);
+  assert.equal(offersPage.includes("No public offers have been published yet"), false);
+
+  const registryPage = readRepoFile("src/app/wish-registry/page.tsx");
+  assert.match(registryPage, /EXAMPLE_WISH_PREVIEWS/);
+  assert.match(registryPage, /filterWishRegistryExamplePreviews/);
+  assert.match(registryPage, /Example preview/);
+});
+
+test("public copy does not claim escrow-backed payment protection", () => {
+  const publicSources = [
+    "src/app/donation-offsets/page.tsx",
+    "src/app/offers/page.tsx",
+    "src/app/offers/[offerId]/page.tsx",
+    "src/app/offers/new/page.tsx",
+    "src/app/terms/page.tsx",
+    "src/components/home/home-page.tsx",
+    "src/components/home/offer-board.tsx",
+    "src/components/home/offer-composer.tsx",
+    "src/components/offers/offer-create-form.tsx",
+    "src/lib/donation-offsets.ts",
+    "src/lib/offers.ts",
+  ].map(readRepoFile).join("\n");
+
+  assert.equal(publicSources.includes(["Escrow", "-backed"].join("")), false);
+  assert.equal(publicSources.includes(["Funds", " in escrow"].join("")), false);
+  assert.equal(publicSources.includes(["escrow", " confirmation"].join("")), false);
+  assert.match(publicSources, /not legal escrow/i);
+});
+
+test("home page exposes a single primary nav source", () => {
+  const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
+  const homeSource = readRepoFile("src/components/home/home-page.tsx");
+
+  assert.match(topbarSource, /aria-label="Primary"/);
+  assert.equal(homeSource.includes("topbar-floating-shell"), false);
+});
+
+test("global search and offers search expose real marketplace discovery", () => {
+  const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
+  const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const appDataSource = readRepoFile("src/lib/app-data.ts");
+  const animalResults = filterSiteSearchItems("animal welfare");
+  const mpfgResults = filterSiteSearchItems("manual evidence");
+  const cohortResults = filterSiteSearchItems("founding cohort");
+  const validationResults = filterSiteSearchItems("appeal rulebook");
+
+  assert.match(topbarSource, /placeholder="Search trades"/);
+  assert.match(topbarSource, /filterSiteSearchItems/);
+  assert.match(topbarSource, /topbar-search-results/);
+  assert.match(offersPage, /name="search"/);
+  assert.match(offersPage, /CAUSE_FILTER_CHIPS/);
+  assert.match(offersPage, /type="range"/);
+  assert.match(offersPage, /SORT_FILTER_CHIPS/);
+  assert.match(offersPage, /parseMinimumScore/);
+  assert.match(offersPage, /parseDirectorySort/);
+  assert.match(offersPage, /FilterSidebar/);
+  assert.match(offersPage, /activeFilterLabels/);
+  assert.match(offersPage, /Reset filters/);
+  assert.match(offersPage, /popularFilterLinks/);
+  assert.match(offersPage, /Popular filters/);
+  assert.match(offersPage, /toggleValue/);
+  assert.match(offersPage, /groupedListings/);
+  assert.match(offersPage, /Jump to cause group/);
+  assert.match(offersPage, /highlightedWorkedExamples/);
+  assert.match(offersPage, /Study the structure before live offers arrive/);
+  assert.match(offersPage, /pilot-info-box/);
+  assert.match(offersPage, /formatCounts/);
+  assert.match(offersPage, /causeCounts/);
+  assert.match(offersPage, /getListingModeIcon/);
+  assert.match(offersPage, /primaryActionLabel/);
+  assert.match(offersPage, /OfferCard/);
+  assert.match(offersPage, /listingMatchesFilters/);
+  assert.match(offersPage, /sortListings/);
+  assert.match(appDataSource, /offerMatchesSearchQuery/);
+  assert.equal(animalResults[0]?.href, "/offers?search=Animal%20Welfare");
+  assert.equal(filterSiteSearchItems("pledge swap")[0]?.href, "/pledge-swaps");
+  assert.ok(mpfgResults.some((result) => result.href === "/mpgf"));
+  assert.equal(cohortResults[0]?.href, "/cohort");
+  assert.ok(validationResults.some((result) => result.href === "/validation"));
+});
+
+test("home page is a founding-cohort landing page with pilot metrics and first actions", () => {
+  const homeSource = readRepoFile("src/components/home/home-page.tsx");
+  const heroIndex = homeSource.indexOf("Cooperate across moral disagreement");
+  const metricsIndex = homeSource.indexOf("growth-progress-card");
+  const routeIndex = homeSource.indexOf("Three paths to start");
+  const activationIndex = homeSource.indexOf("Start with one low-risk action");
+  const previewIndex = homeSource.indexOf("Worked examples, not live liquidity");
+
+  assert.ok(heroIndex > -1);
+  assert.ok(metricsIndex > heroIndex);
+  assert.ok(routeIndex > metricsIndex);
+  assert.ok(activationIndex > routeIndex);
+  assert.ok(previewIndex > activationIndex);
+  assert.match(homeSource, /Join the founding cohort/);
+  assert.match(homeSource, /Browse worked examples/);
+  assert.match(homeSource, /Invite one serious counterparty/);
+  assert.match(homeSource, /marketplaceOverview/);
+  assert.match(homeSource, /CANONICAL_WORKED_CASE_COUNT/);
+  assert.match(homeSource, /worked examples/);
+  assert.match(homeSource, /No escrow or custody claim/);
+  assert.match(homeSource, /IconMark/);
+  assert.match(homeSource, /OfferCard/);
+  assert.equal(homeSource.includes("opening-sequence"), false);
+  assert.equal(homeSource.includes("OfferComposer"), false);
+  assert.equal(homeSource.includes("ParetoChart"), false);
+  assert.equal(homeSource.includes("SearchBar"), false);
+  assert.equal(homeSource.includes("MoralTradeHeroVisual"), false);
+  assert.equal(homeSource.includes("delegate heartbeats"), false);
+  assert.equal(homeSource.includes("manual source consent ledger"), false);
+  assert.equal(homeSource.includes("deterministic synthesis layer"), false);
+  assert.equal(homeSource.includes("As featured in"), false);
+  assert.equal(homeSource.includes("Hear their stories"), false);
+});
+
+test("homepage metrics use live counts when available and avoid fake impact totals", () => {
+  const pageSource = readRepoFile("src/app/page.tsx");
+  const homeSource = readRepoFile("src/components/home/home-page.tsx");
+  const appDataSource = readRepoFile("src/lib/app-data.ts");
+
+  assert.match(pageSource, /getMarketplaceOverview/);
+  assert.match(homeSource, /Live offers/);
+  assert.match(homeSource, /Public profiles/);
+  assert.match(homeSource, /No escrow or custody claim/);
+  assert.match(appDataSource, /openOfferCount/);
+  assert.match(appDataSource, /completedAgreementCount/);
+  assert.equal(homeSource.includes("total value traded"), false);
+  assert.equal(homeSource.includes("registered users"), false);
+});
+
+test("MPGF signed-out manual evidence copy and controls are gated", () => {
+  const consoleSource = readRepoFile("src/components/mpgf/mpgf-console.tsx");
+
+  assert.match(consoleSource, /Manual evidence submission is available after sign-in\./);
+  assert.equal(consoleSource.includes("Manual evidence submission is enabled"), false);
+  assert.match(consoleSource, /disabled=\{!viewerPresent\}/);
+  assert.match(consoleSource, /if \(!viewerPresent\)/);
+});
+
+test("background networking and reasoning standards are distinct public routes", () => {
+  const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
+  const standardsPage = readRepoFile("src/app/reasoning-standards/page.tsx");
+  const sitemapSource = readRepoFile("src/app/sitemap.ts");
+
+  assert.match(backgroundPage, /Find possible trades without turning people into targets/);
+  assert.match(backgroundPage, /does not ingest private feeds/);
+  assert.match(backgroundPage, /No autonomous outreach/);
+  assert.match(standardsPage, /Make trade records specific enough to judge/);
+  assert.match(standardsPage, /not legal escrow/i);
+  assert.match(standardsPage, /voluntary/i);
+  assert.match(sitemapSource, /\/background-networking/);
+  assert.match(sitemapSource, /\/reasoning-standards/);
+  assert.match(sitemapSource, /\/pledge-swaps/);
+  assert.match(sitemapSource, /\/cohort/);
+  assert.match(sitemapSource, /\/paid-action-offers/);
+});
+
+test("cohort page exposes founding progress, referral, and one-counterparty invite loop", () => {
+  const cohortPage = readRepoFile("src/app/cohort/page.tsx");
+  const signupPage = readRepoFile("src/app/signup/page.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+
+  assert.match(cohortPage, /Grow cooperative impact in your community/);
+  assert.match(cohortPage, /Start with one concrete action/);
+  assert.match(cohortPage, /What counts as progress/);
+  assert.match(cohortPage, /Activated account/);
+  assert.match(cohortPage, /Invite one serious counterparty/);
+  assert.match(cohortPage, /Your referral link/);
+  assert.match(cohortPage, /Founding progress/);
+  assert.match(cohortPage, /Safety and privacy/);
+  assert.match(cohortPage, /createNetworkInviteAction/);
+  assert.match(cohortPage, /CANONICAL_WORKED_CASE_COUNT/);
+  assert.match(signupPage, /Start with one low-risk action/);
+  assert.match(signupPage, /Clone a worked example/);
+  assert.match(signupPage, /Create broad wish preview/);
+  assert.match(signupPage, /Log public-good action/);
+  assert.match(actionsSource, /return_to/);
+  assert.match(actionsSource, /Choose one low-risk first action/);
+});
+
+test("activation loop includes concierge intake, admin triage, SLA, and audit trail", () => {
+  const backgroundPage = readRepoFile("src/app/background-networking/page.tsx");
+  const registryPage = readRepoFile("src/app/wish-registry/page.tsx");
+  const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
+  const adminPage = readRepoFile("src/app/admin/page.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+  const appDataSource = readRepoFile("src/lib/app-data.ts");
+  const schemaSource = readRepoFile("supabase/schema.sql");
+  const migrationSource = readRepoFile(
+    "supabase/migrations/20260524_match_concierge_activation.sql",
+  );
+
+  assert.match(backgroundPage, /id="concierge-intake"/);
+  assert.match(backgroundPage, /createMatchConciergeRequestAction/);
+  assert.match(registryPage, /Request concierge intro/);
+  assert.match(dashboardPage, /Private match concierge/);
+  assert.match(dashboardPage, /matchConciergeRequests/);
+  assert.match(adminPage, /Match concierge/);
+  assert.match(adminPage, /updateMatchConciergeRequestAction/);
+  assert.match(adminPage, /formatSlaState/);
+  assert.match(adminPage, /match_concierge_events/);
+  assert.match(actionsSource, /createMatchConciergeRequestAction/);
+  assert.match(actionsSource, /updateMatchConciergeRequestAction/);
+  assert.match(actionsSource, /request_created/);
+  assert.match(actionsSource, /request_triaged/);
+  assert.match(appDataSource, /listMatchConciergeRequestsForUser/);
+  assert.match(schemaSource, /match_concierge_requests/);
+  assert.match(schemaSource, /match_concierge_events/);
+  assert.match(schemaSource, /sla_due_at/);
+  assert.match(migrationSource, /match_concierge_requests/);
+  assert.match(migrationSource, /match_concierge_events/);
+  assert.match(migrationSource, /enable row level security/);
+});
+
+test("accepted introductions can progress through agreement evidence review", () => {
+  const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
+  const agreementPage = readRepoFile("src/app/agreements/[agreementId]/page.tsx");
+  const adminPage = readRepoFile("src/app/admin/page.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+  const appDataSource = readRepoFile("src/lib/app-data.ts");
+  const schemaSource = readRepoFile("supabase/schema.sql");
+  const migrationSource = readRepoFile(
+    "supabase/migrations/20260524_agreement_evidence_verification_loop.sql",
+  );
+
+  assert.match(dashboardPage, /createAgreementRoomFromIntroductionPlanAction/);
+  assert.match(dashboardPage, /Open agreement room/);
+  assert.match(agreementPage, /saveAgreementTermsAction/);
+  assert.match(agreementPage, /submitAgreementEvidenceAction/);
+  assert.match(agreementPage, /requestAgreementReviewAppealAction/);
+  assert.match(agreementPage, /No-trade baseline/);
+  assert.match(agreementPage, /Counterfactual declaration/);
+  assert.match(agreementPage, /Privacy scope/);
+  assert.match(agreementPage, /pending_evidence/);
+  assert.match(agreementPage, /challenge_window_open/);
+  assert.match(agreementPage, /disputed_unresolved/);
+  assert.match(adminPage, /Evidence review/);
+  assert.match(adminPage, /Verification ladder/);
+  assert.match(adminPage, /updateAgreementReviewCaseAction/);
+  assert.match(adminPage, /updateProfileVerificationBadgeAction/);
+  assert.match(actionsSource, /createAgreementRoomFromIntroductionPlanAction/);
+  assert.match(actionsSource, /updateAgreementReviewCaseAction/);
+  assert.match(actionsSource, /completion_reviewed/);
+  assert.match(actionsSource, /repeat_counterparty/);
+  assert.match(appDataSource, /agreement_evidence_items/);
+  assert.match(appDataSource, /agreement_review_cases/);
+  assert.match(appDataSource, /profile_verification_badges/);
+  assert.match(schemaSource, /agreement_evidence_items/);
+  assert.match(schemaSource, /agreement_review_cases/);
+  assert.match(schemaSource, /profile_verification_badges/);
+  assert.match(schemaSource, /completion_state/);
+  assert.match(migrationSource, /agreement_evidence_items/);
+  assert.match(migrationSource, /reviewer_role/);
+  assert.match(migrationSource, /conflict_of_interest_notes/);
+  assert.match(migrationSource, /identity_verified/);
+});
+
+test("trade format landing pages explain formats without payment or custody overclaims", () => {
+  const pledgePage = readRepoFile("src/app/pledge-swaps/page.tsx");
+  const paidActionPage = readRepoFile("src/app/paid-action-offers/page.tsx");
+  const primitivesSource = readRepoFile("src/components/ui/page-primitives.tsx");
+
+  assert.match(pledgePage, /Swap bounded pledges under explicit terms/);
+  assert.match(pledgePage, /Voluntary only/);
+  assert.match(paidActionPage, /payment is pending verification/);
+  assert.match(paidActionPage, /not legal escrow/i);
+  assert.match(paidActionPage, /No custody, escrow, tax, or investment claim/);
+  assert.match(primitivesSource, /Breadcrumb/);
+  assert.match(primitivesSource, /TradeFlowDiagram/);
+});
+
+test("dashboard exposes existing profile portability endpoints", () => {
+  const dashboardSource = readRepoFile("src/app/dashboard/page.tsx");
+  const panelSource = readRepoFile("src/components/dashboard/profile-portability-panel.tsx");
+  const exportRoute = readRepoFile("src/app/api/profile/export/route.ts");
+  const importRoute = readRepoFile("src/app/api/profile/import/route.ts");
+
+  assert.match(dashboardSource, /ProfilePortabilityPanel/);
+  assert.match(panelSource, /\/api\/profile\/export/);
+  assert.match(panelSource, /\/api\/profile\/import/);
+  assert.match(panelSource, /\/api\/profile\/schema/);
+  assert.match(panelSource, /replaceExisting/);
+  assert.match(exportRoute, /schemaUrl: "\/api\/profile\/schema"/);
+  assert.match(exportRoute, /importUrl: "\/api\/profile\/import"/);
+  assert.match(importRoute, /buildDeterministicSynthesis/);
+});
+
+test("public guidance describes verification pipelines without custody overclaims", () => {
+  const donationOffsetsPage = readRepoFile("src/app/donation-offsets/page.tsx");
+  const mpfgPage = readRepoFile("src/app/mpgf/page.tsx");
+  const priorityFundPage = readRepoFile("src/app/priority-correction-fund/page.tsx");
+  const joinedSources = [donationOffsetsPage, mpfgPage, priorityFundPage].join("\n");
+
+  assert.match(donationOffsetsPage, /Perverse-incentive screening/);
+  assert.match(donationOffsetsPage, /No custody \/ no escrow \/ no tax advice/);
+  assert.match(mpfgPage, /Manual evidence starts review/);
+  assert.match(mpfgPage, /Pool support for shared moral goods/);
+  assert.match(priorityFundPage, /10% of verified donations plus 10% of verified member-to-member/);
+  assert.match(priorityFundPage, /top 10% of karma/);
+  assert.equal(joinedSources.includes("Escrow-backed"), false);
+  assert.equal(joinedSources.includes("guaranteed custody"), false);
+});
+
+test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality metrics", () => {
+  const validationPage = readRepoFile("src/app/validation/page.tsx");
+  const validationSource = readRepoFile("src/lib/validation.ts");
+
+  assert.match(validationPage, /VALIDATOR_REVIEW_ROLES/);
+  assert.match(validationPage, /VALIDATOR_OPERATION_STANDARDS/);
+  assert.match(validationPage, /VALIDATOR_QUALITY_METRICS/);
+  assert.match(validationPage, /Manual review has named responsibilities/);
+  assert.match(validationPage, /Review needs SLAs, conflict rules, and appeals/);
+  assert.match(validationPage, /Trust metrics should be published/);
+  assert.match(validationSource, /Intake reviewer/);
+  assert.match(validationSource, /Evidence reviewer/);
+  assert.match(validationSource, /Appeal reviewer/);
+  assert.match(validationSource, /Conflict rule/);
+  assert.match(validationSource, /2 business days/);
+  assert.match(validationSource, /5 business days/);
+  assert.match(validationSource, /Appeal overturn rate/);
+  assert.match(validationSource, /Duplicate-proof misses/);
+});
+
+test("pooled donation offset creation has visible path and server-side guardrails", () => {
+  const donationOffsetsPage = readRepoFile("src/app/donation-offsets/page.tsx");
+  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+  const offerDetailSource = readRepoFile("src/app/offers/[offerId]/page.tsx");
+  const adminSource = readRepoFile("src/app/admin/page.tsx");
+
+  assert.match(donationOffsetsPage, /Create offset/);
+  assert.match(donationOffsetsPage, /Match ratio/);
+  assert.match(offerForm, /offset_pool_maximum_cap_usd/);
+  assert.match(offerForm, /offset_anti_threat_certification/);
+  assert.match(offerForm, /offset_verification_metadata_acknowledgement/);
+  assert.match(offerForm, /One proof, one claim/);
+  assert.match(actionsSource, /validateDonationOffsetSubmissionGuards/);
+  assert.match(actionsSource, /evidenceLocatorsConflict/);
+  assert.match(offerDetailSource, /getDonationOffsetEvidenceState/);
+  assert.match(offerDetailSource, /One proof, one claim/);
+  assert.match(adminSource, /duplicate proof/);
+  assert.match(adminSource, /One proof, one claim/);
+});
+
+test("offer creation form has live client validation aligned with server-required fields", () => {
+  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+
+  assert.match(actionsSource, /const offerAction = readRequired\(formData, "offer_action"\)/);
+  assert.match(actionsSource, /const requestAction = readRequired\(formData, "request_action"\)/);
+  assert.match(actionsSource, /const notes = readRequired\(formData, "notes"\)/);
+  assert.match(offerForm, /liveCoreOfferErrors/);
+  assert.match(offerForm, /liveOfferErrors/);
+  assert.match(offerForm, /Ready to publish/);
+  assert.match(offerForm, /disabled=\{!canPublishOffer\}/);
+  assert.match(offerForm, /name="offer_action"[\s\S]*required/);
+  assert.match(offerForm, /name="request_action"[\s\S]*required/);
+  assert.match(offerForm, /name="notes"[\s\S]*required/);
+});
+
+test("offer creation form exposes preset templates without weakening validation", () => {
+  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+
+  assert.match(offerForm, /OFFER_TEMPLATES/);
+  assert.match(offerForm, /30-day pledge swap/);
+  assert.match(offerForm, /Matched donation offset/);
+  assert.match(offerForm, /Threshold offset pool/);
+  assert.match(offerForm, /applyOfferTemplate/);
+  assert.match(offerForm, /Templates focus on the launch wedge/);
+  assert.match(offerForm, /setOfferAction\(template\.offerAction\)/);
+  assert.match(offerForm, /setBaselineStatement\(template\.baselineStatement\)/);
+  assert.match(offerForm, /disabled=\{!canPublishOffer\}/);
+  assert.match(offerForm, /liveOfferErrors/);
+});
+
+test("offer creation form exposes a guided reviewable-trade wizard", () => {
+  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+  const globalCss = readRepoFile("src/app/globals.css");
+
+  assert.match(offerForm, /OfferWizardStep/);
+  assert.match(offerForm, /Guided offer wizard/);
+  assert.match(offerForm, /Choose a launch route/);
+  assert.match(offerForm, /State reciprocal terms/);
+  assert.match(offerForm, /Explain baseline and exit/);
+  assert.match(offerForm, /Set evidence rules/);
+  assert.match(offerForm, /Ready for review/);
+  assert.match(offerForm, /completedWizardSteps/);
+  assert.match(offerForm, /wizardProgressPercent/);
+  assert.match(offerForm, /href: "#offer-route"/);
+  assert.match(offerForm, /id="offer-terms"/);
+  assert.match(offerForm, /id="offer-boundaries"/);
+  assert.match(offerForm, /id="offer-evidence"/);
+  assert.match(offerForm, /id="offer-publish"/);
+  assert.match(globalCss, /offer-wizard-panel/);
+  assert.match(globalCss, /offer-wizard-steps/);
+});
+
+test("offers page keeps content before the footer in source order", () => {
+  const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const mainIndex = offersPage.indexOf("<main");
+  const directoryIndex = offersPage.indexOf("Offer marketplace");
+  const exampleIndex = offersPage.indexOf("Illustrative fit ranking");
+  const footerIndex = offersPage.indexOf("<SiteFooter />");
+
+  assert.ok(mainIndex > -1);
+  assert.ok(directoryIndex > mainIndex);
+  assert.ok(exampleIndex > directoryIndex);
+  assert.ok(footerIndex > exampleIndex);
+});
+
+test("create trade route family has stable signed-out entry points", () => {
+  const createRoute = readRepoFile("src/app/create/page.tsx");
+  const newOfferPage = readRepoFile("src/app/offers/new/page.tsx");
+
+  assert.match(createRoute, /Create trade/);
+  assert.match(createRoute, /NewOfferPage/);
+  assert.equal(createRoute.includes("redirect("), false);
+  assert.match(newOfferPage, /Create an account to save and publish a structured trade proposal/);
+  assert.match(newOfferPage, /\/signup\?returnTo=\/offers\/new/);
+  assert.match(newOfferPage, /\/login\?returnTo=\/offers\/new/);
+  assert.equal(newOfferPage.includes("requireViewer"), false);
+});
+
+test("marketplace pilot copy separates live offers from worked examples", () => {
+  const offersPage = readRepoFile("src/app/offers/page.tsx");
+
+  assert.match(offersPage, /Live offers/);
+  assert.match(offersPage, /Worked examples/);
+  assert.match(offersPage, /<h1>Browse<\/h1>/);
+  assert.match(offersPage, /Learn from worked examples\. These are not live offers/);
+  assert.match(offersPage, /Worked example, not live liquidity/);
+  assert.match(offersPage, /Manual review before reliance/);
+  assert.match(offersPage, /defaultView = liveOfferCount > 0 \? "live" : "examples"/);
+  assert.match(offersPage, /No live offers yet/);
+  assert.match(offersPage, /No matching listings/);
+  assert.match(offersPage, /Browse worked examples or create the first public offer/);
+  assert.match(offersPage, /visibleFormatCounts/);
+  assert.match(offersPage, /collection-trust-panel/);
+  assert.equal(offersPage.includes("Browse the narrow pilot wedge"), false);
+  assert.equal(offersPage.includes("worked example s"), false);
+  assert.equal(offersPage.includes("Live participant offers will appear here"), false);
+});
+
+test("worked examples have canonical detail pages and sitemap coverage", () => {
+  const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const exampleDetailPage = readRepoFile("src/app/offers/examples/[exampleId]/page.tsx");
+  const sitemapSource = readRepoFile("src/app/sitemap.ts");
+
+  assert.match(offersPage, /\/offers\/examples\/\$\{offer\.id\}/);
+  assert.match(exampleDetailPage, /generateStaticParams/);
+  assert.match(exampleDetailPage, /Worked example; manual review required before reliance/);
+  assert.match(exampleDetailPage, /No escrow or custody claim/);
+  assert.match(sitemapSource, /\/offers\/examples\/\$\{offer\.id\}/);
+});

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Payout Provider Profile",
+  "type": "object",
+  "required": ["version", "mode", "automatedPayouts", "manualExternalPaymentEvidence"],
+  "properties": {
+    "mode": { "const": "manual_evidence_only" },
+    "automatedPayouts": {
+      "type": "object",
+      "required": ["enabled", "provider", "payoutDestinationVerification"],
+      "properties": {
+        "enabled": { "const": false }
+      }
+    }
+  },
+  "additionalProperties": true
+}

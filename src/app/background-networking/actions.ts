@@ -17,6 +17,12 @@ import {
 } from "@/lib/background-local-drafts";
 import { getBackgroundTokens } from "@/lib/background-networking";
 import {
+  buildIntroPacketRow,
+  buildProfileInterviewAnswerRow,
+  buildSourceSummaryRows,
+  validateIntroPacketInput,
+} from "@/lib/background-opportunity-briefs";
+import {
   buildBackgroundNotificationPreferenceRows,
   getDataRightRequestDueAt,
   validateBackgroundSelfServeDeletion,
@@ -34,6 +40,10 @@ type SourceConnectionUpdate = Database["public"]["Tables"]["source_connections"]
 type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Insert"];
 type MatchConciergeRequestRow =
   Database["public"]["Tables"]["match_concierge_requests"]["Row"];
+type BackgroundOpportunityBriefStatus =
+  NonNullable<Database["public"]["Tables"]["background_opportunity_briefs"]["Update"]["status"]>;
+type BackgroundCollectiveRetentionDays =
+  NonNullable<Database["public"]["Tables"]["background_collective_policies"]["Update"]["default_retention_days"]>;
 
 const DATA_RIGHT_REQUEST_STATUSES = [
   "open",
@@ -135,6 +145,415 @@ function parseOptionalTimestamp(value: string) {
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function readBoundedInt(formData: FormData, key: string, fallback: number, min: number, max: number) {
+  const parsed = Number(readOptional(formData, key));
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(min, Math.min(max, Math.trunc(parsed)));
+}
+
+function normalizeCollectivePolicyStage(value: string) {
+  if (value === "registry" || value === "introduced") {
+    return value;
+  }
+
+  return "consent";
+}
+
+function normalizeCollectiveRetentionDays(value: number): BackgroundCollectiveRetentionDays {
+  if (value === 30 || value === 90 || value === 180 || value === 365) {
+    return value;
+  }
+
+  return 90;
+}
+
+function normalizeOpportunityBriefStatus(value: string): BackgroundOpportunityBriefStatus | null {
+  if (value === "opened" || value === "dismissed" || value === "muted") {
+    return value;
+  }
+
+  return null;
+}
+
+export async function updateOpportunityBriefStatusAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const briefId = readOptional(formData, "opportunity_brief_id");
+  const status = normalizeOpportunityBriefStatus(readOptional(formData, "status"));
+
+  if (!briefId) {
+    redirectWithMessage(returnTo, "error", "Opportunity brief ID is required.");
+  }
+
+  if (!status) {
+    redirectWithMessage(returnTo, "error", "Choose a supported opportunity brief action.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const { data: brief, error: briefError } = await supabase
+    .from("background_opportunity_briefs")
+    .select("candidate_profile_id, factor_codes")
+    .eq("id", briefId)
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+
+  if (briefError || !brief) {
+    redirectWithMessage(returnTo, "error", briefError?.message ?? "Opportunity brief was not found.");
+  }
+
+  const { error } = await supabase
+    .from("background_opportunity_briefs")
+    .update({ status })
+    .eq("id", briefId)
+    .eq("profile_id", viewer.authUser.id);
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  if (status === "muted") {
+    const factorCodePattern =
+      readOptional(formData, "factor_code_pattern") || brief.factor_codes[0] || "similar";
+    const mutedUntil = new Date();
+    mutedUntil.setUTCDate(mutedUntil.getUTCDate() + 30);
+    const { error: muteError } = await supabase.from("background_mute_rules").upsert(
+      {
+        candidate_profile_id: brief.candidate_profile_id,
+        factor_code_pattern: factorCodePattern.slice(0, 120),
+        muted_until: mutedUntil.toISOString(),
+        profile_id: viewer.authUser.id,
+        status: "active",
+      },
+      { onConflict: "profile_id,candidate_profile_id,factor_code_pattern" },
+    );
+
+    if (muteError) {
+      redirectWithMessage(returnTo, "error", muteError.message);
+    }
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Opportunity brief updated.");
+}
+
+export async function saveBackgroundProfileInterviewAnswerAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const answer = readOptional(formData, "answer");
+
+  if (!answer) {
+    redirectWithMessage(returnTo, "error", "Answer text is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const row = buildProfileInterviewAnswerRow({
+    answer,
+    broadPreviewUpdate: readOptional(formData, "broad_preview_update"),
+    privateIntentUpdate: readOptional(formData, "private_intent_update"),
+    profileId: viewer.authUser.id,
+    questionKey: readOptional(formData, "question_key"),
+    questionText: readOptional(formData, "question_text"),
+    uncertaintyFlags: readRepeatedStrings(formData, "uncertainty_flags"),
+  });
+  let encryptedInterviewFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+  try {
+    encryptedInterviewFields = prepareRecordSensitiveTextFields({
+      answer: row.answer ?? "",
+      private_intent_update: row.private_intent_update ?? "",
+    });
+  } catch {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Interview answers cannot be saved until background field encryption is configured.",
+    );
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("background_profile_interview_answers").upsert(
+    {
+      ...row,
+      answer: encryptedInterviewFields.plaintextFields.answer,
+      private_intent_update: encryptedInterviewFields.plaintextFields.private_intent_update,
+      sensitive_ciphertexts: encryptedInterviewFields.ciphertexts,
+      sensitive_encryption_version: encryptedInterviewFields.version,
+    },
+    { onConflict: "profile_id,question_key" },
+  );
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Structured profile answer saved.");
+}
+
+export async function saveBackgroundSourceSummaryAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const label = readOptional(formData, "label");
+  const summaryText = readOptional(formData, "summary_text");
+
+  if (!summaryText) {
+    redirectWithMessage(returnTo, "error", "Source summary text is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const sourceType = normalizeSourceConnectionProvider(readOptional(formData, "source_type"));
+  const { receipt, sourceSummary, validationErrors } = buildSourceSummaryRows({
+    allowedFieldKeys: readRepeatedStrings(formData, "allowed_field_keys"),
+    label,
+    profileId: viewer.authUser.id,
+    purpose: readOptional(formData, "purpose"),
+    retentionDays: readOptional(formData, "retention_days") || 90,
+    sourceConnectionId: readOptional(formData, "source_connection_id") || null,
+    sourceType,
+  });
+
+  if (validationErrors.length) {
+    redirectWithMessage(returnTo, "error", validationErrors.join(" "));
+  }
+
+  let encryptedSummaryFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+  let encryptedProfileSourceFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+  try {
+    encryptedSummaryFields = prepareRecordSensitiveTextFields({
+      purpose: sourceSummary.purpose ?? "",
+      summary_text: summaryText,
+    });
+    encryptedProfileSourceFields = prepareRecordSensitiveTextFields({
+      notes: summaryText,
+      snapshot_excerpt: summaryText.slice(0, 420),
+    });
+  } catch {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Source summaries cannot be saved until background field encryption is configured.",
+    );
+  }
+
+  const supabase = await createClient();
+  const { data: receiptRow, error: receiptError } = await supabase
+    .from("background_grant_receipts")
+    .insert(receipt)
+    .select("id")
+    .maybeSingle();
+
+  if (receiptError || !receiptRow) {
+    redirectWithMessage(returnTo, "error", receiptError?.message ?? "Unable to record consent receipt.");
+  }
+
+  const { error: summaryError } = await supabase.from("background_source_summaries").insert({
+    ...sourceSummary,
+    consent_receipt_id: receiptRow.id,
+    purpose: encryptedSummaryFields.plaintextFields.purpose,
+    sensitive_ciphertexts: encryptedSummaryFields.ciphertexts,
+    sensitive_encryption_version: encryptedSummaryFields.version,
+    summary_text: encryptedSummaryFields.plaintextFields.summary_text,
+  });
+
+  if (summaryError) {
+    redirectWithMessage(returnTo, "error", summaryError.message);
+  }
+
+  const profileSourceType = sourceType === "search_profile" ? "other" : sourceType;
+  const { error: profileSourceError } = await supabase.from("profile_sources").insert({
+    access_level: "manual_summary",
+    captured_tags: getBackgroundTokens(`${label} ${summaryText}`, 12),
+    content_kind: "manual_summary",
+    imported_at: new Date().toISOString(),
+    is_active: true,
+    label,
+    needs_review: true,
+    notes: encryptedProfileSourceFields.plaintextFields.notes,
+    profile_id: viewer.authUser.id,
+    sensitive_ciphertexts: encryptedProfileSourceFields.ciphertexts,
+    sensitive_encryption_version: encryptedProfileSourceFields.version,
+    snapshot_excerpt: encryptedProfileSourceFields.plaintextFields.snapshot_excerpt,
+    source_type: profileSourceType,
+    url: readOptional(formData, "source_url"),
+  });
+
+  if (profileSourceError) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      `Source summary saved, but the matching source note could not be recorded: ${profileSourceError.message}`,
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Reviewed source summary saved without raw ingestion.");
+}
+
+export async function createBackgroundIntroPacketAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const purpose = readOptional(formData, "purpose");
+  const requestedFieldKeys = readRepeatedStrings(formData, "requested_field_keys");
+  const validation = validateIntroPacketInput({ purpose, requestedFieldKeys });
+
+  if (validation.errors.length) {
+    redirectWithMessage(returnTo, "error", validation.errors.join(" "));
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const matchId = readOptional(formData, "match_id") || null;
+  const opportunityBriefId = readOptional(formData, "opportunity_brief_id") || null;
+  const counterpartyProfileId = readOptional(formData, "counterparty_profile_id") || null;
+  const packet = buildIntroPacketRow({
+    counterpartyProfileId,
+    matchId,
+    opportunityBriefId,
+    purpose,
+    requestedFieldKeys,
+    requesterAnswers: {
+      boundaries: readOptional(formData, "boundaries"),
+      firstQuestion: readOptional(formData, "first_question"),
+    },
+    requesterProfileId: viewer.authUser.id,
+  });
+
+  const supabase = await createClient();
+  const { data: packetRow, error } = await supabase
+    .from("background_intro_packets")
+    .insert(packet)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !packetRow) {
+    redirectWithMessage(returnTo, "error", error?.message ?? "Unable to create intro packet.");
+  }
+
+  if (opportunityBriefId) {
+    await supabase
+      .from("background_opportunity_briefs")
+      .update({ status: "packet_requested" })
+      .eq("id", opportunityBriefId)
+      .eq("profile_id", viewer.authUser.id);
+  }
+
+  const { data: conciergeRequest } = await supabase
+    .from("match_concierge_requests")
+    .insert({
+      ask_summary: "Review the field choices and mutual questions before any first conversation.",
+      cause_areas: [],
+      constraints: readOptional(formData, "boundaries"),
+      desired_timeline: "Review before any direct introduction.",
+      intent_summary: `Reviewed introduction packet requested. ${purpose}`.slice(0, 900),
+      match_id: matchId,
+      offer_summary: "",
+      requester_profile_id: viewer.authUser.id,
+      route: "private_match",
+      status: "open",
+      target_preview: "Counterparty details remain hidden until review and consent.",
+      target_profile_id: counterpartyProfileId,
+    })
+    .select("id")
+    .maybeSingle();
+
+  let serviceClient: ReturnType<typeof createServiceClient> | null = null;
+
+  try {
+    serviceClient = createServiceClient();
+  } catch {
+    serviceClient = null;
+  }
+
+  if (serviceClient) {
+    await serviceClient.from("match_audit_events").insert({
+      actor_profile_id: viewer.authUser.id,
+      event_type: "intro_packet_requested",
+      match_id: matchId,
+      metadata: {
+        conciergeRequestId: conciergeRequest?.id ?? null,
+        introPacketId: packetRow.id,
+        requestedFieldCount: validation.requestedFieldKeys.length,
+      },
+      summary: "Participant requested a reviewed introduction packet; no outreach was sent.",
+    });
+
+    if (counterpartyProfileId) {
+      await serviceClient.from("wish_notifications").insert({
+        body:
+          "A participant requested operator review for a possible introduction. No private details or contact information were disclosed.",
+        kind: "consent",
+        match_id: matchId,
+        profile_id: counterpartyProfileId,
+        title: "Reviewed intro packet requested",
+      });
+    }
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
+  redirectWithMessage(returnTo, "message", "Intro packet queued for review without sending outreach.");
+}
+
+export async function saveBackgroundCollectivePolicyAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const collectiveId = readOptional(formData, "collective_id");
+
+  if (!collectiveId) {
+    redirectWithMessage(returnTo, "error", "Collective ID is required.");
+  }
+
+  await requireViewer(returnTo);
+  const approverRoles = readRepeatedStrings(formData, "approver_roles");
+  const supabase = await createClient();
+  const { error } = await supabase.from("background_collective_policies").upsert(
+    {
+      approval_threshold: readBoundedInt(formData, "approval_threshold", 1, 1, 20),
+      approver_roles: approverRoles.length ? approverRoles : ["owner", "admin"],
+      collective_id: collectiveId,
+      default_retention_days: normalizeCollectiveRetentionDays(
+        readBoundedInt(formData, "default_retention_days", 90, 30, 365),
+      ),
+      disclosure_rules: {
+        requirePurpose: true,
+        reviewerNote: readOptional(formData, "reviewer_note"),
+      },
+      group_public_preview: readOptional(formData, "group_public_preview"),
+      max_auto_grant_stage: normalizeCollectivePolicyStage(
+        readOptional(formData, "max_auto_grant_stage"),
+      ),
+    },
+    { onConflict: "collective_id" },
+  );
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Collective disclosure policy saved.");
 }
 
 export async function saveBackgroundNotificationPreferencesAction(formData: FormData) {
@@ -612,6 +1031,45 @@ export async function deleteBackgroundNetworkingDataAction(formData: FormData) {
     failures,
     "background query events",
     supabase.from("background_query_events").update({ profile_id: null }).eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "opportunity briefs",
+    supabase
+      .from("background_opportunity_briefs")
+      .delete()
+      .or(`profile_id.eq.${profileId},candidate_profile_id.eq.${profileId}`),
+  );
+  await collectMutationResult(
+    failures,
+    "intro packets",
+    supabase
+      .from("background_intro_packets")
+      .delete()
+      .or(`requester_profile_id.eq.${profileId},counterparty_profile_id.eq.${profileId}`),
+  );
+  await collectMutationResult(
+    failures,
+    "source summaries",
+    supabase.from("background_source_summaries").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "grant receipts",
+    supabase
+      .from("background_grant_receipts")
+      .delete()
+      .or(`profile_id.eq.${profileId},counterparty_id.eq.${profileId}`),
+  );
+  await collectMutationResult(
+    failures,
+    "profile interview answers",
+    supabase.from("background_profile_interview_answers").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "mute rules",
+    supabase.from("background_mute_rules").delete().eq("profile_id", profileId),
   );
   await collectMutationResult(
     failures,

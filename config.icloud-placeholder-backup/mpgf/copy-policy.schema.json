@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Copy Library Policy",
+  "type": "object",
+  "required": ["version", "policy", "copy"],
+  "properties": {
+    "version": { "type": "string" },
+    "policy": {
+      "type": "object",
+      "required": [
+        "noTaxAdvice",
+        "noEscrowClaimByDefault",
+        "noTaxDeductibilityClaimByDefault",
+        "noGuaranteedEffectivenessClaim",
+        "nonRealMoneyLabelRequired"
+      ]
+    },
+    "copy": { "type": "object" }
+  },
+  "additionalProperties": true
+}

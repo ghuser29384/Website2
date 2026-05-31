@@ -153,6 +153,36 @@ const TABLE_REQUIREMENTS: BackgroundRlsTableRequirement[] = [
     table: "source_connections",
   },
   {
+    category: "private_source",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 4,
+    rationale:
+      "Reviewed source summaries are user-approved summaries, not raw ingestion, and remain owner-scoped.",
+    requiredFragments: ["profile_id = (select auth.uid())"],
+    requiredPolicies: [
+      "background_source_summaries_select_own",
+      "background_source_summaries_insert_own",
+      "background_source_summaries_update_own",
+      "background_source_summaries_delete_own",
+    ],
+    table: "background_source_summaries",
+  },
+  {
+    category: "private_profile",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 4,
+    rationale:
+      "Structured elicitation answers may contain private intent and must stay profile-owned.",
+    requiredFragments: ["profile_id = (select auth.uid())"],
+    requiredPolicies: [
+      "background_profile_interview_answers_select_own",
+      "background_profile_interview_answers_insert_own",
+      "background_profile_interview_answers_update_own",
+      "background_profile_interview_answers_delete_own",
+    ],
+    table: "background_profile_interview_answers",
+  },
+  {
     category: "private_profile",
     disallowAnonPolicies: true,
     minimumPolicyCount: 3,
@@ -245,6 +275,56 @@ const TABLE_REQUIREMENTS: BackgroundRlsTableRequirement[] = [
       "match_explanation_snapshots_insert_own",
     ],
     table: "match_explanation_snapshots",
+  },
+  {
+    category: "participant_match",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 4,
+    rationale:
+      "Opportunity briefs are actionable but still profile-owned broad-preview records.",
+    requiredFragments: ["profile_id = (select auth.uid())"],
+    requiredPolicies: [
+      "background_opportunity_briefs_select_own",
+      "background_opportunity_briefs_insert_own",
+      "background_opportunity_briefs_update_own",
+      "background_opportunity_briefs_delete_own",
+    ],
+    table: "background_opportunity_briefs",
+  },
+  {
+    category: "participant_match",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 3,
+    rationale:
+      "Intro packets are visible only to requester and counterparty before operator review.",
+    requiredFragments: [
+      "requester_profile_id = (select auth.uid())",
+      "counterparty_profile_id = (select auth.uid())",
+      "public.profile_participates_in_match(match_id, (select auth.uid()))",
+    ],
+    requiredPolicies: [
+      "background_intro_packets_select_relevant",
+      "background_intro_packets_insert_requester",
+      "background_intro_packets_update_relevant",
+    ],
+    table: "background_intro_packets",
+  },
+  {
+    category: "privacy_grant",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 3,
+    rationale:
+      "Grant receipts summarize consent scope and must remain visible only to relevant participants.",
+    requiredFragments: [
+      "profile_id = (select auth.uid())",
+      "counterparty_id = (select auth.uid())",
+    ],
+    requiredPolicies: [
+      "background_grant_receipts_select_relevant",
+      "background_grant_receipts_insert_own",
+      "background_grant_receipts_update_own",
+    ],
+    table: "background_grant_receipts",
   },
   {
     category: "audit_event",
@@ -448,6 +528,33 @@ const TABLE_REQUIREMENTS: BackgroundRlsTableRequirement[] = [
     ],
     table: "match_audit_events",
   },
+  {
+    category: "privacy_grant",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 3,
+    rationale:
+      "Collective policies set approval and disclosure defaults for accessible collective principals.",
+    requiredFragments: ["public.viewer_can_access_collective(collective_id)"],
+    requiredPolicies: [
+      "background_collective_policies_select_accessible",
+      "background_collective_policies_insert_accessible",
+      "background_collective_policies_update_accessible",
+    ],
+    table: "background_collective_policies",
+  },
+  {
+    category: "participant_match",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 3,
+    rationale: "Mute rules are private preferences for suppressing low-value opportunity briefs.",
+    requiredFragments: ["profile_id = (select auth.uid())"],
+    requiredPolicies: [
+      "background_mute_rules_select_own",
+      "background_mute_rules_insert_own",
+      "background_mute_rules_update_own",
+    ],
+    table: "background_mute_rules",
+  },
 ];
 
 const SENSITIVE_STORAGE_REQUIREMENTS: BackgroundSensitiveStorageRequirement[] = [
@@ -483,6 +590,22 @@ const SENSITIVE_STORAGE_REQUIREMENTS: BackgroundSensitiveStorageRequirement[] = 
     ],
     rationale: "Source connector consent notes and summaries must have encrypted storage slots.",
     table: "source_connections",
+  },
+  {
+    columns: [
+      { name: "sensitive_ciphertexts", typeFragment: "jsonb" },
+      { name: "sensitive_encryption_version", typeFragment: "text" },
+    ],
+    rationale: "Reviewed source-summary text and purpose details must have encrypted storage slots.",
+    table: "background_source_summaries",
+  },
+  {
+    columns: [
+      { name: "sensitive_ciphertexts", typeFragment: "jsonb" },
+      { name: "sensitive_encryption_version", typeFragment: "text" },
+    ],
+    rationale: "Structured interview answers and private intent updates must have encrypted storage slots.",
+    table: "background_profile_interview_answers",
   },
   {
     columns: [
@@ -606,6 +729,8 @@ export function validateBackgroundRlsAuditContract(
       storageTables.includes("wish_profiles") &&
         storageTables.includes("wish_entries") &&
         storageTables.includes("profile_sources") &&
+        storageTables.includes("background_source_summaries") &&
+        storageTables.includes("background_profile_interview_answers") &&
         storageTables.includes("source_connections") &&
         storageTables.includes("profile_syntheses") &&
         contract.sensitiveStorageRequirements.every((requirement) =>

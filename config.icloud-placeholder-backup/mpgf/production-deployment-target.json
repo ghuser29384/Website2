@@ -1,0 +1,47 @@
+{
+  "version": "mpgf-production-deployment-target-v1",
+  "provider": "vercel",
+  "projectName": "website2",
+  "projectId": "prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK",
+  "teamOrOrgId": "team_ySu6sF3Uho1E1GnJtCQPVEuJ",
+  "canonicalBaseUrl": "https://www.moraltrade.org",
+  "canonicalHost": "www.moraltrade.org",
+  "productionEnvironment": "production",
+  "sourceRefPolicy": "main branch or reviewed production deployment commit",
+  "deploymentWorkflow": "npx vercel deploy --prod through repository-approved Vercel project",
+  "deploymentStatusCheck": "Vercel production deployment ready state plus canonical-host HTTP/browser verification",
+  "environmentVariableWorkflow": "Vercel production environment variables managed outside generated docs",
+  "secretManagementWorkflow": "Vercel encrypted production secrets; secret values are never committed or copied into docs",
+  "requiredSecretsByCapability": {
+    "directWorkingNonRealMoney": {
+      "requiredWhenEnabled": false,
+      "secretNames": []
+    },
+    "repositoryAuthSmokeSession": {
+      "requiredWhenEnabled": true,
+      "secretNames": ["MPGF_WWW_SMOKE_TEST_SESSION_SECRET"]
+    }
+  },
+  "productionMigrationWorkflow": "Supabase migration workflow approved for this repository before production-domain demo_complete",
+  "productionDatabaseRef": "repository Supabase production project, referenced by environment only",
+  "domainBindingEvidencePath": "docs/mpgf/production-deployment-prerequisites.md",
+  "rollbackWorkflow": "Vercel production rollback to prior known-good deployment or FEATURE_MPGF_ENABLED=false emergency disablement",
+  "productionAccessValidationMethod": "browser-level verification at https://www.moraltrade.org plus provider deployment metadata",
+  "deploymentApproverRole": "deployment_admin",
+  "requiredEvidencePaths": [
+    "docs/mpgf/production-deployment-prerequisites.md",
+    "docs/mpgf/production-direct-working-launch-runbook.md",
+    "docs/mpgf/www-direct-working-verification.md",
+    "docs/mpgf/www-auth-session-verification.md",
+    "docs/mpgf/www-public-experience-verification.md",
+    "docs/mpgf/www-participant-journey-verification.md",
+    "docs/mpgf/www-production-health-monitor.md"
+  ],
+  "requiredEnvironment": {
+    "MPGF_ENV": "production",
+    "MPGF_PUBLIC_BASE_URL": "https://www.moraltrade.org",
+    "MPGF_CANONICAL_HOST": "www.moraltrade.org",
+    "FEATURE_MPGF_ENABLED": "true",
+    "MPGF_REAL_MONEY_ENABLED": "false"
+  }
+}

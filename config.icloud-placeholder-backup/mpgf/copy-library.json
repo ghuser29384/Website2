@@ -1,0 +1,31 @@
+{
+  "version": "mpgf-copy-library-v1",
+  "policy": {
+    "noTaxAdvice": true,
+    "noEscrowClaimByDefault": true,
+    "noTaxDeductibilityClaimByDefault": true,
+    "noGuaranteedEffectivenessClaim": true,
+    "nonRealMoneyLabelRequired": true
+  },
+  "copy": {
+    "mpgf_plain_language_summary": "The Moral Public Goods Fund is a pilot mechanism for coordinating support for goods that many moral views value.",
+    "moral_public_goods_explanation": "A moral public good is something many people value for moral reasons, such as reducing severe poverty, reducing existential risk, or improving animal welfare.",
+    "moral_trade_coordination_explanation": "MPGF is intended to help people with different moral views coordinate on shared moral public goods instead of each person acting alone.",
+    "pilot_status": "MPGF is currently a pilot mechanism. Some features may operate in pledge-only, test, dry-run, or non-real-money mode until production gates are approved.",
+    "non_real_money_status": "This production demo is non-real-money unless the page explicitly says real-money mode has passed all production gates.",
+    "pledge_only_explanation": "A pledge-only contribution records your non-real-money intent to support MPGF. It does not charge a payment method.",
+    "monthly_pledge_only_explanation": "A monthly pledge-only commitment records a recurring non-real-money pledge. It is not a subscription, charge, donation, or payment.",
+    "pool_proposal_explanation": "Pool proposals suggest moral public goods that could be considered by the MPGF mechanism.",
+    "ballot_demo_explanation": "Demo ballots let eligible participants test how the mechanism records preferences. They do not authorize real disbursements.",
+    "visible_demo_pool_explanation": "Visible demo pools are non-real-money alternatives used to show how the MPGF pilot mechanism works.",
+    "not_tax_advice": "This page does not provide tax, legal, financial, or investment advice.",
+    "tax_deductibility_disabled_by_default": "Unless this page explicitly says otherwise using legally approved wording, MPGF contributions are not represented as tax-deductible donations.",
+    "not_escrow": "Unless this page explicitly says otherwise using legally approved wording, MPGF is not representing that funds are held in legal escrow.",
+    "not_charity_evaluator": "MPGF is not a charity evaluator and does not guarantee that any pool is the most effective use of funds.",
+    "not_guaranteed_effectiveness": "MPGF does not guarantee outcomes or effectiveness. Public summaries describe the mechanism's records and assessments, not guaranteed impact.",
+    "privacy_visibility": "Some MPGF records may appear in public summaries after privacy filtering. Private payment identifiers, verification evidence, private ballot identities, private appeal evidence, and private audit evidence are not public by default.",
+    "ballot_finality": "After final submission, your ballot is final for this cycle unless a formal correction rule applies.",
+    "allocation_not_disbursement": "An allocation or authorization is not the same as an external payment. External payment status is tracked separately.",
+    "support_or_access": "For MPGF access or support, contact support@moraltrade.org."
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "status": "passed_for_direct_working_scope",
+  "generatedAt": "2026-05-07T00:00:00.000Z",
+  "capabilities": [
+    { "capability": "web_framework", "existing": "Next.js App Router", "decision": "direct_repo_convention", "paths": ["src/app"] },
+    { "capability": "auth_session", "existing": "Supabase Auth", "decision": "direct_repo_convention", "paths": ["src/lib/supabase"] },
+    { "capability": "database", "existing": "Supabase Postgres migrations", "decision": "thin_adapter", "paths": ["supabase/migrations"] },
+    { "capability": "payments", "existing": "Stripe", "decision": "blocked", "reason": "MPGF direct-working mode is non-real-money." },
+    { "capability": "styling", "existing": "global CSS", "decision": "direct_repo_convention", "paths": ["src/app/globals.css"] },
+    { "capability": "mpgf_domain", "existing": "none", "decision": "new_mpgf_module", "paths": ["src/lib/mpgf"] },
+    { "capability": "production_deployment", "existing": "Vercel project metadata", "decision": "thin_adapter", "paths": [".vercel/project.json", "config/mpgf/production-deployment-target.json"] }
+  ],
+  "unresolvedCount": 0
+}

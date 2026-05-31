@@ -113,6 +113,55 @@ test("evidence submission persists artifact, claim, traceability, activity, and 
     (traceabilityEvents[0].where_recorded as { locator: string }).locator,
     "https://example.org/Baseline?a=1&b=2",
   );
+  assert.equal(
+    (traceabilityEvents[0].where_recorded as { locationType: string }).locationType,
+    "public_log",
+  );
   assert.equal(activities[0].kind, "evidence_submitted");
   assert.equal(activities[0].idempotency_key, "baseline-bond:offer-1:counterfactual-baseline-evidence");
+});
+
+test("agreement evidence submissions can use an opaque platform locator", async () => {
+  const supabase = new FakeSupabase();
+  const generatedIds = [
+    "00000000-0000-4000-8000-000000000011",
+    "00000000-0000-4000-8000-000000000012",
+    "00000000-0000-4000-8000-000000000013",
+    "00000000-0000-4000-8000-000000000014",
+  ];
+  const result = await persistMoralTradeEvidenceSubmission({
+    actorAgentId: "responder-profile-1",
+    actorAgentKind: "counterparty",
+    actorLabel: "Responder alias",
+    agreementId: "agreement-1",
+    claimScope: "factual_action",
+    evidenceKind: "attestation",
+    evidenceUrl: "moraltrade://agreement-evidence/evidence-item-1",
+    idFactory: () => generatedIds.shift() ?? "00000000-0000-4000-8000-000000000099",
+    idempotencyKey: "agreement:agreement-1:evidence:evidence-item-1",
+    ownerProfileId: "responder-profile-1",
+    reasonCodes: ["agreement_evidence", "evidence_manual_attestation"],
+    recordedAt: "2026-05-31T12:30:00.000Z",
+    redactionLevel: "reviewer_only",
+    subjectId: "agreement-1",
+    subjectKind: "agreement",
+    supabase,
+    traceabilityLocationType: "platform",
+  });
+
+  assert.equal(result.error, null);
+
+  const artifacts = supabase.rows.get("moral_trade_evidence_artifacts") ?? [];
+  const claims = supabase.rows.get("moral_trade_evidence_claims") ?? [];
+  const traceabilityEvents = supabase.rows.get("moral_trade_traceability_events") ?? [];
+  const activities = supabase.rows.get("moral_trade_provenance_activities") ?? [];
+
+  assert.equal(artifacts[0].agreement_id, "agreement-1");
+  assert.equal(artifacts[0].subject_kind, "agreement");
+  assert.equal(claims[0].claim_scope, "factual_action");
+  assert.equal(
+    (traceabilityEvents[0].where_recorded as { locationType: string }).locationType,
+    "platform",
+  );
+  assert.equal(activities[0].idempotency_key, "agreement:agreement-1:evidence:evidence-item-1");
 });

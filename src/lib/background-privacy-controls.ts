@@ -164,7 +164,7 @@ export const BACKGROUND_DATA_INVENTORY = [
     label: "Disclosure grants and access requests",
     processor: "Supabase Postgres",
     retention: "For the active introduction plus audit retention after expiry or revocation.",
-    surface: "privacy_grants and privacy_access_requests",
+    surface: "privacy_grants, privacy_access_requests, and background_grant_receipts",
     use: "Staged disclosure and mutual-consent review.",
   },
   {
@@ -173,7 +173,7 @@ export const BACKGROUND_DATA_INVENTORY = [
     label: "Source notes and connection permissions",
     processor: "Supabase Postgres with app-level field encryption for notes and approved summaries.",
     retention: "Until source removal, deletion request, or safety/legal hold.",
-    surface: "profile_sources and source_connections",
+    surface: "profile_sources, source_connections, and background_source_summaries",
     use: "Optional deterministic context for owner-reviewed matching.",
   },
   {
@@ -182,8 +182,9 @@ export const BACKGROUND_DATA_INVENTORY = [
     label: "Budgets, snapshots, reports, appeals, and operator queues",
     processor: "Supabase Postgres and configured email provider for safe digests.",
     retention: "Operational window plus abuse-prevention audit retention.",
-    surface: "background_query_events, match_explanation_snapshots, risk_signals, match_concierge_requests",
-    use: "Anti-enumeration, explanation provenance, safety review, SLA tracking, and concierge appeal review.",
+    surface:
+      "background_query_events, match_explanation_snapshots, background_opportunity_briefs, background_intro_packets, background_mute_rules, risk_signals, match_concierge_requests",
+    use: "Anti-enumeration, opportunity packaging, explanation provenance, safety review, SLA tracking, and concierge appeal review.",
   },
 ] as const;
 
@@ -195,6 +196,7 @@ export const PRIVATE_NO_STORE_ROUTE_PREFIXES = [
   "/mpgf/admin",
   "/mpgf/account",
   "/api/profile",
+  "/api/background",
   "/api/jobs",
   "/api/saved-searches",
   "/api/wish-registry/search",

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Production Deployment Target",
+  "type": "object",
+  "required": [
+    "version",
+    "provider",
+    "projectName",
+    "projectId",
+    "teamOrOrgId",
+    "canonicalBaseUrl",
+    "canonicalHost",
+    "productionEnvironment",
+    "sourceRefPolicy",
+    "deploymentWorkflow",
+    "deploymentStatusCheck",
+    "environmentVariableWorkflow",
+    "secretManagementWorkflow",
+    "requiredEnvironment",
+    "requiredSecretsByCapability",
+    "productionMigrationWorkflow",
+    "productionDatabaseRef",
+    "domainBindingEvidencePath",
+    "rollbackWorkflow",
+    "productionAccessValidationMethod",
+    "deploymentApproverRole",
+    "requiredEvidencePaths"
+  ],
+  "properties": {
+    "canonicalBaseUrl": { "const": "https://www.moraltrade.org" },
+    "canonicalHost": { "const": "www.moraltrade.org" },
+    "productionEnvironment": { "const": "production" }
+  },
+  "additionalProperties": true
+}

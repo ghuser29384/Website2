@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MPGF Public Experience Profile",
+  "type": "object",
+  "required": [
+    "profileVersion",
+    "enabled",
+    "baseUrl",
+    "publicEntryRoute",
+    "requiredRoutes",
+    "requiredCopyKeys",
+    "requiredModeLabels",
+    "primaryActionRoutes",
+    "supportRouteOrEmail",
+    "requireVisibleDemoOrdinaryPoolAlternative",
+    "allowCarryoverOnlyDemoComplete",
+    "requireMobileAndDesktopChecks"
+  ],
+  "properties": {
+    "enabled": { "const": true },
+    "baseUrl": { "const": "https://www.moraltrade.org" },
+    "publicEntryRoute": { "const": "/mpgf" },
+    "supportRouteOrEmail": { "type": "string", "minLength": 1 },
+    "requireVisibleDemoOrdinaryPoolAlternative": { "const": true },
+    "allowCarryoverOnlyDemoComplete": { "const": false },
+    "requireMobileAndDesktopChecks": { "const": true }
+  },
+  "additionalProperties": true
+}

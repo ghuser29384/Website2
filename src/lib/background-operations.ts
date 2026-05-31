@@ -15,6 +15,8 @@ type BackgroundQueryEventRow = Database["public"]["Tables"]["background_query_ev
 type BackgroundQueryEventInsert = Database["public"]["Tables"]["background_query_events"]["Insert"];
 type MatchExplanationSnapshotInsert =
   Database["public"]["Tables"]["match_explanation_snapshots"]["Insert"];
+type BackgroundOpportunityBriefInsert =
+  Database["public"]["Tables"]["background_opportunity_briefs"]["Insert"];
 
 export const MATCH_EXPLANATION_SNAPSHOT_DEDUPE_COLUMNS = [
   "match_id",
@@ -195,6 +197,25 @@ export async function insertMatchExplanationSnapshots({
   const { error } = await supabase.from("match_explanation_snapshots").upsert(rows, {
     ignoreDuplicates: true,
     onConflict: MATCH_EXPLANATION_SNAPSHOT_DEDUPE_COLUMNS,
+  });
+
+  return error;
+}
+
+export async function upsertBackgroundOpportunityBriefs({
+  briefs,
+  supabase,
+}: {
+  briefs: BackgroundOpportunityBriefInsert[];
+  supabase: SupabaseDatabaseClient;
+}) {
+  if (!briefs.length) {
+    return null;
+  }
+
+  const { error } = await supabase.from("background_opportunity_briefs").upsert(briefs, {
+    ignoreDuplicates: false,
+    onConflict: "profile_id,match_id",
   });
 
   return error;

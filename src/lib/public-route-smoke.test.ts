@@ -1214,6 +1214,13 @@ test("accepted introductions can progress through agreement evidence review", ()
   assert.match(actionsSource, /updateAgreementReviewCaseAction/);
   assert.match(actionsSource, /validateAgreementReviewProtocolTransition/);
   assert.match(actionsSource, /persistMoralTradeAgreementReviewProtocolProvenance/);
+  assert.match(actionsSource, /getAgreementEvidencePersistenceShape/);
+  assert.match(actionsSource, /persistMoralTradeEvidenceSubmission/);
+  assert.match(actionsSource, /status: "pending_evidence"/);
+  assert.match(actionsSource, /moraltrade:\/\/agreement-evidence\/\$\{evidenceItem\.id\}/);
+  assert.match(actionsSource, /agreement:\$\{agreementId\}:evidence:\$\{evidenceItem\.id\}/);
+  assert.match(actionsSource, /traceabilityLocationType: evidenceUrl \? "public_log" : "platform"/);
+  assert.match(actionsSource, /Evidence was saved as pending, but review was not opened because the provenance bundle could not be recorded/);
   assert.match(actionsSource, /buildAgreementReviewDecisionRow/);
   assert.match(actionsSource, /buildAgreementReviewProvenanceRows/);
   assert.match(actionsSource, /evidenceReviewReadiness/);
