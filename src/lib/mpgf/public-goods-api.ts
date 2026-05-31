@@ -21,6 +21,14 @@ import type {
 } from "./types";
 
 export const MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY = "aggregate_only_no_private_evidence_urls_contact_data_or_supporter_reasons";
+export const MPGF_PUBLIC_GOODS_API_CACHE_CONTROL = "no-store, max-age=0";
+export const MPGF_PUBLIC_GOODS_API_HEADERS = {
+  "Cache-Control": MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
+} as const;
+
+export interface MpgfPublicGoodsPublicApiOptions {
+  incidentStatusByCampaignId?: Record<string, "clear" | "frozen" | "resolved" | undefined>;
+}
 
 function nowMs() {
   return new Date("2026-05-31T12:00:00.000Z").getTime();
@@ -94,13 +102,25 @@ function latestReviewSummary(campaignId: string, reviewCases = demoMpgfPublicGoo
   };
 }
 
-function publicCampaignProgress(campaign: MpgfPublicGoodsCampaign) {
+function incidentStateForCampaign(campaign: MpgfPublicGoodsCampaign, options: MpgfPublicGoodsPublicApiOptions = {}) {
+  const configured = options.incidentStatusByCampaignId?.[campaign.id];
+
+  if (configured === "frozen") {
+    return "frozen" as const;
+  }
+
+  return campaign.reviewStatus === "blocked" ? ("frozen" as const) : ("clear" as const);
+}
+
+function publicCampaignProgress(campaign: MpgfPublicGoodsCampaign, options: MpgfPublicGoodsPublicApiOptions = {}) {
   const pledges = campaignPledges(campaign.id);
   const assurance = getMpgfCampaignAssuranceStatus(campaign, demoMpgfAssurancePledges, new Date("2026-05-31T12:00:00.000Z"));
   const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
   const line = allocation.lines.find((candidate) => candidate.campaignId === campaign.id);
   const approvedMatchCents = (line?.baseMatchCents ?? 0) + (line?.qfBonusCents ?? 0);
   const reviewSummary = latestReviewSummary(campaign.id);
+  const incidentState = incidentStateForCampaign(campaign, options);
+  const matchPreviewHiddenByIncidentFreeze = incidentState === "frozen";
 
   return {
     campaignId: campaign.id,
@@ -116,9 +136,10 @@ function publicCampaignProgress(campaign: MpgfPublicGoodsCampaign) {
     thresholdPassed: assurance.thresholdPassed,
     reviewStatus: campaign.reviewStatus,
     campaignStatus: assurance.status,
-    matchEstimateCents: approvedMatchCents,
-    baseMatchCents: line?.baseMatchCents ?? 0,
-    qfBonusCents: line?.qfBonusCents ?? 0,
+    matchEstimateCents: matchPreviewHiddenByIncidentFreeze ? null : approvedMatchCents,
+    baseMatchCents: matchPreviewHiddenByIncidentFreeze ? null : line?.baseMatchCents ?? 0,
+    qfBonusCents: matchPreviewHiddenByIncidentFreeze ? null : line?.qfBonusCents ?? 0,
+    matchPreviewHiddenByIncidentFreeze,
     milestoneSchedule: buildMpgfPublicGoodsMilestoneSchedule({ campaignId: campaign.id }).map((milestone) => ({
       id: milestone.id,
       ordinal: milestone.ordinal,
@@ -126,7 +147,7 @@ function publicCampaignProgress(campaign: MpgfPublicGoodsCampaign) {
       status: milestone.status,
     })),
     reviewSummary,
-    incidentState: campaign.reviewStatus === "blocked" ? "frozen" : "clear",
+    incidentState,
     appealState: reviewSummary.appealOpen ? "appeal_requested" : "none",
     campaignPath: `/mpgf/campaigns/${campaign.slug}`,
     proofPath: `/mpgf/pools/${campaign.slug}`,
@@ -139,6 +160,7 @@ export function listMpgfPublicGoodsRoundsApi() {
   return {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+    cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     rounds: [
       {
         id: demoMpgfAssuranceRound.id,
@@ -165,6 +187,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
   return {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+    cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     round: {
       id: demoMpgfAssuranceRound.id,
       name: demoMpgfAssuranceRound.name,
@@ -191,7 +214,10 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
   };
 }
 
-export function listMpgfPublicGoodsCampaignsApi(roundId: string = demoMpgfAssuranceRound.id) {
+export function listMpgfPublicGoodsCampaignsApi(
+  roundId: string = demoMpgfAssuranceRound.id,
+  options: MpgfPublicGoodsPublicApiOptions = {},
+) {
   if (roundId !== demoMpgfAssuranceRound.id) {
     return null;
   }
@@ -199,12 +225,16 @@ export function listMpgfPublicGoodsCampaignsApi(roundId: string = demoMpgfAssura
   return {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+    cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     roundId,
-    campaigns: demoMpgfPublicGoodsCampaigns.map(publicCampaignProgress),
+    campaigns: demoMpgfPublicGoodsCampaigns.map((campaign) => publicCampaignProgress(campaign, options)),
   };
 }
 
-export function getMpgfPublicGoodsCampaignApi(campaignIdOrSlug: string) {
+export function getMpgfPublicGoodsCampaignApi(
+  campaignIdOrSlug: string,
+  options: MpgfPublicGoodsPublicApiOptions = {},
+) {
   const campaign = demoMpgfPublicGoodsCampaigns.find(
     (candidate) => candidate.id === campaignIdOrSlug || candidate.slug === campaignIdOrSlug,
   );
@@ -216,8 +246,9 @@ export function getMpgfPublicGoodsCampaignApi(campaignIdOrSlug: string) {
   return {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+    cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     campaign: {
-      ...publicCampaignProgress(campaign),
+      ...publicCampaignProgress(campaign, options),
       publicSummary: campaign.publicSummary,
       verificationMethod: campaign.verificationMethod,
       baselineRule: campaign.baselineRule,
@@ -232,29 +263,44 @@ export function getMpgfPublicGoodsCampaignApi(campaignIdOrSlug: string) {
   };
 }
 
-export function getMpgfPublicGoodsMatchPreviewApi(roundId: string = demoMpgfAssuranceRound.id) {
+export function getMpgfPublicGoodsMatchPreviewApi(
+  roundId: string = demoMpgfAssuranceRound.id,
+  options: MpgfPublicGoodsPublicApiOptions = {},
+) {
   if (roundId !== demoMpgfAssuranceRound.id) {
     return null;
   }
 
   const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
-  const previewRows = allocation.lines.map((line) => ({
-    campaignId: line.campaignId,
-    status: line.status,
-    verifiedDonorCount: line.verifiedSupporterCount,
-    directEligibleCents: line.directEligibleCents,
-    qfScore: line.qfScore,
-    estimatedBaseMatchCents: line.baseMatchCents,
-    estimatedQfBonusCents: line.qfBonusCents,
-    estimatedMatchCents: line.baseMatchCents + line.qfBonusCents,
-    blockers: line.blockers,
-  }));
+  const previewRows = allocation.lines.map((line) => {
+    const campaign = demoMpgfPublicGoodsCampaigns.find((candidate) => candidate.id === line.campaignId);
+    const incidentState = campaign ? incidentStateForCampaign(campaign, options) : "clear";
+    const matchPreviewHiddenByIncidentFreeze = incidentState === "frozen";
+
+    return {
+      campaignId: line.campaignId,
+      status: line.status,
+      incidentState,
+      matchPreviewHiddenByIncidentFreeze,
+      verifiedDonorCount: line.verifiedSupporterCount,
+      directEligibleCents: line.directEligibleCents,
+      qfScore: matchPreviewHiddenByIncidentFreeze ? null : line.qfScore,
+      estimatedBaseMatchCents: matchPreviewHiddenByIncidentFreeze ? null : line.baseMatchCents,
+      estimatedQfBonusCents: matchPreviewHiddenByIncidentFreeze ? null : line.qfBonusCents,
+      estimatedMatchCents: matchPreviewHiddenByIncidentFreeze ? null : line.baseMatchCents + line.qfBonusCents,
+      blockers: matchPreviewHiddenByIncidentFreeze
+        ? [...new Set([...line.blockers, "incident_frozen_match_preview_hidden"])]
+        : line.blockers,
+    };
+  });
 
   return {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+    cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     roundId,
     final: false,
+    incidentFreezePolicy: "hide_mutable_match_preview_until_resolved",
     calcHash: publicCalcHash(previewRows),
     rows: previewRows,
   };
@@ -282,6 +328,7 @@ export function getMpgfPublicGoodsAllocationReportApi(roundId: string = demoMpgf
   return {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+    cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     roundId,
     final: true,
     calcHash: publicCalcHash(rows),
@@ -314,6 +361,7 @@ export function getMpgfPublicGoodsLedgerApi() {
   return {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+    cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     ledgerPolicy: "public_aggregate_no_donor_rows_no_receipt_urls",
     calcHash: publicCalcHash(rows),
     rows,

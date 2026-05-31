@@ -107,6 +107,8 @@ import {
   persistMpgfPublicGoodsMilestoneRelease,
 } from "./mpgf/public-goods-milestones";
 import {
+  MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
+  MPGF_PUBLIC_GOODS_API_HEADERS,
   MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
   getMpgfPublicGoodsAllocationReportApi,
   getMpgfPublicGoodsCampaignApi,
@@ -494,12 +496,22 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   const campaigns = listMpgfPublicGoodsCampaignsApi(demoMpgfAssuranceRound.id);
   const detail = getMpgfPublicGoodsCampaignApi(demoMpgfPublicGoodsCampaigns[0]?.slug ?? "");
   const preview = getMpgfPublicGoodsMatchPreviewApi(demoMpgfAssuranceRound.id);
+  const frozenCampaignId = demoMpgfPublicGoodsCampaigns[0]?.id ?? "";
+  const frozenPreview = getMpgfPublicGoodsMatchPreviewApi(demoMpgfAssuranceRound.id, {
+    incidentStatusByCampaignId: { [frozenCampaignId]: "frozen" },
+  });
+  const frozenDetail = getMpgfPublicGoodsCampaignApi(frozenCampaignId, {
+    incidentStatusByCampaignId: { [frozenCampaignId]: "frozen" },
+  });
   const allocations = getMpgfPublicGoodsAllocationReportApi(demoMpgfAssuranceRound.id);
   const ledger = getMpgfPublicGoodsLedgerApi();
 
   assert.equal(rounds.privacyPolicy, MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY);
+  assert.equal(rounds.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
+  assert.deepEqual(MPGF_PUBLIC_GOODS_API_HEADERS, { "Cache-Control": MPGF_PUBLIC_GOODS_API_CACHE_CONTROL });
   assert.equal(rounds.rounds.length, 1);
   assert.ok(round);
+  assert.equal(round.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.match(round.round.sponsorPool.visibleCommitment, /challenge match/i);
   assert.ok(Number(round.round.sponsorPool.perDonorQfCapCents) > 0);
   assert.equal(round.round.sponsorPool.verificationWeightPolicy, "identity_confidence_only_no_moral_reputation");
@@ -516,14 +528,30 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal("supporterReason" in detail.campaign, false);
   assert.equal("userId" in detail.campaign, false);
   assert.ok(preview);
+  assert.equal(preview.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.equal(preview.final, false);
+  assert.equal(preview.incidentFreezePolicy, "hide_mutable_match_preview_until_resolved");
   assert.match(preview.calcHash, /^sha256:/);
   assert.ok(preview.rows.every((row) => typeof row.verifiedDonorCount === "number"));
+  assert.ok(frozenPreview);
+  const frozenPreviewRow = frozenPreview.rows.find((row) => row.campaignId === frozenCampaignId);
+  assert.ok(frozenPreviewRow);
+  assert.equal(frozenPreviewRow.incidentState, "frozen");
+  assert.equal(frozenPreviewRow.matchPreviewHiddenByIncidentFreeze, true);
+  assert.equal(frozenPreviewRow.estimatedMatchCents, null);
+  assert.equal(frozenPreviewRow.qfScore, null);
+  assert.ok(frozenPreviewRow.blockers.includes("incident_frozen_match_preview_hidden"));
+  assert.ok(frozenDetail);
+  assert.equal(frozenDetail.campaign.incidentState, "frozen");
+  assert.equal(frozenDetail.campaign.matchPreviewHiddenByIncidentFreeze, true);
+  assert.equal(frozenDetail.campaign.matchEstimateCents, null);
   assert.ok(allocations);
+  assert.equal(allocations.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.equal(allocations.final, true);
   assert.ok(allocations.totalPayoutCents > 0);
   assert.ok(allocations.rows.every((row) => row.custodyMode === "no_custody_external_handoff"));
   assert.equal(ledger.ledgerPolicy, "public_aggregate_no_donor_rows_no_receipt_urls");
+  assert.equal(ledger.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.ok(ledger.rows.every((row) => row.releasedTotalCents === 0));
   assert.equal(getMpgfPublicGoodsRoundApi("unknown-round"), null);
   assert.equal(getMpgfPublicGoodsCampaignApi("unknown-campaign"), null);
@@ -557,6 +585,9 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     const source = readFileSync(path, "utf8");
 
     assert.match(source, expected);
+    if (path.includes("/rounds") || path.includes("/campaigns/[campaignId]") || path.includes("/audit/ledger")) {
+      assert.match(source, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+    }
     assert.doesNotMatch(source, /token voting/i);
   }
 

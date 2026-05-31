@@ -44,6 +44,10 @@ function statusLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function formatMaybeUsd(cents: number | null | undefined) {
+  return typeof cents === "number" ? formatUsd(cents) : "hidden while incident is frozen";
+}
+
 export async function generateMetadata({ params }: MpgfRoundPageProps): Promise<Metadata> {
   const { roundId } = await params;
   const result = getMpgfPublicGoodsRoundApi(roundId);
@@ -99,7 +103,7 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
     campaignId: campaign.campaignId,
     countedForMatchCents: campaign.countedForMatchCents,
     directEligibleCents: campaign.directEligibleCents,
-    matchEstimateCents: campaign.matchEstimateCents,
+    matchEstimateCents: campaign.matchEstimateCents ?? 0,
     thresholdAmountCents: campaign.thresholdAmountCents,
     thresholdDonors: campaign.thresholdDonors,
     thresholdPassed: campaign.thresholdPassed,
@@ -273,7 +277,7 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
                   </div>
                   <div>
                     <dt>Estimated match</dt>
-                    <dd>{formatUsd(previewRow?.estimatedMatchCents ?? campaign.matchEstimateCents)}</dd>
+                    <dd>{formatMaybeUsd(previewRow?.estimatedMatchCents ?? campaign.matchEstimateCents)}</dd>
                   </div>
                   <div>
                     <dt>Final match</dt>
