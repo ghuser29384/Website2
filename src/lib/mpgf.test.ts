@@ -814,9 +814,20 @@ test("MPGF public-goods review console uses bounded reason codes and appeal stat
   assert.ok(consoleSummary.reasonCodes.includes("blocked_threat_baseline"));
   assert.equal(consoleSummary.privacySafeAnalyticsOnly, true);
   assert.equal(consoleSummary.rawPrivateTextStoredInAnalytics, false);
+  assert.equal(consoleSummary.conflictCheckBanner.status, "clear");
+  assert.ok(consoleSummary.rubric.some((item) => item.key === "milestone_release"));
+  assert.ok(consoleSummary.queue.every((item) => item.conflictCheckStatus === "clear"));
+  assert.ok(consoleSummary.milestoneReleaseQueue.some((item) => item.webhookCanAuthorizeFinalPayout === false));
+  assert.ok(consoleSummary.milestoneReleaseQueue.some((item) => item.status === "paused_by_dispute"));
+  assert.ok(consoleSummary.disputeQueue.some((item) => item.state === "challenge_window"));
+  assert.ok(consoleSummary.auditTrail.every((item) => !item.publicSummary.includes("http")));
   assert.equal(demoMpgfPublicGoodsReviewCases.some((reviewCase) => reviewCase.reasonCode === "needs_destination_evidence"), true);
   assert.match(adminPage, /appeal_upheld/);
   assert.match(adminPage, /appeal_denied/);
+  assert.match(adminPage, /Conflict check banner/);
+  assert.match(adminPage, /Milestone release queue/);
+  assert.match(adminPage, /Dispute queue/);
+  assert.match(adminPage, /Audit trail viewer/);
   assert.throws(
     () =>
       reviewMpgfPublicGoodsCampaign({

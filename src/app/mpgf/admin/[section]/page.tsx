@@ -14,6 +14,7 @@ import { mpgfAdminSections } from "@/lib/mpgf/data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import {
   MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES,
+  formatUsd,
   summarizeMpgfPublicGoodsReviewConsole,
 } from "@/lib/mpgf/mechanism";
 import type { MpgfPublicGoodsReviewAction, MpgfPublicGoodsReviewReasonCode } from "@/lib/mpgf/types";
@@ -314,6 +315,30 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
                     <strong>{publicGoodsReviewConsole.verifiedPaymentProofCount}</strong>
                   </div>
                 </div>
+                <article className="mpgf-gate-row">
+                  <div>
+                    <p className="eyebrow">Conflict check banner</p>
+                    <h3>{publicGoodsReviewConsole.conflictCheckBanner.status.replaceAll("_", " ")}</h3>
+                    <p>{publicGoodsReviewConsole.conflictCheckBanner.message}</p>
+                  </div>
+                  <span className={`mpgf-gate-status mpgf-gate-status-${publicGoodsReviewConsole.conflictCheckBanner.status}`}>
+                    {publicGoodsReviewConsole.conflictCheckBanner.status}
+                  </span>
+                </article>
+                <div className="mpgf-gate-list">
+                  {publicGoodsReviewConsole.rubric.map((rubricItem) => (
+                    <article key={rubricItem.key} className="mpgf-gate-row">
+                      <div>
+                        <p className="eyebrow">{rubricItem.reviewerRole.replaceAll("_", " ")}</p>
+                        <h3>{rubricItem.label}</h3>
+                        <p>{rubricItem.requiredEvidence}</p>
+                      </div>
+                      <span className="mpgf-gate-status mpgf-gate-status-pending_review">
+                        rubric
+                      </span>
+                    </article>
+                  ))}
+                </div>
                 <div className="mpgf-gate-list">
                   {publicGoodsReviewConsole.queue.map((item) => (
                     <article key={item.campaignId} className="mpgf-gate-row">
@@ -324,6 +349,19 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
                           Assurance status: {item.assuranceStatus.replaceAll("_", " ")}. Latest
                           reason code: {item.latestReasonCode?.replaceAll("_", " ") ?? "none"}.
                         </p>
+                        <p>
+                          Conflict check: {item.conflictCheckStatus}; {item.conflictCheckMessage}
+                        </p>
+                        <dl className="mpgf-evidence-list">
+                          <div>
+                            <dt>Direct eligible</dt>
+                            <dd>{formatUsd(item.directEligibleCents)}</dd>
+                          </div>
+                          <div>
+                            <dt>Approved match</dt>
+                            <dd>{formatUsd(item.approvedMatchCents)}</dd>
+                          </div>
+                        </dl>
                         {item.blockers.length > 0 ? (
                           <ul className="mpgf-check-list">
                             {item.blockers.map((blocker) => (
@@ -388,6 +426,107 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
                       </span>
                     </article>
                   ))}
+                </div>
+                <div className="mpgf-admin-action-panel">
+                  <p className="eyebrow">Milestone release queue</p>
+                  <h3>Review-state confirmation before partner release</h3>
+                  <div className="mpgf-gate-list">
+                    {publicGoodsReviewConsole.milestoneReleaseQueue.map((item) => (
+                      <article key={item.campaignId} className="mpgf-gate-row">
+                        <div>
+                          <p className="eyebrow">Milestone {item.nextMilestoneOrdinal}</p>
+                          <h3>{item.title}</h3>
+                          <dl className="mpgf-evidence-list">
+                            <div>
+                              <dt>Approved match</dt>
+                              <dd>{formatUsd(item.approvedMatchCents)}</dd>
+                            </div>
+                            <div>
+                              <dt>Release review</dt>
+                              <dd>
+                                {item.releasePct}% tranche; {formatUsd(item.releaseAmountCents)} pending
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Review state</dt>
+                              <dd>
+                                {item.reviewStateConfirmedRequired
+                                  ? "review-state confirmation required"
+                                  : "already confirmed"}
+                              </dd>
+                            </div>
+                          </dl>
+                          {item.blockers.length > 0 ? (
+                            <ul className="mpgf-check-list">
+                              {item.blockers.map((blocker) => (
+                                <li key={blocker}>{blocker.replaceAll("_", " ")}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                        <span className={`mpgf-gate-status mpgf-gate-status-${item.status === "review_required" ? "pending_review" : "blocked"}`}>
+                          {item.status.replaceAll("_", " ")}
+                        </span>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+                <div className="mpgf-admin-action-panel">
+                  <p className="eyebrow">Dispute queue</p>
+                  <h3>Challenge windows and appeals</h3>
+                  <div className="mpgf-gate-list">
+                    {publicGoodsReviewConsole.disputeQueue.map((item) => (
+                      <article key={item.id} className="mpgf-gate-row">
+                        <div>
+                          <p className="eyebrow">{item.state.replaceAll("_", " ")}</p>
+                          <h3>{item.title}</h3>
+                          <p>
+                            Reason: {item.reasonCode.replaceAll("_", " ")}. Appeal:{" "}
+                            {item.appealStatus.replaceAll("_", " ")}.
+                          </p>
+                          <p>
+                            Opened {new Date(item.openedAt).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                            {item.challengeWindowEndsAt
+                              ? `; challenge window ends ${new Date(item.challengeWindowEndsAt).toLocaleDateString(
+                                  "en-US",
+                                  { month: "short", day: "numeric" },
+                                )}`
+                              : ""}
+                          </p>
+                        </div>
+                        <span className="mpgf-gate-status mpgf-gate-status-pending_review">dispute</span>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+                <div className="mpgf-admin-action-panel">
+                  <p className="eyebrow">Audit trail viewer</p>
+                  <h3>Public-safe review and proof events</h3>
+                  <div className="mpgf-gate-list">
+                    {publicGoodsReviewConsole.auditTrail.slice(0, 6).map((item) => (
+                      <article key={item.id} className="mpgf-gate-row">
+                        <div>
+                          <p className="eyebrow">{item.objectType.replaceAll("_", " ")}</p>
+                          <h3>{item.eventType.replaceAll("_", " ")}</h3>
+                          <p>{item.publicSummary}</p>
+                          <dl className="mpgf-evidence-list">
+                            <div>
+                              <dt>Event hash</dt>
+                              <dd>{item.eventHash}</dd>
+                            </div>
+                            <div>
+                              <dt>Privacy class</dt>
+                              <dd>{item.privacyClass.replaceAll("_", " ")}</dd>
+                            </div>
+                          </dl>
+                        </div>
+                        <span className="mpgf-gate-status mpgf-gate-status-passed">logged</span>
+                      </article>
+                    ))}
+                  </div>
                 </div>
                 <p className="mpgf-small">
                   Reason codes: {MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES.map((code) => code.replaceAll("_", " ")).join(", ")}.

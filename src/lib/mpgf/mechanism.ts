@@ -901,11 +901,13 @@ export function summarizeMpgfPublicGoodsReviewConsole({
   paymentProofs?: MpgfPublicGoodsPaymentProof[];
   now?: Date;
 } = {}) {
+  const allocation = allocateMpgfAssuranceRound({ now });
   const queue = campaigns.map((campaign) => {
     const latestCase = [...reviewCases]
       .filter((reviewCase) => reviewCase.campaignId === campaign.id)
       .sort((left, right) => Date.parse(right.openedAt) - Date.parse(left.openedAt))[0];
     const assuranceStatus = getMpgfCampaignAssuranceStatus(campaign, demoMpgfAssurancePledges, now);
+    const line = allocation.lines.find((candidate) => candidate.campaignId === campaign.id);
 
     return {
       campaignId: campaign.id,
@@ -915,13 +917,130 @@ export function summarizeMpgfPublicGoodsReviewConsole({
       latestReasonCode: latestCase?.reasonCode ?? null,
       appealStatus: latestCase?.appealStatus ?? "none",
       allowedNextActions: latestCase?.allowedNextActions ?? allowedNextReviewActions(campaign.reviewStatus),
+      conflictCheckStatus: "clear" as const,
+      conflictCheckMessage:
+        "Reviewer must not be a campaign party, beneficiary, sponsor, or active recusal record before assignment.",
+      directEligibleCents: assuranceStatus.directEligibleCents,
+      approvedMatchCents: line ? line.baseMatchCents + line.qfBonusCents : 0,
       blockers: assuranceStatus.blockers,
     };
   });
+  const rubric = [
+    {
+      key: "eligibility_queue",
+      label: "Eligibility and destination proof",
+      reviewerRole: "eligibility_reviewer",
+      requiredEvidence: "Reviewed destination reference, public summary, and allowed destination type.",
+    },
+    {
+      key: "anti_threat_externality",
+      label: "Anti-threat and externality screen",
+      reviewerRole: "safety_reviewer",
+      requiredEvidence: "No threat baseline, no perverse incentive, and publishable dissent lane.",
+    },
+    {
+      key: "identity_threshold",
+      label: "Identity-weighted donor threshold",
+      reviewerRole: "integrity_reviewer",
+      requiredEvidence: "Unique counted identities, donor cap, and reduced weight for low-confidence accounts.",
+    },
+    {
+      key: "milestone_release",
+      label: "Milestone release readiness",
+      reviewerRole: "payout_reviewer",
+      requiredEvidence: "Milestone evidence, review-state confirmation, no active appeal, and partner execution only.",
+    },
+    {
+      key: "appeals_and_audit",
+      label: "Appeal and audit trail",
+      reviewerRole: "appeals_reviewer",
+      requiredEvidence: "Public reason code, appeal status, append-only event hash, and private evidence redaction.",
+    },
+  ];
+  const disputeQueue = reviewCases
+    .filter(
+      (reviewCase) =>
+        reviewCase.appealStatus === "appeal_requested" ||
+        reviewCase.state === "challenge_window" ||
+        (reviewCase.action === "challenge" && !reviewCase.closedAt),
+    )
+    .map((reviewCase) => {
+      const campaign = campaigns.find((candidate) => candidate.id === reviewCase.campaignId);
+
+      return {
+        id: reviewCase.id,
+        campaignId: reviewCase.campaignId,
+        title: campaign?.title ?? reviewCase.campaignId,
+        state: reviewCase.state,
+        appealStatus: reviewCase.appealStatus,
+        reasonCode: reviewCase.reasonCode,
+        openedAt: reviewCase.openedAt,
+        challengeWindowEndsAt: reviewCase.challengeWindowEndsAt ?? null,
+      };
+    });
+  const milestoneReleaseQueue = campaigns.map((campaign) => {
+    const line = allocation.lines.find((candidate) => candidate.campaignId === campaign.id);
+    const relevantDisputes = disputeQueue.filter((dispute) => dispute.campaignId === campaign.id);
+    const approvedMatchCents = line ? line.baseMatchCents + line.qfBonusCents : 0;
+    const blockers = [...(line?.blockers ?? [])];
+
+    if (relevantDisputes.length > 0) {
+      blockers.push("open_dispute_or_challenge_window");
+    }
+
+    return {
+      campaignId: campaign.id,
+      title: campaign.title,
+      nextMilestoneOrdinal: 1,
+      releasePct: 40,
+      approvedMatchCents,
+      releaseAmountCents: Math.floor((approvedMatchCents * 40) / 100),
+      status:
+        relevantDisputes.length > 0
+          ? ("paused_by_dispute" as const)
+          : line?.status === "payable"
+            ? ("review_required" as const)
+            : ("not_payable" as const),
+      reviewStateConfirmedRequired: true,
+      webhookCanAuthorizeFinalPayout: false as const,
+      blockers,
+    };
+  });
+  const auditTrail = [
+    ...reviewCases.map((reviewCase) => ({
+      id: reviewCase.id,
+      objectType: "review_case",
+      objectId: reviewCase.campaignId,
+      eventType: `review_${reviewCase.action}`,
+      eventHash: `demo-audit:${stablePublicGoodsHash(`${reviewCase.id}:${reviewCase.reasonCode}`).toString(16)}`,
+      publicSummary: reviewCase.publicNotes,
+      createdAt: reviewCase.openedAt,
+      privacyClass: "public_reason_no_private_evidence_url",
+    })),
+    ...paymentProofs.map((proof) => ({
+      id: proof.id,
+      objectType: "payment_proof",
+      objectId: proof.campaignId,
+      eventType: `payment_proof_${proof.status}`,
+      eventHash: `demo-audit:${stablePublicGoodsHash(`${proof.id}:${proof.status}`).toString(16)}`,
+      publicSummary: `${proof.reconciliationSource.replaceAll("_", " ")} ${proof.status.replaceAll("_", " ")}`,
+      createdAt: proof.createdAt,
+      privacyClass: "aggregate_only_no_receipt_url",
+    })),
+  ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 
   return {
     reasonCodes: MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES,
     queue,
+    conflictCheckBanner: {
+      status: queue.some((item) => item.conflictCheckStatus !== "clear") ? "blocked" : "clear",
+      message:
+        "Conflict check banner: reviewer assignment is blocked by party, beneficiary, sponsor, or recusal conflicts.",
+    },
+    rubric,
+    milestoneReleaseQueue,
+    disputeQueue,
+    auditTrail,
     openCaseCount: reviewCases.filter((reviewCase) => !reviewCase.closedAt).length,
     challengedCampaignCount: campaigns.filter((campaign) => campaign.reviewStatus === "challenge_window").length,
     activeSponsorSubscriptionCount: subscriptions.filter((subscription) => subscription.status === "active").length,
