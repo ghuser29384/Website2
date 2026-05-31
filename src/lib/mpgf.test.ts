@@ -705,6 +705,12 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
   assert.equal(governance.roundRules.campaignThresholds.length, demoMpgfPublicGoodsCampaigns.length);
   assert.match(governance.roundRules.parameterChangePolicy, /never mid-round/);
   assert.match(governance.conflictAndRecusalRules.recusalEnforcement, /reviewer_recusals/);
+  assert.equal(governance.fundsFlowSeparation.phaseOneCustodyPolicy, "fiscal_sponsor_or_partner_held_sponsor_pool_not_platform_custody");
+  assert.match(governance.fundsFlowSeparation.legalRecipientPolicy, /does not become the legal donation recipient/i);
+  assert.ok(governance.fundsFlowSeparation.roles.some((role) => role.key === "donation_receipt_issuer"));
+  assert.ok(governance.fundsFlowSeparation.roles.some((role) => role.key === "sponsor_pool_custodian"));
+  assert.ok(governance.fundsFlowSeparation.roles.some((role) => role.key === "payout_executor"));
+  assert.ok(governance.fundsFlowSeparation.invariants.some((invariant) => /verified webhook events/i.test(invariant)));
   assert.equal(governance.incidentAndDisputeLane.pausesUnreleasedMilestones, true);
   assert.ok(governance.whatRoundDoesNotDecide.some((note) => /No global moral ranking/i.test(note)));
   assert.ok(governance.prohibitedGovernanceMechanisms.includes("token_voting"));
@@ -724,6 +730,8 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
     /Reviewer panel structure/,
     /Locked round parameters/,
     /Campaign thresholds/,
+    /Funds-flow separation/,
+    /Partner-held roles/,
     /Public incident and dispute lane/,
     /What this round does not decide/,
     /No global moral ranking/,

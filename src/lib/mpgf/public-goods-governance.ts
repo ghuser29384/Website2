@@ -137,6 +137,51 @@ export function getMpgfPublicGoodsGovernanceApi() {
       refundPolicyPath: "/mpgf/real-money-terms",
       campaignThresholds,
     },
+    fundsFlowSeparation: {
+      phaseOneCustodyPolicy: "fiscal_sponsor_or_partner_held_sponsor_pool_not_platform_custody",
+      legalRecipientPolicy:
+        "Moral Trade does not become the legal donation recipient unless jurisdiction-specific legal review approves that role.",
+      roles: [
+        {
+          key: "platform_activity",
+          holder: "Moral Trade application",
+          responsibilities: [
+            "campaign review workflow",
+            "verified quadratic allocation calculation",
+            "public aggregate ledger and audit trail",
+          ],
+        },
+        {
+          key: "donation_receipt_issuer",
+          holder: "approved fiscal sponsor or payment partner",
+          responsibilities: [
+            "issue any legally approved donation or payment receipt",
+            "avoid tax-deductibility claims unless the issuer has approved them",
+          ],
+        },
+        {
+          key: "sponsor_pool_custodian",
+          holder: "fiscal sponsor, partner fund, or regulated payment provider",
+          responsibilities: [
+            "hold sponsor-pool funds outside Moral Trade application custody",
+            "preserve refund and rollover accounting by round",
+          ],
+        },
+        {
+          key: "payout_executor",
+          holder: "fiscal sponsor, partner fund, or approved payout operator",
+          responsibilities: [
+            "execute milestone releases only after dual-control review",
+            "return partner reference ids without exposing private payout documents",
+          ],
+        },
+      ],
+      invariants: [
+        "Stripe Checkout records provider state; MPGF records contribution state only from verified webhook events.",
+        "Allocation, donation receipt issuance, custody, and payout execution stay separate records.",
+        "No public copy claims tax treatment, escrow, or guaranteed effectiveness without approved partner wording.",
+      ],
+    },
     incidentAndDisputeLane: {
       publicStatusPath: "/mpgf/governance#incident-dispute-lane",
       appealEndpoint: "/api/mpgf/appeals",
@@ -161,6 +206,7 @@ export function getMpgfPublicGoodsGovernanceApi() {
       beforeProd: [
         { key: "named_governance_roles", status: "published", evidencePath: "/mpgf/governance" },
         { key: "round_rules_caps_thresholds_refund_policy", status: "published", evidencePath: "/mpgf/governance" },
+        { key: "fiscal_sponsor_or_partner_custodian", status: "pending_external_review", evidencePath: "/mpgf/governance" },
         { key: "legal_review", status: "pending_external_review", evidencePath: "/mpgf/real-money-terms" },
         { key: "admin_reviewer_mfa", status: "blocked_until_gate_passes", evidencePath: "/mpgf/admin" },
         { key: "webhook_signature_replay_check", status: "configured_gate_required", evidencePath: "/api/mpgf/health" },

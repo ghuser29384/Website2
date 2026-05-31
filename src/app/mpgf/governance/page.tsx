@@ -194,6 +194,47 @@ export default async function MpgfGovernancePage() {
         </article>
       </section>
 
+      <section className="mpgf-detail-grid">
+        <article className="mpgf-panel">
+          <p className="eyebrow">Funds-flow separation</p>
+          <h2>Keep platform, receipts, custody, and payouts distinct</h2>
+          <dl className="mpgf-summary-grid">
+            <div>
+              <dt>Phase-one custody</dt>
+              <dd>{statusLabel(governance.fundsFlowSeparation.phaseOneCustodyPolicy)}</dd>
+            </div>
+            <div>
+              <dt>Legal recipient role</dt>
+              <dd>{governance.fundsFlowSeparation.legalRecipientPolicy}</dd>
+            </div>
+          </dl>
+          <ul className="mpgf-check-list">
+            {governance.fundsFlowSeparation.invariants.map((invariant) => (
+              <li key={invariant}>{invariant}</li>
+            ))}
+          </ul>
+        </article>
+
+        <article className="mpgf-panel">
+          <p className="eyebrow">Partner-held roles</p>
+          <h2>Who does what before money moves</h2>
+          <div className="mpgf-table" aria-label="MPGF funds-flow role separation">
+            <div className="mpgf-table-row mpgf-table-head">
+              <span>Role</span>
+              <span>Holder</span>
+              <span>Responsibilities</span>
+            </div>
+            {governance.fundsFlowSeparation.roles.map((role) => (
+              <div className="mpgf-table-row" key={role.key}>
+                <span>{statusLabel(role.key)}</span>
+                <span>{role.holder}</span>
+                <span>{role.responsibilities.join(", ")}</span>
+              </div>
+            ))}
+          </div>
+        </article>
+      </section>
+
       <section className="mpgf-detail-grid" id="incident-dispute-lane">
         <article className="mpgf-panel">
           <p className="eyebrow">Conflict, recusal, and appeal paths</p>
