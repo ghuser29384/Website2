@@ -370,6 +370,7 @@
 }
 
 .mpgf-modal-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   padding: 0.85rem;
   border: 1px solid var(--mpgf-line);
   border-radius: var(--radius-sm);
@@ -697,6 +698,7 @@
   .mpgf-control-summary,
   .mpgf-gate-row,
   .mpgf-modal-header,
+  .mpgf-modal-summary,
   .mpgf-segmented-control {
     grid-template-columns: 1fr;
   }
