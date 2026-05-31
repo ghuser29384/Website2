@@ -61,6 +61,20 @@ async function saveDraft(body: string) {
   });
 }
 
+async function clearDrafts() {
+  const db = await openDraftDatabase();
+
+  return new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.clear();
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve();
+    transaction.oncomplete = () => db.close();
+  });
+}
+
 export function BackgroundLocalDraftsPanel() {
   const [drafts, setDrafts] = useState<LocalDraftRecord[]>([]);
   const [draftBody, setDraftBody] = useState("");
@@ -103,6 +117,16 @@ export function BackgroundLocalDraftsPanel() {
     }
   }
 
+  async function handleClearDrafts() {
+    try {
+      await clearDrafts();
+      setDrafts([]);
+      setStatus("Local drafts cleared on this device");
+    } catch {
+      setStatus("Could not clear local drafts");
+    }
+  }
+
   return (
     <article className="panel data-card">
       <p className="detail-kicker">Local drafts</p>
@@ -116,9 +140,14 @@ export function BackgroundLocalDraftsPanel() {
           value={draftBody}
         />
       </label>
-      <button className="button button-secondary button-mini" onClick={handleSaveDraft} type="button">
-        Save local draft
-      </button>
+      <div className="offer-actions">
+        <button className="button button-secondary button-mini" onClick={handleSaveDraft} type="button">
+          Save local draft
+        </button>
+        <button className="button button-secondary button-mini" onClick={handleClearDrafts} type="button">
+          Clear local drafts
+        </button>
+      </div>
       <p className="route-text">{status}</p>
       {drafts.length ? (
         <ul className="clean-list">

@@ -5,12 +5,15 @@ import {
   BACKGROUND_DATA_INVENTORY,
   BACKGROUND_NOTIFICATION_EVENT_KIND_OPTIONS,
   BACKGROUND_SENSITIVE_FIELD_KEYS,
+  BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION,
+  BACKGROUND_SELF_SERVE_DELETION_SURFACES,
   buildBackgroundNotificationPreferenceRows,
   createDefaultBackgroundNotificationPreferences,
   getDataRightRequestDueAt,
   getBackgroundNotificationEventKindForWishNotification,
   getPrivateNoStoreHeaders,
   isBackgroundSensitiveFieldKey,
+  validateBackgroundSelfServeDeletion,
   validateProfileDataRightRequest,
 } from "@/lib/background-privacy-controls";
 
@@ -105,4 +108,18 @@ test("authenticated route cache headers are private no-store only on private pre
 
 test("data-right request due date defaults to thirty days", () => {
   assert.equal(getDataRightRequestDueAt(new Date("2026-05-27T00:00:00Z")), "2026-06-26T00:00:00.000Z");
+});
+
+test("self-serve background deletion requires exact owner confirmation", () => {
+  const rejected = validateBackgroundSelfServeDeletion({
+    confirmation: "delete background networking",
+  });
+  const accepted = validateBackgroundSelfServeDeletion({
+    confirmation: ` ${BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION} `,
+  });
+
+  assert.ok(rejected.errors.some((error) => error.includes(BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION)));
+  assert.deepEqual(accepted.errors, []);
+  assert.equal(accepted.confirmation, BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION);
+  assert.ok(BACKGROUND_SELF_SERVE_DELETION_SURFACES.some((surface) => surface.includes("Safety")));
 });

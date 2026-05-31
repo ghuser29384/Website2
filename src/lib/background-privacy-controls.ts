@@ -33,6 +33,15 @@ export interface ProfileDataRightValidationResult {
   scope: ProfileDataRightScope;
 }
 
+export interface BackgroundSelfServeDeletionValidationInput {
+  confirmation?: string;
+}
+
+export interface BackgroundSelfServeDeletionValidationResult {
+  confirmation: string;
+  errors: string[];
+}
+
 export const BACKGROUND_NOTIFICATION_EVENT_KIND_OPTIONS: Array<{
   description: string;
   label: string;
@@ -117,10 +126,23 @@ export const BACKGROUND_SENSITIVE_FIELD_KEYS = [
   "verification_preferences",
 ] as const;
 
+export const BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION = "DELETE BACKGROUND NETWORKING";
+
+export const BACKGROUND_SELF_SERVE_DELETION_SURFACES = [
+  "Private wish profile and wish entries",
+  "Broad preview and discoverability surface",
+  "Manual source summaries and connector permissions",
+  "Saved searches, delegate strategy records, and helper runs",
+  "Match suggestions, consent records, notifications, privacy grants, and access requests",
+  "Introduction planning records, network invites, bounties, and collectives",
+  "Queued background-networking emails",
+  "Safety, budget, and operator audit rows retained only as redacted or anonymized records",
+] as const;
+
 export const BACKGROUND_DATA_INVENTORY = [
   {
     classification: "public-preview",
-    control: "Disable discoverability or public preview sharing from the wish profile.",
+    control: "Disable discoverability or public preview sharing from the wish profile; remove through self-serve background deletion.",
     label: "Broad previews",
     processor: "Supabase Postgres",
     retention: "Until the profile is hidden, corrected, or deleted.",
@@ -129,7 +151,7 @@ export const BACKGROUND_DATA_INVENTORY = [
   },
   {
     classification: "private-profile",
-    control: "Visible to the owner; exact detail moves only through grants.",
+    control: "Visible to the owner; exact detail moves only through grants; owner-confirmed self-serve deletion is available.",
     label: "Private wishes, asks, constraints, and capabilities",
     processor: "Supabase Postgres with RLS and app-level field encryption for new sensitive text.",
     retention: "Until correction, deletion, or account removal, subject to safety/legal holds.",
@@ -138,7 +160,7 @@ export const BACKGROUND_DATA_INVENTORY = [
   },
   {
     classification: "consent-ledger",
-    control: "Purpose, audience stage, expiry, and revocation are recorded per grant.",
+    control: "Purpose, audience stage, expiry, and revocation are recorded per grant; participant-facing grants are removed during self-serve deletion.",
     label: "Disclosure grants and access requests",
     processor: "Supabase Postgres",
     retention: "For the active introduction plus audit retention after expiry or revocation.",
@@ -147,7 +169,7 @@ export const BACKGROUND_DATA_INVENTORY = [
   },
   {
     classification: "manual-source-summary",
-    control: "Manual summaries only; raw private-feed ingestion remains out of scope.",
+    control: "Manual summaries only; raw private-feed ingestion remains out of scope; source rows are removed during self-serve deletion.",
     label: "Source notes and connection permissions",
     processor: "Supabase Postgres with app-level field encryption for notes and approved summaries.",
     retention: "Until source removal, deletion request, or safety/legal hold.",
@@ -156,7 +178,7 @@ export const BACKGROUND_DATA_INVENTORY = [
   },
   {
     classification: "operations",
-    control: "Buckets, counts, status labels, and hashed fingerprints only.",
+    control: "Buckets, counts, status labels, and hashed fingerprints only; safety audit rows are retained without an active profile link when deletion completes.",
     label: "Budgets, snapshots, reports, and operator queues",
     processor: "Supabase Postgres and configured email provider for safe digests.",
     retention: "Operational window plus abuse-prevention audit retention.",
@@ -333,6 +355,24 @@ export function validateProfileDataRightRequest({
     requestDetails: normalizedDetails,
     requestType: normalizedType,
     scope: normalizedScope,
+  };
+}
+
+export function validateBackgroundSelfServeDeletion({
+  confirmation = "",
+}: BackgroundSelfServeDeletionValidationInput): BackgroundSelfServeDeletionValidationResult {
+  const normalizedConfirmation = confirmation.trim();
+  const errors: string[] = [];
+
+  if (normalizedConfirmation !== BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION) {
+    errors.push(
+      `Type ${BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION} to confirm background-networking deletion.`,
+    );
+  }
+
+  return {
+    confirmation: normalizedConfirmation,
+    errors,
   };
 }
 

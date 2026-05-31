@@ -36,6 +36,7 @@ import {
 } from "@/app/actions";
 import {
   createProfileDataRightRequestAction,
+  deleteBackgroundNetworkingDataAction,
   saveBackgroundNotificationPreferencesAction,
 } from "@/app/background-networking/actions";
 import { BackgroundAccountSecurityPanel } from "@/components/dashboard/background-account-security-panel";
@@ -57,6 +58,8 @@ import {
   BACKGROUND_DATA_INVENTORY,
   BACKGROUND_NOTIFICATION_CHANNEL_OPTIONS,
   BACKGROUND_NOTIFICATION_EVENT_KIND_OPTIONS,
+  BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION,
+  BACKGROUND_SELF_SERVE_DELETION_SURFACES,
   PROFILE_DATA_RIGHT_REQUEST_TYPE_OPTIONS,
   PROFILE_DATA_RIGHT_SCOPE_OPTIONS,
   createDefaultBackgroundNotificationPreferences,
@@ -806,6 +809,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   Record request
                 </button>
               </form>
+              <form action={deleteBackgroundNetworkingDataAction} className="compact-form">
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <label className="field">
+                  <span>Self-serve deletion</span>
+                  <input
+                    autoComplete="off"
+                    name="delete_confirmation"
+                    placeholder={BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION}
+                  />
+                </label>
+                <button className="button button-secondary button-mini" type="submit">
+                  Delete background-networking data
+                </button>
+              </form>
+              <p className="route-text">
+                Removes: {BACKGROUND_SELF_SERVE_DELETION_SURFACES.slice(0, 6).join("; ")}.
+                Safety and budget audit rows are retained only as redacted or anonymized records.
+              </p>
               {dashboardData?.errors.profileDataRightRequests ? (
                 <p className="route-text">Could not load data-right requests.</p>
               ) : dashboardData?.profileDataRightRequests.length ? (

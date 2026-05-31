@@ -1630,6 +1630,7 @@ export interface Database {
           daily_limit?: number;
           used_before?: number;
           remaining_after?: number;
+          profile_id?: string | null;
           candidate_count?: number;
           result_count?: number;
           was_limited?: boolean;
@@ -1754,6 +1755,7 @@ export interface Database {
           created_at?: string;
         };
         Update: {
+          actor_profile_id?: string | null;
           event_type?: string;
           summary?: string;
           metadata?: Record<string, unknown>;
@@ -2438,6 +2440,7 @@ export interface Database {
           reviewed_at?: string | null;
         };
         Update: {
+          profile_id?: string | null;
           signal_type?: string;
           severity?: "low" | "medium" | "high" | "critical";
           summary?: string;
