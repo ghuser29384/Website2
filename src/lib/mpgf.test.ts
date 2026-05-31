@@ -92,6 +92,10 @@ import {
 } from "./mpgf/public-goods-kpis";
 import { buildMpgfPublicGoodsOperationsDashboard } from "./mpgf/public-goods-operations";
 import {
+  MPGF_PUBLIC_GOODS_CHALLENGE_POLICY,
+  createMpgfPublicGoodsChallenge,
+} from "./mpgf/public-goods-challenges";
+import {
   MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW,
   MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY,
   authorizeMpgfPublicGoodsPledgeIntentPayment,
@@ -155,6 +159,12 @@ import {
   MPGF_PUBLIC_GOODS_GOVERNANCE_PRIVACY_POLICY,
   getMpgfPublicGoodsGovernanceApi,
 } from "./mpgf/public-goods-governance";
+import {
+  MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY,
+  MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_PRIVACY_POLICY,
+  createMpgfPublicGoodsGovernanceBallot,
+  getMpgfPublicGoodsGovernanceResultsApi,
+} from "./mpgf/public-goods-governance-ballots";
 import {
   MPGF_EVIDENCE_ACCESS_SCOPE,
   MPGF_EVIDENCE_SIGNED_URL_TTL_SECONDS,
@@ -628,6 +638,10 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.proceduralBadges.policy, MPGF_PUBLIC_GOODS_PROCEDURAL_BADGE_POLICY);
   assert.equal(round.round.proceduralBadges.hiddenSignals.moralKarmaScore, false);
   assert.ok(round.round.proceduralBadges.counters.verified_supporter > 0);
+  assert.equal(round.round.governance.ballotPolicy, MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY);
+  assert.equal(round.round.governance.ballotPath, "/api/mpgf/governance/ballots");
+  assert.equal(round.round.governance.challengePath, "/api/mpgf/challenges");
+  assert.equal(round.round.governance.noGlobalMoralRanking, true);
   assert.match(round.round.sponsorPool.visibleCommitment, /challenge match/i);
   assert.ok(Number(round.round.sponsorPool.perDonorQfCapCents) > 0);
   assert.equal(round.round.sponsorPool.verificationWeightPolicy, "identity_confidence_only_no_moral_reputation");
@@ -724,6 +738,9 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/sponsor-pools/[poolId]/deposits/route.ts", /recordMpgfPublicGoodsSponsorPoolDeposit/],
     ["src/app/api/mpgf/trade-surplus/commit/route.ts", /commitMpgfPublicGoodsTradeSurplus/],
     ["src/app/api/mpgf/trade-surplus/settle/route.ts", /settleMpgfPublicGoodsTradeSurplus/],
+    ["src/app/api/mpgf/governance/ballots/route.ts", /createMpgfPublicGoodsGovernanceBallot/],
+    ["src/app/api/mpgf/governance/results/route.ts", /getMpgfPublicGoodsGovernanceResultsApi/],
+    ["src/app/api/mpgf/challenges/route.ts", /createMpgfPublicGoodsChallenge/],
     ["src/app/api/mpgf/audit/ledger/route.ts", /getMpgfPublicGoodsLedgerApi/],
     ["src/app/api/mpgf/providers/stripe/webhook/route.ts", /webhookCanAuthorizeFinalPayout: false/],
     ["src/app/api/mpgf/contributions/manual-evidence/route.ts", /manualEvidenceFallback: true/],
@@ -1130,6 +1147,74 @@ test("MPGF sponsor deposits and trade surplus settle through the shared flywheel
   for (const forbidden of [
     "private-direct-sponsor-deposit-001",
     "private-successful-trade-surplus-001",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("MPGF governance ballots and challenges are procedural and privacy-safe", () => {
+  const ballot = createMpgfPublicGoodsGovernanceBallot({
+    voterId: "private-governance-voter-001",
+    idempotencyKey: "private-governance-idempotency-001",
+    weightsByCategory: {
+      global_health: 4_000,
+      existential_risk: 2_000,
+      animal_welfare: 2_000,
+      public_interest_knowledge: 1_000,
+      sponsor_reserve: 1_000,
+    },
+  });
+  const results = getMpgfPublicGoodsGovernanceResultsApi(demoMpgfAssuranceRound.id);
+  const unknownResults = getMpgfPublicGoodsGovernanceResultsApi("unknown-round");
+  const challenge = createMpgfPublicGoodsChallenge({
+    campaignId: "campaign-animal-welfare-transition",
+    challengerId: "private-challenger-001",
+    reason: "coordination_cluster_review",
+    publicSummary: "Challenge asks reviewers to inspect a possible coordination cluster.",
+  });
+  const serialized = JSON.stringify({ ballot, results, challenge });
+  const ballotRoute = readFileSync("src/app/api/mpgf/governance/ballots/route.ts", "utf8");
+  const resultsRoute = readFileSync("src/app/api/mpgf/governance/results/route.ts", "utf8");
+  const challengeRoute = readFileSync("src/app/api/mpgf/challenges/route.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260531_mpgf_governance_challenges.sql", "utf8");
+
+  assert.equal(ballot.policy, MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY);
+  assert.equal(ballot.noMoralRanking, true);
+  assert.equal(ballot.noTransferableGovernanceWeight, true);
+  assert.ok(ballot.totalWeightBps <= 10_000);
+  assert.match(ballot.voterRefHash, /^sha256:/);
+  assert.match(ballot.idempotencyKeyHash, /^sha256:/);
+  assert.match(ballot.calcHash, /^sha256:/);
+  assert.ok(results);
+  assert.equal(unknownResults, null);
+  assert.equal(results.privacyPolicy, MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_PRIVACY_POLICY);
+  assert.equal(results.policy, MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY);
+  assert.equal(results.noMoralRanking, true);
+  assert.equal(results.noTransferableGovernanceWeight, true);
+  assert.equal(results.suppressedSmallSample, false);
+  assert.equal(results.categories.length, 5);
+  assert.match(results.calcHash, /^sha256:/);
+  assert.equal(challenge.ok, true);
+  assert.equal(challenge.reasonCode, "coordination_cluster_review");
+  assert.equal(challenge.pausesUnreleasedMilestones, true);
+  assert.equal(challenge.finalPayoutAuthorized, false);
+  assert.match(challenge.challengerRefHash, /^sha256:/);
+  assert.match(challenge.calcHash, /^sha256:/);
+  assert.equal(MPGF_PUBLIC_GOODS_CHALLENGE_POLICY, "challenge_windows_pause_unreleased_milestones_without_authorizing_payouts");
+  assert.match(ballotRoute, /Sign in to submit an MPGF governance ballot/);
+  assert.match(resultsRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(challengeRoute, /Sign in to open an MPGF challenge/);
+  assert.match(migration, /mpgf_public_goods_governance_ballots/);
+  assert.match(migration, /mpgf_public_goods_challenges/);
+  assert.match(migration, /no_moral_ranking boolean not null default true/);
+  assert.match(migration, /no_transferable_governance_weight boolean not null default true/);
+  assert.match(migration, /pauses_unreleased_milestones boolean not null default true/);
+  assert.match(migration, /final_payout_authorized boolean not null default false/);
+
+  for (const forbidden of [
+    "private-governance-voter-001",
+    "private-governance-idempotency-001",
+    "private-challenger-001",
   ]) {
     assert.equal(serialized.includes(forbidden), false);
   }

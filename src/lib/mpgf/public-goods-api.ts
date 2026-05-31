@@ -16,6 +16,7 @@ import {
 import { buildMpgfPublicGoodsAllocationSourceProofMap } from "./public-goods-allocation-results";
 import { getMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
 import { MPGF_PUBLIC_GOODS_FINALIZATION_POLICY } from "./public-goods-finalization";
+import { MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY } from "./public-goods-governance-ballots";
 import { buildMpgfPublicGoodsMilestoneSchedule } from "./public-goods-milestones";
 import { getMpgfPublicGoodsProceduralBadgesApi } from "./public-goods-procedural-badges";
 import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
@@ -239,6 +240,13 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
             hiddenSignals: proceduralBadges.hiddenSignals,
           }
         : null,
+      governance: {
+        ballotPolicy: MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY,
+        ballotPath: "/api/mpgf/governance/ballots",
+        resultsPath: `/api/mpgf/governance/results?roundId=${demoMpgfAssuranceRound.id}`,
+        challengePath: "/api/mpgf/challenges",
+        noGlobalMoralRanking: true,
+      },
       campaignCount: demoMpgfPublicGoodsCampaigns.length,
       verifiedDonorCount: allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
       calcHash: publicCalcHash(allocation.lines.map((line) => [line.campaignId, line.qfScore, line.totalPayoutCents])),
