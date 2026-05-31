@@ -101,6 +101,16 @@ import {
   persistMpgfPublicGoodsMilestoneRelease,
 } from "./mpgf/public-goods-milestones";
 import {
+  MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+  getMpgfPublicGoodsAllocationReportApi,
+  getMpgfPublicGoodsCampaignApi,
+  getMpgfPublicGoodsLedgerApi,
+  getMpgfPublicGoodsMatchPreviewApi,
+  getMpgfPublicGoodsRoundApi,
+  listMpgfPublicGoodsCampaignsApi,
+  listMpgfPublicGoodsRoundsApi,
+} from "./mpgf/public-goods-api";
+import {
   evaluateMpgfExactPilotGate,
   evaluateMpgfGovernanceMachineryGate,
   evaluateMpgfPayoutComplianceGate,
@@ -459,6 +469,75 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.match(route, /persistMpgfPublicGoodsAllocationResults/);
   assert.match(route, /proofPageRequired/);
   assert.match(route, /qfBonusCapCents/);
+});
+
+test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matching, and ledger", () => {
+  const rounds = listMpgfPublicGoodsRoundsApi();
+  const round = getMpgfPublicGoodsRoundApi(demoMpgfAssuranceRound.id);
+  const campaigns = listMpgfPublicGoodsCampaignsApi(demoMpgfAssuranceRound.id);
+  const detail = getMpgfPublicGoodsCampaignApi(demoMpgfPublicGoodsCampaigns[0]?.slug ?? "");
+  const preview = getMpgfPublicGoodsMatchPreviewApi(demoMpgfAssuranceRound.id);
+  const allocations = getMpgfPublicGoodsAllocationReportApi(demoMpgfAssuranceRound.id);
+  const ledger = getMpgfPublicGoodsLedgerApi();
+
+  assert.equal(rounds.privacyPolicy, MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY);
+  assert.equal(rounds.rounds.length, 1);
+  assert.ok(round);
+  assert.match(round.round.sponsorPool.visibleCommitment, /challenge match/i);
+  assert.ok(Number(round.round.sponsorPool.perDonorQfCapCents) > 0);
+  assert.equal(round.round.sponsorPool.verificationWeightPolicy, "identity_confidence_only_no_moral_reputation");
+  assert.ok(campaigns);
+  assert.equal(campaigns.campaigns.length, demoMpgfPublicGoodsCampaigns.length);
+  assert.ok(campaigns.campaigns.every((campaign) => campaign.milestoneSchedule.length === 3));
+  assert.ok(campaigns.campaigns.some((campaign) => campaign.thresholdPassed));
+  assert.ok(detail);
+  assert.equal(detail.campaign.proofPath, `/mpgf/pools/${detail.campaign.slug}`);
+  assert.equal("supporterReason" in detail.campaign, false);
+  assert.equal("userId" in detail.campaign, false);
+  assert.ok(preview);
+  assert.equal(preview.final, false);
+  assert.match(preview.calcHash, /^sha256:/);
+  assert.ok(preview.rows.every((row) => typeof row.verifiedDonorCount === "number"));
+  assert.ok(allocations);
+  assert.equal(allocations.final, true);
+  assert.ok(allocations.totalPayoutCents > 0);
+  assert.ok(allocations.rows.every((row) => row.custodyMode === "no_custody_external_handoff"));
+  assert.equal(ledger.ledgerPolicy, "public_aggregate_no_donor_rows_no_receipt_urls");
+  assert.ok(ledger.rows.every((row) => row.releasedTotalCents === 0));
+  assert.equal(getMpgfPublicGoodsRoundApi("unknown-round"), null);
+  assert.equal(getMpgfPublicGoodsCampaignApi("unknown-campaign"), null);
+  assert.equal(getMpgfPublicGoodsMatchPreviewApi("unknown-round"), null);
+  assert.equal(getMpgfPublicGoodsAllocationReportApi("unknown-round"), null);
+
+  const publicApiJson = JSON.stringify({ rounds, round, campaigns, detail, preview, allocations, ledger });
+
+  for (const forbidden of [
+    "demo-supporter",
+    "supporterReason",
+    "charityReceiptRef",
+    "externalReceiptRef",
+    "private@example",
+  ]) {
+    assert.equal(publicApiJson.includes(forbidden), false);
+  }
+
+  for (const [path, expected] of [
+    ["src/app/api/mpgf/rounds/route.ts", /listMpgfPublicGoodsRoundsApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/route.ts", /getMpgfPublicGoodsRoundApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/campaigns/route.ts", /listMpgfPublicGoodsCampaignsApi/],
+    ["src/app/api/mpgf/campaigns/[campaignId]/route.ts", /getMpgfPublicGoodsCampaignApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/match-preview/route.ts", /getMpgfPublicGoodsMatchPreviewApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/allocations/route.ts", /getMpgfPublicGoodsAllocationReportApi/],
+    ["src/app/api/mpgf/audit/ledger/route.ts", /getMpgfPublicGoodsLedgerApi/],
+    ["src/app/api/mpgf/providers/stripe/webhook/route.ts", /webhookCanAuthorizeFinalPayout: false/],
+    ["src/app/api/mpgf/contributions/manual-evidence/route.ts", /manualEvidenceFallback: true/],
+    ["src/app/api/mpgf/admin/integrity/route.ts", /identity_attestation_flags_only_no_hidden_moral_scores/],
+  ] as const) {
+    const source = readFileSync(path, "utf8");
+
+    assert.match(source, expected);
+    assert.doesNotMatch(source, /token voting/i);
+  }
 });
 
 test("MPGF public-goods campaign service validates schema, deadlines, and prohibited claims", () => {
