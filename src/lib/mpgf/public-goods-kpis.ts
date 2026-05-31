@@ -12,6 +12,7 @@ import {
 } from "./data";
 import {
   allocateMpgfAssuranceRound,
+  countMpgfQfContributionCents,
   getMpgfCampaignAssuranceStatus,
   getMpgfPublicGoodsFeatureFlagStatus,
 } from "./mechanism";
@@ -75,6 +76,17 @@ export interface MpgfPublicGoodsKpiSnapshot {
     directFundsToMatchMultiplierBps: number | null;
     matchToDirectMultiplierBps: number | null;
     sponsorPoolUtilizationBps: number | null;
+  };
+  donorEconomics: {
+    activeContributionCount: number;
+    eligibleContributionCount: number;
+    medianGrossContributionCents: number | null;
+    medianCapAdjustedCountedContributionCents: number | null;
+    campaignConcentrationTopDirectShareBps: number | null;
+    campaignConcentrationTopMatchShareBps: number | null;
+    netNewFundingSurveyEventCount: number;
+    likelyNetNewFundingEventCount: number;
+    likelyNetNewFundingShareBps: number | null;
   };
   handoffProof: {
     externalHandoffPledgeCount: number;
@@ -255,6 +267,42 @@ function isEligiblePledge(pledge: MpgfPublicGoodsPledge) {
   return isActivePledge(pledge) && pledge.eligibilityState === "eligible" && pledge.amountCents > 0;
 }
 
+function perDonorQfCapCents(matchPool: MpgfPublicGoodsMatchPool) {
+  const configured = matchPool.restrictionsJson.perDonorQfCapCents;
+
+  return typeof configured === "number" && Number.isFinite(configured) && configured > 0
+    ? Math.floor(configured)
+    : 10_000;
+}
+
+function largestShareBps(amounts: number[], totalCents: number) {
+  if (amounts.length === 0 || totalCents <= 0) {
+    return null;
+  }
+
+  return rateBps(Math.max(...amounts), totalCents);
+}
+
+function netNewFundingProxy(event: MpgfPublicGoodsKpiAnalyticsEvent) {
+  const eventJson = event.event_json ?? {};
+  const proxy = eventJson.netNewFundingProxy;
+  const preCommitmentStatus = eventJson.preCommitmentStatus;
+
+  if (proxy === "likely_net_new" || preCommitmentStatus === "not_precommitted") {
+    return "likely_net_new" as const;
+  }
+
+  if (proxy === "already_planned" || preCommitmentStatus === "already_planned") {
+    return "already_planned" as const;
+  }
+
+  if (proxy === "uncertain" || preCommitmentStatus === "unknown") {
+    return "uncertain" as const;
+  }
+
+  return null;
+}
+
 function thresholdReachedAt(campaign: MpgfPublicGoodsCampaign, pledges: MpgfPublicGoodsPledge[]) {
   const userAmounts = new Map<string, number>();
   const sortedPledges = pledges
@@ -402,6 +450,17 @@ export function buildMpgfPublicGoodsKpiSnapshot({
   const payableDirectEligibleCents = payableLines.reduce((sum, line) => sum + line.directEligibleCents, 0);
   const sponsorPoolCents = roundAllocation.baseMatchBudgetCents + roundAllocation.qfBonusBudgetCents;
   const matchAllocatedCents = roundAllocation.baseMatchAllocatedCents + roundAllocation.qfBonusAllocatedCents;
+  const activeContributionAmounts = activePledges.map((pledge) => clampNonNegativeInteger(pledge.amountCents));
+  const countedContributionAmounts = eligiblePledges.map((pledge) =>
+    countMpgfQfContributionCents(pledge.amountCents, perDonorQfCapCents(matchPool)),
+  );
+  const campaignDirectAmounts = roundAllocation.lines.map((line) => line.directEligibleCents);
+  const campaignMatchAmounts = roundAllocation.lines.map((line) => line.baseMatchCents + line.qfBonusCents);
+  const netNewFundingEvents = analyticsEvents
+    .filter((event) => event.event_type === "pledge_intent_recorded")
+    .map(netNewFundingProxy)
+    .filter((proxy): proxy is NonNullable<ReturnType<typeof netNewFundingProxy>> => Boolean(proxy));
+  const likelyNetNewFundingEventCount = netNewFundingEvents.filter((proxy) => proxy === "likely_net_new").length;
   const externalHandoffPledgeCount = eligiblePledges.filter((pledge) => pledge.captureMode === "external_handoff").length;
   const verifiedExternalHandoffProofCount = paymentProofs.filter(
     (proof) =>
@@ -459,6 +518,20 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       directFundsToMatchMultiplierBps: rateBps(payableDirectEligibleCents, matchAllocatedCents),
       matchToDirectMultiplierBps: rateBps(matchAllocatedCents, payableDirectEligibleCents),
       sponsorPoolUtilizationBps: rateBps(matchAllocatedCents, sponsorPoolCents),
+    },
+    donorEconomics: {
+      activeContributionCount: activePledges.length,
+      eligibleContributionCount: eligiblePledges.length,
+      medianGrossContributionCents: median(activeContributionAmounts),
+      medianCapAdjustedCountedContributionCents: median(countedContributionAmounts),
+      campaignConcentrationTopDirectShareBps: largestShareBps(
+        campaignDirectAmounts,
+        roundAllocation.lines.reduce((sum, line) => sum + line.directEligibleCents, 0),
+      ),
+      campaignConcentrationTopMatchShareBps: largestShareBps(campaignMatchAmounts, matchAllocatedCents),
+      netNewFundingSurveyEventCount: netNewFundingEvents.length,
+      likelyNetNewFundingEventCount,
+      likelyNetNewFundingShareBps: rateBps(likelyNetNewFundingEventCount, netNewFundingEvents.length),
     },
     handoffProof: {
       externalHandoffPledgeCount,

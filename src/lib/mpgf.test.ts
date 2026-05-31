@@ -1587,7 +1587,11 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
         {
           event_type: "pledge_intent_recorded",
           campaign_id: "campaign-global-health-basic-needs",
-          event_json: { eligibilityState: "eligible" },
+          event_json: {
+            eligibilityState: "eligible",
+            netNewFundingProxy: "likely_net_new",
+            preCommitmentStatus: "not_precommitted",
+          },
           created_at: "2026-05-03T14:00:00.000Z",
         },
       ],
@@ -1626,6 +1630,17 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.equal(snapshot.coordination.pageViewToPledgeIntentBps, 10000);
     assert.equal(snapshot.review.reviewerMedianHoursToClose, 48);
     assert.equal(snapshot.matching.sponsorPoolUtilizationBps !== null && snapshot.matching.sponsorPoolUtilizationBps > 0, true);
+    assert.equal(snapshot.donorEconomics.activeContributionCount, 10);
+    assert.equal(snapshot.donorEconomics.eligibleContributionCount, 9);
+    assert.equal(snapshot.donorEconomics.medianGrossContributionCents, 8750);
+    assert.equal(snapshot.donorEconomics.medianCapAdjustedCountedContributionCents, 9000);
+    assert.equal(snapshot.donorEconomics.netNewFundingSurveyEventCount, 1);
+    assert.equal(snapshot.donorEconomics.likelyNetNewFundingEventCount, 1);
+    assert.equal(snapshot.donorEconomics.likelyNetNewFundingShareBps, 10000);
+    assert.ok(
+      snapshot.donorEconomics.campaignConcentrationTopDirectShareBps !== null &&
+        snapshot.donorEconomics.campaignConcentrationTopDirectShareBps > 0,
+    );
     assert.equal(snapshot.handoffProof.verifiableCompletionShareBps, 5000);
     assert.equal(snapshot.safety.noCustodyPilot, true);
     assert.equal(snapshot.safety.rawPrivateTextStored, false);
@@ -1643,6 +1658,9 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.match(kpis, /reviewerMedianHoursToClose/);
     assert.match(kpis, /thresholdClearRateBps/);
     assert.match(kpis, /retainedRecurringDonors3MonthBps/);
+    assert.match(kpis, /campaignConcentrationTopDirectShareBps/);
+    assert.match(kpis, /medianCapAdjustedCountedContributionCents/);
+    assert.match(kpis, /netNewFundingProxy/);
     assert.doesNotMatch(kpis, /user_ref_hash/);
   } finally {
     if (previousCohort === undefined) {

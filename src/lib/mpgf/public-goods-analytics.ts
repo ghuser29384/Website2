@@ -43,6 +43,8 @@ export interface MpgfPublicGoodsAnalyticsEventJson {
   proofStatus?: string;
   publicEvidenceSource?: string;
   surface?: "public_campaign_page" | "mpgf_participant_action" | "protected_job" | "review_console";
+  preCommitmentStatus?: "not_precommitted" | "already_planned" | "unknown";
+  netNewFundingProxy?: "likely_net_new" | "already_planned" | "uncertain";
   cohort?: string;
   variant?: string;
   reminderKind?: string;
