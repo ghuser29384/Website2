@@ -91,6 +91,7 @@ import { hasActiveProfileSourcePermission } from "@/lib/background-networking";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
+import { formatPerformanceBondAmount } from "@/lib/performance-bonds";
 import { getPriorityCorrectionSummary } from "@/lib/priority-correction";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -125,6 +126,19 @@ function formatCadence(value: number, unit: string) {
   }
 
   return value === 1 ? `every ${unit}` : `every ${value} ${unit}s`;
+}
+
+function formatDashboardState(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function formatDashboardDate(value: string | null | undefined) {
+  if (!value) {
+    return "Not set";
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? "Date unavailable" : new Date(timestamp).toLocaleDateString();
 }
 
 function formatConciergeSla(value: string | null) {
@@ -3534,6 +3548,46 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </Link>
                   </div>
                   {agreement.notes ? <p className="route-text">{agreement.notes}</p> : null}
+                  {agreement.performanceBonds.length ? (
+                    <div className="mini-list">
+                      {agreement.performanceBonds.map((bond) => {
+                        const viewerIsPledger = bond.party_id === viewer?.authUser.id;
+                        const viewerIsCounterparty = bond.counterparty_id === viewer?.authUser.id;
+
+                        return (
+                          <div className="mini-list-item" key={bond.id}>
+                            <strong>
+                              {viewerIsPledger
+                                ? "Your pledge bond"
+                                : viewerIsCounterparty
+                                  ? "Counterparty pledge bond"
+                                  : bond.side === "offerer"
+                                    ? "Offer-maker pledge bond"
+                                    : "Taker pledge bond"}
+                            </strong>
+                            <span>
+                              {formatPerformanceBondAmount(bond.amount_cents, bond.currency)} |{" "}
+                              {formatDashboardState(bond.status)} | funding{" "}
+                              {formatDashboardState(bond.funding_status)}
+                            </span>
+                            <span>
+                              Evidence due {formatDashboardDate(bond.evidence_due_at)}
+                              {bond.challenge_window_ends_at
+                                ? ` | challenge window ends ${formatDashboardDate(
+                                    bond.challenge_window_ends_at,
+                                  )}`
+                                : ""}
+                            </span>
+                            {bond.funding_status === "payment_pending" ? (
+                              <span>
+                                Manual-payment pending; no live custody is claimed for this bond.
+                              </span>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                   <div className="stack-form compact-form">
                     <h4>Payment and lifecycle</h4>
                     <form action={createAgreementPaymentCheckoutAction} className="stack-form compact-form">

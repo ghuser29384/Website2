@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
+  adjudicatePerformanceBondChallengeAction,
   reviewBaselineBondEvidenceAction,
   reviewDonationOffsetOfferAction,
   suppressEmailOutboxAction,
@@ -19,6 +20,11 @@ import { formatBaselineBondAmount, normalizeBaselineBondStatus } from "@/lib/bas
 import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import {
+  evidenceSchemaFromJson,
+  formatPerformanceBondAmount,
+  splitConfigFromJson,
+} from "@/lib/performance-bonds";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -59,6 +65,12 @@ type ProfileVerificationBadgeRow =
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
 type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type RegisteredCharityRow = Database["public"]["Tables"]["registered_charities"]["Row"];
+type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row"];
+type BondEvidenceRow = Database["public"]["Tables"]["bond_evidence"]["Row"];
+type BondChallengeRow = Database["public"]["Tables"]["bond_challenges"]["Row"];
+type BondLedgerEntryRow = Database["public"]["Tables"]["bond_ledger_entries"]["Row"];
+type PerformanceBondAuditEventRow =
+  Database["public"]["Tables"]["performance_bond_audit_events"]["Row"];
 
 interface MatchConciergeReviewRecord {
   request: MatchConciergeRequestRow;
@@ -77,11 +89,42 @@ interface DonationOffsetReviewRecord {
   charity: RegisteredCharityRow | null;
 }
 
+interface PerformanceBondReviewRecord {
+  bond: PerformanceBondRow;
+  evidence: BondEvidenceRow[];
+  challenges: BondChallengeRow[];
+  ledgerEntries: BondLedgerEntryRow[];
+  auditEvents: PerformanceBondAuditEventRow[];
+  offer: OfferRow | null;
+  agreement: AgreementRow | null;
+}
+
 function formatPaymentAmount(amountCents: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency.toUpperCase(),
   }).format(amountCents / 100);
+}
+
+function formatAdminState(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function formatPerformanceBondDestination(bond: PerformanceBondRow) {
+  if (bond.forfeiture_destination === "mpgf") {
+    return "Moral Public Goods Fund";
+  }
+
+  if (bond.forfeiture_destination === "counterparty") {
+    return "Counterparty after platform review";
+  }
+
+  if (bond.forfeiture_destination === "split") {
+    const split = splitConfigFromJson(bond.split_config);
+    return `Split: ${split.counterpartyPercent}% counterparty, ${split.neutralCausePercent}% neutral cause, ${split.mpgfPercent}% MPGF`;
+  }
+
+  return "Compromise charity / neutral cause, or MPGF if no neutral cause is available";
 }
 
 function formatSlaState(value: string | null) {
@@ -216,6 +259,13 @@ async function loadAdminQueues() {
     .in("baseline_bond_status", ["evidence_due", "evidence_submitted"])
     .order("baseline_bond_evidence_due_at", { ascending: true, nullsFirst: false })
     .limit(50);
+  const performanceBondReviewsResult = await supabase
+    .from("performance_bonds")
+    .select("*")
+    .eq("enabled", true)
+    .in("status", ["challenged", "under_review", "rejected_after_review", "evidence_due"])
+    .order("updated_at", { ascending: false })
+    .limit(50);
 
   const errors = [
     reports.error,
@@ -232,6 +282,7 @@ async function loadAdminQueues() {
     verificationBadges.error,
     flaggedOffsetsResult.error,
     baselineBondReviewsResult.error,
+    performanceBondReviewsResult.error,
   ]
     .filter(Boolean)
     .map((error) => error?.message)
@@ -243,6 +294,7 @@ async function loadAdminQueues() {
 
   const flaggedOffsets = (flaggedOffsetsResult.data ?? []) as DonationOffsetOfferRow[];
   const baselineBondReviewOffsets = (baselineBondReviewsResult.data ?? []) as DonationOffsetOfferRow[];
+  const performanceBondRows = (performanceBondReviewsResult.data ?? []) as PerformanceBondRow[];
   const conciergeRows = (conciergeRequests.data ?? []) as MatchConciergeRequestRow[];
   const reviewCaseRows = (agreementReviewCases.data ?? []) as AgreementReviewCaseRow[];
   const conciergeRequestIds = conciergeRows.map((request) => request.id);
@@ -299,6 +351,55 @@ async function loadAdminQueues() {
       : Promise.resolve({ data: [] as RegisteredCharityRow[], error: null }),
   ]);
 
+  const performanceBondIds = performanceBondRows.map((bond) => bond.id);
+  const performanceBondOfferIds = [...new Set(performanceBondRows.map((bond) => bond.offer_id))];
+  const performanceBondAgreementIds = [
+    ...new Set(performanceBondRows.map((bond) => bond.swap_id).filter((id): id is string => Boolean(id))),
+  ];
+  const [
+    performanceBondEvidenceResult,
+    performanceBondChallengesResult,
+    performanceBondLedgerResult,
+    performanceBondAuditResult,
+    performanceBondOffersResult,
+    performanceBondAgreementsResult,
+  ] = await Promise.all([
+    performanceBondIds.length
+      ? supabase
+          .from("bond_evidence")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("submitted_at", { ascending: false })
+      : Promise.resolve({ data: [] as BondEvidenceRow[], error: null }),
+    performanceBondIds.length
+      ? supabase
+          .from("bond_challenges")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("challenged_at", { ascending: false })
+      : Promise.resolve({ data: [] as BondChallengeRow[], error: null }),
+    performanceBondIds.length
+      ? supabase
+          .from("bond_ledger_entries")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as BondLedgerEntryRow[], error: null }),
+    performanceBondIds.length
+      ? supabase
+          .from("performance_bond_audit_events")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] as PerformanceBondAuditEventRow[], error: null }),
+    performanceBondOfferIds.length
+      ? supabase.from("offers").select("*").in("id", performanceBondOfferIds)
+      : Promise.resolve({ data: [] as OfferRow[], error: null }),
+    performanceBondAgreementIds.length
+      ? supabase.from("agreements").select("*").in("id", performanceBondAgreementIds)
+      : Promise.resolve({ data: [] as AgreementRow[], error: null }),
+  ]);
+
   if (flaggedOffersResult.error || flaggedCharitiesResult.error) {
     throw new Error(
       flaggedOffersResult.error?.message ??
@@ -307,12 +408,54 @@ async function loadAdminQueues() {
     );
   }
 
+  const performanceBondRelatedError =
+    performanceBondEvidenceResult.error ??
+    performanceBondChallengesResult.error ??
+    performanceBondLedgerResult.error ??
+    performanceBondAuditResult.error ??
+    performanceBondOffersResult.error ??
+    performanceBondAgreementsResult.error;
+
+  if (performanceBondRelatedError) {
+    throw new Error(performanceBondRelatedError.message);
+  }
+
   const offerMap = new Map(
     ((flaggedOffersResult.data ?? []) as OfferRow[]).map((row) => [row.id, row] as const),
   );
   const charityMap = new Map(
     ((flaggedCharitiesResult.data ?? []) as RegisteredCharityRow[]).map((row) => [row.id, row] as const),
   );
+  const performanceBondOffersById = new Map(
+    ((performanceBondOffersResult.data ?? []) as OfferRow[]).map((row) => [row.id, row] as const),
+  );
+  const performanceBondAgreementsById = new Map(
+    ((performanceBondAgreementsResult.data ?? []) as AgreementRow[]).map((row) => [row.id, row] as const),
+  );
+  const performanceBondEvidenceByBond = new Map<string, BondEvidenceRow[]>();
+  for (const row of (performanceBondEvidenceResult.data ?? []) as BondEvidenceRow[]) {
+    const bucket = performanceBondEvidenceByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    performanceBondEvidenceByBond.set(row.bond_id, bucket);
+  }
+  const performanceBondChallengesByBond = new Map<string, BondChallengeRow[]>();
+  for (const row of (performanceBondChallengesResult.data ?? []) as BondChallengeRow[]) {
+    const bucket = performanceBondChallengesByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    performanceBondChallengesByBond.set(row.bond_id, bucket);
+  }
+  const performanceBondLedgerByBond = new Map<string, BondLedgerEntryRow[]>();
+  for (const row of (performanceBondLedgerResult.data ?? []) as BondLedgerEntryRow[]) {
+    const bucket = performanceBondLedgerByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    performanceBondLedgerByBond.set(row.bond_id, bucket);
+  }
+  const performanceBondAuditByBond = new Map<string, PerformanceBondAuditEventRow[]>();
+  for (const row of (performanceBondAuditResult.data ?? []) as PerformanceBondAuditEventRow[]) {
+    const bucket = performanceBondAuditByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    performanceBondAuditByBond.set(row.bond_id, bucket);
+  }
   const conciergeEventsByRequest = new Map<string, MatchConciergeEventRow[]>();
   for (const event of (conciergeEventsResult.data ?? []) as MatchConciergeEventRow[]) {
     const current = conciergeEventsByRequest.get(event.request_id) ?? [];
@@ -363,6 +506,15 @@ async function loadAdminQueues() {
         offset.baseline_bond_forfeit_destination_id ?? offset.compromise_charity_id,
       ) ?? null,
     })),
+    performanceBondReviews: performanceBondRows.map((bond) => ({
+      bond,
+      evidence: performanceBondEvidenceByBond.get(bond.id) ?? [],
+      challenges: performanceBondChallengesByBond.get(bond.id) ?? [],
+      ledgerEntries: performanceBondLedgerByBond.get(bond.id) ?? [],
+      auditEvents: performanceBondAuditByBond.get(bond.id) ?? [],
+      offer: performanceBondOffersById.get(bond.offer_id) ?? null,
+      agreement: bond.swap_id ? performanceBondAgreementsById.get(bond.swap_id) ?? null : null,
+    })) satisfies PerformanceBondReviewRecord[],
   };
 }
 
@@ -500,19 +652,26 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <div className="flow-step">
                 <span className="flow-number">08</span>
                 <div>
+                  <strong>{queues?.performanceBondReviews.length ?? 0} pledge bond review item(s)</strong>
+                  <p>Performance bond evidence, challenges, and release decisions.</p>
+                </div>
+              </div>
+              <div className="flow-step">
+                <span className="flow-number">09</span>
+                <div>
                   <strong>{queues?.donationOffsetReviews.length ?? 0} offset review item(s)</strong>
                   <p>Paused donation offsets needing baseline or legality review.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">09</span>
+                <span className="flow-number">10</span>
                 <div>
                   <strong>{queues?.payments.length ?? 0} payment issue(s)</strong>
                   <p>Refund requests, disputes, and failures.</p>
                 </div>
               </div>
               <div className="flow-step">
-                <span className="flow-number">10</span>
+                <span className="flow-number">11</span>
                 <div>
                   <strong>{queues?.emails.length ?? 0} email item(s)</strong>
                   <p>Queued or failed outbound mail.</p>
@@ -781,6 +940,205 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     <div>
                       <strong>No agreement evidence reviews.</strong>
                       <p>Evidence submitted from agreement rooms will appear here.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Pledge bond review</p>
+                <h2>Performance bond challenge queue</h2>
+                <p>
+                  Review challenged or overdue pledge performance bonds with their evidence schema,
+                  challenge reason, ledger status, and audit trail. Reviewer decisions require a
+                  written reason.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.performanceBondReviews.length ? (
+                  queues.performanceBondReviews.map(
+                    ({ bond, evidence, challenges, ledgerEntries, auditEvents, offer, agreement }) => {
+                      const evidenceSchema = evidenceSchemaFromJson(bond.evidence_schema);
+                      const latestEvidence = evidence[0] ?? null;
+                      const latestChallenge = challenges[0] ?? null;
+
+                      return (
+                        <article className="panel data-card data-card-wide" key={bond.id}>
+                          <p className="detail-kicker">
+                            {bond.side === "offerer" ? "Offer-maker bond" : "Taker bond"} |{" "}
+                            {formatAdminState(bond.status)}
+                          </p>
+                          <h3>{formatPerformanceBondAmount(bond.amount_cents, bond.currency)}</h3>
+                          <div className="tag-row">
+                            <span className="badge">Funding {formatAdminState(bond.funding_status)}</span>
+                            <span className="source-pill">Party {bond.party_id}</span>
+                            <span className="source-pill">
+                              Counterparty {bond.counterparty_id ?? "not locked"}
+                            </span>
+                            {agreement ? (
+                              <span className="source-pill">
+                                Agreement {agreement.id.slice(0, 8)}
+                              </span>
+                            ) : null}
+                          </div>
+                          {offer ? (
+                            <p className="route-text">
+                              Offer context: {offer.offered_cause} for {offer.requested_cause}.{" "}
+                              {offer.offer_action}
+                            </p>
+                          ) : null}
+                          <div className="field-grid">
+                            <div>
+                              <h4>Evidence schema</h4>
+                              <p className="route-text">
+                                <strong>Action:</strong> {evidenceSchema.actionToProve}
+                              </p>
+                              <p className="route-text">
+                                <strong>Evidence types:</strong> {evidenceSchema.acceptedEvidenceTypes}
+                              </p>
+                              <p className="route-text">
+                                <strong>Minimum detail:</strong> {evidenceSchema.minimumDetail}
+                              </p>
+                              <p className="route-text">
+                                <strong>Review standard:</strong> {evidenceSchema.reviewStandard}
+                              </p>
+                              <p className="route-text">
+                                <strong>Visibility:</strong>{" "}
+                                {formatAdminState(evidenceSchema.visibility)}
+                              </p>
+                            </div>
+                            <div>
+                              <h4>Bond terms</h4>
+                              <p className="route-text">
+                                Evidence due{" "}
+                                {bond.evidence_due_at
+                                  ? new Date(bond.evidence_due_at).toLocaleDateString()
+                                  : "not set"}
+                                ; challenge window {bond.challenge_window_days} days.
+                              </p>
+                              <p className="route-text">
+                                <strong>Forfeiture rule:</strong>{" "}
+                                {formatPerformanceBondDestination(bond)}
+                              </p>
+                              <p className="route-text">
+                                <strong>No-trade baseline:</strong> {bond.no_trade_baseline}
+                              </p>
+                              <p className="route-text">
+                                <strong>Additionality:</strong> {bond.additionality_statement}
+                              </p>
+                            </div>
+                          </div>
+                          {latestEvidence ? (
+                            <div className="status-banner">
+                              <strong>Submitted evidence</strong>
+                              <p>{latestEvidence.evidence_text}</p>
+                              {latestEvidence.evidence_urls.length ? (
+                                <div className="mini-list">
+                                  {latestEvidence.evidence_urls.map((url) => (
+                                    <a className="inline-link" href={url} key={url}>
+                                      Open evidence link
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {latestEvidence.redaction_notes ? (
+                                <p className="panel-note">
+                                  Redaction notes: {latestEvidence.redaction_notes}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <p className="route-text">No evidence has been submitted yet.</p>
+                          )}
+                          {latestChallenge ? (
+                            <div className="status-banner status-banner-error">
+                              <strong>Challenge reason</strong>
+                              <p>{latestChallenge.reason}</p>
+                              <p>{latestChallenge.specific_objection}</p>
+                              <p className="panel-note">
+                                Requested outcome: {latestChallenge.requested_outcome}
+                              </p>
+                            </div>
+                          ) : null}
+                          <form action={adjudicatePerformanceBondChallengeAction} className="compact-form">
+                            <input name="bond_id" type="hidden" value={bond.id} />
+                            <input name="challenge_id" type="hidden" value={latestChallenge?.id ?? ""} />
+                            <input name="return_to" type="hidden" value="/admin" />
+                            <div className="field-grid">
+                              <label className="field">
+                                <span>Decision</span>
+                                <select defaultValue="request_more_evidence" name="decision">
+                                  <option value="accept">Accept evidence and refund</option>
+                                  <option value="reject">Reject evidence and release</option>
+                                  <option value="request_more_evidence">Request more evidence</option>
+                                </select>
+                              </label>
+                              <label className="field">
+                                <span>Appeal deadline</span>
+                                <input name="appeal_deadline" type="date" />
+                              </label>
+                            </div>
+                            <label className="radio-row">
+                              <input name="appeal_allowed" type="checkbox" />
+                              <span>Appeal allowed under this review decision.</span>
+                            </label>
+                            <label className="field">
+                              <span>Decision reason</span>
+                              <textarea
+                                name="decision_reason"
+                                placeholder="Explain the exact evidence-schema match, mismatch, or missing information."
+                                required
+                                rows={4}
+                              />
+                            </label>
+                            <button className="button button-primary button-mini" type="submit">
+                              Save bond decision
+                            </button>
+                          </form>
+                          {ledgerEntries.length ? (
+                            <div className="mini-list">
+                              {ledgerEntries.slice(0, 5).map((entry) => (
+                                <div className="mini-list-item" key={entry.id}>
+                                  <strong>
+                                    {formatAdminState(entry.type)} |{" "}
+                                    {formatPaymentAmount(entry.amount_cents, entry.currency)}
+                                  </strong>
+                                  <span>
+                                    {formatAdminState(entry.status)} to {entry.destination_type}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          {auditEvents.length ? (
+                            <details className="subtle-panel">
+                              <summary className="panel-summary">Audit log</summary>
+                              <div className="mini-list">
+                                {auditEvents.slice(0, 8).map((event) => (
+                                  <div className="mini-list-item" key={event.id}>
+                                    <strong>
+                                      {formatAdminState(event.event_type)} |{" "}
+                                      {formatAdminState(event.from_status)} to{" "}
+                                      {formatAdminState(event.to_status)}
+                                    </strong>
+                                    <span>{event.reason}</span>
+                                    <span>{new Date(event.created_at).toLocaleString()}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          ) : null}
+                        </article>
+                      );
+                    },
+                  )
+                ) : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No pledge performance bond reviews.</strong>
+                      <p>Challenges and overdue bonded pledges will appear here.</p>
                     </div>
                   </div>
                 )}

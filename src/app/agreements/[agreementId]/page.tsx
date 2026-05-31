@@ -7,17 +7,28 @@ import {
   createAgreementPaymentCheckoutAction,
   createAgreementPaymentScheduleAction,
   rateAgreementAction,
+  acceptPerformanceBondEvidenceAction,
+  challengePerformanceBondEvidenceAction,
   requestAgreementReviewAppealAction,
   requestPaymentReviewAction,
   saveAgreementTermsAction,
   submitAgreementEvidenceAction,
+  submitPerformanceBondEvidenceAction,
   updateAgreementStatusAction,
 } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getAgreementForUser, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import {
+  PERFORMANCE_BOND_LIMITATION_COPY,
+  PERFORMANCE_BOND_REVIEWER_POLICY,
+  evidenceSchemaFromJson,
+  formatPerformanceBondAmount,
+  splitConfigFromJson,
+} from "@/lib/performance-bonds";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import type { Database } from "@/lib/supabase/database.types";
 
 export const metadata: Metadata = {
   title: "Agreement",
@@ -31,6 +42,12 @@ interface AgreementPageProps {
   params: Promise<{ agreementId: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
+
+type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row"];
+type BondEvidenceRow = Database["public"]["Tables"]["bond_evidence"]["Row"];
+type BondChallengeRow = Database["public"]["Tables"]["bond_challenges"]["Row"];
+type BondLedgerEntryRow = Database["public"]["Tables"]["bond_ledger_entries"]["Row"];
+type BondAuditEventRow = Database["public"]["Tables"]["performance_bond_audit_events"]["Row"];
 
 function formatPaymentAmount(amountCents: number, currency: string) {
   return new Intl.NumberFormat("en-US", {
@@ -69,6 +86,36 @@ const VERIFICATION_BADGES = [
 
 function formatState(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function formatAgreementDate(value: string | null) {
+  if (!value) {
+    return "Not set";
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? "Date unavailable" : new Date(timestamp).toLocaleDateString();
+}
+
+function formatPerformanceBondDestination(bond: PerformanceBondRow) {
+  if (bond.forfeiture_destination === "mpgf") {
+    return "Moral Public Goods Fund";
+  }
+
+  if (bond.forfeiture_destination === "counterparty") {
+    return "Counterparty after platform review";
+  }
+
+  if (bond.forfeiture_destination === "split") {
+    const split = splitConfigFromJson(bond.split_config);
+    return `Split: ${split.counterpartyPercent}% counterparty, ${split.neutralCausePercent}% neutral cause, ${split.mpgfPercent}% MPGF`;
+  }
+
+  return "Compromise charity / neutral cause, or MPGF if no neutral cause is available";
+}
+
+function isFinalPerformanceBondStatus(status: string) {
+  return ["refunded", "forfeited", "split_disbursed", "cancelled", "expired"].includes(status);
 }
 
 function formatSla(value: string | null) {
@@ -276,6 +323,297 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
             </form>
           </div>
         </section>
+
+        {agreement.performanceBonds.length ? (
+          <section className="section section-white" aria-labelledby="performance-bonds-heading">
+            <div className="section-head">
+              <p className="eyebrow">Pledge performance bonds</p>
+              <h2 id="performance-bonds-heading">Evidence, challenge windows, and review status</h2>
+              <p>
+                These bonds support factual trust about whether each pledged act was performed.
+                They do not replace the no-trade baseline or additionality explanation.
+              </p>
+            </div>
+
+            <div className="data-grid">
+              {agreement.performanceBonds.map((bond) => {
+                const evidenceSchema = evidenceSchemaFromJson(bond.evidence_schema);
+                const evidenceItems = agreement.bondEvidence
+                  .filter((item: BondEvidenceRow) => item.bond_id === bond.id)
+                  .sort(
+                    (left, right) =>
+                      Date.parse(right.submitted_at) - Date.parse(left.submitted_at),
+                  );
+                const latestEvidence = evidenceItems[0] ?? null;
+                const challenges = agreement.bondChallenges
+                  .filter((challenge: BondChallengeRow) => challenge.bond_id === bond.id)
+                  .sort(
+                    (left, right) =>
+                      Date.parse(right.challenged_at) - Date.parse(left.challenged_at),
+                  );
+                const ledgerEntries = agreement.bondLedgerEntries.filter(
+                  (entry: BondLedgerEntryRow) => entry.bond_id === bond.id,
+                );
+                const auditEvents = agreement.performanceBondAuditEvents
+                  .filter((event: BondAuditEventRow) => event.bond_id === bond.id)
+                  .sort(
+                    (left, right) => Date.parse(right.created_at) - Date.parse(left.created_at),
+                  );
+                const isPledger = viewer.authUser.id === bond.party_id;
+                const isCounterparty = viewer.authUser.id === bond.counterparty_id;
+                const canSubmitEvidence =
+                  isPledger &&
+                  !latestEvidence &&
+                  !isFinalPerformanceBondStatus(bond.status) &&
+                  ["active", "awaiting_funding", "evidence_due"].includes(bond.status);
+                const canRespondToEvidence =
+                  isCounterparty && latestEvidence && bond.status === "challenge_window_open";
+
+                return (
+                  <article className="panel data-card data-card-wide" key={bond.id}>
+                    <p className="detail-kicker">
+                      {bond.side === "offerer" ? "Offer-maker pledge" : "Taker reciprocal pledge"}
+                    </p>
+                    <h3>{formatPerformanceBondAmount(bond.amount_cents, bond.currency)}</h3>
+                    <div className="tag-row">
+                      <span className="badge">{formatState(bond.status)}</span>
+                      <span className="source-pill">
+                        Funding: {formatState(bond.funding_status)}
+                      </span>
+                      <span className="source-pill">
+                        Evidence due {formatAgreementDate(bond.evidence_due_at)}
+                      </span>
+                      <span className="source-pill">
+                        Challenge window {bond.challenge_window_days} days
+                      </span>
+                    </div>
+                    <p className="route-text">
+                      {bond.funding_status === "payment_pending"
+                        ? "Manual-payment pending: this record tracks terms and review status, but does not claim live platform custody."
+                        : "Funding and ledger status are shown separately from evidence review."}
+                    </p>
+                    <div className="field-grid">
+                      <div>
+                        <h4>Evidence schema</h4>
+                        <p className="route-text">
+                          <strong>Action:</strong> {evidenceSchema.actionToProve}
+                        </p>
+                        <p className="route-text">
+                          <strong>Evidence types:</strong> {evidenceSchema.acceptedEvidenceTypes}
+                        </p>
+                        <p className="route-text">
+                          <strong>Minimum detail:</strong> {evidenceSchema.minimumDetail}
+                        </p>
+                        <p className="route-text">
+                          <strong>Review standard:</strong> {evidenceSchema.reviewStandard}
+                        </p>
+                        <p className="route-text">
+                          <strong>Visibility:</strong>{" "}
+                          {formatState(evidenceSchema.visibility)}
+                          {evidenceSchema.privateEvidenceAllowed
+                            ? "; private/redacted evidence allowed"
+                            : ""}
+                        </p>
+                      </div>
+                      <div>
+                        <h4>Bond terms</h4>
+                        <p className="route-text">
+                          <strong>Refunded when:</strong> evidence is accepted under the evidence
+                          schema.
+                        </p>
+                        <p className="route-text">
+                          <strong>Forfeiture rule:</strong> {formatPerformanceBondDestination(bond)}
+                        </p>
+                        <p className="route-text">
+                          <strong>Reviewer:</strong> {PERFORMANCE_BOND_REVIEWER_POLICY}
+                        </p>
+                        <p className="panel-note">{PERFORMANCE_BOND_LIMITATION_COPY}</p>
+                      </div>
+                    </div>
+                    <div className="field-grid">
+                      <div>
+                        <h4>No-trade baseline</h4>
+                        <p className="route-text">{bond.no_trade_baseline}</p>
+                      </div>
+                      <div>
+                        <h4>Why this is additional?</h4>
+                        <p className="route-text">{bond.additionality_statement}</p>
+                      </div>
+                    </div>
+
+                    {canSubmitEvidence ? (
+                      <form action={submitPerformanceBondEvidenceAction} className="stack-form compact-form">
+                        <input name="bond_id" type="hidden" value={bond.id} />
+                        <input name="return_to" type="hidden" value={`/agreements/${agreement.id}`} />
+                        <label className="field">
+                          <span>Submit evidence for your pledge</span>
+                          <textarea
+                            name="evidence_text"
+                            placeholder="Explain what was completed and how this evidence satisfies the agreed schema."
+                            required
+                            rows={4}
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Evidence URL</span>
+                          <input
+                            name="evidence_urls"
+                            placeholder="Optional public log, receipt link, or proof packet URL"
+                            type="url"
+                          />
+                        </label>
+                        <div className="field-grid">
+                          <label className="field">
+                            <span>Visibility</span>
+                            <select defaultValue={evidenceSchema.visibility} name="visibility">
+                              <option value="counterparty_only">Counterparty only</option>
+                              <option value="platform_reviewer_only">Platform reviewer only</option>
+                              <option value="public_proof">Public proof</option>
+                              <option value="mixed_redacted">Mixed/redacted</option>
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>Redaction notes</span>
+                            <input
+                              name="redaction_notes"
+                              placeholder="Receipt IDs, addresses, or personal details redacted"
+                            />
+                          </label>
+                        </div>
+                        <p className="panel-note">
+                          Do not upload or link invasive, unsafe, or unnecessary personal evidence.
+                          Redact transaction IDs and private details unless the evidence schema
+                          requires them.
+                        </p>
+                        <label className="radio-row">
+                          <input name="attestation" required type="checkbox" />
+                          <span>
+                            I attest that this evidence is accurate and materially complete under
+                            the agreed evidence standard.
+                          </span>
+                        </label>
+                        <button className="button button-primary button-mini" type="submit">
+                          Submit evidence
+                        </button>
+                      </form>
+                    ) : null}
+
+                    {latestEvidence ? (
+                      <div className="status-banner">
+                        <strong>Latest evidence</strong>
+                        <p>{latestEvidence.evidence_text || "Evidence text not provided."}</p>
+                        {latestEvidence.evidence_urls.length ? (
+                          <div className="mini-list">
+                            {latestEvidence.evidence_urls.map((url) => (
+                              <a className="inline-link" href={url} key={url}>
+                                Open evidence link
+                              </a>
+                            ))}
+                          </div>
+                        ) : null}
+                        <p className="panel-note">
+                          Submitted {new Date(latestEvidence.submitted_at).toLocaleString()}.
+                          {bond.challenge_window_ends_at
+                            ? ` Challenge window ends ${new Date(
+                                bond.challenge_window_ends_at,
+                              ).toLocaleString()}.`
+                            : ""}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {canRespondToEvidence ? (
+                      <div className="field-grid">
+                        <form action={acceptPerformanceBondEvidenceAction} className="compact-form">
+                          <input name="bond_id" type="hidden" value={bond.id} />
+                          <input name="return_to" type="hidden" value={`/agreements/${agreement.id}`} />
+                          <label className="field">
+                            <span>Acceptance note</span>
+                            <textarea
+                              name="reason"
+                              placeholder="Optional note confirming why the evidence satisfies the schema."
+                            />
+                          </label>
+                          <button className="button button-primary button-mini" type="submit">
+                            Accept evidence
+                          </button>
+                        </form>
+
+                        <form action={challengePerformanceBondEvidenceAction} className="compact-form">
+                          <input name="bond_id" type="hidden" value={bond.id} />
+                          <input name="return_to" type="hidden" value={`/agreements/${agreement.id}`} />
+                          <input name="requested_outcome" type="hidden" value="platform_review" />
+                          <p className="panel-note">
+                            Challenges should identify a specific mismatch with the agreed evidence
+                            schema. Bad-faith challenges may affect account trust.
+                          </p>
+                          <label className="field">
+                            <span>Challenge reason</span>
+                            <textarea name="reason" required rows={3} />
+                          </label>
+                          <label className="field">
+                            <span>Specific mismatch</span>
+                            <textarea name="specific_objection" required rows={3} />
+                          </label>
+                          <button className="button button-secondary button-mini" type="submit">
+                            Challenge evidence
+                          </button>
+                        </form>
+                      </div>
+                    ) : null}
+
+                    {challenges.length ? (
+                      <div className="mini-list">
+                        {challenges.map((challenge) => (
+                          <div className="mini-list-item" key={challenge.id}>
+                            <strong>{formatState(challenge.status)}</strong>
+                            <span>{challenge.reason}</span>
+                            <span>{challenge.specific_objection}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {ledgerEntries.length ? (
+                      <div className="mini-list">
+                        {ledgerEntries.map((entry) => (
+                          <div className="mini-list-item" key={entry.id}>
+                            <strong>
+                              {formatState(entry.type)} |{" "}
+                              {formatPaymentAmount(entry.amount_cents, entry.currency)}
+                            </strong>
+                            <span>
+                              {formatState(entry.status)} to {entry.destination_type}
+                              {entry.destination_id ? ` (${entry.destination_id})` : ""}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {auditEvents.length ? (
+                      <details className="subtle-panel">
+                        <summary className="panel-summary">Audit log</summary>
+                        <div className="mini-list">
+                          {auditEvents.slice(0, 8).map((event) => (
+                            <div className="mini-list-item" key={event.id}>
+                              <strong>
+                                {formatState(event.event_type)} |{" "}
+                                {formatState(event.from_status)} to {formatState(event.to_status)}
+                              </strong>
+                              <span>{event.reason}</span>
+                              <span>{new Date(event.created_at).toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
 
         <section className="section section-subtle">
           <div className="section-head">

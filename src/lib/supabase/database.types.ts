@@ -958,6 +958,424 @@ export interface Database {
         };
         Relationships: [];
       };
+      performance_bonds: {
+        Row: {
+          id: string;
+          offer_id: string;
+          swap_id: string | null;
+          interest_id: string | null;
+          party_id: string;
+          counterparty_id: string | null;
+          side: "offerer" | "taker";
+          enabled: boolean;
+          amount_cents: number;
+          currency: string;
+          evidence_due_at: string | null;
+          challenge_window_days: 7 | 14 | 30;
+          challenge_window_ends_at: string | null;
+          evidence_schema: Json;
+          additionality_statement: string;
+          no_trade_baseline: string;
+          forfeiture_rule: "neutral_release" | "counterparty_release" | "split_release";
+          forfeiture_destination: "compromise_charity" | "mpgf" | "counterparty" | "split";
+          forfeiture_destination_id: string | null;
+          split_config: Json;
+          reviewer_policy: string;
+          status:
+            | "not_enabled"
+            | "draft"
+            | "awaiting_funding"
+            | "funded"
+            | "active"
+            | "evidence_due"
+            | "evidence_submitted"
+            | "challenge_window_open"
+            | "accepted_by_counterparty"
+            | "auto_refund_pending"
+            | "refunded"
+            | "challenged"
+            | "under_review"
+            | "accepted_after_review"
+            | "rejected_after_review"
+            | "forfeited"
+            | "split_disbursed"
+            | "cancelled"
+            | "expired";
+          funding_status:
+            | "not_required"
+            | "awaiting_funding"
+            | "payment_pending"
+            | "funded"
+            | "refund_pending"
+            | "refunded"
+            | "release_pending"
+            | "released"
+            | "failed";
+          payment_provider: string;
+          payment_intent_id: string | null;
+          counterparty_payout_consent: boolean;
+          created_at: string;
+          updated_at: string;
+          locked_at: string | null;
+          resolved_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          offer_id: string;
+          swap_id?: string | null;
+          interest_id?: string | null;
+          party_id: string;
+          counterparty_id?: string | null;
+          side: "offerer" | "taker";
+          enabled?: boolean;
+          amount_cents: number;
+          currency?: string;
+          evidence_due_at?: string | null;
+          challenge_window_days?: 7 | 14 | 30;
+          challenge_window_ends_at?: string | null;
+          evidence_schema?: Json;
+          additionality_statement?: string;
+          no_trade_baseline?: string;
+          forfeiture_rule?: "neutral_release" | "counterparty_release" | "split_release";
+          forfeiture_destination?: "compromise_charity" | "mpgf" | "counterparty" | "split";
+          forfeiture_destination_id?: string | null;
+          split_config?: Json;
+          reviewer_policy?: string;
+          status?:
+            | "not_enabled"
+            | "draft"
+            | "awaiting_funding"
+            | "funded"
+            | "active"
+            | "evidence_due"
+            | "evidence_submitted"
+            | "challenge_window_open"
+            | "accepted_by_counterparty"
+            | "auto_refund_pending"
+            | "refunded"
+            | "challenged"
+            | "under_review"
+            | "accepted_after_review"
+            | "rejected_after_review"
+            | "forfeited"
+            | "split_disbursed"
+            | "cancelled"
+            | "expired";
+          funding_status?:
+            | "not_required"
+            | "awaiting_funding"
+            | "payment_pending"
+            | "funded"
+            | "refund_pending"
+            | "refunded"
+            | "release_pending"
+            | "released"
+            | "failed";
+          payment_provider?: string;
+          payment_intent_id?: string | null;
+          counterparty_payout_consent?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          locked_at?: string | null;
+          resolved_at?: string | null;
+        };
+        Update: {
+          swap_id?: string | null;
+          interest_id?: string | null;
+          counterparty_id?: string | null;
+          enabled?: boolean;
+          amount_cents?: number;
+          currency?: string;
+          evidence_due_at?: string | null;
+          challenge_window_days?: 7 | 14 | 30;
+          challenge_window_ends_at?: string | null;
+          evidence_schema?: Json;
+          additionality_statement?: string;
+          no_trade_baseline?: string;
+          forfeiture_rule?: "neutral_release" | "counterparty_release" | "split_release";
+          forfeiture_destination?: "compromise_charity" | "mpgf" | "counterparty" | "split";
+          forfeiture_destination_id?: string | null;
+          split_config?: Json;
+          reviewer_policy?: string;
+          status?:
+            | "not_enabled"
+            | "draft"
+            | "awaiting_funding"
+            | "funded"
+            | "active"
+            | "evidence_due"
+            | "evidence_submitted"
+            | "challenge_window_open"
+            | "accepted_by_counterparty"
+            | "auto_refund_pending"
+            | "refunded"
+            | "challenged"
+            | "under_review"
+            | "accepted_after_review"
+            | "rejected_after_review"
+            | "forfeited"
+            | "split_disbursed"
+            | "cancelled"
+            | "expired";
+          funding_status?:
+            | "not_required"
+            | "awaiting_funding"
+            | "payment_pending"
+            | "funded"
+            | "refund_pending"
+            | "refunded"
+            | "release_pending"
+            | "released"
+            | "failed";
+          payment_provider?: string;
+          payment_intent_id?: string | null;
+          counterparty_payout_consent?: boolean;
+          updated_at?: string;
+          locked_at?: string | null;
+          resolved_at?: string | null;
+        };
+        Relationships: [];
+      };
+      bond_evidence: {
+        Row: {
+          id: string;
+          bond_id: string;
+          submitted_by: string;
+          submitted_at: string;
+          evidence_text: string;
+          evidence_urls: string[];
+          attachments: Json;
+          visibility: "counterparty_only" | "platform_reviewer_only" | "public_proof" | "mixed_redacted";
+          redaction_notes: string;
+          attestation: boolean;
+          status:
+            | "submitted"
+            | "accepted_by_counterparty"
+            | "challenged"
+            | "more_evidence_requested"
+            | "accepted_after_review"
+            | "rejected_after_review";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          bond_id: string;
+          submitted_by: string;
+          submitted_at?: string;
+          evidence_text?: string;
+          evidence_urls?: string[];
+          attachments?: Json;
+          visibility?: "counterparty_only" | "platform_reviewer_only" | "public_proof" | "mixed_redacted";
+          redaction_notes?: string;
+          attestation: boolean;
+          status?:
+            | "submitted"
+            | "accepted_by_counterparty"
+            | "challenged"
+            | "more_evidence_requested"
+            | "accepted_after_review"
+            | "rejected_after_review";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          evidence_text?: string;
+          evidence_urls?: string[];
+          attachments?: Json;
+          visibility?: "counterparty_only" | "platform_reviewer_only" | "public_proof" | "mixed_redacted";
+          redaction_notes?: string;
+          attestation?: boolean;
+          status?:
+            | "submitted"
+            | "accepted_by_counterparty"
+            | "challenged"
+            | "more_evidence_requested"
+            | "accepted_after_review"
+            | "rejected_after_review";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      bond_challenges: {
+        Row: {
+          id: string;
+          bond_id: string;
+          challenged_by: string;
+          challenged_at: string;
+          reason: string;
+          specific_objection: string;
+          requested_outcome: string;
+          bad_faith_flag: boolean;
+          status:
+            | "open"
+            | "under_review"
+            | "accepted"
+            | "rejected"
+            | "more_evidence_requested"
+            | "closed"
+            | "bad_faith_flagged";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          bond_id: string;
+          challenged_by: string;
+          challenged_at?: string;
+          reason: string;
+          specific_objection: string;
+          requested_outcome?: string;
+          bad_faith_flag?: boolean;
+          status?:
+            | "open"
+            | "under_review"
+            | "accepted"
+            | "rejected"
+            | "more_evidence_requested"
+            | "closed"
+            | "bad_faith_flagged";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          reason?: string;
+          specific_objection?: string;
+          requested_outcome?: string;
+          bad_faith_flag?: boolean;
+          status?:
+            | "open"
+            | "under_review"
+            | "accepted"
+            | "rejected"
+            | "more_evidence_requested"
+            | "closed"
+            | "bad_faith_flagged";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      bond_adjudications: {
+        Row: {
+          id: string;
+          bond_id: string;
+          challenge_id: string | null;
+          reviewer_id: string;
+          decision: "accept" | "reject" | "request_more_evidence";
+          decision_reason: string;
+          decided_at: string;
+          appeal_allowed: boolean;
+          appeal_deadline: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          bond_id: string;
+          challenge_id?: string | null;
+          reviewer_id: string;
+          decision: "accept" | "reject" | "request_more_evidence";
+          decision_reason: string;
+          decided_at?: string;
+          appeal_allowed?: boolean;
+          appeal_deadline?: string | null;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      bond_ledger_entries: {
+        Row: {
+          id: string;
+          bond_id: string;
+          type: "fund" | "refund" | "release" | "split_release" | "adjustment";
+          amount_cents: number;
+          currency: string;
+          destination_type: "party" | "counterparty" | "compromise_charity" | "mpgf" | "platform_manual_review";
+          destination_id: string | null;
+          status:
+            | "pending"
+            | "completed"
+            | "not_required"
+            | "awaiting_funding"
+            | "payment_pending"
+            | "funded"
+            | "refund_pending"
+            | "refunded"
+            | "release_pending"
+            | "released"
+            | "failed";
+          idempotency_key: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          bond_id: string;
+          type: "fund" | "refund" | "release" | "split_release" | "adjustment";
+          amount_cents: number;
+          currency?: string;
+          destination_type: "party" | "counterparty" | "compromise_charity" | "mpgf" | "platform_manual_review";
+          destination_id?: string | null;
+          status?:
+            | "pending"
+            | "completed"
+            | "not_required"
+            | "awaiting_funding"
+            | "payment_pending"
+            | "funded"
+            | "refund_pending"
+            | "refunded"
+            | "release_pending"
+            | "released"
+            | "failed";
+          idempotency_key: string;
+          created_at?: string;
+        };
+        Update: {
+          status?:
+            | "pending"
+            | "completed"
+            | "not_required"
+            | "awaiting_funding"
+            | "payment_pending"
+            | "funded"
+            | "refund_pending"
+            | "refunded"
+            | "release_pending"
+            | "released"
+            | "failed";
+        };
+        Relationships: [];
+      };
+      performance_bond_audit_events: {
+        Row: {
+          id: string;
+          bond_id: string;
+          actor_id: string | null;
+          actor_role: "party" | "counterparty" | "reviewer" | "system";
+          event_type: string;
+          from_status: string;
+          to_status: string;
+          reason: string;
+          metadata: Json;
+          idempotency_key: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          bond_id: string;
+          actor_id?: string | null;
+          actor_role: "party" | "counterparty" | "reviewer" | "system";
+          event_type: string;
+          from_status: string;
+          to_status: string;
+          reason: string;
+          metadata?: Json;
+          idempotency_key: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       profile_verification_badges: {
         Row: {
           id: string;

@@ -13,6 +13,19 @@ import {
   validateBaselineBondInput,
 } from "@/lib/baseline-bonds";
 import {
+  PERFORMANCE_BOND_COPY,
+  PERFORMANCE_BOND_COUNTERPARTY_WARNING,
+  PERFORMANCE_BOND_DEFAULT_CURRENCY,
+  PERFORMANCE_BOND_EVIDENCE_TEMPLATES,
+  PERFORMANCE_BOND_LIMITATION_COPY,
+  PERFORMANCE_BOND_REFUND_SUMMARY,
+  PERFORMANCE_BOND_REVIEWER_POLICY,
+  formatPerformanceBondAmount,
+  normalizePerformanceBondEvidenceSchema,
+  parsePerformanceBondSplitConfig,
+  validatePerformanceBondTerms,
+} from "@/lib/performance-bonds";
+import {
   calculateDonationOffsetPoolProgress,
   calculateDonationOffsetPreview,
   createDefaultDonationOffsetFields,
@@ -90,6 +103,10 @@ interface OfferCreateFormProps {
   initialOffsetPoolSide?: "side_a" | "side_b" | "";
   initialTemplate?: OfferTemplate | null;
   paymentBondsEnabled: boolean;
+  pledgePerformanceBondsEnabled: boolean;
+  liveBondPaymentsEnabled: boolean;
+  performanceBondMinCents: number;
+  performanceBondMaxCents: number;
   provenanceValidationRules: ProvenanceValidationRuleOption[];
 }
 
@@ -695,6 +712,10 @@ export function OfferCreateForm({
   initialOffsetPoolSide = "",
   initialTemplate = null,
   paymentBondsEnabled,
+  pledgePerformanceBondsEnabled,
+  liveBondPaymentsEnabled,
+  performanceBondMinCents,
+  performanceBondMaxCents,
   provenanceValidationRules,
 }: OfferCreateFormProps) {
   const [mode, setMode] = useState<OfferMode>(initialTemplate?.mode ?? initialMode);
@@ -717,6 +738,7 @@ export function OfferCreateForm({
   const [offerAction, setOfferAction] = useState(initialTemplate?.offerAction ?? "");
   const [requestAction, setRequestAction] = useState(initialTemplate?.requestAction ?? "");
   const [baselineStatement, setBaselineStatement] = useState(initialTemplate?.baselineStatement ?? "");
+  const [additionalityStatement, setAdditionalityStatement] = useState("");
   const [baselineBondEnabled, setBaselineBondEnabled] = useState(false);
   const [baselineBondAmountUsd, setBaselineBondAmountUsd] = useState("50");
   const [baselineBondForfeitDestinationId, setBaselineBondForfeitDestinationId] = useState(
@@ -725,6 +747,56 @@ export function OfferCreateForm({
   const [offerExpiresAt, setOfferExpiresAt] = useState("");
   const [baselineBondEvidenceDueAt, setBaselineBondEvidenceDueAt] = useState("");
   const [baselineBondEvidenceStandard, setBaselineBondEvidenceStandard] = useState("");
+  const firstPerformanceBondTemplate = PERFORMANCE_BOND_EVIDENCE_TEMPLATES[0];
+  const [performanceBondEnabled, setPerformanceBondEnabled] = useState(false);
+  const [performanceBondAmountUsd, setPerformanceBondAmountUsd] = useState(
+    String(Math.max(performanceBondMinCents, 2_500) / 100),
+  );
+  const [performanceBondEvidenceDueAt, setPerformanceBondEvidenceDueAt] = useState("");
+  const [performanceBondChallengeWindowDays, setPerformanceBondChallengeWindowDays] = useState("14");
+  const [performanceBondTemplateKey, setPerformanceBondTemplateKey] = useState<string>(
+    firstPerformanceBondTemplate.key,
+  );
+  const [performanceBondActionToProve, setPerformanceBondActionToProve] = useState<string>(
+    firstPerformanceBondTemplate.schema.actionToProve,
+  );
+  const [performanceBondEvidenceTypes, setPerformanceBondEvidenceTypes] = useState<string>(
+    firstPerformanceBondTemplate.schema.acceptedEvidenceTypes,
+  );
+  const [performanceBondMinimumDetail, setPerformanceBondMinimumDetail] = useState<string>(
+    firstPerformanceBondTemplate.schema.minimumDetail,
+  );
+  const [performanceBondPrivateEvidenceAllowed, setPerformanceBondPrivateEvidenceAllowed] =
+    useState<boolean>(firstPerformanceBondTemplate.schema.privateEvidenceAllowed);
+  const [performanceBondVisibility, setPerformanceBondVisibility] = useState<string>(
+    firstPerformanceBondTemplate.schema.visibility,
+  );
+  const [performanceBondReviewStandard, setPerformanceBondReviewStandard] = useState<string>(
+    firstPerformanceBondTemplate.schema.reviewStandard,
+  );
+  const [performanceBondForfeitureDestination, setPerformanceBondForfeitureDestination] =
+    useState("compromise_charity");
+  const [performanceBondCounterpartyPercent, setPerformanceBondCounterpartyPercent] = useState("0");
+  const [performanceBondNeutralPercent, setPerformanceBondNeutralPercent] = useState("50");
+  const [performanceBondMpgfPercent, setPerformanceBondMpgfPercent] = useState("50");
+  const [performanceBondCounterpartyConsent, setPerformanceBondCounterpartyConsent] = useState(false);
+  const [performanceBondAdditionality, setPerformanceBondAdditionality] = useState("");
+  const [performanceBondNoTradeBaseline, setPerformanceBondNoTradeBaseline] = useState("");
+
+  function applyPerformanceBondTemplate(templateKey: string) {
+    const template =
+      PERFORMANCE_BOND_EVIDENCE_TEMPLATES.find((entry) => entry.key === templateKey) ??
+      firstPerformanceBondTemplate;
+
+    setPerformanceBondTemplateKey(template.key);
+    setPerformanceBondActionToProve(template.schema.actionToProve);
+    setPerformanceBondEvidenceTypes(template.schema.acceptedEvidenceTypes);
+    setPerformanceBondMinimumDetail(template.schema.minimumDetail);
+    setPerformanceBondPrivateEvidenceAllowed(template.schema.privateEvidenceAllowed);
+    setPerformanceBondVisibility(template.schema.visibility);
+    setPerformanceBondReviewStandard(template.schema.reviewStandard);
+  }
+
   const [exitCondition, setExitCondition] = useState(initialTemplate?.exitCondition ?? "");
   const [notes, setNotes] = useState(initialTemplate?.notes ?? "");
   const [compromiseDestinationId, setCompromiseDestinationId] = useState(
@@ -765,6 +837,7 @@ export function OfferCreateForm({
   const [verificationMetadataAcknowledged, setVerificationMetadataAcknowledged] = useState(false);
 
   const isOffset = mode === "offset";
+  const isPledge = mode === "pledge";
   const isPayment = mode === "payment";
   const selectableCharities = getSelectableRegisteredCharities();
   const consensusCharities = getConsensusCharities();
@@ -898,6 +971,78 @@ export function OfferCreateForm({
       requestAction,
     ],
   );
+  const performanceBondValidation = useMemo(
+    () => {
+      const evidenceSchema = normalizePerformanceBondEvidenceSchema({
+        acceptedEvidenceTypes: performanceBondEvidenceTypes,
+        actionToProve: performanceBondActionToProve,
+        minimumDetail: performanceBondMinimumDetail,
+        privateEvidenceAllowed: performanceBondPrivateEvidenceAllowed,
+        reviewStandard: performanceBondReviewStandard,
+        templateKey: performanceBondTemplateKey,
+        visibility: performanceBondVisibility,
+      });
+
+      return validatePerformanceBondTerms(
+        {
+          additionalityStatement: performanceBondAdditionality || additionalityStatement,
+          amountCents: Math.round((Number(performanceBondAmountUsd) || 0) * 100),
+          challengeWindowDays: Number(performanceBondChallengeWindowDays),
+          counterpartyPayoutConsent: performanceBondCounterpartyConsent,
+          currency: PERFORMANCE_BOND_DEFAULT_CURRENCY,
+          enabled: isPledge && pledgePerformanceBondsEnabled && performanceBondEnabled,
+          evidenceDueAt: toIsoDateOrNull(performanceBondEvidenceDueAt),
+          evidenceSchema,
+          forfeitureDestination:
+            performanceBondForfeitureDestination === "mpgf" ||
+            performanceBondForfeitureDestination === "counterparty" ||
+            performanceBondForfeitureDestination === "split"
+              ? performanceBondForfeitureDestination
+              : "compromise_charity",
+          noTradeBaseline: performanceBondNoTradeBaseline || baselineStatement,
+          splitConfig: parsePerformanceBondSplitConfig({
+            counterpartyPercent: performanceBondCounterpartyPercent,
+            mpgfPercent: performanceBondMpgfPercent,
+            neutralCausePercent: performanceBondNeutralPercent,
+          }),
+        },
+        {
+          enabled: pledgePerformanceBondsEnabled,
+          livePaymentsEnabled: liveBondPaymentsEnabled,
+          maxAmountCents: performanceBondMaxCents,
+          minAmountCents: performanceBondMinCents,
+          stalePaymentPendingDays: 14,
+        },
+      );
+    },
+    [
+      additionalityStatement,
+      baselineStatement,
+      isPledge,
+      liveBondPaymentsEnabled,
+      performanceBondActionToProve,
+      performanceBondAdditionality,
+      performanceBondAmountUsd,
+      performanceBondChallengeWindowDays,
+      performanceBondCounterpartyConsent,
+      performanceBondCounterpartyPercent,
+      performanceBondEnabled,
+      performanceBondEvidenceDueAt,
+      performanceBondEvidenceTypes,
+      performanceBondForfeitureDestination,
+      performanceBondMaxCents,
+      performanceBondMinCents,
+      performanceBondMinimumDetail,
+      performanceBondMpgfPercent,
+      performanceBondNeutralPercent,
+      performanceBondNoTradeBaseline,
+      performanceBondPrivateEvidenceAllowed,
+      performanceBondReviewStandard,
+      performanceBondTemplateKey,
+      performanceBondVisibility,
+      pledgePerformanceBondsEnabled,
+    ],
+  );
 
   const liveOffsetErrors = useMemo(
     () =>
@@ -959,6 +1104,10 @@ export function OfferCreateForm({
       errors.push("State the no-trade baseline or default you are comparing against.");
     }
 
+    if (isPledge && !additionalityStatement.trim()) {
+      errors.push("Explain why this personal pledge swap is additional to the no-trade baseline.");
+    }
+
     if (!exitCondition.trim()) {
       errors.push("State the exit, pause, expiry, or unresolved-evidence condition.");
     }
@@ -972,10 +1121,10 @@ export function OfferCreateForm({
     }
 
     return errors;
-  }, [baselineStatement, exitCondition, isPayment, notes, offerAction, requestAction]);
+  }, [additionalityStatement, baselineStatement, exitCondition, isPayment, isPledge, notes, offerAction, requestAction]);
   const liveOfferErrors = useMemo(
-    () => [...liveCoreOfferErrors, ...liveOffsetErrors],
-    [liveCoreOfferErrors, liveOffsetErrors],
+    () => [...liveCoreOfferErrors, ...liveOffsetErrors, ...performanceBondValidation.errors],
+    [liveCoreOfferErrors, liveOffsetErrors, performanceBondValidation.errors],
   );
   const reviewVerificationMethod = isOffset
     ? formatDonationOffsetVerificationMethod(effectiveVerificationMethod)
@@ -1080,7 +1229,11 @@ export function OfferCreateForm({
         title: "Explain baseline and exit",
         detail: "Make the no-trade default, expiry, and unresolved-evidence path reviewable.",
         href: "#offer-boundaries",
-        complete: Boolean(baselineStatement.trim() && exitCondition.trim()),
+        complete: Boolean(
+          baselineStatement.trim() &&
+            exitCondition.trim() &&
+            (!isPledge || additionalityStatement.trim()),
+        ),
       },
       {
         id: "evidence",
@@ -1101,10 +1254,12 @@ export function OfferCreateForm({
     ],
     [
       baselineStatement,
+      additionalityStatement,
       canPublishOffer,
       exitCondition,
       isOffset,
       isPayment,
+      isPledge,
       liveOffsetErrors.length,
       mode,
       offerAction,
@@ -1587,6 +1742,286 @@ export function OfferCreateForm({
           </p>
         </div>
 
+        {isPledge && pledgePerformanceBondsEnabled ? (
+          <details className="panel subtle-panel" open={performanceBondEnabled}>
+            <summary className="panel-summary">Optional credibility stake</summary>
+            <p className="route-text">{PERFORMANCE_BOND_COPY}</p>
+            <p className="panel-note">
+              {liveBondPaymentsEnabled
+                ? "Live provider funding is required before this can become funded."
+                : "Payment pending/manual review mode: terms can be drafted and reviewed, but the platform is not claiming money is currently held."}
+            </p>
+            <p className="panel-note">{PERFORMANCE_BOND_LIMITATION_COPY}</p>
+
+            <label className="radio-row">
+              <input
+                checked={performanceBondEnabled}
+                name="performance_bond_enabled"
+                type="checkbox"
+                onChange={(event) =>
+                  setPerformanceBondEnabled((event.currentTarget as HTMLInputElement).checked)
+                }
+              />
+              <span>Enable pledge performance bond</span>
+            </label>
+
+            {performanceBondEnabled ? (
+              <div className="clean-stack">
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Bond amount</span>
+                    <input
+                      max={String(performanceBondMaxCents / 100)}
+                      min={String(performanceBondMinCents / 100)}
+                      name="performance_bond_amount_usd"
+                      required={performanceBondEnabled}
+                      step="0.01"
+                      type="number"
+                      value={performanceBondAmountUsd}
+                      onChange={(event) => setPerformanceBondAmountUsd(readFormControlValue(event))}
+                    />
+                    <small>
+                      Conservative v1 limit: {formatPerformanceBondAmount(performanceBondMinCents)} to{" "}
+                      {formatPerformanceBondAmount(performanceBondMaxCents)}.
+                    </small>
+                  </label>
+
+                  <label className="field">
+                    <span>Currency</span>
+                    <input
+                      name="performance_bond_currency"
+                      readOnly
+                      type="text"
+                      value={PERFORMANCE_BOND_DEFAULT_CURRENCY}
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Evidence due date</span>
+                    <input
+                      name="performance_bond_evidence_due_at"
+                      required={performanceBondEnabled}
+                      type="date"
+                      value={performanceBondEvidenceDueAt}
+                      onChange={(event) => setPerformanceBondEvidenceDueAt(readFormControlValue(event))}
+                    />
+                  </label>
+
+                  <label className="field">
+                    <span>Challenge window</span>
+                    <select
+                      name="performance_bond_challenge_window_days"
+                      value={performanceBondChallengeWindowDays}
+                      onChange={(event) =>
+                        setPerformanceBondChallengeWindowDays(readFormControlValue(event))
+                      }
+                    >
+                      <option value="7">7 days</option>
+                      <option value="14">14 days</option>
+                      <option value="30">30 days</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="field">
+                  <span>Evidence schema template</span>
+                  <select
+                    name="performance_bond_schema_template"
+                    value={performanceBondTemplateKey}
+                    onChange={(event) => applyPerformanceBondTemplate(readFormControlValue(event))}
+                  >
+                    {PERFORMANCE_BOND_EVIDENCE_TEMPLATES.map((template) => (
+                      <option key={template.key} value={template.key}>
+                        {template.label}
+                      </option>
+                    ))}
+                  </select>
+                  <small>Templates are editable before acceptance.</small>
+                </label>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>What action must be proven?</span>
+                    <textarea
+                      name="performance_bond_action_to_prove"
+                      required={performanceBondEnabled}
+                      rows={3}
+                      value={performanceBondActionToProve}
+                      onChange={(event) => setPerformanceBondActionToProve(readFormControlValue(event))}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>What evidence types count?</span>
+                    <textarea
+                      name="performance_bond_evidence_types"
+                      required={performanceBondEnabled}
+                      rows={3}
+                      value={performanceBondEvidenceTypes}
+                      onChange={(event) => setPerformanceBondEvidenceTypes(readFormControlValue(event))}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Minimum acceptable detail</span>
+                    <textarea
+                      name="performance_bond_minimum_detail"
+                      required={performanceBondEnabled}
+                      rows={3}
+                      value={performanceBondMinimumDetail}
+                      onChange={(event) => setPerformanceBondMinimumDetail(readFormControlValue(event))}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Review standard</span>
+                    <textarea
+                      name="performance_bond_review_standard"
+                      required={performanceBondEnabled}
+                      rows={3}
+                      value={performanceBondReviewStandard}
+                      onChange={(event) => setPerformanceBondReviewStandard(readFormControlValue(event))}
+                    />
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Who can view the evidence?</span>
+                    <select
+                      name="performance_bond_visibility"
+                      value={performanceBondVisibility}
+                      onChange={(event) => setPerformanceBondVisibility(readFormControlValue(event))}
+                    >
+                      <option value="counterparty_only">Counterparty only</option>
+                      <option value="platform_reviewer_only">Platform reviewer only</option>
+                      <option value="public_proof">Public proof</option>
+                      <option value="mixed_redacted">Mixed/redacted</option>
+                    </select>
+                    <small>Use redaction for receipts, reference IDs, addresses, and personal data.</small>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={performanceBondPrivateEvidenceAllowed}
+                      name="performance_bond_private_evidence_allowed"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setPerformanceBondPrivateEvidenceAllowed(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Private/redacted evidence is allowed.</span>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Refunded when</span>
+                    <input readOnly value={PERFORMANCE_BOND_REFUND_SUMMARY} />
+                  </label>
+                  <label className="field">
+                    <span>Reviewer</span>
+                    <input readOnly value={PERFORMANCE_BOND_REVIEWER_POLICY} />
+                  </label>
+                </div>
+
+                <label className="field">
+                  <span>If not completed, release bond to</span>
+                  <select
+                    name="performance_bond_forfeiture_destination"
+                    value={performanceBondForfeitureDestination}
+                    onChange={(event) => setPerformanceBondForfeitureDestination(readFormControlValue(event))}
+                  >
+                    <option value="compromise_charity">Compromise charity / neutral cause</option>
+                    <option value="mpgf">Moral Public Goods Fund</option>
+                    <option value="counterparty">Counterparty</option>
+                    <option value="split">Split</option>
+                  </select>
+                  <small>Default is neutral; if no concrete neutral cause is available, MPGF is used.</small>
+                </label>
+
+                {performanceBondForfeitureDestination === "counterparty" ||
+                performanceBondForfeitureDestination === "split" ? (
+                  <div className="status-banner status-banner-error">
+                    <p>{PERFORMANCE_BOND_COUNTERPARTY_WARNING}</p>
+                    <label className="radio-row">
+                      <input
+                        checked={performanceBondCounterpartyConsent}
+                        name="performance_bond_counterparty_payout_consent"
+                        type="checkbox"
+                        onChange={(event) =>
+                          setPerformanceBondCounterpartyConsent(
+                            (event.currentTarget as HTMLInputElement).checked,
+                          )
+                        }
+                      />
+                      <span>I explicitly consent to this counterparty payout structure.</span>
+                    </label>
+                  </div>
+                ) : null}
+
+                {performanceBondForfeitureDestination === "split" ? (
+                  <div className="field-grid">
+                    <label className="field">
+                      <span>Counterparty %</span>
+                      <input
+                        max="100"
+                        min="0"
+                        name="performance_bond_counterparty_percent"
+                        type="number"
+                        value={performanceBondCounterpartyPercent}
+                        onChange={(event) => setPerformanceBondCounterpartyPercent(readFormControlValue(event))}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Neutral cause %</span>
+                      <input
+                        max="100"
+                        min="0"
+                        name="performance_bond_neutral_cause_percent"
+                        type="number"
+                        value={performanceBondNeutralPercent}
+                        onChange={(event) => setPerformanceBondNeutralPercent(readFormControlValue(event))}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>MPGF %</span>
+                      <input
+                        max="100"
+                        min="0"
+                        name="performance_bond_mpgf_percent"
+                        type="number"
+                        value={performanceBondMpgfPercent}
+                        onChange={(event) => setPerformanceBondMpgfPercent(readFormControlValue(event))}
+                      />
+                    </label>
+                  </div>
+                ) : null}
+
+                <label className="field">
+                  <span>Why this is additional?</span>
+                  <textarea
+                    name="performance_bond_additionality_statement"
+                    placeholder="Explain why this bond-backed pledge would not happen on this timeline without the swap."
+                    rows={3}
+                    value={performanceBondAdditionality}
+                    onChange={(event) => setPerformanceBondAdditionality(readFormControlValue(event))}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>No-trade baseline</span>
+                  <textarea
+                    name="performance_bond_no_trade_baseline"
+                    placeholder="Restate the baseline this specific bond is meant to make more credible."
+                    rows={3}
+                    value={performanceBondNoTradeBaseline}
+                    onChange={(event) => setPerformanceBondNoTradeBaseline(readFormControlValue(event))}
+                  />
+                </label>
+              </div>
+            ) : null}
+          </details>
+        ) : null}
+
         <div className="field-grid" id="offer-terms">
           <label className="field">
             <span>What you&apos;re offering</span>
@@ -1667,6 +2102,24 @@ export function OfferCreateForm({
             have been.
           </small>
         </label>
+
+        {isPledge ? (
+          <label className="field">
+            <span>Why this is additional?</span>
+            <textarea
+              name="additionality_statement"
+              onChange={(event) => setAdditionalityStatement(readFormControlValue(event))}
+              placeholder="Explain why this action is plausibly caused by the swap rather than something you would have done anyway."
+              required={isPledge}
+              rows={3}
+              value={additionalityStatement}
+            />
+            <small>
+              This does not make the bond prove the counterfactual; it gives reviewers a concrete
+              additionality claim to evaluate alongside the no-trade baseline.
+            </small>
+          </label>
+        ) : null}
 
         {isOffset ? (
           <fieldset className="field baseline-bond-fieldset">

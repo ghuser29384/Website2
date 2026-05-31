@@ -9,6 +9,7 @@ import { getDonationOffsetOverview, getOfferById, getViewer } from "@/lib/app-da
 import { getMoralTradeProvenanceContract } from "@/lib/moral-trade/provenance";
 import { buildCreateSimilarTemplateFromLiveOffer } from "@/lib/offer-create-similar";
 import { isPublicLiveOfferId } from "@/lib/offer-follows";
+import { getPerformanceBondConfig } from "@/lib/performance-bonds";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
@@ -386,6 +387,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
   const offerCreationReturnTo = buildOfferCreationReturnTo(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
   const paymentBondsEnabled = isPaymentBondsEnabled();
+  const performanceBondConfig = getPerformanceBondConfig();
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidationRules = provenanceContract.validationRules.map((rule) => ({
     key: rule.key,
@@ -499,6 +501,10 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 initialOffsetPoolId={initialOffsetPoolId}
                 initialOffsetPoolSide={initialOffsetPoolSide}
                 paymentBondsEnabled={paymentBondsEnabled}
+                pledgePerformanceBondsEnabled={performanceBondConfig.enabled}
+                liveBondPaymentsEnabled={performanceBondConfig.livePaymentsEnabled}
+                performanceBondMinCents={performanceBondConfig.minAmountCents}
+                performanceBondMaxCents={performanceBondConfig.maxAmountCents}
                 supabaseReady={supabaseReady}
                 provenanceValidationRules={provenanceValidationRules}
               />

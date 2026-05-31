@@ -35,6 +35,13 @@ type AgreementPaymentScheduleRow = Database["public"]["Tables"]["agreement_payme
 type AgreementEventRow = Database["public"]["Tables"]["agreement_events"]["Row"];
 type AgreementEvidenceItemRow = Database["public"]["Tables"]["agreement_evidence_items"]["Row"];
 type AgreementReviewCaseRow = Database["public"]["Tables"]["agreement_review_cases"]["Row"];
+type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row"];
+type BondEvidenceRow = Database["public"]["Tables"]["bond_evidence"]["Row"];
+type BondChallengeRow = Database["public"]["Tables"]["bond_challenges"]["Row"];
+type BondAdjudicationRow = Database["public"]["Tables"]["bond_adjudications"]["Row"];
+type BondLedgerEntryRow = Database["public"]["Tables"]["bond_ledger_entries"]["Row"];
+type PerformanceBondAuditEventRow =
+  Database["public"]["Tables"]["performance_bond_audit_events"]["Row"];
 type ProfileVerificationBadgeRow =
   Database["public"]["Tables"]["profile_verification_badges"]["Row"];
 type SavedSearchRow = Database["public"]["Tables"]["saved_searches"]["Row"];
@@ -159,6 +166,7 @@ export interface OfferRecord extends OfferRow {
   recommendationCount: number;
   commentCount: number;
   isInCart: boolean;
+  performanceBonds: PerformanceBondRow[];
   donationOffset: (DonationOffsetOfferRow & {
     compromiseCharity: RegisteredCharityRow | null;
     pool: DonationOffsetPoolRecord | null;
@@ -185,6 +193,7 @@ export interface IncomingResponseRecord {
   canCreateAgreement: boolean;
   memberInterestId: string | null;
   guestInterestId: string | null;
+  performanceBond: PerformanceBondRow | null;
 }
 
 export interface AgreementRatingRecord extends AgreementRatingRow {
@@ -203,6 +212,12 @@ export interface AgreementRecord extends AgreementRow {
   events: AgreementEventRow[];
   evidenceItems: AgreementEvidenceItemRow[];
   reviewCases: AgreementReviewCaseRow[];
+  performanceBonds: PerformanceBondRow[];
+  bondEvidence: BondEvidenceRow[];
+  bondChallenges: BondChallengeRow[];
+  bondAdjudications: BondAdjudicationRow[];
+  bondLedgerEntries: BondLedgerEntryRow[];
+  performanceBondAuditEvents: PerformanceBondAuditEventRow[];
 }
 
 export interface DonationOffsetMatchRecord extends DonationOffsetMatchRow {
@@ -792,6 +807,7 @@ async function hydrateOffers(
     { data: offsetOffers, error: offsetOffersError },
     { data: offsetPools, error: offsetPoolsError },
     { data: charities, error: charitiesError },
+    { data: performanceBonds, error: performanceBondsError },
   ] =
     await Promise.all([
       getProfileSummaryMap(viewerId, ownerIds),
@@ -803,6 +819,7 @@ async function hydrateOffers(
       supabase.from("donation_offset_offers").select("*").in("offer_id", offerIds),
       supabase.from("donation_offset_pools").select("*"),
       supabase.from("registered_charities").select("*"),
+      supabase.from("performance_bonds").select("*").in("offer_id", offerIds),
     ]);
 
   if (recommendationsError) {
@@ -822,6 +839,9 @@ async function hydrateOffers(
   }
   if (charitiesError) {
     throw new Error(charitiesError.message);
+  }
+  if (performanceBondsError) {
+    throw new Error(performanceBondsError.message);
   }
 
   const recommendationCounts = new Map<string, number>();
@@ -852,6 +872,7 @@ async function hydrateOffers(
       pool: DonationOffsetPoolRecord | null;
     }
   >();
+  const performanceBondsByOffer = new Map<string, PerformanceBondRow[]>();
 
   for (const row of (offsetOffers ?? []) as DonationOffsetOfferRow[]) {
     offsetOfferMap.set(row.offer_id, {
@@ -861,12 +882,19 @@ async function hydrateOffers(
     });
   }
 
+  for (const row of (performanceBonds ?? []) as PerformanceBondRow[]) {
+    const bucket = performanceBondsByOffer.get(row.offer_id) ?? [];
+    bucket.push(row);
+    performanceBondsByOffer.set(row.offer_id, bucket);
+  }
+
   return offers.map((offer) => ({
     ...offer,
     ownerProfile: profileMap.get(offer.owner_id) ?? null,
     recommendationCount: recommendationCounts.get(offer.id) ?? 0,
     commentCount: commentCounts.get(offer.id) ?? 0,
     isInCart: cartSet.has(offer.id),
+    performanceBonds: performanceBondsByOffer.get(offer.id) ?? [],
     donationOffset: offsetOfferMap.get(offer.id) ?? null,
   }));
 }
@@ -1393,6 +1421,27 @@ async function hydrateIncomingResponses(
   const profileMap = profileIds.length
     ? await getProfileSummaryMap(viewerId, profileIds)
     : new Map<string, PublicProfileSummary>();
+  const memberInterestIds = memberInterests.map((interest) => interest.id);
+  let performanceBondByInterest = new Map<string, PerformanceBondRow>();
+
+  if (memberInterestIds.length) {
+    const supabase = await createClient();
+    const { data: takerBonds, error: takerBondsError } = await supabase
+      .from("performance_bonds")
+      .select("*")
+      .in("interest_id", memberInterestIds)
+      .eq("side", "taker");
+
+    if (takerBondsError) {
+      throw new Error(takerBondsError.message);
+    }
+
+    performanceBondByInterest = new Map(
+      ((takerBonds ?? []) as PerformanceBondRow[])
+        .filter((bond) => bond.interest_id)
+        .map((bond) => [bond.interest_id as string, bond] as const),
+    );
+  }
 
   const combined: IncomingResponseRecord[] = [
     ...memberInterests.map((interest) => {
@@ -1415,6 +1464,7 @@ async function hydrateIncomingResponses(
         canCreateAgreement: true,
         memberInterestId: interest.id,
         guestInterestId: null,
+        performanceBond: performanceBondByInterest.get(interest.id) ?? null,
       } satisfies IncomingResponseRecord;
     }),
     ...guestInterests.map((interest) => {
@@ -1440,6 +1490,7 @@ async function hydrateIncomingResponses(
         canCreateAgreement: Boolean(interest.claimed_by_profile_id),
         memberInterestId: null,
         guestInterestId: interest.id,
+        performanceBond: null,
       } satisfies IncomingResponseRecord;
     }),
   ];
@@ -1936,6 +1987,7 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
     { data: events, error: eventsError },
     { data: evidenceItems, error: evidenceItemsError },
     { data: reviewCases, error: reviewCasesError },
+    { data: performanceBonds, error: performanceBondsError },
     profileMap,
   ] =
     await Promise.all([
@@ -1968,6 +2020,11 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
         .select("*")
         .in("agreement_id", agreementIds)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("performance_bonds")
+        .select("*")
+        .in("swap_id", agreementIds)
+        .order("created_at", { ascending: false }),
       getProfileSummaryMap(userId, profileIds),
     ]);
 
@@ -1992,15 +2049,83 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
   if (reviewCasesError) {
     throw new Error(reviewCasesError.message);
   }
+  if (performanceBondsError) {
+    throw new Error(performanceBondsError.message);
+  }
 
   const hydratedOffers = await hydrateOffers((offers ?? []) as OfferRow[], userId);
   const offersById = new Map(hydratedOffers.map((offer) => [offer.id, offer]));
+  const performanceBondRows = (performanceBonds ?? []) as PerformanceBondRow[];
+  const performanceBondIds = performanceBondRows.map((bond) => bond.id);
+  const [
+    { data: bondEvidence, error: bondEvidenceError },
+    { data: bondChallenges, error: bondChallengesError },
+    { data: bondAdjudications, error: bondAdjudicationsError },
+    { data: bondLedgerEntries, error: bondLedgerEntriesError },
+    { data: performanceBondAuditEvents, error: performanceBondAuditEventsError },
+  ] = performanceBondIds.length
+    ? await Promise.all([
+        supabase
+          .from("bond_evidence")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("submitted_at", { ascending: false }),
+        supabase
+          .from("bond_challenges")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("challenged_at", { ascending: false }),
+        supabase
+          .from("bond_adjudications")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("decided_at", { ascending: false }),
+        supabase
+          .from("bond_ledger_entries")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("performance_bond_audit_events")
+          .select("*")
+          .in("bond_id", performanceBondIds)
+          .order("created_at", { ascending: false }),
+      ])
+    : [
+        { data: [] as BondEvidenceRow[], error: null },
+        { data: [] as BondChallengeRow[], error: null },
+        { data: [] as BondAdjudicationRow[], error: null },
+        { data: [] as BondLedgerEntryRow[], error: null },
+        { data: [] as PerformanceBondAuditEventRow[], error: null },
+      ];
+
+  if (bondEvidenceError) {
+    throw new Error(bondEvidenceError.message);
+  }
+  if (bondChallengesError) {
+    throw new Error(bondChallengesError.message);
+  }
+  if (bondAdjudicationsError) {
+    throw new Error(bondAdjudicationsError.message);
+  }
+  if (bondLedgerEntriesError) {
+    throw new Error(bondLedgerEntriesError.message);
+  }
+  if (performanceBondAuditEventsError) {
+    throw new Error(performanceBondAuditEventsError.message);
+  }
   const ratingsByAgreement = new Map<string, AgreementRatingRecord[]>();
   const paymentsByAgreement = new Map<string, AgreementPaymentRow[]>();
   const paymentSchedulesByAgreement = new Map<string, AgreementPaymentScheduleRow[]>();
   const eventsByAgreement = new Map<string, AgreementEventRow[]>();
   const evidenceItemsByAgreement = new Map<string, AgreementEvidenceItemRow[]>();
   const reviewCasesByAgreement = new Map<string, AgreementReviewCaseRow[]>();
+  const performanceBondsByAgreement = new Map<string, PerformanceBondRow[]>();
+  const bondEvidenceByBond = new Map<string, BondEvidenceRow[]>();
+  const bondChallengesByBond = new Map<string, BondChallengeRow[]>();
+  const bondAdjudicationsByBond = new Map<string, BondAdjudicationRow[]>();
+  const bondLedgerByBond = new Map<string, BondLedgerEntryRow[]>();
+  const bondAuditByBond = new Map<string, PerformanceBondAuditEventRow[]>();
 
   for (const rating of (ratings ?? []) as AgreementRatingRow[]) {
     const bucket = ratingsByAgreement.get(rating.agreement_id) ?? [];
@@ -2042,12 +2167,53 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
     reviewCasesByAgreement.set(reviewCase.agreement_id, bucket);
   }
 
+  for (const bond of performanceBondRows) {
+    if (!bond.swap_id) {
+      continue;
+    }
+
+    const bucket = performanceBondsByAgreement.get(bond.swap_id) ?? [];
+    bucket.push(bond);
+    performanceBondsByAgreement.set(bond.swap_id, bucket);
+  }
+
+  for (const row of (bondEvidence ?? []) as BondEvidenceRow[]) {
+    const bucket = bondEvidenceByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    bondEvidenceByBond.set(row.bond_id, bucket);
+  }
+
+  for (const row of (bondChallenges ?? []) as BondChallengeRow[]) {
+    const bucket = bondChallengesByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    bondChallengesByBond.set(row.bond_id, bucket);
+  }
+
+  for (const row of (bondAdjudications ?? []) as BondAdjudicationRow[]) {
+    const bucket = bondAdjudicationsByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    bondAdjudicationsByBond.set(row.bond_id, bucket);
+  }
+
+  for (const row of (bondLedgerEntries ?? []) as BondLedgerEntryRow[]) {
+    const bucket = bondLedgerByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    bondLedgerByBond.set(row.bond_id, bucket);
+  }
+
+  for (const row of (performanceBondAuditEvents ?? []) as PerformanceBondAuditEventRow[]) {
+    const bucket = bondAuditByBond.get(row.bond_id) ?? [];
+    bucket.push(row);
+    bondAuditByBond.set(row.bond_id, bucket);
+  }
+
   return agreements.map((agreement) => {
     const ratingsForAgreement = ratingsByAgreement.get(agreement.id) ?? [];
     const viewerRating =
       ratingsForAgreement.find((rating) => rating.rater_id === userId) ?? null;
     const counterpartyId =
       agreement.proposer_id === userId ? agreement.responder_id : agreement.proposer_id;
+    const agreementPerformanceBonds = performanceBondsByAgreement.get(agreement.id) ?? [];
 
     return {
       ...agreement,
@@ -2061,6 +2227,12 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
       events: eventsByAgreement.get(agreement.id) ?? [],
       evidenceItems: evidenceItemsByAgreement.get(agreement.id) ?? [],
       reviewCases: reviewCasesByAgreement.get(agreement.id) ?? [],
+      performanceBonds: agreementPerformanceBonds,
+      bondEvidence: agreementPerformanceBonds.flatMap((bond) => bondEvidenceByBond.get(bond.id) ?? []),
+      bondChallenges: agreementPerformanceBonds.flatMap((bond) => bondChallengesByBond.get(bond.id) ?? []),
+      bondAdjudications: agreementPerformanceBonds.flatMap((bond) => bondAdjudicationsByBond.get(bond.id) ?? []),
+      bondLedgerEntries: agreementPerformanceBonds.flatMap((bond) => bondLedgerByBond.get(bond.id) ?? []),
+      performanceBondAuditEvents: agreementPerformanceBonds.flatMap((bond) => bondAuditByBond.get(bond.id) ?? []),
     } satisfies AgreementRecord;
   });
 }

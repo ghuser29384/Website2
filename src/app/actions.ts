@@ -86,6 +86,39 @@ import {
   type BaselineBondStatus,
 } from "@/lib/baseline-bonds";
 import {
+  PERFORMANCE_BOND_DEFAULT_CURRENCY,
+  PERFORMANCE_BOND_MANUAL_PROVIDER,
+  PERFORMANCE_BOND_REVIEWER_POLICY,
+  acceptBondEvidence,
+  adjudicateBondChallenge,
+  cancelPerformanceBondDraft,
+  challengeBondEvidence,
+  createPerformanceBond,
+  evidenceSchemaToJson,
+  getDefaultPerformanceBondSplitConfig,
+  getPerformanceBondConfig,
+  getPerformanceBondForfeitureRule,
+  isLiveBondPaymentsEnabled,
+  isPledgePerformanceBondsEnabled,
+  lockPerformanceBondTerms,
+  normalizePerformanceBondChallengeWindowDays,
+  normalizePerformanceBondCurrency,
+  normalizePerformanceBondEvidenceSchema,
+  normalizePerformanceBondForfeitureDestination,
+  normalizePerformanceBondVisibility,
+  parsePerformanceBondSplitConfig,
+  splitConfigToJson,
+  submitBondEvidence,
+  validatePerformanceBondTerms,
+  type BondAdjudicationDecision,
+  type BondFundingStatus,
+  type PerformanceBondForfeitureDestination,
+  type PerformanceBondRecord,
+  type PerformanceBondSide,
+  type PerformanceBondStatus,
+  type PerformanceBondTermsInput,
+} from "@/lib/performance-bonds";
+import {
   ANALYTICS_OPT_OUT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
   buildPrivacySafeFunnelEventRecord,
@@ -170,6 +203,9 @@ type AgreementReviewCaseInsert =
   Database["public"]["Tables"]["agreement_review_cases"]["Insert"];
 type AgreementReviewCaseUpdate =
   Database["public"]["Tables"]["agreement_review_cases"]["Update"];
+type PerformanceBondInsert = Database["public"]["Tables"]["performance_bonds"]["Insert"];
+type PerformanceBondRow = Database["public"]["Tables"]["performance_bonds"]["Row"];
+type PerformanceBondUpdate = Database["public"]["Tables"]["performance_bonds"]["Update"];
 type ProfileVerificationBadgeInsert =
   Database["public"]["Tables"]["profile_verification_badges"]["Insert"];
 type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
@@ -1193,6 +1229,232 @@ function normalizeDonationOffsetPoolSide(value: string): DonationOffsetPoolSide 
   return "";
 }
 
+function performanceBondFormKey(prefix: string, key: string) {
+  return `${prefix}_${key}`;
+}
+
+function readPerformanceBondTermsFromForm({
+  fallbackAdditionality,
+  fallbackNoTradeBaseline,
+  formData,
+  prefix,
+}: {
+  fallbackAdditionality: string;
+  fallbackNoTradeBaseline: string;
+  formData: FormData;
+  prefix: string;
+}) {
+  const field = (key: string) => performanceBondFormKey(prefix, key);
+  const enabled = readBoolean(formData, field("enabled"));
+  const forfeitureDestination = normalizePerformanceBondForfeitureDestination(
+    readOptional(formData, field("forfeiture_destination")),
+  );
+  const splitConfig = parsePerformanceBondSplitConfig({
+    counterpartyPercent: readOptional(formData, field("counterparty_percent")),
+    mpgfPercent: readOptional(formData, field("mpgf_percent")),
+    neutralCausePercent: readOptional(formData, field("neutral_cause_percent")),
+  });
+  const evidenceSchema = normalizePerformanceBondEvidenceSchema({
+    acceptedEvidenceTypes: readOptional(formData, field("evidence_types")),
+    actionToProve: readOptional(formData, field("action_to_prove")),
+    minimumDetail: readOptional(formData, field("minimum_detail")),
+    privateEvidenceAllowed: readBoolean(formData, field("private_evidence_allowed")),
+    reviewStandard: readOptional(formData, field("review_standard")),
+    templateKey: readOptional(formData, field("schema_template")),
+    visibility: readOptional(formData, field("visibility")),
+  });
+  const terms: PerformanceBondTermsInput = {
+    additionalityStatement:
+      readOptional(formData, field("additionality_statement")) || fallbackAdditionality,
+    amountCents: readMoneyCents(formData, field("amount_usd")),
+    challengeWindowDays: normalizePerformanceBondChallengeWindowDays(
+      readOptional(formData, field("challenge_window_days")),
+    ),
+    counterpartyPayoutConsent: readBoolean(formData, field("counterparty_payout_consent")),
+    currency: normalizePerformanceBondCurrency(
+      readOptional(formData, field("currency")) || PERFORMANCE_BOND_DEFAULT_CURRENCY,
+    ),
+    enabled,
+    evidenceDueAt: enabled ? parseOptionalTimestamp(readOptional(formData, field("evidence_due_at"))) : null,
+    evidenceSchema,
+    forfeitureDestination,
+    noTradeBaseline:
+      readOptional(formData, field("no_trade_baseline")) || fallbackNoTradeBaseline,
+    splitConfig: forfeitureDestination === "split" ? splitConfig : getDefaultPerformanceBondSplitConfig(),
+  };
+
+  return {
+    enabled,
+    forfeitureDestinationId: readOptional(formData, field("forfeiture_destination_id")) || null,
+    terms,
+  };
+}
+
+function buildDraftPerformanceBondPayload({
+  counterpartyId,
+  forfeitureDestinationId,
+  interestId,
+  offerId,
+  partyId,
+  side,
+  terms,
+}: {
+  counterpartyId: string | null;
+  forfeitureDestinationId: string | null;
+  interestId: string | null;
+  offerId: string;
+  partyId: string;
+  side: PerformanceBondSide;
+  terms: PerformanceBondTermsInput;
+}): PerformanceBondInsert {
+  const forfeitureDestination = normalizePerformanceBondForfeitureDestination(
+    terms.forfeitureDestination,
+  );
+
+  return {
+    additionality_statement: terms.additionalityStatement.trim(),
+    amount_cents: terms.amountCents,
+    challenge_window_days: terms.challengeWindowDays as 7 | 14 | 30,
+    counterparty_id: counterpartyId,
+    counterparty_payout_consent: terms.counterpartyPayoutConsent,
+    currency: normalizePerformanceBondCurrency(terms.currency),
+    enabled: terms.enabled,
+    evidence_due_at: terms.evidenceDueAt,
+    evidence_schema: evidenceSchemaToJson(terms.evidenceSchema),
+    forfeiture_destination: forfeitureDestination,
+    forfeiture_destination_id:
+      forfeitureDestination === "compromise_charity" ? forfeitureDestinationId : null,
+    forfeiture_rule: getPerformanceBondForfeitureRule(forfeitureDestination),
+    funding_status: "awaiting_funding",
+    interest_id: interestId,
+    no_trade_baseline: terms.noTradeBaseline.trim(),
+    offer_id: offerId,
+    party_id: partyId,
+    payment_provider: PERFORMANCE_BOND_MANUAL_PROVIDER,
+    reviewer_policy: PERFORMANCE_BOND_REVIEWER_POLICY,
+    side,
+    split_config: splitConfigToJson(terms.splitConfig),
+    status: "draft",
+  };
+}
+
+async function upsertDraftPerformanceBond({
+  counterpartyId,
+  forfeitureDestinationId,
+  interestId,
+  offerId,
+  partyId,
+  returnTo,
+  side,
+  supabase,
+  terms,
+}: {
+  counterpartyId: string | null;
+  forfeitureDestinationId: string | null;
+  interestId: string | null;
+  offerId: string;
+  partyId: string;
+  returnTo: string;
+  side: PerformanceBondSide;
+  supabase: ReturnType<typeof createServiceClient>;
+  terms: PerformanceBondTermsInput;
+}) {
+  const lookup = supabase
+    .from("performance_bonds")
+    .select("*")
+    .eq("offer_id", offerId)
+    .eq("side", side);
+  const { data: existing, error: existingError } = interestId
+    ? await lookup.eq("interest_id", interestId).maybeSingle()
+    : await lookup.maybeSingle();
+
+  if (existingError) {
+    redirectWithMessage(returnTo, "error", existingError.message);
+  }
+
+  const existingBond = existing as PerformanceBondRow | null;
+  if (existingBond?.locked_at) {
+    redirectWithMessage(returnTo, "error", "Pledge performance bond terms are locked after acceptance.");
+  }
+
+  if (!terms.enabled) {
+    if (existingBond) {
+      try {
+        await cancelPerformanceBondDraft({
+          actorId: partyId,
+          bondId: existingBond.id,
+          supabase,
+        });
+      } catch (error) {
+        redirectWithMessage(
+          returnTo,
+          "error",
+          error instanceof Error ? error.message : "Unable to cancel pledge performance bond.",
+        );
+      }
+    }
+
+    return null;
+  }
+
+  const validation = validatePerformanceBondTerms(terms, getPerformanceBondConfig());
+  if (validation.errors.length) {
+    redirectWithMessage(returnTo, "error", validation.errors[0] ?? "Complete the pledge performance bond fields.");
+  }
+
+  if (!existingBond) {
+    try {
+      return await createPerformanceBond({
+        counterpartyId,
+        forfeitureDestinationId,
+        interestId,
+        offerId,
+        partyId,
+        side,
+        supabase,
+        terms,
+      });
+    } catch (error) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        error instanceof Error ? error.message : "Unable to create pledge performance bond.",
+      );
+    }
+  }
+
+  const {
+    created_at: _createdAt,
+    id: _id,
+    offer_id: _offerId,
+    party_id: _partyId,
+    side: _side,
+    ...payload
+  } = buildDraftPerformanceBondPayload({
+    counterpartyId,
+    forfeitureDestinationId,
+    interestId,
+    offerId,
+    partyId,
+    side,
+    terms,
+  });
+  const updatePayload: PerformanceBondUpdate = payload;
+  const { data, error } = await supabase
+    .from("performance_bonds")
+    .update(updatePayload)
+    .eq("id", existingBond.id)
+    .eq("status", "draft")
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    redirectWithMessage(returnTo, "error", error?.message ?? "Unable to update pledge performance bond.");
+  }
+
+  return data as PerformanceBondRow;
+}
+
 const blockedWishPatterns: Array<{ pattern: RegExp; label: string }> = [
   { pattern: /\b(kill|murder|assault|poison|bomb|terror|weaponize)\b/i, label: "violence" },
   { pattern: /\b(harass|stalk|dox|doxx|blackmail|extort|threaten)\b/i, label: "coercion or harassment" },
@@ -1820,6 +2082,14 @@ function normalizeVerificationBadgeStatus(value: string): ProfileVerificationBad
   }
 
   return "pending";
+}
+
+function normalizeBondAdjudicationDecision(value: string): BondAdjudicationDecision {
+  if (value === "reject" || value === "request_more_evidence") {
+    return value;
+  }
+
+  return "accept";
 }
 
 function readMoneyCents(formData: FormData, key: string) {
@@ -2930,6 +3200,9 @@ export async function createOfferAction(formData: FormData) {
   const offerAction = readRequired(formData, "offer_action");
   const requestAction = readRequired(formData, "request_action");
   const baselineStatement = readRequired(formData, "baseline_statement");
+  const additionalityStatement = normalizedMode === "pledge"
+    ? readRequired(formData, "additionality_statement")
+    : readOptional(formData, "additionality_statement");
   const exitCondition = readRequired(formData, "exit_condition");
   const compromiseCause = readRequired(formData, "compromise_cause") || "Not needed";
   const verification = readRequired(formData, "verification");
@@ -3034,9 +3307,42 @@ export async function createOfferAction(formData: FormData) {
           poolSide ? `&offset_pool_side=${poolSide}` : ""
         }`
       : "/offers/new";
+  const pledgePerformanceBondConfig = getPerformanceBondConfig();
+  const pledgePerformanceBondFields =
+    normalizedMode === "pledge" && pledgePerformanceBondConfig.enabled
+      ? readPerformanceBondTermsFromForm({
+          fallbackAdditionality: additionalityStatement,
+          fallbackNoTradeBaseline: baselineStatement,
+          formData,
+          prefix: "performance_bond",
+        })
+      : null;
 
   if (!offerAction || !requestAction || !baselineStatement || !exitCondition || !offeredCause || !requestedCause) {
     redirectWithMessage(newOfferReturnPath, "error", "Complete all required offer fields.");
+  }
+
+  if (normalizedMode === "pledge" && !additionalityStatement.trim()) {
+    redirectWithMessage(
+      newOfferReturnPath,
+      "error",
+      "Explain why this personal pledge swap is additional to the no-trade baseline.",
+    );
+  }
+
+  if (pledgePerformanceBondFields?.enabled) {
+    const bondValidation = validatePerformanceBondTerms(
+      pledgePerformanceBondFields.terms,
+      pledgePerformanceBondConfig,
+    );
+
+    if (bondValidation.errors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        bondValidation.errors[0] ?? "Complete the pledge performance bond fields.",
+      );
+    }
   }
 
   const protocolDraft = {
@@ -3093,9 +3399,12 @@ export async function createOfferAction(formData: FormData) {
   const structuredNotes = [
     notes,
     `No-trade baseline / default: ${baselineStatement}`,
+    additionalityStatement ? `Why this is additional: ${additionalityStatement}` : "",
     `Exit, pause, or expiry condition: ${exitCondition}`,
     buildMoralTradeOfferProtocolNotes(protocolReview, protocolTransition),
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
   let donationOffsetFields: DonationOffsetFields | null = null;
   let baselineBondPauseReasons: string[] = [];
@@ -3505,6 +3814,35 @@ export async function createOfferAction(formData: FormData) {
     }
   }
 
+  if (normalizedMode === "pledge" && pledgePerformanceBondFields?.enabled) {
+    const serviceSupabase = createServiceClient();
+
+    try {
+      await createPerformanceBond({
+        counterpartyId: null,
+        forfeitureDestinationId: pledgePerformanceBondFields.forfeitureDestinationId,
+        offerId: data.id,
+        partyId: viewer.authUser.id,
+        side: "offerer",
+        supabase: serviceSupabase,
+        terms: pledgePerformanceBondFields.terms,
+      });
+    } catch (bondError) {
+      logSupabaseActionError(
+        "Failed to create pledge performance bond",
+        toActionError(bondError, "Unable to create pledge performance bond."),
+        { offerId: data.id, ownerId: viewer.authUser.id },
+      );
+      redirectWithMessage(
+        `/offers/${data.id}`,
+        "error",
+        bondError instanceof Error
+          ? bondError.message
+          : "Offer saved but the pledge performance bond could not be recorded.",
+      );
+    }
+  }
+
   const provenanceResult = await persistMoralTradeOfferCreateProtocolProvenance({
     actorAgentId: viewer.authUser.id,
     actorLabel: ownerAlias,
@@ -3531,9 +3869,12 @@ export async function createOfferAction(formData: FormData) {
   const finalStructuredNotes = [
     notes,
     `No-trade baseline / default: ${baselineStatement}`,
+    additionalityStatement ? `Why this is additional: ${additionalityStatement}` : "",
     `Exit, pause, or expiry condition: ${exitCondition}`,
     buildMoralTradeOfferProtocolNotes(protocolReview, provenanceResult.transition),
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const { error: finalOfferUpdateError } = await supabase
     .from("offers")
     .update({
@@ -3635,12 +3976,13 @@ export async function expressInterestAction(formData: FormData) {
 
   const offerId = readRequired(formData, "offer_id");
   const message = readRequired(formData, "message");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), `/offers/${offerId}`);
 
   if (!offerId) {
     redirectWithMessage("/offers", "error", "Offer ID is required.");
   }
 
-  const viewer = await requireViewer(`/offers/${offerId}`);
+  const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
 
   const { data: offer, error: offerError } = await supabase
@@ -3654,13 +3996,65 @@ export async function expressInterestAction(formData: FormData) {
   }
 
   if (offer.owner_id === viewer.authUser.id) {
-    redirectWithMessage(`/offers/${offerId}`, "error", "You cannot express interest in your own offer.");
+    redirectWithMessage(returnTo, "error", "You cannot express interest in your own offer.");
+  }
+
+  const pledgePerformanceBondFeatureEnabled = isPledgePerformanceBondsEnabled();
+  const { data: offererBond, error: offererBondError } =
+    pledgePerformanceBondFeatureEnabled && offer.mode === "pledge"
+      ? await supabase
+          .from("performance_bonds")
+          .select("*")
+          .eq("offer_id", offerId)
+          .eq("side", "offerer")
+          .eq("enabled", true)
+          .maybeSingle()
+      : { data: null, error: null };
+
+  if (offererBondError) {
+    redirectWithMessage(returnTo, "error", offererBondError.message);
+  }
+
+  if (offererBond && !readBoolean(formData, "accept_offerer_performance_bond_terms")) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Accept the offer-maker's locked evidence schema and forfeiture rule before responding.",
+    );
+  }
+
+  const takerBondFields =
+    pledgePerformanceBondFeatureEnabled && offer.mode === "pledge"
+      ? readPerformanceBondTermsFromForm({
+          fallbackAdditionality: readOptional(
+            formData,
+            "taker_performance_bond_additionality_statement",
+          ),
+          fallbackNoTradeBaseline: readOptional(formData, "taker_performance_bond_no_trade_baseline"),
+          formData,
+          prefix: "taker_performance_bond",
+        })
+      : null;
+
+  if (takerBondFields?.enabled) {
+    const takerBondValidation = validatePerformanceBondTerms(
+      takerBondFields.terms,
+      getPerformanceBondConfig(),
+    );
+
+    if (takerBondValidation.errors.length) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        takerBondValidation.errors[0] ?? "Complete reciprocal pledge performance bond fields.",
+      );
+    }
   }
 
   const interestedAlias = deriveDisplayName(viewer.authUser, viewer.profile);
   await ensureAccountRowsForUser(viewer.authUser, supabase);
 
-  const { error } = await supabase.from("interests").upsert(
+  const { data: interest, error } = await supabase.from("interests").upsert(
     {
       offer_id: offerId,
       user_id: viewer.authUser.id,
@@ -3671,10 +4065,25 @@ export async function expressInterestAction(formData: FormData) {
     {
       onConflict: "offer_id,user_id",
     },
-  );
+  ).select("*").single();
 
-  if (error) {
-    redirectWithMessage(`/offers/${offerId}`, "error", error.message);
+  if (error || !interest) {
+    redirectWithMessage(returnTo, "error", error?.message ?? "Unable to record interest.");
+  }
+
+  if (takerBondFields) {
+    const serviceSupabase = createServiceClient();
+    await upsertDraftPerformanceBond({
+      counterpartyId: offer.owner_id,
+      forfeitureDestinationId: takerBondFields.forfeitureDestinationId,
+      interestId: interest.id,
+      offerId,
+      partyId: viewer.authUser.id,
+      returnTo,
+      side: "taker",
+      supabase: serviceSupabase,
+      terms: takerBondFields.terms,
+    });
   }
 
   const { data: ownerProfile } = await supabase
@@ -3692,7 +4101,13 @@ export async function expressInterestAction(formData: FormData) {
 
   revalidatePath(`/offers/${offerId}`);
   revalidatePath("/dashboard");
-  redirectWithMessage(`/offers/${offerId}`, "message", "Interest recorded.");
+  redirectWithMessage(
+    returnTo,
+    "message",
+    takerBondFields?.enabled
+      ? "Interest and reciprocal pledge performance bond terms recorded."
+      : "Interest recorded.",
+  );
 }
 
 export async function updateProfileAction(formData: FormData) {
@@ -7319,6 +7734,200 @@ export async function submitAgreementEvidenceAction(formData: FormData) {
   redirectWithMessage(returnTo, "message", "Evidence submitted for review.");
 }
 
+export async function submitPerformanceBondEvidenceAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const bondId = readRequired(formData, "bond_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const evidenceText = truncateText(readRequired(formData, "evidence_text"), 2400);
+  const evidenceUrls = readStringList(formData, "evidence_urls")
+    .map((url) => truncateText(url, 900))
+    .filter(Boolean);
+  const visibility = normalizePerformanceBondVisibility(readOptional(formData, "visibility"));
+  const redactionNotes = truncateText(readOptional(formData, "redaction_notes"), 1200);
+  const attestation = readBoolean(formData, "attestation");
+
+  if (!bondId) {
+    redirectWithMessage(returnTo, "error", "Pledge performance bond ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const serviceSupabase = createServiceClient();
+
+  try {
+    const result = await submitBondEvidence({
+      actorId: viewer.authUser.id,
+      attestation,
+      bondId,
+      evidenceText,
+      evidenceUrls,
+      redactionNotes,
+      supabase: serviceSupabase,
+      visibility,
+    });
+
+    if (result.bond.swap_id) {
+      await serviceSupabase.from("agreement_events").insert({
+        agreement_id: result.bond.swap_id,
+        actor_id: viewer.authUser.id,
+        event_type: "evidence_submitted",
+        summary: "Pledge performance bond evidence submitted.",
+        details: evidenceText,
+      });
+      revalidatePath(`/agreements/${result.bond.swap_id}`);
+    }
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Unable to submit pledge performance bond evidence.",
+    );
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
+  redirectWithMessage(returnTo, "message", "Pledge performance bond evidence submitted.");
+}
+
+export async function acceptPerformanceBondEvidenceAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const bondId = readRequired(formData, "bond_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const reason = truncateText(readOptional(formData, "reason"), 1200);
+  const viewer = await requireViewer(returnTo);
+  const serviceSupabase = createServiceClient();
+
+  try {
+    const bond = await acceptBondEvidence({
+      actorId: viewer.authUser.id,
+      bondId,
+      reason,
+      supabase: serviceSupabase,
+    });
+
+    if (bond.swap_id) {
+      await serviceSupabase.from("agreement_events").insert({
+        agreement_id: bond.swap_id,
+        actor_id: viewer.authUser.id,
+        event_type: "review_status_changed",
+        summary: "Counterparty accepted pledge performance bond evidence.",
+        details: reason,
+      });
+      revalidatePath(`/agreements/${bond.swap_id}`);
+    }
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Unable to accept pledge performance bond evidence.",
+    );
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Evidence accepted. Refund processing status updated.");
+}
+
+export async function challengePerformanceBondEvidenceAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const bondId = readRequired(formData, "bond_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const reason = truncateText(readRequired(formData, "reason"), 1200);
+  const specificObjection = truncateText(readRequired(formData, "specific_objection"), 1200);
+  const requestedOutcome = truncateText(readOptional(formData, "requested_outcome") || "platform_review", 240);
+  const viewer = await requireViewer(returnTo);
+  const serviceSupabase = createServiceClient();
+
+  try {
+    const bond = await challengeBondEvidence({
+      actorId: viewer.authUser.id,
+      bondId,
+      reason,
+      requestedOutcome,
+      specificObjection,
+      supabase: serviceSupabase,
+    });
+
+    if (bond.swap_id) {
+      await serviceSupabase.from("agreement_events").insert({
+        agreement_id: bond.swap_id,
+        actor_id: viewer.authUser.id,
+        event_type: "challenge_opened",
+        summary: "Pledge performance bond evidence challenged.",
+        details: specificObjection,
+      });
+      revalidatePath(`/agreements/${bond.swap_id}`);
+    }
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Unable to challenge pledge performance bond evidence.",
+    );
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Challenge recorded and routed to platform review.");
+}
+
+export async function adjudicatePerformanceBondChallengeAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/admin", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const bondId = readRequired(formData, "bond_id");
+  const challengeId = readOptional(formData, "challenge_id") || null;
+  const decision = normalizeBondAdjudicationDecision(readRequired(formData, "decision"));
+  const decisionReason = truncateText(readRequired(formData, "decision_reason"), 1600);
+  const appealAllowed = readBoolean(formData, "appeal_allowed");
+  const appealDeadline = parseOptionalTimestamp(readOptional(formData, "appeal_deadline"));
+  const admin = await requireAdminViewer(returnTo);
+  const serviceSupabase = createServiceClient();
+
+  try {
+    const bond = await adjudicateBondChallenge({
+      appealAllowed,
+      appealDeadline,
+      bondId,
+      challengeId,
+      decision,
+      decisionReason,
+      reviewerId: admin.authUser.id,
+      supabase: serviceSupabase,
+    });
+
+    if (bond.swap_id) {
+      await serviceSupabase.from("agreement_events").insert({
+        agreement_id: bond.swap_id,
+        actor_id: admin.authUser.id,
+        event_type: "review_status_changed",
+        summary: `Pledge performance bond review decision: ${decision.replaceAll("_", " ")}.`,
+        details: decisionReason,
+      });
+      revalidatePath(`/agreements/${bond.swap_id}`);
+    }
+  } catch (error) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      error instanceof Error ? error.message : "Unable to adjudicate pledge performance bond.",
+    );
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Pledge performance bond review decision saved.");
+}
+
 export async function requestAgreementReviewAppealAction(formData: FormData) {
   if (!hasSupabaseEnv()) {
     redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
@@ -9018,6 +9627,41 @@ export async function acceptInterestAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", "That interest is not attached to this offer.");
   }
 
+  let offererPerformanceBond: PerformanceBondRow | null = null;
+  let takerPerformanceBond: PerformanceBondRow | null = null;
+
+  if (offer.mode === "pledge" && isPledgePerformanceBondsEnabled()) {
+    const [offererBondResult, takerBondResult] = await Promise.all([
+      supabase
+        .from("performance_bonds")
+        .select("*")
+        .eq("offer_id", offerId)
+        .eq("side", "offerer")
+        .eq("enabled", true)
+        .maybeSingle(),
+      supabase
+        .from("performance_bonds")
+        .select("*")
+        .eq("interest_id", interestId)
+        .eq("side", "taker")
+        .eq("enabled", true)
+        .maybeSingle(),
+    ]);
+
+    if (offererBondResult.error || takerBondResult.error) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        offererBondResult.error?.message ??
+          takerBondResult.error?.message ??
+          "Unable to load pledge performance bond terms.",
+      );
+    }
+
+    offererPerformanceBond = offererBondResult.data as PerformanceBondRow | null;
+    takerPerformanceBond = takerBondResult.data as PerformanceBondRow | null;
+  }
+
   const { error: acceptError } = await supabase
     .from("interests")
     .update({
@@ -9050,7 +9694,7 @@ export async function acceptInterestAction(formData: FormData) {
     });
   }
 
-  const { error: agreementError } = await supabase.from("agreements").upsert(
+  const { data: agreement, error: agreementError } = await supabase.from("agreements").upsert(
     {
       offer_id: offerId,
       interest_id: interestId,
@@ -9062,6 +9706,8 @@ export async function acceptInterestAction(formData: FormData) {
       structured_terms: `${offer.offer_action} for ${offer.request_action}`,
       duration_terms: offer.duration,
       evidence_rule: offer.verification,
+      no_trade_baseline: offererPerformanceBond?.no_trade_baseline ?? "",
+      counterfactual_declaration: offererPerformanceBond?.additionality_statement ?? "",
       privacy_scope: "Agreement participants can see this room. Broader publication waits for reviewed completion.",
       disclosure_scope: "Share only the details needed to verify this agreement and resolve disputes.",
       completion_state: "pending_evidence",
@@ -9069,16 +9715,58 @@ export async function acceptInterestAction(formData: FormData) {
     {
       onConflict: "interest_id",
     },
-  );
+  ).select("*").single();
 
-  if (agreementError) {
+  if (agreementError || !agreement) {
     logSupabaseActionError("Failed to create agreement after accepting interest", agreementError, {
       offerId,
       interestId,
       proposerId: viewer.authUser.id,
       responderId: interest.user_id,
     });
-    redirectWithMessage(returnTo, "error", agreementError.message);
+    redirectWithMessage(returnTo, "error", agreementError?.message ?? "Unable to create agreement.");
+  }
+
+  if (offer.mode === "pledge" && (offererPerformanceBond || takerPerformanceBond)) {
+    const serviceSupabase = createServiceClient();
+    const livePaymentsEnabled = isLiveBondPaymentsEnabled();
+
+    try {
+      if (offererPerformanceBond) {
+        await lockPerformanceBondTerms({
+          actorId: viewer.authUser.id,
+          bondId: offererPerformanceBond.id,
+          counterpartyId: interest.user_id,
+          livePaymentsEnabled,
+          supabase: serviceSupabase,
+          swapId: agreement.id,
+        });
+      }
+
+      if (takerPerformanceBond) {
+        await lockPerformanceBondTerms({
+          actorId: interest.user_id,
+          bondId: takerPerformanceBond.id,
+          counterpartyId: viewer.authUser.id,
+          livePaymentsEnabled,
+          supabase: serviceSupabase,
+          swapId: agreement.id,
+        });
+      }
+    } catch (bondLockError) {
+      logSupabaseActionError(
+        "Failed to lock pledge performance bond terms",
+        toActionError(bondLockError, "Unable to lock pledge performance bond terms."),
+        { agreementId: agreement.id, offerId, interestId },
+      );
+      redirectWithMessage(
+        returnTo,
+        "error",
+        bondLockError instanceof Error
+          ? bondLockError.message
+          : "Agreement created, but pledge performance bond terms could not be locked.",
+      );
+    }
   }
 
   if (offer.mode === "offset") {
@@ -9245,6 +9933,28 @@ export async function acceptGuestInterestAction(formData: FormData) {
       "error",
       "That guest respondent has not created an account yet. Ask them to sign up with the same email first.",
     );
+  }
+
+  if (offer.mode === "pledge" && isPledgePerformanceBondsEnabled()) {
+    const { data: offererBond, error: offererBondError } = await supabase
+      .from("performance_bonds")
+      .select("id")
+      .eq("offer_id", offerId)
+      .eq("side", "offerer")
+      .eq("enabled", true)
+      .maybeSingle();
+
+    if (offererBondError) {
+      redirectWithMessage(returnTo, "error", offererBondError.message);
+    }
+
+    if (offererBond) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "Bonded pledge swaps require a signed-in member response so evidence terms and reciprocal bond choices can be locked before acceptance.",
+      );
+    }
   }
 
   const { data: existingAgreement, error: existingAgreementError } = await supabase
