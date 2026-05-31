@@ -163,6 +163,16 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                   </dd>
                 </div>
                 <div>
+                  <dt>Deadline</dt>
+                  <dd>
+                    {new Date(campaign.deadlineAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </dd>
+                </div>
+                <div>
                   <dt>Base match</dt>
                   <dd>{formatUsd(assuranceLine.baseMatchCents)}</dd>
                 </div>
@@ -200,6 +210,10 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                   <dd>{campaign.destinationType.replaceAll("_", " ")}</dd>
                 </div>
                 <div>
+                  <dt>Destination reference</dt>
+                  <dd>{campaign.destinationRef}</dd>
+                </div>
+                <div>
                   <dt>Proof required</dt>
                   <dd>{assuranceLine.proofRequired.replaceAll("_", " ")}</dd>
                 </div>
@@ -210,6 +224,10 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                 <div>
                   <dt>Sponsor pool</dt>
                   <dd>{formatUsd(demoMpgfMatchPool.budgetCents)}</dd>
+                </div>
+                <div>
+                  <dt>Sponsor commitment</dt>
+                  <dd>{demoMpgfMatchPool.visibleCommitment}</dd>
                 </div>
                 <div>
                   <dt>Monthly pool refill</dt>

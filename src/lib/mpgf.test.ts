@@ -1051,7 +1051,11 @@ test("MPGF public-goods proof pages resolve campaign routes and expose public-sa
   assert.equal(normalizeMpgfPublicGoodsReasonCode("appeal_upheld"), "appeal_upheld");
   assert.equal(normalizeMpgfPublicGoodsReasonCode("not-a-reason-code"), "needs_destination_evidence");
   assert.match(page, /loadMpgfPublicGoodsProofSummary/);
+  assert.match(page, /Destination reference/);
+  assert.match(page, /Deadline/);
   assert.match(page, /Sponsor top-up/);
+  assert.match(page, /Sponsor commitment/);
+  assert.match(page, /visibleCommitment/);
   assert.match(page, /Public evidence source/);
 });
 
