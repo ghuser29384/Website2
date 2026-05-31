@@ -83,6 +83,10 @@ import {
   summarizeMpgfPublicGoodsProof,
 } from "./mpgf/public-goods-proof";
 import {
+  buildMpgfPublicGoodsKpiSnapshot,
+  loadMpgfPublicGoodsKpiSnapshot,
+} from "./mpgf/public-goods-kpis";
+import {
   evaluateMpgfExactPilotGate,
   evaluateMpgfGovernanceMachineryGate,
   evaluateMpgfPayoutComplianceGate,
@@ -924,6 +928,90 @@ test("MPGF public-goods reminder planner queues aggregate, non-spammy deadline a
   assert.match(reminders, /email_outbox/);
   assert.match(reminders, /reminder_queued/);
   assert.match(analytics, /reminder_queued/);
+});
+
+test("MPGF public-goods KPI snapshot gathers rollout data without private fields", async () => {
+  const previousCohort = process.env.MPGF_PUBLIC_GOODS_COHORT;
+
+  try {
+    process.env.MPGF_PUBLIC_GOODS_COHORT = "invited_demo";
+
+    const snapshot = buildMpgfPublicGoodsKpiSnapshot({
+      generatedAt: "2026-06-15T12:00:00.000Z",
+      analyticsEvents: [
+        {
+          event_type: "campaign_viewed",
+          campaign_id: "campaign-global-health-basic-needs",
+          event_json: { surface: "public_campaign_page" },
+          created_at: "2026-05-03T12:00:00.000Z",
+        },
+        {
+          event_type: "pledge_intent_recorded",
+          campaign_id: "campaign-global-health-basic-needs",
+          event_json: { eligibilityState: "eligible" },
+          created_at: "2026-05-03T14:00:00.000Z",
+        },
+      ],
+    });
+    const retentionSnapshot = buildMpgfPublicGoodsKpiSnapshot({
+      generatedAt: "2026-06-15T12:00:00.000Z",
+      subscriptions: [
+        {
+          ...demoMpgfPublicGoodsSubscriptions[0],
+          id: "subscription-old-active",
+          userId: "private-old-active",
+          status: "active",
+          createdAt: "2025-12-01T00:00:00.000Z",
+        },
+        {
+          ...demoMpgfPublicGoodsSubscriptions[0],
+          id: "subscription-old-cancelled",
+          userId: "private-old-cancelled",
+          status: "cancelled",
+          createdAt: "2025-12-01T00:00:00.000Z",
+        },
+      ],
+    });
+    const dryRun = await loadMpgfPublicGoodsKpiSnapshot({
+      dryRun: true,
+      generatedAt: "2026-06-15T12:00:00.000Z",
+    });
+    const route = readFileSync("src/app/api/mpgf/public-goods/kpis/route.ts", "utf8");
+    const kpis = readFileSync("src/lib/mpgf/public-goods-kpis.ts", "utf8");
+    const serialized = JSON.stringify(snapshot);
+
+    assert.equal(snapshot.privacyPolicy, "aggregate_only_no_user_or_reason_text");
+    assert.equal(snapshot.coordination.thresholdClearedCampaignCount, 2);
+    assert.equal(snapshot.coordination.thresholdClearRateBps, 5000);
+    assert.equal(snapshot.coordination.medianHoursToThreshold, 154.5);
+    assert.equal(snapshot.coordination.pageViewToPledgeIntentBps, 10000);
+    assert.equal(snapshot.review.reviewerMedianHoursToClose, 48);
+    assert.equal(snapshot.matching.sponsorPoolUtilizationBps !== null && snapshot.matching.sponsorPoolUtilizationBps > 0, true);
+    assert.equal(snapshot.handoffProof.verifiableCompletionShareBps, 5000);
+    assert.equal(snapshot.safety.noCustodyPilot, true);
+    assert.equal(snapshot.safety.rawPrivateTextStored, false);
+    assert.equal(snapshot.rolloutGate.widensPublicAccessAutomatically, false);
+    assert.equal(snapshot.rolloutGate.recommendation, "hold_invited_cohort");
+    assert.equal(snapshot.rolloutGate.blockers.includes("invited_cohort_still_required"), true);
+    assert.equal(retentionSnapshot.recurring.retainedRecurringDonors3MonthBps, 5000);
+    assert.equal(retentionSnapshot.recurring.retainedRecurringDonors6MonthBps, 5000);
+    assert.equal(dryRun.status, "dry_run");
+    assert.equal(serialized.includes("demo-supporter"), false);
+    assert.equal(serialized.includes("private-old"), false);
+    assert.equal(serialized.includes("supporterReason"), false);
+    assert.match(route, /MPGF_PUBLIC_GOODS_KPI_SECRET/);
+    assert.match(route, /loadMpgfPublicGoodsKpiSnapshot/);
+    assert.match(kpis, /reviewerMedianHoursToClose/);
+    assert.match(kpis, /thresholdClearRateBps/);
+    assert.match(kpis, /retainedRecurringDonors3MonthBps/);
+    assert.doesNotMatch(kpis, /user_ref_hash/);
+  } finally {
+    if (previousCohort === undefined) {
+      delete process.env.MPGF_PUBLIC_GOODS_COHORT;
+    } else {
+      process.env.MPGF_PUBLIC_GOODS_COHORT = previousCohort;
+    }
+  }
 });
 
 test("MPGF public-goods migration covers required entities and RLS policies", () => {
