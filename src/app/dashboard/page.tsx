@@ -83,6 +83,7 @@ import {
   formatBackgroundSourcePermissionFieldLabel,
 } from "@/lib/background-source-permissions";
 import { formatOpportunityBriefNextStep } from "@/lib/background-opportunity-briefs";
+import { formatBackgroundIntentClaimType } from "@/lib/background-intent-claims";
 import { summarizeBackgroundAiShadowReadiness } from "@/lib/background-ai-shadow";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { hasBackgroundFieldEncryptionKey } from "@/lib/background-field-encryption";
@@ -264,6 +265,38 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     0,
     profileCompletenessTotal - profileMissingFields.length,
   );
+  const activeIntentClaims =
+    dashboardData?.intentClaims.filter((claim) => claim.status === "active") ?? [];
+  const previewSafeIntentClaimCount = activeIntentClaims.filter(
+    (claim) => claim.preview_safe,
+  ).length;
+  const privateIntentClaimCount = Math.max(
+    0,
+    activeIntentClaims.length - previewSafeIntentClaimCount,
+  );
+  const intentClaimGroups = [
+    {
+      claimTypes: ["cause_priority", "trade_preference", "profile_state"],
+      label: "Broad preview intent",
+    },
+    {
+      claimTypes: ["ask_term", "offer_term", "capability_tag"],
+      label: "Private matching signals",
+    },
+    {
+      claimTypes: ["constraint_flag", "uncertainty_item", "missing_field"],
+      label: "Boundaries and open questions",
+    },
+    {
+      claimTypes: ["source_permission"],
+      label: "Reviewed source permissions",
+    },
+  ].map((group) => ({
+    ...group,
+    claims: activeIntentClaims
+      .filter((claim) => group.claimTypes.includes(claim.claim_type))
+      .slice(0, 8),
+  }));
   const notificationPreferenceRows =
     dashboardData?.backgroundNotificationPreferences.length || !viewer
       ? (dashboardData?.backgroundNotificationPreferences ?? []).map((preference) => ({
@@ -1039,6 +1072,72 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {stage}
                 </span>
               ))}
+            </div>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">What the system thinks you want</p>
+            <h3>Deterministic intent claims from explicit profile surfaces</h3>
+            <p className="route-text">
+              Active claims: {activeIntentClaims.length}. Preview-safe: {previewSafeIntentClaimCount}.
+              Owner-only matching signals: {privateIntentClaimCount}. Claims are regenerated from
+              saved profile fields, deterministic synthesis tags, and reviewed source permissions.
+            </p>
+            {dashboardData?.errors.intentClaims ? (
+              <p className="route-text">Could not load deterministic intent claims.</p>
+            ) : activeIntentClaims.length ? (
+              <div className="data-grid">
+                {intentClaimGroups.map((group) => (
+                  <article className="mini-list-item" key={group.label}>
+                    <strong>{group.label}</strong>
+                    {group.claims.length ? (
+                      <>
+                        <span>
+                          {group.claims
+                            .map(
+                              (claim) =>
+                                `${formatBackgroundIntentClaimType(claim.claim_type)}: ${
+                                  claim.claim_value
+                                }`,
+                            )
+                            .join(" / ")}
+                        </span>
+                        <span>
+                          Surfaces:{" "}
+                          {[...new Set(group.claims.map((claim) => claim.surface_label))]
+                            .filter(Boolean)
+                            .join(", ") || "not recorded"}
+                        </span>
+                        <span>
+                          Confidence:{" "}
+                          {[...new Set(group.claims.map((claim) => claim.confidence_band))]
+                            .join(", ")}
+                        </span>
+                      </>
+                    ) : (
+                      <span>No active claims in this group yet.</span>
+                    )}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <div>
+                  <strong>No deterministic intent claims have been generated yet.</strong>
+                  <p>Save or refresh your private wish profile to create this owner-scoped view.</p>
+                </div>
+              </div>
+            )}
+            <div className="form-actions">
+              <form action={refreshProfileSynthesisAction}>
+                <input name="return_to" type="hidden" value="/dashboard" />
+                <button className="button button-secondary button-mini" type="submit">
+                  Refresh synthesis and claims
+                </button>
+              </form>
+              <Link className="button button-secondary button-mini" href="/background-networking">
+                Open background workspace
+              </Link>
             </div>
           </div>
 

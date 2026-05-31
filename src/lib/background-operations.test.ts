@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildPrivacySafeRiskSignalInsert,
   insertMatchExplanationSnapshots,
   MATCH_EXPLANATION_SNAPSHOT_DEDUPE_COLUMNS,
+  recordBackgroundQueryRiskSignal,
+  sanitizeBackgroundLogMetadata,
+  sanitizeBackgroundRiskSignalSummary,
 } from "@/lib/background-operations";
 import type { MatchExplanationSnapshotPayload } from "@/lib/background-explanations";
 
@@ -54,4 +58,124 @@ test("match explanation snapshots ignore duplicate provenance rows", async () =>
   assert.equal(calls[0]?.options.ignoreDuplicates, true);
   assert.equal(calls[0]?.options.onConflict, MATCH_EXPLANATION_SNAPSHOT_DEDUPE_COLUMNS);
   assert.deepEqual(calls[0]?.rows, [snapshot]);
+});
+
+test("background log metadata rejects raw query and source payloads", () => {
+  const metadata = sanitizeBackgroundLogMetadata({
+    anomalyScore: 9,
+    limit: 80,
+    query: "exact private wish phrase from a search box",
+    route: "/wish-registry?query=exact+private+wish#details",
+    sourceNote: "raw note from private feed with alex@example.org",
+    strayDebugField: "safe-looking but outside the structured vocabulary",
+    strategyKind: "cause_overlap",
+  });
+  const serialized = JSON.stringify(metadata);
+
+  assert.equal(metadata.anomalyScore, 9);
+  assert.equal(metadata.limit, 80);
+  assert.equal(metadata.route, "/wish-registry");
+  assert.equal(metadata.strategyKind, "cause_overlap");
+  assert.equal(metadata.rawPayloadRejected, true);
+  assert.deepEqual(metadata.rejectedPrivateMetadataKeys, ["query", "sourceNote"]);
+  assert.deepEqual(metadata.omittedMetadataKeys, ["strayDebugField"]);
+  assert.equal(serialized.includes("exact private wish"), false);
+  assert.equal(serialized.includes("alex@example.org"), false);
+  assert.equal(serialized.includes("?query="), false);
+});
+
+test("background risk signal insert sanitizes metadata and private summaries", async () => {
+  const inserts: Array<Record<string, unknown>> = [];
+  const updates: Array<Record<string, unknown>> = [];
+  const supabase = {
+    from(table: string) {
+      if (table === "risk_signals") {
+        return {
+          insert(row: Record<string, unknown>) {
+            inserts.push(row);
+            return {
+              select() {
+                return {
+                  maybeSingle() {
+                    return { data: { id: "risk-signal-1" }, error: null };
+                  },
+                };
+              },
+            };
+          },
+        };
+      }
+
+      assert.equal(table, "background_query_events");
+
+      return {
+        update(row: Record<string, unknown>) {
+          updates.push(row);
+          return {
+            eq() {
+              return { error: null };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const error = await recordBackgroundQueryRiskSignal({
+    eventId: "query-event-1",
+    metadata: {
+      query: "exact private wish with person@example.org",
+      resultBucket: "1",
+      route: "/api/wish-registry/search?query=private",
+    },
+    profileId: "profile-1",
+    signalType: "sparse_registry_search",
+    summary: "User searched for exact private wish and person@example.org",
+    supabase: supabase as never,
+  });
+
+  assert.equal(error, null);
+  assert.equal(inserts.length, 1);
+  assert.deepEqual(inserts[0]?.metadata, {
+    rawPayloadRejected: true,
+    rejectedPrivateMetadataKeys: ["query"],
+    resultBucket: "1",
+    route: "/api/wish-registry/search",
+  });
+  assert.equal(
+    inserts[0]?.summary,
+    sanitizeBackgroundRiskSignalSummary("User searched for exact private wish and person@example.org"),
+  );
+  assert.deepEqual(updates, [{ risk_signal_id: "risk-signal-1" }]);
+});
+
+test("privacy-safe risk signal builder keeps counts and drops raw private detail", () => {
+  const row = buildPrivacySafeRiskSignalInsert({
+    profile_id: "profile-1",
+    severity: "low",
+    signal_type: "delegate_low_confidence",
+    summary: "Source note mentioned person@example.org and an exact private wish.",
+    metadata: {
+      confidenceScore: 61,
+      missingFieldCount: 2,
+      missingFields: ["exact_wish", "contact_details"],
+      sourceNote: "raw source note with person@example.org",
+      strategyId: "strategy-1",
+    },
+  });
+  const serialized = JSON.stringify(row);
+
+  assert.deepEqual(row.metadata, {
+    confidenceScore: 61,
+    missingFieldCount: 2,
+    rawPayloadRejected: true,
+    rejectedPrivateMetadataKeys: ["missingFields", "sourceNote"],
+    strategyId: "strategy-1",
+  });
+  assert.equal(
+    row.summary,
+    "Background risk signal recorded with private details redacted before logging.",
+  );
+  assert.equal(serialized.includes("person@example.org"), false);
+  assert.equal(serialized.includes("exact_wish"), false);
 });

@@ -24,7 +24,9 @@ import {
   getDeterministicSignalsFromSynthesis,
   hasActiveProfileSourcePermission,
   normalizeBackgroundToken,
+  type DeterministicSynthesisPayload,
 } from "@/lib/background-networking";
+import { buildBackgroundIntentClaims } from "@/lib/background-intent-claims";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import {
   buildMatchExplanationSnapshot,
@@ -55,6 +57,7 @@ import {
   validateBackgroundSourcePermission,
 } from "@/lib/background-source-permissions";
 import {
+  buildPrivacySafeRiskSignalInsert,
   completeBackgroundQueryEvent,
   insertMatchExplanationSnapshots,
   recordBackgroundQueryRiskSignal,
@@ -227,6 +230,52 @@ function readOptional(formData: FormData, key: string) {
 function readBoolean(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim().toLowerCase();
   return value === "on" || value === "true" || value === "1" || value === "yes";
+}
+
+async function replaceBackgroundIntentClaims({
+  profile,
+  sourceConnections,
+  supabase,
+  synthesis,
+  userId,
+}: {
+  profile: WishProfileRow;
+  sourceConnections: SourceConnectionRow[];
+  supabase: SupabaseServerClient;
+  synthesis: DeterministicSynthesisPayload;
+  userId: string;
+}) {
+  const claims = buildBackgroundIntentClaims({
+    profile,
+    sourceConnections,
+    synthesis,
+  });
+  const { error: archiveError } = await supabase
+    .from("background_intent_claims")
+    .update({ status: "superseded" })
+    .eq("profile_id", userId)
+    .eq("status", "active");
+
+  if (archiveError) {
+    logSupabaseActionError("Failed to supersede background intent claims", archiveError, {
+      userId,
+    });
+    return;
+  }
+
+  if (!claims.length) {
+    return;
+  }
+
+  const { error: upsertError } = await supabase
+    .from("background_intent_claims")
+    .upsert(claims, { onConflict: "profile_id,claim_key" });
+
+  if (upsertError) {
+    logSupabaseActionError("Failed to refresh background intent claims", upsertError, {
+      userId,
+    });
+  }
 }
 
 function readPositiveMoneyAmount(formData: FormData, key: string) {
@@ -4155,6 +4204,14 @@ export async function saveWishProfileAction(formData: FormData) {
       logSupabaseActionError("Failed to refresh synthesis during wish profile save", synthesisError, {
         userId: viewer.authUser.id,
       });
+    } else {
+      await replaceBackgroundIntentClaims({
+        profile: decryptedWishProfile,
+        sourceConnections: sourceConnectionRows,
+        supabase,
+        synthesis: synthesisPayload,
+        userId: viewer.authUser.id,
+      });
     }
   }
 
@@ -5697,6 +5754,14 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", error.message);
   }
 
+  await replaceBackgroundIntentClaims({
+    profile: decryptedProfile,
+    sourceConnections: sourceConnectionRows,
+    supabase,
+    synthesis: synthesisPayload,
+    userId: viewer.authUser.id,
+  });
+
   const { error: clarificationDeleteError } = await supabase
     .from("clarification_questions")
     .delete()
@@ -5744,19 +5809,21 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
   }
 
   if (synthesisPayload.confidence_score < 70 || synthesisPayload.missing_fields.length >= 3) {
-    const { error: riskError } = await supabase.from("risk_signals").insert({
-      profile_id: viewer.authUser.id,
-      signal_type: "underspecified_profile",
-      severity: "low",
-      summary:
-        "The deterministic synthesis is low confidence; ask follow-up questions before relying on matches.",
-      metadata: {
-        confidenceBreakdown: synthesisPayload.confidence_breakdown,
-        missingFields: synthesisPayload.missing_fields,
-        sourceCount: synthesisPayload.source_count,
-        synthesisVersion: synthesisPayload.synthesis_version,
-      },
-    });
+    const { error: riskError } = await supabase.from("risk_signals").insert(
+      buildPrivacySafeRiskSignalInsert({
+        profile_id: viewer.authUser.id,
+        signal_type: "underspecified_profile",
+        severity: "low",
+        summary:
+          "The deterministic synthesis is low confidence; ask follow-up questions before relying on matches.",
+        metadata: {
+          confidenceScore: synthesisPayload.confidence_score,
+          missingFieldCount: synthesisPayload.missing_fields.length,
+          sourceCount: synthesisPayload.source_count,
+          synthesisVersion: synthesisPayload.synthesis_version,
+        },
+      }),
+    );
 
     if (riskError) {
       logSupabaseActionError("Failed to record low-confidence synthesis signal", riskError, {

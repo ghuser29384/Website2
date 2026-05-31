@@ -79,6 +79,8 @@ type NetworkInviteRow = Database["public"]["Tables"]["network_invites"]["Row"];
 type PersonalDelegateRow = Database["public"]["Tables"]["personal_delegates"]["Row"];
 type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
 type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Row"];
+type BackgroundIntentClaimRow =
+  Database["public"]["Tables"]["background_intent_claims"]["Row"];
 type HelperStrategyRow = Database["public"]["Tables"]["helper_strategies"]["Row"];
 type HelperRunRow = Database["public"]["Tables"]["helper_runs"]["Row"];
 type MatchIntroductionPlanRow =
@@ -295,6 +297,7 @@ export interface DashboardDataResult {
   personalDelegate: PersonalDelegateRow | null;
   sourceConnections: SourceConnectionRow[];
   profileSynthesis: ProfileSynthesisRow | null;
+  intentClaims: BackgroundIntentClaimRow[];
   helperStrategies: HelperStrategyRow[];
   helperRuns: HelperRunRow[];
   introductionPlans: MatchIntroductionPlanRow[];
@@ -339,6 +342,7 @@ export interface DashboardDataResult {
     personalDelegate: string | null;
     sourceConnections: string | null;
     profileSynthesis: string | null;
+    intentClaims: string | null;
     helperStrategies: string | null;
     helperRuns: string | null;
     introductionPlans: string | null;
@@ -2640,6 +2644,30 @@ async function getProfileSynthesisForUser(userId: string): Promise<ProfileSynthe
     : null;
 }
 
+async function listBackgroundIntentClaimsForUser(
+  userId: string,
+): Promise<BackgroundIntentClaimRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_intent_claims")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("status", { ascending: true })
+    .order("claim_type", { ascending: true })
+    .order("updated_at", { ascending: false })
+    .limit(80);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundIntentClaimRow[];
+}
+
 async function listHelperStrategiesForUser(userId: string): Promise<HelperStrategyRow[]> {
   if (!hasSupabaseEnv()) {
     return [];
@@ -3028,6 +3056,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       personalDelegate: null,
       sourceConnections: [],
       profileSynthesis: null,
+      intentClaims: [],
       helperStrategies: [],
       helperRuns: [],
       introductionPlans: [],
@@ -3072,6 +3101,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         personalDelegate: null,
         sourceConnections: null,
         profileSynthesis: null,
+        intentClaims: null,
         helperStrategies: null,
         helperRuns: null,
         introductionPlans: null,
@@ -3121,6 +3151,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     personalDelegate: null,
     sourceConnections: null,
     profileSynthesis: null,
+    intentClaims: null,
     helperStrategies: null,
     helperRuns: null,
     introductionPlans: null,
@@ -3507,6 +3538,15 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load profile synthesis", { message, userId });
   }
 
+  let intentClaims: BackgroundIntentClaimRow[] = [];
+  try {
+    intentClaims = await listBackgroundIntentClaimsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load intent claims.";
+    errors.intentClaims = message;
+    console.error("[supabase] Failed to load background intent claims", { message, userId });
+  }
+
   let helperStrategies: HelperStrategyRow[] = [];
   try {
     helperStrategies = await listHelperStrategiesForUser(userId);
@@ -3686,6 +3726,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     personalDelegate,
     sourceConnections,
     profileSynthesis,
+    intentClaims,
     helperStrategies,
     helperRuns,
     introductionPlans,

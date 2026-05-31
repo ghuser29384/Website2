@@ -30,6 +30,7 @@ export async function GET(request: Request) {
         "backgroundNotificationPreferences",
         "brokerageBounties",
       ],
+      exportOnlyCollections: ["backgroundIntentClaims"],
       notes: [
         "Imports are scoped to the signed-in user only.",
         "Private wish entries, profile-sensitive text, source notes, connection summaries, and regenerated synthesis text are encrypted on write when imported.",
@@ -38,6 +39,7 @@ export async function GET(request: Request) {
         "Saved searches may include public /offers filter metadata for cause-follow and live-offer notification workflows.",
         "Counterparty-linked records such as privacy grants, privacy access requests, match suggestions, introduction tasks, and agreements are not imported through this endpoint.",
         "After import, deterministic synthesis is refreshed from the imported records.",
+        "Background intent claims are deterministic owner-scoped summaries; imports regenerate them instead of trusting portable claim rows.",
       ],
     },
     "public_contract_static",

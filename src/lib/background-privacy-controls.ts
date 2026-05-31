@@ -130,6 +130,7 @@ export const BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION = "DELETE BACKGROUND NE
 
 export const BACKGROUND_SELF_SERVE_DELETION_SURFACES = [
   "Private wish profile and wish entries",
+  "Deterministic intent claims and profile synthesis",
   "Broad preview and discoverability surface",
   "Manual source summaries and connector permissions",
   "Saved searches, delegate strategy records, and helper runs",
@@ -157,6 +158,15 @@ export const BACKGROUND_DATA_INVENTORY = [
     retention: "Until correction, deletion, or account removal, subject to safety/legal holds.",
     surface: "wish_profiles and wish_entries",
     use: "Deterministic synthesis and owner-reviewed matching.",
+  },
+  {
+    classification: "private-profile",
+    control: "Owner-scoped under RLS; regenerated from explicit fields and reviewed permissions instead of imported as authority.",
+    label: "Intent claims",
+    processor: "Supabase Postgres",
+    retention: "Until regenerated, superseded, corrected, or deleted with background-networking data.",
+    surface: "background_intent_claims",
+    use: "Dashboard explanation of what deterministic matching thinks the user wants.",
   },
   {
     classification: "consent-ledger",

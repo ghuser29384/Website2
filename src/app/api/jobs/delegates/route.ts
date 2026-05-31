@@ -16,6 +16,7 @@ import {
 } from "@/lib/background-field-encryption";
 import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
 import {
+  buildPrivacySafeRiskSignalInsert,
   completeBackgroundQueryEvent,
   insertMatchExplanationSnapshots,
   recordBackgroundQueryRiskSignal,
@@ -274,17 +275,19 @@ async function processDelegates(request: Request) {
     const viewerSignals = getDeterministicSignalsFromSynthesis(synthesis);
 
     if (!strategyGroup.length) {
-      const { error: signalError } = await supabase.from("risk_signals").insert({
-        profile_id: delegate.profile_id,
-        signal_type: "no_helper_strategy",
-        severity: "low",
-        summary:
-          "The delegate is active, but no active helper strategy exists. Add at least one strategy before expecting background coverage.",
-        metadata: {
-          delegateMode: delegate.operating_mode,
-          searchScope: delegate.search_scope,
-        },
-      });
+      const { error: signalError } = await supabase.from("risk_signals").insert(
+        buildPrivacySafeRiskSignalInsert({
+          profile_id: delegate.profile_id,
+          signal_type: "no_helper_strategy",
+          severity: "low",
+          summary:
+            "The delegate is active, but no active helper strategy exists. Add at least one strategy before expecting background coverage.",
+          metadata: {
+            delegateMode: delegate.operating_mode,
+            searchScope: delegate.search_scope,
+          },
+        }),
+      );
 
       if (!signalError) {
         riskSignalsCreated += 1;
@@ -292,17 +295,19 @@ async function processDelegates(request: Request) {
     }
 
     if (!profile || !synthesis || !viewerSignals) {
-      const { error: signalError } = await supabase.from("risk_signals").insert({
-        profile_id: delegate.profile_id,
-        signal_type: "missing_profile_synthesis",
-        severity: "low",
-        summary:
-          "The delegate scan could not find a usable deterministic profile synthesis. Refresh the profile synthesis before relying on helper runs.",
-        metadata: {
-          hasProfile: Boolean(profile),
-          hasSynthesis: Boolean(viewerSignals),
-        },
-      });
+      const { error: signalError } = await supabase.from("risk_signals").insert(
+        buildPrivacySafeRiskSignalInsert({
+          profile_id: delegate.profile_id,
+          signal_type: "missing_profile_synthesis",
+          severity: "low",
+          summary:
+            "The delegate scan could not find a usable deterministic profile synthesis. Refresh the profile synthesis before relying on helper runs.",
+          metadata: {
+            hasProfile: Boolean(profile),
+            hasSynthesis: Boolean(viewerSignals),
+          },
+        }),
+      );
 
       if (!signalError) {
         riskSignalsCreated += 1;
@@ -339,18 +344,20 @@ async function processDelegates(request: Request) {
         const pendingAccessRequests = pendingPrivacyRequestsByOwnerId.get(delegate.profile_id) ?? [];
 
         if (viewerSignals.confidenceScore < 70) {
-          const { error } = await supabase.from("risk_signals").insert({
-            profile_id: delegate.profile_id,
-            signal_type: "delegate_low_confidence",
-            severity: "low",
-            summary:
-              "This delegate is running on a low-confidence deterministic synthesis. Answer clarification questions before escalating a match.",
-            metadata: {
-              confidenceScore: viewerSignals.confidenceScore,
-              missingFields: viewerSignals.missingFields,
-              strategyId: strategy.id,
-            },
-          });
+          const { error } = await supabase.from("risk_signals").insert(
+            buildPrivacySafeRiskSignalInsert({
+              profile_id: delegate.profile_id,
+              signal_type: "delegate_low_confidence",
+              severity: "low",
+              summary:
+                "This delegate is running on a low-confidence deterministic synthesis. Answer clarification questions before escalating a match.",
+              metadata: {
+                confidenceScore: viewerSignals.confidenceScore,
+                missingFieldCount: viewerSignals.missingFields.length,
+                strategyId: strategy.id,
+              },
+            }),
+          );
 
           if (!error) {
             riskSignalsCreated += 1;
@@ -359,16 +366,18 @@ async function processDelegates(request: Request) {
         }
 
         if (profile.openness_to_payment && !viewerSignals.constraintFlags.includes("verification")) {
-          const { error } = await supabase.from("risk_signals").insert({
-            profile_id: delegate.profile_id,
-            signal_type: "payment_without_verification",
-            severity: "medium",
-            summary:
-              "Payment-mediated trades are enabled, but verification preferences do not yet mention evidence, receipts, or attestations.",
-            metadata: {
-              strategyId: strategy.id,
-            },
-          });
+          const { error } = await supabase.from("risk_signals").insert(
+            buildPrivacySafeRiskSignalInsert({
+              profile_id: delegate.profile_id,
+              signal_type: "payment_without_verification",
+              severity: "medium",
+              summary:
+                "Payment-mediated trades are enabled, but verification preferences do not yet mention evidence, receipts, or attestations.",
+              metadata: {
+                strategyId: strategy.id,
+              },
+            }),
+          );
 
           if (!error) {
             riskSignalsCreated += 1;
@@ -377,16 +386,18 @@ async function processDelegates(request: Request) {
         }
 
         if (profile.background_search_enabled && !activePrivacyGrants.length) {
-          const { error } = await supabase.from("risk_signals").insert({
-            profile_id: delegate.profile_id,
-            signal_type: "missing_privacy_grants",
-            severity: "low",
-            summary:
-              "Background search is enabled, but no field-level privacy grants have been drafted yet.",
-            metadata: {
-              strategyId: strategy.id,
-            },
-          });
+          const { error } = await supabase.from("risk_signals").insert(
+            buildPrivacySafeRiskSignalInsert({
+              profile_id: delegate.profile_id,
+              signal_type: "missing_privacy_grants",
+              severity: "low",
+              summary:
+                "Background search is enabled, but no field-level privacy grants have been drafted yet.",
+              metadata: {
+                strategyId: strategy.id,
+              },
+            }),
+          );
 
           if (!error) {
             riskSignalsCreated += 1;
@@ -404,18 +415,20 @@ async function processDelegates(request: Request) {
         });
 
         if (stalledPlan) {
-          const { error } = await supabase.from("risk_signals").insert({
-            profile_id: delegate.profile_id,
-            match_id: stalledPlan.match_id,
-            signal_type: "stalled_introduction_plan",
-            severity: "medium",
-            summary:
-              "A consented introduction plan has been sitting open without enough completed checklist steps.",
-            metadata: {
-              planId: stalledPlan.id,
-              strategyId: strategy.id,
-            },
-          });
+          const { error } = await supabase.from("risk_signals").insert(
+            buildPrivacySafeRiskSignalInsert({
+              profile_id: delegate.profile_id,
+              match_id: stalledPlan.match_id,
+              signal_type: "stalled_introduction_plan",
+              severity: "medium",
+              summary:
+                "A consented introduction plan has been sitting open without enough completed checklist steps.",
+              metadata: {
+                planId: stalledPlan.id,
+                strategyId: strategy.id,
+              },
+            }),
+          );
 
           if (!error) {
             riskSignalsCreated += 1;
@@ -429,18 +442,20 @@ async function processDelegates(request: Request) {
         });
 
         if (stalePrivacyRequest) {
-          const { error } = await supabase.from("risk_signals").insert({
-            profile_id: delegate.profile_id,
-            match_id: stalePrivacyRequest.match_id,
-            signal_type: "stale_privacy_access_request",
-            severity: "low",
-            summary:
-              "A pending privacy access request has not been answered for at least a week.",
-            metadata: {
-              requestId: stalePrivacyRequest.id,
-              strategyId: strategy.id,
-            },
-          });
+          const { error } = await supabase.from("risk_signals").insert(
+            buildPrivacySafeRiskSignalInsert({
+              profile_id: delegate.profile_id,
+              match_id: stalePrivacyRequest.match_id,
+              signal_type: "stale_privacy_access_request",
+              severity: "low",
+              summary:
+                "A pending privacy access request has not been answered for at least a week.",
+              metadata: {
+                requestId: stalePrivacyRequest.id,
+                strategyId: strategy.id,
+              },
+            }),
+          );
 
           if (!error) {
             riskSignalsCreated += 1;

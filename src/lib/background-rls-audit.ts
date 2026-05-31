@@ -196,6 +196,21 @@ const TABLE_REQUIREMENTS: BackgroundRlsTableRequirement[] = [
     table: "profile_syntheses",
   },
   {
+    category: "private_profile",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 4,
+    rationale:
+      "Intent claims summarize what deterministic matching thinks the user wants and must remain owner-scoped.",
+    requiredFragments: ["profile_id = (select auth.uid())"],
+    requiredPolicies: [
+      "background_intent_claims_select_own",
+      "background_intent_claims_insert_own",
+      "background_intent_claims_update_own",
+      "background_intent_claims_delete_own",
+    ],
+    table: "background_intent_claims",
+  },
+  {
     category: "delegate_helper",
     disallowAnonPolicies: true,
     minimumPolicyCount: 4,
@@ -715,6 +730,7 @@ export function validateBackgroundRlsAuditContract(
       "table-coverage",
       "Private, participant-linked, operator-review, helper, notification, and audit tables are covered",
       tableNames.includes("wish_profiles") &&
+        tableNames.includes("background_intent_claims") &&
         tableNames.includes("profile_sources") &&
         tableNames.includes("match_suggestions") &&
         tableNames.includes("privacy_grants") &&

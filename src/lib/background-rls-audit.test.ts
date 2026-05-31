@@ -22,6 +22,7 @@ test("background RLS audit contract covers private, participant, and audit table
   assert.ok(tableNames.includes("privacy_grants"));
   assert.ok(tableNames.includes("match_audit_events"));
   assert.ok(tableNames.includes("source_connections"));
+  assert.ok(tableNames.includes("background_intent_claims"));
   assert.ok(contract.tableRequirements.length >= 20);
   assert.ok(contract.sensitiveStorageRequirements.length >= 5);
   assert.ok(contract.contractTests.includes("background_rls_audit_schema_smoke"));

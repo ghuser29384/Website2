@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { buildDeterministicSynthesis } from "@/lib/background-networking";
+import { buildBackgroundIntentClaims } from "@/lib/background-intent-claims";
 import { getBackgroundSourceRetentionExpiresAt } from "@/lib/background-opportunity-briefs";
 import {
   PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
       supabase.from("profile_sources").delete().eq("profile_id", profileId),
       supabase.from("saved_searches").delete().eq("profile_id", profileId),
       supabase.from("source_connections").delete().eq("profile_id", profileId),
+      supabase.from("background_intent_claims").delete().eq("profile_id", profileId),
       supabase.from("wish_entries").delete().eq("profile_id", profileId),
       supabase.from("wish_profiles").delete().eq("profile_id", profileId),
     ]);
@@ -656,6 +658,23 @@ export async function POST(request: Request) {
       },
       { onConflict: "profile_id" },
     );
+
+    const intentClaims = buildBackgroundIntentClaims({
+      profile: decryptedProfile,
+      sourceConnections: decryptedSourceConnections,
+      synthesis,
+    });
+    await supabase
+      .from("background_intent_claims")
+      .update({ status: "superseded" })
+      .eq("profile_id", profileId)
+      .eq("status", "active");
+
+    if (intentClaims.length) {
+      await supabase
+        .from("background_intent_claims")
+        .upsert(intentClaims, { onConflict: "profile_id,claim_key" });
+    }
   }
 
   return jsonResponse({

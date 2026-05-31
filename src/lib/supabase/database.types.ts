@@ -2616,6 +2616,102 @@ export interface Database {
         };
         Relationships: [];
       };
+      background_intent_claims: {
+        Row: {
+          id: string;
+          profile_id: string;
+          claim_key: string;
+          claim_type:
+            | "ask_term"
+            | "capability_tag"
+            | "cause_priority"
+            | "constraint_flag"
+            | "missing_field"
+            | "offer_term"
+            | "profile_state"
+            | "source_permission"
+            | "trade_preference"
+            | "uncertainty_item";
+          claim_value: string;
+          claim_version: string;
+          confidence_band: "high" | "medium" | "low";
+          source_kind:
+            | "wish_profile"
+            | "profile_synthesis"
+            | "source_connection"
+            | "source_summary"
+            | "profile_interview";
+          source_record_id: string | null;
+          surface_label: string;
+          preview_safe: boolean;
+          explanation: string;
+          status: "active" | "superseded" | "withdrawn";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          claim_key: string;
+          claim_type:
+            | "ask_term"
+            | "capability_tag"
+            | "cause_priority"
+            | "constraint_flag"
+            | "missing_field"
+            | "offer_term"
+            | "profile_state"
+            | "source_permission"
+            | "trade_preference"
+            | "uncertainty_item";
+          claim_value?: string;
+          claim_version?: string;
+          confidence_band?: "high" | "medium" | "low";
+          source_kind?:
+            | "wish_profile"
+            | "profile_synthesis"
+            | "source_connection"
+            | "source_summary"
+            | "profile_interview";
+          source_record_id?: string | null;
+          surface_label?: string;
+          preview_safe?: boolean;
+          explanation?: string;
+          status?: "active" | "superseded" | "withdrawn";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          claim_key?: string;
+          claim_type?:
+            | "ask_term"
+            | "capability_tag"
+            | "cause_priority"
+            | "constraint_flag"
+            | "missing_field"
+            | "offer_term"
+            | "profile_state"
+            | "source_permission"
+            | "trade_preference"
+            | "uncertainty_item";
+          claim_value?: string;
+          claim_version?: string;
+          confidence_band?: "high" | "medium" | "low";
+          source_kind?:
+            | "wish_profile"
+            | "profile_synthesis"
+            | "source_connection"
+            | "source_summary"
+            | "profile_interview";
+          source_record_id?: string | null;
+          surface_label?: string;
+          preview_safe?: boolean;
+          explanation?: string;
+          status?: "active" | "superseded" | "withdrawn";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       helper_strategies: {
         Row: {
           id: string;

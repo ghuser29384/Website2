@@ -1227,6 +1227,11 @@ export async function deleteBackgroundNetworkingDataAction(formData: FormData) {
   );
   await collectMutationResult(
     failures,
+    "intent claims",
+    supabase.from("background_intent_claims").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
     "clarification questions",
     supabase.from("clarification_questions").delete().eq("profile_id", profileId),
   );

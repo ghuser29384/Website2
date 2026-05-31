@@ -1289,6 +1289,25 @@ create table if not exists public.profile_syntheses (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.background_intent_claims (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  claim_key text not null,
+  claim_type text not null check (claim_type in ('ask_term', 'capability_tag', 'cause_priority', 'constraint_flag', 'missing_field', 'offer_term', 'profile_state', 'source_permission', 'trade_preference', 'uncertainty_item')),
+  claim_value text not null default '',
+  claim_version text not null default 'background-intent-claims-v1',
+  confidence_band text not null default 'medium' check (confidence_band in ('high', 'medium', 'low')),
+  source_kind text not null default 'wish_profile' check (source_kind in ('wish_profile', 'profile_synthesis', 'source_connection', 'source_summary', 'profile_interview')),
+  source_record_id uuid,
+  surface_label text not null default '',
+  preview_safe boolean not null default false,
+  explanation text not null default '',
+  status text not null default 'active' check (status in ('active', 'superseded', 'withdrawn')),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (profile_id, claim_key)
+);
+
 create table if not exists public.helper_strategies (
   id uuid primary key default gen_random_uuid(),
   profile_id uuid not null references public.profiles (id) on delete cascade,
@@ -1890,6 +1909,19 @@ create index if not exists profiles_follower_sort_idx on public.profiles (follow
 create index if not exists profiles_karma_sort_idx on public.profiles (karma desc, offer_count desc, id);
 create index if not exists profiles_comment_sort_idx on public.profiles (comment_count desc, offer_count desc, id);
 create index if not exists wish_profiles_discoverable_idx on public.wish_profiles (is_discoverable, share_public_preview, safety_status, updated_at desc);
+create index if not exists wish_profiles_broad_preview_text_search_idx on public.wish_profiles using gin (
+  to_tsvector(
+    'english',
+    coalesce(public_preview, '') || ' ' ||
+    array_to_string(causes, ' ') || ' ' ||
+    coalesce(collective_name, '') || ' ' ||
+    coalesce(participant_kind, '') || ' ' ||
+    case
+      when share_location then coalesce(location_city, '') || ' ' || coalesce(location_region, '')
+      else ''
+    end
+  )
+) where is_discoverable = true and share_public_preview = true and background_search_enabled = true and safety_status = 'clear';
 create index if not exists wish_profiles_sensitive_encryption_idx on public.wish_profiles (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
 create index if not exists wish_entries_profile_type_idx on public.wish_entries (profile_id, entry_type, updated_at desc);
 create index if not exists wish_entries_preview_idx on public.wish_entries (visibility, safety_status, entry_type, updated_at desc);
@@ -1941,6 +1973,8 @@ create index if not exists source_connections_sensitive_encryption_idx on public
 create index if not exists source_connections_retention_expires_idx on public.source_connections (retention_expires_at asc) where retention_expires_at is not null;
 create index if not exists source_connections_ai_shadow_idx on public.source_connections (profile_id, ai_shadow_mode_allowed, updated_at desc);
 create index if not exists profile_syntheses_sensitive_encryption_idx on public.profile_syntheses (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
+create index if not exists background_intent_claims_profile_status_idx on public.background_intent_claims (profile_id, status, claim_type, updated_at desc);
+create index if not exists background_intent_claims_preview_idx on public.background_intent_claims (preview_safe, claim_type, updated_at desc) where status = 'active';
 create index if not exists helper_strategies_profile_status_idx on public.helper_strategies (profile_id, status, priority asc, updated_at desc);
 create index if not exists helper_runs_profile_created_idx on public.helper_runs (profile_id, created_at desc);
 create index if not exists helper_runs_strategy_created_idx on public.helper_runs (strategy_id, created_at desc);
@@ -2822,6 +2856,11 @@ create trigger profile_syntheses_set_updated_at
 before update on public.profile_syntheses
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists background_intent_claims_set_updated_at on public.background_intent_claims;
+create trigger background_intent_claims_set_updated_at
+before update on public.background_intent_claims
+for each row execute procedure public.set_updated_at();
+
 drop trigger if exists helper_strategies_set_updated_at on public.helper_strategies;
 create trigger helper_strategies_set_updated_at
 before update on public.helper_strategies
@@ -3089,6 +3128,7 @@ alter table public.network_invites enable row level security;
 alter table public.personal_delegates enable row level security;
 alter table public.source_connections enable row level security;
 alter table public.profile_syntheses enable row level security;
+alter table public.background_intent_claims enable row level security;
 alter table public.helper_strategies enable row level security;
 alter table public.helper_runs enable row level security;
 alter table public.match_introduction_plans enable row level security;
@@ -4619,6 +4659,35 @@ for update
 to authenticated
 using (profile_id = (select auth.uid()))
 with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_intent_claims_select_own" on public.background_intent_claims;
+create policy "background_intent_claims_select_own"
+on public.background_intent_claims
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_intent_claims_insert_own" on public.background_intent_claims;
+create policy "background_intent_claims_insert_own"
+on public.background_intent_claims
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_intent_claims_update_own" on public.background_intent_claims;
+create policy "background_intent_claims_update_own"
+on public.background_intent_claims
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "background_intent_claims_delete_own" on public.background_intent_claims;
+create policy "background_intent_claims_delete_own"
+on public.background_intent_claims
+for delete
+to authenticated
+using (profile_id = (select auth.uid()));
 
 drop policy if exists "helper_strategies_select_own" on public.helper_strategies;
 create policy "helper_strategies_select_own"
