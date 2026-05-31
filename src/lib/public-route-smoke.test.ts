@@ -2832,6 +2832,13 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(offerForm, /id="offer-boundaries"/);
   assert.match(offerForm, /id="offer-evidence"/);
   assert.match(offerForm, /id="offer-publish"/);
+  assert.match(offerNewPage, /page-shell offer-create-shell/);
+  assert.match(offerNewPage, /auth-grid offer-create-grid/);
+  assert.match(globalCss, /\.offer-create-shell \.offer-create-grid[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(globalCss, /\.offer-create-shell \.offer-wizard-steps[\s\S]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
+  assert.match(globalCss, /\.offer-create-shell \.offer-template-grid[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(globalCss, /@media \(max-width: 1023px\)[\s\S]*\.offer-create-shell \.offer-wizard-steps[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(globalCss, /@media \(max-width: 760px\)[\s\S]*\.offer-create-shell \.offer-wizard-steps[\s\S]*grid-template-columns: 1fr/);
   assert.match(globalCss, /offer-wizard-panel/);
   assert.match(globalCss, /offer-wizard-steps/);
   assert.match(globalCss, /protocol-review-panel/);

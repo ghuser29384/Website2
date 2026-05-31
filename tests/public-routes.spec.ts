@@ -99,6 +99,37 @@ for (const route of publicRoutes) {
   });
 }
 
+test("/offers/new offset creation layout stays broad without mobile overflow", async ({ page }) => {
+  const route = "/offers/new?mode=offset#offer-boundaries";
+  const viewports = [375, 768, 1024, 1280, 1440] as const;
+
+  for (const width of viewports) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+
+    const horizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(horizontalOverflow).toBeLessThanOrEqual(1);
+
+    const wizard = page.locator('section[aria-labelledby="offer-wizard-heading"]');
+    const wizardVisible = (await wizard.count()) > 0 && (await wizard.first().isVisible());
+
+    if (width === 1280 && wizardVisible) {
+      const wizardBox = await wizard.first().boundingBox();
+      expect(wizardBox?.width ?? 0).toBeGreaterThan(900);
+
+      const templateSection = page.locator('section[aria-labelledby="offer-template-heading"]');
+      await expect(templateSection).toBeVisible();
+
+      const templateBox = await templateSection.boundingBox();
+      expect(templateBox?.width ?? 0).toBeGreaterThan(900);
+      expect((templateBox?.x ?? 0) + (templateBox?.width ?? 0)).toBeLessThanOrEqual(width + 1);
+      await expect(page.locator(".offer-template-button")).toHaveCount(3);
+    }
+  }
+});
+
 for (const route of ["/", "/offers", "/donation-offsets", "/mpgf", "/methodology", "/safety", "/people", "/signup"] as const) {
   test(`public route ${route} uses canonical top-level navigation`, async ({ page }) => {
     await page.goto(route, { waitUntil: "domcontentloaded" });

@@ -10180,6 +10180,65 @@ strong {
   }
 }
 
+.offer-create-shell .offer-create-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+}
+
+.offer-create-shell .auth-card,
+.offer-create-shell .auth-side-card,
+.offer-create-shell .offer-wizard-panel,
+.offer-create-shell .offer-template-panel {
+  width: 100%;
+  min-width: 0;
+}
+
+.offer-create-shell .offer-wizard-summary p:not(.eyebrow),
+.offer-create-shell .offer-template-panel > div > p {
+  max-width: 72ch;
+}
+
+.offer-create-shell .offer-wizard-steps {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.offer-create-shell .offer-wizard-steps a {
+  min-width: 0;
+  min-height: 8rem;
+  padding: 1rem;
+}
+
+.offer-create-shell .offer-template-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.offer-create-shell .offer-template-button {
+  min-width: 0;
+  height: 100%;
+  padding: 1.1rem;
+}
+
+@media (max-width: 1023px) {
+  .offer-create-shell .offer-wizard-steps,
+  .offer-create-shell .offer-template-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .offer-create-shell .offer-wizard-summary,
+  .offer-create-shell .offer-wizard-steps,
+  .offer-create-shell .offer-template-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .offer-create-shell .offer-wizard-steps a {
+    min-height: auto;
+  }
+}
+
 @media (prefers-contrast: more) {
   :root {
     --line: #7e8790;

@@ -173,7 +173,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
     })) ?? [];
 
   return (
-    <div className="page-shell">
+    <div className="page-shell offer-create-shell">
       <header className="hero">
         <SiteTopbar
           brandHref="/"
@@ -240,7 +240,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
 
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
-          <div className="auth-grid">
+          <div className="auth-grid offer-create-grid">
             {viewer ? (
               <OfferCreateForm
                 availablePools={availablePools}
