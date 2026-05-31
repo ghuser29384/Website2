@@ -91,6 +91,10 @@ import {
 } from "./mpgf/public-goods-kpis";
 import { buildMpgfPublicGoodsOperationsDashboard } from "./mpgf/public-goods-operations";
 import {
+  buildMpgfSubscriptionCancellationUpdate,
+  canRecordMpgfSponsorPoolInvoice,
+} from "./mpgf/real-money";
+import {
   buildMpgfPublicGoodsExperimentAssignmentRow,
   persistMpgfPublicGoodsExperimentAssignment,
 } from "./mpgf/public-goods-experiments";
@@ -929,6 +933,41 @@ test("MPGF public-goods payment adapter keeps handoff, fiscal-host, and signed-i
   assert.match(unsafeDestination.blockers.join("\n"), /HTTPS/);
   assert.match(persistence, /resolveMpgfPublicGoodsPaymentAdapter/);
   assert.match(mechanism, /payment adapter rejected pledge/);
+});
+
+test("MPGF real-money subscription cancellation stops future sponsor-pool increments", () => {
+  const cancellation = buildMpgfSubscriptionCancellationUpdate({
+    id: "sub_mpgf_cancelled",
+    status: "canceled",
+    canceled_at: Date.parse("2026-06-10T12:00:00.000Z") / 1000,
+  });
+  const activeCommitment = { status: "active" };
+  const cancelledCommitment = { status: "cancelled" };
+  const pendingProviderCommitment = { status: "provider_action_required" };
+  const realMoney = readFileSync("src/lib/mpgf/real-money.ts", "utf8");
+  const sharedStripeWebhookRoute = readFileSync("src/app/api/stripe/webhook/route.ts", "utf8");
+  const dedicatedStripeWebhookRoute = readFileSync("src/app/api/mpgf/providers/stripe/webhook/route.ts", "utf8");
+
+  assert.deepEqual(cancellation, {
+    providerSubscriptionId: "sub_mpgf_cancelled",
+    update: {
+      status: "cancelled",
+      cancelled_at: "2026-06-10T12:00:00.000Z",
+      next_scheduled_at: null,
+    },
+  });
+  assert.equal(canRecordMpgfSponsorPoolInvoice(activeCommitment), true);
+  assert.equal(canRecordMpgfSponsorPoolInvoice(cancelledCommitment), false);
+  assert.equal(canRecordMpgfSponsorPoolInvoice(pendingProviderCommitment), false);
+  assert.equal(buildMpgfSubscriptionCancellationUpdate({ id: "sub_active", status: "active" }), null);
+  assert.match(realMoney, /customer\.subscription\.deleted/);
+  assert.match(realMoney, /customer\.subscription\.updated/);
+  assert.match(realMoney, /recordMpgfSubscriptionCancellation/);
+  assert.match(realMoney, /canRecordMpgfSponsorPoolInvoice\(commitment\)/);
+  assert.match(realMoney, /\.select\("id, user_id, amount_cents, mode, status, provider_customer_id"\)/);
+  assert.match(sharedStripeWebhookRoute, /customer\.subscription\.deleted/);
+  assert.match(sharedStripeWebhookRoute, /customer\.subscription\.updated/);
+  assert.match(dedicatedStripeWebhookRoute, /handleMpgfStripeWebhookEvent/);
 });
 
 test("MPGF public-goods review console uses bounded reason codes and appeal states", () => {

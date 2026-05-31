@@ -102,6 +102,10 @@ function isPotentialMpgfStripeEvent(event: Stripe.Event) {
     return Boolean(object.subscription);
   }
 
+  if (event.type === "customer.subscription.deleted" || event.type === "customer.subscription.updated") {
+    return Boolean(object.id);
+  }
+
   if (event.type === "charge.refunded") {
     return Boolean(object.payment_intent);
   }

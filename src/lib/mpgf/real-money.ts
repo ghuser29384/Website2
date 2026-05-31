@@ -359,6 +359,38 @@ function stripeObjectId(value: unknown) {
   return null;
 }
 
+export function canRecordMpgfSponsorPoolInvoice(commitment: { status?: string | null }) {
+  return commitment.status === "active";
+}
+
+export function buildMpgfSubscriptionCancellationUpdate(subscription: {
+  id?: unknown;
+  status?: unknown;
+  canceled_at?: unknown;
+  ended_at?: unknown;
+}) {
+  const providerSubscriptionId = stripeObjectId(subscription.id);
+  const cancelledAtSeconds =
+    typeof subscription.canceled_at === "number"
+      ? subscription.canceled_at
+      : typeof subscription.ended_at === "number"
+        ? subscription.ended_at
+        : null;
+
+  if (!providerSubscriptionId || subscription.status !== "canceled") {
+    return null;
+  }
+
+  return {
+    providerSubscriptionId,
+    update: {
+      status: "cancelled" as const,
+      cancelled_at: new Date((cancelledAtSeconds ?? Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+      next_scheduled_at: null,
+    },
+  };
+}
+
 export async function createMpgfBillingPortal(input: { userId: string }): Promise<MpgfRealMoneyCheckoutResult> {
   const readiness = await loadMpgfRealMoneyReadiness();
 
@@ -746,11 +778,11 @@ async function recordMpgfSubscriptionInvoice(invoice: Stripe.Invoice) {
   const supabase = createServiceClient() as SupabaseServiceAny;
   const { data: commitment } = await supabase
     .from("mpgf_recurring_contribution_commitments")
-    .select("id, user_id, amount_cents, mode, provider_customer_id")
+    .select("id, user_id, amount_cents, mode, status, provider_customer_id")
     .eq("provider_subscription_id", subscriptionId)
     .maybeSingle();
 
-  if (!commitment) {
+  if (!commitment || !canRecordMpgfSponsorPoolInvoice(commitment)) {
     return false;
   }
 
@@ -799,6 +831,28 @@ async function recordMpgfSubscriptionInvoice(invoice: Stripe.Invoice) {
   });
 
   return true;
+}
+
+async function recordMpgfSubscriptionCancellation(subscription: Stripe.Subscription) {
+  const cancellation = buildMpgfSubscriptionCancellationUpdate(subscription as unknown as Record<string, unknown>);
+
+  if (!cancellation) {
+    return false;
+  }
+
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const { data, error } = await supabase
+    .from("mpgf_recurring_contribution_commitments")
+    .update(cancellation.update)
+    .eq("provider_subscription_id", cancellation.providerSubscriptionId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return Boolean(data);
 }
 
 async function recordMpgfRefundFromCharge(charge: Stripe.Charge) {
@@ -909,6 +963,11 @@ export async function handleMpgfStripeWebhookEvent(input: {
       handled = await recordMpgfCheckoutSession(input.event.data.object as Stripe.Checkout.Session, "cancelled");
     } else if (input.event.type === "invoice.paid") {
       handled = await recordMpgfSubscriptionInvoice(input.event.data.object as Stripe.Invoice);
+    } else if (
+      input.event.type === "customer.subscription.deleted" ||
+      input.event.type === "customer.subscription.updated"
+    ) {
+      handled = await recordMpgfSubscriptionCancellation(input.event.data.object as Stripe.Subscription);
     } else if (input.event.type === "charge.refunded") {
       handled = await recordMpgfRefundFromCharge(input.event.data.object as Stripe.Charge);
     }
