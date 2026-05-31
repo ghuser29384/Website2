@@ -65,6 +65,7 @@ import {
 } from "./mpgf/data";
 import {
   buildMpgfPublicGoodsAllocationResultRows,
+  buildMpgfPublicGoodsAllocationSourceProofMap,
   persistMpgfPublicGoodsAllocationResults,
 } from "./mpgf/public-goods-allocation-results";
 import {
@@ -467,6 +468,8 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   });
   const globalHealth = rows.find((row) => row.campaign_id === "campaign-global-health-basic-needs");
   const resilience = rows.find((row) => row.campaign_id === "campaign-existential-risk-resilience");
+  const animalWelfare = rows.find((row) => row.campaign_id === "campaign-animal-welfare-transition");
+  const sourceProofByCampaignId = buildMpgfPublicGoodsAllocationSourceProofMap({ allocation });
   const dryRun = await persistMpgfPublicGoodsAllocationResults({
     allocation,
     dryRun: true,
@@ -477,9 +480,20 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.equal(rows.length, allocation.lines.length);
   assert.ok(globalHealth);
   assert.ok(resilience);
+  assert.ok(animalWelfare);
   assert.equal(globalHealth.status, "payable");
   assert.ok(globalHealth.total_payout_cents > 0);
   assert.ok(globalHealth.qf_bonus_cents <= globalHealth.qf_bonus_cap_cents);
+  assert.match(globalHealth.source_contribution_digest, /^sha256:/);
+  assert.equal(globalHealth.regenerated_from_contribution_records, true);
+  assert.equal(globalHealth.verified_supporter_count, globalHealth.unique_counted_identity_count);
+  assert.equal(globalHealth.source_contribution_digest, sourceProofByCampaignId.get(globalHealth.campaign_id)?.sourceContributionDigest);
+  assert.ok(globalHealth.unique_counted_identity_count <= globalHealth.raw_payment_object_count);
+  assert.ok(globalHealth.unique_counted_identity_count <= globalHealth.eligible_contribution_record_count);
+  assert.ok(animalWelfare.raw_payment_object_count > animalWelfare.unique_counted_identity_count);
+  assert.equal(animalWelfare.verified_supporter_count, animalWelfare.unique_counted_identity_count);
+  assert.equal(JSON.stringify(rows).includes("demo-supporter"), false);
+  assert.equal(JSON.stringify(rows).includes("supporterReason"), false);
   assert.notEqual(resilience.status, "payable");
   assert.equal(resilience.total_payout_cents, 0);
   assert.equal(dryRun.status, "dry_run");
@@ -548,8 +562,18 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(allocations);
   assert.equal(allocations.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.equal(allocations.final, true);
+  assert.equal(
+    allocations.regenerationPolicy,
+    "allocation_report_regenerates_from_underlying_contribution_records_collapsed_by_identity",
+  );
   assert.ok(allocations.totalPayoutCents > 0);
   assert.ok(allocations.rows.every((row) => row.custodyMode === "no_custody_external_handoff"));
+  const allocationReportRow = allocations.rows.find((row) => row.campaignId === "campaign-animal-welfare-transition");
+  assert.ok(allocationReportRow);
+  assert.match(allocationReportRow.sourceContributionDigest, /^sha256:/);
+  assert.equal(allocationReportRow.regeneratedFromContributionRecords, true);
+  assert.equal(allocationReportRow.verifiedDonorCount, allocationReportRow.uniqueCountedIdentityCount);
+  assert.ok(allocationReportRow.rawPaymentObjectCount > allocationReportRow.uniqueCountedIdentityCount);
   assert.equal(ledger.ledgerPolicy, "public_aggregate_no_donor_rows_no_receipt_urls");
   assert.equal(ledger.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.ok(ledger.rows.every((row) => row.releasedTotalCents === 0));
@@ -1704,6 +1728,10 @@ test("MPGF public-goods migration covers required entities and RLS policies", ()
     "supabase/migrations/20260531_mpgf_public_goods_governance_enforcement.sql",
     "utf8",
   );
+  const allocationSourceProofMigration = readFileSync(
+    "supabase/migrations/20260531_mpgf_public_goods_allocation_source_proof.sql",
+    "utf8",
+  );
 
   for (const tableName of [
     "mpgf_public_goods_campaigns",
@@ -1751,6 +1779,14 @@ test("MPGF public-goods migration covers required entities and RLS policies", ()
   assert.match(governanceMigration, /roll_forward_to_next_round_or_default_pool_by_published_rule/);
   assert.match(governanceMigration, /private_evidence_ref is null or private_evidence_ref !~\*/);
   assert.match(governanceMigration, /noTokenVoting/);
+  assert.match(allocationSourceProofMigration, /source_contribution_digest text not null/);
+  assert.match(allocationSourceProofMigration, /eligible_contribution_record_count integer not null/);
+  assert.match(allocationSourceProofMigration, /raw_payment_object_count integer not null/);
+  assert.match(allocationSourceProofMigration, /unique_counted_identity_count integer not null/);
+  assert.match(allocationSourceProofMigration, /regenerated_from_contribution_records boolean not null/);
+  assert.match(allocationSourceProofMigration, /unique_counted_identity_count <= eligible_contribution_record_count/);
+  assert.match(allocationSourceProofMigration, /eligible_contribution_record_count <= raw_payment_object_count/);
+  assert.match(allocationSourceProofMigration, /no donor ids or raw payment refs are exposed/);
 });
 
 test("MPGF public-goods participant paths persist campaign pledges and creation fields", () => {

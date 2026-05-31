@@ -13,6 +13,7 @@ import {
   getMpgfCampaignAssuranceStatus,
   mpgfVerificationWeightFromHumanScoreBps,
 } from "./mechanism";
+import { buildMpgfPublicGoodsAllocationSourceProofMap } from "./public-goods-allocation-results";
 import { buildMpgfPublicGoodsMilestoneSchedule } from "./public-goods-milestones";
 import type {
   MpgfPublicGoodsCampaign,
@@ -312,18 +313,35 @@ export function getMpgfPublicGoodsAllocationReportApi(roundId: string = demoMpgf
   }
 
   const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
-  const rows = allocation.lines.map((line) => ({
-    campaignId: line.campaignId,
-    status: line.status,
-    directEligibleCents: line.directEligibleCents,
-    verifiedDonorCount: line.verifiedSupporterCount,
-    baseMatchCents: line.baseMatchCents,
-    qfBonusCents: line.qfBonusCents,
-    totalPayoutCents: line.status === "payable" ? line.totalPayoutCents : 0,
-    proofRequired: line.proofRequired,
-    custodyMode: line.custodyMode,
-    blockers: line.blockers,
-  }));
+  const sourceProofByCampaignId = buildMpgfPublicGoodsAllocationSourceProofMap({
+    allocation,
+    pledges: demoMpgfAssurancePledges,
+  });
+  const rows = allocation.lines.map((line) => {
+    const sourceProof = sourceProofByCampaignId.get(line.campaignId);
+
+    if (!sourceProof) {
+      throw new Error(`MPGF public-goods allocation source proof missing for ${line.campaignId}.`);
+    }
+
+    return {
+      campaignId: line.campaignId,
+      status: line.status,
+      directEligibleCents: line.directEligibleCents,
+      verifiedDonorCount: line.verifiedSupporterCount,
+      baseMatchCents: line.baseMatchCents,
+      qfBonusCents: line.qfBonusCents,
+      totalPayoutCents: line.status === "payable" ? line.totalPayoutCents : 0,
+      proofRequired: line.proofRequired,
+      custodyMode: line.custodyMode,
+      blockers: line.blockers,
+      sourceContributionDigest: sourceProof.sourceContributionDigest,
+      eligibleContributionRecordCount: sourceProof.eligibleContributionRecordCount,
+      rawPaymentObjectCount: sourceProof.rawPaymentObjectCount,
+      uniqueCountedIdentityCount: sourceProof.uniqueCountedIdentityCount,
+      regeneratedFromContributionRecords: sourceProof.regeneratedFromContributionRecords,
+    };
+  });
 
   return {
     ok: true,
@@ -331,6 +349,7 @@ export function getMpgfPublicGoodsAllocationReportApi(roundId: string = demoMpgf
     cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     roundId,
     final: true,
+    regenerationPolicy: "allocation_report_regenerates_from_underlying_contribution_records_collapsed_by_identity",
     calcHash: publicCalcHash(rows),
     sponsorPoolCents: allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
     baseMatchAllocatedCents: allocation.baseMatchAllocatedCents,
