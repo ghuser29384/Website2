@@ -87,6 +87,7 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
   const allocationRow = allocation.rows.find((row) => row.campaignId === campaign.campaignId);
   const ledgerRow = ledger.rows.find((row) => row.campaignId === campaign.campaignId);
   const finalMatchCents = (allocationRow?.baseMatchCents ?? 0) + (allocationRow?.qfBonusCents ?? 0);
+  const matchEstimateCents = previewRow?.estimatedMatchCents ?? campaign.matchEstimateCents ?? 0;
 
   return (
     <MpgfPageFrame
@@ -120,7 +121,7 @@ export default async function MpgfCampaignPage({ params }: MpgfCampaignPageProps
         </div>
         <div className="mpgf-kpi">
           <span>Match estimate</span>
-          <strong>{formatUsd(previewRow?.estimatedMatchCents ?? campaign.matchEstimateCents)}</strong>
+          <strong>{formatUsd(matchEstimateCents)}</strong>
         </div>
         <div className="mpgf-kpi">
           <span>Donor count</span>
