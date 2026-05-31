@@ -1,5 +1,7 @@
 export const ATTRIBUTION_COOKIE_NAME = "mt_attribution";
 export const ATTRIBUTION_MAX_AGE_SECONDS = 60 * 60 * 24 * 45;
+export const ANALYTICS_OPT_OUT_COOKIE_NAME = "mt_analytics_opt_out";
+export const ANALYTICS_OPT_OUT_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 2;
 
 export const FUNNEL_EVENT_TYPES = [
   "page_view",
@@ -204,6 +206,10 @@ export type FirstAction = (typeof FIRST_ACTIONS)[number]["value"];
 
 export function isFunnelEventType(value: string): value is FunnelEventType {
   return FUNNEL_EVENT_TYPES.includes(value as FunnelEventType);
+}
+
+export function isAnalyticsOptedOut(value: string | null | undefined) {
+  return value === "1" || value === "true";
 }
 
 const FUNNEL_METADATA_ALLOWED_KEYS = new Set([

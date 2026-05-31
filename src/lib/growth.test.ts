@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ANALYTICS_OPT_OUT_COOKIE_NAME,
+  ATTRIBUTION_COOKIE_NAME,
   buildPrivacySafeFunnelEventRecord,
+  isAnalyticsOptedOut,
   isFunnelEventType,
   sanitizeFunnelEventMetadata,
   sanitizeFunnelEventPath,
@@ -110,4 +113,14 @@ test("funnel event path and referrer sanitizers drop query strings and hashes", 
     sanitizeFunnelEventReferrer("https://example.org/path/to/page?token=secret#frag"),
     "https://example.org/path/to/page",
   );
+});
+
+test("analytics opt-out cookie is separate from attribution and accepts only explicit values", () => {
+  assert.equal(ANALYTICS_OPT_OUT_COOKIE_NAME, "mt_analytics_opt_out");
+  assert.equal(ATTRIBUTION_COOKIE_NAME, "mt_attribution");
+  assert.notEqual(ANALYTICS_OPT_OUT_COOKIE_NAME, ATTRIBUTION_COOKIE_NAME);
+  assert.equal(isAnalyticsOptedOut("1"), true);
+  assert.equal(isAnalyticsOptedOut("true"), true);
+  assert.equal(isAnalyticsOptedOut("0"), false);
+  assert.equal(isAnalyticsOptedOut(undefined), false);
 });

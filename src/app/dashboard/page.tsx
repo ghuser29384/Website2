@@ -28,7 +28,6 @@ import {
   savePersonalDelegateAction,
   savePrivacyGrantAction,
   saveSearchAction,
-  saveSourceConnectionAction,
   saveProfileSourceAction,
   respondCollectiveDecisionAction,
   updateIntroductionTaskAction,
@@ -37,10 +36,15 @@ import {
 import {
   createProfileDataRightRequestAction,
   deleteBackgroundNetworkingDataAction,
+  requestMatchConciergeAppealAction,
+  revokeBackgroundSourceConnectionAction,
+  saveBackgroundSourceConnectionAction,
   saveBackgroundNotificationPreferencesAction,
+  syncBackgroundLocalDraftAction,
 } from "@/app/background-networking/actions";
 import { BackgroundAccountSecurityPanel } from "@/components/dashboard/background-account-security-panel";
 import { BackgroundLocalDraftsPanel } from "@/components/dashboard/background-local-drafts-panel";
+import { BackgroundLocalTransparencyPanel } from "@/components/dashboard/background-local-transparency-panel";
 import { ProfilePortabilityPanel } from "@/components/dashboard/profile-portability-panel";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -67,6 +71,12 @@ import {
   formatBackgroundNotificationEventKind,
   getBackgroundNotificationPreferenceKey,
 } from "@/lib/background-privacy-controls";
+import {
+  BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS,
+  BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS,
+  formatBackgroundSourcePermissionFieldLabel,
+} from "@/lib/background-source-permissions";
+import { summarizeBackgroundAiShadowReadiness } from "@/lib/background-ai-shadow";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { hasBackgroundFieldEncryptionKey } from "@/lib/background-field-encryption";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
@@ -169,6 +179,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const activeConciergeRequests = conciergeRequests.filter(
     (request) => !["declined", "closed"].includes(request.status),
   );
+  const conciergeRequestsWithAppeals = conciergeRequests.filter(
+    (request) =>
+      ["declined", "closed"].includes(request.status) || request.appeal_status !== "none",
+  );
+  const displayedConciergeRequests = [...activeConciergeRequests, ...conciergeRequestsWithAppeals]
+    .filter((request, index, requests) => requests.findIndex((entry) => entry.id === request.id) === index)
+    .slice(0, 5);
   const latestBackgroundRun = dashboardData?.backgroundRuns[0] ?? null;
   const unreadWishNotificationCount =
     dashboardData?.wishNotifications.filter((notification) => !notification.read_at).length ?? 0;
@@ -244,6 +261,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     (dashboardData?.matchReports.length ?? 0) +
     (dashboardData?.matchConciergeRequests.length ?? 0) +
     (dashboardData?.riskSignals.filter((signal) => signal.status === "open").length ?? 0);
+  const aiShadowReadiness = summarizeBackgroundAiShadowReadiness(
+    dashboardData?.sourceConnections ?? [],
+  );
+  const localTransparencyMatchSnapshots =
+    dashboardData?.matchExplanationSnapshots.slice(0, 10).map((snapshot) => ({
+      confidenceBand: snapshot.confidence_band,
+      createdAt: snapshot.created_at,
+      explanationVersion: snapshot.explanation_version,
+      factorCodes: snapshot.factor_codes,
+      id: snapshot.id,
+      matchId: snapshot.match_id,
+      scoreBucket: snapshot.score_bucket,
+      workflowStage: snapshot.workflow_stage,
+    })) ?? [];
+  const localTransparencyConsentGrants =
+    dashboardData?.privacyGrants.slice(0, 10).map((grant) => ({
+      accessLevel: grant.access_level,
+      audienceStage: grant.audience_stage,
+      expiresAt: grant.expires_at,
+      fieldKey: grant.field_key,
+      id: grant.id,
+      matchId: grant.match_id,
+      status: grant.status,
+      updatedAt: grant.updated_at,
+    })) ?? [];
 
   return (
     <div className="page-shell">
@@ -1002,17 +1044,43 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </button>
             </form>
             <div className="mini-list">
-              {activeConciergeRequests.length ? (
-                activeConciergeRequests.slice(0, 5).map((request) => (
+              {displayedConciergeRequests.length ? (
+                displayedConciergeRequests.map((request) => (
                   <div className="mini-list-item" key={request.id}>
                     <strong>
                       {request.status.replaceAll("_", " ")} | {request.route.replaceAll("_", " ")}
                     </strong>
                     <span>{formatConciergeSla(request.sla_due_at)}</span>
+                    {request.appeal_status !== "none" ? (
+                      <span>
+                        Appeal: {request.appeal_status.replaceAll("_", " ")}
+                        {request.appeal_resolution_note
+                          ? ` | ${request.appeal_resolution_note}`
+                          : ""}
+                      </span>
+                    ) : null}
                     <span>{request.intent_summary}</span>
                     {request.target_preview ? <span>Target: {request.target_preview}</span> : null}
                     {request.operator_notes ? <span>Operator: {request.operator_notes}</span> : null}
                     {request.risk_notes ? <span>Risk: {request.risk_notes}</span> : null}
+                    {["declined", "closed"].includes(request.status) &&
+                    !["requested", "under_review"].includes(request.appeal_status) ? (
+                      <form action={requestMatchConciergeAppealAction} className="compact-form">
+                        <input name="request_id" type="hidden" value={request.id} />
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <label className="field">
+                          <span>Appeal reason</span>
+                          <textarea
+                            name="appeal_reason"
+                            placeholder="What should an operator re-check about this concierge decision?"
+                            rows={3}
+                          />
+                        </label>
+                        <button className="button button-secondary button-mini" type="submit">
+                          Request appeal
+                        </button>
+                      </form>
+                    ) : null}
                   </div>
                 ))
               ) : (
@@ -1116,9 +1184,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <h3>External source connections</h3>
               <p className="route-text">
                 Record what could be connected later. This stores consent and scope only; no
-                social, email, calendar, or chatbot data is imported.
+                social, email, calendar, or chatbot data is imported. Active external connectors
+                need explicit field permissions, a retention window, and consent notes.
               </p>
-              <form action={saveSourceConnectionAction} className="compact-form">
+              <p className="route-text">
+                AI shadow readiness: {aiShadowReadiness.ready}/{aiShadowReadiness.total} source(s)
+                have connected status, approved summaries, live retention, and explicit field
+                consent. Shadow evaluation cannot publish matches, disclose details, or change live
+                ranking.
+              </p>
+              <form action={saveBackgroundSourceConnectionAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
                 <label className="field">
                   <span>Provider</span>
@@ -1179,6 +1254,35 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <span>Consent notes</span>
                   <textarea name="consent_notes" placeholder="What may be used, what must stay private." />
                 </label>
+                <fieldset className="filter-group">
+                  <legend>Allowed matching uses</legend>
+                  <div className="filter-option-list">
+                    {BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.map((option) => (
+                      <label className="check-row" key={option.value}>
+                        <input name="allowed_field_keys" type="checkbox" value={option.value} />
+                        <span>
+                          <strong>{option.label}</strong> {option.description}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Retention window</span>
+                    <select name="retention_days" defaultValue="90">
+                      {BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.map((days) => (
+                        <option key={days} value={days}>
+                          {days} days
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="field checkbox-field">
+                    <input name="ai_shadow_mode_allowed" type="checkbox" />
+                    <span>Allow approved summaries in future AI shadow-mode evaluation</span>
+                  </label>
+                </div>
                 <label className="field">
                   <span>Latest import summary</span>
                   <textarea
@@ -1194,7 +1298,34 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ul className="clean-list">
                   {dashboardData.sourceConnections.slice(0, 4).map((connection) => (
                     <li key={connection.id}>
-                      {connection.label} ({connection.provider}, {connection.access_status}, {connection.import_mode})
+                      <div className="source-permission-row">
+                        <span>
+                          {connection.label} ({connection.provider}, {connection.access_status},{" "}
+                          {connection.import_mode}) · fields{" "}
+                          {(connection.allowed_field_keys ?? []).length
+                            ? (connection.allowed_field_keys ?? [])
+                                .map(formatBackgroundSourcePermissionFieldLabel)
+                                .join(", ")
+                            : "not set"}
+                          {connection.retention_expires_at
+                            ? ` · expires ${new Date(connection.retention_expires_at).toLocaleDateString()}`
+                            : ""}
+                          {connection.ai_shadow_mode_allowed ? " · AI shadow mode allowed" : ""}
+                        </span>
+                        {connection.access_status === "revoked" ? null : (
+                          <form action={revokeBackgroundSourceConnectionAction}>
+                            <input name="return_to" type="hidden" value="/dashboard" />
+                            <input
+                              name="source_connection_id"
+                              type="hidden"
+                              value={connection.id}
+                            />
+                            <button className="button button-secondary button-mini" type="submit">
+                              Revoke permission
+                            </button>
+                          </form>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -1994,7 +2125,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
 
           <div className="data-grid">
-            <BackgroundLocalDraftsPanel />
+            <BackgroundLocalDraftsPanel syncDraftAction={syncBackgroundLocalDraftAction} />
+
+            <BackgroundLocalTransparencyPanel
+              consentGrants={localTransparencyConsentGrants}
+              matchSnapshots={localTransparencyMatchSnapshots}
+            />
 
             <article className="panel data-card">
               <p className="detail-kicker">Manual sources</p>

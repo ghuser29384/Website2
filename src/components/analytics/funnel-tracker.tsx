@@ -4,7 +4,10 @@ import { useEffect } from "react";
 import { useReportWebVitals } from "next/web-vitals";
 import { usePathname, useSearchParams } from "next/navigation";
 
-import type { FunnelEventType } from "@/lib/growth";
+import {
+  ANALYTICS_OPT_OUT_COOKIE_NAME,
+  type FunnelEventType,
+} from "@/lib/growth";
 
 function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
   const href = target.href;
@@ -30,6 +33,20 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
 }
 
 function postFunnelEvent(eventType: FunnelEventType, metadata: Record<string, unknown>) {
+  if (
+    document.cookie
+      .split(";")
+      .some((cookie) => {
+        const entry = cookie.trim();
+        return (
+          entry === `${ANALYTICS_OPT_OUT_COOKIE_NAME}=1` ||
+          entry === `${ANALYTICS_OPT_OUT_COOKIE_NAME}=true`
+        );
+      })
+  ) {
+    return;
+  }
+
   const body = JSON.stringify({
     eventType,
     metadata,

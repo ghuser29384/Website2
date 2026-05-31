@@ -121,8 +121,8 @@
       "key": "analytics_attribution_lifecycle",
       "label": "Analytics and attribution lifecycle",
       "scope": "Approved funnel event type, route path, coarse metadata buckets, partner attribution, and optional authenticated profile id.",
-      "retentionWindow": "Only redacted funnel records are eligible for storage; exact wishes, contact details, report bodies, raw source notes, private evidence artifacts, and free-form payloads are excluded before insert.",
-      "evidence": "src/lib/measurement-plan.ts defines approved events and src/lib/growth.ts builds privacy-safe funnel event records."
+      "retentionWindow": "Only redacted funnel records are eligible for storage; exact wishes, contact details, report bodies, raw source notes, private evidence artifacts, and free-form payloads are excluded before insert. Browser-level opt-out clears attribution and suppresses optional funnel-event inserts.",
+      "evidence": "src/lib/measurement-plan.ts defines approved events and analytics-objection guardrails; src/lib/growth.ts builds privacy-safe funnel event records and names the opt-out cookie."
     },
     {
       "key": "notification_delivery_lifecycle",

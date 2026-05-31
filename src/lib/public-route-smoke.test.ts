@@ -3,11 +3,16 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import {
+  BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS,
+  BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS,
+} from "@/lib/background-source-permissions";
 import { PARTNER_COHORTS } from "@/lib/growth";
 import {
   MEASUREMENT_EVENT_SPECS,
   MEASUREMENT_GUARDRAILS,
   MEASUREMENT_PERFORMANCE_BASELINE,
+  MEASUREMENT_ROADMAP,
   validateMeasurementPlan,
 } from "@/lib/measurement-plan";
 import { demoAlternatives, MPGF_COPY } from "@/lib/mpgf/data";
@@ -643,13 +648,41 @@ test("background networking and reasoning routes are distinct resilient public r
   assert.match(backgroundPage, /getMoralTradeMatchSignalContract/);
   assert.match(backgroundPage, /validateMoralTradeMatchSignalContract/);
   assert.match(backgroundPage, /validateMoralTradeMatchSignal/);
+  assert.match(backgroundPage, /getBackgroundAiShadowContract/);
+  assert.match(backgroundPage, /validateBackgroundAiShadowContract/);
+  assert.match(backgroundPage, /getBackgroundCapabilityGateContract/);
+  assert.match(backgroundPage, /validateBackgroundCapabilityGateContract/);
+  assert.match(backgroundPage, /getBackgroundRlsAuditContract/);
+  assert.match(backgroundPage, /validateBackgroundRlsAuditContract/);
   assert.match(backgroundPage, /Match signal contract/);
   assert.match(backgroundPage, /Suggestions explain public compatibility without revealing private wishes/);
   assert.match(backgroundPage, /matchSignalContract\.sampleSignal/);
   assert.match(backgroundPage, /matchSignalContract\.redactedFields/);
+  assert.match(backgroundPage, /AI shadow mode/);
+  assert.match(backgroundPage, /Open shadow contract/);
+  assert.match(backgroundPage, /\/api\/moral-trade\/ai-shadow\/contract/);
+  assert.match(backgroundPage, /aiShadowContract\.sampleReadyEvaluation/);
+  assert.match(backgroundPage, /aiShadowContract\.prohibitedEffects/);
+  assert.match(backgroundPage, /Capability gates/);
+  assert.match(backgroundPage, /Open gate contract/);
+  assert.match(backgroundPage, /capabilityGateContract\.gates/);
+  assert.match(backgroundPage, /capabilityGateValidation\.expansionReady/);
+  assert.match(backgroundPage, /\/api\/moral-trade\/background-capability-gates\/contract/);
+  assert.match(backgroundPage, /RLS and encryption audit/);
+  assert.match(backgroundPage, /Open RLS contract/);
+  assert.match(backgroundPage, /rlsAuditContract\.tableRequirements/);
+  assert.match(backgroundPage, /\/api\/moral-trade\/background-rls-audit\/contract/);
   assert.match(backgroundPage, /factorCode/);
   assert.match(backgroundPage, /Counts, not hidden inference/);
   assert.match(backgroundPage, /does not infer ideology, psychology, protected traits, or hidden/);
+  assert.match(backgroundPage, /BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS/);
+  assert.match(backgroundPage, /BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS/);
+  assert.match(backgroundPage, /Source connector boundary/);
+  assert.match(backgroundPage, /Raw connector ingestion remains disabled/);
+  assert.match(backgroundPage, /BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION/);
+  assert.match(backgroundPage, /BACKGROUND_SELF_SERVE_DELETION_SURFACES/);
+  assert.match(backgroundPage, /Participants can remove the background layer/);
+  assert.match(backgroundPage, /Open deletion controls/);
   assert.match(backgroundPage, /\/api\/moral-trade\/match-signal\/contract/);
   assert.match(reasoningCenterPage, /Pilot reasoning index/);
   assert.match(reasoningCenterPage, /reasoningCenterDescription/);
@@ -717,6 +750,83 @@ test("background networking and reasoning routes are distinct resilient public r
   assert.match(sitemapSource, /\/paid-action-offers/);
 });
 
+test("background source connector permissions stay field-limited and raw-ingestion disabled", () => {
+  const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
+  const aiShadowContractRoute = readRepoFile(
+    "src/app/api/moral-trade/ai-shadow/contract/route.ts",
+  );
+  const capabilityGateRoute = readRepoFile(
+    "src/app/api/moral-trade/background-capability-gates/contract/route.ts",
+  );
+  const rlsAuditContractRoute = readRepoFile(
+    "src/app/api/moral-trade/background-rls-audit/contract/route.ts",
+  );
+  const backgroundActions = readRepoFile("src/app/background-networking/actions.ts");
+  const backgroundNetworkingSource = readRepoFile("src/lib/background-networking.ts");
+  const backgroundAiShadowSource = readRepoFile("src/lib/background-ai-shadow.ts");
+  const backgroundCapabilityGateSource = readRepoFile("src/lib/background-capability-gates.ts");
+  const backgroundRlsAuditSource = readRepoFile("src/lib/background-rls-audit.ts");
+  const legacyActions = readRepoFile("src/app/actions.ts");
+  const schemaSource = readRepoFile("supabase/schema.sql");
+  const migrationSource = readRepoFile(
+    "supabase/migrations/20260531_background_source_connection_permissions.sql",
+  );
+
+  assert.ok(BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.length >= 6);
+  assert.deepEqual(BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS, [30, 90, 180, 365]);
+  assert.match(dashboardPage, /saveBackgroundSourceConnectionAction/);
+  assert.match(dashboardPage, /revokeBackgroundSourceConnectionAction/);
+  assert.equal(dashboardPage.includes("saveSourceConnectionAction"), false);
+  assert.match(dashboardPage, /BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS/);
+  assert.match(dashboardPage, /name="allowed_field_keys"/);
+  assert.match(dashboardPage, /name="retention_days"/);
+  assert.match(dashboardPage, /name="ai_shadow_mode_allowed"/);
+  assert.match(dashboardPage, /name="source_connection_id"/);
+  assert.match(dashboardPage, /Revoke permission/);
+  assert.match(dashboardPage, /formatBackgroundSourcePermissionFieldLabel/);
+  assert.match(backgroundActions, /validateBackgroundSourcePermission/);
+  assert.match(backgroundActions, /allowed_field_keys: permission\.allowedFieldKeys/);
+  assert.match(backgroundActions, /retention_expires_at: permission\.retentionExpiresAt/);
+  assert.match(backgroundActions, /raw_ingestion_allowed: permission\.rawIngestionAllowed/);
+  assert.match(backgroundActions, /revokeBackgroundSourceConnectionAction/);
+  assert.match(backgroundActions, /access_status: "revoked"/);
+  assert.match(backgroundActions, /\.update\(payload, \{ count: "exact" \}\)/);
+  assert.match(backgroundActions, /Source permission revoked for future matching/);
+  assert.match(backgroundNetworkingSource, /hasActiveBackgroundSourcePermission/);
+  assert.match(backgroundNetworkingSource, /activeSourceConnections/);
+  assert.match(backgroundAiShadowSource, /getBackgroundAiShadowContract/);
+  assert.match(backgroundAiShadowSource, /validateBackgroundAiShadowContract/);
+  assert.match(backgroundAiShadowSource, /approved_summary_shadow_evaluation_only/);
+  assert.match(backgroundAiShadowSource, /analytics_copy_of_raw_content/);
+  assert.match(aiShadowContractRoute, /getBackgroundAiShadowContract/);
+  assert.match(aiShadowContractRoute, /validateBackgroundAiShadowContract/);
+  assert.match(aiShadowContractRoute, /sampleReadyEvaluation/);
+  assert.match(aiShadowContractRoute, /sampleBlockedEvaluation/);
+  assert.match(backgroundCapabilityGateSource, /getBackgroundCapabilityGateContract/);
+  assert.match(backgroundCapabilityGateSource, /validateBackgroundCapabilityGateContract/);
+  assert.match(backgroundCapabilityGateSource, /DPIA and documented privacy-design review/);
+  assert.match(backgroundCapabilityGateSource, /privacy_preserving_overlap/);
+  assert.match(backgroundCapabilityGateSource, /raw_private_feed_training/);
+  assert.match(capabilityGateRoute, /getBackgroundCapabilityGateContract/);
+  assert.match(capabilityGateRoute, /validateBackgroundCapabilityGateContract/);
+  assert.match(capabilityGateRoute, /expansionReady/);
+  assert.match(backgroundRlsAuditSource, /validateBackgroundRlsAuditSchema/);
+  assert.match(backgroundRlsAuditSource, /match_audit_events/);
+  assert.match(backgroundRlsAuditSource, /sensitiveStorageRequirements/);
+  assert.match(backgroundRlsAuditSource, /anonymous-policy-not-allowed/);
+  assert.match(rlsAuditContractRoute, /getBackgroundRlsAuditContract/);
+  assert.match(rlsAuditContractRoute, /validateBackgroundRlsAuditContract/);
+  assert.match(rlsAuditContractRoute, /schemaAuditMode: "repository_test"/);
+  assert.match(legacyActions, /validateBackgroundSourcePermission/);
+  assert.match(legacyActions, /allowed_field_keys: permission\.allowedFieldKeys/);
+  assert.match(legacyActions, /retention_expires_at: permission\.retentionExpiresAt/);
+  assert.match(legacyActions, /raw_ingestion_allowed: permission\.rawIngestionAllowed/);
+  assert.match(schemaSource, /source_connections_allowed_field_keys_check/);
+  assert.match(schemaSource, /source_connections_raw_ingestion_disabled_check/);
+  assert.match(migrationSource, /source_connections_allowed_field_keys_check/);
+  assert.match(migrationSource, /source_connections_raw_ingestion_disabled_check/);
+});
+
 test("global loading and error states expose route-specific recovery instead of generic dead ends", () => {
   const loadingPage = readRepoFile("src/app/loading.tsx");
   const errorPage = readRepoFile("src/app/error.tsx");
@@ -778,6 +888,8 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   const adminGrowthPage = readRepoFile("src/app/admin/growth/page.tsx");
   const actionsSource = readRepoFile("src/app/actions.ts");
   const apiSource = readRepoFile("src/app/api/funnel-events/route.ts");
+  const privacyActions = readRepoFile("src/app/privacy/actions.ts");
+  const supabaseProxy = readRepoFile("src/lib/supabase/proxy.ts");
   const funnelTracker = readRepoFile("src/components/analytics/funnel-tracker.tsx");
   const newOfferPage = readRepoFile("src/app/offers/new/page.tsx");
   const offerCreateForm = readRepoFile("src/components/offers/offer-create-form.tsx");
@@ -794,6 +906,8 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(growthSource, /sanitizeFunnelEventMetadata/);
   assert.match(growthSource, /sanitizeFunnelEventPath/);
   assert.match(growthSource, /buildPrivacySafeFunnelEventRecord/);
+  assert.match(growthSource, /ANALYTICS_OPT_OUT_COOKIE_NAME/);
+  assert.match(growthSource, /isAnalyticsOptedOut/);
   assert.match(growthSource, /queryLengthBucket/);
   assert.match(migrationSource, /funnel_events/);
   assert.match(migrationSource, /cohort_attributions/);
@@ -802,11 +916,23 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(migrationSource, /email_nurture_subscriptions/);
   assert.match(apiSource, /parseAttributionCookie/);
   assert.match(apiSource, /takeMoralTradeApiRateLimitSlot\(request, "analytics_ingest"\)/);
+  assert.match(apiSource, /ANALYTICS_OPT_OUT_COOKIE_NAME/);
+  assert.match(apiSource, /isAnalyticsOptedOut/);
+  assert.match(apiSource, /status: 204/);
   assert.match(apiSource, /buildMoralTradeApiJsonResponse/);
   assert.match(apiSource, /MORAL_TRADE_API_CACHE_CONTROL_HEADERS\.no_store_dynamic/);
   assert.match(apiSource, /buildPrivacySafeFunnelEventRecord/);
+  assert.match(privacyActions, /saveAnalyticsPreferenceAction/);
+  assert.match(privacyActions, /ANALYTICS_OPT_OUT_COOKIE_NAME/);
+  assert.match(privacyActions, /ATTRIBUTION_COOKIE_NAME/);
+  assert.match(privacyActions, /maxAge: 0/);
+  assert.match(supabaseProxy, /ANALYTICS_OPT_OUT_COOKIE_NAME/);
+  assert.match(supabaseProxy, /isAnalyticsOptedOut/);
+  assert.match(supabaseProxy, /maxAge: 0/);
   assert.match(actionsSource, /buildPrivacySafeFunnelEventRecord/);
+  assert.match(actionsSource, /isAnalyticsOptedOut/);
   assert.match(funnelTracker, /useReportWebVitals/);
+  assert.match(funnelTracker, /ANALYTICS_OPT_OUT_COOKIE_NAME/);
   assert.match(funnelTracker, /performance_metric_recorded/);
   assert.match(funnelTracker, /metricValueBucket/);
   assert.match(funnelTracker, /CLS/);
@@ -877,6 +1003,18 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
       /not moral worth|not score users/i.test(`${guardrail.title} ${guardrail.rule}`),
     ),
   );
+  assert.ok(
+    MEASUREMENT_GUARDRAILS.some((guardrail) =>
+      /Honor analytics objection|opt-out cookie/i.test(`${guardrail.title} ${guardrail.rule}`),
+    ),
+  );
+  assert.ok(
+    MEASUREMENT_ROADMAP.some((item) =>
+      /Browser-level analytics objection|suppresses optional funnel-event inserts/i.test(
+        `${item.title} ${item.detail}`,
+      ),
+    ),
+  );
 });
 
 test("privacy and terms publish processor retention and data-request transparency", () => {
@@ -894,6 +1032,18 @@ test("privacy and terms publish processor retention and data-request transparenc
   assert.match(privacyPage, /Stripe for participant payment objects; Every\.org for off-site donation routes/);
   assert.match(privacyPage, /future analytics tools must follow the same redaction rules/);
   assert.match(privacyPage, /exact wishes, contact details, report bodies, and raw source notes are excluded/);
+  assert.match(privacyPage, /BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS/);
+  assert.match(privacyPage, /BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS/);
+  assert.match(privacyPage, /separate source permission/);
+  assert.match(privacyPage, /broad matching categories/);
+  assert.match(privacyPage, /Optional AI shadow-mode review/);
+  assert.match(privacyPage, /cannot change live matching, ranking, disclosure, or outreach/);
+  assert.match(privacyPage, /Live source connectors, AI assist mode, and private-overlap computation require a DPIA/);
+  assert.match(privacyPage, /lawful-basis record, privacy-design review, and external security\/privacy review/);
+  assert.match(privacyPage, /saveAnalyticsPreferenceAction/);
+  assert.match(privacyPage, /Turn off optional analytics/);
+  assert.match(privacyPage, /Allow minimal analytics/);
+  assert.match(privacyPage, /prevents middleware from recreating it/);
   assert.match(privacyPage, /getMoralTradeDisclosureContract/);
   assert.match(privacyPage, /validateMoralTradeDisclosureContract/);
   assert.match(privacyPage, /Disclosure is stage-bound, field-bound, and non-mutating/);
@@ -902,6 +1052,10 @@ test("privacy and terms publish processor retention and data-request transparenc
   assert.match(privacyPage, /disclosureContract\.redactedFields/);
   assert.match(privacyPage, /disclosureContract\.searchPrivacyControls/);
   assert.match(privacyPage, /\/api\/moral-trade\/disclosure\/contract/);
+  assert.match(privacyPage, /BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION/);
+  assert.match(privacyPage, /BACKGROUND_SELF_SERVE_DELETION_SURFACES/);
+  assert.match(privacyPage, /Self-serve background-networking deletion/);
+  assert.match(privacyPage, /participant-facing matching records/);
   assert.match(privacyPage, /Open data request tools/);
   assert.match(privacyPage, /Contact privacy support/);
   assert.match(privacyPage, /correction, deletion, restriction, or processor clarification/);
@@ -1351,6 +1505,18 @@ test("public contract APIs enforce the documented public contract read throttle"
       path: "src/app/api/moral-trade/ai-governance/health/route.ts",
       cacheControl: "no_store_dynamic",
     },
+    {
+      path: "src/app/api/moral-trade/ai-shadow/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/background-capability-gates/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/background-rls-audit/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
     { path: "src/app/api/profile/schema/route.ts", cacheControl: "public_contract_static" },
   ];
 
@@ -1788,6 +1954,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(operationsProfile, /evidence_provenance_lifecycle/);
   assert.match(operationsProfile, /payment_donation_reference_lifecycle/);
   assert.match(operationsProfile, /analytics_attribution_lifecycle/);
+  assert.match(operationsProfile, /Browser-level opt-out clears attribution/);
   assert.match(operationsProfile, /notification_delivery_lifecycle/);
   assert.match(operationsProfile, /data_right_request_lifecycle/);
   assert.match(operationsProfile, /retention_lifecycle_contract_smoke/);
@@ -1932,6 +2099,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_performance_health/);
   assert.match(apiContractSource, /moral_trade_externality_health/);
   assert.match(apiContractSource, /moral_trade_ai_governance_health/);
+  assert.match(apiContractSource, /moral_trade_ai_shadow_contract/);
+  assert.match(apiContractSource, /moral_trade_background_capability_gates_contract/);
+  assert.match(apiContractSource, /moral_trade_background_rls_audit_contract/);
   assert.match(apiContractSource, /moral_trade_api_contract/);
   assert.match(apiContractSource, /auditMoralTradeApiImplementationContract/);
   assert.match(apiContractSource, /implementation-backed-rate-limits-and-cache/);
@@ -1957,6 +2127,18 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /evidenceMetadataSummary/);
   assert.match(apiContractProfile, /raw evidence artifacts/);
   assert.match(apiContractProfile, /match_signal_contract_response/);
+  assert.match(apiContractProfile, /ai_shadow_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_ai_shadow_contract/);
+  assert.match(apiContractProfile, /approved, redacted source summaries/);
+  assert.match(apiContractProfile, /cannot publish matches, disclose details, contact counterparties, rank users/);
+  assert.match(apiContractProfile, /background_capability_gates_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_background_capability_gates_contract/);
+  assert.match(apiContractProfile, /DPIA, lawful-basis, privacy-design, external-review/);
+  assert.match(apiContractProfile, /source connector workers, AI assist mode, and private-overlap computation cannot expand/);
+  assert.match(apiContractProfile, /background_rls_audit_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_background_rls_audit_contract/);
+  assert.match(apiContractProfile, /row-level security, participant-scoped policies/);
+  assert.match(apiContractProfile, /sensitive ciphertext\/version storage/);
   assert.match(apiContractProfile, /match_signal_evaluate_request/);
   assert.match(apiContractProfile, /match_signal_evaluate_response/);
   assert.match(apiContractProfile, /redacted_profile_match_preview_only/);

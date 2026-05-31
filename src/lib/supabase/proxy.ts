@@ -2,10 +2,12 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import {
+  ANALYTICS_OPT_OUT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
   ATTRIBUTION_MAX_AGE_SECONDS,
   createAnonymousId,
   encodeAttribution,
+  isAnalyticsOptedOut,
   parseAttributionCookie,
 } from "@/lib/growth";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -34,6 +36,17 @@ function getPartnerSlugFromPath(request: NextRequest) {
 }
 
 function attachAttributionCookie(request: NextRequest, response: NextResponse) {
+  if (isAnalyticsOptedOut(request.cookies.get(ANALYTICS_OPT_OUT_COOKIE_NAME)?.value)) {
+    response.cookies.set(ATTRIBUTION_COOKIE_NAME, "", {
+      maxAge: 0,
+      path: "/",
+      sameSite: "lax",
+      secure: request.nextUrl.protocol === "https:",
+    });
+
+    return response;
+  }
+
   const existing = parseAttributionCookie(request.cookies.get(ATTRIBUTION_COOKIE_NAME)?.value);
   const currentPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
   const shouldRefresh = hasAttributionParams(request) || !existing;

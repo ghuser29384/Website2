@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { evaluateDeterministicMatch, type DeterministicSignals } from "@/lib/background-networking";
+import {
+  buildDeterministicSynthesis,
+  evaluateDeterministicMatch,
+  type DeterministicSignals,
+} from "@/lib/background-networking";
 
 type DeterministicMatchInput = Parameters<typeof evaluateDeterministicMatch>[0];
+type SynthesisInput = Parameters<typeof buildDeterministicSynthesis>[0];
 
 const baseSignals = {
   askTerms: [],
@@ -59,4 +64,39 @@ test("deterministic background matches do not return raw overlapping private ter
   assert.ok(evaluation.sharedTokens.every((token) => token.startsWith("broad_language_overlap_")));
   assert.doesNotMatch(serialized, /secretcalibration/i);
   assert.match(evaluation.viewerReason, /broad ask\/offer compatibility signal/);
+});
+
+test("deterministic synthesis counts only active unexpired source permissions", () => {
+  const connection = (
+    overrides: Partial<SynthesisInput["connections"][number]>,
+  ): SynthesisInput["connections"][number] =>
+    ({
+      access_status: "connected",
+      allowed_field_keys: ["cause_priorities"],
+      retention_expires_at: "2099-01-01T00:00:00.000Z",
+      ...overrides,
+    }) as SynthesisInput["connections"][number];
+  const synthesis = buildDeterministicSynthesis({
+    connections: [
+      connection({ access_status: "revoked" }),
+      connection({ retention_expires_at: "2000-01-01T00:00:00.000Z" }),
+      connection({ allowed_field_keys: [] }),
+      connection({ access_status: "needs_review" }),
+    ],
+    entries: [],
+    profile: {
+      capabilities: "",
+      causes: [],
+      constraints: "",
+      location_city: null,
+      location_region: null,
+      public_preview: "",
+      uncertainty_notes: "",
+      verification_preferences: "",
+    } as SynthesisInput["profile"],
+    profileSources: [],
+  });
+
+  assert.equal(synthesis.source_count, 1);
+  assert.equal(synthesis.confidence_breakdown.sources, 1);
 });

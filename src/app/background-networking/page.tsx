@@ -5,7 +5,27 @@ import { createMatchConciergeRequestAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { StatusBadge } from "@/components/ui/page-primitives";
-import { BACKGROUND_DATA_INVENTORY } from "@/lib/background-privacy-controls";
+import {
+  BACKGROUND_DATA_INVENTORY,
+  BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION,
+  BACKGROUND_SELF_SERVE_DELETION_SURFACES,
+} from "@/lib/background-privacy-controls";
+import {
+  BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS,
+  BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS,
+} from "@/lib/background-source-permissions";
+import {
+  getBackgroundAiShadowContract,
+  validateBackgroundAiShadowContract,
+} from "@/lib/background-ai-shadow";
+import {
+  getBackgroundCapabilityGateContract,
+  validateBackgroundCapabilityGateContract,
+} from "@/lib/background-capability-gates";
+import {
+  getBackgroundRlsAuditContract,
+  validateBackgroundRlsAuditContract,
+} from "@/lib/background-rls-audit";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import {
@@ -58,6 +78,13 @@ export default async function BackgroundNetworkingPage({
       : "fail";
   const matchSignalBlockerCount =
     matchSignalValidation.blockers.length + sampleSignalValidation.blockers.length;
+  const aiShadowContract = getBackgroundAiShadowContract();
+  const aiShadowValidation = validateBackgroundAiShadowContract(aiShadowContract);
+  const capabilityGateContract = getBackgroundCapabilityGateContract();
+  const capabilityGateValidation =
+    validateBackgroundCapabilityGateContract(capabilityGateContract);
+  const rlsAuditContract = getBackgroundRlsAuditContract();
+  const rlsAuditValidation = validateBackgroundRlsAuditContract(rlsAuditContract);
 
   return (
     <div className="page-shell">
@@ -292,13 +319,214 @@ export default async function BackgroundNetworkingPage({
           </div>
         </section>
 
+        <section className="section section-white" aria-labelledby="capability-gates-heading">
+          <div className="section-head">
+            <p className="eyebrow">Capability gates</p>
+            <h2 id="capability-gates-heading">
+              Higher-power background features stay gated until privacy review is done.
+            </h2>
+            <p>
+              The reports recommend staged expansion rather than broad passive ingestion. This
+              public gate keeps source connectors, AI summarization, and private-overlap
+              computation default-off, shadow-only, or design-only until DPIA, lawful-basis,
+              privacy-design, external review, and human-control checks are satisfied.
+            </p>
+          </div>
+
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Expansion gate</p>
+              <div className="protocol-workflow-card-head">
+                <h3>{capabilityGateValidation.status}</h3>
+                <StatusBadge
+                  tone={capabilityGateValidation.status === "pass" ? "default" : "warning"}
+                >
+                  {capabilityGateValidation.status}
+                </StatusBadge>
+              </div>
+              <p>
+                {capabilityGateValidation.checks.length} check(s),{" "}
+                {capabilityGateValidation.blockers.length} blocker(s), expansion ready:{" "}
+                {String(capabilityGateValidation.expansionReady)}.
+              </p>
+            </div>
+            <div className="hero-actions">
+              <Link
+                className="button button-primary"
+                href="/api/moral-trade/background-capability-gates/contract"
+              >
+                Open gate contract
+              </Link>
+              <Link className="button button-secondary" href="/safety">
+                Safety posture
+              </Link>
+            </div>
+          </div>
+
+          <div className="protocol-review-grid">
+            {capabilityGateContract.gates.map((gate) => (
+              <article className="panel data-card" key={gate.key}>
+                <p className="detail-kicker">{formatMatchSignalToken(gate.releaseState)}</p>
+                <h3>{gate.label}</h3>
+                <p className="route-text">{gate.allowedUse}</p>
+                <p className="route-text">
+                  <strong>Required before expansion:</strong>{" "}
+                  {gate.requiredBeforeExpansion.slice(0, 3).join("; ")}.
+                </p>
+                <p className="panel-note">
+                  Current blocker: {gate.currentBlockers[0]}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="rls-audit-heading">
+          <div className="section-head">
+            <p className="eyebrow">RLS and encryption audit</p>
+            <h2 id="rls-audit-heading">
+              Private background tables now have an executable access-control contract.
+            </h2>
+            <p>
+              The schema audit covers private wishes, manual source notes, saved searches, match
+              suggestions, grants, concierge requests, notifications, helper runs, risk signals,
+              and audit events. The regression test fails if those tables lose row-level security,
+              participant-scoped policies, or ciphertext/version columns for sensitive text.
+            </p>
+          </div>
+
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Repository schema audit</p>
+              <div className="protocol-workflow-card-head">
+                <h3>{rlsAuditValidation.status}</h3>
+                <StatusBadge tone={rlsAuditValidation.status === "pass" ? "default" : "warning"}>
+                  {rlsAuditValidation.status}
+                </StatusBadge>
+              </div>
+              <p>
+                {rlsAuditContract.tableRequirements.length} RLS table requirement(s),{" "}
+                {rlsAuditContract.sensitiveStorageRequirements.length} sensitive storage
+                requirement(s), {rlsAuditValidation.blockers.length} blocker(s).
+              </p>
+            </div>
+            <div className="hero-actions">
+              <Link
+                className="button button-primary"
+                href="/api/moral-trade/background-rls-audit/contract"
+              >
+                Open RLS contract
+              </Link>
+              <Link className="button button-secondary" href="/privacy">
+                Data inventory
+              </Link>
+            </div>
+          </div>
+
+          <div className="protocol-review-grid">
+            <article className="panel data-card">
+              <p className="detail-kicker">Private by default</p>
+              <h3>No anonymous private-table policies</h3>
+              <p className="route-text">
+                Every background-networking table requirement disallows anonymous policies. Public
+                discovery stays on broad previews rather than private wish or source tables.
+              </p>
+            </article>
+            <article className="panel data-card">
+              <p className="detail-kicker">Participant scoped</p>
+              <h3>Match data uses participant helper checks</h3>
+              <p className="route-text">
+                Match suggestions, grants, requests, reports, and audit events are checked through
+                owner, counterparty, or participant predicates instead of public reads.
+              </p>
+            </article>
+            <article className="panel data-card">
+              <p className="detail-kicker">Sensitive text</p>
+              <h3>Ciphertext columns are part of the contract</h3>
+              <p className="route-text">
+                Wish bodies, exact profile notes, source notes, connector consent notes, and
+                synthesis summaries require encrypted storage slots and encryption-version columns.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="ai-shadow-contract-heading">
+          <div className="section-head">
+            <p className="eyebrow">AI shadow mode</p>
+            <h2 id="ai-shadow-contract-heading">
+              Optional AI assistance must earn trust before it can affect matching.
+            </h2>
+            <p>
+              The next AI layer is shadow-only: it can test approved, redacted source summaries
+              from consenting users, but it cannot create live match suggestions, disclose private
+              details, contact counterparties, change ranking, or store raw source content.
+            </p>
+          </div>
+
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Shadow contract</p>
+              <div className="protocol-workflow-card-head">
+                <h3>{aiShadowValidation.status}</h3>
+                <StatusBadge tone={aiShadowValidation.status === "pass" ? "default" : "warning"}>
+                  {aiShadowValidation.status}
+                </StatusBadge>
+              </div>
+              <p>
+                {aiShadowValidation.checks.length} contract check(s),{" "}
+                {aiShadowValidation.blockers.length} blocker(s), use{" "}
+                {aiShadowContract.allowedUse.replaceAll("_", " ")}.
+              </p>
+            </div>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/api/moral-trade/ai-shadow/contract">
+                Open shadow contract
+              </Link>
+              <Link className="button button-secondary" href="/privacy">
+                Source permissions
+              </Link>
+            </div>
+          </div>
+
+          <div className="protocol-review-grid">
+            <article className="panel data-card">
+              <h3>Approved inputs only</h3>
+              <ul className="clean-list">
+                {aiShadowContract.requiredSourceFields.map((field) => (
+                  <li key={field}>{formatMatchSignalToken(String(field))}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel data-card">
+              <h3>Prohibited effects</h3>
+              <ul className="clean-list">
+                {aiShadowContract.prohibitedEffects.slice(0, 5).map((effect) => (
+                  <li key={effect}>{formatMatchSignalToken(effect)}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel data-card">
+              <h3>Sample redaction</h3>
+              <p className="route-text">
+                {aiShadowContract.sampleReadyEvaluation.redactedApprovedSummary}
+              </p>
+              <p className="panel-note">
+                Blocked sample reasons:{" "}
+                {aiShadowContract.sampleBlockedEvaluation.blockedReasons.join("; ")}.
+              </p>
+            </article>
+          </div>
+        </section>
+
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Privacy controls</p>
             <h2>What the current pilot stores and how it is bounded</h2>
             <p>
               The signed-in dashboard now exposes the background-networking data map, active
-              grants, notification channel choices, local drafts, and data-right requests.
+              grants, notification channel choices, local drafts, local transparency receipts, and
+              data-right requests.
             </p>
           </div>
 
@@ -317,6 +545,56 @@ export default async function BackgroundNetworkingPage({
               </article>
             ))}
           </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Source connector boundary</p>
+            <h3>External sources require explicit, revocable field permissions</h3>
+            <p className="route-text">
+              Connect a source only to produce a private summary for matching. Moral Trade does
+              not search the raw source continuously, contact anyone from it, or copy raw content
+              into analytics. Participants can review a summary before saving, limit which fields
+              it may influence, and revoke access at any time.
+            </p>
+            <p className="route-text">
+              Raw connector ingestion remains disabled. Active external connections require
+              consent notes, a supported retention window (
+              {BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.join(", ")} days), and at least one broad
+              field permission.
+            </p>
+            <ul className="compact-list">
+              {BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.map((option) => (
+                <li key={option.value}>
+                  <strong>{option.label}:</strong> {option.description}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Deletion scope</p>
+            <h3>Participants can remove the background layer without erasing the whole account</h3>
+            <p className="route-text">
+              The dashboard self-serve flow requires the exact confirmation phrase{" "}
+              <strong>{BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION}</strong>, then removes
+              private wishes, broad previews, source summaries, saved searches, grants,
+              suggestions, notifications, helper records, and introduction artifacts tied to
+              background networking. Safety and operator audit rows stay only as redacted or
+              anonymized records when review integrity requires retention.
+            </p>
+            <ul className="compact-list">
+              {BACKGROUND_SELF_SERVE_DELETION_SURFACES.map((surface) => (
+                <li key={surface}>{surface}</li>
+              ))}
+            </ul>
+            <div className="hero-actions">
+              <Link className="button button-primary" href={viewer ? "/dashboard" : "/login?returnTo=/dashboard"}>
+                Open deletion controls
+              </Link>
+              <Link className="button button-secondary" href="/privacy">
+                Privacy and retention
+              </Link>
+            </div>
+          </div>
         </section>
 
         <section className="section section-subtle" id="concierge-intake">
@@ -326,7 +604,8 @@ export default async function BackgroundNetworkingPage({
             <p>
               This request goes to an operator queue first. It records intent, proposed trade
               shape, privacy constraints, and an SLA before anyone receives contact details or
-              exact wishes.
+              exact wishes. Declined or closed concierge decisions can be appealed from the
+              dashboard for a second operator review.
             </p>
           </div>
 

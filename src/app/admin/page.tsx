@@ -146,7 +146,9 @@ async function loadAdminQueues() {
     supabase
       .from("match_concierge_requests")
       .select("*")
-      .in("status", ["open", "triaged", "waiting_on_requester", "waiting_on_counterparty"])
+      .or(
+        "status.in.(open,triaged,waiting_on_requester,waiting_on_counterparty),appeal_status.in.(requested,under_review)",
+      )
       .order("sla_due_at", { ascending: true, nullsFirst: false })
       .limit(50),
     supabase
@@ -346,6 +348,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   }
   const limitedQueryEvents =
     queues?.backgroundQueryEvents.filter((event) => event.was_limited).length ?? 0;
+  const openConciergeAppeals =
+    queues?.matchConciergeRequests.filter((entry) =>
+      ["requested", "under_review"].includes(entry.request.appeal_status),
+    ).length ?? 0;
 
   return (
     <div className="page-shell">
@@ -392,7 +398,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <span className="flow-number">03</span>
                 <div>
                   <strong>{queues?.matchConciergeRequests.length ?? 0} concierge intro item(s)</strong>
-                  <p>Pending private-match triage and SLA review.</p>
+                  <p>
+                    Pending private-match triage and SLA review; {openConciergeAppeals} appeal(s).
+                  </p>
                 </div>
               </div>
               <div className="flow-step">
@@ -780,6 +788,15 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                       </p>
                       <h3>{formatSlaState(request.sla_due_at)}</h3>
                       <p className="route-text">{request.intent_summary}</p>
+                      {request.appeal_status !== "none" ? (
+                        <div className="status-banner">
+                          <strong>Appeal {request.appeal_status.replaceAll("_", " ")}</strong>
+                          {request.appeal_reason ? <p>{request.appeal_reason}</p> : null}
+                          {request.appeal_resolution_note ? (
+                            <p>{request.appeal_resolution_note}</p>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {request.offer_summary ? (
                         <p className="route-text">
                           <strong>Offer:</strong> {request.offer_summary}
@@ -849,6 +866,26 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                               defaultValue={request.match_id ?? ""}
                               name="match_id"
                               placeholder="Optional match_suggestions id"
+                            />
+                          </label>
+                        </div>
+                        <div className="field-grid">
+                          <label className="field">
+                            <span>Appeal status</span>
+                            <select name="appeal_status" defaultValue={request.appeal_status}>
+                              <option value="none">None</option>
+                              <option value="requested">Requested</option>
+                              <option value="under_review">Under review</option>
+                              <option value="resolved">Resolved</option>
+                              <option value="dismissed">Dismissed</option>
+                            </select>
+                          </label>
+                          <label className="field">
+                            <span>Appeal resolution</span>
+                            <input
+                              defaultValue={request.appeal_resolution_note}
+                              name="appeal_resolution_note"
+                              placeholder="What changed, or why the decision stands?"
                             />
                           </label>
                         </div>

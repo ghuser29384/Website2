@@ -169,7 +169,7 @@ export const BACKGROUND_DATA_INVENTORY = [
   },
   {
     classification: "manual-source-summary",
-    control: "Manual summaries only; raw private-feed ingestion remains out of scope; source rows are removed during self-serve deletion.",
+    control: "Manual summaries only; source connectors require field permissions, retention expiry, and no raw ingestion; source rows are removed during self-serve deletion.",
     label: "Source notes and connection permissions",
     processor: "Supabase Postgres with app-level field encryption for notes and approved summaries.",
     retention: "Until source removal, deletion request, or safety/legal hold.",
@@ -178,12 +178,12 @@ export const BACKGROUND_DATA_INVENTORY = [
   },
   {
     classification: "operations",
-    control: "Buckets, counts, status labels, and hashed fingerprints only; safety audit rows are retained without an active profile link when deletion completes.",
-    label: "Budgets, snapshots, reports, and operator queues",
+    control: "Buckets, counts, status labels, hashed fingerprints, SLA state, and appeal status only; safety audit rows are retained without an active profile link when deletion completes.",
+    label: "Budgets, snapshots, reports, appeals, and operator queues",
     processor: "Supabase Postgres and configured email provider for safe digests.",
     retention: "Operational window plus abuse-prevention audit retention.",
-    surface: "background_query_events, match_explanation_snapshots, risk_signals",
-    use: "Anti-enumeration, explanation provenance, safety review, and SLA tracking.",
+    surface: "background_query_events, match_explanation_snapshots, risk_signals, match_concierge_requests",
+    use: "Anti-enumeration, explanation provenance, safety review, SLA tracking, and concierge appeal review.",
   },
 ] as const;
 

@@ -15,6 +15,7 @@ import {
   buildMoralTradeApiRateLimitBlocker,
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
+import { normalizeBackgroundSourcePermissionFields } from "@/lib/background-source-permissions";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -395,6 +396,17 @@ export async function POST(request: Request) {
             typeof row.last_imported_at === "string" && row.last_imported_at
               ? row.last_imported_at
               : null,
+          allowed_field_keys: normalizeBackgroundSourcePermissionFields(
+            Array.isArray(row.allowed_field_keys)
+              ? row.allowed_field_keys.map((entry) => String(entry ?? ""))
+              : [],
+          ),
+          retention_expires_at:
+            typeof row.retention_expires_at === "string" && row.retention_expires_at
+              ? row.retention_expires_at
+              : null,
+          ai_shadow_mode_allowed: row.ai_shadow_mode_allowed === true,
+          raw_ingestion_allowed: false,
           sensitive_ciphertexts: encryptedFields.ciphertexts,
           sensitive_encryption_version: encryptedFields.version,
         };

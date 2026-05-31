@@ -1,8 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import {
+  ANALYTICS_OPT_OUT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
   buildPrivacySafeFunnelEventRecord,
+  isAnalyticsOptedOut,
   isFunnelEventType,
   parseAttributionCookie,
 } from "@/lib/growth";
@@ -21,6 +23,15 @@ function cleanText(value: unknown, maxLength = 500) {
 }
 
 export async function POST(request: NextRequest) {
+  if (isAnalyticsOptedOut(request.cookies.get(ANALYTICS_OPT_OUT_COOKIE_NAME)?.value)) {
+    return new NextResponse(null, {
+      headers: {
+        "Cache-Control": MORAL_TRADE_API_CACHE_CONTROL_HEADERS.no_store_dynamic,
+      },
+      status: 204,
+    });
+  }
+
   if (!hasSupabaseEnv()) {
     return new NextResponse(null, {
       headers: {

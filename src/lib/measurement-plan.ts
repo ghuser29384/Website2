@@ -239,6 +239,11 @@ export const MEASUREMENT_GUARDRAILS: MeasurementGuardrail[] = [
     rule:
       "Web Vitals are recorded as metric name, rating, and value bucket, not raw traces or user-identifying diagnostic detail.",
   },
+  {
+    title: "Honor analytics objection",
+    rule:
+      "If the analytics opt-out cookie is present, optional attribution is cleared and funnel ingestion exits without writing a row; safety, security, payment, and rights-request records remain separately governed.",
+  },
 ];
 
 const REQUIRED_BASELINE_ROUTES = [
@@ -283,6 +288,12 @@ export const MEASUREMENT_ROADMAP: MeasurementRoadmapItem[] = [
     status: "active",
     detail:
       "Run the public route-baseline command on the home, offers, cohort, signup, login, Moral Trade, private matching, and public-goods routes on mobile and desktop before optimizing.",
+  },
+  {
+    title: "Browser-level analytics objection",
+    status: "active",
+    detail:
+      "Expose an opt-out control that clears the attribution cookie and suppresses optional funnel-event inserts for the current browser.",
   },
   {
     title: "Aggregate search visibility",

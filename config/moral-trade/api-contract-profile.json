@@ -363,6 +363,42 @@
       "fallback": "Return AI-governance blockers; undocumented ML cannot rank, match, disclose, or change proposal state."
     },
     {
+      "key": "moral_trade_ai_shadow_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/ai-shadow/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "ai_shadow_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return AI shadow-mode blockers and public non-mutation guarantees; shadow evaluation cannot publish matches, disclose details, contact counterparties, rank users, or copy raw source content into analytics."
+    },
+    {
+      "key": "moral_trade_background_capability_gates_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/background-capability-gates/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_capability_gates_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return background capability-gate blockers; source connector workers, AI assist mode, and private-overlap computation cannot expand without DPIA, lawful-basis records, privacy-design review, external review, and human-control gates."
+    },
+    {
+      "key": "moral_trade_background_rls_audit_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/background-rls-audit/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_rls_audit_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return background RLS audit contract blockers; private wishes, source notes, saved searches, grants, notifications, helper records, risk signals, and audit events must retain row-level security, participant-scoped policies, no anonymous private-table policies, and sensitive ciphertext/version storage."
+    },
+    {
       "key": "profile_schema",
       "method": "GET",
       "path": "/api/profile/schema",
@@ -727,6 +763,45 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for input boundaries, redactions, approved factor codes, non-mutating preview, human review, and no private inference." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Required input fields, optional input fields, approved factor codes, redacted fields, participant explanation template, invariants, sample signal, and contract tests." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on redacted match previews." }
+      ]
+    },
+    {
+      "key": "ai_shadow_contract_response",
+      "purpose": "Public AI shadow-mode boundary for approved, redacted source summaries, prohibited effects, invariants, sample ready and blocked evaluations, and validator result.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the AI shadow contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the contract validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "AI shadow contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable AI shadow-mode purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for approved-summary input boundaries, blockers, redaction, prohibited effects, and non-mutating shadow-only behavior." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Allowed use, decisioning mode, state mutation flag, required source fields, prohibited effects, invariants, sample ready evaluation, sample blocked evaluation, and test hooks." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on AI shadow evaluation." }
+      ]
+    },
+    {
+      "key": "background_capability_gates_contract_response",
+      "purpose": "Public staged-expansion gate for source connectors, AI summarization, and privacy-preserving overlap computation, with DPIA, lawful-basis, privacy-design, external-review, and human-control requirements.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the background capability gate validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the gate validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Background capability gate contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable expansion-gate purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for required gates, DPIA requirements, separate consent, raw-content boundaries, staging, and human control." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Gate list, release state, lawful basis, retention rule, prohibited effects, required reviews before expansion, current blockers, invariants, and test hooks." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent capability expansion." }
+      ]
+    },
+    {
+      "key": "background_rls_audit_contract_response",
+      "purpose": "Public background-networking RLS and sensitive-storage audit contract for private tables, participant-linked match tables, operator-review records, helper records, notifications, risk signals, audit events, and ciphertext/version storage.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the background RLS audit contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the RLS audit contract validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Background RLS audit contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable RLS and sensitive-storage audit purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for table coverage, sensitive-storage coverage, anonymous-policy exclusion, participant helper boundaries, and regression-test hooks." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "RLS table requirements, policy-name requirements, required policy fragments, sensitive storage requirements, invariants, schema audit mode, and contract-test hooks." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on the background-networking RLS audit." }
       ]
     },
     {

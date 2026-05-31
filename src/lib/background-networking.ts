@@ -1,3 +1,4 @@
+import { hasActiveBackgroundSourcePermission } from "@/lib/background-source-permissions";
 import type { Database } from "@/lib/supabase/database.types";
 
 type WishEntryRow = Database["public"]["Tables"]["wish_entries"]["Row"];
@@ -230,7 +231,10 @@ export function buildDeterministicSynthesis({
   const wishes = entries.filter((entry) => entry.entry_type === "wish").map((entry) => entry.body);
   const offers = entries.filter((entry) => entry.entry_type === "offer").map((entry) => entry.body);
   const asks = entries.filter((entry) => entry.entry_type === "ask").map((entry) => entry.body);
-  const sourceCount = profileSources.length + connections.length;
+  const activeSourceConnections = connections.filter((connection) =>
+    hasActiveBackgroundSourcePermission(connection),
+  );
+  const sourceCount = profileSources.length + activeSourceConnections.length;
   const missingFields = buildMissingFields({
     asks,
     capabilities: profile.capabilities,

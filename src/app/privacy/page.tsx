@@ -1,10 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { saveAnalyticsPreferenceAction } from "@/app/privacy/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { StatusBadge } from "@/components/ui/page-primitives";
-import { BACKGROUND_DATA_INVENTORY } from "@/lib/background-privacy-controls";
+import {
+  BACKGROUND_DATA_INVENTORY,
+  BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION,
+  BACKGROUND_SELF_SERVE_DELETION_SURFACES,
+} from "@/lib/background-privacy-controls";
+import {
+  BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS,
+  BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS,
+} from "@/lib/background-source-permissions";
 import { getViewer } from "@/lib/app-data";
 import {
   getMoralTradeDisclosureContract,
@@ -143,6 +152,23 @@ export default async function PrivacyPage() {
             scope, import mode, and manual summaries only. The app does not automatically ingest,
             scrape, or search raw external data.
           </p>
+          <p className="route-text">
+            Active external connectors require a separate source permission, consent notes, one of
+            the supported retention windows ({BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.join(", ")}
+            days), and a field list chosen from broad matching categories.
+          </p>
+          <p className="route-text">
+            Optional AI shadow-mode review is a separate source-level consent. It may use approved
+            summaries only and cannot change live matching, ranking, disclosure, or outreach.
+            Live source connectors, AI assist mode, and private-overlap computation require a DPIA,
+            lawful-basis record, privacy-design review, and external security/privacy review before
+            expansion.
+          </p>
+          <ul className="compact-list">
+            {BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.map((option) => (
+              <li key={option.value}>{option.label}</li>
+            ))}
+          </ul>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Field-level grants and portability</h2>
@@ -214,7 +240,7 @@ export default async function PrivacyPage() {
             reconcile commitments.
           </p>
         </section>
-        <section className="panel data-card data-card-wide">
+        <section className="panel data-card data-card-wide" id="analytics-preferences">
           <h2>Analytics and attribution</h2>
           <p>
             Moral Trade may record lightweight product events such as page views, worked-example
@@ -226,6 +252,34 @@ export default async function PrivacyPage() {
             counts, buckets, and state labels; they should not copy exact wish text, private
             constraints, report bodies, source notes, or notification message text into analytics.
           </p>
+          <p className="route-text">
+            Optional funnel analytics can be turned off for this browser. Turning it off clears the
+            attribution cookie, prevents middleware from recreating it, and makes optional funnel
+            event ingestion return without storing a row. Account, safety, security, payment,
+            abuse-prevention, and rights-request records remain governed by their own purposes and
+            retention rules.
+          </p>
+          <form action={saveAnalyticsPreferenceAction} className="compact-form">
+            <input name="return_to" type="hidden" value="/privacy#analytics-preferences" />
+            <div className="hero-actions">
+              <button
+                className="button button-secondary button-mini"
+                name="analytics_preference"
+                type="submit"
+                value="off"
+              >
+                Turn off optional analytics
+              </button>
+              <button
+                className="button button-secondary button-mini"
+                name="analytics_preference"
+                type="submit"
+                value="on"
+              >
+                Allow minimal analytics
+              </button>
+            </div>
+          </form>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Cookies and local state</h2>
@@ -253,6 +307,22 @@ export default async function PrivacyPage() {
               <li key={item.surface}>
                 <strong>{item.label}:</strong> {item.classification}; {item.retention}
               </li>
+            ))}
+          </ul>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Self-serve background-networking deletion</h2>
+          <p>
+            Signed-in participants can delete the background-networking layer without deleting the
+            whole account by typing{" "}
+            <strong>{BACKGROUND_SELF_SERVE_DELETION_CONFIRMATION}</strong> in the dashboard.
+            The action removes participant-facing matching records while retaining only redacted
+            or anonymized safety, budget, and operator audit rows where review integrity requires
+            it.
+          </p>
+          <ul className="compact-list">
+            {BACKGROUND_SELF_SERVE_DELETION_SURFACES.map((surface) => (
+              <li key={surface}>{surface}</li>
             ))}
           </ul>
         </section>

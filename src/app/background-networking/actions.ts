@@ -8,15 +8,31 @@ import {
   type BackgroundMfaActionState,
   normalizeBackgroundTotpCode,
 } from "@/lib/background-account-security";
+import { validateBackgroundConciergeAppealRequest } from "@/lib/background-concierge-appeals";
+import { prepareRecordSensitiveTextFields } from "@/lib/background-field-encryption";
+import {
+  type BackgroundLocalDraftSyncResult,
+  normalizeBackgroundLocalDraftBody,
+} from "@/lib/background-local-drafts";
+import { getBackgroundTokens } from "@/lib/background-networking";
 import {
   buildBackgroundNotificationPreferenceRows,
   getDataRightRequestDueAt,
   validateBackgroundSelfServeDeletion,
   validateProfileDataRightRequest,
 } from "@/lib/background-privacy-controls";
+import { validateBackgroundSourcePermission } from "@/lib/background-source-permissions";
 import { requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
+import { hasSupabaseEnv } from "@/lib/supabase/config";
+import type { Database } from "@/lib/supabase/database.types";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+
+type SourceConnectionInsert = Database["public"]["Tables"]["source_connections"]["Insert"];
+type SourceConnectionUpdate = Database["public"]["Tables"]["source_connections"]["Update"];
+type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Insert"];
+type MatchConciergeRequestRow =
+  Database["public"]["Tables"]["match_concierge_requests"]["Row"];
 
 const DATA_RIGHT_REQUEST_STATUSES = [
   "open",
@@ -35,11 +51,17 @@ function readOptional(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
+function readBoolean(formData: FormData, key: string) {
+  const value = String(formData.get(key) ?? "").trim().toLowerCase();
+  return value === "on" || value === "true" || value === "1" || value === "yes";
+}
+
 function readRepeatedStrings(formData: FormData, key: string) {
   return formData
     .getAll(key)
     .map((entry) => String(entry ?? "").trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((entry, index, entries) => entries.indexOf(entry) === index);
 }
 
 function redirectWithMessage(
@@ -63,6 +85,55 @@ async function collectMutationResult(
   if (result.error) {
     failures.push(`${label}: ${result.error.message ?? "database error"}`);
   }
+}
+
+function normalizeSourceConnectionProvider(value: string): SourceConnectionInsert["provider"] {
+  if (
+    value === "social" ||
+    value === "blog" ||
+    value === "email" ||
+    value === "calendar" ||
+    value === "chat_history" ||
+    value === "search_profile" ||
+    value === "other"
+  ) {
+    return value;
+  }
+
+  return "manual";
+}
+
+function normalizeSourceImportMode(value: string): SourceConnectionInsert["import_mode"] {
+  if (value === "manual_paste" || value === "rss_pull" || value === "forwarded_note") {
+    return value;
+  }
+
+  return "manual_review";
+}
+
+function normalizeSourceSyncFrequency(value: string): SourceConnectionInsert["sync_frequency"] {
+  if (value === "weekly" || value === "monthly") {
+    return value;
+  }
+
+  return "manual";
+}
+
+function normalizeSourceAccessStatus(value: string): SourceConnectionInsert["access_status"] {
+  if (value === "connected" || value === "revoked" || value === "needs_review") {
+    return value;
+  }
+
+  return "not_connected";
+}
+
+function parseOptionalTimestamp(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
 export async function saveBackgroundNotificationPreferencesAction(formData: FormData) {
@@ -139,6 +210,342 @@ export async function createProfileDataRightRequestAction(formData: FormData) {
   redirectWithMessage(returnTo, "message", "Data-right request recorded.");
 }
 
+export async function saveBackgroundSourceConnectionAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const label = readOptional(formData, "label");
+
+  if (!label) {
+    redirectWithMessage(returnTo, "error", "Connection label is required.");
+  }
+
+  const provider = normalizeSourceConnectionProvider(readOptional(formData, "provider"));
+  const accessStatus = normalizeSourceAccessStatus(readOptional(formData, "access_status"));
+  const accessScope = readOptional(formData, "access_scope");
+  const consentNotes = readOptional(formData, "consent_notes");
+  const permission = validateBackgroundSourcePermission({
+    accessScope,
+    accessStatus,
+    aiShadowModeAllowed: readBoolean(formData, "ai_shadow_mode_allowed"),
+    allowedFieldKeys: readRepeatedStrings(formData, "allowed_field_keys"),
+    consentNotes,
+    provider,
+    rawIngestionAllowed: readBoolean(formData, "raw_ingestion_allowed"),
+    retentionDays: readOptional(formData, "retention_days"),
+  });
+
+  if (permission.errors.length) {
+    redirectWithMessage(returnTo, "error", permission.errors.join(" "));
+  }
+
+  let encryptedSourceConnectionFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+  try {
+    encryptedSourceConnectionFields = prepareRecordSensitiveTextFields({
+      access_scope: accessScope,
+      consent_notes: consentNotes,
+      last_sync_summary: readOptional(formData, "last_sync_summary"),
+    });
+  } catch {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Source connection notes cannot be saved until background field encryption is configured.",
+    );
+  }
+
+  const payload: SourceConnectionInsert = {
+    access_scope: encryptedSourceConnectionFields.plaintextFields.access_scope,
+    access_status: accessStatus,
+    ai_shadow_mode_allowed: permission.aiShadowModeAllowed,
+    allowed_field_keys: permission.allowedFieldKeys,
+    consent_notes: encryptedSourceConnectionFields.plaintextFields.consent_notes,
+    import_mode: normalizeSourceImportMode(readOptional(formData, "import_mode")),
+    label,
+    last_import_item_count: Math.max(
+      0,
+      Math.min(10000, Number(readOptional(formData, "last_import_item_count")) || 0),
+    ),
+    last_imported_at: parseOptionalTimestamp(readOptional(formData, "last_imported_at")),
+    last_sync_summary: encryptedSourceConnectionFields.plaintextFields.last_sync_summary,
+    profile_id: viewer.authUser.id,
+    provider,
+    raw_ingestion_allowed: permission.rawIngestionAllowed,
+    retention_expires_at: permission.retentionExpiresAt,
+    sensitive_ciphertexts: encryptedSourceConnectionFields.ciphertexts,
+    sensitive_encryption_version: encryptedSourceConnectionFields.version,
+    sync_frequency: normalizeSourceSyncFrequency(readOptional(formData, "sync_frequency")),
+    url: readOptional(formData, "url"),
+  };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("source_connections").insert(payload);
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(
+    returnTo,
+    "message",
+    "Source connection permission recorded. Raw ingestion remains disabled.",
+  );
+}
+
+export async function revokeBackgroundSourceConnectionAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const connectionId = readOptional(formData, "source_connection_id");
+
+  if (!connectionId) {
+    redirectWithMessage(returnTo, "error", "Choose a source connection to revoke.");
+  }
+
+  const now = new Date().toISOString();
+  const payload: SourceConnectionUpdate = {
+    access_status: "revoked",
+    ai_shadow_mode_allowed: false,
+    allowed_field_keys: [],
+    raw_ingestion_allowed: false,
+    retention_expires_at: now,
+    sync_frequency: "manual",
+    updated_at: now,
+  };
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("source_connections")
+    .update(payload, { count: "exact" })
+    .eq("id", connectionId)
+    .eq("profile_id", viewer.authUser.id);
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  if (!count) {
+    redirectWithMessage(returnTo, "error", "Source connection was not found.");
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Source permission revoked for future matching.");
+}
+
+export async function syncBackgroundLocalDraftAction(
+  formData: FormData,
+): Promise<BackgroundLocalDraftSyncResult> {
+  const draftId = readOptional(formData, "draft_id") || "local-draft";
+
+  if (!hasSupabaseEnv()) {
+    return {
+      draftId,
+      message: "Supabase is not configured yet.",
+      ok: false,
+    };
+  }
+
+  const body = normalizeBackgroundLocalDraftBody(readOptional(formData, "draft_body"));
+
+  if (!body) {
+    return {
+      draftId,
+      message: "Draft is empty.",
+      ok: false,
+    };
+  }
+
+  const viewer = await requireViewer("/dashboard");
+  const sourceLabel =
+    normalizeBackgroundLocalDraftBody(readOptional(formData, "draft_label")).slice(0, 120) ||
+    "Local background draft";
+  const draftTag = `local_draft_${draftId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80)}`;
+  const snapshotExcerpt = body.slice(0, 420);
+  let encryptedProfileSourceFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+  try {
+    encryptedProfileSourceFields = prepareRecordSensitiveTextFields({
+      notes: body,
+      snapshot_excerpt: snapshotExcerpt,
+    });
+  } catch {
+    return {
+      draftId,
+      message: "Draft cannot sync until background field encryption is configured.",
+      ok: false,
+    };
+  }
+
+  const syncedAt = new Date().toISOString();
+  const supabase = await createClient();
+  const { data: existingDraftSource, error: existingDraftError } = await supabase
+    .from("profile_sources")
+    .select("id")
+    .eq("profile_id", viewer.authUser.id)
+    .contains("captured_tags", [draftTag])
+    .limit(1)
+    .maybeSingle();
+
+  if (existingDraftError) {
+    return {
+      draftId,
+      message: existingDraftError.message,
+      ok: false,
+    };
+  }
+
+  if (existingDraftSource) {
+    return {
+      draftId,
+      message: "Draft already synced to manual source review.",
+      ok: true,
+      syncedAt,
+    };
+  }
+
+  const payload: ProfileSourceInsert = {
+    access_level: "manual_summary",
+    captured_tags: [draftTag, ...getBackgroundTokens(`${sourceLabel} ${body}`, 11)],
+    content_kind: "manual_summary",
+    imported_at: syncedAt,
+    is_active: true,
+    label: sourceLabel,
+    needs_review: true,
+    notes: encryptedProfileSourceFields.plaintextFields.notes,
+    profile_id: viewer.authUser.id,
+    sensitive_ciphertexts: encryptedProfileSourceFields.ciphertexts,
+    sensitive_encryption_version: encryptedProfileSourceFields.version,
+    snapshot_excerpt: encryptedProfileSourceFields.plaintextFields.snapshot_excerpt,
+    source_type: "manual",
+    url: "",
+  };
+  const { error } = await supabase.from("profile_sources").insert(payload);
+
+  if (error) {
+    return {
+      draftId,
+      message: error.message,
+      ok: false,
+    };
+  }
+
+  revalidatePath("/dashboard");
+
+  return {
+    draftId,
+    message: "Draft synced to manual source review.",
+    ok: true,
+    syncedAt,
+  };
+}
+
+export async function requestMatchConciergeAppealAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const requestId = readOptional(formData, "request_id");
+
+  if (!requestId) {
+    redirectWithMessage(returnTo, "error", "Concierge request ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  let supabase: ReturnType<typeof createServiceClient>;
+
+  try {
+    supabase = createServiceClient();
+  } catch {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Concierge appeals require service-role configuration for operator review routing.",
+    );
+  }
+
+  const { data: requestRow, error: requestError } = await supabase
+    .from("match_concierge_requests")
+    .select("*")
+    .eq("id", requestId)
+    .maybeSingle();
+
+  if (requestError || !requestRow) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      requestError?.message ?? "Concierge request was not found.",
+    );
+  }
+
+  const conciergeRequest = requestRow as MatchConciergeRequestRow;
+  const isParticipant =
+    conciergeRequest.requester_profile_id === viewer.authUser.id ||
+    conciergeRequest.target_profile_id === viewer.authUser.id;
+
+  if (!isParticipant) {
+    redirectWithMessage(returnTo, "error", "You can only appeal your own concierge requests.");
+  }
+
+  const validation = validateBackgroundConciergeAppealRequest({
+    appealStatus: conciergeRequest.appeal_status,
+    reason: readOptional(formData, "appeal_reason"),
+    requestStatus: conciergeRequest.status,
+  });
+
+  if (validation.errors.length) {
+    redirectWithMessage(returnTo, "error", validation.errors.join(" "));
+  }
+
+  const now = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("match_concierge_requests")
+    .update({
+      appeal_reason: validation.reason,
+      appeal_resolution_note: "",
+      appeal_resolved_at: null,
+      appeal_resolved_by: null,
+      appeal_status: "requested",
+      appealed_at: now,
+      updated_at: now,
+    })
+    .eq("id", requestId);
+
+  if (updateError) {
+    redirectWithMessage(returnTo, "error", updateError.message);
+  }
+
+  const { error: eventError } = await supabase.from("match_concierge_events").insert({
+    actor_profile_id: viewer.authUser.id,
+    event_type: "appeal_requested",
+    metadata: {
+      appealStatus: "requested",
+      requestStatus: conciergeRequest.status,
+    },
+    request_id: requestId,
+    summary: "Participant requested a second review of a concierge decision.",
+  });
+
+  if (eventError) {
+    console.error("[supabase] Failed to record concierge appeal event", {
+      message: eventError.message,
+      requestId,
+      userId: viewer.authUser.id,
+    });
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
+  redirectWithMessage(returnTo, "message", "Concierge appeal requested for operator review.");
+}
+
 export async function deleteBackgroundNetworkingDataAction(formData: FormData) {
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const viewer = await requireViewer(returnTo);
@@ -172,6 +579,11 @@ export async function deleteBackgroundNetworkingDataAction(formData: FormData) {
     supabase
       .from("match_concierge_requests")
       .update({
+        appeal_reason: "",
+        appeal_resolution_note: "Counterparty deleted their background-networking profile.",
+        appeal_resolved_at: now,
+        appeal_resolved_by: null,
+        appeal_status: "dismissed",
         match_id: null,
         operator_notes: "Counterparty deleted their background-networking profile.",
         reviewed_at: now,

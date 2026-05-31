@@ -1069,6 +1069,12 @@ create table if not exists public.match_concierge_requests (
   sla_due_at timestamptz not null default (timezone('utc', now()) + interval '24 hours'),
   reviewed_by uuid references public.profiles (id) on delete set null,
   reviewed_at timestamptz,
+  appeal_status text not null default 'none' check (appeal_status in ('none', 'requested', 'under_review', 'resolved', 'dismissed')),
+  appeal_reason text not null default '',
+  appealed_at timestamptz,
+  appeal_resolved_at timestamptz,
+  appeal_resolved_by uuid references public.profiles (id) on delete set null,
+  appeal_resolution_note text not null default '',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   check (target_profile_id is null or requester_profile_id <> target_profile_id)
@@ -1129,6 +1135,10 @@ create table if not exists public.source_connections (
   last_sync_summary text not null default '',
   last_import_item_count integer not null default 0 check (last_import_item_count >= 0),
   last_imported_at timestamptz,
+  allowed_field_keys text[] not null default '{}',
+  retention_expires_at timestamptz,
+  ai_shadow_mode_allowed boolean not null default false,
+  raw_ingestion_allowed boolean not null default false,
   sensitive_ciphertexts jsonb not null default '{}'::jsonb,
   sensitive_encryption_version text not null default '',
   created_at timestamptz not null default timezone('utc', now()),
@@ -1547,8 +1557,45 @@ alter table public.source_connections add column if not exists import_mode text 
 alter table public.source_connections add column if not exists sync_frequency text not null default 'manual';
 alter table public.source_connections add column if not exists last_sync_summary text not null default '';
 alter table public.source_connections add column if not exists last_import_item_count integer not null default 0;
+alter table public.source_connections add column if not exists allowed_field_keys text[] not null default '{}';
+alter table public.source_connections add column if not exists retention_expires_at timestamptz;
+alter table public.source_connections add column if not exists ai_shadow_mode_allowed boolean not null default false;
+alter table public.source_connections add column if not exists raw_ingestion_allowed boolean not null default false;
 alter table public.source_connections add column if not exists sensitive_ciphertexts jsonb not null default '{}'::jsonb;
 alter table public.source_connections add column if not exists sensitive_encryption_version text not null default '';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'source_connections_allowed_field_keys_check'
+  ) then
+    alter table public.source_connections
+      add constraint source_connections_allowed_field_keys_check
+      check (
+        allowed_field_keys <@ array[
+          'cause_priorities',
+          'capability_tags',
+          'offer_ask_terms',
+          'verification_preferences',
+          'availability_context',
+          'safety_constraints'
+        ]::text[]
+      );
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'source_connections_raw_ingestion_disabled_check'
+  ) then
+    alter table public.source_connections
+      add constraint source_connections_raw_ingestion_disabled_check
+      check (raw_ingestion_allowed = false);
+  end if;
+end
+$$;
 
 alter table public.profile_syntheses add column if not exists cause_priorities text[] not null default '{}';
 alter table public.profile_syntheses add column if not exists offer_terms text[] not null default '{}';
@@ -1571,6 +1618,27 @@ alter table public.match_introduction_plans add column if not exists next_action
 alter table public.privacy_grants add column if not exists audience_stage text not null default 'registry';
 alter table public.privacy_grants add column if not exists notes text not null default '';
 alter table public.privacy_grants add column if not exists expires_at timestamptz;
+
+alter table public.match_concierge_requests add column if not exists appeal_status text not null default 'none';
+alter table public.match_concierge_requests add column if not exists appeal_reason text not null default '';
+alter table public.match_concierge_requests add column if not exists appealed_at timestamptz;
+alter table public.match_concierge_requests add column if not exists appeal_resolved_at timestamptz;
+alter table public.match_concierge_requests add column if not exists appeal_resolved_by uuid references public.profiles (id) on delete set null;
+alter table public.match_concierge_requests add column if not exists appeal_resolution_note text not null default '';
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'match_concierge_requests_appeal_status_check'
+  ) then
+    alter table public.match_concierge_requests
+      add constraint match_concierge_requests_appeal_status_check
+      check (appeal_status in ('none', 'requested', 'under_review', 'resolved', 'dismissed'));
+  end if;
+end
+$$;
 
 alter table public.risk_signals add column if not exists metadata jsonb not null default '{}'::jsonb;
 
@@ -1729,6 +1797,7 @@ create index if not exists match_reports_match_status_idx on public.match_report
 create index if not exists match_concierge_requests_status_sla_idx on public.match_concierge_requests (status, sla_due_at asc, created_at desc);
 create index if not exists match_concierge_requests_requester_idx on public.match_concierge_requests (requester_profile_id, updated_at desc);
 create index if not exists match_concierge_requests_target_idx on public.match_concierge_requests (target_profile_id, updated_at desc);
+create index if not exists match_concierge_requests_appeal_status_idx on public.match_concierge_requests (appeal_status, sla_due_at asc, updated_at desc) where appeal_status <> 'none';
 create index if not exists match_concierge_events_request_idx on public.match_concierge_events (request_id, created_at desc);
 create index if not exists network_invites_profile_status_idx on public.network_invites (profile_id, status, created_at desc);
 create index if not exists network_invites_profile_priority_idx on public.network_invites (profile_id, priority desc, updated_at desc);
@@ -1736,6 +1805,8 @@ create index if not exists personal_delegates_status_idx on public.personal_dele
 create index if not exists source_connections_profile_status_idx on public.source_connections (profile_id, access_status, updated_at desc);
 create index if not exists source_connections_profile_import_idx on public.source_connections (profile_id, access_status, sync_frequency, updated_at desc);
 create index if not exists source_connections_sensitive_encryption_idx on public.source_connections (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
+create index if not exists source_connections_retention_expires_idx on public.source_connections (retention_expires_at asc) where retention_expires_at is not null;
+create index if not exists source_connections_ai_shadow_idx on public.source_connections (profile_id, ai_shadow_mode_allowed, updated_at desc);
 create index if not exists profile_syntheses_sensitive_encryption_idx on public.profile_syntheses (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
 create index if not exists helper_strategies_profile_status_idx on public.helper_strategies (profile_id, status, priority asc, updated_at desc);
 create index if not exists helper_runs_profile_created_idx on public.helper_runs (profile_id, created_at desc);

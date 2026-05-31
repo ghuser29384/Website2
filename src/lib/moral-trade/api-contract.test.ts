@@ -46,6 +46,12 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_performance_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_externality_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_ai_governance_health"));
+  assert.ok(profile.routes.some((route) => route.key === "moral_trade_ai_shadow_contract"));
+  assert.ok(
+    profile.routes.some(
+      (route) => route.key === "moral_trade_background_capability_gates_contract",
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "profile_export"));
   assert.ok(profile.routes.some((route) => route.key === "profile_import"));
   assert.ok(profile.routes.some((route) => route.key === "profile_export" && route.rateLimitSurface === "profile_portability"));
@@ -145,6 +151,17 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "performance_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "externality_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "ai_governance_health_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "ai_shadow_contract_response"));
+  assert.ok(
+    profile.schemaDefinitions.some(
+      (schema) => schema.key === "background_capability_gates_contract_response",
+    ),
+  );
+  assert.ok(
+    profile.schemaDefinitions.some(
+      (schema) => schema.key === "background_rls_audit_contract_response",
+    ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "wish_registry_search_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "empty_204_response"));
   assert.ok(

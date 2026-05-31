@@ -29,6 +29,7 @@ import {
   buildPrivacySafeMatchAuditMetadata,
   type MatchExplanationSnapshotPayload,
 } from "@/lib/background-explanations";
+import { normalizeBackgroundConciergeAppealStatus } from "@/lib/background-concierge-appeals";
 import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
 import {
   PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
@@ -46,6 +47,7 @@ import {
   type DisclosureAccessLevel,
   type DisclosureAudienceStage,
 } from "@/lib/background-disclosure";
+import { validateBackgroundSourcePermission } from "@/lib/background-source-permissions";
 import {
   completeBackgroundQueryEvent,
   insertMatchExplanationSnapshots,
@@ -58,9 +60,11 @@ import {
 } from "@/lib/background-query-budget";
 import { getSafeInternalPath } from "@/lib/paths";
 import {
+  ANALYTICS_OPT_OUT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
   buildPrivacySafeFunnelEventRecord,
   getFirstActionHref,
+  isAnalyticsOptedOut,
   normalizeFirstAction,
   normalizeOnboardingGoal,
   normalizeParticipantKind as normalizeCohortParticipantKind,
@@ -768,6 +772,10 @@ async function persistMoralTradeAgreementReviewProtocolProvenance({
 
 async function readAttributionPayload() {
   const cookieStore = await cookies();
+  if (isAnalyticsOptedOut(cookieStore.get(ANALYTICS_OPT_OUT_COOKIE_NAME)?.value)) {
+    return null;
+  }
+
   return parseAttributionCookie(cookieStore.get(ATTRIBUTION_COOKIE_NAME)?.value);
 }
 
@@ -784,6 +792,12 @@ async function recordServerFunnelEvent({
   profileId: string | null;
   supabase: SupabaseServerClient;
 }) {
+  const cookieStore = await cookies();
+
+  if (isAnalyticsOptedOut(cookieStore.get(ANALYTICS_OPT_OUT_COOKIE_NAME)?.value)) {
+    return;
+  }
+
   const attribution = await readAttributionPayload();
   const eventRecord = buildPrivacySafeFunnelEventRecord({
     attribution,
@@ -1699,6 +1713,14 @@ function normalizeConciergeStatus(value: string): NonNullable<MatchConciergeRequ
   }
 
   return "open";
+}
+
+function getConciergeAppealResolutionTimestamp(
+  appealStatus: ReturnType<typeof normalizeBackgroundConciergeAppealStatus>,
+) {
+  return appealStatus === "resolved" || appealStatus === "dismissed"
+    ? new Date().toISOString()
+    : null;
 }
 
 function buildSlaDueAt(hours: number) {
@@ -4734,6 +4756,8 @@ export async function updateMatchConciergeRequestAction(formData: FormData) {
   const admin = await requireAdminViewer(returnTo);
   const supabase = createServiceClient();
   const nextStatus = normalizeConciergeStatus(readRequired(formData, "status"));
+  const appealStatus = normalizeBackgroundConciergeAppealStatus(readOptional(formData, "appeal_status"));
+  const appealResolvedAt = getConciergeAppealResolutionTimestamp(appealStatus);
   const operatorNotes = readOptional(formData, "operator_notes");
   const riskNotes = readOptional(formData, "risk_notes");
   const matchId = readOptional(formData, "match_id") || null;
@@ -4746,6 +4770,10 @@ export async function updateMatchConciergeRequestAction(formData: FormData) {
     match_id: matchId,
     reviewed_by: nextStatus === "open" ? null : admin.authUser.id,
     reviewed_at: reviewedAt,
+    appeal_status: appealStatus,
+    appeal_resolution_note: readOptional(formData, "appeal_resolution_note").slice(0, 2000),
+    appeal_resolved_at: appealResolvedAt,
+    appeal_resolved_by: appealResolvedAt ? admin.authUser.id : null,
   };
 
   const { data: requestRow, error } = await supabase
@@ -4769,6 +4797,7 @@ export async function updateMatchConciergeRequestAction(formData: FormData) {
     event_type: "request_triaged",
     summary: `Operator moved concierge request to ${nextStatus}.`,
     metadata: {
+      appealStatus,
       operatorNotes,
       riskNotes,
       matchId,
@@ -5070,12 +5099,31 @@ export async function saveSourceConnectionAction(formData: FormData) {
   }
 
   const viewer = await requireViewer(returnTo);
+  const provider = normalizeSourceConnectionProvider(readOptional(formData, "provider"));
+  const accessStatus = normalizeSourceAccessStatus(readOptional(formData, "access_status"));
+  const accessScope = readOptional(formData, "access_scope");
+  const consentNotes = readOptional(formData, "consent_notes");
+  const permission = validateBackgroundSourcePermission({
+    accessScope,
+    accessStatus,
+    aiShadowModeAllowed: readBoolean(formData, "ai_shadow_mode_allowed"),
+    allowedFieldKeys: readRepeatedStrings(formData, "allowed_field_keys"),
+    consentNotes,
+    provider,
+    rawIngestionAllowed: readBoolean(formData, "raw_ingestion_allowed"),
+    retentionDays: readOptional(formData, "retention_days"),
+  });
+
+  if (permission.errors.length) {
+    redirectWithMessage(returnTo, "error", permission.errors.join(" "));
+  }
+
   let encryptedSourceConnectionFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
 
   try {
     encryptedSourceConnectionFields = prepareRecordSensitiveTextFields({
-      access_scope: readOptional(formData, "access_scope"),
-      consent_notes: readOptional(formData, "consent_notes"),
+      access_scope: accessScope,
+      consent_notes: consentNotes,
       last_sync_summary: readOptional(formData, "last_sync_summary"),
     });
   } catch (error) {
@@ -5095,10 +5143,10 @@ export async function saveSourceConnectionAction(formData: FormData) {
 
   const payload: SourceConnectionInsert = {
     profile_id: viewer.authUser.id,
-    provider: normalizeSourceConnectionProvider(readOptional(formData, "provider")),
+    provider,
     label,
     url: readOptional(formData, "url"),
-    access_status: normalizeSourceAccessStatus(readOptional(formData, "access_status")),
+    access_status: accessStatus,
     access_scope: encryptedSourceConnectionFields.plaintextFields.access_scope,
     consent_notes: encryptedSourceConnectionFields.plaintextFields.consent_notes,
     import_mode: normalizeSourceImportMode(readOptional(formData, "import_mode")),
@@ -5110,6 +5158,10 @@ export async function saveSourceConnectionAction(formData: FormData) {
       max: 10000,
     }),
     last_imported_at: parseOptionalTimestamp(readOptional(formData, "last_imported_at")),
+    allowed_field_keys: permission.allowedFieldKeys,
+    retention_expires_at: permission.retentionExpiresAt,
+    ai_shadow_mode_allowed: permission.aiShadowModeAllowed,
+    raw_ingestion_allowed: permission.rawIngestionAllowed,
     sensitive_ciphertexts: encryptedSourceConnectionFields.ciphertexts,
     sensitive_encryption_version: encryptedSourceConnectionFields.version,
   };
@@ -5128,7 +5180,7 @@ export async function saveSourceConnectionAction(formData: FormData) {
   redirectWithMessage(
     returnTo,
     "message",
-    "Source connection recorded. No external data is imported automatically.",
+    "Source connection permission recorded. Raw ingestion remains disabled.",
   );
 }
 
