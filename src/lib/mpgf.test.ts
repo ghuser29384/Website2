@@ -92,6 +92,11 @@ import {
 } from "./mpgf/public-goods-kpis";
 import { buildMpgfPublicGoodsOperationsDashboard } from "./mpgf/public-goods-operations";
 import {
+  MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY,
+  buildMpgfPublicGoodsSponsorPoolFlywheel,
+  getMpgfPublicGoodsSponsorPoolFlywheelApi,
+} from "./mpgf/public-goods-sponsor-flywheel";
+import {
   buildMpgfPublicGoodsRefundReconciliationPlan,
   buildMpgfSubscriptionCancellationUpdate,
   canRecordMpgfSponsorPoolInvoice,
@@ -588,6 +593,10 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.match(round.round.sponsorPool.visibleCommitment, /challenge match/i);
   assert.ok(Number(round.round.sponsorPool.perDonorQfCapCents) > 0);
   assert.equal(round.round.sponsorPool.verificationWeightPolicy, "identity_confidence_only_no_moral_reputation");
+  assert.equal(round.round.sponsorPool.flywheelPolicy, "trade_surplus_funded_verified_plural_assurance");
+  assert.equal(round.round.sponsorPool.flywheelPath, `/api/mpgf/sponsor-pools/${demoMpgfMatchPool.id}`);
+  assert.ok(round.round.sponsorPool.flywheelSourceTypes.includes("donation_offset_surplus"));
+  assert.ok(round.round.sponsorPool.flywheelSourceTypes.includes("trade_surplus_tithe"));
   assert.ok(campaigns);
   assert.equal(campaigns.campaigns.length, demoMpgfPublicGoodsCampaigns.length);
   assert.ok(campaigns.campaigns.every((campaign) => campaign.milestoneSchedule.length === 3));
@@ -660,6 +669,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/campaigns/[campaignId]/route.ts", /getMpgfPublicGoodsCampaignApi/],
     ["src/app/api/mpgf/rounds/[roundId]/match-preview/route.ts", /getMpgfPublicGoodsMatchPreviewApi/],
     ["src/app/api/mpgf/rounds/[roundId]/allocations/route.ts", /getMpgfPublicGoodsAllocationReportApi/],
+    ["src/app/api/mpgf/sponsor-pools/[poolId]/route.ts", /getMpgfPublicGoodsSponsorPoolFlywheelApi/],
     ["src/app/api/mpgf/audit/ledger/route.ts", /getMpgfPublicGoodsLedgerApi/],
     ["src/app/api/mpgf/providers/stripe/webhook/route.ts", /webhookCanAuthorizeFinalPayout: false/],
     ["src/app/api/mpgf/contributions/manual-evidence/route.ts", /manualEvidenceFallback: true/],
@@ -744,6 +754,53 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   }
 
   assert.match(mpgfHubPage, new RegExp(`/mpgf/rounds/\\$\\{demoMpgfAssuranceRound\\.id\\}`));
+});
+
+test("MPGF sponsor-pool flywheel aggregates trade surplus without private source refs", () => {
+  const flywheel = buildMpgfPublicGoodsSponsorPoolFlywheel();
+  const api = getMpgfPublicGoodsSponsorPoolFlywheelApi(demoMpgfMatchPool.id);
+  const unknown = getMpgfPublicGoodsSponsorPoolFlywheelApi("unknown-pool");
+  const serialized = JSON.stringify(flywheel);
+  const route = readFileSync("src/app/api/mpgf/sponsor-pools/[poolId]/route.ts", "utf8");
+  const governance = getMpgfPublicGoodsGovernanceApi();
+  const governancePage = readFileSync("src/app/mpgf/governance/page.tsx", "utf8");
+  const migration = readFileSync("supabase/migrations/20260531_mpgf_sponsor_pool_flywheel.sql", "utf8");
+
+  assert.ok(api);
+  assert.equal(unknown, null);
+  assert.equal(flywheel.privacyPolicy, MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY);
+  assert.equal(flywheel.flywheelPolicy, "trade_surplus_funded_verified_plural_assurance");
+  assert.equal(flywheel.custodyMode, "partner_or_provider_held_not_platform_custody");
+  assert.equal(flywheel.availableForRoundCents, demoMpgfMatchPool.budgetCents);
+  assert.equal(flywheel.unfundedSponsorPoolCents, 0);
+  assert.equal(flywheel.sourceBreakdown.find((source) => source.sourceType === "direct_sponsor_deposit")?.availableCents, 100_000);
+  assert.equal(flywheel.sourceBreakdown.find((source) => source.sourceType === "recurring_member_tithe")?.availableCents, 2_500);
+  assert.equal(flywheel.sourceBreakdown.find((source) => source.sourceType === "donation_offset_surplus")?.availableCents, 25_000);
+  assert.equal(flywheel.sourceBreakdown.find((source) => source.sourceType === "trade_surplus_tithe")?.availableCents, 22_500);
+  assert.match(flywheel.calcHash, /^sha256:/);
+  assert.ok(flywheel.entries.every((entry) => entry.sourceRefHash.startsWith("sha256:")));
+  assert.ok(flywheel.entries.every((entry) => entry.custodyMode === "partner_or_provider_held_not_platform_custody"));
+  assert.equal(governance.sponsorPoolFlywheel.apiPath, `/api/mpgf/sponsor-pools/${demoMpgfMatchPool.id}`);
+  assert.equal(governance.sponsorPoolFlywheel.availableForRoundCents, demoMpgfMatchPool.budgetCents);
+  assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(route, /getMpgfPublicGoodsSponsorPoolFlywheelApi/);
+  assert.match(governancePage, /Sponsor-pool flywheel/);
+  assert.match(governancePage, /Trade surplus refills matching capital/);
+  assert.match(governancePage, /Open sponsor-pool flywheel JSON/);
+  assert.match(migration, /mpgf_public_goods_sponsor_pool_deposits/);
+  assert.match(migration, /donation_offset_surplus/);
+  assert.match(migration, /trade_surplus_tithe/);
+  assert.match(migration, /partner_or_provider_held_not_platform_custody/);
+  assert.match(migration, /raw donor, trade, payment, and offset identifiers are not public/);
+
+  for (const forbidden of [
+    "anchor-sponsor-private",
+    "donation-offset-surplus-private",
+    "successful-moral-trade-tithe-private",
+    "demo-sponsor-circle-member",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
 });
 
 test("MPGF public-goods governance publication covers roles, rules, disputes, and no-ranking boundaries", () => {

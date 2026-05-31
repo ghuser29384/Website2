@@ -3,6 +3,7 @@ import {
   demoMpgfMatchPool,
   demoMpgfPublicGoodsCampaigns,
 } from "./data";
+import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
 
 export const MPGF_PUBLIC_GOODS_GOVERNANCE_PRIVACY_POLICY =
   "public_governance_no_private_notes_no_personal_contact";
@@ -91,6 +92,7 @@ export function getMpgfPublicGoodsGovernanceApi() {
     challengeWindowEndsAt: campaign.challengeWindowEndsAt ?? null,
   }));
   const perDonorQfCapCents = Number(demoMpgfMatchPool.restrictionsJson.perDonorQfCapCents ?? 0);
+  const sponsorPoolFlywheel = buildMpgfPublicGoodsSponsorPoolFlywheel();
 
   return {
     ok: true,
@@ -136,6 +138,16 @@ export function getMpgfPublicGoodsGovernanceApi() {
       unmatchedSponsorFundsRule: "roll_forward_to_next_round_or_default_pool_by_published_rule",
       refundPolicyPath: "/mpgf/real-money-terms",
       campaignThresholds,
+    },
+    sponsorPoolFlywheel: {
+      poolId: sponsorPoolFlywheel.poolId,
+      apiPath: `/api/mpgf/sponsor-pools/${sponsorPoolFlywheel.poolId}`,
+      flywheelPolicy: sponsorPoolFlywheel.flywheelPolicy,
+      custodyMode: sponsorPoolFlywheel.custodyMode,
+      availableForRoundCents: sponsorPoolFlywheel.availableForRoundCents,
+      unfundedSponsorPoolCents: sponsorPoolFlywheel.unfundedSponsorPoolCents,
+      sourceBreakdown: sponsorPoolFlywheel.sourceBreakdown,
+      calcHash: sponsorPoolFlywheel.calcHash,
     },
     fundsFlowSeparation: {
       phaseOneCustodyPolicy: "fiscal_sponsor_or_partner_held_sponsor_pool_not_platform_custody",

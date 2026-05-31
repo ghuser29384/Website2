@@ -196,6 +196,58 @@ export default async function MpgfGovernancePage() {
 
       <section className="mpgf-detail-grid">
         <article className="mpgf-panel">
+          <p className="eyebrow">Sponsor-pool flywheel</p>
+          <h2>Trade surplus refills matching capital</h2>
+          <dl className="mpgf-summary-grid">
+            <div>
+              <dt>Policy</dt>
+              <dd>{statusLabel(governance.sponsorPoolFlywheel.flywheelPolicy)}</dd>
+            </div>
+            <div>
+              <dt>Available for round</dt>
+              <dd>{formatUsd(governance.sponsorPoolFlywheel.availableForRoundCents)}</dd>
+            </div>
+            <div>
+              <dt>Unfunded sponsor pool</dt>
+              <dd>{formatUsd(governance.sponsorPoolFlywheel.unfundedSponsorPoolCents)}</dd>
+            </div>
+            <div>
+              <dt>Calculation hash</dt>
+              <dd>{governance.sponsorPoolFlywheel.calcHash.slice(0, 18)}...</dd>
+            </div>
+          </dl>
+          <p>
+            Direct sponsor deposits, recurring member tithes, donation-offset surplus, and
+            successful-trade surplus can refill the sponsor pool before the round allocation
+            formula runs.
+          </p>
+          <Link className="inline-link" href={governance.sponsorPoolFlywheel.apiPath}>
+            Open sponsor-pool flywheel JSON
+          </Link>
+        </article>
+
+        <article className="mpgf-panel">
+          <p className="eyebrow">Source breakdown</p>
+          <h2>Aggregate refill sources only</h2>
+          <div className="mpgf-table" aria-label="MPGF sponsor-pool flywheel source breakdown">
+            <div className="mpgf-table-row mpgf-table-head">
+              <span>Source</span>
+              <span>Available</span>
+              <span>Entries</span>
+            </div>
+            {governance.sponsorPoolFlywheel.sourceBreakdown.map((source) => (
+              <div className="mpgf-table-row" key={source.sourceType}>
+                <span>{statusLabel(source.sourceType)}</span>
+                <span>{formatUsd(source.availableCents)}</span>
+                <span>{source.entryCount}</span>
+              </div>
+            ))}
+          </div>
+        </article>
+      </section>
+
+      <section className="mpgf-detail-grid">
+        <article className="mpgf-panel">
           <p className="eyebrow">Funds-flow separation</p>
           <h2>Keep platform, receipts, custody, and payouts distinct</h2>
           <dl className="mpgf-summary-grid">

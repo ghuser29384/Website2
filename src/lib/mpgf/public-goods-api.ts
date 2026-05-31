@@ -15,6 +15,7 @@ import {
 } from "./mechanism";
 import { buildMpgfPublicGoodsAllocationSourceProofMap } from "./public-goods-allocation-results";
 import { buildMpgfPublicGoodsMilestoneSchedule } from "./public-goods-milestones";
+import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
 import type {
   MpgfPublicGoodsCampaign,
   MpgfPublicGoodsPledge,
@@ -184,6 +185,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
   }
 
   const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
+  const sponsorPoolFlywheel = buildMpgfPublicGoodsSponsorPoolFlywheel();
 
   return {
     ok: true,
@@ -207,6 +209,10 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
         qfBonusBudgetCents: allocation.qfBonusBudgetCents,
         perDonorQfCapCents: demoMpgfMatchPool.restrictionsJson.perDonorQfCapCents,
         verificationWeightPolicy: demoMpgfMatchPool.restrictionsJson.verificationWeightPolicy,
+        flywheelPolicy: sponsorPoolFlywheel.flywheelPolicy,
+        flywheelPath: `/api/mpgf/sponsor-pools/${sponsorPoolFlywheel.poolId}`,
+        flywheelAvailableForRoundCents: sponsorPoolFlywheel.availableForRoundCents,
+        flywheelSourceTypes: sponsorPoolFlywheel.sourceTypes,
       },
       campaignCount: demoMpgfPublicGoodsCampaigns.length,
       verifiedDonorCount: allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
