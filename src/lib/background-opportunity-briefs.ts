@@ -108,7 +108,14 @@ export function buildOpportunityBriefRow({
     match_id: matchId,
     next_step_type: nextStepType,
     profile_id: profileId,
+    redacted_fields: explanation.redactedSurfaces,
     reveal_consequence_notice: BACKGROUND_BRIEF_REVEAL_NOTICE,
+    safe_summary: explanation.summary,
+    shared_counts: {
+      factorCodeCount: explanation.factorCodes.length,
+      redactedSurfaceCount: explanation.redactedSurfaces.length,
+      sharedCauseCount: input.sharedCauses.length,
+    },
     status: "open",
     title,
     expires_at: expiresAt,
@@ -144,7 +151,10 @@ export function serializeOpportunityBriefCard(row: {
   id: string;
   next_step_type: string;
   profile_id: string;
+  redacted_fields?: string[] | null;
   reveal_consequence_notice: string;
+  safe_summary?: string | null;
+  shared_counts?: Record<string, unknown> | null;
   status: string;
   title: string;
   why_text: string;
@@ -156,7 +166,10 @@ export function serializeOpportunityBriefCard(row: {
     id: row.id,
     nextStep: formatOpportunityBriefNextStep(row.next_step_type),
     profileId: row.profile_id,
+    redactedFields: uniqueStrings(row.redacted_fields ?? []),
     revealConsequenceNotice: row.reveal_consequence_notice || BACKGROUND_BRIEF_REVEAL_NOTICE,
+    safeSummary: compactText(row.safe_summary ?? row.why_text, 500),
+    sharedCounts: row.shared_counts ?? {},
     status: row.status,
     title: compactText(row.title, 140),
     why: compactText(row.why_text, 700),

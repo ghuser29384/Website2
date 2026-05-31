@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildBackgroundOpportunityFeedbackRow,
   getOpportunityBriefStatusForFeedback,
+  isBackgroundOpportunityFeedbackPairAllowed,
   normalizeBackgroundOpportunityFeedbackOutcome,
   normalizeBackgroundOpportunityFeedbackReason,
 } from "@/lib/background-opportunity-feedback";
@@ -13,6 +14,27 @@ test("opportunity feedback normalizes to a closed reason and outcome lattice", (
   assert.equal(normalizeBackgroundOpportunityFeedbackReason("raw private reason"), null);
   assert.equal(normalizeBackgroundOpportunityFeedbackOutcome("interested"), "interested");
   assert.equal(normalizeBackgroundOpportunityFeedbackOutcome("opened"), null);
+  assert.equal(
+    isBackgroundOpportunityFeedbackPairAllowed({
+      outcome: "interested",
+      reasonCode: "interested",
+    }),
+    true,
+  );
+  assert.equal(
+    isBackgroundOpportunityFeedbackPairAllowed({
+      outcome: "interested",
+      reasonCode: "bad_timing",
+    }),
+    false,
+  );
+  assert.equal(
+    isBackgroundOpportunityFeedbackPairAllowed({
+      outcome: "dismissed",
+      reasonCode: "interested",
+    }),
+    false,
+  );
 });
 
 test("opportunity feedback maps to safe brief states", () => {

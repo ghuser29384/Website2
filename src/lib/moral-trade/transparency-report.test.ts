@@ -19,6 +19,10 @@ test("transparency report contract publishes required aggregate-only metrics", (
   assert.equal(contract.publicationCadence, "quarterly");
   assert.equal(contract.minimumPublicCount, MORAL_TRADE_TRANSPARENCY_MIN_PUBLIC_COUNT);
   assert.ok(metricKeys.includes("reviewed_match_suggestions"));
+  assert.ok(metricKeys.includes("opportunity_briefs_opened"));
+  assert.ok(metricKeys.includes("opportunity_feedback_submitted"));
+  assert.ok(metricKeys.includes("opportunity_briefs_dismissed"));
+  assert.ok(metricKeys.includes("opportunity_interest_marked"));
   assert.ok(metricKeys.includes("declined_intro_requests"));
   assert.ok(metricKeys.includes("disclosure_grants_created"));
   assert.ok(metricKeys.includes("concierge_appeals_requested"));

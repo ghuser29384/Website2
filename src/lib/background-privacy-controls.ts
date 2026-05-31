@@ -137,7 +137,7 @@ export const BACKGROUND_SELF_SERVE_DELETION_SURFACES = [
   "Broad preview and discoverability surface",
   "Manual source summaries and connector permissions",
   "Saved searches, delegate strategy records, and helper runs",
-  "Match suggestions, consent records, notifications, privacy grants, and access requests",
+  "Match suggestions, opportunity feedback, consent records, notifications, privacy grants, and access requests",
   "Introduction planning records, network invites, bounties, and collectives",
   "Queued background-networking emails",
   "Safety, budget, and operator audit rows retained only as redacted or anonymized records",
@@ -196,7 +196,7 @@ export const BACKGROUND_DATA_INVENTORY = [
     processor: "Supabase Postgres and configured email provider for safe digests.",
     retention: "Operational window plus abuse-prevention audit retention.",
     surface:
-      "background_query_events, match_explanation_snapshots, background_opportunity_briefs, background_intro_packets, background_mute_rules, risk_signals, match_concierge_requests",
+      "background_query_events, match_explanation_snapshots, background_opportunity_briefs, background_match_feedback, background_intro_packets, background_mute_rules, risk_signals, match_concierge_requests",
     use: "Anti-enumeration, opportunity packaging, explanation provenance, safety review, SLA tracking, and concierge appeal review.",
   },
 ] as const;
@@ -280,10 +280,13 @@ export function createDefaultBackgroundNotificationPreferences(profileId: string
 
 export function normalizeBackgroundNotificationPreferenceDraft({
   channel,
+  dailyCap,
   digestCadence,
   enabled,
   eventKind,
   profileId,
+  quietHoursEnd,
+  quietHoursStart,
 }: BackgroundNotificationPreferenceDraft): BackgroundNotificationPreferenceDraft | null {
   if (!EVENT_KIND_VALUES.has(eventKind) || !CHANNEL_VALUES.has(channel)) {
     return null;
@@ -293,10 +296,13 @@ export function normalizeBackgroundNotificationPreferenceDraft({
 
   return {
     channel,
+    dailyCap,
     digestCadence: channel === "web_push" && !enabled ? "none" : normalizedCadence,
     enabled,
     eventKind,
     profileId,
+    quietHoursEnd,
+    quietHoursStart,
   };
 }
 

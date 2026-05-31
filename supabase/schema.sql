@@ -1451,11 +1451,18 @@ create table if not exists public.background_notification_preferences (
   enabled boolean not null default true,
   digest_cadence text not null default 'daily' check (digest_cadence in ('immediate', 'daily', 'weekly', 'none')),
   quiet_until timestamptz,
+  quiet_hours_start smallint check (quiet_hours_start is null or quiet_hours_start between 0 and 23),
+  quiet_hours_end smallint check (quiet_hours_end is null or quiet_hours_end between 0 and 23),
+  daily_cap smallint check (daily_cap is null or daily_cap between 0 and 24),
   last_digest_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   unique (profile_id, event_kind, channel)
 );
+
+alter table public.background_notification_preferences add column if not exists quiet_hours_start smallint;
+alter table public.background_notification_preferences add column if not exists quiet_hours_end smallint;
+alter table public.background_notification_preferences add column if not exists daily_cap smallint;
 
 create table if not exists public.profile_data_right_requests (
   id uuid primary key default gen_random_uuid(),
@@ -5364,15 +5371,58 @@ create table if not exists public.background_opportunity_briefs (
   title text not null default 'Opportunity brief',
   confidence_band text not null default 'Exploratory' check (confidence_band in ('High', 'Moderate', 'Tentative', 'Exploratory')),
   factor_codes text[] not null default '{}',
+  shared_counts jsonb not null default '{}'::jsonb,
+  safe_summary text not null default '',
+  redacted_fields text[] not null default '{}',
   why_text text not null default '',
   next_step_type text not null default 'review_profile' check (next_step_type in ('answer_questions', 'request_intro_packet', 'request_detail', 'review_profile', 'mute_or_dismiss')),
   hidden_fields_notice text not null default 'Exact wishes, private asks, contact details, raw source notes, and sensitive constraints stay hidden until a purpose-bound grant or mutual consent.',
   reveal_consequence_notice text not null default 'Requesting more detail queues a reviewed, field-bound step; it does not send contact details or introduce anyone automatically.',
-  status text not null default 'open' check (status in ('open', 'opened', 'dismissed', 'muted', 'packet_requested', 'expired')),
+  status text not null default 'open' check (status in ('open', 'opened', 'dismissed', 'interested', 'muted', 'packet_requested', 'expired')),
   expires_at timestamptz not null default (timezone('utc', now()) + interval '14 days'),
+  seen_at timestamptz,
+  feedback_reason text constraint background_opportunity_briefs_feedback_reason_check check (
+    feedback_reason is null
+    or feedback_reason in ('not_relevant', 'bad_timing', 'too_vague', 'safety_concern', 'interested')
+  ),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   unique (profile_id, match_id)
+);
+
+alter table public.background_opportunity_briefs add column if not exists shared_counts jsonb not null default '{}'::jsonb;
+alter table public.background_opportunity_briefs add column if not exists safe_summary text not null default '';
+alter table public.background_opportunity_briefs add column if not exists redacted_fields text[] not null default '{}';
+alter table public.background_opportunity_briefs add column if not exists seen_at timestamptz;
+alter table public.background_opportunity_briefs add column if not exists feedback_reason text;
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_feedback_reason_check;
+alter table public.background_opportunity_briefs
+add constraint background_opportunity_briefs_feedback_reason_check
+check (
+  feedback_reason is null
+  or feedback_reason in ('not_relevant', 'bad_timing', 'too_vague', 'safety_concern', 'interested')
+);
+
+create table if not exists public.background_match_feedback (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles (id) on delete cascade,
+  opportunity_brief_id uuid not null references public.background_opportunity_briefs (id) on delete cascade,
+  match_id uuid references public.match_suggestions (id) on delete set null,
+  outcome text not null check (outcome in ('dismissed', 'interested')),
+  reason_code text not null check (reason_code in ('not_relevant', 'bad_timing', 'too_vague', 'safety_concern', 'interested')),
+  constraint background_match_feedback_reason_outcome_check check (
+    (outcome = 'interested' and reason_code = 'interested')
+    or (outcome = 'dismissed' and reason_code <> 'interested')
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (profile_id, opportunity_brief_id)
+);
+
+alter table public.background_match_feedback drop constraint if exists background_match_feedback_reason_outcome_check;
+alter table public.background_match_feedback add constraint background_match_feedback_reason_outcome_check check (
+  (outcome = 'interested' and reason_code = 'interested')
+  or (outcome = 'dismissed' and reason_code <> 'interested')
 );
 
 create table if not exists public.background_intro_packets (
@@ -5500,6 +5550,12 @@ on public.background_opportunity_briefs (profile_id, status, expires_at asc, cre
 create index if not exists background_opportunity_briefs_match_idx
 on public.background_opportunity_briefs (match_id, profile_id);
 
+create index if not exists background_match_feedback_profile_idx
+on public.background_match_feedback (profile_id, outcome, updated_at desc);
+
+create index if not exists background_match_feedback_brief_idx
+on public.background_match_feedback (opportunity_brief_id, profile_id);
+
 create index if not exists background_intro_packets_requester_idx
 on public.background_intro_packets (requester_profile_id, review_state, created_at desc);
 
@@ -5525,6 +5581,11 @@ on public.background_mute_rules (profile_id, status, muted_until asc);
 drop trigger if exists background_opportunity_briefs_set_updated_at on public.background_opportunity_briefs;
 create trigger background_opportunity_briefs_set_updated_at
 before update on public.background_opportunity_briefs
+for each row execute function public.set_updated_at();
+
+drop trigger if exists background_match_feedback_set_updated_at on public.background_match_feedback;
+create trigger background_match_feedback_set_updated_at
+before update on public.background_match_feedback
 for each row execute function public.set_updated_at();
 
 drop trigger if exists background_intro_packets_set_updated_at on public.background_intro_packets;
@@ -5553,6 +5614,7 @@ before update on public.background_mute_rules
 for each row execute function public.set_updated_at();
 
 alter table public.background_opportunity_briefs enable row level security;
+alter table public.background_match_feedback enable row level security;
 alter table public.background_intro_packets enable row level security;
 alter table public.background_grant_receipts enable row level security;
 alter table public.background_source_summaries enable row level security;
@@ -5588,6 +5650,36 @@ on public.background_opportunity_briefs
 for delete
 to authenticated
 using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_match_feedback_select_own" on public.background_match_feedback;
+create policy "background_match_feedback_select_own"
+on public.background_match_feedback
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "background_match_feedback_insert_own" on public.background_match_feedback;
+create policy "background_match_feedback_insert_own"
+on public.background_match_feedback
+for insert
+to authenticated
+with check (
+  profile_id = (select auth.uid())
+  and exists (
+    select 1
+    from public.background_opportunity_briefs
+    where background_opportunity_briefs.id = background_match_feedback.opportunity_brief_id
+      and background_opportunity_briefs.profile_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "background_match_feedback_update_own" on public.background_match_feedback;
+create policy "background_match_feedback_update_own"
+on public.background_match_feedback
+for update
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
 
 drop policy if exists "background_intro_packets_select_relevant" on public.background_intro_packets;
 create policy "background_intro_packets_select_relevant"

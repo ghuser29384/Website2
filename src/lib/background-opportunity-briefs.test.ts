@@ -40,7 +40,10 @@ test("opportunity brief serialization keeps exact private wishes out of broad ca
     id: "brief-1",
     next_step_type: row.next_step_type ?? "review_profile",
     profile_id: row.profile_id,
+    redacted_fields: row.redacted_fields ?? [],
     reveal_consequence_notice: row.reveal_consequence_notice ?? "",
+    safe_summary: row.safe_summary ?? "",
+    shared_counts: row.shared_counts ?? {},
     status: row.status ?? "open",
     title: row.title ?? "",
     why_text: row.why_text ?? "",
@@ -49,6 +52,8 @@ test("opportunity brief serialization keeps exact private wishes out of broad ca
 
   assert.equal(rendered.includes(exactPrivateWish), false);
   assert.match(rendered, /Exact wishes/);
+  assert.ok(serialized.redactedFields.length > 0);
+  assert.equal(serialized.sharedCounts.sharedCauseCount, 1);
   assert.deepEqual(row.factor_codes?.sort(), [
     "cause_overlap",
     "deterministic_scan",

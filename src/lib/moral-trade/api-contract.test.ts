@@ -90,6 +90,30 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
         /send no outreach/i.test(route.fallback),
     ),
   );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_opportunity_brief_list" &&
+        route.path === "/api/background/opportunity-briefs" &&
+        route.auth === "authenticated" &&
+        route.cacheControl === "private_no_store" &&
+        route.rateLimitSurface === "background_opportunity_brief_read" &&
+        /broad-preview opportunity cards/i.test(route.fallback) &&
+        /exact wishes/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_opportunity_feedback_create" &&
+        route.path === "/api/background/opportunity-briefs/:id/feedback" &&
+        route.auth === "authenticated" &&
+        route.cacheControl === "private_no_store" &&
+        route.rateLimitSurface === "background_opportunity_feedback_write" &&
+        /closed reason\/outcome codes/i.test(route.fallback) &&
+        /no outreach is sent/i.test(route.fallback),
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "wish_registry_search"));
   assert.ok(profile.routes.some((route) => route.key === "funnel_events"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_export_response"));
@@ -97,6 +121,9 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_create_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_brief_list_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_feedback_create_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_feedback_create_response"));
   assert.ok(
     profile.schemaDefinitions
       .find((schema) => schema.key === "background_source_summary_create_response")

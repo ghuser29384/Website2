@@ -471,6 +471,30 @@
       "fallback": "Require viewer authentication, concrete purpose, and field-bounded requested details before queueing a reviewed introduction packet; rate-limited requests create no packet and send no outreach."
     },
     {
+      "key": "background_opportunity_brief_list",
+      "method": "GET",
+      "path": "/api/background/opportunity-briefs",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_opportunity_brief_list_response",
+      "rateLimitSurface": "background_opportunity_brief_read",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication and return only viewer-owned broad-preview opportunity cards; rate-limited reads return no private brief data, and exact wishes, private asks, source notes, constraints, and contact details stay out of the response."
+    },
+    {
+      "key": "background_opportunity_feedback_create",
+      "method": "POST",
+      "path": "/api/background/opportunity-briefs/:id/feedback",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_opportunity_feedback_create_request",
+      "responseSchema": "background_opportunity_feedback_create_response",
+      "rateLimitSurface": "background_opportunity_feedback_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication, owner-only brief access, and closed reason/outcome codes before recording feedback; duplicate submissions update the existing feedback row, rate-limited requests create no state change, and no outreach is sent."
+    },
+    {
       "key": "wish_registry_search",
       "method": "GET",
       "path": "/api/wish-registry/search",
@@ -1189,6 +1213,32 @@
         { "key": "introPacketId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned reviewed introduction packet id." },
         { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "reviewed_intro_packet_requested when the packet is queued for review; rate-limited or invalid requests create no packet." },
         { "key": "outreachSent", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; the endpoint queues review and never contacts a counterparty." }
+      ]
+    },
+    {
+      "key": "background_opportunity_brief_list_response",
+      "purpose": "Authenticated broad-preview opportunity brief inbox with redacted summaries and no exact private details.",
+      "fields": [
+        { "key": "briefs", "type": "opportunity_brief_card_array", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned cards with broad factor codes, confidence band, safe summary, shared counts, redacted field labels, status, and next safe step only." },
+        { "key": "privacyNotice", "type": "string", "required": true, "privacy": "public_contract", "description": "States that exact wishes, private asks, source notes, constraints, and contact details remain outside the API response." }
+      ]
+    },
+    {
+      "key": "background_opportunity_feedback_create_request",
+      "purpose": "Authenticated opportunity feedback over closed reason and outcome codes.",
+      "fields": [
+        { "key": "id", "type": "path_uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned opportunity brief id from the route path; cross-profile ids fail closed." },
+        { "key": "reason", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "Closed reason code only: not_relevant, bad_timing, too_vague, safety_concern, or interested. Free-text feedback is not accepted." },
+        { "key": "outcome", "type": "enum", "required": false, "privacy": "private_authenticated", "description": "Closed outcome code: dismissed or interested. Interested outcome requires interested reason; dismissed outcome cannot use interested reason." }
+      ]
+    },
+    {
+      "key": "background_opportunity_feedback_create_response",
+      "purpose": "Private no-store result for owner-only opportunity feedback with no autonomous outreach.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public_contract", "description": "True only after the owner-scoped feedback row and brief status update succeed." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "opportunity_feedback_recorded when feedback is stored; rate-limited or invalid requests create no state change." },
+        { "key": "outreachSent", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; feedback never contacts a counterparty." }
       ]
     },
     {

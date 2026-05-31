@@ -1936,6 +1936,9 @@ export interface Database {
           title: string;
           confidence_band: "High" | "Moderate" | "Tentative" | "Exploratory";
           factor_codes: string[];
+          shared_counts: Record<string, unknown>;
+          safe_summary: string;
+          redacted_fields: string[];
           why_text: string;
           next_step_type:
             | "answer_questions"
@@ -1945,8 +1948,16 @@ export interface Database {
             | "mute_or_dismiss";
           hidden_fields_notice: string;
           reveal_consequence_notice: string;
-          status: "open" | "opened" | "dismissed" | "muted" | "packet_requested" | "expired";
+          status: "open" | "opened" | "dismissed" | "interested" | "muted" | "packet_requested" | "expired";
           expires_at: string;
+          seen_at: string | null;
+          feedback_reason:
+            | "not_relevant"
+            | "bad_timing"
+            | "too_vague"
+            | "safety_concern"
+            | "interested"
+            | null;
           created_at: string;
           updated_at: string;
         };
@@ -1958,6 +1969,9 @@ export interface Database {
           title?: string;
           confidence_band?: "High" | "Moderate" | "Tentative" | "Exploratory";
           factor_codes?: string[];
+          shared_counts?: Record<string, unknown>;
+          safe_summary?: string;
+          redacted_fields?: string[];
           why_text?: string;
           next_step_type?:
             | "answer_questions"
@@ -1967,8 +1981,16 @@ export interface Database {
             | "mute_or_dismiss";
           hidden_fields_notice?: string;
           reveal_consequence_notice?: string;
-          status?: "open" | "opened" | "dismissed" | "muted" | "packet_requested" | "expired";
+          status?: "open" | "opened" | "dismissed" | "interested" | "muted" | "packet_requested" | "expired";
           expires_at?: string;
+          seen_at?: string | null;
+          feedback_reason?:
+            | "not_relevant"
+            | "bad_timing"
+            | "too_vague"
+            | "safety_concern"
+            | "interested"
+            | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1978,6 +2000,9 @@ export interface Database {
           title?: string;
           confidence_band?: "High" | "Moderate" | "Tentative" | "Exploratory";
           factor_codes?: string[];
+          shared_counts?: Record<string, unknown>;
+          safe_summary?: string;
+          redacted_fields?: string[];
           why_text?: string;
           next_step_type?:
             | "answer_questions"
@@ -1987,8 +2012,60 @@ export interface Database {
             | "mute_or_dismiss";
           hidden_fields_notice?: string;
           reveal_consequence_notice?: string;
-          status?: "open" | "opened" | "dismissed" | "muted" | "packet_requested" | "expired";
+          status?: "open" | "opened" | "dismissed" | "interested" | "muted" | "packet_requested" | "expired";
           expires_at?: string;
+          seen_at?: string | null;
+          feedback_reason?:
+            | "not_relevant"
+            | "bad_timing"
+            | "too_vague"
+            | "safety_concern"
+            | "interested"
+            | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_match_feedback: {
+        Row: {
+          id: string;
+          profile_id: string;
+          opportunity_brief_id: string;
+          match_id: string | null;
+          outcome: "dismissed" | "interested";
+          reason_code:
+            | "not_relevant"
+            | "bad_timing"
+            | "too_vague"
+            | "safety_concern"
+            | "interested";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          opportunity_brief_id: string;
+          match_id?: string | null;
+          outcome: "dismissed" | "interested";
+          reason_code:
+            | "not_relevant"
+            | "bad_timing"
+            | "too_vague"
+            | "safety_concern"
+            | "interested";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          match_id?: string | null;
+          outcome?: "dismissed" | "interested";
+          reason_code?:
+            | "not_relevant"
+            | "bad_timing"
+            | "too_vague"
+            | "safety_concern"
+            | "interested";
           updated_at?: string;
         };
         Relationships: [];
@@ -2512,6 +2589,9 @@ export interface Database {
           enabled: boolean;
           digest_cadence: "immediate" | "daily" | "weekly" | "none";
           quiet_until: string | null;
+          quiet_hours_start: number | null;
+          quiet_hours_end: number | null;
+          daily_cap: number | null;
           last_digest_at: string | null;
           created_at: string;
           updated_at: string;
@@ -2530,6 +2610,9 @@ export interface Database {
           enabled?: boolean;
           digest_cadence?: "immediate" | "daily" | "weekly" | "none";
           quiet_until?: string | null;
+          quiet_hours_start?: number | null;
+          quiet_hours_end?: number | null;
+          daily_cap?: number | null;
           last_digest_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -2546,6 +2629,9 @@ export interface Database {
           enabled?: boolean;
           digest_cadence?: "immediate" | "daily" | "weekly" | "none";
           quiet_until?: string | null;
+          quiet_hours_start?: number | null;
+          quiet_hours_end?: number | null;
+          daily_cap?: number | null;
           last_digest_at?: string | null;
           updated_at?: string;
         };

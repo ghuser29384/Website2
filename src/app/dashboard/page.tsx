@@ -1258,6 +1258,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <input name="return_to" type="hidden" value="/dashboard" />
                         <input name="opportunity_brief_id" type="hidden" value={brief.id} />
                         <input name="status" type="hidden" value="dismissed" />
+                        <input name="feedback_outcome" type="hidden" value="dismissed" />
+                        <label className="field compact-field">
+                          <span>Reason</span>
+                          <select name="feedback_reason" defaultValue="not_relevant">
+                            <option value="not_relevant">Not relevant</option>
+                            <option value="bad_timing">Bad timing</option>
+                            <option value="too_vague">Too vague</option>
+                            <option value="safety_concern">Safety concern</option>
+                          </select>
+                        </label>
                         <button className="button button-secondary button-mini" type="submit">
                           Not for me
                         </button>
@@ -1265,7 +1275,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <form action={updateOpportunityBriefStatusAction}>
                         <input name="return_to" type="hidden" value="/dashboard" />
                         <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                        <input name="status" type="hidden" value="interested" />
+                        <input name="feedback_outcome" type="hidden" value="interested" />
+                        <input name="feedback_reason" type="hidden" value="interested" />
+                        <button className="button button-secondary button-mini" type="submit">
+                          Interested
+                        </button>
+                      </form>
+                      <form action={updateOpportunityBriefStatusAction}>
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="opportunity_brief_id" type="hidden" value={brief.id} />
                         <input name="status" type="hidden" value="muted" />
+                        <input name="feedback_outcome" type="hidden" value="dismissed" />
+                        <input name="feedback_reason" type="hidden" value="too_vague" />
                         <input
                           name="factor_code_pattern"
                           type="hidden"

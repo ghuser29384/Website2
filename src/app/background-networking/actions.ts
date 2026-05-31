@@ -17,6 +17,13 @@ import {
 } from "@/lib/background-local-drafts";
 import { getBackgroundTokens } from "@/lib/background-networking";
 import {
+  buildBackgroundOpportunityFeedbackRow,
+  getOpportunityBriefStatusForFeedback,
+  isBackgroundOpportunityFeedbackPairAllowed,
+  normalizeBackgroundOpportunityFeedbackOutcome,
+  normalizeBackgroundOpportunityFeedbackReason,
+} from "@/lib/background-opportunity-feedback";
+import {
   buildIntroPacketRow,
   buildProfileInterviewAnswerRow,
   buildSourceSummaryRows,
@@ -202,7 +209,7 @@ function normalizeCollectiveRetentionDays(value: number): BackgroundCollectiveRe
 }
 
 function normalizeOpportunityBriefStatus(value: string): BackgroundOpportunityBriefStatus | null {
-  if (value === "opened" || value === "dismissed" || value === "muted") {
+  if (value === "opened" || value === "dismissed" || value === "interested" || value === "muted") {
     return value;
   }
 
@@ -217,6 +224,18 @@ export async function updateOpportunityBriefStatusAction(formData: FormData) {
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const briefId = readOptional(formData, "opportunity_brief_id");
   const status = normalizeOpportunityBriefStatus(readOptional(formData, "status"));
+  const feedbackReason =
+    normalizeBackgroundOpportunityFeedbackReason(readOptional(formData, "feedback_reason")) ??
+    (status === "interested" ? "interested" : null);
+  const fallbackFeedbackOutcome =
+    status === "interested"
+      ? "interested"
+      : status === "dismissed" || status === "muted"
+        ? "dismissed"
+        : null;
+  const feedbackOutcome =
+    normalizeBackgroundOpportunityFeedbackOutcome(readOptional(formData, "feedback_outcome")) ??
+    fallbackFeedbackOutcome;
 
   if (!briefId) {
     redirectWithMessage(returnTo, "error", "Opportunity brief ID is required.");
@@ -226,11 +245,22 @@ export async function updateOpportunityBriefStatusAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", "Choose a supported opportunity brief action.");
   }
 
+  if (
+    feedbackOutcome &&
+    feedbackReason &&
+    !isBackgroundOpportunityFeedbackPairAllowed({
+      outcome: feedbackOutcome,
+      reasonCode: feedbackReason,
+    })
+  ) {
+    redirectWithMessage(returnTo, "error", "Choose a supported opportunity feedback reason.");
+  }
+
   const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
   const { data: brief, error: briefError } = await supabase
     .from("background_opportunity_briefs")
-    .select("candidate_profile_id, factor_codes")
+    .select("candidate_profile_id, factor_codes, match_id")
     .eq("id", briefId)
     .eq("profile_id", viewer.authUser.id)
     .maybeSingle();
@@ -239,9 +269,19 @@ export async function updateOpportunityBriefStatusAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", briefError?.message ?? "Opportunity brief was not found.");
   }
 
+  const nextStatus =
+    status === "muted"
+      ? status
+      : feedbackOutcome && feedbackReason
+        ? getOpportunityBriefStatusForFeedback(feedbackOutcome)
+        : status;
   const { error } = await supabase
     .from("background_opportunity_briefs")
-    .update({ status })
+    .update({
+      feedback_reason: feedbackReason,
+      seen_at: new Date().toISOString(),
+      status: nextStatus,
+    })
     .eq("id", briefId)
     .eq("profile_id", viewer.authUser.id);
 
@@ -267,6 +307,23 @@ export async function updateOpportunityBriefStatusAction(formData: FormData) {
 
     if (muteError) {
       redirectWithMessage(returnTo, "error", muteError.message);
+    }
+  }
+
+  if (feedbackOutcome && feedbackReason) {
+    const { error: feedbackError } = await supabase.from("background_match_feedback").upsert(
+      buildBackgroundOpportunityFeedbackRow({
+        matchId: brief.match_id,
+        opportunityBriefId: briefId,
+        outcome: feedbackOutcome,
+        profileId: viewer.authUser.id,
+        reasonCode: feedbackReason,
+      }),
+      { onConflict: "profile_id,opportunity_brief_id" },
+    );
+
+    if (feedbackError) {
+      redirectWithMessage(returnTo, "error", feedbackError.message);
     }
   }
 
@@ -1122,6 +1179,11 @@ export async function deleteBackgroundNetworkingDataAction(formData: FormData) {
     failures,
     "background query events",
     supabase.from("background_query_events").update({ profile_id: null }).eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "opportunity feedback",
+    supabase.from("background_match_feedback").delete().eq("profile_id", profileId),
   );
   await collectMutationResult(
     failures,

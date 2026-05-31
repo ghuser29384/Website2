@@ -42,6 +42,18 @@ export function getOpportunityBriefStatusForFeedback(
   return outcome === "interested" ? "interested" : "dismissed";
 }
 
+export function isBackgroundOpportunityFeedbackPairAllowed({
+  outcome,
+  reasonCode,
+}: {
+  outcome: BackgroundOpportunityFeedbackOutcome;
+  reasonCode: BackgroundOpportunityFeedbackReason;
+}) {
+  return outcome === "interested"
+    ? reasonCode === "interested"
+    : reasonCode !== "interested";
+}
+
 export function buildBackgroundOpportunityFeedbackRow({
   matchId = null,
   opportunityBriefId,

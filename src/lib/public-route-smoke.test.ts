@@ -769,10 +769,19 @@ test("background source connector permissions stay field-limited and raw-ingesti
   const backgroundActions = readRepoFile("src/app/background-networking/actions.ts");
   const sourceSummariesRoute = readRepoFile("src/app/api/background/source-summaries/route.ts");
   const introPacketsRoute = readRepoFile("src/app/api/background/intro-packets/route.ts");
+  const opportunityBriefsRoute = readRepoFile("src/app/api/background/opportunity-briefs/route.ts");
+  const opportunityFeedbackRoute = readRepoFile(
+    "src/app/api/background/opportunity-briefs/[id]/feedback/route.ts",
+  );
   const backgroundNetworkingSource = readRepoFile("src/lib/background-networking.ts");
   const backgroundAiShadowSource = readRepoFile("src/lib/background-ai-shadow.ts");
   const backgroundCapabilityGateSource = readRepoFile("src/lib/background-capability-gates.ts");
   const backgroundRlsAuditSource = readRepoFile("src/lib/background-rls-audit.ts");
+  const backgroundNotificationPolicySource = readRepoFile(
+    "src/lib/background-notification-policy.ts",
+  );
+  const backgroundNotificationsSource = readRepoFile("src/lib/background-notifications.ts");
+  const opportunityFeedbackSource = readRepoFile("src/lib/background-opportunity-feedback.ts");
   const apiRateLimitSource = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const legacyActions = readRepoFile("src/app/actions.ts");
@@ -820,10 +829,26 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(introPacketsRoute, /background_intro_packet_write/);
   assert.match(introPacketsRoute, /buildMoralTradeApiRateLimitResponse/);
   assert.match(introPacketsRoute, /outreachSent: false/);
+  assert.match(opportunityBriefsRoute, /background_opportunity_brief_read/);
+  assert.match(opportunityBriefsRoute, /serializeOpportunityBriefCard/);
+  assert.match(opportunityBriefsRoute, /Exact wishes, private asks, source notes, constraints, and contact details/);
+  assert.match(opportunityFeedbackRoute, /background_opportunity_feedback_write/);
+  assert.match(opportunityFeedbackRoute, /isBackgroundOpportunityFeedbackPairAllowed/);
+  assert.match(opportunityFeedbackRoute, /outreachSent: false/);
+  assert.match(opportunityFeedbackSource, /BACKGROUND_OPPORTUNITY_FEEDBACK_REASONS/);
+  assert.match(opportunityFeedbackSource, /isBackgroundOpportunityFeedbackPairAllowed/);
+  assert.match(backgroundNotificationPolicySource, /BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS/);
+  assert.match(backgroundNotificationPolicySource, /dailyCap/);
+  assert.match(backgroundNotificationPolicySource, /quietHoursStart/);
+  assert.match(backgroundNotificationsSource, /shouldSendBackgroundNotificationImmediately/);
   assert.match(apiRateLimitSource, /background_source_summary_write: \{ limit: 12/);
   assert.match(apiRateLimitSource, /background_intro_packet_write: \{ limit: 12/);
+  assert.match(apiRateLimitSource, /background_opportunity_brief_read: \{ limit: 60/);
+  assert.match(apiRateLimitSource, /background_opportunity_feedback_write: \{ limit: 30/);
   assert.match(apiContractProfile, /background_source_summary_create/);
   assert.match(apiContractProfile, /background_intro_packet_create/);
+  assert.match(apiContractProfile, /background_opportunity_brief_list/);
+  assert.match(apiContractProfile, /background_opportunity_feedback_create/);
   assert.match(backgroundNetworkingSource, /hasActiveBackgroundSourcePermission/);
   assert.match(backgroundNetworkingSource, /hasActiveProfileSourcePermission/);
   assert.match(backgroundNetworkingSource, /activeProfileSources/);
@@ -846,6 +871,7 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(capabilityGateRoute, /expansionReady/);
   assert.match(backgroundRlsAuditSource, /validateBackgroundRlsAuditSchema/);
   assert.match(backgroundRlsAuditSource, /match_audit_events/);
+  assert.match(backgroundRlsAuditSource, /background_match_feedback/);
   assert.match(backgroundRlsAuditSource, /sensitiveStorageRequirements/);
   assert.match(backgroundRlsAuditSource, /anonymous-policy-not-allowed/);
   assert.match(rlsAuditContractRoute, /getBackgroundRlsAuditContract/);
@@ -859,6 +885,8 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(schemaSource, /profile_sources_retention_expires_idx/);
   assert.match(schemaSource, /source_connections_allowed_field_keys_check/);
   assert.match(schemaSource, /source_connections_raw_ingestion_disabled_check/);
+  assert.match(schemaSource, /background_match_feedback/);
+  assert.match(schemaSource, /background_opportunity_briefs_feedback_reason_check/);
   assert.match(migrationSource, /source_connections_allowed_field_keys_check/);
   assert.match(migrationSource, /source_connections_raw_ingestion_disabled_check/);
 });
@@ -1686,7 +1714,7 @@ test("public guidance describes verification pipelines without custody overclaim
 
   assert.match(donationOffsetsPage, /Perverse-incentive screening/);
   assert.match(donationOffsetsPage, /No custody \/ no escrow \/ no tax advice/);
-  assert.match(mpfgPage, /Manual evidence starts review/);
+  assert.match(mpfgPage, /Contribution intents start with identity and conditional authorization/);
   assert.match(mpfgPage, /Coordinate around moral public goods/);
   assert.match(priorityFundPage, /10% of verified donations plus 10% of verified member-to-member/);
   assert.match(priorityFundPage, /top 10% of karma/);

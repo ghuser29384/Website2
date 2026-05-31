@@ -69,6 +69,10 @@ type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
 const REQUIRED_METRIC_KEYS = [
   "reviewed_match_suggestions",
   "opportunity_briefs_delivered",
+  "opportunity_briefs_opened",
+  "opportunity_feedback_submitted",
+  "opportunity_briefs_dismissed",
+  "opportunity_interest_marked",
   "intro_packets_created",
   "declined_intro_requests",
   "blocked_safety_records",
@@ -103,6 +107,34 @@ const METRIC_DEFINITIONS: MoralTradeTransparencyMetricDefinition[] = [
     kind: "count",
     label: "Opportunity briefs delivered",
     sourceTables: ["background_opportunity_briefs"],
+  },
+  {
+    description: "Opportunity briefs marked seen during the report period.",
+    key: "opportunity_briefs_opened",
+    kind: "count",
+    label: "Opportunity briefs opened",
+    sourceTables: ["background_opportunity_briefs"],
+  },
+  {
+    description: "Closed-code relevance feedback updates recorded during the report period.",
+    key: "opportunity_feedback_submitted",
+    kind: "count",
+    label: "Opportunity feedback submitted",
+    sourceTables: ["background_match_feedback"],
+  },
+  {
+    description: "Opportunity feedback rows marked dismissed during the report period.",
+    key: "opportunity_briefs_dismissed",
+    kind: "count",
+    label: "Opportunity briefs dismissed",
+    sourceTables: ["background_match_feedback"],
+  },
+  {
+    description: "Opportunity feedback rows marked interested during the report period.",
+    key: "opportunity_interest_marked",
+    kind: "count",
+    label: "Opportunity interest marks",
+    sourceTables: ["background_match_feedback"],
   },
   {
     description: "Reviewed introduction packets requested during the report period.",
@@ -500,6 +532,10 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
     reportsSubmitted,
     appealsRequested,
     opportunityBriefs,
+    opportunityBriefOpens,
+    opportunityFeedback,
+    opportunityDismissals,
+    opportunityInterest,
     introPackets,
     evidenceReviewed,
     unresolvedDisputes,
@@ -555,6 +591,27 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
       supabase,
     }),
     safeCount({
+      apply: (query) =>
+        periodFilter(period, "seen_at")(query).not("seen_at", "is", null),
+      label: "background_opportunity_briefs",
+      supabase,
+    }),
+    safeCount({
+      apply: periodFilter(period, "updated_at"),
+      label: "background_match_feedback",
+      supabase,
+    }),
+    safeCount({
+      apply: (query) => periodFilter(period, "updated_at")(query).eq("outcome", "dismissed"),
+      label: "background_match_feedback",
+      supabase,
+    }),
+    safeCount({
+      apply: (query) => periodFilter(period, "updated_at")(query).eq("outcome", "interested"),
+      label: "background_match_feedback",
+      supabase,
+    }),
+    safeCount({
       apply: periodFilter(period),
       label: "background_intro_packets",
       supabase,
@@ -591,6 +648,10 @@ export async function loadMoralTradeTransparencyReportSnapshot(now = new Date())
     metricInputs: [
       { key: "reviewed_match_suggestions", value: reviewedMatches },
       { key: "opportunity_briefs_delivered", value: opportunityBriefs },
+      { key: "opportunity_briefs_opened", value: opportunityBriefOpens },
+      { key: "opportunity_feedback_submitted", value: opportunityFeedback },
+      { key: "opportunity_briefs_dismissed", value: opportunityDismissals },
+      { key: "opportunity_interest_marked", value: opportunityInterest },
       { key: "intro_packets_created", value: introPackets },
       { key: "declined_intro_requests", value: declinedIntros },
       {

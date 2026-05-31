@@ -311,6 +311,23 @@ const TABLE_REQUIREMENTS: BackgroundRlsTableRequirement[] = [
     disallowAnonPolicies: true,
     minimumPolicyCount: 3,
     rationale:
+      "Opportunity feedback records private relevance judgments and must stay owner-scoped.",
+    requiredFragments: [
+      "profile_id = (select auth.uid())",
+      "background_opportunity_briefs.profile_id = (select auth.uid())",
+    ],
+    requiredPolicies: [
+      "background_match_feedback_select_own",
+      "background_match_feedback_insert_own",
+      "background_match_feedback_update_own",
+    ],
+    table: "background_match_feedback",
+  },
+  {
+    category: "participant_match",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 3,
+    rationale:
       "Intro packets are visible only to requester and counterparty before operator review.",
     requiredFragments: [
       "requester_profile_id = (select auth.uid())",

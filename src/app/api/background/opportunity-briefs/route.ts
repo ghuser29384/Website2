@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { serializeOpportunityBriefCard } from "@/lib/background-opportunity-briefs";
+import {
+  buildMoralTradeApiRateLimitResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -14,7 +18,20 @@ function privateJson(body: Record<string, unknown>, status = 200) {
   });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const rateLimit = takeMoralTradeApiRateLimitSlot(
+    request,
+    "background_opportunity_brief_read",
+  );
+
+  if (rateLimit.limited) {
+    return buildMoralTradeApiRateLimitResponse(
+      rateLimit,
+      "Rate-limited opportunity brief reads return no private brief data until the window resets.",
+      "private, no-store",
+    );
+  }
+
   if (!hasSupabaseEnv()) {
     return privateJson({ error: "Supabase is not configured." }, 503);
   }
