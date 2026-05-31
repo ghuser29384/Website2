@@ -397,13 +397,55 @@ test("MPGF assurance matching allocates sponsor match and capped identity-aware 
 test("MPGF assurance QF collapses duplicate identities and expires missed thresholds", () => {
   const animalWelfare = demoMpgfPublicGoodsCampaigns.find((campaign) => campaign.id === "campaign-animal-welfare-transition");
   const knowledge = demoMpgfPublicGoodsCampaigns.find((campaign) => campaign.id === "campaign-public-interest-knowledge");
+  const globalHealth = demoMpgfPublicGoodsCampaigns.find((campaign) => campaign.id === "campaign-global-health-basic-needs");
 
   assert.ok(animalWelfare);
   assert.ok(knowledge);
+  assert.ok(globalHealth);
 
   const animalStatus = getMpgfCampaignAssuranceStatus(animalWelfare);
   const knowledgeStatus = getMpgfCampaignAssuranceStatus(knowledge);
   const animalPledges = demoMpgfAssurancePledges.filter((pledge) => pledge.campaignId === animalWelfare.id);
+  const splitPaymentIntentPledges = [
+    {
+      ...demoMpgfAssurancePledges[0]!,
+      id: "pledge-split-same-donor-a",
+      userId: "same-donor",
+      amountCents: 8_000,
+      paymentIntentRef: "pi_split_a",
+    },
+    {
+      ...demoMpgfAssurancePledges[0]!,
+      id: "pledge-split-same-donor-b",
+      userId: "same-donor",
+      amountCents: 8_000,
+      paymentIntentRef: "pi_split_b",
+    },
+    {
+      ...demoMpgfAssurancePledges[1]!,
+      id: "pledge-split-other-donor",
+      userId: "other-donor",
+      amountCents: 8_000,
+      paymentIntentRef: "pi_split_c",
+    },
+  ];
+  const splitStatus = getMpgfCampaignAssuranceStatus(globalHealth, splitPaymentIntentPledges);
+  const splitQfScore = computeMpgfCampaignQfScore(globalHealth, splitPaymentIntentPledges, 10_000);
+  const mergedDonorScore = computeMpgfVerifiedQfRawScore(
+    [
+      { donorId: "same-donor", grossCents: 16_000, verificationWeight: 1 },
+      { donorId: "other-donor", grossCents: 8_000, verificationWeight: 1 },
+    ],
+    10_000,
+  );
+  const rawPaymentObjectScore = computeMpgfVerifiedQfRawScore(
+    [
+      { donorId: "payment-a", grossCents: 8_000, verificationWeight: 1 },
+      { donorId: "payment-b", grossCents: 8_000, verificationWeight: 1 },
+      { donorId: "payment-c", grossCents: 8_000, verificationWeight: 1 },
+    ],
+    10_000,
+  );
   const animalQfScore = computeMpgfCampaignQfScore(animalWelfare);
   const exactTwoDonorScore = computeMpgfVerifiedQfRawScore(
     [
@@ -416,11 +458,15 @@ test("MPGF assurance QF collapses duplicate identities and expires missed thresh
   assert.equal(animalPledges.length, 4);
   assert.equal(animalStatus.verifiedSupporterCount, 3);
   assert.equal(animalStatus.excludedPledgeCount, 1);
+  assert.equal(splitStatus.verifiedSupporterCount, 2);
+  assert.equal(splitQfScore, mergedDonorScore);
+  assert.ok(splitQfScore < rawPaymentObjectScore);
   assert.equal(knowledgeStatus.status, "expired");
   assert.ok(animalQfScore > animalStatus.directEligibleCents);
   assert.equal(exactTwoDonorScore, 20_000);
   assert.equal(countMpgfQfContributionCents(25_000, 10_000), 10_000);
   assert.equal(computeMpgfVerifiedQfRawScore([{ donorId: "solo", grossCents: 25_000, verificationWeight: 1 }], 10_000), 0);
+  assert.equal(computeMpgfVerifiedQfRawScore([{ donorId: "unverified", grossCents: 10_000, verificationWeight: 0 }], 10_000), 0);
   assert.equal(mpgfVerificationWeightFromHumanScoreBps(8_000), 1);
   assert.equal(mpgfVerificationWeightFromHumanScoreBps(5_000), 0.5);
   assert.equal(mpgfVerificationWeightFromHumanScoreBps(4_999), 0);
@@ -448,6 +494,19 @@ test("MPGF assurance match budget scales down deterministically when raw base ma
   assert.equal(constrained.baseMatchAllocatedCents, 30_000);
   assert.equal(constrained.qfBonusAllocatedCents, 0);
   assert.ok(constrained.lines.every((line) => line.baseMatchCents <= line.directEligibleCents));
+
+  const blocked = allocateMpgfAssuranceRound({
+    campaigns: [{ ...globalHealth, reviewStatus: "blocked" }],
+    pledges: demoMpgfAssurancePledges,
+    round: demoMpgfAssuranceRound,
+    matchPool: demoMpgfMatchPool,
+  });
+  const blockedLine = blocked.lines[0];
+
+  assert.ok(blockedLine);
+  assert.equal(blockedLine.status, "blocked");
+  assert.equal(blockedLine.baseMatchCents, 0);
+  assert.equal(blockedLine.qfBonusCents, 0);
 });
 
 test("MPGF assurance output preserves the no-custody external-handoff posture", () => {
@@ -1024,6 +1083,11 @@ test("MPGF real-money subscription cancellation stops future sponsor-pool increm
   assert.equal(canRecordMpgfSponsorPoolInvoice(cancelledCommitment), false);
   assert.equal(canRecordMpgfSponsorPoolInvoice(pendingProviderCommitment), false);
   assert.equal(buildMpgfSubscriptionCancellationUpdate({ id: "sub_active", status: "active" }), null);
+  assert.match(realMoney, /checkout\.session\.expired/);
+  assert.match(realMoney, /status === "cancelled" \? "cancelled" : "failed"/);
+  assert.match(realMoney, /onConflict: "provider,provider_event_id"/);
+  assert.match(realMoney, /already_processed/);
+  assert.match(realMoney, /onConflict: "payment_intent_id"/);
   assert.match(realMoney, /customer\.subscription\.deleted/);
   assert.match(realMoney, /customer\.subscription\.updated/);
   assert.match(realMoney, /recordMpgfSubscriptionCancellation/);
