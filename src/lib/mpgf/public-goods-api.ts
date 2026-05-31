@@ -14,6 +14,7 @@ import {
   mpgfVerificationWeightFromHumanScoreBps,
 } from "./mechanism";
 import { buildMpgfPublicGoodsAllocationSourceProofMap } from "./public-goods-allocation-results";
+import { getMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
 import { buildMpgfPublicGoodsMilestoneSchedule } from "./public-goods-milestones";
 import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
 import type {
@@ -186,6 +187,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
 
   const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
   const sponsorPoolFlywheel = buildMpgfPublicGoodsSponsorPoolFlywheel();
+  const contributionFlow = getMpgfPublicGoodsContributionFlowApi(roundId);
 
   return {
     ok: true,
@@ -214,6 +216,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
         flywheelAvailableForRoundCents: sponsorPoolFlywheel.availableForRoundCents,
         flywheelSourceTypes: sponsorPoolFlywheel.sourceTypes,
       },
+      contributionFlow,
       campaignCount: demoMpgfPublicGoodsCampaigns.length,
       verifiedDonorCount: allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
       calcHash: publicCalcHash(allocation.lines.map((line) => [line.campaignId, line.qfScore, line.totalPayoutCents])),

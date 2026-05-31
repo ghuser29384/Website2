@@ -56,7 +56,7 @@ export default async function MpgfPage() {
             View public round
           </Link>
           <Link className="button button-primary" href="/mpgf/contribute">
-            Submit manual evidence
+            Start conditional contribution
           </Link>
           <Link className="button button-secondary" href="/mpgf/pools">
             Review candidate pools
@@ -66,7 +66,7 @@ export default async function MpgfPage() {
           </Link>
         </>
       }
-      description="The Public Goods Fund is the pilot's main test of moral-public-goods coordination: threshold commitments, external-payment evidence, dissent notes, and reviewer verification for goods many moral views can value."
+      description="The Public Goods Fund is the pilot's main test of moral-public-goods coordination: verified contribution intents, conditional payment authorization, sponsor matching, dissent notes, and reviewer verification for goods many moral views can value."
       eyebrow="Public Goods Fund"
       title="Coordinate around moral public goods."
       realMoneyReadiness={realMoneyReadiness}
@@ -101,8 +101,12 @@ export default async function MpgfPage() {
             <p>{MPGF_COPY.moralPublicGoods}</p>
           </article>
           <article className="panel concept-card">
-            <h3>Evidence before counting</h3>
-            <p>{MPGF_COPY.manualExternalPaymentEvidence}</p>
+            <h3>Identity and authorization before counting</h3>
+            <p>
+              The primary flow records a pledge intent, verifies identity, authorizes payment
+              conditionally, and falls back to manual evidence only when provider integration is
+              unavailable.
+            </p>
           </article>
           <article className="panel concept-card">
             <h3>Legal posture</h3>
@@ -277,20 +281,20 @@ export default async function MpgfPage() {
       <section className="section section-subtle" id="evidence-review">
         <div className="section-head">
           <p className="eyebrow">Evidence and payment review path</p>
-          <h2>Manual evidence starts review; it does not move or certify money by itself</h2>
+          <h2>Contribution intents start with identity and conditional authorization</h2>
           <p>
-            Signed-in participants can record external-payment evidence for MPGF review. A record
-            is counted only after review accepts the destination, reference, amount, evidence
-            standard, and any provider event that applies.
+            Signed-in participants can create a pledge intent, verify identity, and authorize a
+            provider-managed payment that captures only after threshold, review, and challenge gates.
+            Manual evidence remains available when provider integrations are unavailable.
           </p>
         </div>
 
         <div className="concept-grid">
           <article className="panel concept-card">
-            <h3>Manual evidence</h3>
+            <h3>Pledge intent</h3>
             <p>
-              Participants submit an external destination, amount, date, reference, and evidence
-              note. Until review accepts it, the contribution remains a pending claim.
+              Participants choose a campaign, amount, visibility setting, and fallback rule before
+              any contribution can count.
             </p>
           </article>
           <article className="panel concept-card">
@@ -304,8 +308,8 @@ export default async function MpgfPage() {
           <article className="panel concept-card">
             <h3>Participant controls</h3>
             <p>
-              Signed-out visitors can inspect the workflow, but manual evidence submission and
-              persisted contribution records are available only after sign-in.
+              Signed-out visitors can inspect the workflow, but contribution intents, identity
+              checks, payment authorization, and manual evidence records require sign-in.
             </p>
           </article>
         </div>
@@ -314,32 +318,33 @@ export default async function MpgfPage() {
       <section className="section section-white" id="participation">
         <div className="section-head">
           <p className="eyebrow">How participation works</p>
-          <h2>Pay externally, submit evidence, then wait for review</h2>
+          <h2>Verify identity, authorize conditionally, then wait for review</h2>
           <p>
             The public hub explains the workflow without embedding the full submission console.
-            Signed-in participants use the dedicated contribution page to record evidence.
+            Signed-in participants use the dedicated contribution page to create contribution
+            intents or submit manual evidence when provider authorization is unavailable.
           </p>
         </div>
         <div className="step-card-grid">
           <article className="panel step-card">
             <span className="step-index">01</span>
-            <h3>Pay through an approved external destination</h3>
-            <p>Use the external destination named by the pilot or by the candidate pool.</p>
+            <h3>Create a pledge intent</h3>
+            <p>Select the campaign, amount, visibility preference, and manual fallback rule.</p>
           </article>
           <article className="panel step-card">
             <span className="step-index">02</span>
-            <h3>Submit receipt evidence</h3>
-            <p>Record the amount, reference, payment date, destination, and supporting evidence.</p>
+            <h3>Verify identity and authorize payment</h3>
+            <p>Identity checks and conditional provider authorization happen before threshold counting.</p>
           </article>
           <article className="panel step-card">
             <span className="step-index">03</span>
-            <h3>Reviewers mark it verified or unresolved</h3>
-            <p>Evidence counts only after review accepts it; unresolved records remain pending.</p>
+            <h3>Reviewers count it only after gates clear</h3>
+            <p>Threshold, review, provider event, and challenge gates must pass before capture or counting.</p>
           </article>
         </div>
         <div className="hero-actions">
           <Link className="button button-primary" href="/mpgf/contribute">
-            Submit manual evidence
+            Start conditional contribution
           </Link>
           <Link className="button button-secondary" href="/mpgf/account/contributions">
             View contribution state

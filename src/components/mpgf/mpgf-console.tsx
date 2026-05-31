@@ -630,12 +630,12 @@ export function MpgfConsole({
       {activeTab === "contribute" ? (
         <div className="mpgf-workflow-grid">
           <section className="mpgf-panel mpgf-panel-primary">
-            <p className="eyebrow">Verified assurance pledge</p>
-            <h2>Your pledge only happens if enough verified people join</h2>
+            <p className="eyebrow">Contribution intent</p>
+            <h2>Verify identity, then authorize conditionally</h2>
             <p>
               Choose a campaign, amount, visibility setting, and capture mode. Public-goods
-              pledges are conditional commitments: they count only after supporter, identity,
-              threshold, review, and evidence gates pass.
+              contribution intents count only after supporter, identity, threshold, review, provider
+              event, and challenge gates pass; manual evidence remains the fallback path.
             </p>
             <div className="mpgf-form-grid">
               <label>
@@ -742,7 +742,7 @@ export function MpgfConsole({
                 type="button"
                 onClick={recordPublicGoodsAssurancePledge}
               >
-                {viewerPresent ? "Save assurance pledge" : "Record demo assurance pledge"}
+                {viewerPresent ? "Create contribution intent" : "Record demo contribution intent"}
               </button>
               <Link className="button button-secondary" href="/mpgf/pools">
                 Compare campaigns

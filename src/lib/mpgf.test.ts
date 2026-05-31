@@ -92,6 +92,15 @@ import {
 } from "./mpgf/public-goods-kpis";
 import { buildMpgfPublicGoodsOperationsDashboard } from "./mpgf/public-goods-operations";
 import {
+  MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW,
+  MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY,
+  authorizeMpgfPublicGoodsPledgeIntentPayment,
+  createMpgfPublicGoodsPledgeIntent,
+  getMpgfPublicGoodsContributionFlowApi,
+  recordMpgfPublicGoodsProviderPaymentEvent,
+  verifyMpgfPublicGoodsPledgeIntentIdentity,
+} from "./mpgf/public-goods-contribution-intents";
+import {
   MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY,
   buildMpgfPublicGoodsSponsorPoolFlywheel,
   getMpgfPublicGoodsSponsorPoolFlywheelApi,
@@ -590,6 +599,10 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(rounds.rounds.length, 1);
   assert.ok(round);
   assert.equal(round.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
+  assert.equal(round.round.contributionFlow?.primaryFlow, MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW);
+  assert.equal(round.round.contributionFlow?.pledgeIntentPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/pledge-intents`);
+  assert.equal(round.round.contributionFlow?.manualEvidenceFallbackPath, "/api/mpgf/evidence/manual");
+  assert.ok(round.round.contributionFlow?.stateObjects.includes("provider_payment_event"));
   assert.match(round.round.sponsorPool.visibleCommitment, /challenge match/i);
   assert.ok(Number(round.round.sponsorPool.perDonorQfCapCents) > 0);
   assert.equal(round.round.sponsorPool.verificationWeightPolicy, "identity_confidence_only_no_moral_reputation");
@@ -669,6 +682,11 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/campaigns/[campaignId]/route.ts", /getMpgfPublicGoodsCampaignApi/],
     ["src/app/api/mpgf/rounds/[roundId]/match-preview/route.ts", /getMpgfPublicGoodsMatchPreviewApi/],
     ["src/app/api/mpgf/rounds/[roundId]/allocations/route.ts", /getMpgfPublicGoodsAllocationReportApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/pledge-intents/route.ts", /createMpgfPublicGoodsPledgeIntent/],
+    ["src/app/api/mpgf/pledge-intents/[intentId]/verify-identity/route.ts", /verifyMpgfPublicGoodsPledgeIntentIdentity/],
+    ["src/app/api/mpgf/pledge-intents/[intentId]/authorize-payment/route.ts", /authorizeMpgfPublicGoodsPledgeIntentPayment/],
+    ["src/app/api/mpgf/provider-events/webhook/route.ts", /recordMpgfPublicGoodsProviderPaymentEvent/],
+    ["src/app/api/mpgf/evidence/manual/route.ts", /manual-evidence\/route/],
     ["src/app/api/mpgf/sponsor-pools/[poolId]/route.ts", /getMpgfPublicGoodsSponsorPoolFlywheelApi/],
     ["src/app/api/mpgf/audit/ledger/route.ts", /getMpgfPublicGoodsLedgerApi/],
     ["src/app/api/mpgf/providers/stripe/webhook/route.ts", /webhookCanAuthorizeFinalPayout: false/],
@@ -754,6 +772,104 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   }
 
   assert.match(mpgfHubPage, new RegExp(`/mpgf/rounds/\\$\\{demoMpgfAssuranceRound\\.id\\}`));
+  assert.match(mpgfHubPage, /Start conditional contribution/);
+  assert.match(mpgfHubPage, /Verify identity, authorize conditionally, then wait for review/);
+});
+
+test("MPGF contribution intents verify identity before conditional payment authorization", () => {
+  const contributionFlow = getMpgfPublicGoodsContributionFlowApi(demoMpgfAssuranceRound.id);
+  const unknownFlow = getMpgfPublicGoodsContributionFlowApi("unknown-round");
+  const intent = createMpgfPublicGoodsPledgeIntent({
+    campaignId: demoMpgfPublicGoodsCampaigns[0]?.id ?? "",
+    userId: "demo-contributor-private-user",
+    amountCents: 12_500,
+    idempotencyKey: "private-idempotency-key-001",
+  });
+  const verified = verifyMpgfPublicGoodsPledgeIntentIdentity(intent, {
+    userId: "demo-contributor-private-user",
+    provider: "external_proof_of_personhood",
+    humanScoreBps: 9_200,
+    providerPayload: {
+      scoreBucket: "high",
+      proofRef: "redacted-proof-ref",
+    },
+  });
+  const authorized = authorizeMpgfPublicGoodsPledgeIntentPayment(verified.pledgeIntent, {
+    identityVerification: verified.identityVerification,
+    providerPaymentRef: "provider-private-payment-intent-001",
+  });
+  const manualFallback = authorizeMpgfPublicGoodsPledgeIntentPayment(verified.pledgeIntent, {
+    identityVerification: verified.identityVerification,
+    providerAvailable: false,
+  });
+  const providerEvent = recordMpgfPublicGoodsProviderPaymentEvent(authorized.paymentAuthorization, {
+    providerEventRef: "provider-private-event-001",
+    eventType: "authorization_created",
+    signatureVerified: true,
+  });
+  const serialized = JSON.stringify({ contributionFlow, intent, verified, authorized, manualFallback, providerEvent });
+  const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/pledge-intents/route.ts", "utf8");
+  const verifyRoute = readFileSync("src/app/api/mpgf/pledge-intents/[intentId]/verify-identity/route.ts", "utf8");
+  const authorizeRoute = readFileSync("src/app/api/mpgf/pledge-intents/[intentId]/authorize-payment/route.ts", "utf8");
+  const providerWebhookRoute = readFileSync("src/app/api/mpgf/provider-events/webhook/route.ts", "utf8");
+  const manualAliasRoute = readFileSync("src/app/api/mpgf/evidence/manual/route.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260531_mpgf_contribution_intents.sql", "utf8");
+  const contributionPage = readFileSync("src/app/mpgf/contribute/page.tsx", "utf8");
+  const consoleSource = readFileSync("src/components/mpgf/mpgf-console.tsx", "utf8");
+
+  assert.ok(contributionFlow);
+  assert.equal(unknownFlow, null);
+  assert.equal(contributionFlow.primaryFlow, MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW);
+  assert.equal(contributionFlow.privacyPolicy, MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY);
+  assert.deepEqual(contributionFlow.stateObjects, [
+    "pledge_intent",
+    "identity_verification",
+    "payment_authorization",
+    "provider_payment_event",
+  ]);
+  assert.equal(intent.paymentState, "intent_created");
+  assert.equal(intent.countingState, "preview_only");
+  assert.match(intent.userRefHash, /^sha256:/);
+  assert.match(intent.idempotencyKeyHash, /^sha256:/);
+  assert.equal(intent.fallbackRule.manualEvidencePath, "/api/mpgf/evidence/manual");
+  assert.equal(verified.identityVerification.status, "verified");
+  assert.equal(verified.identityVerification.countsForMatching, true);
+  assert.equal(verified.nextAction, "authorize_payment");
+  assert.equal(authorized.paymentAuthorization.status, "authorized");
+  assert.equal(authorized.paymentAuthorization.requiresProviderWebhook, true);
+  assert.equal(authorized.paymentAuthorization.finalPayoutAuthorized, false);
+  assert.equal(authorized.paymentAuthorization.capturePolicy, "capture_only_after_threshold_review_and_challenge_window");
+  assert.match(authorized.paymentAuthorization.providerRefHash ?? "", /^sha256:/);
+  assert.equal(manualFallback.paymentAuthorization.status, "manual_fallback_required");
+  assert.equal(manualFallback.paymentAuthorization.manualEvidencePath, "/api/mpgf/evidence/manual");
+  assert.equal(providerEvent.status, "recorded");
+  assert.equal(providerEvent.finalPayoutAuthorized, false);
+  assert.match(providerEvent.providerEventRefHash, /^sha256:/);
+  assert.match(providerEvent.appendOnlyHash, /^sha256:/);
+  assert.match(route, /reviewRequiredBeforeCounting: true/);
+  assert.match(verifyRoute, /finalPayoutAuthorized: false/);
+  assert.match(authorizeRoute, /providerWebhookPath: "\/api\/mpgf\/provider-events\/webhook"/);
+  assert.match(providerWebhookRoute, /Missing MPGF provider event signature/);
+  assert.match(providerWebhookRoute, /finalPayoutAuthorized: false/);
+  assert.match(manualAliasRoute, /contributions\/manual-evidence\/route/);
+  assert.match(migration, /create table if not exists public\.mpgf_pledge_intents/);
+  assert.match(migration, /create table if not exists public\.mpgf_identity_verifications/);
+  assert.match(migration, /create table if not exists public\.mpgf_payment_authorizations/);
+  assert.match(migration, /create table if not exists public\.mpgf_provider_payment_events/);
+  assert.match(migration, /capture_only_after_threshold_review_and_challenge_window/);
+  assert.match(migration, /final_payout_authorized boolean not null default false check \(final_payout_authorized = false\)/);
+  assert.match(contributionPage, /verified conditional authorization/);
+  assert.match(consoleSource, /Contribution intent/);
+  assert.match(consoleSource, /Create contribution intent/);
+
+  for (const forbidden of [
+    "demo-contributor-private-user",
+    "private-idempotency-key-001",
+    "provider-private-payment-intent-001",
+    "provider-private-event-001",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
 });
 
 test("MPGF sponsor-pool flywheel aggregates trade surplus without private source refs", () => {

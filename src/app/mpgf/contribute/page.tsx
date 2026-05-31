@@ -11,13 +11,13 @@ import { getAbsoluteUrl } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Contribute to MPGF",
-  description: "Submit manual external-payment evidence for MPGF review.",
+  description: "Create an MPGF pledge intent, verify identity, authorize conditionally, or use manual evidence fallback.",
   alternates: {
     canonical: "/mpgf/contribute",
   },
   openGraph: {
     title: "Contribute to MPGF",
-    description: "Submit manual external-payment evidence for MPGF review.",
+    description: "Create an MPGF pledge intent, verify identity, authorize conditionally, or use manual evidence fallback.",
     url: getAbsoluteUrl("/mpgf/contribute"),
     type: "website",
   },
@@ -40,11 +40,11 @@ export default async function MpgfContributePage() {
         viewer ? (
           <Link className="button button-secondary" href="/mpgf/account/contributions">My evidence and pledges</Link>
         ) : (
-          <Link className="button button-secondary" href="/login?returnTo=/mpgf/contribute">Sign in to submit evidence</Link>
+          <Link className="button button-secondary" href="/login?returnTo=/mpgf/contribute">Sign in to contribute</Link>
         )
       }
-      description={MPGF_COPY.manualExternalPaymentEvidence}
-      title="Submit manual evidence for an MPGF contribution."
+      description="Create a pledge intent, verify identity, and authorize payment conditionally. Manual external-payment evidence remains available when provider integration is unavailable."
+      title="Contribute through verified conditional authorization."
       realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
