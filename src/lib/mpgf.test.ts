@@ -1262,6 +1262,10 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
 
 test("MPGF public-goods migration covers required entities and RLS policies", () => {
   const migration = readFileSync("supabase/migrations/20260529_mpgf_verified_assurance_matching.sql", "utf8");
+  const governanceMigration = readFileSync(
+    "supabase/migrations/20260531_mpgf_public_goods_governance_enforcement.sql",
+    "utf8",
+  );
 
   for (const tableName of [
     "mpgf_public_goods_campaigns",
@@ -1276,6 +1280,15 @@ test("MPGF public-goods migration covers required entities and RLS policies", ()
     "mpgf_public_goods_experiment_assignments",
   ]) {
     assert.match(migration, new RegExp(`create table if not exists public\\.${tableName}`));
+  }
+
+  for (const tableName of [
+    "mpgf_public_goods_sponsor_commitments",
+    "mpgf_public_goods_appeals",
+    "mpgf_public_goods_audit_events",
+    "mpgf_public_goods_reviewer_recusals",
+  ]) {
+    assert.match(governanceMigration, new RegExp(`create table if not exists public\\.${tableName}`));
   }
 
   assert.match(migration, /is_recurring boolean not null default false/);
@@ -1293,6 +1306,13 @@ test("MPGF public-goods migration covers required entities and RLS policies", ()
   assert.match(migration, /public_goods_destination_type/);
   assert.match(migration, /insert into public\.mpgf_public_goods_campaigns/);
   assert.match(migration, /campaign-global-health-basic-needs/);
+  assert.match(governanceMigration, /mpgf_public_goods_audit_events_append_only/);
+  assert.match(governanceMigration, /round parameters are immutable after status = open/);
+  assert.match(governanceMigration, /reviewer recusal blocks this review case/);
+  assert.match(governanceMigration, /eligibility_status = approved/);
+  assert.match(governanceMigration, /roll_forward_to_next_round_or_default_pool_by_published_rule/);
+  assert.match(governanceMigration, /private_evidence_ref is null or private_evidence_ref !~\*/);
+  assert.match(governanceMigration, /noTokenVoting/);
 });
 
 test("MPGF public-goods participant paths persist campaign pledges and creation fields", () => {
