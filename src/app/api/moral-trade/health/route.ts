@@ -67,6 +67,10 @@ import {
   validateMoralTradeAiGovernanceProfile,
 } from "@/lib/moral-trade/ai-governance";
 import {
+  getMoralTradeDocumentCoverageProfile,
+  validateMoralTradeDocumentCoverageProfile,
+} from "@/lib/moral-trade/document-coverage";
+import {
   getMoralTradeMatchSignalContract,
   validateMoralTradeMatchSignalContract,
 } from "@/lib/moral-trade/match-signal";
@@ -158,6 +162,9 @@ export async function GET(request: Request) {
     auditMoralTradeApiImplementationContract(apiContractProfile);
   const aiGovernanceProfile = getMoralTradeAiGovernanceProfile();
   const aiGovernanceValidation = validateMoralTradeAiGovernanceProfile(aiGovernanceProfile);
+  const documentCoverageProfile = getMoralTradeDocumentCoverageProfile();
+  const documentCoverageValidation =
+    validateMoralTradeDocumentCoverageProfile(documentCoverageProfile);
 
   return buildMoralTradeApiJsonResponse({
     ok:
@@ -181,7 +188,8 @@ export async function GET(request: Request) {
       transparencyReportValidation.status === "pass" &&
       apiContractValidation.status === "pass" &&
       apiContractImplementationAudit.status === "pass" &&
-      aiGovernanceValidation.status === "pass",
+      aiGovernanceValidation.status === "pass" &&
+      documentCoverageValidation.status === "pass",
     checkedAt: new Date().toISOString(),
     profileVersion: profile.version,
     purpose: profile.purpose,
@@ -206,6 +214,7 @@ export async function GET(request: Request) {
     apiContractValidation,
     apiContractImplementationAudit,
     aiGovernanceValidation,
+    documentCoverageValidation,
     publicContract: {
       requiredProposalFields: profile.requiredProposalFields,
       dataModelProfileVersion: dataModelProfile.version,
@@ -417,6 +426,14 @@ export async function GET(request: Request) {
       aiGovernanceExternalStandards: aiGovernanceProfile.externalStandards.map(
         (entry) => entry.key,
       ),
+      documentCoverageProfileVersion: documentCoverageProfile.version,
+      documentCoverageSourceDocuments: documentCoverageProfile.sourceDocuments.map(
+        (source) => source.key,
+      ),
+      documentCoverageRequirementKeys: documentCoverageProfile.requirements.map(
+        (requirement) => requirement.key,
+      ),
+      documentCoverageNonClaims: documentCoverageProfile.nonClaims,
       qualityMetrics: profile.qualityMetrics,
     },
     blockers: [
@@ -441,6 +458,7 @@ export async function GET(request: Request) {
       ...apiContractValidation.blockers,
       ...apiContractImplementationAudit.blockers,
       ...aiGovernanceValidation.blockers,
+      ...documentCoverageValidation.blockers,
     ],
   });
 }

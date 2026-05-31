@@ -46,6 +46,15 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_performance_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_externality_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_ai_governance_health"));
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_document_coverage_health" &&
+        route.path === "/api/moral-trade/document-coverage/health" &&
+        route.responseSchema === "document_coverage_health_response" &&
+        /never fabricate production evidence/i.test(route.fallback),
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_ai_shadow_contract"));
   assert.ok(
     profile.routes.some(
@@ -209,6 +218,11 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   );
   assert.ok(
     profile.schemaDefinitions
+      .find((schema) => schema.key === "moral_trade_aggregate_health_response")
+      ?.fields.some((field) => field.key === "documentCoverageValidation"),
+  );
+  assert.ok(
+    profile.schemaDefinitions
       .find((schema) => schema.key === "provenance_schema_response")
       ?.fields.some((field) => field.key === "sampleBundleSummary"),
   );
@@ -269,6 +283,16 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "performance_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "externality_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "ai_governance_health_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "document_coverage_health_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "document_coverage_health_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "validation" &&
+          /source documents, recommendation families/i.test(field.description),
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "ai_shadow_contract_response"));
   assert.ok(
     profile.schemaDefinitions.some(

@@ -363,6 +363,18 @@
       "fallback": "Return AI-governance blockers; undocumented ML cannot rank, match, disclose, or change proposal state."
     },
     {
+      "key": "moral_trade_document_coverage_health",
+      "method": "GET",
+      "path": "/api/moral-trade/document-coverage/health",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "document_coverage_health_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return document-coverage blockers that map the Moral Trade improvement documents to implemented validators, routes, and tests; never fabricate production evidence or claim live liquidity."
+    },
+    {
       "key": "moral_trade_ai_shadow_contract",
       "method": "GET",
       "path": "/api/moral-trade/ai-shadow/contract",
@@ -674,7 +686,7 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, data-model, policy-bundle, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, and API-contract validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
@@ -698,6 +710,7 @@
         { "key": "transparencyReportValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Aggregate transparency report validator result for metric coverage, small-sample suppression, and private-field exclusion." },
         { "key": "apiContractValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "API contract validator result." },
         { "key": "aiGovernanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validator result for documentation, fairness, and human-control gates." },
+        { "key": "documentCoverageValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Document-coverage validator result mapping the improvement documents to source, implementation, route, and test evidence." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published codes, route keys, schema keys, transition rules, and metric names." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Validator blockers that prevent readiness claims." }
       ]
@@ -1118,6 +1131,19 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validation result." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Required documentation, machine-checkable documentation templates, permitted automation, prohibited uses, fairness documentation, explanation controls, and external standards." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "AI governance blockers." }
+      ]
+    },
+    {
+      "key": "document_coverage_health_response",
+      "purpose": "Public coverage map from the Moral Trade improvement documents to concrete validators, implementation files, route evidence, and tests.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the document coverage validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the document coverage validation run." },
+        { "key": "profileVersion", "type": "string", "required": true, "privacy": "public", "description": "Document coverage profile version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable purpose for the document coverage contract." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for source documents, recommendation families, implementation evidence, test files, route evidence, and non-claims." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Published source-document records, requirement mappings, evidence files, test files, route evidence, and non-claims." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Document coverage blockers that prevent claiming the improvement documents are implemented." }
       ]
     },
     {

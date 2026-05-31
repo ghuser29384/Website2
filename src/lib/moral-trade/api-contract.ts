@@ -118,6 +118,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_performance_health",
   "moral_trade_externality_health",
   "moral_trade_ai_governance_health",
+  "moral_trade_document_coverage_health",
   "moral_trade_ai_shadow_contract",
   "moral_trade_background_capability_gates_contract",
   "moral_trade_background_rls_audit_contract",
