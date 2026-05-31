@@ -31,7 +31,15 @@ test("security profile publishes headers, sessions, provider boundaries, non-cla
     profile.controls.find((control) => control.key === "field_level_encryption_not_claimed")?.status,
     "not_claimed",
   );
+  assert.equal(
+    profile.controls.find((control) => control.key === "background_field_encryption_keyring")?.status,
+    "implemented",
+  );
   assert.ok(profile.publicNonClaims.some((entry) => /MFA|2FA/i.test(entry)));
+  assert.equal(
+    profile.controls.find((control) => control.key === "two_factor_admin_gate")?.status,
+    "implemented",
+  );
   assert.equal(
     profile.controls.find((control) => control.key === "incident_response_reporting")?.status,
     "implemented",
@@ -43,6 +51,11 @@ test("security profile publishes headers, sessions, provider boundaries, non-cla
 
 test("security implementation source keeps headers, cache, and sessions aligned", () => {
   const validation = validateMoralTradeSecurityImplementation({
+    actionsSource: readRepoFile("src/app/actions.ts"),
+    adminSource: readRepoFile("src/lib/admin.ts"),
+    backgroundActionsSource: readRepoFile("src/app/background-networking/actions.ts"),
+    backgroundFieldEncryptionSource: readRepoFile("src/lib/background-field-encryption.ts"),
+    mpgfAdminActionsSource: readRepoFile("src/app/mpgf/admin/actions.ts"),
     nextConfigSource: readRepoFile("next.config.ts"),
     supabaseProxySource: readRepoFile("src/lib/supabase/proxy.ts"),
     supabaseServerSource: readRepoFile("src/lib/supabase/server.ts"),
@@ -76,13 +89,13 @@ test("security validation fails if provider boundaries are overclaimed or scale 
   assert.ok(validation.blockers.some((blocker) => blocker.includes("scale-gates")));
 });
 
-test("security scale readiness blocks sensitive admin expansion until 2FA, sessions, and keys are ready", () => {
+test("security scale readiness blocks sensitive admin expansion until sessions and keys are ready", () => {
   const readiness = auditMoralTradeSecurityScaleReadiness({
     gateKey: "sensitive_admin_scale",
   });
 
   assert.equal(readiness.status, "blocked");
-  assert.ok(readiness.blockers.includes("scale_control_not_ready:two_factor_admin_gate"));
+  assert.equal(readiness.blockers.includes("scale_control_not_ready:two_factor_admin_gate"), false);
   assert.ok(readiness.blockers.includes("scale_control_not_ready:device_session_review_gate"));
   assert.ok(readiness.blockers.includes("scale_control_not_ready:key_rotation_gate"));
   assert.equal(readiness.blockers.includes("scale_control_not_ready:incident_response_reporting"), false);

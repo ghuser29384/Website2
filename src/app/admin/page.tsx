@@ -14,9 +14,10 @@ import {
 import { updateProfileDataRightRequestAction } from "@/app/background-networking/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { isAdminEmail } from "@/lib/admin";
+import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
@@ -327,12 +328,17 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const formMessage = getFormMessage(resolvedSearchParams);
   const viewer = hasSupabaseEnv() ? await requireViewer("/admin") : null;
   const isAdmin = isAdminEmail(viewer?.authUser.email);
+  const adminMfaSummary = isAdmin ? await loadBackgroundAccountSecuritySummary() : null;
+  const adminAccess = evaluateAdminOperatorAccess({
+    email: viewer?.authUser.email,
+    mfaSummary: adminMfaSummary,
+  });
   let queues:
     | Awaited<ReturnType<typeof loadAdminQueues>>
     | null = null;
   let loadError: string | null = null;
 
-  if (isAdmin) {
+  if (adminAccess.allowed) {
     try {
       queues = await loadAdminQueues();
     } catch (error) {
@@ -369,7 +375,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <h1>Admin review console.</h1>
             <p className="hero-text">
               Review unsafe matches, payment problems, queued email, and blocked wish profiles.
-              This page is gated by the `ADMIN_EMAILS` environment variable.
+              This page is gated by the `ADMIN_EMAILS` environment variable and an active
+              authenticator MFA session.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/admin/growth">
@@ -479,6 +486,22 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <strong>Admin access required.</strong>
                 <p>Add your signed-in email to ADMIN_EMAILS in Vercel to use this console.</p>
               </div>
+            </div>
+          </section>
+        ) : !adminAccess.allowed ? (
+          <section className="section section-white">
+            <div className="empty-state">
+              <div>
+                <strong>Authenticator MFA required.</strong>
+                <p>{adminAccess.message}</p>
+                <p>
+                  Current session level: {adminMfaSummary?.currentLevel ?? "unknown"} · verified
+                  factors: {adminMfaSummary?.verifiedTotpCount ?? 0}
+                </p>
+              </div>
+              <Link className="button button-secondary" href="/dashboard#account-security">
+                Open account security
+              </Link>
             </div>
           </section>
         ) : loadError ? (

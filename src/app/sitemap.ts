@@ -68,6 +68,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     },
     {
+      url: getAbsoluteUrl("/transparency"),
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.72,
+    },
+    {
       url: getAbsoluteUrl("/accessibility"),
       lastModified: now,
       changeFrequency: "monthly",

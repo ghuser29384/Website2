@@ -3,7 +3,8 @@ import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
-import { isAdminEmail } from "@/lib/admin";
+import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
+import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { loadMpgfProductionControlPlaneSummary } from "@/lib/mpgf/control-plane";
 import { mpgfAdminSections } from "@/lib/mpgf/data";
 import { getAbsoluteUrl } from "@/lib/seo";
@@ -31,7 +32,12 @@ export const dynamic = "force-dynamic";
 export default async function MpgfAdminPage() {
   const viewer = await getViewer();
   const isAdmin = isAdminEmail(viewer?.authUser.email);
-  const controlPlane = isAdmin ? await loadMpgfProductionControlPlaneSummary() : null;
+  const adminMfaSummary = isAdmin ? await loadBackgroundAccountSecuritySummary() : null;
+  const adminAccess = evaluateAdminOperatorAccess({
+    email: viewer?.authUser.email,
+    mfaSummary: adminMfaSummary,
+  });
+  const controlPlane = adminAccess.allowed ? await loadMpgfProductionControlPlaneSummary() : null;
 
   return (
     <MpgfPageFrame
@@ -41,9 +47,9 @@ export default async function MpgfAdminPage() {
       viewerPresent={Boolean(viewer)}
     >
       <section className="mpgf-panel">
-        <p className="eyebrow">{isAdmin ? "Admin verified" : "Gated route"}</p>
-        <h2>{isAdmin ? "Administrative sections" : "Admin access required"}</h2>
-        {isAdmin ? (
+        <p className="eyebrow">{adminAccess.allowed ? "MFA-verified admin" : "Gated route"}</p>
+        <h2>{adminAccess.allowed ? "Administrative sections" : "Admin access required"}</h2>
+        {adminAccess.allowed ? (
           <>
             <div className="mpgf-control-summary">
               <div>
@@ -95,7 +101,14 @@ export default async function MpgfAdminPage() {
             </div>
           </>
         ) : (
-          <p>Administrative sections require an authenticated admin session.</p>
+          <>
+            <p>{adminAccess.message}</p>
+            {isAdmin ? (
+              <Link className="button button-secondary" href="/dashboard#account-security">
+                Open account security
+              </Link>
+            ) : null}
+          </>
         )}
       </section>
     </MpgfPageFrame>

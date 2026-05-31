@@ -25,6 +25,14 @@ export const metadata: Metadata = {
 
 const updates = [
   {
+    date: "May 31, 2026",
+    tag: "Transparency",
+    title: "First aggregate transparency report route",
+    summary:
+      "The pilot now publishes thresholded counts for review outcomes, disclosure grants, reports, appeals, and operator timing without exposing private case files.",
+    href: "/transparency",
+  },
+  {
     date: "May 27, 2026",
     tag: "Pilot log",
     title: "Audit response: make the pilot easier to understand",
@@ -51,7 +59,6 @@ const updates = [
 ] as const;
 
 const upcomingReports = [
-  "First transparency report: review outcomes, rejected proposal classes, and unresolved objections.",
   "First case study: one low-risk pledge swap or donation offset from draft through review.",
   "Governance roster update: named operators, advisors, reviewers, and conflicts once roles are formal.",
 ] as const;

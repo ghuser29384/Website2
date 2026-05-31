@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
-import { isAdminEmail } from "@/lib/admin";
+import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { getViewer } from "@/lib/app-data";
+import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { demoMpgfAssuranceRound, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
 import { MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES, reviewMpgfPublicGoodsCampaign } from "@/lib/mpgf/mechanism";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -47,6 +48,16 @@ async function requireMpgfAdmin() {
 
   if (!viewer || !isAdminEmail(viewer.authUser.email)) {
     throw new Error("MPGF admin approval requires an authenticated admin session.");
+  }
+
+  const adminMfaSummary = await loadBackgroundAccountSecuritySummary();
+  const adminAccess = evaluateAdminOperatorAccess({
+    email: viewer.authUser.email,
+    mfaSummary: adminMfaSummary,
+  });
+
+  if (!adminAccess.allowed) {
+    throw new Error(adminAccess.message);
   }
 
   if (!hasSupabaseEnv() || !process.env.SUPABASE_SERVICE_ROLE_KEY) {

@@ -13,8 +13,8 @@
       "key": "private_no_store_cache",
       "label": "Private no-store cache policy",
       "status": "implemented",
-      "evidence": "next.config.ts and background privacy controls mark dashboard, admin, profile, and job API routes private no-store.",
-      "publicClaim": "Authenticated and sensitive routes should not be cached as public pages."
+      "evidence": "next.config.ts and background privacy controls mark dashboard, admin, agreement rooms, saved offers, MPGF account/admin, profile/job APIs, saved-search writes, and wish-registry search private no-store.",
+      "publicClaim": "Authenticated and sensitive routes, including private match rooms and saved-user surfaces, should not be cached as public pages."
     },
     {
       "key": "supabase_auth_cookies",
@@ -32,10 +32,17 @@
     },
     {
       "key": "field_level_encryption_not_claimed",
-      "label": "Field-level encryption is not claimed",
+      "label": "Platform-wide field-level encryption is not claimed",
       "status": "not_claimed",
-      "evidence": "background-privacy-controls marks field-encryption work as tracked separately.",
-      "publicClaim": "Private wishes and source notes are protected by access, redaction, cache, and consent controls; field-level encryption is not advertised as complete."
+      "evidence": "Background-networking sensitive text has a separate field-encryption control, but the public pilot does not claim app-level field encryption for every Moral Trade private table.",
+      "publicClaim": "Provider encryption, RLS, redaction, cache, and consent controls still protect non-background private tables unless a table-specific field-encryption control is published."
+    },
+    {
+      "key": "background_field_encryption_keyring",
+      "label": "Background field-encryption keyring",
+      "status": "implemented",
+      "evidence": "src/lib/background-field-encryption.ts uses AES-256-GCM with versioned ciphertexts, active key ids from BACKGROUND_FIELD_ENCRYPTION_KEYS/BACKGROUND_FIELD_ENCRYPTION_ACTIVE_KEY_ID, legacy v1 decrypt candidates, and fail-closed saves when no key is configured.",
+      "publicClaim": "Background-networking exact wishes, sensitive constraints, private source notes, connector consent notes, and deterministic synthesis summaries use app-level field encryption with versioned key ids and rotation support."
     },
     {
       "key": "server_only_secret_management",
@@ -47,9 +54,9 @@
     {
       "key": "two_factor_admin_gate",
       "label": "2FA/MFA admin gate",
-      "status": "required_before_scale",
-      "evidence": "The public pilot does not claim verified 2FA enforcement for all sensitive admin users.",
-      "publicClaim": "Sensitive admin scale requires verified MFA/2FA enforcement before expansion."
+      "status": "implemented",
+      "evidence": "src/lib/admin.ts requires an allowlisted admin email plus an active Supabase authenticator MFA session (AAL2) before admin queues or review actions can run; app admin pages, MPGF admin actions, background data-right review, and core review mutations call that gate.",
+      "publicClaim": "Operator consoles and review mutations require an allowlisted admin account with an active authenticator MFA session."
     },
     {
       "key": "device_session_review_gate",
@@ -62,8 +69,8 @@
       "key": "key_rotation_gate",
       "label": "Key rotation gate",
       "status": "required_before_scale",
-      "evidence": "The public pilot does not yet publish a Moral Trade-specific key rotation cadence for every provider secret.",
-      "publicClaim": "Paid-action or trust-badge scale requires provider secret/key rotation records and rollback notes."
+      "evidence": "Background field encryption now supports versioned active key ids, but the public pilot does not yet publish provider-wide rotation cadence, rollback evidence, or completed rotation records for every provider secret.",
+      "publicClaim": "Paid-action or trust-badge scale requires provider secret/key rotation records and rollback notes; background field encryption exposes its own versioned keyring boundary."
     },
     {
       "key": "platform_abuse_throttling",
@@ -117,8 +124,8 @@
     }
   ],
   "publicNonClaims": [
-    "Moral Trade does not claim custom field-level encryption for all private wish/source-note rows.",
-    "Moral Trade does not claim verified MFA/2FA enforcement for every sensitive admin user until the admin gate passes.",
+    "Moral Trade does not claim custom field-level encryption for every private Moral Trade table; background-networking sensitive text has a separate versioned keyring control.",
+    "Moral Trade does not claim the app-level MFA/2FA admin gate replaces provider-console MFA, device inventory, session revocation, or key-rotation evidence.",
     "Moral Trade does not claim a completed key-rotation program until provider rotation records are published.",
     "Moral Trade does not claim 24/7 staffed security operations or zero incidents; incident summaries stay aggregate and privacy-redacted.",
     "Moral Trade does not claim zero security risk; public health endpoints expose blockers instead."

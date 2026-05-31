@@ -67,7 +67,7 @@ export function BackgroundAccountSecurityPanel({
   }, [removeState.status, router, verifyState.status]);
 
   return (
-    <article className="panel data-card">
+    <article className="panel data-card" id="account-security">
       <p className="detail-kicker">Account security</p>
       <h3>Authenticator MFA for private wish data</h3>
       <dl className="values-summary compact-summary">

@@ -37,6 +37,10 @@ import {
 } from "@/lib/moral-trade/reasoning-packets";
 import { validateMoralTradeSecurityProfile } from "@/lib/moral-trade/security";
 import { validateMoralTradeProtocolProfile } from "@/lib/moral-trade/protocol";
+import {
+  getMoralTradeTransparencyReportContract,
+  validateMoralTradeTransparencyReportContract,
+} from "@/lib/moral-trade/transparency-report";
 import { CANONICAL_WORKED_CASE_COUNT } from "@/lib/seed-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -105,6 +109,9 @@ export default async function StatusPage() {
   const apiContractProfile = getMoralTradeApiContractProfile();
   const apiContractValidation = validateMoralTradeApiContractProfile(apiContractProfile);
   const apiImplementationAudit = auditMoralTradeApiImplementationContract(apiContractProfile);
+  const transparencyReportValidation = validateMoralTradeTransparencyReportContract(
+    getMoralTradeTransparencyReportContract(),
+  );
   const protocolHealthSurfaces = [
     {
       label: "Core protocol and data model",
@@ -176,6 +183,13 @@ export default async function StatusPage() {
       summary:
         "Quality metrics, privacy-safe slices, promotion gates, model-card requirements, and prohibited automation.",
       ...summarizeValidationSurfaces(evaluationValidation, aiGovernanceValidation),
+    },
+    {
+      label: "Transparency report",
+      href: "/api/moral-trade/transparency/report",
+      summary:
+        "Aggregate-only review outcomes, disclosure grants, reports, appeals, median timing, SLA attainment, and small-sample suppression.",
+      ...summarizeValidationSurfaces(transparencyReportValidation),
     },
   ] as const;
 

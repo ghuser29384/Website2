@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { isAdminEmail } from "@/lib/admin";
+import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import {
   type BackgroundMfaActionState,
+  loadBackgroundAccountSecuritySummary,
   normalizeBackgroundTotpCode,
 } from "@/lib/background-account-security";
 import { validateBackgroundConciergeAppealRequest } from "@/lib/background-concierge-appeals";
@@ -825,6 +826,16 @@ export async function updateProfileDataRightRequestAction(formData: FormData) {
 
   if (!isAdminEmail(viewer.authUser.email)) {
     redirectWithMessage(returnTo, "error", "Admin access is required.");
+  }
+
+  const adminMfaSummary = await loadBackgroundAccountSecuritySummary();
+  const adminAccess = evaluateAdminOperatorAccess({
+    email: viewer.authUser.email,
+    mfaSummary: adminMfaSummary,
+  });
+
+  if (!adminAccess.allowed) {
+    redirectWithMessage(returnTo, "error", adminAccess.message);
   }
 
   const requestId = readOptional(formData, "request_id");

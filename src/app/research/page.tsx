@@ -114,10 +114,13 @@ export default async function ResearchPage() {
         <section className="panel data-card data-card-wide">
           <h2>Transparency reports</h2>
           <p>
-            The first useful reports should count review outcomes, rejected proposal classes,
-            challenge-window resolutions, pair-completion evidence, and unresolved externality
-            objections. They should not expose private-feed data or exact wishes without consent.
+            The first useful report now counts review outcomes, disclosure grants, reports,
+            appeals, operator timing, and unresolved disputes with small-sample suppression. It
+            does not expose private-feed data, case files, report bodies, or exact wishes.
           </p>
+          <Link className="text-button" href="/transparency">
+            Open transparency report
+          </Link>
         </section>
 
         <section className="panel data-card data-card-wide">

@@ -103,6 +103,21 @@ test("authenticated route cache headers are private no-store only on private pre
     Expires: "0",
     Pragma: "no-cache",
   });
+  assert.deepEqual(getPrivateNoStoreHeaders("/agreements/agreement-123"), {
+    "Cache-Control": "private, no-store, max-age=0",
+    Expires: "0",
+    Pragma: "no-cache",
+  });
+  assert.deepEqual(getPrivateNoStoreHeaders("/saved-offers"), {
+    "Cache-Control": "private, no-store, max-age=0",
+    Expires: "0",
+    Pragma: "no-cache",
+  });
+  assert.deepEqual(getPrivateNoStoreHeaders("/api/wish-registry/search"), {
+    "Cache-Control": "private, no-store, max-age=0",
+    Expires: "0",
+    Pragma: "no-cache",
+  });
   assert.equal(getPrivateNoStoreHeaders("/background-networking"), null);
 });
 

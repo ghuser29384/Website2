@@ -6975,6 +6975,13 @@ output {
   line-height: 1.25;
 }
 
+.metric-value {
+  display: block;
+  color: var(--ink);
+  font-size: clamp(1.35rem, 2vw, 2rem);
+  line-height: 1.1;
+}
+
 .metric-card p {
   margin: 0;
   color: var(--ink-soft);

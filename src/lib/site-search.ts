@@ -106,6 +106,23 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     ],
   },
   {
+    href: "/transparency",
+    label: "Transparency report",
+    summary:
+      "Quarterly aggregate-only counts for review outcomes, disclosure grants, safety reports, appeals, and operator timing.",
+    kind: "learn",
+    keywords: [
+      "transparency",
+      "report",
+      "review outcomes",
+      "appeals",
+      "operator sla",
+      "disclosure grants",
+      "safety reports",
+      "trust metrics",
+    ],
+  },
+  {
     href: "/accessibility",
     label: "Accessibility statement",
     summary: "WCAG-oriented QA scope, keyboard and screen-reader checks, known limitations, and access-barrier support.",

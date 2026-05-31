@@ -39,11 +39,35 @@ const nextConfig: NextConfig = {
         headers: privateNoStoreHeaders,
       },
       {
+        source: "/agreements/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/saved-offers/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/mpgf/admin/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/mpgf/account/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
         source: "/api/profile/:path*",
         headers: privateNoStoreHeaders,
       },
       {
         source: "/api/jobs/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/api/saved-searches",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/api/wish-registry/search",
         headers: privateNoStoreHeaders,
       },
       {

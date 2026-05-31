@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { isAdminEmail } from "@/lib/admin";
+import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
+import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
@@ -88,6 +89,11 @@ export default async function PriorityCorrectionFundPage({
     ? await getPriorityCorrectionPageData(viewer?.authUser.id ?? null)
     : null;
   const isAdmin = Boolean(viewer?.authUser.email && isAdminEmail(viewer.authUser.email));
+  const adminMfaSummary = isAdmin ? await loadBackgroundAccountSecuritySummary() : null;
+  const adminAccess = evaluateAdminOperatorAccess({
+    email: viewer?.authUser.email,
+    mfaSummary: adminMfaSummary,
+  });
   const currentCycle = pageData?.currentCycle ?? null;
   const viewerSnapshot = pageData?.viewerSnapshot ?? null;
   const viewerAssignments = pageData?.viewerAssignments ?? [];
@@ -767,7 +773,7 @@ export default async function PriorityCorrectionFundPage({
           </div>
         </section>
 
-        {isAdmin ? (
+        {adminAccess.allowed ? (
           <section className="section section-white">
             <div className="section-head">
               <p className="eyebrow">Admin controls</p>
@@ -809,6 +815,18 @@ export default async function PriorityCorrectionFundPage({
                   </div>
                 </form>
               ) : null}
+            </div>
+          </section>
+        ) : isAdmin ? (
+          <section className="section section-white">
+            <div className="empty-state">
+              <div>
+                <strong>Authenticator MFA required.</strong>
+                <p>{adminAccess.message}</p>
+              </div>
+              <Link className="button button-secondary" href="/dashboard#account-security">
+                Open account security
+              </Link>
             </div>
           </section>
         ) : null}

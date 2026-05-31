@@ -1,12 +1,22 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 
-export const BACKGROUND_FIELD_ENCRYPTION_VERSION = "bg-field-v1";
+export const BACKGROUND_FIELD_ENCRYPTION_VERSION = "bg-field-v2";
+export const BACKGROUND_LEGACY_FIELD_ENCRYPTION_VERSION = "bg-field-v1";
 export const BACKGROUND_ENCRYPTED_TEXT_PLACEHOLDER = "[encrypted private field]";
 export const BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE = "[encrypted private field unavailable]";
 
 const CIPHER_ALGORITHM = "aes-256-gcm";
-const ENCRYPTED_PREFIX = "bgenc:v1";
+const ENCRYPTED_PREFIX_V1 = "bgenc:v1";
+const ENCRYPTED_PREFIX_V2 = "bgenc:v2";
+const DEFAULT_KEY_ID = "default";
+const KEYRING_ENV_NAME = "BACKGROUND_FIELD_ENCRYPTION_KEYS";
+const ACTIVE_KEY_ID_ENV_NAME = "BACKGROUND_FIELD_ENCRYPTION_ACTIVE_KEY_ID";
 const KEY_ENV_NAMES = ["BACKGROUND_FIELD_ENCRYPTION_KEY", "MORAL_TRADE_FIELD_ENCRYPTION_KEY"];
+const LEGACY_KEY_ENV_NAMES = [
+  "BACKGROUND_FIELD_ENCRYPTION_LEGACY_KEY",
+  "BACKGROUND_FIELD_ENCRYPTION_KEY",
+  "MORAL_TRADE_FIELD_ENCRYPTION_KEY",
+];
 
 export type SensitiveTextFieldMap = Record<string, string>;
 
@@ -40,6 +50,14 @@ export interface PreparedEncryptedFields {
   version: string;
 }
 
+export interface BackgroundFieldEncryptionKeyStatus {
+  activeKeyId: string | null;
+  activeVersion: typeof BACKGROUND_FIELD_ENCRYPTION_VERSION;
+  configuredKeyIds: string[];
+  legacyDecryptCandidateCount: number;
+  rotationReady: boolean;
+}
+
 function base64UrlEncode(buffer: Buffer) {
   return buffer
     .toString("base64")
@@ -55,25 +73,29 @@ function base64UrlDecode(value: string) {
   return Buffer.from(padded, "base64");
 }
 
-function getRawEncryptionKey() {
-  for (const envName of KEY_ENV_NAMES) {
+function getFirstConfiguredEnvKey(envNames: readonly string[]) {
+  for (const envName of envNames) {
     const value = process.env[envName]?.trim();
 
     if (value) {
-      return value;
+      return { envName, value };
     }
+  }
+
+  return null;
+}
+
+function normalizeKeyId(value: string) {
+  const normalized = value.trim().toLowerCase();
+
+  if (/^[a-z0-9][a-z0-9._-]{0,63}$/.test(normalized)) {
+    return normalized;
   }
 
   return "";
 }
 
-export function hasBackgroundFieldEncryptionKey() {
-  return Boolean(getRawEncryptionKey());
-}
-
-function deriveBackgroundFieldEncryptionKey() {
-  const rawKey = getRawEncryptionKey();
-
+function deriveBackgroundFieldEncryptionKey(rawKey: string) {
   if (!rawKey) {
     return null;
   }
@@ -97,16 +119,151 @@ function deriveBackgroundFieldEncryptionKey() {
   return createHash("sha256").update(rawKey, "utf8").digest();
 }
 
-function getAad(fieldKey: string) {
-  return Buffer.from(`moral-trade:${BACKGROUND_FIELD_ENCRYPTION_VERSION}:${fieldKey}`, "utf8");
+function parseJsonKeyring(rawValue: string) {
+  try {
+    const parsed = JSON.parse(rawValue) as unknown;
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+
+    const record = parsed as Record<string, unknown>;
+    const rawKeys = record.keys;
+
+    if (!rawKeys || typeof rawKeys !== "object" || Array.isArray(rawKeys)) {
+      return null;
+    }
+
+    return {
+      activeKeyId:
+        typeof record.activeKeyId === "string"
+          ? record.activeKeyId
+          : typeof record.active === "string"
+            ? record.active
+            : typeof record.primary === "string"
+              ? record.primary
+              : "",
+      entries: Object.entries(rawKeys as Record<string, unknown>)
+        .map(([keyId, keyValue]) => [keyId, typeof keyValue === "string" ? keyValue : ""] as const)
+        .filter(([, keyValue]) => keyValue.trim()),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseDelimitedKeyring(rawValue: string) {
+  return rawValue
+    .split(/[,\n;]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const separatorIndex = entry.indexOf("=");
+
+      if (separatorIndex <= 0) {
+        return ["", ""] as const;
+      }
+
+      return [entry.slice(0, separatorIndex), entry.slice(separatorIndex + 1)] as const;
+    })
+    .filter(([, keyValue]) => keyValue.trim());
+}
+
+function loadBackgroundFieldEncryptionKeyring() {
+  const keys = new Map<string, Buffer>();
+  const keyringValue = process.env[KEYRING_ENV_NAME]?.trim();
+  const configuredActiveKeyId = normalizeKeyId(process.env[ACTIVE_KEY_ID_ENV_NAME] ?? "");
+
+  if (keyringValue) {
+    const parsedKeyring = parseJsonKeyring(keyringValue);
+    const entries = parsedKeyring?.entries ?? parseDelimitedKeyring(keyringValue);
+
+    for (const [rawKeyId, rawKeyValue] of entries) {
+      const keyId = normalizeKeyId(rawKeyId);
+      const key = deriveBackgroundFieldEncryptionKey(rawKeyValue.trim());
+
+      if (keyId && key) {
+        keys.set(keyId, key);
+      }
+    }
+
+    const parsedActiveKeyId = normalizeKeyId(parsedKeyring?.activeKeyId ?? "");
+    const activeKeyId =
+      configuredActiveKeyId && keys.has(configuredActiveKeyId)
+        ? configuredActiveKeyId
+        : parsedActiveKeyId && keys.has(parsedActiveKeyId)
+          ? parsedActiveKeyId
+          : keys.keys().next().value ?? null;
+
+    return { activeKeyId, keys };
+  }
+
+  const fallback = getFirstConfiguredEnvKey(KEY_ENV_NAMES);
+  const fallbackKey = fallback ? deriveBackgroundFieldEncryptionKey(fallback.value) : null;
+
+  if (fallbackKey) {
+    keys.set(DEFAULT_KEY_ID, fallbackKey);
+  }
+
+  return {
+    activeKeyId: fallbackKey ? DEFAULT_KEY_ID : null,
+    keys,
+  };
+}
+
+function getLegacyDecryptKeys(keyring = loadBackgroundFieldEncryptionKeyring()) {
+  const candidates: Buffer[] = [];
+
+  for (const envName of LEGACY_KEY_ENV_NAMES) {
+    const rawKey = process.env[envName]?.trim();
+    const derived = rawKey ? deriveBackgroundFieldEncryptionKey(rawKey) : null;
+
+    if (derived && !candidates.some((candidate) => candidate.equals(derived))) {
+      candidates.push(derived);
+    }
+  }
+
+  for (const key of keyring.keys.values()) {
+    if (!candidates.some((candidate) => candidate.equals(key))) {
+      candidates.push(key);
+    }
+  }
+
+  return candidates;
+}
+
+export function hasBackgroundFieldEncryptionKey() {
+  return Boolean(loadBackgroundFieldEncryptionKeyring().activeKeyId);
+}
+
+export function getBackgroundFieldEncryptionKeyStatus(): BackgroundFieldEncryptionKeyStatus {
+  const keyring = loadBackgroundFieldEncryptionKeyring();
+  const configuredKeyIds = Array.from(keyring.keys.keys()).sort();
+
+  return {
+    activeKeyId: keyring.activeKeyId,
+    activeVersion: BACKGROUND_FIELD_ENCRYPTION_VERSION,
+    configuredKeyIds,
+    legacyDecryptCandidateCount: getLegacyDecryptKeys(keyring).length,
+    rotationReady: configuredKeyIds.length > 1,
+  };
+}
+
+function getAad(version: string, fieldKey: string) {
+  return Buffer.from(`moral-trade:${version}:${fieldKey}`, "utf8");
 }
 
 export function isEncryptedBackgroundText(value: string | null | undefined) {
-  return typeof value === "string" && value.startsWith(`${ENCRYPTED_PREFIX}:`);
+  return (
+    typeof value === "string" &&
+    (value.startsWith(`${ENCRYPTED_PREFIX_V1}:`) ||
+      value.startsWith(`${ENCRYPTED_PREFIX_V2}:`))
+  );
 }
 
 export function encryptBackgroundSensitiveText(value: string, fieldKey: string) {
-  const key = deriveBackgroundFieldEncryptionKey();
+  const keyring = loadBackgroundFieldEncryptionKeyring();
+  const key = keyring.activeKeyId ? keyring.keys.get(keyring.activeKeyId) : null;
   const plaintext = value.trim();
 
   if (!plaintext) {
@@ -115,22 +272,48 @@ export function encryptBackgroundSensitiveText(value: string, fieldKey: string) 
 
   if (!key) {
     throw new Error(
-      "BACKGROUND_FIELD_ENCRYPTION_KEY is required before saving private background-networking text.",
+      "BACKGROUND_FIELD_ENCRYPTION_KEYS or BACKGROUND_FIELD_ENCRYPTION_KEY is required before saving private background-networking text.",
     );
   }
 
   const iv = randomBytes(12);
   const cipher = createCipheriv(CIPHER_ALGORITHM, key, iv);
-  cipher.setAAD(getAad(fieldKey));
+  cipher.setAAD(getAad(BACKGROUND_FIELD_ENCRYPTION_VERSION, fieldKey));
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
 
   return [
-    ENCRYPTED_PREFIX,
+    ENCRYPTED_PREFIX_V2,
+    keyring.activeKeyId,
     base64UrlEncode(iv),
     base64UrlEncode(tag),
     base64UrlEncode(ciphertext),
   ].join(":");
+}
+
+function decryptWithKey({
+  ciphertextValue,
+  fieldKey,
+  ivValue,
+  key,
+  tagValue,
+  version,
+}: {
+  ciphertextValue: string;
+  fieldKey: string;
+  ivValue: string;
+  key: Buffer;
+  tagValue: string;
+  version: string;
+}) {
+  const decipher = createDecipheriv(CIPHER_ALGORITHM, key, base64UrlDecode(ivValue));
+  decipher.setAAD(getAad(version, fieldKey));
+  decipher.setAuthTag(base64UrlDecode(tagValue));
+
+  return Buffer.concat([
+    decipher.update(base64UrlDecode(ciphertextValue)),
+    decipher.final(),
+  ]).toString("utf8");
 }
 
 export function decryptBackgroundSensitiveText(
@@ -145,30 +328,54 @@ export function decryptBackgroundSensitiveText(
     return value;
   }
 
-  const key = deriveBackgroundFieldEncryptionKey();
+  const parts = value.split(":");
 
-  if (!key) {
-    return BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE;
+  if (parts[0] === "bgenc" && parts[1] === "v2") {
+    const [, , keyId, ivValue, tagValue, ciphertextValue] = parts;
+    const normalizedKeyId = normalizeKeyId(keyId ?? "");
+    const keyring = loadBackgroundFieldEncryptionKeyring();
+    const key = normalizedKeyId ? keyring.keys.get(normalizedKeyId) : null;
+
+    if (!key || !ivValue || !tagValue || !ciphertextValue) {
+      return BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE;
+    }
+
+    try {
+      return decryptWithKey({
+        ciphertextValue,
+        fieldKey,
+        ivValue,
+        key,
+        tagValue,
+        version: BACKGROUND_FIELD_ENCRYPTION_VERSION,
+      });
+    } catch {
+      return BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE;
+    }
   }
 
-  const [, , ivValue, tagValue, ciphertextValue] = value.split(":");
+  const [, , ivValue, tagValue, ciphertextValue] = parts;
 
   if (!ivValue || !tagValue || !ciphertextValue) {
     return BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE;
   }
 
-  try {
-    const decipher = createDecipheriv(CIPHER_ALGORITHM, key, base64UrlDecode(ivValue));
-    decipher.setAAD(getAad(fieldKey));
-    decipher.setAuthTag(base64UrlDecode(tagValue));
-
-    return Buffer.concat([
-      decipher.update(base64UrlDecode(ciphertextValue)),
-      decipher.final(),
-    ]).toString("utf8");
-  } catch {
-    return BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE;
+  for (const key of getLegacyDecryptKeys()) {
+    try {
+      return decryptWithKey({
+        ciphertextValue,
+        fieldKey,
+        ivValue,
+        key,
+        tagValue,
+        version: BACKGROUND_LEGACY_FIELD_ENCRYPTION_VERSION,
+      });
+    } catch {
+      // Try the next legacy candidate.
+    }
   }
+
+  return BACKGROUND_ENCRYPTED_TEXT_UNAVAILABLE;
 }
 
 export function normalizeEncryptedFieldMap(value: unknown): SensitiveTextFieldMap {

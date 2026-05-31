@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
 
-import { isAdminEmail } from "@/lib/admin";
+import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
@@ -24,6 +24,7 @@ import {
   getDeterministicSignalsFromSynthesis,
   normalizeBackgroundToken,
 } from "@/lib/background-networking";
+import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import {
   buildMatchExplanationSnapshot,
   buildPrivacySafeMatchAuditMetadata,
@@ -958,6 +959,16 @@ async function requireAdminViewer(returnTo: string) {
 
   if (!isAdminEmail(viewer.authUser.email)) {
     redirectWithMessage(returnTo, "error", "Admin access is required.");
+  }
+
+  const adminMfaSummary = await loadBackgroundAccountSecuritySummary();
+  const adminAccess = evaluateAdminOperatorAccess({
+    email: viewer.authUser.email,
+    mfaSummary: adminMfaSummary,
+  });
+
+  if (!adminAccess.allowed) {
+    redirectWithMessage(returnTo, "error", adminAccess.message);
   }
 
   return viewer;

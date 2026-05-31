@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
-import { isAdminEmail } from "@/lib/admin";
+import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { getViewer } from "@/lib/app-data";
+import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import {
   loadMpgfProductionControlPlaneSummary,
   mpgfGatesForAdminSection,
@@ -174,12 +175,17 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
   const { section } = await params;
   const viewer = await getViewer();
   const isAdmin = isAdminEmail(viewer?.authUser.email);
+  const adminMfaSummary = isAdmin ? await loadBackgroundAccountSecuritySummary() : null;
+  const adminAccess = evaluateAdminOperatorAccess({
+    email: viewer?.authUser.email,
+    mfaSummary: adminMfaSummary,
+  });
 
   if (!mpgfAdminSections.includes(section as (typeof mpgfAdminSections)[number])) {
     notFound();
   }
 
-  const controlPlane = isAdmin ? await loadMpgfProductionControlPlaneSummary() : null;
+  const controlPlane = adminAccess.allowed ? await loadMpgfProductionControlPlaneSummary() : null;
   const sectionGates = controlPlane ? mpgfGatesForAdminSection(section, controlPlane.gates) : [];
   const gateControls = gateApprovalControls[section] ?? [];
   const approvalControls = adminApprovalControls[section] ?? [];
@@ -201,9 +207,9 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
       viewerPresent={Boolean(viewer)}
     >
       <section className="mpgf-panel">
-        <p className="eyebrow">{isAdmin ? "Admin verified" : "Gated route"}</p>
-        <h2>{isAdmin ? "Section control gates" : "Admin access required"}</h2>
-        {isAdmin ? (
+        <p className="eyebrow">{adminAccess.allowed ? "MFA-verified admin" : "Gated route"}</p>
+        <h2>{adminAccess.allowed ? "Section control gates" : "Admin access required"}</h2>
+        {adminAccess.allowed ? (
           <>
             <p>
               This route maps the Build Instruction admin surface and shows the production gates
@@ -391,11 +397,17 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
             ) : null}
           </>
         ) : (
-          <p>
-            Administrative section content requires an authenticated admin session. This public gate
-            exposes no settings, secrets, approvals, payment controls, payout controls, or live
-            authorization actions.
-          </p>
+          <>
+            <p>
+              {adminAccess.message} This public gate exposes no settings, secrets, approvals,
+              payment controls, payout controls, or live authorization actions.
+            </p>
+            {isAdmin ? (
+              <Link className="button button-secondary" href="/dashboard#account-security">
+                Open account security
+              </Link>
+            ) : null}
+          </>
         )}
       </section>
     </MpgfPageFrame>

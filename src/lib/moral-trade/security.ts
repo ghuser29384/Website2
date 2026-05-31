@@ -72,6 +72,7 @@ const REQUIRED_CONTROLS = [
   "supabase_auth_cookies",
   "provider_encryption_at_rest",
   "field_level_encryption_not_claimed",
+  "background_field_encryption_keyring",
   "server_only_secret_management",
   "two_factor_admin_gate",
   "device_session_review_gate",
@@ -171,10 +172,20 @@ export function auditMoralTradeSecurityScaleReadiness({
 }
 
 export function validateMoralTradeSecurityImplementation({
+  actionsSource,
+  adminSource,
+  backgroundActionsSource,
+  backgroundFieldEncryptionSource,
+  mpgfAdminActionsSource,
   nextConfigSource,
   supabaseProxySource,
   supabaseServerSource,
 }: {
+  actionsSource: string;
+  adminSource: string;
+  backgroundActionsSource: string;
+  backgroundFieldEncryptionSource: string;
+  mpgfAdminActionsSource: string;
   nextConfigSource: string;
   supabaseProxySource: string;
   supabaseServerSource: string;
@@ -202,9 +213,15 @@ export function validateMoralTradeSecurityImplementation({
         /private,\s*no-store,\s*max-age=0/.test(nextConfigSource) &&
         /source:\s*"\/dashboard\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/admin\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/agreements\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/saved-offers\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/mpgf\/admin\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/mpgf\/account\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/api\/profile\/:path\*"/.test(nextConfigSource) &&
-        /source:\s*"\/api\/jobs\/:path\*"/.test(nextConfigSource),
-      "dashboard, admin, profile API, and job API routes should be private no-store.",
+        /source:\s*"\/api\/jobs\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/api\/saved-searches"/.test(nextConfigSource) &&
+        /source:\s*"\/api\/wish-registry\/search"/.test(nextConfigSource),
+      "dashboard, admin, agreement, saved-offer, MPGF account/admin, profile API, job API, saved-search, and wish-registry search routes should be private no-store.",
     ),
     check(
       "supabase-session-refresh-source",
@@ -223,6 +240,33 @@ export function validateMoralTradeSecurityImplementation({
         /createSupabaseClient<Database>/.test(supabaseServerSource) &&
         /persistSession:\s*false/.test(supabaseServerSource),
       "service-role clients must not persist browser sessions.",
+    ),
+    check(
+      "operator-mfa-gate-source",
+      "Admin and operator mutations require active authenticator MFA",
+      /evaluateAdminOperatorAccess/.test(adminSource) &&
+        /verifiedTotpCount < 1/.test(adminSource) &&
+        /currentLevel !== "aal2"/.test(adminSource) &&
+        /loadBackgroundAccountSecuritySummary/.test(actionsSource) &&
+        /evaluateAdminOperatorAccess/.test(actionsSource) &&
+        /loadBackgroundAccountSecuritySummary/.test(backgroundActionsSource) &&
+        /evaluateAdminOperatorAccess/.test(backgroundActionsSource) &&
+        /loadBackgroundAccountSecuritySummary/.test(mpgfAdminActionsSource) &&
+        /evaluateAdminOperatorAccess/.test(mpgfAdminActionsSource),
+      "admin routes and review actions should require allowlisted email plus an active Supabase AAL2 MFA session.",
+    ),
+    check(
+      "background-field-encryption-keyring-source",
+      "Background field encryption uses a versioned keyring and fail-closed saves",
+      /BACKGROUND_FIELD_ENCRYPTION_KEYS/.test(backgroundFieldEncryptionSource) &&
+        /BACKGROUND_FIELD_ENCRYPTION_ACTIVE_KEY_ID/.test(backgroundFieldEncryptionSource) &&
+        /bgenc:v2/.test(backgroundFieldEncryptionSource) &&
+        /legacy/i.test(backgroundFieldEncryptionSource) &&
+        /rotationReady/.test(backgroundFieldEncryptionSource) &&
+        /BACKGROUND_FIELD_ENCRYPTION_KEYS or BACKGROUND_FIELD_ENCRYPTION_KEY/.test(
+          backgroundFieldEncryptionSource,
+        ),
+      "background sensitive text should encrypt with versioned key ids, support legacy decrypt, and fail closed without configured key material.",
     ),
     check(
       "attribution-cookie-boundary-source",
@@ -277,6 +321,7 @@ export function validateMoralTradeSecurityProfile(
       "Provider encryption boundary and non-claims are explicit",
       controlMap.get("provider_encryption_at_rest")?.status === "provider_boundary" &&
         controlMap.get("field_level_encryption_not_claimed")?.status === "not_claimed" &&
+        controlMap.get("background_field_encryption_keyring")?.status === "implemented" &&
         REQUIRED_PUBLIC_NON_CLAIMS.every((pattern) =>
           profile.publicNonClaims.some((entry) => pattern.test(entry)),
         ),
@@ -284,8 +329,8 @@ export function validateMoralTradeSecurityProfile(
     ),
     check(
       "admin-and-key-scale-gates",
-      "2FA, device/session review, and key rotation gate sensitive scale",
-      controlMap.get("two_factor_admin_gate")?.status === "required_before_scale" &&
+      "MFA is enforced while device/session review and key rotation still gate sensitive scale",
+      controlMap.get("two_factor_admin_gate")?.status === "implemented" &&
         controlMap.get("device_session_review_gate")?.status === "required_before_scale" &&
         controlMap.get("key_rotation_gate")?.status === "required_before_scale",
       ["two_factor_admin_gate", "device_session_review_gate", "key_rotation_gate"]

@@ -190,8 +190,14 @@ export const BACKGROUND_DATA_INVENTORY = [
 export const PRIVATE_NO_STORE_ROUTE_PREFIXES = [
   "/dashboard",
   "/admin",
+  "/agreements",
+  "/saved-offers",
+  "/mpgf/admin",
+  "/mpgf/account",
   "/api/profile",
   "/api/jobs",
+  "/api/saved-searches",
+  "/api/wish-registry/search",
 ] as const;
 
 const EVENT_KIND_VALUES = new Set(

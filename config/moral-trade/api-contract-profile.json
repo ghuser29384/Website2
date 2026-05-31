@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.5-2026-05",
+  "version": "moral-trade-api-contract-v0.6-2026-05",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -397,6 +397,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return background RLS audit contract blockers; private wishes, source notes, saved searches, grants, notifications, helper records, risk signals, and audit events must retain row-level security, participant-scoped policies, no anonymous private-table policies, and sensitive ciphertext/version storage."
+    },
+    {
+      "key": "moral_trade_transparency_report",
+      "method": "GET",
+      "path": "/api/moral-trade/transparency/report",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "transparency_report_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return the transparency report contract, threshold rules, and aggregate-only fallback status; never expose participant ids, profile text, report bodies, source notes, exact wishes, contact details, or private evidence artifacts."
     },
     {
       "key": "profile_schema",
@@ -802,6 +814,20 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for table coverage, sensitive-storage coverage, anonymous-policy exclusion, participant helper boundaries, and regression-test hooks." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "RLS table requirements, policy-name requirements, required policy fragments, sensitive storage requirements, invariants, schema audit mode, and contract-test hooks." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on the background-networking RLS audit." }
+      ]
+    },
+    {
+      "key": "transparency_report_response",
+      "purpose": "Aggregate-only review outcomes, declined introductions, safety records, disclosure grants, reports, appeals, evidence review, unresolved disputes, median review times, and SLA attainment.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the transparency contract and report snapshot validators pass." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the transparency report read." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Transparency report contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable purpose for aggregate trust reporting." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Contract and report validation results for metric coverage, small-sample suppression, and private-field exclusion." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Publication cadence, minimum public count, metric definitions, privacy rules, and contract-test hooks." },
+        { "key": "report", "type": "object", "required": true, "privacy": "public_contract", "description": "Thresholded aggregate metrics only; small nonzero samples are suppressed and no private case records are returned." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Blockers that prevent relying on the aggregate transparency report." }
       ]
     },
     {

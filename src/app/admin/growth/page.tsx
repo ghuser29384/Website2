@@ -3,8 +3,9 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { isAdminEmail } from "@/lib/admin";
+import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
+import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { FUNNEL_EVENT_TYPES } from "@/lib/growth";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -158,10 +159,15 @@ function MetricTable({ rows }: { rows: CountRow[] }) {
 export default async function AdminGrowthPage() {
   const viewer = hasSupabaseEnv() ? await requireViewer("/admin/growth") : null;
   const isAdmin = isAdminEmail(viewer?.authUser.email);
+  const adminMfaSummary = isAdmin ? await loadBackgroundAccountSecuritySummary() : null;
+  const adminAccess = evaluateAdminOperatorAccess({
+    email: viewer?.authUser.email,
+    mfaSummary: adminMfaSummary,
+  });
   let dashboard: Awaited<ReturnType<typeof loadGrowthDashboard>> | null = null;
   let loadError: string | null = null;
 
-  if (isAdmin) {
+  if (adminAccess.allowed) {
     try {
       dashboard = await loadGrowthDashboard();
     } catch (error) {
@@ -194,8 +200,11 @@ export default async function AdminGrowthPage() {
           </section>
           <aside className="hero-panel panel">
             <p className="eyebrow">Access</p>
-            <h2>{isAdmin ? "Admin view" : "Admin required"}</h2>
-            <p>This page is gated by the same admin email allowlist as the review console.</p>
+            <h2>{adminAccess.allowed ? "MFA-verified admin view" : "Admin step-up required"}</h2>
+            <p>
+              This page is gated by the same admin email allowlist as the review console and an
+              active authenticator MFA session.
+            </p>
           </aside>
         </div>
       </header>
@@ -206,6 +215,20 @@ export default async function AdminGrowthPage() {
             <article className="panel">
               <h2>Not authorized</h2>
               <p>Sign in with an admin email to view growth reporting.</p>
+            </article>
+          </section>
+        ) : !adminAccess.allowed ? (
+          <section className="section section-white">
+            <article className="panel">
+              <h2>Authenticator MFA required</h2>
+              <p>{adminAccess.message}</p>
+              <p>
+                Current session level: {adminMfaSummary?.currentLevel ?? "unknown"} · verified
+                factors: {adminMfaSummary?.verifiedTotpCount ?? 0}
+              </p>
+              <Link className="button button-secondary" href="/dashboard#account-security">
+                Open account security
+              </Link>
             </article>
           </section>
         ) : null}

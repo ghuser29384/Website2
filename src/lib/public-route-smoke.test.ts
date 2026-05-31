@@ -1142,6 +1142,7 @@ test("activation loop includes concierge intake, admin triage, SLA, and audit tr
   const registryPage = readRepoFile("src/app/wish-registry/page.tsx");
   const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
   const adminPage = readRepoFile("src/app/admin/page.tsx");
+  const adminAccessSource = readRepoFile("src/lib/admin.ts");
   const actionsSource = readRepoFile("src/app/actions.ts");
   const appDataSource = readRepoFile("src/lib/app-data.ts");
   const schemaSource = readRepoFile("supabase/schema.sql");
@@ -1158,8 +1159,14 @@ test("activation loop includes concierge intake, admin triage, SLA, and audit tr
   assert.match(adminPage, /updateMatchConciergeRequestAction/);
   assert.match(adminPage, /formatSlaState/);
   assert.match(adminPage, /match_concierge_events/);
+  assert.match(adminPage, /evaluateAdminOperatorAccess/);
+  assert.match(adminPage, /Authenticator MFA required/);
+  assert.match(adminPage, /\/dashboard#account-security/);
+  assert.match(adminAccessSource, /ADMIN_MFA_REQUIRED_MESSAGE/);
+  assert.match(adminAccessSource, /mfa_step_up_required/);
   assert.match(actionsSource, /createMatchConciergeRequestAction/);
   assert.match(actionsSource, /updateMatchConciergeRequestAction/);
+  assert.match(actionsSource, /evaluateAdminOperatorAccess/);
   assert.match(actionsSource, /request_created/);
   assert.match(actionsSource, /request_triaged/);
   assert.match(appDataSource, /listMatchConciergeRequestsForUser/);
@@ -1255,6 +1262,11 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   const projectsPage = readRepoFile("src/app/projects/page.tsx");
   const sourcesPage = readRepoFile("src/app/sources/page.tsx");
   const measurementPage = readRepoFile("src/app/measurement/page.tsx");
+  const transparencyPage = readRepoFile("src/app/transparency/page.tsx");
+  const transparencyReportSource = readRepoFile("src/lib/moral-trade/transparency-report.ts");
+  const transparencyReportRoute = readRepoFile(
+    "src/app/api/moral-trade/transparency/report/route.ts",
+  );
   const accessibilityPage = readRepoFile("src/app/accessibility/page.tsx");
   const measurementPlanSource = readRepoFile("src/lib/measurement-plan.ts");
   const updatesPage = readRepoFile("src/app/updates/page.tsx");
@@ -1306,6 +1318,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(researchPage, /What would make this unsafe/);
   assert.match(researchPage, /Open mechanism-design questions/);
   assert.match(researchPage, /Transparency reports/);
+  assert.match(researchPage, /\/transparency/);
   assert.match(trustPage, /What you can rely on today/);
   assert.match(trustPage, /No custody, escrow, tax, legal, investment, or payment-protection service/);
   assert.match(trustPage, /When something looks wrong/);
@@ -1340,6 +1353,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(statusPage, /validateMoralTradeIncidentResponseProfile/);
   assert.match(statusPage, /validateMoralTradePerformanceProfile/);
   assert.match(statusPage, /auditMoralTradeRouteRecoveryManifest/);
+  assert.match(statusPage, /validateMoralTradeTransparencyReportContract/);
   assert.match(statusPage, /\/api\/moral-trade\/health/);
   assert.match(statusPage, /\/api\/moral-trade\/provenance\/schema/);
   assert.match(statusPage, /\/api\/moral-trade\/reasoning\/packets/);
@@ -1348,6 +1362,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(statusPage, /\/api\/moral-trade\/externality\/health/);
   assert.match(statusPage, /\/api\/moral-trade\/incident-response\/health/);
   assert.match(statusPage, /\/api\/moral-trade\/performance\/health/);
+  assert.match(statusPage, /\/api\/moral-trade\/transparency\/report/);
   assert.match(statusPage, /Disclosure grants and appeals/);
   assert.match(statusPage, /Externality and remedy review/);
   assert.match(statusPage, /Incident response/);
@@ -1365,6 +1380,23 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(measurementPage, /Open evaluation JSON/);
   assert.match(measurementPage, /Lighthouse/);
   assert.match(measurementPage, /Search Console/);
+  assert.match(transparencyPage, /Public counts without public case files/);
+  assert.match(transparencyPage, /loadMoralTradeTransparencyReportSnapshot/);
+  assert.match(transparencyPage, /small-sample suppression/);
+  assert.match(transparencyPage, /\/api\/moral-trade\/transparency\/report/);
+  assert.match(transparencyReportSource, /MORAL_TRADE_TRANSPARENCY_MIN_PUBLIC_COUNT = 3/);
+  assert.match(transparencyReportSource, /reviewed_match_suggestions/);
+  assert.match(transparencyReportSource, /declined_intro_requests/);
+  assert.match(transparencyReportSource, /disclosure_grants_created/);
+  assert.match(transparencyReportSource, /concierge_appeals_requested/);
+  assert.match(transparencyReportSource, /median_concierge_review_hours/);
+  assert.match(transparencyReportSource, /no ids, emails, names/);
+  assert.match(transparencyReportSource, /small_sample_not_suppressed/);
+  assert.match(transparencyReportRoute, /takeMoralTradeApiRateLimitSlot\(request, "public_contract_read"\)/);
+  assert.match(transparencyReportRoute, /validateMoralTradeTransparencyReportSnapshot/);
+  assert.match(updatesPage, /First aggregate transparency report route/);
+  assert.match(siteSearchSource, /Transparency report/);
+  assert.match(sitemapSource, /\/transparency/);
   assert.match(accessibilityPage, /Accessibility statement/);
   assert.match(accessibilityPage, /WCAG 2\.1 AA-oriented QA/);
   assert.match(accessibilityPage, /keyboard and screen-reader QA/);
@@ -1517,6 +1549,10 @@ test("public contract APIs enforce the documented public contract read throttle"
       path: "src/app/api/moral-trade/background-rls-audit/contract/route.ts",
       cacheControl: "no_store_dynamic",
     },
+    {
+      path: "src/app/api/moral-trade/transparency/report/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
     { path: "src/app/api/profile/schema/route.ts", cacheControl: "public_contract_static" },
   ];
 
@@ -1607,6 +1643,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const offerWritePathSource = readRepoFile("src/lib/moral-trade/offer-write-path.ts");
   const agreementWritePathSource = readRepoFile("src/lib/moral-trade/agreement-write-path.ts");
   const actionsSource = readRepoFile("src/app/actions.ts");
+  const adminSource = readRepoFile("src/lib/admin.ts");
+  const adminPageSource = readRepoFile("src/app/admin/page.tsx");
+  const adminGrowthPageSource = readRepoFile("src/app/admin/growth/page.tsx");
+  const backgroundActionsSource = readRepoFile("src/app/background-networking/actions.ts");
+  const mpgfAdminActionsSource = readRepoFile("src/app/mpgf/admin/actions.ts");
+  const mpgfAdminPageSource = readRepoFile("src/app/mpgf/admin/page.tsx");
   const copilotSource = readRepoFile("src/lib/moral-trade/copilot.ts");
   const copilotContract = readRepoFile("config/moral-trade/copilot-contract.json");
   const backgroundExplanationsSource = readRepoFile("src/lib/background-explanations.ts");
@@ -1969,9 +2011,26 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(securitySource, /auditMoralTradeSecurityScaleReadiness/);
   assert.match(securitySource, /provider-boundary-and-nonclaims/);
   assert.match(securitySource, /scale_control_not_ready/);
+  assert.match(securitySource, /operator-mfa-gate-source/);
+  assert.match(adminSource, /evaluateAdminOperatorAccess/);
+  assert.match(adminSource, /verifiedTotpCount < 1/);
+  assert.match(adminSource, /currentLevel !== "aal2"/);
+  assert.match(adminPageSource, /loadBackgroundAccountSecuritySummary/);
+  assert.match(adminPageSource, /evaluateAdminOperatorAccess/);
+  assert.match(adminPageSource, /\/dashboard#account-security/);
+  assert.match(adminGrowthPageSource, /loadBackgroundAccountSecuritySummary/);
+  assert.match(backgroundActionsSource, /loadBackgroundAccountSecuritySummary/);
+  assert.match(backgroundActionsSource, /evaluateAdminOperatorAccess/);
+  assert.match(actionsSource, /loadBackgroundAccountSecuritySummary/);
+  assert.match(actionsSource, /evaluateAdminOperatorAccess/);
+  assert.match(mpgfAdminActionsSource, /loadBackgroundAccountSecuritySummary/);
+  assert.match(mpgfAdminActionsSource, /evaluateAdminOperatorAccess/);
+  assert.match(mpgfAdminPageSource, /loadBackgroundAccountSecuritySummary/);
   assert.match(securityProfile, /provider_encryption_at_rest/);
   assert.match(securityProfile, /field_level_encryption_not_claimed/);
   assert.match(securityProfile, /two_factor_admin_gate/);
+  assert.match(securityProfile, /\"status\": \"implemented\"/);
+  assert.match(securityProfile, /active Supabase authenticator MFA session \(AAL2\)/);
   assert.match(securityProfile, /device_session_review_gate/);
   assert.match(securityProfile, /key_rotation_gate/);
   assert.match(securityProfile, /incident_response_reporting/);
@@ -2102,6 +2161,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_ai_shadow_contract/);
   assert.match(apiContractSource, /moral_trade_background_capability_gates_contract/);
   assert.match(apiContractSource, /moral_trade_background_rls_audit_contract/);
+  assert.match(apiContractSource, /moral_trade_transparency_report/);
   assert.match(apiContractSource, /moral_trade_api_contract/);
   assert.match(apiContractSource, /auditMoralTradeApiImplementationContract/);
   assert.match(apiContractSource, /implementation-backed-rate-limits-and-cache/);
@@ -2139,6 +2199,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /moral_trade_background_rls_audit_contract/);
   assert.match(apiContractProfile, /row-level security, participant-scoped policies/);
   assert.match(apiContractProfile, /sensitive ciphertext\/version storage/);
+  assert.match(apiContractProfile, /transparency_report_response/);
+  assert.match(apiContractProfile, /moral_trade_transparency_report/);
+  assert.match(apiContractProfile, /Aggregate-only review outcomes/);
+  assert.match(apiContractProfile, /small nonzero samples are suppressed/);
   assert.match(apiContractProfile, /match_signal_evaluate_request/);
   assert.match(apiContractProfile, /match_signal_evaluate_response/);
   assert.match(apiContractProfile, /redacted_profile_match_preview_only/);

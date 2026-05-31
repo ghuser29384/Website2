@@ -52,6 +52,7 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
       (route) => route.key === "moral_trade_background_capability_gates_contract",
     ),
   );
+  assert.ok(profile.routes.some((route) => route.key === "moral_trade_transparency_report"));
   assert.ok(profile.routes.some((route) => route.key === "profile_export"));
   assert.ok(profile.routes.some((route) => route.key === "profile_import"));
   assert.ok(profile.routes.some((route) => route.key === "profile_export" && route.rateLimitSurface === "profile_portability"));
@@ -162,6 +163,7 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
       (schema) => schema.key === "background_rls_audit_contract_response",
     ),
   );
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "transparency_report_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "wish_registry_search_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "empty_204_response"));
   assert.ok(
