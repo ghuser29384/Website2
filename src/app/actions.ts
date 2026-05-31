@@ -46,11 +46,14 @@ import {
 } from "@/lib/background-field-encryption";
 import {
   buildDisclosureGrantNotes,
+  evaluatePrivacyAccessRequestCadence,
   getDefaultGrantExpiryDays,
+  getPrivacyAccessRequestWindowStart,
   requiresContactDisclosureStepUp,
   validateDisclosureRequest,
   type DisclosureAccessLevel,
   type DisclosureAudienceStage,
+  type PrivacyAccessRequestCadenceRow,
 } from "@/lib/background-disclosure";
 import {
   hasActiveBackgroundSourcePermission,
@@ -4969,6 +4972,61 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", disclosureErrorsToMessage(disclosureValidation.errors));
   }
   const allowedFields = disclosureValidation.allowedFields;
+  const supabase = await createClient();
+  const { data: recentRequests, error: recentRequestsError } = await supabase
+    .from("privacy_access_requests")
+    .select("created_at, requested_fields, requested_stage, status")
+    .eq("requester_profile_id", viewer.authUser.id)
+    .eq("owner_profile_id", ownerProfileId)
+    .gte("created_at", getPrivacyAccessRequestWindowStart())
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (recentRequestsError) {
+    logSupabaseActionError("Failed to check recent privacy access requests", recentRequestsError, {
+      ownerProfileId,
+      requesterProfileId: viewer.authUser.id,
+    });
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Unable to check recent detail requests. Try again before requesting private fields.",
+    );
+  }
+
+  const cadenceDecision = evaluatePrivacyAccessRequestCadence({
+    recentRequests: (recentRequests ?? []) as PrivacyAccessRequestCadenceRow[],
+    requestedFields: allowedFields,
+    requestedStage,
+  });
+
+  if (
+    !cadenceDecision.allowed ||
+    cadenceDecision.similarRequestCount >= 2 ||
+    cadenceDecision.recentRequestCount >= 4
+  ) {
+    const serviceClient = createServiceClient();
+    await recordBackgroundQueryRiskSignal({
+      metadata: {
+        pendingRequestCount: cadenceDecision.pendingRequestCount,
+        recentRequestCount: cadenceDecision.recentRequestCount,
+        requestedFieldCount: allowedFields.length,
+        requestedStage,
+        similarPendingCount: cadenceDecision.similarPendingCount,
+        similarRequestCount: cadenceDecision.similarRequestCount,
+      },
+      profileId: viewer.authUser.id,
+      severity: cadenceDecision.allowed ? "low" : "medium",
+      signalType: "detail_request_probe_pressure",
+      summary:
+        "A detail request pattern approached or crossed the repeated-request privacy threshold.",
+      supabase: serviceClient,
+    });
+  }
+
+  if (!cadenceDecision.allowed) {
+    redirectWithMessage(returnTo, "error", disclosureErrorsToMessage(cadenceDecision.blockers));
+  }
 
   const payload: PrivacyAccessRequestInsert = {
     owner_profile_id: ownerProfileId,
@@ -4981,7 +5039,6 @@ export async function createPrivacyAccessRequestAction(formData: FormData) {
     status: "pending",
   };
 
-  const supabase = await createClient();
   const { data: requestRow, error } = await supabase
     .from("privacy_access_requests")
     .insert(payload)

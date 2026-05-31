@@ -2,6 +2,7 @@ import {
   BACKGROUND_DISCLOSURE_FIELDS,
   DISCLOSURE_ACCESS_LEVELS,
   DISCLOSURE_AUDIENCE_STAGES,
+  PRIVACY_ACCESS_REQUEST_WINDOW_DAYS,
   getDefaultGrantExpiryDays,
   requiresContactDisclosureStepUp,
   validateDisclosureRequest,
@@ -105,7 +106,12 @@ export interface MoralTradeDisclosureSearchPrivacyControl {
   dailyLimit?: number;
   minResultCount?: number;
   minSpecificity?: number;
+  similarPendingLimit?: number;
+  similarWeeklyLimit?: number;
+  pendingLimit?: number;
   scope?: string;
+  weeklyLimit?: number;
+  windowDays?: number;
 }
 
 export interface MoralTradeDisclosureContract {
@@ -158,6 +164,7 @@ const REQUIRED_SEARCH_PRIVACY_CONTROLS = [
   "stable_query_fingerprint",
   "redacted_overlap_tokens",
   "risk_signal_logging",
+  "detail_request_probe_limit",
 ] as const;
 
 const SEARCH_PRIVACY_CONTROLS = [
@@ -191,6 +198,18 @@ const SEARCH_PRIVACY_CONTROLS = [
     label: "Risk signal logging",
     rule: "Budget pressure and sparse searches are logged as redacted risk signals for operator review without revealing exact wishes.",
   },
+  {
+    key: "detail_request_probe_limit",
+    label: "Repeated detail-request limit",
+    pendingLimit: 3,
+    scope: "privacy_access_request",
+    similarPendingLimit: 1,
+    similarWeeklyLimit: 3,
+    weeklyLimit: 6,
+    windowDays: PRIVACY_ACCESS_REQUEST_WINDOW_DAYS,
+    rule:
+      "Repeated same-owner detail requests are checked over a seven-day window; pending duplicate field/stage requests are blocked and probing pressure is logged with counts only.",
+  },
 ] as const satisfies readonly MoralTradeDisclosureSearchPrivacyControl[];
 
 const CONTRACT_TESTS = [
@@ -199,6 +218,7 @@ const CONTRACT_TESTS = [
   "disclosure_query_budget_contract_smoke",
   "background_disclosure_lattice_smoke",
   "disclosure_contact_step_up_contract_smoke",
+  "privacy_access_request_cadence_smoke",
   "technical_spec_disclosure_grant_smoke",
 ] as const;
 
@@ -440,6 +460,7 @@ export function getMoralTradeDisclosureContract(): MoralTradeDisclosureContract 
       "Raw source notes, private feed payloads, exact private wishes before consent, and sensitive constraints in public previews stay redacted.",
       "Disclosure grants are field-level, purpose-bound, stage-bound, expiry-aware, and scoped to owner, counterparty, or match context.",
       "Registry search must enforce query budgets, sparse-result privacy floors, redacted overlap tokens, and risk-signal logging before broad previews can be relied on.",
+      "Detail requests must suppress repeated same-owner probing over a seven-day window and log only counts, stages, and field totals.",
       "Evaluators cannot disclose, introduce, contact, approve, revoke, or mutate records; live grants require authenticated owner-controlled actions.",
     ],
     sampleInput: SAMPLE_INPUT,
@@ -461,6 +482,9 @@ export function validateMoralTradeDisclosureContract(
   );
   const sparseResultControl = contract.searchPrivacyControls.find(
     (control) => control.key === "sparse_result_privacy_floor",
+  );
+  const detailRequestControl = contract.searchPrivacyControls.find(
+    (control) => control.key === "detail_request_probe_limit",
   );
   const checks = [
     check(
@@ -524,6 +548,20 @@ export function validateMoralTradeDisclosureContract(
           /query budgets.*sparse-result privacy floors.*redacted overlap tokens/i.test(entry),
         ),
       searchPrivacyControlKeys.join(", "),
+    ),
+    check(
+      "detail-request-probing-controls",
+      "Contract publishes repeated detail-request probing limits",
+      detailRequestControl?.scope === "privacy_access_request" &&
+        detailRequestControl.windowDays === PRIVACY_ACCESS_REQUEST_WINDOW_DAYS &&
+        detailRequestControl.pendingLimit === 3 &&
+        detailRequestControl.similarPendingLimit === 1 &&
+        detailRequestControl.similarWeeklyLimit === 3 &&
+        detailRequestControl.weeklyLimit === 6 &&
+        contract.invariants.some((entry) => /same-owner probing.*seven-day window/i.test(entry)),
+      detailRequestControl
+        ? `${detailRequestControl.scope}; ${detailRequestControl.windowDays}d`
+        : "missing",
     ),
     check(
       "nonmutating-owner-control",

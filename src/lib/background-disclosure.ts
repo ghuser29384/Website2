@@ -117,6 +117,24 @@ export interface DisclosureValidationResult {
   errors: string[];
 }
 
+export interface PrivacyAccessRequestCadenceRow {
+  created_at: string;
+  requested_fields: string[];
+  requested_stage: DisclosureAudienceStage;
+  status: "pending" | "approved" | "denied" | "withdrawn";
+}
+
+export interface PrivacyAccessRequestCadenceDecision {
+  allowed: boolean;
+  blockers: string[];
+  pendingRequestCount: number;
+  recentRequestCount: number;
+  similarPendingCount: number;
+  similarRequestCount: number;
+}
+
+export const PRIVACY_ACCESS_REQUEST_WINDOW_DAYS = 7;
+
 export function normalizeDisclosureFieldKeys(values: string[]) {
   const normalized = values
     .map((value) => value.trim())
@@ -146,6 +164,61 @@ export function getDefaultGrantExpiryDays(stage: DisclosureAudienceStage) {
   }
 
   return 14;
+}
+
+export function getPrivacyAccessRequestWindowStart(now = new Date()) {
+  return new Date(now.getTime() - PRIVACY_ACCESS_REQUEST_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+    .toISOString();
+}
+
+function getFieldSetKey(fieldKeys: string[]) {
+  return [...normalizeDisclosureFieldKeys(fieldKeys)].sort().join("|");
+}
+
+export function evaluatePrivacyAccessRequestCadence({
+  recentRequests,
+  requestedFields,
+  requestedStage,
+}: {
+  recentRequests: PrivacyAccessRequestCadenceRow[];
+  requestedFields: string[];
+  requestedStage: DisclosureAudienceStage;
+}): PrivacyAccessRequestCadenceDecision {
+  const requestedFieldSetKey = getFieldSetKey(requestedFields);
+  const scopedRequests = recentRequests.filter((request) => request.status !== "approved");
+  const pendingRequests = scopedRequests.filter((request) => request.status === "pending");
+  const similarRequests = scopedRequests.filter(
+    (request) =>
+      request.requested_stage === requestedStage &&
+      getFieldSetKey(request.requested_fields) === requestedFieldSetKey,
+  );
+  const similarPendingRequests = similarRequests.filter((request) => request.status === "pending");
+  const blockers: string[] = [];
+
+  if (similarPendingRequests.length > 0) {
+    blockers.push("A similar detail request is already pending for this profile.");
+  }
+
+  if (similarRequests.length >= 3) {
+    blockers.push("Too many similar detail requests were sent to this profile this week.");
+  }
+
+  if (pendingRequests.length >= 3) {
+    blockers.push("Too many unresolved detail requests are already pending for this profile.");
+  }
+
+  if (scopedRequests.length >= 6) {
+    blockers.push("Too many detail requests were sent to this profile this week.");
+  }
+
+  return {
+    allowed: blockers.length === 0,
+    blockers,
+    pendingRequestCount: pendingRequests.length,
+    recentRequestCount: scopedRequests.length,
+    similarPendingCount: similarPendingRequests.length,
+    similarRequestCount: similarRequests.length,
+  };
 }
 
 export function requiresContactDisclosureStepUp({

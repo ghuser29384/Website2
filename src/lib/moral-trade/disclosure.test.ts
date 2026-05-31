@@ -5,6 +5,7 @@ import {
   BACKGROUND_QUERY_COSTS,
   BACKGROUND_QUERY_DAILY_LIMITS,
 } from "../background-query-budget";
+import { PRIVACY_ACCESS_REQUEST_WINDOW_DAYS } from "../background-disclosure";
 import {
   evaluateMoralTradeDisclosureGrant,
   getMoralTradeDisclosureContract,
@@ -135,10 +136,23 @@ test("disclosure contract validates staged disclosure and privacy grant boundari
         control.minSpecificity === 3,
     ),
   );
+  assert.ok(
+    contract.searchPrivacyControls.some(
+      (control) =>
+        control.key === "detail_request_probe_limit" &&
+        control.scope === "privacy_access_request" &&
+        control.windowDays === PRIVACY_ACCESS_REQUEST_WINDOW_DAYS &&
+        control.pendingLimit === 3 &&
+        control.similarPendingLimit === 1 &&
+        control.similarWeeklyLimit === 3 &&
+        control.weeklyLimit === 6,
+    ),
+  );
   assert.ok(contract.approvedFactorCodes.includes("owner_approval_required"));
   assert.ok(contract.approvedFactorCodes.includes("step_up_auth_required"));
   assert.ok(contract.contractTests.includes("disclosure_query_budget_contract_smoke"));
   assert.ok(contract.contractTests.includes("disclosure_contact_step_up_contract_smoke"));
+  assert.ok(contract.contractTests.includes("privacy_access_request_cadence_smoke"));
   assert.ok(contract.contractTests.includes("disclosure_grant_evaluate_route_contract"));
 });
 
