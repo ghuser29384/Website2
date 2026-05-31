@@ -31,7 +31,17 @@ test("default background notification preferences use inbox and digest, not push
   );
   assert.equal(
     preferences.every((preference) =>
-      preference.channel === "email_digest" ? preference.digestCadence === "daily" : true,
+      preference.channel === "email_digest" && preference.eventKind === "match_suggestions"
+        ? preference.digestCadence === "daily"
+        : true,
+    ),
+    true,
+  );
+  assert.equal(
+    preferences.every((preference) =>
+      preference.channel === "email_digest" && preference.eventKind !== "match_suggestions"
+        ? preference.digestCadence === "immediate"
+        : true,
     ),
     true,
   );

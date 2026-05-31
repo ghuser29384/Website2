@@ -652,10 +652,13 @@ export async function saveBackgroundNotificationPreferencesAction(formData: Form
     profileId: viewer.authUser.id,
   }).map((preference) => ({
     channel: preference.channel,
+    daily_cap: preference.dailyCap ?? null,
     digest_cadence: preference.digestCadence,
     enabled: preference.enabled,
     event_kind: preference.eventKind,
     profile_id: preference.profileId,
+    quiet_hours_end: preference.quietHoursEnd ?? null,
+    quiet_hours_start: preference.quietHoursStart ?? null,
     updated_at: new Date().toISOString(),
   }));
   const supabase = await createClient();

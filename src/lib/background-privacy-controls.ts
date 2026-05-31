@@ -14,10 +14,13 @@ export type ProfileDataRightScope = "background_networking" | "profile" | "full_
 
 export interface BackgroundNotificationPreferenceDraft {
   channel: BackgroundNotificationChannel;
+  dailyCap?: number | null;
   digestCadence: BackgroundNotificationDigestCadence;
   enabled: boolean;
   eventKind: BackgroundNotificationEventKind;
   profileId: string;
+  quietHoursEnd?: number | null;
+  quietHoursStart?: number | null;
 }
 
 export interface ProfileDataRightValidationInput {
@@ -255,10 +258,13 @@ export function createDefaultBackgroundNotificationPreferences(profileId: string
     });
     rows.push({
       channel: "email_digest",
-      digestCadence: "daily",
+      dailyCap: eventKind === "match_suggestions" ? 1 : null,
+      digestCadence: eventKind === "match_suggestions" ? "daily" : "immediate",
       enabled: true,
       eventKind,
       profileId,
+      quietHoursEnd: 8,
+      quietHoursStart: 22,
     });
     rows.push({
       channel: "web_push",

@@ -1,5 +1,6 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 
+import { shouldSendBackgroundNotificationImmediately } from "@/lib/background-notification-policy";
 import { getBackgroundNotificationEventKindForWishNotification } from "@/lib/background-privacy-controls";
 import { getSiteUrl } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
@@ -88,7 +89,9 @@ export async function queueSafeWishNotificationEmails({
   );
   const { data: channelPrefs, error: channelPrefsError } = await supabase
     .from("background_notification_preferences")
-    .select("profile_id, event_kind, channel, enabled, digest_cadence")
+    .select(
+      "profile_id, event_kind, channel, enabled, digest_cadence, quiet_until, quiet_hours_start, quiet_hours_end, daily_cap",
+    )
     .in("profile_id", profileIds)
     .eq("channel", "email_digest");
 
@@ -99,21 +102,41 @@ export async function queueSafeWishNotificationEmails({
     };
   }
 
-  const profilesWithEmailPrefs = new Set((channelPrefs ?? []).map((preference) => preference.profile_id));
-  const enabledEmailPreferenceKeys = new Set(
-    (channelPrefs ?? [])
-      .filter((preference) => preference.enabled && preference.digest_cadence !== "none")
-      .map((preference) => `${preference.profile_id}:${preference.event_kind}`),
+  const emailPreferenceByKey = new Map(
+    (channelPrefs ?? []).map((preference) => [
+      `${preference.profile_id}:${preference.event_kind}`,
+      preference,
+    ]),
   );
   const emailRows: EmailOutboxInsert[] = notifications
     .filter((notification) => {
       const eventKind = getBackgroundNotificationEventKindForWishNotification(notification.kind);
+      const preference = emailPreferenceByKey.get(`${notification.profile_id}:${eventKind}`);
 
-      if (profilesWithEmailPrefs.has(notification.profile_id)) {
-        return enabledEmailPreferenceKeys.has(`${notification.profile_id}:${eventKind}`);
+      if (preference) {
+        return shouldSendBackgroundNotificationImmediately({
+          channel: "email_digest",
+          dailyCap: preference.daily_cap,
+          digestCadence: preference.digest_cadence,
+          enabled: preference.enabled,
+          eventKind,
+          quietHoursEnd: preference.quiet_hours_end,
+          quietHoursStart: preference.quiet_hours_start,
+          quietUntil: preference.quiet_until,
+        });
       }
 
-      return emailEnabledProfileIds.has(notification.profile_id);
+      return (
+        emailEnabledProfileIds.has(notification.profile_id) &&
+        shouldSendBackgroundNotificationImmediately({
+          channel: "email_digest",
+          digestCadence: eventKind === "match_suggestions" ? "daily" : "immediate",
+          enabled: true,
+          eventKind,
+          quietHoursEnd: 8,
+          quietHoursStart: 22,
+        })
+      );
     })
     .map((notification) => {
       const recipientEmail = emailByProfileId.get(notification.profile_id) ?? "";
