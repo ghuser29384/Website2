@@ -492,6 +492,10 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(campaigns.campaigns.some((campaign) => campaign.thresholdPassed));
   assert.ok(detail);
   assert.equal(detail.campaign.proofPath, `/mpgf/pools/${detail.campaign.slug}`);
+  assert.equal(detail.campaign.campaignPath, `/mpgf/campaigns/${detail.campaign.slug}`);
+  assert.equal(detail.campaign.incidentState, "clear");
+  assert.equal(detail.campaign.appealState, "none");
+  assert.equal(detail.campaign.destinationProof.destinationRef.includes("Demo"), true);
   assert.equal("supporterReason" in detail.campaign, false);
   assert.equal("userId" in detail.campaign, false);
   assert.ok(preview);
@@ -540,6 +544,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   }
 
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const campaignPage = readFileSync("src/app/mpgf/campaigns/[campaignId]/page.tsx", "utf8");
   const contributionModal = readFileSync("src/components/mpgf/mpgf-contribution-modal.tsx", "utf8");
   const realMoneyCheckout = readFileSync("src/lib/mpgf/real-money.ts", "utf8");
   const mpgfHubPage = readFileSync("src/app/mpgf/page.tsx", "utf8");
@@ -553,6 +558,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     /Estimated match/,
     /Final match/,
     /Evidence and destination proof/,
+    /Campaign page/,
     /Appeal or dissent note/,
     /milestoneSchedule/,
     /getMpgfPublicGoodsMatchPreviewApi/,
@@ -562,6 +568,22 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   }
 
   assert.match(roundPage, /MpgfContributionModal/);
+  for (const expected of [
+    /Direct total/,
+    /Counted total/,
+    /Match estimate/,
+    /Donor count/,
+    /Threshold flags/,
+    /Milestone schedule/,
+    /Review summary/,
+    /Destination proof/,
+    /Incident state/,
+    /Appeal state/,
+    /getMpgfPublicGoodsCampaignApi/,
+    /getMpgfPublicGoodsLedgerApi/,
+  ]) {
+    assert.match(campaignPage, expected);
+  }
   for (const expected of [
     /role="dialog"/,
     /aria-modal="true"/,

@@ -307,6 +307,9 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
                   ))}
                 </div>
                 <div className="mpgf-admin-action-grid">
+                  <Link className="button button-secondary" href={campaign.campaignPath}>
+                    Campaign page
+                  </Link>
                   <Link className="button button-secondary" href={campaign.proofPath}>
                     Evidence and destination proof
                   </Link>

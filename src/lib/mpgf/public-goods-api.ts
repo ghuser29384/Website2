@@ -100,6 +100,7 @@ function publicCampaignProgress(campaign: MpgfPublicGoodsCampaign) {
   const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
   const line = allocation.lines.find((candidate) => candidate.campaignId === campaign.id);
   const approvedMatchCents = (line?.baseMatchCents ?? 0) + (line?.qfBonusCents ?? 0);
+  const reviewSummary = latestReviewSummary(campaign.id);
 
   return {
     campaignId: campaign.id,
@@ -124,7 +125,10 @@ function publicCampaignProgress(campaign: MpgfPublicGoodsCampaign) {
       releasePct: milestone.releasePct,
       status: milestone.status,
     })),
-    reviewSummary: latestReviewSummary(campaign.id),
+    reviewSummary,
+    incidentState: campaign.reviewStatus === "blocked" ? "frozen" : "clear",
+    appealState: reviewSummary.appealOpen ? "appeal_requested" : "none",
+    campaignPath: `/mpgf/campaigns/${campaign.slug}`,
     proofPath: `/mpgf/pools/${campaign.slug}`,
   };
 }
@@ -219,6 +223,11 @@ export function getMpgfPublicGoodsCampaignApi(campaignIdOrSlug: string) {
       baselineRule: campaign.baselineRule,
       exitRule: campaign.exitRule,
       challengeWindowEndsAt: campaign.challengeWindowEndsAt ?? null,
+      destinationProof: {
+        destinationRef: campaign.destinationRef,
+        destinationType: campaign.destinationType,
+        verificationMethod: campaign.verificationMethod,
+      },
     },
   };
 }
