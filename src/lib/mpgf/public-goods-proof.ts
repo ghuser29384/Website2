@@ -14,6 +14,7 @@ import type {
   MpgfPublicGoodsCampaign,
   MpgfPublicGoodsPaymentProof,
   MpgfPublicGoodsReviewCase,
+  MpgfPublicGoodsReviewReasonCode,
   MpgfPublicGoodsSubscription,
 } from "./types";
 
@@ -32,7 +33,7 @@ export interface MpgfPublicGoodsProofSummary {
   sponsorTopUpCents: number;
   verifiedProofCount: number;
   rejectedProofCount: number;
-  latestReasonCode: string | null;
+  latestReasonCode: MpgfPublicGoodsReviewReasonCode | null;
   latestProofStatus: MpgfPublicGoodsPaymentProof["status"] | null;
   latestReconciliationSource: MpgfPublicGoodsPaymentProof["reconciliationSource"] | null;
   latestVerifiedAt: string | null;
@@ -69,6 +70,28 @@ function normalizeReconciliationSource(value: unknown): MpgfPublicGoodsPaymentPr
   return "external_receipt";
 }
 
+const publicGoodsReasonCodes = new Set<MpgfPublicGoodsReviewReasonCode>([
+  "destination_verified",
+  "needs_destination_evidence",
+  "needs_identity_evidence",
+  "blocked_threat_baseline",
+  "blocked_destination_risk",
+  "challenge_opened",
+  "challenge_resolved",
+  "external_handoff_verified",
+  "external_handoff_failed",
+  "duplicate_identity_blocked",
+  "appeal_requested",
+  "appeal_denied",
+  "appeal_upheld",
+]);
+
+export function normalizeMpgfPublicGoodsReasonCode(value: unknown): MpgfPublicGoodsReviewReasonCode {
+  return typeof value === "string" && publicGoodsReasonCodes.has(value as MpgfPublicGoodsReviewReasonCode)
+    ? (value as MpgfPublicGoodsReviewReasonCode)
+    : "needs_destination_evidence";
+}
+
 function mapPaymentProofRow(row: Record<string, unknown>): MpgfPublicGoodsPaymentProof {
   return {
     id: String(row.id),
@@ -77,10 +100,7 @@ function mapPaymentProofRow(row: Record<string, unknown>): MpgfPublicGoodsPaymen
     sourceEventRef: typeof row.source_event_ref === "string" ? "redacted" : undefined,
     amountVerifiedCents: toNumber(row.amount_verified_cents),
     status: normalizeProofStatus(row.status),
-    reasonCode:
-      row.reason_code === "external_handoff_verified" || row.reason_code === "external_handoff_failed"
-        ? row.reason_code
-        : "needs_destination_evidence",
+    reasonCode: normalizeMpgfPublicGoodsReasonCode(row.reason_code),
     reconciliationSource: normalizeReconciliationSource(row.reconciliation_source),
     verifiedAt: typeof row.verified_at === "string" ? row.verified_at : undefined,
     createdAt: String(row.created_at),
@@ -106,10 +126,7 @@ function mapReviewCaseRow(row: Record<string, unknown>): MpgfPublicGoodsReviewCa
       row.action === "finalize"
         ? row.action
         : "needs_evidence",
-    reasonCode:
-      row.reason_code === "external_handoff_verified" || row.reason_code === "external_handoff_failed"
-        ? row.reason_code
-        : "needs_destination_evidence",
+    reasonCode: normalizeMpgfPublicGoodsReasonCode(row.reason_code),
     reviewerId: "redacted-reviewer",
     openedAt: String(row.opened_at),
     closedAt: typeof row.closed_at === "string" ? row.closed_at : undefined,

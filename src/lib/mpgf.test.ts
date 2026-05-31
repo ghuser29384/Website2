@@ -61,6 +61,7 @@ import {
 } from "./mpgf/data";
 import { buildMpgfPublicGoodsReconciliationRows } from "./mpgf/public-goods-reconciliation";
 import {
+  normalizeMpgfPublicGoodsReasonCode,
   resolveMpgfPublicGoodsRoute,
   summarizeMpgfPublicGoodsProof,
 } from "./mpgf/public-goods-proof";
@@ -615,6 +616,45 @@ test("MPGF public-goods proof pages resolve campaign routes and expose public-sa
     campaign,
     assuranceLine: line,
   });
+  const exclusionProof = summarizeMpgfPublicGoodsProof({
+    campaign,
+    assuranceLine: line,
+    paymentProofs: [
+      {
+        id: "proof-verified",
+        campaignId: campaign.id,
+        amountVerifiedCents: 1_000,
+        status: "verified",
+        reasonCode: "external_handoff_verified",
+        reconciliationSource: "external_receipt",
+        verifiedAt: "2026-05-13T12:00:00.000Z",
+        createdAt: "2026-05-13T12:00:00.000Z",
+      },
+      {
+        id: "proof-duplicate",
+        campaignId: campaign.id,
+        amountVerifiedCents: 0,
+        status: "rejected",
+        reasonCode: "duplicate_identity_blocked",
+        reconciliationSource: "external_receipt",
+        createdAt: "2026-05-14T12:00:00.000Z",
+      },
+    ],
+    reviewCases: [
+      {
+        id: "review-appeal",
+        campaignId: campaign.id,
+        state: "challenge_window",
+        action: "challenge",
+        reasonCode: "appeal_requested",
+        reviewerId: "redacted-reviewer",
+        openedAt: "2026-05-14T13:00:00.000Z",
+        appealStatus: "appeal_requested",
+        publicNotes: "Appeal requested for duplicate-proof review.",
+        allowedNextActions: ["needs_evidence", "block", "finalize"],
+      },
+    ],
+  });
   const page = readFileSync("src/app/mpgf/pools/[poolId]/page.tsx", "utf8");
 
   assert.equal(bySlug.campaign?.id, campaign.id);
@@ -624,6 +664,11 @@ test("MPGF public-goods proof pages resolve campaign routes and expose public-sa
   assert.equal(proof.latestReasonCode, "external_handoff_verified");
   assert.equal(proof.latestReconciliationSource, "external_receipt");
   assert.equal(proof.publicEvidenceSource, "demo_fixture");
+  assert.equal(exclusionProof.latestReasonCode, "duplicate_identity_blocked");
+  assert.equal(exclusionProof.latestAppealStatus, "appeal_requested");
+  assert.equal(normalizeMpgfPublicGoodsReasonCode("challenge_opened"), "challenge_opened");
+  assert.equal(normalizeMpgfPublicGoodsReasonCode("appeal_upheld"), "appeal_upheld");
+  assert.equal(normalizeMpgfPublicGoodsReasonCode("not-a-reason-code"), "needs_destination_evidence");
   assert.match(page, /loadMpgfPublicGoodsProofSummary/);
   assert.match(page, /Sponsor top-up/);
   assert.match(page, /Public evidence source/);

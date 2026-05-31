@@ -1,12 +1,16 @@
 import { createServiceClient } from "@/lib/supabase/server";
 
-import { reconcileMpgfPublicGoodsExternalHandoff } from "./mechanism";
+import {
+  MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES,
+  reconcileMpgfPublicGoodsExternalHandoff,
+} from "./mechanism";
 import type {
   MpgfPublicGoodsCampaign,
   MpgfPublicGoodsCaptureMode,
   MpgfPublicGoodsPaymentProof,
   MpgfPublicGoodsPledge,
   MpgfPublicGoodsReviewCase,
+  MpgfPublicGoodsReviewReasonCode,
   MpgfPublicGoodsVisibilityMode,
 } from "./types";
 
@@ -75,6 +79,13 @@ function normalizeVisibilityMode(value: unknown): MpgfPublicGoodsVisibilityMode 
   }
 
   return "private_amount";
+}
+
+function normalizeReasonCode(value: unknown): MpgfPublicGoodsReviewReasonCode {
+  return typeof value === "string" &&
+    MPGF_PUBLIC_GOODS_REVIEW_REASON_CODES.includes(value as MpgfPublicGoodsReviewReasonCode)
+    ? (value as MpgfPublicGoodsReviewReasonCode)
+    : "needs_destination_evidence";
 }
 
 function mapCampaignRow(row: Record<string, unknown>): MpgfPublicGoodsCampaign {
@@ -213,10 +224,7 @@ export async function reconcileMpgfPublicGoodsPaymentProof(
           row.status === "superseded"
             ? row.status
             : "pending_review",
-        reasonCode:
-          row.reason_code === "external_handoff_verified" || row.reason_code === "external_handoff_failed"
-            ? row.reason_code
-            : "needs_destination_evidence",
+        reasonCode: normalizeReasonCode(row.reason_code),
         reconciliationSource:
           row.reconciliation_source === "fiscal_host_webhook" || row.reconciliation_source === "sponsor_signed_intent"
             ? row.reconciliation_source
@@ -229,10 +237,7 @@ export async function reconcileMpgfPublicGoodsPaymentProof(
         campaignId: String(row.campaign_id),
         state: row.status === "verified" ? "approved" : "needs_evidence",
         action: row.status === "verified" ? "approve" : "needs_evidence",
-        reasonCode:
-          row.reason_code === "external_handoff_verified" || row.reason_code === "external_handoff_failed"
-            ? row.reason_code
-            : "needs_destination_evidence",
+        reasonCode: normalizeReasonCode(row.reason_code),
         reviewerId: "mpgf-reconciliation-worker",
         openedAt: String(row.created_at),
         closedAt: typeof row.verified_at === "string" ? row.verified_at : undefined,
