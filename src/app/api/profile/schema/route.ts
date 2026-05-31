@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   return buildMoralTradeApiJsonResponse(
     {
-      exportVersion: "background-networking-v5",
+      exportVersion: "background-networking-v6",
       importableCollections: [
         "wishProfile",
         "wishEntries",
@@ -32,6 +32,7 @@ export async function GET(request: Request) {
       ],
       notes: [
         "Imports are scoped to the signed-in user only.",
+        "Private wish entries, profile-sensitive text, source notes, connection summaries, and regenerated synthesis text are encrypted on write when imported.",
         "Saved searches may include public /offers filter metadata for cause-follow and live-offer notification workflows.",
         "Counterparty-linked records such as privacy grants, privacy access requests, match suggestions, introduction tasks, and agreements are not imported through this endpoint.",
         "After import, deterministic synthesis is refreshed from the imported records.",

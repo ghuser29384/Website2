@@ -1142,6 +1142,8 @@ export interface Database {
           public_preview: string;
           safety_status: "clear" | "flagged" | "blocked";
           safety_notes: string;
+          sensitive_ciphertexts: Record<string, string>;
+          sensitive_encryption_version: string;
           created_at: string;
           updated_at: string;
         };
@@ -1171,6 +1173,8 @@ export interface Database {
           public_preview?: string;
           safety_status?: "clear" | "flagged" | "blocked";
           safety_notes?: string;
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -1199,6 +1203,8 @@ export interface Database {
           public_preview?: string;
           safety_status?: "clear" | "flagged" | "blocked";
           safety_notes?: string;
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -1211,6 +1217,8 @@ export interface Database {
           cause_area: string;
           title: string;
           body: string;
+          body_ciphertext: string;
+          body_encryption_version: string;
           trade_mode: string;
           visibility: "private" | "preview";
           safety_status: "clear" | "flagged" | "blocked";
@@ -1224,6 +1232,8 @@ export interface Database {
           cause_area?: string;
           title?: string;
           body: string;
+          body_ciphertext?: string;
+          body_encryption_version?: string;
           trade_mode?: string;
           visibility?: "private" | "preview";
           safety_status?: "clear" | "flagged" | "blocked";
@@ -1235,6 +1245,8 @@ export interface Database {
           cause_area?: string;
           title?: string;
           body?: string;
+          body_ciphertext?: string;
+          body_encryption_version?: string;
           trade_mode?: string;
           visibility?: "private" | "preview";
           safety_status?: "clear" | "flagged" | "blocked";
@@ -1372,6 +1384,8 @@ export interface Database {
           imported_at: string | null;
           source_connection_id: string | null;
           is_active: boolean;
+          sensitive_ciphertexts: Record<string, string>;
+          sensitive_encryption_version: string;
           created_at: string;
           updated_at: string;
         };
@@ -1396,6 +1410,8 @@ export interface Database {
           imported_at?: string | null;
           source_connection_id?: string | null;
           is_active?: boolean;
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -1418,6 +1434,8 @@ export interface Database {
           imported_at?: string | null;
           source_connection_id?: string | null;
           is_active?: boolean;
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -1995,6 +2013,8 @@ export interface Database {
           last_sync_summary: string;
           last_import_item_count: number;
           last_imported_at: string | null;
+          sensitive_ciphertexts: Record<string, string>;
+          sensitive_encryption_version: string;
           created_at: string;
           updated_at: string;
         };
@@ -2020,6 +2040,8 @@ export interface Database {
           last_sync_summary?: string;
           last_import_item_count?: number;
           last_imported_at?: string | null;
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -2043,6 +2065,8 @@ export interface Database {
           last_sync_summary?: string;
           last_import_item_count?: number;
           last_imported_at?: string | null;
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -2066,6 +2090,8 @@ export interface Database {
           missing_fields: string[];
           confidence_breakdown: Record<string, number>;
           synthesis_version: string;
+          sensitive_ciphertexts: Record<string, string>;
+          sensitive_encryption_version: string;
           created_at: string;
           updated_at: string;
         };
@@ -2087,6 +2113,8 @@ export interface Database {
           missing_fields?: string[];
           confidence_breakdown?: Record<string, number>;
           synthesis_version?: string;
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -2107,6 +2135,8 @@ export interface Database {
           missing_fields?: string[];
           confidence_breakdown?: Record<string, number>;
           synthesis_version?: string;
+          sensitive_ciphertexts?: Record<string, string>;
+          sensitive_encryption_version?: string;
           updated_at?: string;
         };
         Relationships: [];

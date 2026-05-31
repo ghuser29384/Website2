@@ -63,6 +63,7 @@ import {
   formatBackgroundNotificationEventKind,
   getBackgroundNotificationPreferenceKey,
 } from "@/lib/background-privacy-controls";
+import { hasBackgroundFieldEncryptionKey } from "@/lib/background-field-encryption";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
@@ -136,6 +137,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const formMessage = getFormMessage(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
   const stripeReady = hasStripeEnv();
+  const backgroundFieldEncryptionReady = hasBackgroundFieldEncryptionKey();
   const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
   const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
   const priorityFundSummary =
@@ -682,6 +684,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <div>
                   <dt>Authenticated cache</dt>
                   <dd>Private, no-store</dd>
+                </div>
+                <div>
+                  <dt>Field encryption</dt>
+                  <dd>{backgroundFieldEncryptionReady ? "Configured for new private text" : "Configuration required"}</dd>
+                </div>
+                <div>
+                  <dt>Account security</dt>
+                  <dd>Use MFA before storing high-sensitivity wishes</dd>
                 </div>
               </dl>
               <div className="mini-list">

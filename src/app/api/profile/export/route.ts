@@ -4,6 +4,14 @@ import {
   buildMoralTradeApiRateLimitBlocker,
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
+import {
+  PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
+  PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
+  SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS,
+  WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+  overlayBackgroundRecordSensitiveText,
+  overlayEncryptedWishEntryBody,
+} from "@/lib/background-field-encryption";
 import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
@@ -139,15 +147,37 @@ export async function GET(request: Request) {
     return jsonResponse({ error: firstError.message }, 500);
   }
 
+  const exportedWishProfile = wishProfile.data
+    ? overlayBackgroundRecordSensitiveText(
+        wishProfile.data,
+        WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+      )
+    : null;
+  const exportedWishEntries = (wishEntries.data ?? []).map((entry) =>
+    overlayEncryptedWishEntryBody(entry),
+  );
+  const exportedSourceConnections = (sourceConnections.data ?? []).map((connection) =>
+    overlayBackgroundRecordSensitiveText(connection, SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS),
+  );
+  const exportedProfileSources = (profileSources.data ?? []).map((source) =>
+    overlayBackgroundRecordSensitiveText(source, PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS),
+  );
+  const exportedProfileSynthesis = profileSynthesis.data
+    ? overlayBackgroundRecordSensitiveText(
+        profileSynthesis.data,
+        PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
+      )
+    : null;
+
   return jsonResponse({
     exportedAt: new Date().toISOString(),
     profile: profile.data,
-    wishProfile: wishProfile.data,
-    wishEntries: wishEntries.data ?? [],
+    wishProfile: exportedWishProfile,
+    wishEntries: exportedWishEntries,
     personalDelegate: personalDelegate.data,
-    sourceConnections: sourceConnections.data ?? [],
-    profileSources: profileSources.data ?? [],
-    profileSynthesis: profileSynthesis.data,
+    sourceConnections: exportedSourceConnections,
+    profileSources: exportedProfileSources,
+    profileSynthesis: exportedProfileSynthesis,
     helperStrategies: helperStrategies.data ?? [],
     helperRuns: helperRuns.data ?? [],
     introductionTasks: introductionTasks.data ?? [],

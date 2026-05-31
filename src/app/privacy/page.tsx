@@ -35,7 +35,8 @@ const transparencyRows = [
   {
     title: "Private wish and source data",
     purpose: "Support broad previews, consent-gated introductions, and manual source summaries.",
-    processors: "Stored in Moral Trade records backed by Supabase; raw external feeds are not automatically ingested.",
+    processors:
+      "Stored in Moral Trade records backed by Supabase; new sensitive wish/source text is app-level encrypted before storage.",
     retention:
       "Kept only for the consent scope or review workflow that needs it, with exact wishes and source notes excluded from public cards and analytics.",
   },

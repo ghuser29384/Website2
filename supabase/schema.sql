@@ -863,6 +863,8 @@ create table if not exists public.wish_profiles (
   public_preview text not null default '',
   safety_status text not null default 'clear' check (safety_status in ('clear', 'flagged', 'blocked')),
   safety_notes text not null default '',
+  sensitive_ciphertexts jsonb not null default '{}'::jsonb,
+  sensitive_encryption_version text not null default '',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -874,6 +876,8 @@ create table if not exists public.wish_entries (
   cause_area text not null default '',
   title text not null default '',
   body text not null,
+  body_ciphertext text not null default '',
+  body_encryption_version text not null default '',
   trade_mode text not null default 'open',
   visibility text not null default 'private' check (visibility in ('private', 'preview')),
   safety_status text not null default 'clear' check (safety_status in ('clear', 'flagged', 'blocked')),
@@ -918,6 +922,10 @@ alter table public.wish_profiles add column if not exists notification_dashboard
 alter table public.wish_profiles add column if not exists privacy_stage text not null default 'broad';
 alter table public.wish_profiles add column if not exists brokerage_preference text not null default '';
 alter table public.wish_profiles add column if not exists match_frequency text not null default 'weekly';
+alter table public.wish_profiles add column if not exists sensitive_ciphertexts jsonb not null default '{}'::jsonb;
+alter table public.wish_profiles add column if not exists sensitive_encryption_version text not null default '';
+alter table public.wish_entries add column if not exists body_ciphertext text not null default '';
+alter table public.wish_entries add column if not exists body_encryption_version text not null default '';
 alter table public.match_suggestions add column if not exists match_basis text[] not null default '{}';
 alter table public.match_suggestions add column if not exists shared_causes text[] not null default '{}';
 alter table public.match_suggestions add column if not exists suggested_first_step text not null default '';
@@ -972,6 +980,8 @@ create table if not exists public.profile_sources (
   needs_review boolean not null default true,
   imported_at timestamptz,
   is_active boolean not null default true,
+  sensitive_ciphertexts jsonb not null default '{}'::jsonb,
+  sensitive_encryption_version text not null default '',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -1119,6 +1129,8 @@ create table if not exists public.source_connections (
   last_sync_summary text not null default '',
   last_import_item_count integer not null default 0 check (last_import_item_count >= 0),
   last_imported_at timestamptz,
+  sensitive_ciphertexts jsonb not null default '{}'::jsonb,
+  sensitive_encryption_version text not null default '',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -1141,6 +1153,8 @@ create table if not exists public.profile_syntheses (
   missing_fields text[] not null default '{}',
   confidence_breakdown jsonb not null default '{}'::jsonb,
   synthesis_version text not null default 'deterministic-v1',
+  sensitive_ciphertexts jsonb not null default '{}'::jsonb,
+  sensitive_encryption_version text not null default '',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -1520,6 +1534,8 @@ alter table public.profile_sources add column if not exists captured_tags text[]
 alter table public.profile_sources add column if not exists needs_review boolean not null default true;
 alter table public.profile_sources add column if not exists imported_at timestamptz;
 alter table public.profile_sources add column if not exists source_connection_id uuid references public.source_connections (id) on delete set null;
+alter table public.profile_sources add column if not exists sensitive_ciphertexts jsonb not null default '{}'::jsonb;
+alter table public.profile_sources add column if not exists sensitive_encryption_version text not null default '';
 
 alter table public.network_invites add column if not exists target_kind text not null default 'person';
 alter table public.network_invites add column if not exists target_url text not null default '';
@@ -1531,6 +1547,8 @@ alter table public.source_connections add column if not exists import_mode text 
 alter table public.source_connections add column if not exists sync_frequency text not null default 'manual';
 alter table public.source_connections add column if not exists last_sync_summary text not null default '';
 alter table public.source_connections add column if not exists last_import_item_count integer not null default 0;
+alter table public.source_connections add column if not exists sensitive_ciphertexts jsonb not null default '{}'::jsonb;
+alter table public.source_connections add column if not exists sensitive_encryption_version text not null default '';
 
 alter table public.profile_syntheses add column if not exists cause_priorities text[] not null default '{}';
 alter table public.profile_syntheses add column if not exists offer_terms text[] not null default '{}';
@@ -1540,6 +1558,8 @@ alter table public.profile_syntheses add column if not exists constraint_flags t
 alter table public.profile_syntheses add column if not exists uncertainty_flags text[] not null default '{}';
 alter table public.profile_syntheses add column if not exists missing_fields text[] not null default '{}';
 alter table public.profile_syntheses add column if not exists confidence_breakdown jsonb not null default '{}'::jsonb;
+alter table public.profile_syntheses add column if not exists sensitive_ciphertexts jsonb not null default '{}'::jsonb;
+alter table public.profile_syntheses add column if not exists sensitive_encryption_version text not null default '';
 
 alter table public.helper_strategies add column if not exists min_score smallint not null default 55;
 alter table public.helper_strategies add column if not exists strategy_config jsonb not null default '{}'::jsonb;
@@ -1670,8 +1690,10 @@ create index if not exists profiles_follower_sort_idx on public.profiles (follow
 create index if not exists profiles_karma_sort_idx on public.profiles (karma desc, offer_count desc, id);
 create index if not exists profiles_comment_sort_idx on public.profiles (comment_count desc, offer_count desc, id);
 create index if not exists wish_profiles_discoverable_idx on public.wish_profiles (is_discoverable, share_public_preview, safety_status, updated_at desc);
+create index if not exists wish_profiles_sensitive_encryption_idx on public.wish_profiles (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
 create index if not exists wish_entries_profile_type_idx on public.wish_entries (profile_id, entry_type, updated_at desc);
 create index if not exists wish_entries_preview_idx on public.wish_entries (visibility, safety_status, entry_type, updated_at desc);
+create index if not exists wish_entries_body_encryption_idx on public.wish_entries (body_encryption_version, updated_at desc) where body_encryption_version <> '';
 create index if not exists match_suggestions_profile_a_idx on public.match_suggestions (profile_a_id, status, updated_at desc);
 create index if not exists match_suggestions_profile_b_idx on public.match_suggestions (profile_b_id, status, updated_at desc);
 create index if not exists match_suggestions_score_idx on public.match_suggestions (status, score desc, updated_at desc);
@@ -1679,6 +1701,7 @@ create index if not exists match_consents_profile_id_idx on public.match_consent
 create index if not exists wish_notifications_profile_unread_idx on public.wish_notifications (profile_id, read_at, created_at desc);
 create index if not exists profile_sources_profile_active_idx on public.profile_sources (profile_id, is_active, updated_at desc);
 create index if not exists profile_sources_profile_review_idx on public.profile_sources (profile_id, needs_review, updated_at desc);
+create index if not exists profile_sources_sensitive_encryption_idx on public.profile_sources (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
 create index if not exists clarification_questions_profile_status_idx on public.clarification_questions (profile_id, status, created_at desc);
 create index if not exists background_match_runs_profile_created_idx on public.background_match_runs (profile_id, created_at desc);
 create index if not exists match_explanation_snapshots_profile_created_idx on public.match_explanation_snapshots (profile_id, created_at desc);
@@ -1712,6 +1735,8 @@ create index if not exists network_invites_profile_priority_idx on public.networ
 create index if not exists personal_delegates_status_idx on public.personal_delegates (status, operating_mode, last_run_at asc nulls first);
 create index if not exists source_connections_profile_status_idx on public.source_connections (profile_id, access_status, updated_at desc);
 create index if not exists source_connections_profile_import_idx on public.source_connections (profile_id, access_status, sync_frequency, updated_at desc);
+create index if not exists source_connections_sensitive_encryption_idx on public.source_connections (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
+create index if not exists profile_syntheses_sensitive_encryption_idx on public.profile_syntheses (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
 create index if not exists helper_strategies_profile_status_idx on public.helper_strategies (profile_id, status, priority asc, updated_at desc);
 create index if not exists helper_runs_profile_created_idx on public.helper_runs (profile_id, created_at desc);
 create index if not exists helper_runs_strategy_created_idx on public.helper_runs (strategy_id, created_at desc);

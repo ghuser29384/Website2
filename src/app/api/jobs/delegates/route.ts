@@ -9,6 +9,11 @@ import {
   buildMatchExplanationSnapshot,
   buildPrivacySafeMatchAuditMetadata,
 } from "@/lib/background-explanations";
+import {
+  PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
+  WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+  overlayBackgroundRecordSensitiveText,
+} from "@/lib/background-field-encryption";
 import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
 import {
   completeBackgroundQueryEvent,
@@ -192,15 +197,21 @@ async function processDelegates(request: Request) {
 
   const strategyRows = (strategies ?? []) as HelperStrategyRow[];
   const profileById = new Map(
-    ((profiles ?? []) as WishProfileRow[]).map((profile) => [profile.profile_id, profile]),
+    ((profiles ?? []) as WishProfileRow[]).map((profile) => [
+      profile.profile_id,
+      overlayBackgroundRecordSensitiveText(profile, WISH_PROFILE_SENSITIVE_TEXT_FIELDS),
+    ]),
   );
   const synthesisById = new Map(
-    ((syntheses ?? []) as ProfileSynthesisRow[]).map((synthesis) => [synthesis.profile_id, synthesis]),
+    ((syntheses ?? []) as ProfileSynthesisRow[]).map((synthesis) => [
+      synthesis.profile_id,
+      overlayBackgroundRecordSensitiveText(synthesis, PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS),
+    ]),
   );
   const previewSynthesisById = new Map(
     ((previewSyntheses ?? []) as ProfileSynthesisRow[]).map((synthesis) => [
       synthesis.profile_id,
-      synthesis,
+      overlayBackgroundRecordSensitiveText(synthesis, PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS),
     ]),
   );
   const previewRows = (previews ?? []) as WishProfilePreviewRow[];

@@ -5,6 +5,14 @@ import {
   calculateDonationOffsetPoolProgress,
   type DonationOffsetPoolProgress,
 } from "@/lib/donation-offsets";
+import {
+  PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
+  PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
+  SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS,
+  WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+  overlayBackgroundRecordSensitiveText,
+  overlayEncryptedWishEntryBody,
+} from "@/lib/background-field-encryption";
 import type { Database } from "@/lib/supabase/database.types";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -2051,10 +2059,16 @@ export async function getWishProfileForUser(userId: string): Promise<WishProfile
     return null;
   }
 
-  const rows = (entries ?? []) as WishEntryRow[];
+  const rows = ((entries ?? []) as WishEntryRow[]).map((entry) =>
+    overlayEncryptedWishEntryBody(entry),
+  );
+  const decryptedProfile = overlayBackgroundRecordSensitiveText(
+    profile as WishProfileRow,
+    WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+  );
 
   return {
-    ...(profile as WishProfileRow),
+    ...decryptedProfile,
     wishes: rows.filter((entry) => entry.entry_type === "wish"),
     offers: rows.filter((entry) => entry.entry_type === "offer"),
     asks: rows.filter((entry) => entry.entry_type === "ask"),
@@ -2180,7 +2194,9 @@ async function listProfileSourcesForUser(userId: string): Promise<ProfileSourceR
     throw new Error(error.message);
   }
 
-  return (data ?? []) as ProfileSourceRow[];
+  return ((data ?? []) as ProfileSourceRow[]).map((row) =>
+    overlayBackgroundRecordSensitiveText(row, PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS),
+  );
 }
 
 async function listClarificationQuestionsForUser(
@@ -2411,7 +2427,9 @@ async function listSourceConnectionsForUser(userId: string): Promise<SourceConne
     throw new Error(error.message);
   }
 
-  return (data ?? []) as SourceConnectionRow[];
+  return ((data ?? []) as SourceConnectionRow[]).map((row) =>
+    overlayBackgroundRecordSensitiveText(row, SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS),
+  );
 }
 
 async function getProfileSynthesisForUser(userId: string): Promise<ProfileSynthesisRow | null> {
@@ -2430,7 +2448,12 @@ async function getProfileSynthesisForUser(userId: string): Promise<ProfileSynthe
     throw new Error(error.message);
   }
 
-  return (data ?? null) as ProfileSynthesisRow | null;
+  return data
+    ? overlayBackgroundRecordSensitiveText(
+        data as ProfileSynthesisRow,
+        PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
+      )
+    : null;
 }
 
 async function listHelperStrategiesForUser(userId: string): Promise<HelperStrategyRow[]> {

@@ -31,6 +31,15 @@ import {
 } from "@/lib/background-explanations";
 import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
 import {
+  PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
+  SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS,
+  WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+  overlayBackgroundRecordSensitiveText,
+  overlayEncryptedWishEntryBody,
+  prepareEncryptedWishEntryBody,
+  prepareRecordSensitiveTextFields,
+} from "@/lib/background-field-encryption";
+import {
   buildDisclosureGrantNotes,
   getDefaultGrantExpiryDays,
   validateDisclosureRequest,
@@ -315,6 +324,10 @@ function logSupabaseActionError(
     message: error.message,
     ...metadata,
   });
+}
+
+function toActionError(error: unknown, fallbackMessage: string) {
+  return error instanceof Error ? error : new Error(fallbackMessage);
 }
 
 async function getOrCreateMoralTradeOfferProvenanceAgentId({
@@ -3358,6 +3371,30 @@ export async function saveWishProfileAction(formData: FormData) {
 
   const publicPreview = buildBroadWishPreview({ causes, openToPayment, openToPledges });
   const tradeMode = inferTradeMode({ openToPayment, openToPledges, tradeShape });
+  let encryptedWishProfileFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+  try {
+    encryptedWishProfileFields = prepareRecordSensitiveTextFields({
+      brokerage_preference: brokeragePreference,
+      capabilities,
+      constraints,
+      uncertainty_notes: uncertaintyNotes,
+      verification_preferences: verificationPreferences,
+    });
+  } catch (error) {
+    logSupabaseActionError(
+      "Failed to encrypt wish profile private fields",
+      toActionError(error, "Unknown wish-profile encryption error"),
+      {
+        userId: viewer.authUser.id,
+      },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Private wish fields cannot be saved until background field encryption is configured.",
+    );
+  }
 
   const { error: profileError } = await supabase.from("wish_profiles").upsert(
     {
@@ -3367,10 +3404,10 @@ export async function saveWishProfileAction(formData: FormData) {
       causes,
       location_city: locationCity || null,
       location_region: locationRegion || null,
-      capabilities,
-      constraints,
-      verification_preferences: verificationPreferences,
-      uncertainty_notes: uncertaintyNotes,
+      capabilities: encryptedWishProfileFields.plaintextFields.capabilities,
+      constraints: encryptedWishProfileFields.plaintextFields.constraints,
+      verification_preferences: encryptedWishProfileFields.plaintextFields.verification_preferences,
+      uncertainty_notes: encryptedWishProfileFields.plaintextFields.uncertainty_notes,
       openness_to_payment: openToPayment,
       openness_to_pledges: openToPledges,
       background_search_enabled: backgroundSearchEnabled,
@@ -3378,7 +3415,7 @@ export async function saveWishProfileAction(formData: FormData) {
       notification_email_enabled: notificationEmailEnabled,
       notification_dashboard_enabled: notificationDashboardEnabled,
       privacy_stage: privacyStage,
-      brokerage_preference: brokeragePreference,
+      brokerage_preference: encryptedWishProfileFields.plaintextFields.brokerage_preference,
       match_frequency: matchFrequency,
       is_discoverable: isDiscoverable,
       share_public_preview: sharePublicPreview,
@@ -3386,6 +3423,8 @@ export async function saveWishProfileAction(formData: FormData) {
       public_preview: sharePublicPreview ? publicPreview : "",
       safety_status: "clear",
       safety_notes: "",
+      sensitive_ciphertexts: encryptedWishProfileFields.ciphertexts,
+      sensitive_encryption_version: encryptedWishProfileFields.version,
     },
     {
       onConflict: "profile_id",
@@ -3414,56 +3453,71 @@ export async function saveWishProfileAction(formData: FormData) {
   const entryPayloads: Database["public"]["Tables"]["wish_entries"]["Insert"][] = [];
   const primaryCause = causes[0] ?? "";
 
-  if (wishText) {
-    entryPayloads.push({
-      profile_id: viewer.authUser.id,
-      entry_type: "wish",
-      cause_area: primaryCause,
-      title: "Concrete wish",
-      body: wishText,
-      trade_mode: tradeMode,
-      visibility: "private",
-      safety_status: "clear",
-    });
-  }
+  try {
+    if (wishText) {
+      entryPayloads.push({
+        profile_id: viewer.authUser.id,
+        entry_type: "wish",
+        cause_area: primaryCause,
+        title: "Concrete wish",
+        ...prepareEncryptedWishEntryBody(wishText),
+        trade_mode: tradeMode,
+        visibility: "private",
+        safety_status: "clear",
+      });
+    }
 
-  if (offers.length) {
-    entryPayloads.push({
-      profile_id: viewer.authUser.id,
-      entry_type: "offer",
-      cause_area: primaryCause,
-      title: "What this person can offer",
-      body: offers.join(", "),
-      trade_mode: tradeMode,
-      visibility: "private",
-      safety_status: "clear",
-    });
-  }
+    if (offers.length) {
+      entryPayloads.push({
+        profile_id: viewer.authUser.id,
+        entry_type: "offer",
+        cause_area: primaryCause,
+        title: "What this person can offer",
+        ...prepareEncryptedWishEntryBody(offers.join(", ")),
+        trade_mode: tradeMode,
+        visibility: "private",
+        safety_status: "clear",
+      });
+    }
 
-  if (capabilities) {
-    entryPayloads.push({
-      profile_id: viewer.authUser.id,
-      entry_type: "offer",
-      cause_area: primaryCause,
-      title: "Capabilities and resources",
-      body: capabilities,
-      trade_mode: tradeMode,
-      visibility: "private",
-      safety_status: "clear",
-    });
-  }
+    if (capabilities) {
+      entryPayloads.push({
+        profile_id: viewer.authUser.id,
+        entry_type: "offer",
+        cause_area: primaryCause,
+        title: "Capabilities and resources",
+        ...prepareEncryptedWishEntryBody(capabilities),
+        trade_mode: tradeMode,
+        visibility: "private",
+        safety_status: "clear",
+      });
+    }
 
-  if (askText) {
-    entryPayloads.push({
-      profile_id: viewer.authUser.id,
-      entry_type: "ask",
-      cause_area: primaryCause,
-      title: "Ask from counterparties",
-      body: askText,
-      trade_mode: tradeMode,
-      visibility: "private",
-      safety_status: "clear",
-    });
+    if (askText) {
+      entryPayloads.push({
+        profile_id: viewer.authUser.id,
+        entry_type: "ask",
+        cause_area: primaryCause,
+        title: "Ask from counterparties",
+        ...prepareEncryptedWishEntryBody(askText),
+        trade_mode: tradeMode,
+        visibility: "private",
+        safety_status: "clear",
+      });
+    }
+  } catch (error) {
+    logSupabaseActionError(
+      "Failed to encrypt wish entry private fields",
+      toActionError(error, "Unknown wish-entry encryption error"),
+      {
+        userId: viewer.authUser.id,
+      },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Private wish entries cannot be saved until background field encryption is configured.",
+    );
   }
 
   const { data: insertedEntries, error: entriesError } = entryPayloads.length
@@ -3478,19 +3532,44 @@ export async function saveWishProfileAction(formData: FormData) {
   }
 
   if (manualSourceReviewEnabled && sourceLabel) {
+    let encryptedProfileSourceFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+    const sourceSnapshotExcerpt = truncateText(sourceNotes || sourceLabel, 420);
+
+    try {
+      encryptedProfileSourceFields = prepareRecordSensitiveTextFields({
+        notes: sourceNotes,
+        snapshot_excerpt: sourceSnapshotExcerpt,
+      });
+    } catch (error) {
+      logSupabaseActionError(
+        "Failed to encrypt manual profile source fields",
+        toActionError(error, "Unknown manual profile-source encryption error"),
+        {
+          userId: viewer.authUser.id,
+        },
+      );
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "Manual source notes cannot be saved until background field encryption is configured.",
+      );
+    }
+
     const sourcePayload: ProfileSourceInsert = {
       profile_id: viewer.authUser.id,
       source_type: sourceType,
       label: sourceLabel,
       url: sourceUrl,
       access_level: sourceAccessLevel,
-      notes: sourceNotes,
+      notes: encryptedProfileSourceFields.plaintextFields.notes,
       content_kind: normalizeSourceContentKind(readOptional(formData, "source_content_kind")),
-      snapshot_excerpt: truncateText(sourceNotes || sourceLabel, 420),
+      snapshot_excerpt: encryptedProfileSourceFields.plaintextFields.snapshot_excerpt,
       captured_tags: getBackgroundTokens(`${sourceLabel} ${sourceNotes}`, 12),
       needs_review: manualSourceReviewEnabled,
       imported_at: new Date().toISOString(),
       is_active: true,
+      sensitive_ciphertexts: encryptedProfileSourceFields.ciphertexts,
+      sensitive_encryption_version: encryptedProfileSourceFields.version,
     };
     const { error: sourceError } = await supabase.from("profile_sources").insert(sourcePayload);
 
@@ -3533,8 +3612,15 @@ export async function saveWishProfileAction(formData: FormData) {
     );
   }
 
-  const profileSourcesRows = (currentProfileSources ?? []) as ProfileSourceRow[];
-  const sourceConnectionRows = (currentSourceConnections ?? []) as SourceConnectionRow[];
+  const profileSourcesRows = ((currentProfileSources ?? []) as ProfileSourceRow[]).map((row) =>
+    overlayBackgroundRecordSensitiveText(row, PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS),
+  );
+  const sourceConnectionRows = ((currentSourceConnections ?? []) as SourceConnectionRow[]).map((row) =>
+    overlayBackgroundRecordSensitiveText(row, SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS),
+  );
+  const insertedEntryRows = ((insertedEntries ?? []) as WishEntryRow[]).map((row) =>
+    overlayEncryptedWishEntryBody(row),
+  );
 
   const { error: clarificationDeleteError } = await supabase
     .from("clarification_questions")
@@ -3583,18 +3669,54 @@ export async function saveWishProfileAction(formData: FormData) {
   }
 
   if (currentWishProfile) {
+    const decryptedWishProfile = overlayBackgroundRecordSensitiveText(
+      currentWishProfile as WishProfileRow,
+      WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+    );
     const synthesisPayload = buildDeterministicSynthesis({
       connections: sourceConnectionRows,
-      entries: (insertedEntries ?? []) as WishEntryRow[],
-      profile: currentWishProfile as WishProfileRow,
+      entries: insertedEntryRows,
+      profile: decryptedWishProfile,
       profileSources: profileSourcesRows,
     });
+    let encryptedSynthesisFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+    try {
+      encryptedSynthesisFields = prepareRecordSensitiveTextFields({
+        capabilities: synthesisPayload.capabilities,
+        constraints: synthesisPayload.constraints,
+        hopes: synthesisPayload.hopes,
+        intent: synthesisPayload.intent,
+        uncertainty: synthesisPayload.uncertainty,
+      });
+    } catch (error) {
+      logSupabaseActionError(
+        "Failed to encrypt profile synthesis private fields",
+        toActionError(error, "Unknown profile-synthesis encryption error"),
+        {
+          userId: viewer.authUser.id,
+        },
+      );
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "Profile synthesis cannot be saved until background field encryption is configured.",
+      );
+    }
+
     const { error: synthesisError } = await supabase
       .from("profile_syntheses")
       .upsert(
         {
           profile_id: viewer.authUser.id,
           ...synthesisPayload,
+          capabilities: encryptedSynthesisFields.plaintextFields.capabilities,
+          constraints: encryptedSynthesisFields.plaintextFields.constraints,
+          hopes: encryptedSynthesisFields.plaintextFields.hopes,
+          intent: encryptedSynthesisFields.plaintextFields.intent,
+          uncertainty: encryptedSynthesisFields.plaintextFields.uncertainty,
+          sensitive_ciphertexts: encryptedSynthesisFields.ciphertexts,
+          sensitive_encryption_version: encryptedSynthesisFields.version,
         },
         { onConflict: "profile_id" },
       );
@@ -3608,8 +3730,8 @@ export async function saveWishProfileAction(formData: FormData) {
 
   if (isDiscoverable && sharePublicPreview && backgroundSearchEnabled) {
     const viewerEntry =
-      ((insertedEntries ?? []) as WishEntryRow[]).find((entry) => entry.entry_type === "ask") ??
-      ((insertedEntries ?? []) as WishEntryRow[])[0] ??
+      insertedEntryRows.find((entry) => entry.entry_type === "ask") ??
+      insertedEntryRows[0] ??
       null;
 
     const runResult = await generateWishMatchSuggestions({
@@ -4151,10 +4273,16 @@ export async function refreshBackgroundMatchesAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", message);
   }
 
-  const wishProfile = profile as WishProfileRow;
-  const wishEntries = ((entries ?? []) as WishEntryRow[]).filter((entry) => entry.entry_type === "wish");
-  const offerEntries = ((entries ?? []) as WishEntryRow[]).filter((entry) => entry.entry_type === "offer");
-  const askEntries = ((entries ?? []) as WishEntryRow[]).filter((entry) => entry.entry_type === "ask");
+  const wishProfile = overlayBackgroundRecordSensitiveText(
+    profile as WishProfileRow,
+    WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+  );
+  const decryptedEntries = ((entries ?? []) as WishEntryRow[]).map((entry) =>
+    overlayEncryptedWishEntryBody(entry),
+  );
+  const wishEntries = decryptedEntries.filter((entry) => entry.entry_type === "wish");
+  const offerEntries = decryptedEntries.filter((entry) => entry.entry_type === "offer");
+  const askEntries = decryptedEntries.filter((entry) => entry.entry_type === "ask");
   const viewerEntry = askEntries[0] ?? wishEntries[0] ?? offerEntries[0] ?? null;
 
   if (!wishProfile.is_discoverable || !wishProfile.share_public_preview) {
@@ -4774,6 +4902,32 @@ export async function saveProfileSourceAction(formData: FormData) {
   const viewer = await requireViewer(returnTo);
   const sourceNotes = readOptional(formData, "source_notes");
   const sourceLabel = label;
+  const sourceSnapshotExcerpt = truncateText(
+    readOptional(formData, "snapshot_excerpt") || sourceNotes || sourceLabel,
+    420,
+  );
+  let encryptedProfileSourceFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+  try {
+    encryptedProfileSourceFields = prepareRecordSensitiveTextFields({
+      notes: sourceNotes,
+      snapshot_excerpt: sourceSnapshotExcerpt,
+    });
+  } catch (error) {
+    logSupabaseActionError(
+      "Failed to encrypt profile source fields",
+      toActionError(error, "Unknown profile-source encryption error"),
+      {
+        userId: viewer.authUser.id,
+      },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Source notes cannot be saved until background field encryption is configured.",
+    );
+  }
+
   const supabase = await createClient();
   const payload: ProfileSourceInsert = {
     profile_id: viewer.authUser.id,
@@ -4782,11 +4936,8 @@ export async function saveProfileSourceAction(formData: FormData) {
     url: readOptional(formData, "source_url"),
     access_level: normalizeAccessLevel(readOptional(formData, "source_access_level")),
     content_kind: normalizeSourceContentKind(readOptional(formData, "source_content_kind")),
-    notes: sourceNotes,
-    snapshot_excerpt: truncateText(
-      readOptional(formData, "snapshot_excerpt") || sourceNotes || sourceLabel,
-      420,
-    ),
+    notes: encryptedProfileSourceFields.plaintextFields.notes,
+    snapshot_excerpt: encryptedProfileSourceFields.plaintextFields.snapshot_excerpt,
     captured_tags: getBackgroundTokens(
       `${sourceLabel} ${sourceNotes} ${readOptional(formData, "captured_tags")}`,
       12,
@@ -4795,6 +4946,8 @@ export async function saveProfileSourceAction(formData: FormData) {
     imported_at:
       parseOptionalTimestamp(readOptional(formData, "imported_at")) ?? new Date().toISOString(),
     is_active: true,
+    sensitive_ciphertexts: encryptedProfileSourceFields.ciphertexts,
+    sensitive_encryption_version: encryptedProfileSourceFields.version,
   };
   const { error } = await supabase.from("profile_sources").insert(payload);
 
@@ -4917,23 +5070,48 @@ export async function saveSourceConnectionAction(formData: FormData) {
   }
 
   const viewer = await requireViewer(returnTo);
+  let encryptedSourceConnectionFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+  try {
+    encryptedSourceConnectionFields = prepareRecordSensitiveTextFields({
+      access_scope: readOptional(formData, "access_scope"),
+      consent_notes: readOptional(formData, "consent_notes"),
+      last_sync_summary: readOptional(formData, "last_sync_summary"),
+    });
+  } catch (error) {
+    logSupabaseActionError(
+      "Failed to encrypt source connection fields",
+      toActionError(error, "Unknown source-connection encryption error"),
+      {
+        userId: viewer.authUser.id,
+      },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Source connection notes cannot be saved until background field encryption is configured.",
+    );
+  }
+
   const payload: SourceConnectionInsert = {
     profile_id: viewer.authUser.id,
     provider: normalizeSourceConnectionProvider(readOptional(formData, "provider")),
     label,
     url: readOptional(formData, "url"),
     access_status: normalizeSourceAccessStatus(readOptional(formData, "access_status")),
-    access_scope: readOptional(formData, "access_scope"),
-    consent_notes: readOptional(formData, "consent_notes"),
+    access_scope: encryptedSourceConnectionFields.plaintextFields.access_scope,
+    consent_notes: encryptedSourceConnectionFields.plaintextFields.consent_notes,
     import_mode: normalizeSourceImportMode(readOptional(formData, "import_mode")),
     sync_frequency: normalizeSourceSyncFrequency(readOptional(formData, "sync_frequency")),
-    last_sync_summary: readOptional(formData, "last_sync_summary"),
+    last_sync_summary: encryptedSourceConnectionFields.plaintextFields.last_sync_summary,
     last_import_item_count: readBoundedInt(formData, "last_import_item_count", {
       fallback: 0,
       min: 0,
       max: 10000,
     }),
     last_imported_at: parseOptionalTimestamp(readOptional(formData, "last_imported_at")),
+    sensitive_ciphertexts: encryptedSourceConnectionFields.ciphertexts,
+    sensitive_encryption_version: encryptedSourceConnectionFields.version,
   };
 
   const supabase = await createClient();
@@ -4978,15 +5156,47 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", "Save a private wish profile before refreshing synthesis.");
   }
 
-  const rows = (entries ?? []) as WishEntryRow[];
-  const profileSourceRows = (sources ?? []) as ProfileSourceRow[];
-  const sourceConnectionRows = (connections ?? []) as SourceConnectionRow[];
+  const rows = ((entries ?? []) as WishEntryRow[]).map((row) => overlayEncryptedWishEntryBody(row));
+  const profileSourceRows = ((sources ?? []) as ProfileSourceRow[]).map((row) =>
+    overlayBackgroundRecordSensitiveText(row, PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS),
+  );
+  const sourceConnectionRows = ((connections ?? []) as SourceConnectionRow[]).map((row) =>
+    overlayBackgroundRecordSensitiveText(row, SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS),
+  );
+  const decryptedProfile = overlayBackgroundRecordSensitiveText(
+    profile as WishProfileRow,
+    WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+  );
   const synthesisPayload = buildDeterministicSynthesis({
     connections: sourceConnectionRows,
     entries: rows,
-    profile: profile as WishProfileRow,
+    profile: decryptedProfile,
     profileSources: profileSourceRows,
   });
+  let encryptedSynthesisFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+  try {
+    encryptedSynthesisFields = prepareRecordSensitiveTextFields({
+      capabilities: synthesisPayload.capabilities,
+      constraints: synthesisPayload.constraints,
+      hopes: synthesisPayload.hopes,
+      intent: synthesisPayload.intent,
+      uncertainty: synthesisPayload.uncertainty,
+    });
+  } catch (error) {
+    logSupabaseActionError(
+      "Failed to encrypt refreshed profile synthesis fields",
+      toActionError(error, "Unknown refreshed profile-synthesis encryption error"),
+      {
+        userId: viewer.authUser.id,
+      },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Profile synthesis cannot be saved until background field encryption is configured.",
+    );
+  }
 
   const { error } = await supabase
     .from("profile_syntheses")
@@ -4994,6 +5204,13 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
       {
         profile_id: viewer.authUser.id,
         ...synthesisPayload,
+        capabilities: encryptedSynthesisFields.plaintextFields.capabilities,
+        constraints: encryptedSynthesisFields.plaintextFields.constraints,
+        hopes: encryptedSynthesisFields.plaintextFields.hopes,
+        intent: encryptedSynthesisFields.plaintextFields.intent,
+        uncertainty: encryptedSynthesisFields.plaintextFields.uncertainty,
+        sensitive_ciphertexts: encryptedSynthesisFields.ciphertexts,
+        sensitive_encryption_version: encryptedSynthesisFields.version,
       },
       { onConflict: "profile_id" },
     );
@@ -5019,23 +5236,23 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
 
   const clarificationQuestions = buildDeterministicClarificationQuestions({
     askText: rows.filter((entry) => entry.entry_type === "ask").map((entry) => entry.body).join(" "),
-    backgroundSearchEnabled: profile.background_search_enabled,
-    capabilities: profile.capabilities,
-    causes: profile.causes ?? [],
-    collectiveName: profile.collective_name,
-    constraints: profile.constraints,
-    locationCity: profile.location_city,
-    locationRegion: profile.location_region,
-    manualSourceReviewEnabled: profile.manual_source_review_enabled,
+    backgroundSearchEnabled: decryptedProfile.background_search_enabled,
+    capabilities: decryptedProfile.capabilities,
+    causes: decryptedProfile.causes ?? [],
+    collectiveName: decryptedProfile.collective_name,
+    constraints: decryptedProfile.constraints,
+    locationCity: decryptedProfile.location_city,
+    locationRegion: decryptedProfile.location_region,
+    manualSourceReviewEnabled: decryptedProfile.manual_source_review_enabled,
     offers: rows.filter((entry) => entry.entry_type === "offer").map((entry) => entry.body),
-    openToPayment: profile.openness_to_payment,
-    openToPledges: profile.openness_to_pledges,
-    participantKind: profile.participant_kind,
+    openToPayment: decryptedProfile.openness_to_payment,
+    openToPledges: decryptedProfile.openness_to_pledges,
+    participantKind: decryptedProfile.participant_kind,
     profileId: viewer.authUser.id,
-    publicPreview: profile.public_preview,
+    publicPreview: decryptedProfile.public_preview,
     sourceCount: synthesisPayload.source_count,
-    uncertaintyNotes: profile.uncertainty_notes,
-    verificationPreferences: profile.verification_preferences,
+    uncertaintyNotes: decryptedProfile.uncertainty_notes,
+    verificationPreferences: decryptedProfile.verification_preferences,
     wishText: rows.filter((entry) => entry.entry_type === "wish").map((entry) => entry.body).join(" "),
   });
 

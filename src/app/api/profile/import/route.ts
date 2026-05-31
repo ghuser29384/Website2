@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 
 import { buildDeterministicSynthesis } from "@/lib/background-networking";
 import {
+  PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
+  PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
+  SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS,
+  WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+  overlayBackgroundRecordSensitiveText,
+  overlayEncryptedWishEntryBody,
+  prepareEncryptedWishEntryBody,
+  prepareRecordSensitiveTextFields,
+} from "@/lib/background-field-encryption";
+import {
   buildMoralTradeApiRateLimitBlocker,
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
@@ -120,6 +130,23 @@ export async function POST(request: Request) {
 
   const wishProfile = body.wishProfile as Record<string, unknown> | undefined;
   if (wishProfile) {
+    let encryptedWishProfileFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+    try {
+      encryptedWishProfileFields = prepareRecordSensitiveTextFields({
+        brokerage_preference: String(wishProfile.brokerage_preference ?? ""),
+        capabilities: String(wishProfile.capabilities ?? ""),
+        constraints: String(wishProfile.constraints ?? ""),
+        uncertainty_notes: String(wishProfile.uncertainty_notes ?? ""),
+        verification_preferences: String(wishProfile.verification_preferences ?? ""),
+      });
+    } catch {
+      return jsonResponse(
+        { error: "Background field encryption is required before importing private wish data." },
+        503,
+      );
+    }
+
     const payload: WishProfileInsert = {
       profile_id: profileId,
       participant_kind:
@@ -132,10 +159,10 @@ export async function POST(request: Request) {
         : [],
       location_city: String(wishProfile.location_city ?? "") || null,
       location_region: String(wishProfile.location_region ?? "") || null,
-      capabilities: String(wishProfile.capabilities ?? ""),
-      constraints: String(wishProfile.constraints ?? ""),
-      verification_preferences: String(wishProfile.verification_preferences ?? ""),
-      uncertainty_notes: String(wishProfile.uncertainty_notes ?? ""),
+      capabilities: encryptedWishProfileFields.plaintextFields.capabilities,
+      constraints: encryptedWishProfileFields.plaintextFields.constraints,
+      verification_preferences: encryptedWishProfileFields.plaintextFields.verification_preferences,
+      uncertainty_notes: encryptedWishProfileFields.plaintextFields.uncertainty_notes,
       openness_to_payment: wishProfile.openness_to_payment === true,
       openness_to_pledges: wishProfile.openness_to_pledges === true,
       background_search_enabled: wishProfile.background_search_enabled === true,
@@ -146,7 +173,7 @@ export async function POST(request: Request) {
         wishProfile.privacy_stage === "strict" || wishProfile.privacy_stage === "limited"
           ? (wishProfile.privacy_stage as WishProfileInsert["privacy_stage"])
           : "broad",
-      brokerage_preference: String(wishProfile.brokerage_preference ?? ""),
+      brokerage_preference: encryptedWishProfileFields.plaintextFields.brokerage_preference,
       match_frequency:
         wishProfile.match_frequency === "manual" || wishProfile.match_frequency === "monthly"
           ? (wishProfile.match_frequency as WishProfileInsert["match_frequency"])
@@ -157,6 +184,8 @@ export async function POST(request: Request) {
       public_preview: String(wishProfile.public_preview ?? ""),
       safety_status: "clear",
       safety_notes: "",
+      sensitive_ciphertexts: encryptedWishProfileFields.ciphertexts,
+      sensitive_encryption_version: encryptedWishProfileFields.version,
     };
 
     const { error } = await supabase
@@ -172,23 +201,38 @@ export async function POST(request: Request) {
 
   const wishEntries = Array.isArray(body.wishEntries) ? body.wishEntries : [];
   if (wishEntries.length) {
-    const payload = wishEntries.map((entry) => {
-      const row = entry as Record<string, unknown>;
-      return {
-        profile_id: profileId,
-        entry_type:
-          row.entry_type === "offer" || row.entry_type === "ask" ? row.entry_type : "wish",
-        cause_area: String(row.cause_area ?? ""),
-        title: String(row.title ?? ""),
-        body: String(row.body ?? ""),
-        trade_mode:
-          row.trade_mode === "pledge" || row.trade_mode === "donation" || row.trade_mode === "payment"
-            ? (row.trade_mode as WishEntryInsert["trade_mode"])
-            : "open",
-        visibility: row.visibility === "preview" || row.visibility === "public" ? "preview" : "private",
-        safety_status: "clear",
-      } satisfies WishEntryInsert;
-    });
+    let payload: WishEntryInsert[];
+
+    try {
+      payload = wishEntries.map((entry) => {
+        const row = entry as Record<string, unknown>;
+        const visibility =
+          row.visibility === "preview" || row.visibility === "public" ? "preview" : "private";
+        const bodyText = String(row.body ?? "");
+
+        return {
+          profile_id: profileId,
+          entry_type:
+            row.entry_type === "offer" || row.entry_type === "ask" ? row.entry_type : "wish",
+          cause_area: String(row.cause_area ?? ""),
+          title: String(row.title ?? ""),
+          ...(visibility === "private"
+            ? prepareEncryptedWishEntryBody(bodyText)
+            : { body: bodyText, body_ciphertext: "", body_encryption_version: "" }),
+          trade_mode:
+            row.trade_mode === "pledge" || row.trade_mode === "donation" || row.trade_mode === "payment"
+              ? (row.trade_mode as WishEntryInsert["trade_mode"])
+              : "open",
+          visibility,
+          safety_status: "clear",
+        } satisfies WishEntryInsert;
+      });
+    } catch {
+      return jsonResponse(
+        { error: "Background field encryption is required before importing private wish entries." },
+        503,
+      );
+    }
 
     const { error } = await supabase.from("wish_entries").insert(payload);
     if (error) {
@@ -306,86 +350,105 @@ export async function POST(request: Request) {
       rows: Array.isArray(body.sourceConnections) ? body.sourceConnections : [],
       table: "source_connections",
       countKey: "sourceConnections",
-      mapRow: (row) => ({
-        profile_id: profileId,
-        provider:
-          row.provider === "social" ||
-          row.provider === "blog" ||
-          row.provider === "email" ||
-          row.provider === "calendar" ||
-          row.provider === "chat_history" ||
-          row.provider === "search_profile" ||
-          row.provider === "other"
-            ? (row.provider as SourceConnectionInsert["provider"])
-            : "manual",
-        label: String(row.label ?? ""),
-        url: String(row.url ?? ""),
-        access_status:
-          row.access_status === "connected" ||
-          row.access_status === "revoked" ||
-          row.access_status === "needs_review"
-            ? (row.access_status as SourceConnectionInsert["access_status"])
-            : "not_connected",
-        access_scope: String(row.access_scope ?? ""),
-        consent_notes: String(row.consent_notes ?? ""),
-        import_mode:
-          row.import_mode === "manual_paste" ||
-          row.import_mode === "rss_pull" ||
-          row.import_mode === "forwarded_note"
-            ? (row.import_mode as SourceConnectionInsert["import_mode"])
-            : "manual_review",
-        sync_frequency:
-          row.sync_frequency === "weekly" || row.sync_frequency === "monthly"
-            ? (row.sync_frequency as SourceConnectionInsert["sync_frequency"])
-            : "manual",
-        last_sync_summary: String(row.last_sync_summary ?? ""),
-        last_import_item_count: Math.max(0, Number(row.last_import_item_count ?? 0) || 0),
-        last_imported_at:
-          typeof row.last_imported_at === "string" && row.last_imported_at
-            ? row.last_imported_at
-            : null,
-      }),
+      mapRow: (row) => {
+        const encryptedFields = prepareRecordSensitiveTextFields({
+          access_scope: String(row.access_scope ?? ""),
+          consent_notes: String(row.consent_notes ?? ""),
+          last_sync_summary: String(row.last_sync_summary ?? ""),
+        });
+
+        return {
+          profile_id: profileId,
+          provider:
+            row.provider === "social" ||
+            row.provider === "blog" ||
+            row.provider === "email" ||
+            row.provider === "calendar" ||
+            row.provider === "chat_history" ||
+            row.provider === "search_profile" ||
+            row.provider === "other"
+              ? (row.provider as SourceConnectionInsert["provider"])
+              : "manual",
+          label: String(row.label ?? ""),
+          url: String(row.url ?? ""),
+          access_status:
+            row.access_status === "connected" ||
+            row.access_status === "revoked" ||
+            row.access_status === "needs_review"
+              ? (row.access_status as SourceConnectionInsert["access_status"])
+              : "not_connected",
+          access_scope: encryptedFields.plaintextFields.access_scope,
+          consent_notes: encryptedFields.plaintextFields.consent_notes,
+          import_mode:
+            row.import_mode === "manual_paste" ||
+            row.import_mode === "rss_pull" ||
+            row.import_mode === "forwarded_note"
+              ? (row.import_mode as SourceConnectionInsert["import_mode"])
+              : "manual_review",
+          sync_frequency:
+            row.sync_frequency === "weekly" || row.sync_frequency === "monthly"
+              ? (row.sync_frequency as SourceConnectionInsert["sync_frequency"])
+              : "manual",
+          last_sync_summary: encryptedFields.plaintextFields.last_sync_summary,
+          last_import_item_count: Math.max(0, Number(row.last_import_item_count ?? 0) || 0),
+          last_imported_at:
+            typeof row.last_imported_at === "string" && row.last_imported_at
+              ? row.last_imported_at
+              : null,
+          sensitive_ciphertexts: encryptedFields.ciphertexts,
+          sensitive_encryption_version: encryptedFields.version,
+        };
+      },
     });
 
     await importRows({
       rows: Array.isArray(body.profileSources) ? body.profileSources : [],
       table: "profile_sources",
       countKey: "profileSources",
-      mapRow: (row) => ({
-        profile_id: profileId,
-        source_type:
-          row.source_type === "social" ||
-          row.source_type === "blog" ||
-          row.source_type === "chat_history" ||
-          row.source_type === "email" ||
-          row.source_type === "calendar" ||
-          row.source_type === "other"
-            ? (row.source_type as ProfileSourceInsert["source_type"])
-            : "manual",
-        label: String(row.label ?? ""),
-        url: String(row.url ?? ""),
-        access_level:
-          row.access_level === "metadata_only" || row.access_level === "none"
-            ? (row.access_level as ProfileSourceInsert["access_level"])
-            : "manual_summary",
-        content_kind:
-          row.content_kind === "pasted_excerpt" ||
-          row.content_kind === "public_post" ||
-          row.content_kind === "email_note" ||
-          row.content_kind === "chat_note" ||
-          row.content_kind === "calendar_note"
-            ? (row.content_kind as ProfileSourceInsert["content_kind"])
-            : "manual_summary",
-        notes: String(row.notes ?? ""),
-        snapshot_excerpt: String(row.snapshot_excerpt ?? ""),
-        captured_tags: Array.isArray(row.captured_tags)
-          ? row.captured_tags.map((value) => String(value ?? "")).filter(Boolean)
-          : [],
-        needs_review: row.needs_review !== false,
-        imported_at:
-          typeof row.imported_at === "string" && row.imported_at ? row.imported_at : null,
-        is_active: row.is_active !== false,
-      }),
+      mapRow: (row) => {
+        const encryptedFields = prepareRecordSensitiveTextFields({
+          notes: String(row.notes ?? ""),
+          snapshot_excerpt: String(row.snapshot_excerpt ?? ""),
+        });
+
+        return {
+          profile_id: profileId,
+          source_type:
+            row.source_type === "social" ||
+            row.source_type === "blog" ||
+            row.source_type === "chat_history" ||
+            row.source_type === "email" ||
+            row.source_type === "calendar" ||
+            row.source_type === "other"
+              ? (row.source_type as ProfileSourceInsert["source_type"])
+              : "manual",
+          label: String(row.label ?? ""),
+          url: String(row.url ?? ""),
+          access_level:
+            row.access_level === "metadata_only" || row.access_level === "none"
+              ? (row.access_level as ProfileSourceInsert["access_level"])
+              : "manual_summary",
+          content_kind:
+            row.content_kind === "pasted_excerpt" ||
+            row.content_kind === "public_post" ||
+            row.content_kind === "email_note" ||
+            row.content_kind === "chat_note" ||
+            row.content_kind === "calendar_note"
+              ? (row.content_kind as ProfileSourceInsert["content_kind"])
+              : "manual_summary",
+          notes: encryptedFields.plaintextFields.notes,
+          snapshot_excerpt: encryptedFields.plaintextFields.snapshot_excerpt,
+          captured_tags: Array.isArray(row.captured_tags)
+            ? row.captured_tags.map((value) => String(value ?? "")).filter(Boolean)
+            : [],
+          needs_review: row.needs_review !== false,
+          imported_at:
+            typeof row.imported_at === "string" && row.imported_at ? row.imported_at : null,
+          is_active: row.is_active !== false,
+          sensitive_ciphertexts: encryptedFields.ciphertexts,
+          sensitive_encryption_version: encryptedFields.version,
+        };
+      },
     });
 
     await importRows({
@@ -522,17 +585,57 @@ export async function POST(request: Request) {
   ]);
 
   if (!profileError && !entryError && !sourceError && !connectionError && profileRow) {
+    const decryptedProfile = overlayBackgroundRecordSensitiveText(
+      profileRow,
+      WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
+    );
+    const decryptedEntries = ((entryRows ?? []) as Database["public"]["Tables"]["wish_entries"]["Row"][]).map(
+      (entry) => overlayEncryptedWishEntryBody(entry),
+    );
+    const decryptedProfileSources = ((
+      profileSourceRows ?? []
+    ) as Database["public"]["Tables"]["profile_sources"]["Row"][]).map((source) =>
+      overlayBackgroundRecordSensitiveText(source, PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS),
+    );
+    const decryptedSourceConnections = ((
+      sourceConnectionRows ?? []
+    ) as Database["public"]["Tables"]["source_connections"]["Row"][]).map((connection) =>
+      overlayBackgroundRecordSensitiveText(connection, SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS),
+    );
     const synthesis = buildDeterministicSynthesis({
-      connections: (sourceConnectionRows ?? []) as Database["public"]["Tables"]["source_connections"]["Row"][],
-      entries: (entryRows ?? []) as Database["public"]["Tables"]["wish_entries"]["Row"][],
-      profile: profileRow,
-      profileSources: (profileSourceRows ?? []) as Database["public"]["Tables"]["profile_sources"]["Row"][],
+      connections: decryptedSourceConnections,
+      entries: decryptedEntries,
+      profile: decryptedProfile,
+      profileSources: decryptedProfileSources,
     });
+    let encryptedSynthesisFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
+
+    try {
+      encryptedSynthesisFields = prepareRecordSensitiveTextFields({
+        capabilities: synthesis.capabilities,
+        constraints: synthesis.constraints,
+        hopes: synthesis.hopes,
+        intent: synthesis.intent,
+        uncertainty: synthesis.uncertainty,
+      });
+    } catch {
+      return jsonResponse(
+        { error: "Background field encryption is required before importing profile synthesis." },
+        503,
+      );
+    }
 
     await supabase.from("profile_syntheses").upsert(
       {
         profile_id: profileId,
         ...synthesis,
+        capabilities: encryptedSynthesisFields.plaintextFields.capabilities,
+        constraints: encryptedSynthesisFields.plaintextFields.constraints,
+        hopes: encryptedSynthesisFields.plaintextFields.hopes,
+        intent: encryptedSynthesisFields.plaintextFields.intent,
+        uncertainty: encryptedSynthesisFields.plaintextFields.uncertainty,
+        sensitive_ciphertexts: encryptedSynthesisFields.ciphertexts,
+        sensitive_encryption_version: encryptedSynthesisFields.version,
       },
       { onConflict: "profile_id" },
     );
