@@ -86,6 +86,7 @@ import { formatOpportunityBriefNextStep } from "@/lib/background-opportunity-bri
 import { summarizeBackgroundAiShadowReadiness } from "@/lib/background-ai-shadow";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { hasBackgroundFieldEncryptionKey } from "@/lib/background-field-encryption";
+import { hasActiveProfileSourcePermission } from "@/lib/background-networking";
 import { getDashboardData, requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatPaymentCadence } from "@/lib/offers";
@@ -1958,6 +1959,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 contact-level visibility for a match or counterparty. Prefer intro-specific grants
                 that expire, then renew only if both sides still need the detail.
               </p>
+              <p className="route-text">
+                Contact-email or contact-level grants can be drafted here, but approving them
+                requires an active MFA step-up from account security.
+              </p>
               <form action={savePrivacyGrantAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
                 <label className="field">
@@ -2588,7 +2593,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <h3>Source consent without automatic ingestion</h3>
               <p className="route-text">
                 Add a public page, profile summary, or note that could later be reviewed. The app
-                stores your note; it does not scrape or analyze the source.
+                stores your note with a retention timer; it does not scrape or analyze the source.
               </p>
               <form action={saveProfileSourceAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
@@ -2629,6 +2634,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <span>Captured tags</span>
                   <input name="captured_tags" placeholder="animal welfare, receipts, local, vegetarian" />
                 </label>
+                <label className="field">
+                  <span>Retention</span>
+                  <select name="retention_days" defaultValue="90">
+                    {BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.map((days) => (
+                      <option key={`manual-source-${days}`} value={days}>
+                        {days} days
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="field checkbox-field">
                   <input defaultChecked name="needs_review" type="checkbox" />
                   <span>Needs manual review before relying on it</span>
@@ -2643,13 +2658,22 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <p className="route-text">Could not load source records.</p>
               ) : dashboardData?.profileSources.length ? (
                 <ul className="clean-list">
-                  {dashboardData.profileSources.slice(0, 4).map((source) => (
-                    <li key={source.id}>
-                      {source.label}
-                      {source.url ? ` (${source.url})` : ""}
-                      {source.snapshot_excerpt ? ` — ${source.snapshot_excerpt}` : ""}
-                    </li>
-                  ))}
+                  {dashboardData.profileSources.slice(0, 4).map((source) => {
+                    const sourceCanInfluence = hasActiveProfileSourcePermission(source);
+
+                    return (
+                      <li key={source.id}>
+                        <strong>{source.label}</strong>
+                        {source.url ? ` (${source.url})` : ""}
+                        {source.snapshot_excerpt ? ` — ${source.snapshot_excerpt}` : ""}
+                        <p>
+                          <strong>Retention:</strong>{" "}
+                          {sourceCanInfluence ? "may influence deterministic synthesis" : "expired or inactive; influence disabled"}{" "}
+                          until {new Date(source.retention_expires_at).toLocaleDateString()}.
+                        </p>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : null}
             </article>

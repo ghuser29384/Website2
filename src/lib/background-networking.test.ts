@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildDeterministicSynthesis,
   evaluateDeterministicMatch,
+  hasActiveProfileSourcePermission,
   type DeterministicSignals,
 } from "@/lib/background-networking";
 
@@ -99,4 +100,44 @@ test("deterministic synthesis counts only active unexpired source permissions", 
 
   assert.equal(synthesis.source_count, 1);
   assert.equal(synthesis.confidence_breakdown.sources, 1);
+});
+
+test("deterministic synthesis ignores expired profile source notes", () => {
+  const source = (
+    overrides: Partial<SynthesisInput["profileSources"][number]>,
+  ): SynthesisInput["profileSources"][number] =>
+    ({
+      is_active: true,
+      notes: "Current source note",
+      retention_expires_at: "2099-01-01T00:00:00.000Z",
+      snapshot_excerpt: "Current source capability",
+      ...overrides,
+    }) as SynthesisInput["profileSources"][number];
+  const expiredSource = source({
+    notes: "Expired source note",
+    retention_expires_at: "2000-01-01T00:00:00.000Z",
+    snapshot_excerpt: "Expired source capability",
+  });
+  const synthesis = buildDeterministicSynthesis({
+    connections: [],
+    entries: [],
+    profile: {
+      brokerage_preference: "",
+      capabilities: "",
+      causes: [],
+      constraints: "",
+      location_city: null,
+      location_region: null,
+      public_preview: "",
+      uncertainty_notes: "",
+      verification_preferences: "",
+    } as SynthesisInput["profile"],
+    profileSources: [source({}), expiredSource, source({ is_active: false })],
+  });
+
+  assert.equal(hasActiveProfileSourcePermission(expiredSource), false);
+  assert.equal(synthesis.source_count, 1);
+  assert.match(synthesis.capabilities, /Current source capability/);
+  assert.doesNotMatch(synthesis.capabilities, /Expired source capability/);
+  assert.doesNotMatch(synthesis.uncertainty, /Expired source note/);
 });

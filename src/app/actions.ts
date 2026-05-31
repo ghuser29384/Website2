@@ -22,6 +22,7 @@ import {
   evaluateDeterministicMatch,
   getBackgroundTokens,
   getDeterministicSignalsFromSynthesis,
+  hasActiveProfileSourcePermission,
   normalizeBackgroundToken,
 } from "@/lib/background-networking";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
@@ -44,11 +45,15 @@ import {
 import {
   buildDisclosureGrantNotes,
   getDefaultGrantExpiryDays,
+  requiresContactDisclosureStepUp,
   validateDisclosureRequest,
   type DisclosureAccessLevel,
   type DisclosureAudienceStage,
 } from "@/lib/background-disclosure";
-import { validateBackgroundSourcePermission } from "@/lib/background-source-permissions";
+import {
+  hasActiveBackgroundSourcePermission,
+  validateBackgroundSourcePermission,
+} from "@/lib/background-source-permissions";
 import {
   completeBackgroundQueryEvent,
   insertMatchExplanationSnapshots,
@@ -56,7 +61,10 @@ import {
   reserveBackgroundQueryBudget,
   upsertBackgroundOpportunityBriefs,
 } from "@/lib/background-operations";
-import { buildOpportunityBriefRow } from "@/lib/background-opportunity-briefs";
+import {
+  buildOpportunityBriefRow,
+  getBackgroundSourceRetentionExpiresAt,
+} from "@/lib/background-opportunity-briefs";
 import {
   getBackgroundQueryFingerprint,
   type BackgroundQueryScope,
@@ -329,6 +337,30 @@ function readDisclosureFieldKeys(
 
 function disclosureErrorsToMessage(errors: string[]) {
   return errors.join(" ");
+}
+
+async function requireContactDisclosureMfaStepUp({
+  accessLevel,
+  fieldKeys,
+  returnTo,
+}: {
+  accessLevel: DisclosureAccessLevel;
+  fieldKeys: string[];
+  returnTo: string;
+}) {
+  if (!requiresContactDisclosureStepUp({ accessLevel, fieldKeys })) {
+    return;
+  }
+
+  const mfaSummary = await loadBackgroundAccountSecuritySummary();
+
+  if (mfaSummary.currentLevel !== "aal2") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Contact disclosure grants require an active MFA step-up. Verify an authenticator session from account security, then approve the grant.",
+    );
+  }
 }
 
 function logSupabaseActionError(
@@ -3958,6 +3990,7 @@ export async function saveWishProfileAction(formData: FormData) {
       captured_tags: getBackgroundTokens(`${sourceLabel} ${sourceNotes}`, 12),
       needs_review: manualSourceReviewEnabled,
       imported_at: new Date().toISOString(),
+      retention_expires_at: getBackgroundSourceRetentionExpiresAt(90),
       is_active: true,
       sensitive_ciphertexts: encryptedProfileSourceFields.ciphertexts,
       sensitive_encryption_version: encryptedProfileSourceFields.version,
@@ -4006,8 +4039,14 @@ export async function saveWishProfileAction(formData: FormData) {
   const profileSourcesRows = ((currentProfileSources ?? []) as ProfileSourceRow[]).map((row) =>
     overlayBackgroundRecordSensitiveText(row, PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS),
   );
+  const activeProfileSourcesRows = profileSourcesRows.filter((row) =>
+    hasActiveProfileSourcePermission(row),
+  );
   const sourceConnectionRows = ((currentSourceConnections ?? []) as SourceConnectionRow[]).map((row) =>
     overlayBackgroundRecordSensitiveText(row, SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS),
+  );
+  const activeSourceConnectionRows = sourceConnectionRows.filter((row) =>
+    hasActiveBackgroundSourcePermission(row),
   );
   const insertedEntryRows = ((insertedEntries ?? []) as WishEntryRow[]).map((row) =>
     overlayEncryptedWishEntryBody(row),
@@ -4041,7 +4080,7 @@ export async function saveWishProfileAction(formData: FormData) {
     participantKind,
     profileId: viewer.authUser.id,
     publicPreview: sharePublicPreview ? publicPreview : "",
-    sourceCount: profileSourcesRows.length + sourceConnectionRows.length,
+    sourceCount: activeProfileSourcesRows.length + activeSourceConnectionRows.length,
     uncertaintyNotes,
     verificationPreferences,
     wishText,
@@ -5355,6 +5394,9 @@ export async function saveProfileSourceAction(formData: FormData) {
     needs_review: readBoolean(formData, "needs_review"),
     imported_at:
       parseOptionalTimestamp(readOptional(formData, "imported_at")) ?? new Date().toISOString(),
+    retention_expires_at: getBackgroundSourceRetentionExpiresAt(
+      readOptional(formData, "retention_days") || 90,
+    ),
     is_active: true,
     sensitive_ciphertexts: encryptedProfileSourceFields.ciphertexts,
     sensitive_encryption_version: encryptedProfileSourceFields.version,
@@ -5787,6 +5829,7 @@ export async function savePrivacyGrantAction(formData: FormData) {
   const viewer = await requireViewer(returnTo);
   const audienceStage = normalizeDisclosureStage(readOptional(formData, "audience_stage"));
   const accessLevel = normalizeDisclosureAccess(readOptional(formData, "access_level"));
+  const grantStatus = normalizePrivacyGrantStatus(readOptional(formData, "status"));
   const purpose = readOptional(formData, "purpose") || readOptional(formData, "notes");
   const disclosureValidation = validateDisclosureRequest({
     accessLevel,
@@ -5805,6 +5848,14 @@ export async function savePrivacyGrantAction(formData: FormData) {
     redirectWithMessage(returnTo, "error", "Choose a supported privacy field.");
   }
 
+  if (grantStatus === "granted") {
+    await requireContactDisclosureMfaStepUp({
+      accessLevel,
+      fieldKeys: disclosureValidation.allowedFields,
+      returnTo,
+    });
+  }
+
   const payload: PrivacyGrantInsert = {
     profile_id: viewer.authUser.id,
     counterparty_id: readOptional(formData, "counterparty_id") || null,
@@ -5812,7 +5863,7 @@ export async function savePrivacyGrantAction(formData: FormData) {
     field_key: fieldKey,
     access_level: accessLevel,
     audience_stage: audienceStage,
-    status: normalizePrivacyGrantStatus(readOptional(formData, "status")),
+    status: grantStatus,
     notes: buildDisclosureGrantNotes({
       ownerNote: readOptional(formData, "notes"),
       purpose,
@@ -5976,6 +6027,14 @@ export async function respondPrivacyAccessRequestAction(formData: FormData) {
 
   if (nextStatus === "approved" && disclosureValidation.errors.length) {
     redirectWithMessage(returnTo, "error", disclosureErrorsToMessage(disclosureValidation.errors));
+  }
+
+  if (nextStatus === "approved" && isOwner) {
+    await requireContactDisclosureMfaStepUp({
+      accessLevel,
+      fieldKeys: disclosureValidation.allowedFields,
+      returnTo,
+    });
   }
 
   const resolvedAt =

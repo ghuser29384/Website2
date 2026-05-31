@@ -230,6 +230,13 @@ export function normalizeSourceSummaryRetentionDays(value: string | number | nul
     : 90;
 }
 
+export function getBackgroundSourceRetentionExpiresAt(
+  value: string | number | null | undefined,
+  now = new Date(),
+) {
+  return addDays(now, normalizeSourceSummaryRetentionDays(value));
+}
+
 export function buildSourceSummaryRows({
   allowedFieldKeys,
   label,
@@ -255,7 +262,7 @@ export function buildSourceSummaryRows({
 } {
   const fieldKeys = normalizeBackgroundSourcePermissionFields(allowedFieldKeys);
   const normalizedRetentionDays = normalizeSourceSummaryRetentionDays(retentionDays);
-  const expiresAt = addDays(now, normalizedRetentionDays);
+  const expiresAt = getBackgroundSourceRetentionExpiresAt(normalizedRetentionDays, now);
   const validationErrors: string[] = [];
 
   if (!label.trim()) {

@@ -5,6 +5,7 @@ import {
   formatDisclosureFieldLabel,
   getDefaultGrantExpiryDays,
   normalizeDisclosureFieldKeys,
+  requiresContactDisclosureStepUp,
   validateDisclosureRequest,
 } from "@/lib/background-disclosure";
 
@@ -41,4 +42,28 @@ test("grant expiry defaults stay short before introductions", () => {
   assert.equal(getDefaultGrantExpiryDays("registry"), 14);
   assert.equal(getDefaultGrantExpiryDays("consent"), 30);
   assert.equal(getDefaultGrantExpiryDays("introduced"), 90);
+});
+
+test("contact disclosure grants require MFA step-up", () => {
+  assert.equal(
+    requiresContactDisclosureStepUp({
+      accessLevel: "specific",
+      fieldKeys: ["exact_wish"],
+    }),
+    false,
+  );
+  assert.equal(
+    requiresContactDisclosureStepUp({
+      accessLevel: "specific",
+      fieldKeys: ["contact_email"],
+    }),
+    true,
+  );
+  assert.equal(
+    requiresContactDisclosureStepUp({
+      accessLevel: "contact",
+      fieldKeys: ["exact_wish"],
+    }),
+    true,
+  );
 });

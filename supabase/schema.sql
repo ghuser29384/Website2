@@ -1097,6 +1097,7 @@ create table if not exists public.profile_sources (
   captured_tags text[] not null default '{}',
   needs_review boolean not null default true,
   imported_at timestamptz,
+  retention_expires_at timestamptz not null default (timezone('utc', now()) + interval '90 days'),
   is_active boolean not null default true,
   sensitive_ciphertexts jsonb not null default '{}'::jsonb,
   sensitive_encryption_version text not null default '',
@@ -1663,6 +1664,17 @@ alter table public.profile_sources add column if not exists captured_tags text[]
 alter table public.profile_sources add column if not exists needs_review boolean not null default true;
 alter table public.profile_sources add column if not exists imported_at timestamptz;
 alter table public.profile_sources add column if not exists source_connection_id uuid references public.source_connections (id) on delete set null;
+alter table public.profile_sources add column if not exists retention_expires_at timestamptz;
+update public.profile_sources
+set retention_expires_at = coalesce(
+  retention_expires_at,
+  imported_at + interval '90 days',
+  created_at + interval '90 days',
+  timezone('utc', now()) + interval '90 days'
+)
+where retention_expires_at is null;
+alter table public.profile_sources alter column retention_expires_at set default (timezone('utc', now()) + interval '90 days');
+alter table public.profile_sources alter column retention_expires_at set not null;
 alter table public.profile_sources add column if not exists sensitive_ciphertexts jsonb not null default '{}'::jsonb;
 alter table public.profile_sources add column if not exists sensitive_encryption_version text not null default '';
 
@@ -1889,6 +1901,7 @@ create index if not exists match_consents_profile_id_idx on public.match_consent
 create index if not exists wish_notifications_profile_unread_idx on public.wish_notifications (profile_id, read_at, created_at desc);
 create index if not exists profile_sources_profile_active_idx on public.profile_sources (profile_id, is_active, updated_at desc);
 create index if not exists profile_sources_profile_review_idx on public.profile_sources (profile_id, needs_review, updated_at desc);
+create index if not exists profile_sources_retention_expires_idx on public.profile_sources (profile_id, retention_expires_at asc);
 create index if not exists profile_sources_sensitive_encryption_idx on public.profile_sources (sensitive_encryption_version, updated_at desc) where sensitive_encryption_version <> '';
 create index if not exists clarification_questions_profile_status_idx on public.clarification_questions (profile_id, status, created_at desc);
 create index if not exists background_match_runs_profile_created_idx on public.background_match_runs (profile_id, created_at desc);

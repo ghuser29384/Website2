@@ -169,10 +169,10 @@ export const BACKGROUND_DATA_INVENTORY = [
   },
   {
     classification: "manual-source-summary",
-    control: "Manual summaries only; source connectors require field permissions, retention expiry, and no raw ingestion; source rows are removed during self-serve deletion.",
+    control: "Manual summaries only; source notes and connectors require field permissions, retention expiry, and no raw ingestion; expired or inactive source notes stop influencing deterministic synthesis.",
     label: "Source notes and connection permissions",
     processor: "Supabase Postgres with app-level field encryption for notes and approved summaries.",
-    retention: "Until source removal, deletion request, or safety/legal hold.",
+    retention: "Until the source-level retention timer expires, source removal, deletion request, or safety/legal hold.",
     surface: "profile_sources, source_connections, and background_source_summaries",
     use: "Optional deterministic context for owner-reviewed matching.",
   },

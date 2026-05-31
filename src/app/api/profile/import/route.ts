@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { buildDeterministicSynthesis } from "@/lib/background-networking";
+import { getBackgroundSourceRetentionExpiresAt } from "@/lib/background-opportunity-briefs";
 import {
   PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
   PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
@@ -456,6 +457,10 @@ export async function POST(request: Request) {
           needs_review: row.needs_review !== false,
           imported_at:
             typeof row.imported_at === "string" && row.imported_at ? row.imported_at : null,
+          retention_expires_at:
+            typeof row.retention_expires_at === "string" && row.retention_expires_at
+              ? row.retention_expires_at
+              : getBackgroundSourceRetentionExpiresAt(90),
           is_active: row.is_active !== false,
           sensitive_ciphertexts: encryptedFields.ciphertexts,
           sensitive_encryption_version: encryptedFields.version,

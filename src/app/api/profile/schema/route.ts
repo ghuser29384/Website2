@@ -33,6 +33,7 @@ export async function GET(request: Request) {
       notes: [
         "Imports are scoped to the signed-in user only.",
         "Private wish entries, profile-sensitive text, source notes, connection summaries, and regenerated synthesis text are encrypted on write when imported.",
+        "Profile source notes carry retention_expires_at; expired or inactive source notes are excluded from deterministic synthesis.",
         "Source connections can carry structured allowed_field_keys, retention_expires_at, and ai_shadow_mode_allowed metadata; raw_ingestion_allowed is forced false on import.",
         "Saved searches may include public /offers filter metadata for cause-follow and live-offer notification workflows.",
         "Counterparty-linked records such as privacy grants, privacy access requests, match suggestions, introduction tasks, and agreements are not imported through this endpoint.",

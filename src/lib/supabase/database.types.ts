@@ -1448,6 +1448,7 @@ export interface Database {
           captured_tags: string[];
           needs_review: boolean;
           imported_at: string | null;
+          retention_expires_at: string;
           source_connection_id: string | null;
           is_active: boolean;
           sensitive_ciphertexts: Record<string, string>;
@@ -1474,6 +1475,7 @@ export interface Database {
           captured_tags?: string[];
           needs_review?: boolean;
           imported_at?: string | null;
+          retention_expires_at?: string;
           source_connection_id?: string | null;
           is_active?: boolean;
           sensitive_ciphertexts?: Record<string, string>;
@@ -1498,6 +1500,7 @@ export interface Database {
           captured_tags?: string[];
           needs_review?: boolean;
           imported_at?: string | null;
+          retention_expires_at?: string;
           source_connection_id?: string | null;
           is_active?: boolean;
           sensitive_ciphertexts?: Record<string, string>;

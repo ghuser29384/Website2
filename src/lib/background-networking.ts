@@ -132,6 +132,23 @@ export function getBackgroundTokens(value: string, maxCount = 24) {
   ].slice(0, maxCount);
 }
 
+export function hasActiveProfileSourcePermission(
+  source: Pick<ProfileSourceRow, "is_active" | "retention_expires_at">,
+  now = new Date(),
+) {
+  if (!source.is_active) {
+    return false;
+  }
+
+  if (!source.retention_expires_at) {
+    return true;
+  }
+
+  const expiresAt = Date.parse(source.retention_expires_at);
+
+  return Number.isFinite(expiresAt) && expiresAt > now.getTime();
+}
+
 function summarizeLines(values: string[], fallback: string, maxLength = 420) {
   const compactValues = values
     .map((value) => truncateBackgroundText(value, 180))
@@ -231,10 +248,13 @@ export function buildDeterministicSynthesis({
   const wishes = entries.filter((entry) => entry.entry_type === "wish").map((entry) => entry.body);
   const offers = entries.filter((entry) => entry.entry_type === "offer").map((entry) => entry.body);
   const asks = entries.filter((entry) => entry.entry_type === "ask").map((entry) => entry.body);
+  const activeProfileSources = profileSources.filter((source) =>
+    hasActiveProfileSourcePermission(source),
+  );
   const activeSourceConnections = connections.filter((connection) =>
     hasActiveBackgroundSourcePermission(connection),
   );
-  const sourceCount = profileSources.length + activeSourceConnections.length;
+  const sourceCount = activeProfileSources.length + activeSourceConnections.length;
   const missingFields = buildMissingFields({
     asks,
     capabilities: profile.capabilities,
@@ -282,7 +302,7 @@ export function buildDeterministicSynthesis({
     profile.brokerage_preference,
   ]);
   const uncertaintyFlags = buildUncertaintyFlags(
-    [profile.uncertainty_notes, ...profileSources.map((source) => source.notes)],
+    [profile.uncertainty_notes, ...activeProfileSources.map((source) => source.notes)],
     missingFields,
   );
 
@@ -304,7 +324,11 @@ export function buildDeterministicSynthesis({
       "Intent is underspecified.",
     ),
     capabilities: summarizeLines(
-      [profile.capabilities, ...offers, ...profileSources.map((source) => source.snapshot_excerpt || source.notes)],
+      [
+        profile.capabilities,
+        ...offers,
+        ...activeProfileSources.map((source) => source.snapshot_excerpt || source.notes),
+      ],
       "No capabilities or offers have been stated yet.",
     ),
     constraints: summarizeLines(

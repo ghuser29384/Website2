@@ -148,6 +148,19 @@ export function getDefaultGrantExpiryDays(stage: DisclosureAudienceStage) {
   return 14;
 }
 
+export function requiresContactDisclosureStepUp({
+  accessLevel = "specific",
+  fieldKeys,
+}: {
+  accessLevel?: DisclosureAccessLevel;
+  fieldKeys: string[];
+}) {
+  return (
+    accessLevel === "contact" ||
+    normalizeDisclosureFieldKeys(fieldKeys).includes("contact_email")
+  );
+}
+
 export function validateDisclosureRequest({
   accessLevel = "specific",
   fieldKeys,

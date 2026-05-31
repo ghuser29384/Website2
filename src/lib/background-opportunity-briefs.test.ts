@@ -6,6 +6,7 @@ import {
   buildIntroPacketRow,
   buildOpportunityBriefRow,
   buildSourceSummaryRows,
+  getBackgroundSourceRetentionExpiresAt,
   getGrantReceiptStatus,
   serializeOpportunityBriefCard,
   validateIntroPacketInput,
@@ -114,6 +115,13 @@ test("source summaries are scoped, expiring, and raw-ingestion disabled", () => 
   assert.equal(sourceSummary.retention_expires_at, "2026-06-30T00:00:00.000Z");
   assert.equal(receipt.receipt_kind, "source_summary");
   assert.equal(receipt.expires_at, sourceSummary.retention_expires_at);
+});
+
+test("source retention expiry normalizes unsupported windows to ninety days", () => {
+  assert.equal(
+    getBackgroundSourceRetentionExpiresAt("17", new Date("2026-05-31T00:00:00.000Z")),
+    "2026-08-29T00:00:00.000Z",
+  );
 });
 
 test("grant receipt status follows revocation before expiry", () => {

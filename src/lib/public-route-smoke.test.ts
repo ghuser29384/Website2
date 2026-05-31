@@ -783,16 +783,21 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(dashboardPage, /name="ai_shadow_mode_allowed"/);
   assert.match(dashboardPage, /name="source_connection_id"/);
   assert.match(dashboardPage, /Revoke permission/);
+  assert.match(dashboardPage, /stores your note with a retention timer/);
+  assert.match(dashboardPage, /hasActiveProfileSourcePermission/);
   assert.match(dashboardPage, /formatBackgroundSourcePermissionFieldLabel/);
   assert.match(backgroundActions, /validateBackgroundSourcePermission/);
   assert.match(backgroundActions, /allowed_field_keys: permission\.allowedFieldKeys/);
   assert.match(backgroundActions, /retention_expires_at: permission\.retentionExpiresAt/);
+  assert.match(backgroundActions, /retention_expires_at: sourceSummary\.retention_expires_at/);
   assert.match(backgroundActions, /raw_ingestion_allowed: permission\.rawIngestionAllowed/);
   assert.match(backgroundActions, /revokeBackgroundSourceConnectionAction/);
   assert.match(backgroundActions, /access_status: "revoked"/);
   assert.match(backgroundActions, /\.update\(payload, \{ count: "exact" \}\)/);
   assert.match(backgroundActions, /Source permission revoked for future matching/);
   assert.match(backgroundNetworkingSource, /hasActiveBackgroundSourcePermission/);
+  assert.match(backgroundNetworkingSource, /hasActiveProfileSourcePermission/);
+  assert.match(backgroundNetworkingSource, /activeProfileSources/);
   assert.match(backgroundNetworkingSource, /activeSourceConnections/);
   assert.match(backgroundAiShadowSource, /getBackgroundAiShadowContract/);
   assert.match(backgroundAiShadowSource, /validateBackgroundAiShadowContract/);
@@ -820,7 +825,9 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(legacyActions, /validateBackgroundSourcePermission/);
   assert.match(legacyActions, /allowed_field_keys: permission\.allowedFieldKeys/);
   assert.match(legacyActions, /retention_expires_at: permission\.retentionExpiresAt/);
+  assert.match(legacyActions, /getBackgroundSourceRetentionExpiresAt/);
   assert.match(legacyActions, /raw_ingestion_allowed: permission\.rawIngestionAllowed/);
+  assert.match(schemaSource, /profile_sources_retention_expires_idx/);
   assert.match(schemaSource, /source_connections_allowed_field_keys_check/);
   assert.match(schemaSource, /source_connections_raw_ingestion_disabled_check/);
   assert.match(migrationSource, /source_connections_allowed_field_keys_check/);
@@ -1160,6 +1167,7 @@ test("activation loop includes concierge intake, admin triage, SLA, and audit tr
   assert.match(dashboardPage, /Consent Center/);
   assert.match(dashboardPage, /Revoke grant/);
   assert.match(dashboardPage, /No-trade baseline/);
+  assert.match(dashboardPage, /Contact-email or contact-level grants/);
   assert.match(dashboardPage, /Exposure previews below show what a connection or reviewed summary can influence/);
   assert.match(dashboardPage, /raw summary stays\s+private and raw ingestion remains disabled/);
   assert.match(dashboardPage, /Grant receipts/);
@@ -1180,6 +1188,7 @@ test("activation loop includes concierge intake, admin triage, SLA, and audit tr
   assert.match(actionsSource, /request_created/);
   assert.match(actionsSource, /request_triaged/);
   assert.match(actionsSource, /no_trade_baseline/);
+  assert.match(actionsSource, /requireContactDisclosureMfaStepUp/);
   assert.match(appDataSource, /listMatchConciergeRequestsForUser/);
   assert.match(schemaSource, /match_concierge_requests/);
   assert.match(schemaSource, /no_trade_baseline/);
@@ -2003,6 +2012,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(disclosureSource, /contact_details_before_introduction/);
   assert.match(disclosureSource, /raw_source_notes_redacted/);
   assert.match(disclosureSource, /owner_approval_required/);
+  assert.match(disclosureSource, /step_up_auth_required/);
+  assert.match(disclosureSource, /disclosure_contact_step_up_contract_smoke/);
   assert.match(disclosureSource, /searchPrivacyControls/);
   assert.match(disclosureSource, /daily_registry_query_budget/);
   assert.match(disclosureSource, /sparse_result_privacy_floor/);

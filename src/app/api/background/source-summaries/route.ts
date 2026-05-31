@@ -154,6 +154,7 @@ export async function POST(request: Request) {
     captured_tags: getBackgroundTokens(`${label} ${summaryText}`, 12),
     content_kind: "manual_summary",
     imported_at: new Date().toISOString(),
+    retention_expires_at: sourceSummary.retention_expires_at,
     is_active: true,
     label,
     needs_review: true,
