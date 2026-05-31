@@ -115,6 +115,12 @@ import {
   getMpgfPublicGoodsGovernanceApi,
 } from "./mpgf/public-goods-governance";
 import {
+  MPGF_EVIDENCE_ACCESS_SCOPE,
+  MPGF_EVIDENCE_SIGNED_URL_TTL_SECONDS,
+  normalizeMpgfManualEvidenceSecurity,
+  verifyMpgfEvidenceAccessSignature,
+} from "./mpgf/public-goods-evidence-security";
+import {
   evaluateMpgfExactPilotGate,
   evaluateMpgfGovernanceMachineryGate,
   evaluateMpgfPayoutComplianceGate,
@@ -669,6 +675,86 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
   assert.match(governanceRoute, /getMpgfPublicGoodsGovernanceApi/);
   assert.match(mpgfHubPage, /\/mpgf\/governance/);
   assert.match(roundPage, /\/mpgf\/governance/);
+});
+
+test("MPGF manual evidence security signs receipt access and stores scan metadata", () => {
+  const secured = normalizeMpgfManualEvidenceSecurity({
+    evidenceDescription: "Open Collective receipt PDF for reviewer inspection.",
+    evidenceUrl: "https://receipts.example.org/path/receipt-123.pdf?download=1",
+    externalPaymentReference: "open-collective:receipt-123",
+    now: new Date("2026-05-31T12:00:00.000Z"),
+    siteUrl: "https://moraltrade.example",
+  });
+  const signedUrl = new URL(secured.signedEvidenceUrl ?? "");
+  const verification = verifyMpgfEvidenceAccessSignature({
+    evidenceRef: signedUrl.pathname.split("/").at(-1) ?? "",
+    evidenceHash: signedUrl.searchParams.get("evidenceHash"),
+    expiresAt: signedUrl.searchParams.get("expires"),
+    scope: signedUrl.searchParams.get("scope"),
+    signature: signedUrl.searchParams.get("sig"),
+    now: new Date("2026-05-31T12:05:00.000Z"),
+  });
+  const expired = verifyMpgfEvidenceAccessSignature({
+    evidenceRef: signedUrl.pathname.split("/").at(-1) ?? "",
+    evidenceHash: signedUrl.searchParams.get("evidenceHash"),
+    expiresAt: signedUrl.searchParams.get("expires"),
+    scope: signedUrl.searchParams.get("scope"),
+    signature: signedUrl.searchParams.get("sig"),
+    now: new Date("2026-05-31T12:16:00.000Z"),
+  });
+  const descriptionOnly = normalizeMpgfManualEvidenceSecurity({
+    evidenceDescription: "Bank transfer screenshot is available to reviewers on request.",
+    externalPaymentReference: "bank-transfer:reference-123",
+    now: new Date("2026-05-31T12:00:00.000Z"),
+    siteUrl: "https://moraltrade.example",
+  });
+  const route = readFileSync("src/app/api/mpgf/evidence/[evidenceRef]/route.ts", "utf8");
+  const realMoney = readFileSync("src/lib/mpgf/real-money.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260531_mpgf_manual_evidence_security.sql", "utf8");
+  const accountControls = readFileSync("src/components/mpgf/mpgf-contribution-controls.tsx", "utf8");
+  const securedJson = JSON.stringify(secured);
+
+  assert.equal(secured.accessScope, MPGF_EVIDENCE_ACCESS_SCOPE);
+  assert.equal(secured.malwareScanStatus, "metadata_scan_passed");
+  assert.equal(secured.signedUrlExpiresAt, "2026-05-31T12:15:00.000Z");
+  assert.equal(secured.normalizedEvidenceJson.signedUrlTtlSeconds, MPGF_EVIDENCE_SIGNED_URL_TTL_SECONDS);
+  assert.equal(secured.normalizedEvidenceJson.storesRawReceiptUrl, false);
+  assert.equal(signedUrl.pathname.startsWith("/api/mpgf/evidence/manual-"), true);
+  assert.equal(signedUrl.searchParams.get("scope"), MPGF_EVIDENCE_ACCESS_SCOPE);
+  assert.equal(verification.status, "verified");
+  assert.equal(expired.status, "expired");
+  assert.equal(descriptionOnly.signedEvidenceUrl, null);
+  assert.equal(descriptionOnly.malwareScanStatus, "manual_review_required");
+  assert.equal(securedJson.includes("receipts.example.org"), false);
+  assert.throws(
+    () =>
+      normalizeMpgfManualEvidenceSecurity({
+        evidenceDescription: "Suspicious executable evidence.",
+        evidenceUrl: "https://receipts.example.org/download.exe",
+        externalPaymentReference: "bad-file",
+        siteUrl: "https://moraltrade.example",
+      }),
+    /malware-scan policy/,
+  );
+  assert.throws(
+    () =>
+      normalizeMpgfManualEvidenceSecurity({
+        evidenceDescription: "Plain HTTP receipt.",
+        evidenceUrl: "http://receipts.example.org/receipt.pdf",
+        externalPaymentReference: "plain-http",
+        siteUrl: "https://moraltrade.example",
+      }),
+    /HTTPS/,
+  );
+  assert.match(route, /verifyMpgfEvidenceAccessSignature/);
+  assert.match(route, /privateEvidenceNotReturned/);
+  assert.match(realMoney, /normalizeMpgfManualEvidenceSecurity/);
+  assert.match(realMoney, /evidence_access_scope/);
+  assert.match(realMoney, /evidence_malware_scan_status/);
+  assert.match(migration, /evidence_signed_url_expires_at/);
+  assert.match(migration, /evidence_normalized_json/);
+  assert.match(migration, /raw receipt URLs are hashed/);
+  assert.match(accountControls, /href=\{evidence\.evidenceUrl\}/);
 });
 
 test("MPGF public-goods campaign service validates schema, deadlines, and prohibited claims", () => {

@@ -8,6 +8,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getStripe, getStripeWebhookSecret, hasStripeEnv } from "@/lib/stripe";
 
 import { demoCycle } from "./data";
+import { normalizeMpgfManualEvidenceSecurity } from "./public-goods-evidence-security";
 import type {
   MpgfManualEvidenceActionResult,
   MpgfManualEvidenceProvider,
@@ -64,26 +65,6 @@ function checkoutMetadataText(value: string | null | undefined) {
 
 function checkoutMetadataCents(value: number | null | undefined) {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? String(value) : "";
-}
-
-function parseEvidenceUrl(value: string | null | undefined) {
-  const trimmed = optionalTrimmed(value);
-
-  if (!trimmed) {
-    return null;
-  }
-
-  try {
-    const parsed = new URL(trimmed);
-
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      throw new Error("Evidence URL must use http or https.");
-    }
-
-    return parsed.toString();
-  } catch {
-    throw new Error("Evidence URL must be a valid URL.");
-  }
 }
 
 function normalizeManualEvidenceProvider(value: string): MpgfManualEvidenceProvider {
@@ -460,7 +441,6 @@ export async function submitMpgfManualExternalPaymentEvidence(input: {
   const amountCents = toCents(input.amountDollars, "External payment evidence amount");
   const externalPaymentReference = optionalTrimmed(input.externalPaymentReference);
   const evidenceDescription = optionalTrimmed(input.evidenceDescription);
-  const evidenceUrl = parseEvidenceUrl(input.evidenceUrl);
   const paidAt = optionalTrimmed(input.paidAt);
 
   if (!externalPaymentReference) {
@@ -478,6 +458,13 @@ export async function submitMpgfManualExternalPaymentEvidence(input: {
       readiness,
     };
   }
+
+  const securedEvidence = normalizeMpgfManualEvidenceSecurity({
+    evidenceDescription,
+    evidenceUrl: input.evidenceUrl,
+    externalPaymentReference,
+    siteUrl: getSiteUrl(),
+  });
 
   let supabase: SupabaseServiceAny;
 
@@ -500,8 +487,12 @@ export async function submitMpgfManualExternalPaymentEvidence(input: {
       currency: "usd",
       provider: input.provider,
       external_payment_reference: externalPaymentReference,
-      evidence_url: evidenceUrl,
+      evidence_url: securedEvidence.signedEvidenceUrl,
       evidence_description: evidenceDescription,
+      evidence_access_scope: securedEvidence.accessScope,
+      evidence_signed_url_expires_at: securedEvidence.signedUrlExpiresAt,
+      evidence_malware_scan_status: securedEvidence.malwareScanStatus,
+      evidence_normalized_json: securedEvidence.normalizedEvidenceJson,
       paid_at: paidAt || null,
       status: "submitted",
     })
