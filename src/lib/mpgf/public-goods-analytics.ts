@@ -20,7 +20,8 @@ export type MpgfPublicGoodsAnalyticsEventType =
   | "threshold_status_evaluated"
   | "external_handoff_reconciled"
   | "allocation_finalized"
-  | "subscription_refill_recorded";
+  | "subscription_refill_recorded"
+  | "reminder_queued";
 
 export type MpgfPublicGoodsAnalyticsAmountBucket =
   | "under_10"
@@ -44,6 +45,8 @@ export interface MpgfPublicGoodsAnalyticsEventJson {
   surface?: "public_campaign_page" | "mpgf_participant_action" | "protected_job" | "review_console";
   cohort?: string;
   variant?: string;
+  reminderKind?: string;
+  reminderKey?: string;
 }
 
 export interface MpgfPublicGoodsAnalyticsEventRow {
@@ -69,6 +72,7 @@ const allowedEventTypes = new Set<MpgfPublicGoodsAnalyticsEventType>([
   "external_handoff_reconciled",
   "allocation_finalized",
   "subscription_refill_recorded",
+  "reminder_queued",
 ]);
 
 const forbiddenAnalyticsKeyPattern =

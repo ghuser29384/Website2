@@ -70,6 +70,11 @@ import {
 } from "./mpgf/public-goods-analytics";
 import { evaluateMpgfPublicGoodsIdentityAdapter } from "./mpgf/public-goods-identity";
 import { resolveMpgfPublicGoodsPaymentAdapter } from "./mpgf/public-goods-payment-adapter";
+import {
+  buildMpgfPublicGoodsReminderEmailRows,
+  buildMpgfPublicGoodsReminderPlans,
+  selectMpgfPublicGoodsReminderKind,
+} from "./mpgf/public-goods-reminders";
 import { buildMpgfPublicGoodsReconciliationRows } from "./mpgf/public-goods-reconciliation";
 import {
   normalizeMpgfPublicGoodsReasonCode,
@@ -750,6 +755,74 @@ test("MPGF public-goods analytics keeps only privacy-safe buckets and factor cod
   assert.match(persistence, /pledge_intent_recorded/);
   assert.match(persistence, /amountBucket/);
   assert.match(persistence, /bucketMpgfPublicGoodsAmountCents/);
+});
+
+test("MPGF public-goods reminder planner queues aggregate, non-spammy deadline and threshold emails", () => {
+  const campaign = {
+    ...demoMpgfPublicGoodsCampaigns[0],
+    id: "campaign-reminder-threshold-near",
+    thresholdAmountCents: 10_000,
+    thresholdSupporters: 3,
+    deadlineAt: "2026-06-02T12:00:00.000Z",
+  };
+  const pledges = [
+    {
+      ...demoMpgfAssurancePledges[0],
+      id: "pledge-reminder-1",
+      campaignId: campaign.id,
+      userId: "reminder-user-1",
+      amountCents: 5_000,
+      supporterReason: "Private reason should not appear in email.",
+    },
+    {
+      ...demoMpgfAssurancePledges[1],
+      id: "pledge-reminder-2",
+      campaignId: campaign.id,
+      userId: "reminder-user-2",
+      amountCents: 3_500,
+    },
+  ];
+  const now = new Date("2026-05-31T13:00:00.000Z");
+  const kind = selectMpgfPublicGoodsReminderKind({ campaign, pledges, now });
+  const plans = buildMpgfPublicGoodsReminderPlans({
+    campaign,
+    pledges,
+    contacts: [
+      { profileId: "profile-reminder-1", userRef: "reminder-user-1", email: "supporter@example.org" },
+      { profileId: "profile-reminder-2", userRef: "reminder-user-2", email: null },
+    ],
+    now,
+  });
+  const emailRows = buildMpgfPublicGoodsReminderEmailRows(plans);
+  const thresholdMetKind = selectMpgfPublicGoodsReminderKind({
+    campaign: {
+      ...campaign,
+      id: "campaign-reminder-threshold-met",
+      thresholdAmountCents: 8_000,
+      thresholdSupporters: 2,
+    },
+    pledges: pledges.map((pledge) => ({ ...pledge, campaignId: "campaign-reminder-threshold-met" })),
+    now,
+  });
+  const route = readFileSync("src/app/api/mpgf/public-goods/reminders/route.ts", "utf8");
+  const reminders = readFileSync("src/lib/mpgf/public-goods-reminders.ts", "utf8");
+  const analytics = readFileSync("src/lib/mpgf/public-goods-analytics.ts", "utf8");
+
+  assert.equal(kind, "threshold_near");
+  assert.equal(plans.length, 2);
+  assert.equal(plans.every((plan) => plan.privacyPolicy === "aggregate_progress_no_private_amounts_or_reasons"), true);
+  assert.equal(emailRows.length, 1);
+  assert.equal(emailRows[0]?.provider, "mpgf_public_goods_reminder_worker");
+  assert.match(String(emailRows[0]?.body), /85%/);
+  assert.match(String(emailRows[0]?.body), /2\/3 verified supporters/);
+  assert.doesNotMatch(String(emailRows[0]?.body), /Private reason should not appear/i);
+  assert.doesNotMatch(String(emailRows[0]?.body), /\$|5000|3500|8500/);
+  assert.equal(thresholdMetKind, "threshold_met_next_step");
+  assert.match(route, /MPGF_PUBLIC_GOODS_REMINDER_SECRET/);
+  assert.match(route, /queueMpgfPublicGoodsReminderEmails/);
+  assert.match(reminders, /email_outbox/);
+  assert.match(reminders, /reminder_queued/);
+  assert.match(analytics, /reminder_queued/);
 });
 
 test("MPGF public-goods migration covers required entities and RLS policies", () => {
