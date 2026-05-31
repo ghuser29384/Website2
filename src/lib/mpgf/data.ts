@@ -634,7 +634,7 @@ export const mpgfPublicRoutes = [
   "/mpgf/account/contributions",
   "/mpgf/pools",
   "/mpgf/pools/new",
-  "/mpgf/pools/global-health-basic-needs",
+  ...demoMpgfPublicGoodsCampaigns.map((campaign) => `/mpgf/pools/${campaign.slug}`),
   `/mpgf/ballot/${demoCycle.id}`,
   `/mpgf/cycles/${demoCycle.id}`,
   "/mpgf/technical-spec",

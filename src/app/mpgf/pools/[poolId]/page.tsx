@@ -7,16 +7,16 @@ import { getViewer } from "@/lib/app-data";
 import {
   demoAlternatives,
   demoMpgfMatchPool,
-  demoMpgfPublicGoodsCampaigns,
-  demoMpgfPublicGoodsPaymentProofs,
-  demoMpgfPublicGoodsReviewCases,
-  demoMpgfPublicGoodsSubscriptions,
 } from "@/lib/mpgf/data";
 import {
   allocateMpgfAssuranceRound,
   formatUsd,
   getMpgfCampaignAssuranceStatus,
 } from "@/lib/mpgf/mechanism";
+import {
+  loadMpgfPublicGoodsProofSummary,
+  resolveMpgfPublicGoodsRoute,
+} from "@/lib/mpgf/public-goods-proof";
 import { getAbsoluteUrl } from "@/lib/seo";
 
 interface MpgfPoolPageProps {
@@ -37,9 +37,9 @@ function getGoodTypeLabel(alternative: (typeof demoAlternatives)[number]) {
 
 export async function generateMetadata({ params }: MpgfPoolPageProps): Promise<Metadata> {
   const { poolId } = await params;
-  const alternative = demoAlternatives.find((candidate) => candidate.id === poolId);
+  const { alternative, campaign, canonicalPoolId } = resolveMpgfPublicGoodsRoute(poolId);
 
-  if (!alternative) {
+  if (!alternative && !campaign) {
     return {
       title: "MPGF Pool",
       robots: {
@@ -49,16 +49,20 @@ export async function generateMetadata({ params }: MpgfPoolPageProps): Promise<M
     };
   }
 
+  const title = alternative ? `${alternative.shortName} MPGF Pool` : `${campaign?.title ?? "MPGF"} Proof Path`;
+  const description = alternative?.moralPublicGoodRationale ?? campaign?.publicSummary ?? "";
+  const canonical = canonicalPoolId ? `/mpgf/pools/${canonicalPoolId}` : `/mpgf/pools/${poolId}`;
+
   return {
-    title: `${alternative.shortName} MPGF Pool`,
-    description: alternative.moralPublicGoodRationale,
+    title,
+    description,
     alternates: {
-      canonical: `/mpgf/pools/${alternative.id}`,
+      canonical,
     },
     openGraph: {
-      title: `${alternative.shortName} MPGF Pool`,
-      description: alternative.moralPublicGoodRationale,
-      url: getAbsoluteUrl(`/mpgf/pools/${alternative.id}`),
+      title,
+      description,
+      url: getAbsoluteUrl(canonical),
       type: "website",
     },
   };
@@ -67,28 +71,18 @@ export async function generateMetadata({ params }: MpgfPoolPageProps): Promise<M
 export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
   const { poolId } = await params;
   const viewer = await getViewer();
-  const alternative = demoAlternatives.find((candidate) => candidate.id === poolId);
-  const campaign = demoMpgfPublicGoodsCampaigns.find((candidate) => candidate.poolAlternativeId === poolId);
+  const { alternative, campaign } = resolveMpgfPublicGoodsRoute(poolId);
   const assuranceAllocation = allocateMpgfAssuranceRound();
   const assuranceLine = campaign
     ? assuranceAllocation.lines.find((candidate) => candidate.campaignId === campaign.id)
     : null;
   const assuranceStatus = campaign ? getMpgfCampaignAssuranceStatus(campaign) : null;
-  const reviewCases = campaign
-    ? demoMpgfPublicGoodsReviewCases
-        .filter((reviewCase) => reviewCase.campaignId === campaign.id)
-        .sort((left, right) => Date.parse(right.openedAt) - Date.parse(left.openedAt))
-    : [];
-  const latestReviewCase = reviewCases[0];
-  const paymentProofs = campaign
-    ? demoMpgfPublicGoodsPaymentProofs.filter((paymentProof) => paymentProof.campaignId === campaign.id)
-    : [];
-  const verifiedAmountCents = paymentProofs
-    .filter((paymentProof) => paymentProof.status === "verified")
-    .reduce((sum, paymentProof) => sum + paymentProof.amountVerifiedCents, 0);
-  const sponsorSubscriptionCents = demoMpgfPublicGoodsSubscriptions
-    .filter((subscription) => subscription.poolId === demoMpgfMatchPool.id && subscription.status === "active")
-    .reduce((sum, subscription) => sum + subscription.amountCents, 0);
+  const proofSummary = campaign
+    ? await loadMpgfPublicGoodsProofSummary({
+        campaign,
+        assuranceLine,
+      })
+    : null;
 
   if (!alternative) {
     notFound();
@@ -142,7 +136,7 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
           </dl>
         </article>
       </section>
-      {campaign && assuranceStatus && assuranceLine ? (
+      {campaign && assuranceStatus && assuranceLine && proofSummary ? (
         <section className="section section-subtle">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Verified assurance route</p>
@@ -219,13 +213,13 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                 </div>
                 <div>
                   <dt>Monthly pool refill</dt>
-                  <dd>{formatUsd(sponsorSubscriptionCents)}</dd>
+                  <dd>{formatUsd(proofSummary.activeSponsorSubscriptionCents)}</dd>
                 </div>
                 <div>
                   <dt>Challenge window</dt>
                   <dd>
-                    {campaign.challengeWindowEndsAt
-                      ? new Date(campaign.challengeWindowEndsAt).toLocaleDateString("en-US", {
+                    {proofSummary.challengeWindowEndsAt
+                      ? new Date(proofSummary.challengeWindowEndsAt).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
                         })
@@ -234,7 +228,19 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                 </div>
                 <div>
                   <dt>Verified proof amount</dt>
-                  <dd>{formatUsd(verifiedAmountCents)}</dd>
+                  <dd>{formatUsd(proofSummary.verifiedAmountCents)}</dd>
+                </div>
+                <div>
+                  <dt>Sponsor top-up</dt>
+                  <dd>{formatUsd(proofSummary.sponsorTopUpCents)}</dd>
+                </div>
+                <div>
+                  <dt>Verified proofs</dt>
+                  <dd>{proofSummary.verifiedProofCount}</dd>
+                </div>
+                <div>
+                  <dt>Rejected proofs</dt>
+                  <dd>{proofSummary.rejectedProofCount}</dd>
                 </div>
                 <div>
                   <dt>Excluded pledges</dt>
@@ -242,9 +248,33 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                 </div>
                 <div>
                   <dt>Latest reason code</dt>
-                  <dd>{latestReviewCase?.reasonCode.replaceAll("_", " ") ?? "pending review"}</dd>
+                  <dd>{proofSummary.latestReasonCode?.replaceAll("_", " ") ?? "pending review"}</dd>
+                </div>
+                <div>
+                  <dt>Latest proof source</dt>
+                  <dd>{proofSummary.latestReconciliationSource?.replaceAll("_", " ") ?? "pending proof"}</dd>
+                </div>
+                <div>
+                  <dt>Latest verified at</dt>
+                  <dd>
+                    {proofSummary.latestVerifiedAt
+                      ? new Date(proofSummary.latestVerifiedAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })
+                      : "Not verified"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Public evidence source</dt>
+                  <dd>{proofSummary.publicEvidenceSource.replaceAll("_", " ")}</dd>
                 </div>
               </dl>
+              {proofSummary.warnings.length > 0 ? (
+                <p className="mpgf-small">
+                  Persisted proof aggregate is unavailable; showing fixture-safe public evidence.
+                </p>
+              ) : null}
               <p>{campaign.baselineRule}</p>
               <p>{campaign.exitRule}</p>
             </article>
@@ -271,7 +301,7 @@ export default async function MpgfPoolPage({ params }: MpgfPoolPageProps) {
                 </div>
                 <div>
                   <dt>Appeal status</dt>
-                  <dd>{latestReviewCase?.appealStatus.replaceAll("_", " ") ?? "none"}</dd>
+                  <dd>{proofSummary.latestAppealStatus.replaceAll("_", " ")}</dd>
                 </div>
               </dl>
             </article>

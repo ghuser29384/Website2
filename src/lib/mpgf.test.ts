@@ -61,6 +61,10 @@ import {
 } from "./mpgf/data";
 import { buildMpgfPublicGoodsReconciliationRows } from "./mpgf/public-goods-reconciliation";
 import {
+  resolveMpgfPublicGoodsRoute,
+  summarizeMpgfPublicGoodsProof,
+} from "./mpgf/public-goods-proof";
+import {
   evaluateMpgfExactPilotGate,
   evaluateMpgfGovernanceMachineryGate,
   evaluateMpgfPayoutComplianceGate,
@@ -599,6 +603,30 @@ test("MPGF public-goods reconciliation route writes payment proofs through a pro
   assert.match(reconciliation, /mpgf_public_goods_review_cases/);
   assert.match(reconciliation, /source_event_ref/);
   assert.match(reconciliation, /status: "already_processed"/);
+});
+
+test("MPGF public-goods proof pages resolve campaign routes and expose public-safe aggregates", () => {
+  const campaign = demoMpgfPublicGoodsCampaigns[0];
+  const allocation = allocateMpgfAssuranceRound();
+  const line = allocation.lines.find((candidate) => candidate.campaignId === campaign.id);
+  const bySlug = resolveMpgfPublicGoodsRoute(campaign.slug);
+  const byCampaignId = resolveMpgfPublicGoodsRoute(campaign.id);
+  const proof = summarizeMpgfPublicGoodsProof({
+    campaign,
+    assuranceLine: line,
+  });
+  const page = readFileSync("src/app/mpgf/pools/[poolId]/page.tsx", "utf8");
+
+  assert.equal(bySlug.campaign?.id, campaign.id);
+  assert.equal(bySlug.alternative?.id, campaign.poolAlternativeId);
+  assert.equal(byCampaignId.campaign?.id, campaign.id);
+  assert.equal(proof.verifiedAmountCents, 10_000);
+  assert.equal(proof.latestReasonCode, "external_handoff_verified");
+  assert.equal(proof.latestReconciliationSource, "external_receipt");
+  assert.equal(proof.publicEvidenceSource, "demo_fixture");
+  assert.match(page, /loadMpgfPublicGoodsProofSummary/);
+  assert.match(page, /Sponsor top-up/);
+  assert.match(page, /Public evidence source/);
 });
 
 test("MPGF production completion gate fails while production evidence is only pending", () => {
