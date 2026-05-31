@@ -193,11 +193,59 @@ create table if not exists public.donation_offset_offers (
   pool_side text check (pool_side in ('side_a', 'side_b')),
   assurance_minimum_cents integer not null default 0 check (assurance_minimum_cents >= 0),
   assurance_deadline_at timestamptz,
+  offer_expires_at timestamptz,
   evidence_url text not null default '',
   moderation_status text not null default 'clear' check (moderation_status in ('clear', 'flagged', 'blocked')),
   moderation_notes text not null default '',
   moderation_reviewed_by uuid references public.profiles (id) on delete set null,
   moderation_reviewed_at timestamptz,
+  baseline_bond_enabled boolean not null default false,
+  baseline_bond_amount_cents integer not null default 0 check (baseline_bond_amount_cents >= 0),
+  baseline_bond_currency text not null default 'USD' check (baseline_bond_currency ~ '^[A-Z]{3}$'),
+  baseline_bond_forfeit_destination_id text references public.registered_charities (id) on delete restrict,
+  baseline_bond_evidence_due_at timestamptz,
+  baseline_bond_evidence_standard text not null default '',
+  baseline_bond_evidence_url text not null default '',
+  baseline_bond_status text not null default 'none' check (
+    baseline_bond_status in (
+      'none',
+      'pending_payment',
+      'posted',
+      'refunded_after_match',
+      'evidence_due',
+      'evidence_submitted',
+      'refunded_after_evidence',
+      'forfeited',
+      'cancelled_by_review'
+    )
+  ),
+  baseline_bond_review_notes text not null default '',
+  baseline_bond_reviewed_by uuid references public.profiles (id) on delete set null,
+  baseline_bond_reviewed_at timestamptz,
+  baseline_bond_appeal_window_ends_at timestamptz,
+  check (
+    baseline_bond_enabled = false
+    or (
+      baseline_bond_amount_cents > 0
+      and baseline_bond_forfeit_destination_id is not null
+      and baseline_bond_evidence_due_at is not null
+      and offer_expires_at is not null
+      and length(trim(baseline_bond_evidence_standard)) >= 20
+      and baseline_bond_status <> 'none'
+    )
+  ),
+  check (
+    baseline_bond_enabled = false
+    or baseline_bond_evidence_due_at > offer_expires_at
+  ),
+  check (
+    baseline_bond_forfeit_destination_id is null
+    or baseline_bond_forfeit_destination_id not in (
+      'platform-operating-account',
+      'moraltrade-operating-account',
+      'moral-trade-operating-account'
+    )
+  ),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -222,8 +270,78 @@ add constraint donation_offset_offers_assurance_minimum_cents_check
 check (assurance_minimum_cents >= 0);
 
 alter table public.donation_offset_offers add column if not exists assurance_deadline_at timestamptz;
+alter table public.donation_offset_offers add column if not exists offer_expires_at timestamptz;
 alter table public.donation_offset_offers add column if not exists moderation_reviewed_by uuid references public.profiles (id) on delete set null;
 alter table public.donation_offset_offers add column if not exists moderation_reviewed_at timestamptz;
+alter table public.donation_offset_offers add column if not exists baseline_bond_enabled boolean not null default false;
+alter table public.donation_offset_offers add column if not exists baseline_bond_amount_cents integer not null default 0;
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_amount_cents_check;
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_amount_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_amount_check
+check (baseline_bond_amount_cents >= 0);
+alter table public.donation_offset_offers add column if not exists baseline_bond_currency text not null default 'USD';
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_currency_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_currency_check
+check (baseline_bond_currency ~ '^[A-Z]{3}$');
+alter table public.donation_offset_offers add column if not exists baseline_bond_forfeit_destination_id text references public.registered_charities (id) on delete restrict;
+alter table public.donation_offset_offers add column if not exists baseline_bond_evidence_due_at timestamptz;
+alter table public.donation_offset_offers add column if not exists baseline_bond_evidence_standard text not null default '';
+alter table public.donation_offset_offers add column if not exists baseline_bond_evidence_url text not null default '';
+alter table public.donation_offset_offers add column if not exists baseline_bond_status text not null default 'none';
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_status_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_status_check
+check (
+  baseline_bond_status in (
+    'none',
+    'pending_payment',
+    'posted',
+    'refunded_after_match',
+    'evidence_due',
+    'evidence_submitted',
+    'refunded_after_evidence',
+    'forfeited',
+    'cancelled_by_review'
+  )
+);
+alter table public.donation_offset_offers add column if not exists baseline_bond_review_notes text not null default '';
+alter table public.donation_offset_offers add column if not exists baseline_bond_reviewed_by uuid references public.profiles (id) on delete set null;
+alter table public.donation_offset_offers add column if not exists baseline_bond_reviewed_at timestamptz;
+alter table public.donation_offset_offers add column if not exists baseline_bond_appeal_window_ends_at timestamptz;
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_enabled_fields_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_enabled_fields_check
+check (
+  baseline_bond_enabled = false
+  or (
+    baseline_bond_amount_cents > 0
+    and baseline_bond_forfeit_destination_id is not null
+    and baseline_bond_evidence_due_at is not null
+    and offer_expires_at is not null
+    and length(trim(baseline_bond_evidence_standard)) >= 20
+    and baseline_bond_status <> 'none'
+  )
+);
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_timing_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_timing_check
+check (
+  baseline_bond_enabled = false
+  or baseline_bond_evidence_due_at > offer_expires_at
+);
+alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_baseline_bond_forfeit_destination_check;
+alter table public.donation_offset_offers
+add constraint donation_offset_offers_baseline_bond_forfeit_destination_check
+check (
+  baseline_bond_forfeit_destination_id is null
+  or baseline_bond_forfeit_destination_id not in (
+    'platform-operating-account',
+    'moraltrade-operating-account',
+    'moral-trade-operating-account'
+  )
+);
 alter table public.donation_offset_offers drop constraint if exists donation_offset_offers_verification_method_check;
 alter table public.donation_offset_offers
 add constraint donation_offset_offers_verification_method_check
@@ -1685,6 +1803,7 @@ create index if not exists donation_offset_pools_charity_idx on public.donation_
 create index if not exists donation_offset_offers_charity_idx on public.donation_offset_offers (compromise_charity_id);
 create index if not exists donation_offset_offers_moderation_idx on public.donation_offset_offers (moderation_status, created_at desc);
 create index if not exists donation_offset_offers_pool_idx on public.donation_offset_offers (pool_id, participation_mode, created_at desc);
+create index if not exists donation_offset_offers_baseline_bond_status_idx on public.donation_offset_offers (baseline_bond_status, offer_expires_at) where baseline_bond_enabled = true;
 create index if not exists donation_offset_matches_offer_idx on public.donation_offset_matches (offer_id, created_at desc);
 create index if not exists donation_offset_matches_owner_idx on public.donation_offset_matches (owner_profile_id, created_at desc);
 create index if not exists donation_offset_matches_counterparty_idx on public.donation_offset_matches (counterparty_profile_id, created_at desc);

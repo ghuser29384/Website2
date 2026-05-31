@@ -10,6 +10,11 @@ import {
   OfferCard,
   FilterSidebar,
 } from "@/components/ui/page-primitives";
+import {
+  BASELINE_BOND_TOOLTIP,
+  formatPostedBaselineBondBadge,
+  normalizeBaselineBondStatus,
+} from "@/lib/baseline-bonds";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffersPage, OFFERS_PAGE_SIZE, type OfferRecord } from "@/lib/app-data";
 import { formatMode } from "@/lib/offers";
@@ -121,6 +126,7 @@ interface MarketplaceListing {
   title: string;
   offering: string;
   actionEvidence: string;
+  baselineBondBadge: string | null;
   baselineConfidence: string;
   externalityReview: string;
   scoreConfidence: string;
@@ -228,6 +234,7 @@ function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number
   return {
     actionEvidence: getActionEvidenceSummary(offer),
     alias: offer.alias,
+    baselineBondBadge: null,
     baselineConfidence,
     duration: offer.duration,
     externalityReview: getExternalityReviewSummary(offer),
@@ -266,6 +273,9 @@ function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
     requestedCause: offer.requested_cause,
   };
   const baselineConfidence = getBaselineConfidence(reviewInput);
+  const baselineBondStatus = normalizeBaselineBondStatus(
+    offer.donationOffset?.baseline_bond_status,
+  );
   const reviewInstrumentation = getOfferReviewCardInstrumentation({
     ...reviewInput,
     currentStatus: "Live offer; evidence and baseline review required before reliance",
@@ -276,6 +286,13 @@ function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
   return {
     actionEvidence: getActionEvidenceSummary(reviewInput),
     alias: offer.ownerProfile?.resolvedName ?? offer.owner_alias,
+    baselineBondBadge:
+      offer.donationOffset && baselineBondStatus === "posted"
+        ? formatPostedBaselineBondBadge(
+            offer.donationOffset.baseline_bond_amount_cents,
+            offer.donationOffset.baseline_bond_currency,
+          )
+        : null,
     baselineConfidence,
     duration: offer.duration,
     externalityReview: getExternalityReviewSummary(reviewInput),
@@ -1232,6 +1249,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                             duration={listing.duration}
                             evidence={listing.verification}
                             actionEvidence={listing.actionEvidence}
+                            baselineBondBadge={listing.baselineBondBadge}
+                            baselineBondTooltip={BASELINE_BOND_TOOLTIP}
                             baselineConfidence={listing.baselineConfidence}
                             externalityReview={listing.externalityReview}
                             key={`${listing.source}-${listing.id}`}
@@ -1304,6 +1323,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                               duration={listing.duration}
                               evidence={listing.verification}
                               actionEvidence={listing.actionEvidence}
+                              baselineBondBadge={listing.baselineBondBadge}
+                              baselineBondTooltip={BASELINE_BOND_TOOLTIP}
                               baselineConfidence={listing.baselineConfidence}
                               externalityReview={listing.externalityReview}
                               key={`empty-preview-${listing.id}`}

@@ -394,6 +394,8 @@ interface OfferCardProps {
   duration: string;
   evidence: string;
   actionEvidence?: string;
+  baselineBondBadge?: string | null;
+  baselineBondTooltip?: string;
   baselineConfidence?: string;
   externalityReview?: string;
   modeIcon: IconName;
@@ -416,6 +418,8 @@ interface OfferCardProps {
 export function OfferCard({
   actionEvidence,
   alias,
+  baselineBondBadge,
+  baselineBondTooltip,
   baselineConfidence,
   causeExchange,
   ctaHref,
@@ -448,6 +452,11 @@ export function OfferCard({
             {evidence}
           </StatusBadge>
           <StatusBadge tone="warning">Manual review required</StatusBadge>
+          {baselineBondBadge ? (
+            <span className="badge badge-warning" title={baselineBondTooltip}>
+              {baselineBondBadge}
+            </span>
+          ) : null}
         </div>
       </div>
       <div className="listing-title-block">

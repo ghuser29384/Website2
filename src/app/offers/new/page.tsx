@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { OfferCreateForm, type OfferTemplate } from "@/components/offers/offer-create-form";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { isPaymentBondsEnabled } from "@/lib/baseline-bonds";
 import { getFormMessage } from "@/lib/form-state";
 import { getDonationOffsetOverview, getOfferById, getViewer } from "@/lib/app-data";
 import { getMoralTradeProvenanceContract } from "@/lib/moral-trade/provenance";
@@ -139,6 +140,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
   const initialExampleTemplate = getWorkedExampleTemplate(requestedExampleId);
   const offerCreationReturnTo = buildOfferCreationReturnTo(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
+  const paymentBondsEnabled = isPaymentBondsEnabled();
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidationRules = provenanceContract.validationRules.map((rule) => ({
     key: rule.key,
@@ -250,6 +252,7 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
                 initialOffsetParticipationMode={initialOffsetParticipationMode}
                 initialOffsetPoolId={initialOffsetPoolId}
                 initialOffsetPoolSide={initialOffsetPoolSide}
+                paymentBondsEnabled={paymentBondsEnabled}
                 supabaseReady={supabaseReady}
                 provenanceValidationRules={provenanceValidationRules}
               />

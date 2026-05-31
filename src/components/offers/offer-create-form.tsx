@@ -5,6 +5,14 @@ import Link from "next/link";
 
 import { createOfferAction } from "@/app/actions";
 import {
+  BASELINE_BOND_DEFAULT_CURRENCY,
+  BASELINE_CREDIBILITY_BOND_COPY,
+  calculatePilotBaselineBondCapCents,
+  formatBaselineBondAmount,
+  getBaselineBondEvidenceDueAt,
+  validateBaselineBondInput,
+} from "@/lib/baseline-bonds";
+import {
   calculateDonationOffsetPoolProgress,
   calculateDonationOffsetPreview,
   createDefaultDonationOffsetFields,
@@ -16,6 +24,7 @@ import {
   getConsensusCharities,
   getDonationOffsetComplexityWarnings,
   getSelectableRegisteredCharities,
+  findRegisteredCharityById,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
   DONATION_OFFSET_PARTICIPATION_MODE_OPTIONS,
@@ -80,6 +89,7 @@ interface OfferCreateFormProps {
   initialOffsetPoolId?: string;
   initialOffsetPoolSide?: "side_a" | "side_b" | "";
   initialTemplate?: OfferTemplate | null;
+  paymentBondsEnabled: boolean;
   provenanceValidationRules: ProvenanceValidationRuleOption[];
 }
 
@@ -349,6 +359,15 @@ function toDateInputValue(value: string | null) {
   }
 
   return value.slice(0, 10);
+}
+
+function toIsoDateOrNull(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
 function readFormControlValue(event: { currentTarget: EventTarget }) {
@@ -675,6 +694,7 @@ export function OfferCreateForm({
   initialOffsetPoolId = "",
   initialOffsetPoolSide = "",
   initialTemplate = null,
+  paymentBondsEnabled,
   provenanceValidationRules,
 }: OfferCreateFormProps) {
   const [mode, setMode] = useState<OfferMode>(initialTemplate?.mode ?? initialMode);
@@ -697,6 +717,14 @@ export function OfferCreateForm({
   const [offerAction, setOfferAction] = useState(initialTemplate?.offerAction ?? "");
   const [requestAction, setRequestAction] = useState(initialTemplate?.requestAction ?? "");
   const [baselineStatement, setBaselineStatement] = useState(initialTemplate?.baselineStatement ?? "");
+  const [baselineBondEnabled, setBaselineBondEnabled] = useState(false);
+  const [baselineBondAmountUsd, setBaselineBondAmountUsd] = useState("50");
+  const [baselineBondForfeitDestinationId, setBaselineBondForfeitDestinationId] = useState(
+    defaultOffsetFields.compromiseDestinationId,
+  );
+  const [offerExpiresAt, setOfferExpiresAt] = useState("");
+  const [baselineBondEvidenceDueAt, setBaselineBondEvidenceDueAt] = useState("");
+  const [baselineBondEvidenceStandard, setBaselineBondEvidenceStandard] = useState("");
   const [exitCondition, setExitCondition] = useState(initialTemplate?.exitCondition ?? "");
   const [notes, setNotes] = useState(initialTemplate?.notes ?? "");
   const [compromiseDestinationId, setCompromiseDestinationId] = useState(
@@ -826,6 +854,50 @@ export function OfferCreateForm({
       exitCondition,
     ],
   );
+  const baselineAmountCents = Math.round((Number(baselineAmountUsd) || 0) * 100);
+  const baselineBondCapCents = calculatePilotBaselineBondCapCents(baselineAmountCents);
+  const baselineBondValidation = useMemo(
+    () => {
+      if (!isOffset) {
+        return {
+          errors: [],
+          pauseReasons: [],
+          rejectReasons: [],
+          safetyAction: "clear" as const,
+        };
+      }
+
+      return validateBaselineBondInput({
+        amountCents: Math.round((Number(baselineBondAmountUsd) || 0) * 100),
+        baselineAmountCents: Math.round((Number(baselineAmountUsd) || 0) * 100),
+        baselineStatement,
+        currency: BASELINE_BOND_DEFAULT_CURRENCY,
+        enabled: baselineBondEnabled,
+        evidenceDueAt: toIsoDateOrNull(baselineBondEvidenceDueAt),
+        evidenceStandard: baselineBondEvidenceStandard,
+        forfeitDestination: findRegisteredCharityById(baselineBondForfeitDestinationId),
+        forfeitDestinationId: baselineBondForfeitDestinationId,
+        notes,
+        offerExpiresAt: toIsoDateOrNull(offerExpiresAt),
+        offeredAction: offerAction,
+        requestedAction: requestAction,
+      });
+    },
+    [
+      baselineAmountUsd,
+      baselineBondAmountUsd,
+      baselineBondEnabled,
+      baselineBondEvidenceDueAt,
+      baselineBondEvidenceStandard,
+      baselineBondForfeitDestinationId,
+      baselineStatement,
+      isOffset,
+      notes,
+      offerAction,
+      offerExpiresAt,
+      requestAction,
+    ],
+  );
 
   const liveOffsetErrors = useMemo(
     () =>
@@ -838,10 +910,12 @@ export function OfferCreateForm({
               verificationMetadataAcknowledged,
               evidenceUrl,
             }),
+            ...baselineBondValidation.errors,
           ]
         : [],
     [
       antiThreatCertified,
+      baselineBondValidation.errors,
       evidenceUrl,
       isOffset,
       normalizedOffsetFields,
@@ -1108,6 +1182,10 @@ export function OfferCreateForm({
       );
       setPoolId("");
       setPoolSide("");
+      setBaselineBondEnabled(false);
+      setOfferExpiresAt("");
+      setBaselineBondEvidenceDueAt("");
+      setBaselineBondEvidenceStandard("");
     }
   }
 
@@ -1170,6 +1248,17 @@ export function OfferCreateForm({
           <strong>Complexity warning.</strong>
           <ul className="clean-list">
             {complexityWarnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {isOffset && baselineBondValidation.pauseReasons.length ? (
+        <div className="status-banner status-banner-warning">
+          <strong>Baseline credibility bond needs review.</strong>
+          <ul className="clean-list">
+            {baselineBondValidation.pauseReasons.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
           </ul>
@@ -1578,6 +1667,146 @@ export function OfferCreateForm({
             have been.
           </small>
         </label>
+
+        {isOffset ? (
+          <fieldset className="field baseline-bond-fieldset">
+            <legend>Baseline credibility bond</legend>
+            <div className="panel subtle-panel">
+              <div className="panel-head">
+                <div>
+                  <p className="eyebrow">
+                    {paymentBondsEnabled ? "Optional pilot" : "Planned pilot feature"}
+                  </p>
+                  <h3>Signal that this no-trade baseline is serious</h3>
+                </div>
+              </div>
+              <p className="route-text">{BASELINE_CREDIBILITY_BOND_COPY}</p>
+              <p className="panel-note">
+                {paymentBondsEnabled
+                  ? "Real payment collection still requires reviewer approval before any payment link is created."
+                  : "Planned pilot feature: you can record willingness to post a baseline credibility bond, but no money is collected."}
+              </p>
+              <label className="radio-row">
+                <input
+                  checked={baselineBondEnabled}
+                  name="baseline_bond_enabled"
+                  type="checkbox"
+                  onChange={(event) =>
+                    setBaselineBondEnabled((event.currentTarget as HTMLInputElement).checked)
+                  }
+                />
+                <span>I would post a baseline credibility bond for this offset.</span>
+              </label>
+
+              {baselineBondEnabled ? (
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Bond amount</span>
+                    <input
+                      max={baselineBondCapCents > 0 ? String(baselineBondCapCents / 100) : "250"}
+                      min="10"
+                      name="baseline_bond_amount_usd"
+                      required={baselineBondEnabled}
+                      step="0.01"
+                      type="number"
+                      value={baselineBondAmountUsd}
+                      onChange={(event) => setBaselineBondAmountUsd(readFormControlValue(event))}
+                    />
+                    <small>
+                      Pilot cap: min $10, max{" "}
+                      {formatBaselineBondAmount(baselineBondCapCents || 0)} or 20% of the stated
+                      baseline amount, whichever is lower.
+                    </small>
+                  </label>
+
+                  <label className="field">
+                    <span>Currency</span>
+                    <input
+                      name="baseline_bond_currency"
+                      readOnly
+                      required={baselineBondEnabled}
+                      type="text"
+                      value={BASELINE_BOND_DEFAULT_CURRENCY}
+                    />
+                    <small>USD only for the pilot.</small>
+                  </label>
+
+                  <label className="field">
+                    <span>Offer expiry date</span>
+                    <input
+                      name="offer_expires_at"
+                      required={baselineBondEnabled}
+                      type="date"
+                      value={offerExpiresAt}
+                      onChange={(event) => {
+                        const nextDate = readFormControlValue(event);
+                        setOfferExpiresAt(nextDate);
+
+                        if (!baselineBondEvidenceDueAt && nextDate) {
+                          const nextEvidenceDueAt = getBaselineBondEvidenceDueAt(
+                            toIsoDateOrNull(nextDate) ?? nextDate,
+                          );
+                          setBaselineBondEvidenceDueAt(
+                            nextEvidenceDueAt ? nextEvidenceDueAt.slice(0, 10) : "",
+                          );
+                        }
+                      }}
+                    />
+                    <small>A baseline credibility bond requires an expiry date.</small>
+                  </label>
+
+                  <label className="field">
+                    <span>Evidence due date</span>
+                    <input
+                      name="baseline_bond_evidence_due_at"
+                      required={baselineBondEnabled}
+                      type="date"
+                      value={baselineBondEvidenceDueAt}
+                      onChange={(event) =>
+                        setBaselineBondEvidenceDueAt(readFormControlValue(event))
+                      }
+                    />
+                    <small>Evidence must be due after the offer expires unmatched.</small>
+                  </label>
+
+                  <label className="field">
+                    <span>Forfeit destination</span>
+                    <select
+                      name="baseline_bond_forfeit_destination_id"
+                      required={baselineBondEnabled}
+                      value={baselineBondForfeitDestinationId}
+                      onChange={(event) =>
+                        setBaselineBondForfeitDestinationId(readFormControlValue(event))
+                      }
+                    >
+                      {consensusCharities.map((charity) => (
+                        <option key={charity.id} value={charity.id}>
+                          {charity.name}
+                        </option>
+                      ))}
+                    </select>
+                    <small>Choose a preselected public-good destination.</small>
+                  </label>
+
+                  <label className="field">
+                    <span>Evidence standard</span>
+                    <textarea
+                      name="baseline_bond_evidence_standard"
+                      onChange={(event) =>
+                        setBaselineBondEvidenceStandard(readFormControlValue(event))
+                      }
+                      placeholder="e.g. Dated donation receipt, public confirmation, or payment record showing the stated baseline was carried out."
+                      required={baselineBondEnabled}
+                      rows={3}
+                      value={baselineBondEvidenceStandard}
+                    />
+                    <small>Name the concrete evidence reviewers should expect after expiry.</small>
+                  </label>
+                </div>
+              ) : null}
+            </div>
+          </fieldset>
+        ) : null}
 
         <TemplateTextareaSuggestions
           helpText="Short, bounded trades are easier to trust than open-ended commitments with unclear exit rules."

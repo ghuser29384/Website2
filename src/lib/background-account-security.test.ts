@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   normalizeBackgroundTotpCode,
+  summarizeBackgroundSessionSecurity,
   summarizeBackgroundMfaFactors,
 } from "./background-account-security";
 
@@ -63,4 +64,35 @@ test("summarizes MFA enrollment and session step-up state", () => {
   assert.equal(active.statusLabel, "MFA active for this session");
   assert.equal(active.statusTone, "secure");
   assert.equal(active.needsStepUp, false);
+});
+
+test("summarizes current session claims for review and revocation controls", () => {
+  const session = summarizeBackgroundSessionSecurity({
+    claims: {
+      aal: "aal2",
+      exp: 1_779_000_000,
+      iat: 1_778_996_400,
+      session_id: "11111111-2222-3333-4444-555555555555",
+    },
+    now: new Date(1_778_997_000_000),
+  });
+
+  assert.equal(session.currentAal, "aal2");
+  assert.equal(session.sessionIdSuffix, "55555555");
+  assert.equal(session.accessTokenLifetimeSeconds, 3600);
+  assert.equal(session.accessTokenAgeSeconds, 600);
+  assert.equal(session.accessTokenExpiresInSeconds, 3000);
+  assert.equal(session.accessTokenWindowStatus, "recommended");
+  assert.equal(session.revocationSupported, true);
+
+  const longWindow = summarizeBackgroundSessionSecurity({
+    claims: {
+      exp: 1_779_010_000,
+      iat: 1_778_996_400,
+    },
+    now: new Date(1_778_997_000_000),
+  });
+
+  assert.equal(longWindow.accessTokenWindowStatus, "long");
+  assert.match(longWindow.reviewLabel, /longer than/);
 });

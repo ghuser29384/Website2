@@ -1,4 +1,5 @@
 import type { OfferRecord } from "@/lib/app-data";
+import { formatPostedBaselineBondBadge, normalizeBaselineBondStatus } from "@/lib/baseline-bonds";
 import { formatMode, type OfferMode } from "@/lib/offers";
 import {
   getActionEvidenceSummary,
@@ -56,6 +57,7 @@ export interface PublicOfferListing {
   secondaryCause: string | null;
   offeredAction: string;
   requestedAction: string;
+  baselineBondBadge: string | null;
   verificationMethod: string;
   verificationSummary: string | null;
   duration: PublicOfferDuration;
@@ -209,6 +211,7 @@ const REQUIRED_LISTING_KEYS = [
   "secondaryCause",
   "offeredAction",
   "requestedAction",
+  "baselineBondBadge",
   "verificationMethod",
   "verificationSummary",
   "duration",
@@ -410,6 +413,7 @@ function workedExampleToPublicListing(
     secondaryCause: offer.requestedCause,
     offeredAction: offer.offerAction,
     requestedAction: offer.requestAction,
+    baselineBondBadge: null,
     verificationMethod: offer.verification,
     verificationSummary: getActionEvidenceSummary(offer),
     duration: parseDuration(offer.duration),
@@ -426,6 +430,9 @@ function workedExampleToPublicListing(
 }
 
 function liveOfferToPublicListing(offer: OfferRecord): PublicOfferListing {
+  const baselineBondStatus = normalizeBaselineBondStatus(
+    offer.donationOffset?.baseline_bond_status,
+  );
   const baselineConfidence = getBaselineConfidence({
     baselineAmountUsd: offer.donationOffset
       ? offer.donationOffset.baseline_amount_cents / 100
@@ -458,6 +465,13 @@ function liveOfferToPublicListing(offer: OfferRecord): PublicOfferListing {
     secondaryCause: offer.requested_cause || null,
     offeredAction: offer.offer_action,
     requestedAction: offer.request_action,
+    baselineBondBadge:
+      offer.donationOffset && baselineBondStatus === "posted"
+        ? formatPostedBaselineBondBadge(
+            offer.donationOffset.baseline_bond_amount_cents,
+            offer.donationOffset.baseline_bond_currency,
+          )
+        : null,
     verificationMethod: offer.verification,
     verificationSummary: [
       getActionEvidenceSummary({
@@ -513,6 +527,7 @@ function listingMatchesSearch(listing: PublicOfferListing, query: string) {
     listing.secondaryCause,
     listing.offeredAction,
     listing.requestedAction,
+    listing.baselineBondBadge,
     listing.verificationMethod,
     listing.reviewState,
     listing.format,
@@ -879,6 +894,7 @@ function listingHasRequiredFields(listing: PublicOfferListing) {
 
     if (value === null) {
       return key === "secondaryCause" ||
+        key === "baselineBondBadge" ||
         key === "verificationSummary" ||
         key === "offeredImpactScore" ||
         key === "requestedImpactThreshold";

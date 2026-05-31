@@ -53,6 +53,15 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
     ),
   );
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_transparency_report"));
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_transparency_report" &&
+        route.path === "/api/moral-trade/transparency/report" &&
+        route.cacheControl === "no_store_dynamic" &&
+        route.rateLimitSurface === "public_contract_read",
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "profile_export"));
   assert.ok(profile.routes.some((route) => route.key === "profile_import"));
   assert.ok(profile.routes.some((route) => route.key === "profile_export" && route.rateLimitSurface === "profile_portability"));
@@ -89,6 +98,11 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
     profile.schemaDefinitions
       .find((schema) => schema.key === "moral_trade_aggregate_health_response")
       ?.fields.some((field) => field.key === "schemaRegistryValidation"),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "moral_trade_aggregate_health_response")
+      ?.fields.some((field) => field.key === "transparencyReportValidation"),
   );
   assert.ok(
     profile.schemaDefinitions
@@ -164,6 +178,16 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
     ),
   );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "transparency_report_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "transparency_report_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "report" &&
+          field.privacy === "public_contract" &&
+          /small nonzero samples are suppressed/i.test(field.description),
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "wish_registry_search_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "empty_204_response"));
   assert.ok(
@@ -174,6 +198,10 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.privacyClasses.some((entry) => entry.key === "authenticated_private"));
   assert.ok(profile.privacyClasses.some((entry) => entry.key === "ephemeral_private_draft_review"));
   assert.ok(profile.privacyClasses.some((entry) => entry.key === "redacted_analytics"));
+  assert.equal(
+    validation.checks.find((entry) => entry.id === "transparency-report-route")?.status,
+    "pass",
+  );
 });
 
 test("api contract implementation audit proves route metadata is backed by executable tables", () => {
@@ -338,6 +366,10 @@ test("api contract validation fails when private or sparse-preview protections a
         return { ...route, cacheControl: "public_cache", fallback: "Publish raw reports." };
       }
 
+      if (route.key === "moral_trade_transparency_report") {
+        return { ...route, cacheControl: "public_cache", fallback: "Return every case." };
+      }
+
       if (route.key === "moral_trade_reasoning_packets") {
         return { ...route, cacheControl: "public_cache", fallback: "Return all reasoning." };
       }
@@ -370,6 +402,7 @@ test("api contract validation fails when private or sparse-preview protections a
   assert.ok(validation.blockers.some((blocker) => blocker.includes("challenge-appeal-routes")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("disclosure-grant-routes")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("incident-response-health-route")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("transparency-report-route")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("reasoning-packets-validator")));
 });
 

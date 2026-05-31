@@ -1267,6 +1267,7 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   const transparencyReportRoute = readRepoFile(
     "src/app/api/moral-trade/transparency/report/route.ts",
   );
+  const moralTradeHealthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const accessibilityPage = readRepoFile("src/app/accessibility/page.tsx");
   const measurementPlanSource = readRepoFile("src/lib/measurement-plan.ts");
   const updatesPage = readRepoFile("src/app/updates/page.tsx");
@@ -1394,6 +1395,9 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(transparencyReportSource, /small_sample_not_suppressed/);
   assert.match(transparencyReportRoute, /takeMoralTradeApiRateLimitSlot\(request, "public_contract_read"\)/);
   assert.match(transparencyReportRoute, /validateMoralTradeTransparencyReportSnapshot/);
+  assert.match(moralTradeHealthRoute, /getMoralTradeTransparencyReportContract/);
+  assert.match(moralTradeHealthRoute, /transparencyReportValidation/);
+  assert.match(moralTradeHealthRoute, /transparencyReportMinimumPublicCount/);
   assert.match(updatesPage, /First aggregate transparency report route/);
   assert.match(siteSearchSource, /Transparency report/);
   assert.match(sitemapSource, /\/transparency/);
@@ -1647,6 +1651,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const adminPageSource = readRepoFile("src/app/admin/page.tsx");
   const adminGrowthPageSource = readRepoFile("src/app/admin/growth/page.tsx");
   const backgroundActionsSource = readRepoFile("src/app/background-networking/actions.ts");
+  const backgroundAccountSecuritySource = readRepoFile("src/lib/background-account-security.ts");
+  const backgroundAccountSecurityPanelSource = readRepoFile(
+    "src/components/dashboard/background-account-security-panel.tsx",
+  );
   const mpgfAdminActionsSource = readRepoFile("src/app/mpgf/admin/actions.ts");
   const mpgfAdminPageSource = readRepoFile("src/app/mpgf/admin/page.tsx");
   const copilotSource = readRepoFile("src/lib/moral-trade/copilot.ts");
@@ -2012,6 +2020,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(securitySource, /provider-boundary-and-nonclaims/);
   assert.match(securitySource, /scale_control_not_ready/);
   assert.match(securitySource, /operator-mfa-gate-source/);
+  assert.match(securitySource, /participant-session-review-source/);
+  assert.match(backgroundAccountSecuritySource, /BACKGROUND_SESSION_REVIEW_CONTROL_VERSION/);
+  assert.match(backgroundAccountSecuritySource, /supabase\.auth\.getClaims/);
+  assert.match(backgroundAccountSecuritySource, /session_id/);
+  assert.match(backgroundAccountSecuritySource, /accessTokenWindowStatus/);
+  assert.match(backgroundActionsSource, /signOut\(\{\s*scope:\s*"others"\s*\}\)/);
+  assert.match(backgroundAccountSecurityPanelSource, /Revoke other sessions/);
+  assert.match(backgroundAccountSecurityPanelSource, /sessionIdSuffix/);
   assert.match(adminSource, /evaluateAdminOperatorAccess/);
   assert.match(adminSource, /verifiedTotpCount < 1/);
   assert.match(adminSource, /currentLevel !== "aal2"/);
@@ -2029,6 +2045,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(securityProfile, /provider_encryption_at_rest/);
   assert.match(securityProfile, /field_level_encryption_not_claimed/);
   assert.match(securityProfile, /two_factor_admin_gate/);
+  assert.match(securityProfile, /participant_session_review_revocation/);
+  assert.match(securityProfile, /revoke other active Supabase sessions/);
   assert.match(securityProfile, /\"status\": \"implemented\"/);
   assert.match(securityProfile, /active Supabase authenticator MFA session \(AAL2\)/);
   assert.match(securityProfile, /device_session_review_gate/);
@@ -2834,13 +2852,13 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(offerForm, /id="offer-publish"/);
   assert.match(offerNewPage, /page-shell offer-create-shell/);
   assert.match(offerNewPage, /auth-grid offer-create-grid/);
+  assert.match(globalCss, /offer-wizard-panel/);
+  assert.match(globalCss, /offer-wizard-steps/);
   assert.match(globalCss, /\.offer-create-shell \.offer-create-grid[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
   assert.match(globalCss, /\.offer-create-shell \.offer-wizard-steps[\s\S]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
   assert.match(globalCss, /\.offer-create-shell \.offer-template-grid[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(globalCss, /@media \(max-width: 1023px\)[\s\S]*\.offer-create-shell \.offer-wizard-steps[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(globalCss, /@media \(max-width: 760px\)[\s\S]*\.offer-create-shell \.offer-wizard-steps[\s\S]*grid-template-columns: 1fr/);
-  assert.match(globalCss, /offer-wizard-panel/);
-  assert.match(globalCss, /offer-wizard-steps/);
   assert.match(globalCss, /protocol-review-panel/);
   assert.match(globalCss, /protocol-verification-list/);
   assert.match(globalCss, /protocol-provenance-preflight/);

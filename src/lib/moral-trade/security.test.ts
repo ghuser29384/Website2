@@ -41,6 +41,10 @@ test("security profile publishes headers, sessions, provider boundaries, non-cla
     "implemented",
   );
   assert.equal(
+    profile.controls.find((control) => control.key === "participant_session_review_revocation")?.status,
+    "implemented",
+  );
+  assert.equal(
     profile.controls.find((control) => control.key === "incident_response_reporting")?.status,
     "implemented",
   );
@@ -53,6 +57,10 @@ test("security implementation source keeps headers, cache, and sessions aligned"
   const validation = validateMoralTradeSecurityImplementation({
     actionsSource: readRepoFile("src/app/actions.ts"),
     adminSource: readRepoFile("src/lib/admin.ts"),
+    backgroundAccountSecuritySource: readRepoFile("src/lib/background-account-security.ts"),
+    backgroundAccountSecurityPanelSource: readRepoFile(
+      "src/components/dashboard/background-account-security-panel.tsx",
+    ),
     backgroundActionsSource: readRepoFile("src/app/background-networking/actions.ts"),
     backgroundFieldEncryptionSource: readRepoFile("src/lib/background-field-encryption.ts"),
     mpgfAdminActionsSource: readRepoFile("src/app/mpgf/admin/actions.ts"),
@@ -106,7 +114,13 @@ test("security scale readiness passes when a gate's required controls are implem
   const readyProfile: MoralTradeSecurityProfile = {
     ...profile,
     controls: profile.controls.map((control) =>
-      ["two_factor_admin_gate", "device_session_review_gate", "key_rotation_gate", "incident_response_reporting"].includes(
+      [
+        "two_factor_admin_gate",
+        "participant_session_review_revocation",
+        "device_session_review_gate",
+        "key_rotation_gate",
+        "incident_response_reporting",
+      ].includes(
         control.key,
       )
         ? { ...control, status: "implemented" }

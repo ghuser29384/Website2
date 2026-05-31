@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   enrollBackgroundNetworkingMfaAction,
   removeBackgroundNetworkingMfaAction,
+  revokeOtherBackgroundNetworkingSessionsAction,
   verifyBackgroundNetworkingMfaAction,
 } from "@/app/background-networking/actions";
 import {
@@ -32,6 +33,23 @@ function ActionMessage({ state }: { state: BackgroundMfaActionState }) {
       {state.error ?? state.message}
     </p>
   );
+}
+
+function formatSessionDuration(seconds: number | null | undefined) {
+  if (typeof seconds !== "number") {
+    return "unknown";
+  }
+
+  const absoluteSeconds = Math.abs(seconds);
+  const minutes = Math.max(1, Math.round(absoluteSeconds / 60));
+
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+
+  const hours = Math.round(minutes / 60);
+
+  return `${hours}h`;
 }
 
 export function BackgroundAccountSecurityPanel({
@@ -86,6 +104,30 @@ export function BackgroundAccountSecurityPanel({
       </dl>
 
       {initialSummary?.error ? <p className="route-text">{initialSummary.error}</p> : null}
+
+      <div className="mini-list">
+        <div className="mini-list-item">
+          <strong>Current session</strong>
+          <span>Session suffix: {initialSummary?.session.sessionIdSuffix ?? "unknown"}</span>
+          <span>AAL: {initialSummary?.session.currentAal ?? initialSummary?.currentLevel ?? "unknown"}</span>
+          <span>
+            Token window:{" "}
+            {formatSessionDuration(initialSummary?.session.accessTokenLifetimeSeconds)} ·{" "}
+            {initialSummary?.session.accessTokenWindowStatus ?? "unknown"}
+          </span>
+          <span>
+            Expires in: {formatSessionDuration(initialSummary?.session.accessTokenExpiresInSeconds)}
+          </span>
+          <span>{initialSummary?.session.reviewLabel ?? "Session review unavailable."}</span>
+        </div>
+      </div>
+
+      <form action={revokeOtherBackgroundNetworkingSessionsAction} className="compact-form">
+        <input name="return_to" type="hidden" value="/dashboard" />
+        <button className="button button-secondary button-mini" type="submit">
+          Revoke other sessions
+        </button>
+      </form>
 
       {verifiedFactors.length ? (
         <form action={verifyAction} className="compact-form">

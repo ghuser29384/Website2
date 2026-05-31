@@ -9,6 +9,7 @@ import {
   addOfferRecommendationAction,
   expressInterestAction,
   removeOfferRecommendationAction,
+  submitBaselineBondEvidenceAction,
   toggleCartAction,
   updateOfferDiscountAction,
 } from "@/app/actions";
@@ -27,6 +28,12 @@ import {
   listRecommendableOffers,
 } from "@/lib/app-data";
 import { findEveryOrgTargetForCauseArea } from "@/lib/every-org";
+import {
+  BASELINE_BOND_TOOLTIP,
+  formatBaselineBondAmount,
+  formatPostedBaselineBondBadge,
+  normalizeBaselineBondStatus,
+} from "@/lib/baseline-bonds";
 import { getFormMessage } from "@/lib/form-state";
 import { formatMode, formatOffsetSummary, formatPaymentCadence } from "@/lib/offers";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -193,6 +200,16 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
     offeredCause: offer.offered_cause,
     requestedCause: offer.requested_cause,
   };
+  const baselineBondStatus = normalizeBaselineBondStatus(
+    offer.donationOffset?.baseline_bond_status,
+  );
+  const postedBaselineBondBadge =
+    offer.donationOffset && baselineBondStatus === "posted"
+      ? formatPostedBaselineBondBadge(
+          offer.donationOffset.baseline_bond_amount_cents,
+          offer.donationOffset.baseline_bond_currency,
+        )
+      : null;
   const actionEvidence = getActionEvidenceSummary(reviewInput);
   const baselineConfidence = getBaselineConfidence(reviewInput);
   const baselineEvidence = getBaselineEvidenceSummary(reviewInput);
@@ -467,6 +484,11 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                   Counterparty minimum acceptable importance {offer.min_counterparty_impact}+/10
                 </span>
                 <span className="impact-pill">Confidence: {scoreConfidence}</span>
+                {postedBaselineBondBadge ? (
+                  <span className="badge badge-warning" title={BASELINE_BOND_TOOLTIP}>
+                    {postedBaselineBondBadge}
+                  </span>
+                ) : null}
               </div>
               <p className="route-text">
                 Not a platform moral ranking. These scores reflect participant-stated views, not
@@ -538,6 +560,63 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                     ) : (
                       <p>Evidence link not yet provided. This offer may remain flagged.</p>
                     )}
+                    {offer.donationOffset.baseline_bond_enabled ? (
+                      <div>
+                        <h3>Baseline credibility bond</h3>
+                        <p>
+                          {formatBaselineBondAmount(
+                            offer.donationOffset.baseline_bond_amount_cents,
+                            offer.donationOffset.baseline_bond_currency,
+                          )}{" "}
+                          | status {baselineBondStatus.replaceAll("_", " ")}
+                        </p>
+                        {offer.donationOffset.offer_expires_at ? (
+                          <p>
+                            Offer expires{" "}
+                            {new Date(offer.donationOffset.offer_expires_at).toLocaleDateString()}.
+                          </p>
+                        ) : null}
+                        {offer.donationOffset.baseline_bond_evidence_due_at ? (
+                          <p>
+                            Evidence due{" "}
+                            {new Date(
+                              offer.donationOffset.baseline_bond_evidence_due_at,
+                            ).toLocaleDateString()}
+                            .
+                          </p>
+                        ) : null}
+                        <p>{offer.donationOffset.baseline_bond_evidence_standard}</p>
+                        {offer.donationOffset.baseline_bond_evidence_url ? (
+                          <p>
+                            Baseline evidence:{" "}
+                            <a
+                              className="inline-link"
+                              href={offer.donationOffset.baseline_bond_evidence_url}
+                            >
+                              open submitted evidence
+                            </a>
+                          </p>
+                        ) : null}
+                        {isOwner && baselineBondStatus === "evidence_due" ? (
+                          <form action={submitBaselineBondEvidenceAction} className="stack-form">
+                            <input name="offer_id" type="hidden" value={offer.id} />
+                            <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
+                            <label className="field">
+                              <span>Submit baseline evidence</span>
+                              <input
+                                name="baseline_bond_evidence_url"
+                                placeholder="https://..."
+                                required
+                                type="url"
+                              />
+                            </label>
+                            <button className="button button-secondary button-mini" type="submit">
+                              Submit evidence
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 {relatedDonationTarget ? (

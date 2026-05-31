@@ -54,6 +54,10 @@ import {
   validateMoralTradeExternalityProfile,
 } from "@/lib/moral-trade/externality";
 import {
+  getMoralTradeTransparencyReportContract,
+  validateMoralTradeTransparencyReportContract,
+} from "@/lib/moral-trade/transparency-report";
+import {
   auditMoralTradeApiImplementationContract,
   getMoralTradeApiContractProfile,
   validateMoralTradeApiContractProfile,
@@ -145,6 +149,9 @@ export async function GET(request: Request) {
   const performanceValidation = validateMoralTradePerformanceProfile(performanceProfile);
   const externalityProfile = getMoralTradeExternalityProfile();
   const externalityValidation = validateMoralTradeExternalityProfile(externalityProfile);
+  const transparencyReportContract = getMoralTradeTransparencyReportContract();
+  const transparencyReportValidation =
+    validateMoralTradeTransparencyReportContract(transparencyReportContract);
   const apiContractProfile = getMoralTradeApiContractProfile();
   const apiContractValidation = validateMoralTradeApiContractProfile(apiContractProfile);
   const apiContractImplementationAudit =
@@ -171,6 +178,7 @@ export async function GET(request: Request) {
       evaluationValidation.status === "pass" &&
       performanceValidation.status === "pass" &&
       externalityValidation.status === "pass" &&
+      transparencyReportValidation.status === "pass" &&
       apiContractValidation.status === "pass" &&
       apiContractImplementationAudit.status === "pass" &&
       aiGovernanceValidation.status === "pass",
@@ -194,6 +202,7 @@ export async function GET(request: Request) {
     evaluationValidation,
     performanceValidation,
     externalityValidation,
+    transparencyReportValidation,
     apiContractValidation,
     apiContractImplementationAudit,
     aiGovernanceValidation,
@@ -369,6 +378,14 @@ export async function GET(request: Request) {
         (standard) => standard.key,
       ),
       externalityRemedyControls: externalityProfile.remedyControls.map((control) => control.key),
+      transparencyReportContractVersion: transparencyReportContract.version,
+      transparencyReportMinimumPublicCount:
+        transparencyReportContract.minimumPublicCount,
+      transparencyReportMetricKeys: transparencyReportContract.metricDefinitions.map(
+        (metric) => metric.key,
+      ),
+      transparencyReportPrivacyRules: transparencyReportContract.privacyRules,
+      transparencyReportContractTests: transparencyReportContract.contractTests,
       apiContractProfileVersion: apiContractProfile.version,
       apiContractImplementationAuditStatus: apiContractImplementationAudit.status,
       apiRoutes: apiContractProfile.routes.map((route) => route.key),
@@ -420,6 +437,7 @@ export async function GET(request: Request) {
       ...evaluationValidation.blockers,
       ...performanceValidation.blockers,
       ...externalityValidation.blockers,
+      ...transparencyReportValidation.blockers,
       ...apiContractValidation.blockers,
       ...apiContractImplementationAudit.blockers,
       ...aiGovernanceValidation.blockers,

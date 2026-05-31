@@ -61,6 +61,15 @@ import {
 } from "@/lib/background-query-budget";
 import { getSafeInternalPath } from "@/lib/paths";
 import {
+  getBaselineBondAppealWindowEndsAt,
+  getBaselineBondStatusAfterAccepted,
+  isPaymentBondsEnabled,
+  normalizeBaselineBondCurrency,
+  normalizeBaselineBondStatus,
+  validateBaselineBondInput,
+  type BaselineBondStatus,
+} from "@/lib/baseline-bonds";
+import {
   ANALYTICS_OPT_OUT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
   buildPrivacySafeFunnelEventRecord,
@@ -108,6 +117,7 @@ import {
   isMoralTradeOfferCreateProvenanceUniqueViolation,
   validateMoralTradeOfferCreateTransition,
 } from "@/lib/moral-trade/offer-write-path";
+import { persistBaselineBondStatusTransition } from "@/lib/moral-trade/baseline-bond-transitions";
 import {
   buildAgreementReviewDecisionConflictSelector,
   buildAgreementReviewDecisionRow,
@@ -141,6 +151,7 @@ type AgreementReviewCaseUpdate =
   Database["public"]["Tables"]["agreement_review_cases"]["Update"];
 type ProfileVerificationBadgeInsert =
   Database["public"]["Tables"]["profile_verification_badges"]["Insert"];
+type DonationOffsetOfferRow = Database["public"]["Tables"]["donation_offset_offers"]["Row"];
 type DonationOffsetOfferInsert = Database["public"]["Tables"]["donation_offset_offers"]["Insert"];
 type DonationOffsetMatchInsert = Database["public"]["Tables"]["donation_offset_matches"]["Insert"];
 type DonationOffsetPoolInsert = Database["public"]["Tables"]["donation_offset_pools"]["Insert"];
@@ -2769,6 +2780,28 @@ export async function createOfferAction(formData: FormData) {
     ? readOptional(formData, "assurance_deadline")
     : "";
   const evidenceUrl = normalizedMode === "offset" ? readOptional(formData, "offset_evidence_url") : "";
+  const baselineBondEnabled = normalizedMode === "offset"
+    ? readBoolean(formData, "baseline_bond_enabled")
+    : false;
+  const offerExpiresAt = normalizedMode === "offset"
+    ? parseOptionalTimestamp(readOptional(formData, "offer_expires_at"))
+    : null;
+  const baselineBondAmountUsd = normalizedMode === "offset" && baselineBondEnabled
+    ? readPositiveMoneyAmount(formData, "baseline_bond_amount_usd")
+    : null;
+  const baselineBondAmountCents = convertUsdToCents(baselineBondAmountUsd);
+  const baselineBondCurrency = normalizeBaselineBondCurrency(
+    normalizedMode === "offset" ? readOptional(formData, "baseline_bond_currency") : "",
+  );
+  const baselineBondForfeitDestinationId = normalizedMode === "offset" && baselineBondEnabled
+    ? readRequired(formData, "baseline_bond_forfeit_destination_id")
+    : "";
+  const baselineBondEvidenceDueAt = normalizedMode === "offset" && baselineBondEnabled
+    ? parseOptionalTimestamp(readOptional(formData, "baseline_bond_evidence_due_at"))
+    : null;
+  const baselineBondEvidenceStandard = normalizedMode === "offset" && baselineBondEnabled
+    ? readRequired(formData, "baseline_bond_evidence_standard")
+    : "";
   const antiThreatCertification = normalizedMode === "offset"
     ? readBoolean(formData, "offset_anti_threat_certification")
     : false;
@@ -2847,6 +2880,7 @@ export async function createOfferAction(formData: FormData) {
   ].join("\n\n");
 
   let donationOffsetFields: DonationOffsetFields | null = null;
+  let baselineBondPauseReasons: string[] = [];
 
   if (normalizedMode === "offset") {
     donationOffsetFields = {
@@ -2871,6 +2905,25 @@ export async function createOfferAction(formData: FormData) {
     };
 
     const charity = findRegisteredCharityById(compromiseDestinationId);
+    const baselineBondForfeitDestination = findRegisteredCharityById(
+      baselineBondForfeitDestinationId,
+    );
+    const baselineBondValidation = validateBaselineBondInput({
+      amountCents: baselineBondAmountCents,
+      baselineAmountCents: convertUsdToCents(donationOffsetFields.baselineAmountUsd),
+      baselineStatement,
+      currency: baselineBondCurrency,
+      enabled: baselineBondEnabled,
+      evidenceDueAt: baselineBondEvidenceDueAt,
+      evidenceStandard: baselineBondEvidenceStandard,
+      forfeitDestination: baselineBondForfeitDestination,
+      forfeitDestinationId: baselineBondForfeitDestinationId,
+      notes,
+      offerExpiresAt,
+      offeredAction: offerAction,
+      requestedAction: requestAction,
+    });
+    baselineBondPauseReasons = baselineBondValidation.pauseReasons;
     const moderation = assessDonationOffsetModeration(donationOffsetFields, charity);
     const validationErrors = [
       ...(donationOffsetFields ? validateDonationOffsetFields(donationOffsetFields) : []),
@@ -2880,6 +2933,7 @@ export async function createOfferAction(formData: FormData) {
         verificationMetadataAcknowledged,
         evidenceUrl,
       }),
+      ...baselineBondValidation.errors,
     ];
 
     if (
@@ -2911,6 +2965,15 @@ export async function createOfferAction(formData: FormData) {
         "error",
         moderation.reasons[0] ??
           "This donation offset could not be published because it violates the platform safeguards.",
+      );
+    }
+
+    if (baselineBondValidation.safetyAction === "reject") {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        baselineBondValidation.rejectReasons[0] ??
+          "This baseline credibility bond cannot be offered under the platform safeguards.",
       );
     }
 
@@ -3050,8 +3113,12 @@ export async function createOfferAction(formData: FormData) {
     normalizedMode === "offset" && donationOffsetFields
       ? assessDonationOffsetModeration(donationOffsetFields)
       : null;
+  const effectiveOffsetModerationStatus =
+    offsetModeration?.status === "clear" && baselineBondPauseReasons.length
+      ? "flagged"
+      : offsetModeration?.status ?? null;
   const offerPersistenceStatus = getMoralTradeOfferPersistenceStatus({
-    donationOffsetModerationStatus: offsetModeration?.status ?? null,
+    donationOffsetModerationStatus: effectiveOffsetModerationStatus,
     protocolReviewStatus: protocolReview.status,
   });
 
@@ -3088,6 +3155,16 @@ export async function createOfferAction(formData: FormData) {
   }
 
   if (normalizedMode === "offset" && donationOffsetFields) {
+    const baselineBondStatus: BaselineBondStatus = baselineBondEnabled ? "pending_payment" : "none";
+    const baselineBondNotes = [
+      offsetModeration?.reasons.join(" ") ?? "",
+      ...baselineBondPauseReasons,
+      baselineBondEnabled && !isPaymentBondsEnabled()
+        ? "Baseline credibility bond recorded as planned pilot willingness only; no money was collected."
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
     const offsetInsert: DonationOffsetOfferInsert = {
       offer_id: data.id,
       baseline_amount_cents: convertUsdToCents(donationOffsetFields.baselineAmountUsd),
@@ -3107,8 +3184,22 @@ export async function createOfferAction(formData: FormData) {
       assurance_minimum_cents: convertUsdToCents(donationOffsetFields.assuranceMinimumUsd),
       assurance_deadline_at: parseOptionalTimestamp(donationOffsetFields.assuranceDeadline),
       evidence_url: donationOffsetFields.evidenceUrl,
-      moderation_status: offsetModeration?.status ?? "clear",
-      moderation_notes: offsetModeration?.reasons.join(" ") ?? "",
+      moderation_status: effectiveOffsetModerationStatus ?? "clear",
+      moderation_notes: baselineBondNotes,
+      offer_expires_at: offerExpiresAt,
+      baseline_bond_enabled: baselineBondEnabled,
+      baseline_bond_amount_cents: baselineBondEnabled ? baselineBondAmountCents : 0,
+      baseline_bond_currency: baselineBondCurrency,
+      baseline_bond_forfeit_destination_id: baselineBondEnabled
+        ? baselineBondForfeitDestinationId
+        : null,
+      baseline_bond_evidence_due_at: baselineBondEnabled ? baselineBondEvidenceDueAt : null,
+      baseline_bond_evidence_standard: baselineBondEnabled ? baselineBondEvidenceStandard : "",
+      baseline_bond_evidence_url: "",
+      baseline_bond_status: baselineBondStatus,
+      baseline_bond_appeal_window_ends_at: baselineBondEnabled
+        ? getBaselineBondAppealWindowEndsAt(protocolTransitionRecordedAt)
+        : null,
     };
 
     const { error: offsetError } = await supabase.from("donation_offset_offers").insert(offsetInsert);
@@ -3119,6 +3210,41 @@ export async function createOfferAction(formData: FormData) {
         ownerId: viewer.authUser.id,
       });
       redirectWithMessage(newOfferReturnPath, "error", offsetError.message);
+    }
+
+    if (baselineBondEnabled) {
+      const bondTransitionResult = await persistBaselineBondStatusTransition({
+        actorAgentId: viewer.authUser.id,
+        actorAgentKind: "participant",
+        actorLabel: ownerAlias,
+        fromStatus: "none",
+        idempotencyKey: `baseline-bond:${data.id}:none-to-pending_payment`,
+        offerId: data.id,
+        ownerProfileId: viewer.authUser.id,
+        provenanceActivity: "risk_screened",
+        recordedAt: protocolTransitionRecordedAt,
+        supabase,
+        toStatus: "pending_payment",
+      });
+
+      if (bondTransitionResult.error) {
+        logSupabaseActionError(
+          "Failed to persist baseline credibility bond transition",
+          toActionError(
+            bondTransitionResult.error,
+            "Unable to persist baseline credibility bond transition.",
+          ),
+          {
+            offerId: data.id,
+            ownerId: viewer.authUser.id,
+          },
+        );
+        redirectWithMessage(
+          `/offers/${data.id}`,
+          "error",
+          "Offer saved but kept paused because the baseline credibility bond audit transition could not be written.",
+        );
+      }
     }
   }
 
@@ -3178,12 +3304,71 @@ export async function createOfferAction(formData: FormData) {
   redirectWithMessage(
     `/offers/${data.id}`,
     "message",
-    normalizedMode === "offset" && offsetModeration?.status === "flagged"
+    normalizedMode === "offset" && effectiveOffsetModerationStatus === "flagged"
       ? "Donation offset saved for moderator review. It will remain paused until the baseline evidence is approved."
       : offerPersistenceStatus === "paused"
         ? "Offer saved for protocol review. It will remain paused until evidence or human-review requirements are cleared."
       : "Offer created successfully.",
   );
+}
+
+async function refundPostedBaselineBondAfterMatch({
+  actorLabel,
+  actorProfileId,
+  idempotencyKeySuffix,
+  offerId,
+  offsetDetails,
+  ownerProfileId,
+  supabase,
+}: {
+  actorLabel: string;
+  actorProfileId: string;
+  idempotencyKeySuffix: string;
+  offerId: string;
+  offsetDetails: DonationOffsetOfferRow;
+  ownerProfileId: string;
+  supabase: SupabaseServerClient;
+}) {
+  const currentStatus = normalizeBaselineBondStatus(offsetDetails.baseline_bond_status);
+  const nextStatus = getBaselineBondStatusAfterAccepted({
+    offerExpiresAt: offsetDetails.offer_expires_at,
+    status: currentStatus,
+  });
+
+  if (nextStatus === currentStatus) {
+    return null;
+  }
+
+  const { error: updateError } = await supabase
+    .from("donation_offset_offers")
+    .update({
+      baseline_bond_status: nextStatus,
+      baseline_bond_review_notes:
+        "Baseline credibility bond marked for refund because the offer was accepted before expiry.",
+      baseline_bond_reviewed_at: new Date().toISOString(),
+      baseline_bond_reviewed_by: actorProfileId,
+    })
+    .eq("offer_id", offerId)
+    .eq("baseline_bond_status", currentStatus);
+
+  if (updateError) {
+    return updateError;
+  }
+
+  const transitionResult = await persistBaselineBondStatusTransition({
+    actorAgentId: actorProfileId,
+    actorAgentKind: "participant",
+    actorLabel,
+    fromStatus: currentStatus,
+    idempotencyKey: `baseline-bond:${offerId}:${currentStatus}-to-${nextStatus}:${idempotencyKeySuffix}`,
+    offerId,
+    ownerProfileId,
+    provenanceActivity: "review_completed",
+    supabase,
+    toStatus: nextStatus,
+  });
+
+  return transitionResult.error;
 }
 
 export async function expressInterestAction(formData: FormData) {
@@ -7546,6 +7731,248 @@ export async function reviewDonationOffsetOfferAction(formData: FormData) {
   redirectWithMessage(returnTo, "message", "Donation offset review updated.");
 }
 
+export async function submitBaselineBondEvidenceAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/offers", "error", "Supabase is not configured yet.");
+  }
+
+  const offerId = readRequired(formData, "offer_id");
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), `/offers/${offerId}`);
+  const evidenceUrl = readRequired(formData, "baseline_bond_evidence_url");
+
+  if (!offerId) {
+    redirectWithMessage(returnTo, "error", "Offer ID is required.");
+  }
+
+  if (!evidenceUrl || !/^https?:\/\//i.test(evidenceUrl)) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Submit a reviewable evidence link for the baseline credibility bond.",
+    );
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const [{ data: offer, error: offerError }, { data: offset, error: offsetError }] =
+    await Promise.all([
+      supabase.from("offers").select("*").eq("id", offerId).maybeSingle(),
+      supabase.from("donation_offset_offers").select("*").eq("offer_id", offerId).maybeSingle(),
+    ]);
+
+  if (offerError || !offer) {
+    redirectWithMessage(returnTo, "error", offerError?.message ?? "Offer not found.");
+  }
+
+  if (offsetError || !offset) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      offsetError?.message ?? "Baseline credibility bond details were not found.",
+    );
+  }
+
+  if (offer.owner_id !== viewer.authUser.id) {
+    redirectWithMessage(returnTo, "error", "Only the offer owner can submit baseline credibility bond evidence.");
+  }
+
+  const currentStatus = normalizeBaselineBondStatus(offset.baseline_bond_status);
+
+  if (currentStatus !== "evidence_due") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Baseline credibility bond evidence is not open for submission yet.",
+    );
+  }
+
+  const { error: updateError } = await supabase
+    .from("donation_offset_offers")
+    .update({
+      baseline_bond_evidence_url: evidenceUrl,
+      baseline_bond_status: "evidence_submitted",
+    })
+    .eq("offer_id", offerId)
+    .eq("baseline_bond_status", currentStatus);
+
+  if (updateError) {
+    logSupabaseActionError("Failed to submit baseline credibility bond evidence", updateError, {
+      offerId,
+      ownerId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", updateError.message);
+  }
+
+  const transitionResult = await persistBaselineBondStatusTransition({
+    actorAgentId: viewer.authUser.id,
+    actorAgentKind: "participant",
+    actorLabel: offer.owner_alias,
+    fromStatus: currentStatus,
+    idempotencyKey: `baseline-bond:${offerId}:evidence_due-to-evidence_submitted`,
+    offerId,
+    ownerProfileId: viewer.authUser.id,
+    provenanceActivity: "evidence_submitted",
+    supabase,
+    toStatus: "evidence_submitted",
+  });
+
+  if (transitionResult.error) {
+    logSupabaseActionError(
+      "Failed to persist baseline credibility bond evidence transition",
+      toActionError(
+        transitionResult.error,
+        "Unable to persist baseline credibility bond evidence transition.",
+      ),
+      { offerId, ownerId: viewer.authUser.id },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Evidence was submitted, but the baseline credibility bond audit transition could not be recorded.",
+    );
+  }
+
+  revalidatePath("/admin");
+  revalidatePath(`/offers/${offerId}`);
+  redirectWithMessage(returnTo, "message", "Baseline credibility bond evidence submitted for review.");
+}
+
+export async function reviewBaselineBondEvidenceAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/admin");
+  const offerId = readRequired(formData, "offer_id");
+  const decision = readRequired(formData, "baseline_bond_decision");
+  const reviewNotes = readOptional(formData, "baseline_bond_review_notes");
+
+  if (!offerId) {
+    redirectWithMessage(returnTo, "error", "Offer ID is required.");
+  }
+
+  const admin = await requireAdminViewer(returnTo);
+  const supabase = createServiceClient();
+  const [{ data: offer, error: offerError }, { data: offset, error: offsetError }] =
+    await Promise.all([
+      supabase.from("offers").select("*").eq("id", offerId).maybeSingle(),
+      supabase.from("donation_offset_offers").select("*").eq("offer_id", offerId).maybeSingle(),
+    ]);
+
+  if (offerError || !offer) {
+    redirectWithMessage(returnTo, "error", offerError?.message ?? "Offer not found.");
+  }
+
+  if (offsetError || !offset) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      offsetError?.message ?? "Baseline credibility bond details were not found.",
+    );
+  }
+
+  const currentStatus = normalizeBaselineBondStatus(offset.baseline_bond_status);
+  let nextStatus: BaselineBondStatus | null = null;
+
+  if (decision === "approve") {
+    if (currentStatus !== "evidence_submitted" && currentStatus !== "evidence_due") {
+      redirectWithMessage(returnTo, "error", "Baseline credibility bond evidence is not awaiting approval.");
+    }
+    nextStatus = "refunded_after_evidence";
+  } else if (decision === "forfeit") {
+    if (currentStatus !== "evidence_submitted" && currentStatus !== "evidence_due") {
+      redirectWithMessage(returnTo, "error", "Baseline credibility bond is not ready for forfeiture review.");
+    }
+
+    const now = new Date();
+    const appealWindowEndsAt =
+      offset.baseline_bond_appeal_window_ends_at ??
+      getBaselineBondAppealWindowEndsAt(now);
+    const appealWindowMs = appealWindowEndsAt ? Date.parse(appealWindowEndsAt) : NaN;
+
+    if (!Number.isFinite(appealWindowMs) || appealWindowMs > now.getTime()) {
+      const { error: appealWindowError } = await supabase
+        .from("donation_offset_offers")
+        .update({
+          baseline_bond_appeal_window_ends_at: appealWindowEndsAt,
+          baseline_bond_review_notes:
+            reviewNotes ||
+            "Evidence was not approved. The appeal window must close before forfeiture.",
+          baseline_bond_reviewed_at: now.toISOString(),
+          baseline_bond_reviewed_by: admin.authUser.id,
+        })
+        .eq("offer_id", offerId);
+
+      if (appealWindowError) {
+        redirectWithMessage(returnTo, "error", appealWindowError.message);
+      }
+
+      revalidatePath("/admin");
+      revalidatePath(`/offers/${offerId}`);
+      redirectWithMessage(
+        returnTo,
+        "message",
+        "Baseline credibility bond appeal window opened. Forfeiture is blocked until that window closes.",
+      );
+    }
+
+    nextStatus = "forfeited";
+  } else if (decision === "cancel") {
+    nextStatus = "cancelled_by_review";
+  } else {
+    redirectWithMessage(returnTo, "error", "Choose a valid baseline credibility bond review decision.");
+  }
+
+  const { error: updateError } = await supabase
+    .from("donation_offset_offers")
+    .update({
+      baseline_bond_status: nextStatus,
+      baseline_bond_review_notes: reviewNotes,
+      baseline_bond_reviewed_at: new Date().toISOString(),
+      baseline_bond_reviewed_by: admin.authUser.id,
+    })
+    .eq("offer_id", offerId)
+    .eq("baseline_bond_status", currentStatus);
+
+  if (updateError) {
+    logSupabaseActionError("Failed to review baseline credibility bond evidence", updateError, {
+      offerId,
+      decision,
+    });
+    redirectWithMessage(returnTo, "error", updateError.message);
+  }
+
+  const transitionResult = await persistBaselineBondStatusTransition({
+    actorAgentId: admin.authUser.id,
+    actorAgentKind: "operator",
+    actorLabel: admin.authUser.email ?? "Admin reviewer",
+    fromStatus: currentStatus,
+    idempotencyKey: `baseline-bond:${offerId}:${currentStatus}-to-${nextStatus}`,
+    offerId,
+    ownerProfileId: offer.owner_id,
+    provenanceActivity: "review_completed",
+    supabase,
+    toStatus: nextStatus,
+  });
+
+  if (transitionResult.error) {
+    logSupabaseActionError(
+      "Failed to persist baseline credibility bond review transition",
+      toActionError(
+        transitionResult.error,
+        "Unable to persist baseline credibility bond review transition.",
+      ),
+      { offerId, decision },
+    );
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Baseline credibility bond review was saved, but the audit transition could not be recorded.",
+    );
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/offers");
+  revalidatePath(`/offers/${offerId}`);
+  redirectWithMessage(returnTo, "message", "Baseline credibility bond review updated.");
+}
+
 export async function toggleFollowAction(formData: FormData) {
   if (!hasSupabaseEnv()) {
     redirectWithMessage("/", "error", "Supabase is not configured yet.");
@@ -8196,6 +8623,29 @@ export async function acceptInterestAction(formData: FormData) {
       });
       redirectWithMessage(returnTo, "error", matchError.message);
     }
+
+    const bondRefundError = await refundPostedBaselineBondAfterMatch({
+      actorLabel: offer.owner_alias,
+      actorProfileId: viewer.authUser.id,
+      idempotencyKeySuffix: interestId,
+      offerId,
+      offsetDetails: offsetDetails as DonationOffsetOfferRow,
+      ownerProfileId: viewer.authUser.id,
+      supabase,
+    });
+
+    if (bondRefundError) {
+      logSupabaseActionError(
+        "Failed to update baseline credibility bond after match",
+        toActionError(bondRefundError, "Unable to update baseline credibility bond after match."),
+        { offerId, interestId },
+      );
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "The response was accepted, but the baseline credibility bond refund transition could not be recorded.",
+      );
+    }
   }
 
   const { data: responderProfile } = await supabase
@@ -8434,6 +8884,32 @@ export async function acceptGuestInterestAction(formData: FormData) {
         guestInterestId,
       });
       redirectWithMessage(returnTo, "error", matchError.message);
+    }
+
+    const bondRefundError = await refundPostedBaselineBondAfterMatch({
+      actorLabel: offer.owner_alias,
+      actorProfileId: viewer.authUser.id,
+      idempotencyKeySuffix: guestInterestId,
+      offerId,
+      offsetDetails: offsetDetails as DonationOffsetOfferRow,
+      ownerProfileId: viewer.authUser.id,
+      supabase,
+    });
+
+    if (bondRefundError) {
+      logSupabaseActionError(
+        "Failed to update baseline credibility bond after guest match",
+        toActionError(
+          bondRefundError,
+          "Unable to update baseline credibility bond after guest match.",
+        ),
+        { offerId, guestInterestId },
+      );
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "The guest response was accepted, but the baseline credibility bond refund transition could not be recorded.",
+      );
     }
   }
 

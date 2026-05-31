@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
+  reviewBaselineBondEvidenceAction,
   reviewDonationOffsetOfferAction,
   suppressEmailOutboxAction,
   updateAgreementReviewCaseAction,
@@ -14,6 +15,7 @@ import {
 import { updateProfileDataRightRequestAction } from "@/app/background-networking/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { formatBaselineBondAmount, normalizeBaselineBondStatus } from "@/lib/baseline-bonds";
 import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
@@ -195,6 +197,12 @@ async function loadAdminQueues() {
     .eq("moderation_status", "flagged")
     .order("created_at", { ascending: false })
     .limit(50);
+  const baselineBondReviewsResult = await supabase
+    .from("donation_offset_offers")
+    .select("*")
+    .in("baseline_bond_status", ["evidence_due", "evidence_submitted"])
+    .order("baseline_bond_evidence_due_at", { ascending: true, nullsFirst: false })
+    .limit(50);
 
   const errors = [
     reports.error,
@@ -210,6 +218,7 @@ async function loadAdminQueues() {
     agreementReviewCases.error,
     verificationBadges.error,
     flaggedOffsetsResult.error,
+    baselineBondReviewsResult.error,
   ]
     .filter(Boolean)
     .map((error) => error?.message)
@@ -220,6 +229,7 @@ async function loadAdminQueues() {
   }
 
   const flaggedOffsets = (flaggedOffsetsResult.data ?? []) as DonationOffsetOfferRow[];
+  const baselineBondReviewOffsets = (baselineBondReviewsResult.data ?? []) as DonationOffsetOfferRow[];
   const conciergeRows = (conciergeRequests.data ?? []) as MatchConciergeRequestRow[];
   const reviewCaseRows = (agreementReviewCases.data ?? []) as AgreementReviewCaseRow[];
   const conciergeRequestIds = conciergeRows.map((request) => request.id);
@@ -255,8 +265,18 @@ async function loadAdminQueues() {
     );
   }
 
-  const flaggedOfferIds = flaggedOffsets.map((row) => row.offer_id);
-  const charityIds = [...new Set(flaggedOffsets.map((row) => row.compromise_charity_id))];
+  const flaggedOfferIds = [...new Set([
+    ...flaggedOffsets.map((row) => row.offer_id),
+    ...baselineBondReviewOffsets.map((row) => row.offer_id),
+  ])];
+  const charityIds = [
+    ...new Set([
+      ...flaggedOffsets.map((row) => row.compromise_charity_id),
+      ...baselineBondReviewOffsets
+        .map((row) => row.baseline_bond_forfeit_destination_id ?? row.compromise_charity_id)
+        .filter(Boolean),
+    ]),
+  ];
   const [flaggedOffersResult, flaggedCharitiesResult] = await Promise.all([
     flaggedOfferIds.length
       ? supabase.from("offers").select("*").in("id", flaggedOfferIds)
@@ -293,7 +313,10 @@ async function loadAdminQueues() {
     ((reviewEvidenceItemsResult.data ?? []) as AgreementEvidenceItemRow[]).map((row) => [row.id, row] as const),
   );
 
+  const loadedAtIso = new Date().toISOString();
+
   return {
+    loadedAtIso,
     reports: (reports.data ?? []) as MatchReportRow[],
     payments: (payments.data ?? []) as AgreementPaymentRow[],
     events: (events.data ?? []) as AgreementEventRow[],
@@ -319,6 +342,13 @@ async function loadAdminQueues() {
       offset,
       offer: offerMap.get(offset.offer_id) ?? null,
       charity: charityMap.get(offset.compromise_charity_id) ?? null,
+    })),
+    baselineBondReviews: baselineBondReviewOffsets.map((offset) => ({
+      offset,
+      offer: offerMap.get(offset.offer_id) ?? null,
+      charity: charityMap.get(
+        offset.baseline_bond_forfeit_destination_id ?? offset.compromise_charity_id,
+      ) ?? null,
     })),
   };
 }
@@ -1199,6 +1229,135 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     <div>
                       <strong>No paused donation offsets.</strong>
                       <p>Flagged offset offers will appear here for review.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="section section-subtle">
+              <div className="section-head">
+                <p className="eyebrow">Baseline credibility bonds</p>
+                <h2>Bond evidence awaiting review</h2>
+                <p>
+                  Review unmatched baseline evidence and record privacy-safe decisions. Private
+                  payment details stay out of this queue and the public audit trail.
+                </p>
+              </div>
+              <div className="data-grid">
+                {queues?.baselineBondReviews.length ? (
+                  queues.baselineBondReviews.map((review) => {
+                    const status = normalizeBaselineBondStatus(review.offset.baseline_bond_status);
+                    const amountLabel = review.offset.baseline_bond_amount_cents
+                      ? formatBaselineBondAmount(
+                          review.offset.baseline_bond_amount_cents,
+                          review.offset.baseline_bond_currency ?? "USD",
+                        )
+                      : "No amount recorded";
+                    const appealWindowEndsAt = review.offset.baseline_bond_appeal_window_ends_at;
+                    const appealWindowOpen = appealWindowEndsAt
+                      ? appealWindowEndsAt > queues.loadedAtIso
+                      : false;
+
+                    return (
+                      <article className="panel data-card" key={`baseline-bond-${review.offset.offer_id}`}>
+                        <p className="detail-kicker">
+                          {status.replaceAll("_", " ")} | {amountLabel}
+                        </p>
+                        <h3>
+                          {review.offer?.offered_cause ?? "Offset"} for{" "}
+                          {review.offer?.requested_cause ?? "counterparty"}
+                        </h3>
+                        <p className="route-text">
+                          Forfeit destination: {review.charity?.name ?? "Public-good destination missing"}
+                        </p>
+                        <p className="route-text">
+                          Baseline: {formatBaselineBondAmount(review.offset.baseline_amount_cents)} from{" "}
+                          {review.offset.baseline_opposed_cause}
+                        </p>
+                        <p className="route-text">
+                          Offer expiry:{" "}
+                          {review.offset.offer_expires_at
+                            ? new Date(review.offset.offer_expires_at).toLocaleString()
+                            : "Not recorded"}
+                          {" | "}evidence due:{" "}
+                          {review.offset.baseline_bond_evidence_due_at
+                            ? new Date(review.offset.baseline_bond_evidence_due_at).toLocaleString()
+                            : "Not recorded"}
+                        </p>
+                        <p className="route-text">
+                          Evidence standard:{" "}
+                          {review.offset.baseline_bond_evidence_standard ?? "No standard recorded."}
+                        </p>
+                        {review.offset.baseline_bond_evidence_url ? (
+                          <p className="route-text">
+                            Evidence:{" "}
+                            <a className="inline-link" href={review.offset.baseline_bond_evidence_url}>
+                              open submitted packet
+                            </a>
+                          </p>
+                        ) : (
+                          <p className="route-text">Evidence: not submitted yet.</p>
+                        )}
+                        {appealWindowEndsAt ? (
+                          <p className="route-text">
+                            Appeal window:{" "}
+                            {appealWindowOpen ? "open until " : "closed at "}
+                            {new Date(appealWindowEndsAt).toLocaleString()}
+                          </p>
+                        ) : null}
+                        {review.offset.baseline_bond_review_notes ? (
+                          <p className="route-text">
+                            Review notes: {review.offset.baseline_bond_review_notes}
+                          </p>
+                        ) : null}
+                        <form action={reviewBaselineBondEvidenceAction} className="compact-form">
+                          <input name="offer_id" type="hidden" value={review.offset.offer_id} />
+                          <input name="return_to" type="hidden" value="/admin" />
+                          <label className="field">
+                            <span>Reviewer notes</span>
+                            <textarea
+                              defaultValue={review.offset.baseline_bond_review_notes ?? ""}
+                              name="baseline_bond_review_notes"
+                              placeholder="Evidence reviewed, appeal state, and decision rationale."
+                              rows={3}
+                            />
+                          </label>
+                          <div className="form-actions">
+                            <button
+                              className="button button-secondary button-mini"
+                              name="baseline_bond_decision"
+                              type="submit"
+                              value="approve"
+                            >
+                              Approve evidence and mark refund
+                            </button>
+                            <button
+                              className="button button-secondary button-mini"
+                              name="baseline_bond_decision"
+                              type="submit"
+                              value="forfeit"
+                            >
+                              Forfeit after appeal window
+                            </button>
+                            <button
+                              className="button button-secondary button-mini"
+                              name="baseline_bond_decision"
+                              type="submit"
+                              value="cancel"
+                            >
+                              Cancel by review
+                            </button>
+                          </div>
+                        </form>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <div className="empty-state">
+                    <div>
+                      <strong>No baseline credibility bond evidence is awaiting review.</strong>
+                      <p>Expired unmatched bonded baselines will appear here when evidence opens.</p>
                     </div>
                   </div>
                 )}

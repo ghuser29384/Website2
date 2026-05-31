@@ -59,11 +59,18 @@
       "publicClaim": "Operator consoles and review mutations require an allowlisted admin account with an active authenticator MFA session."
     },
     {
+      "key": "participant_session_review_revocation",
+      "label": "Participant session review and revocation",
+      "status": "implemented",
+      "evidence": "src/lib/background-account-security.ts reads current Supabase JWT session_id/iat/exp/aal claims, the dashboard account-security panel shows a redacted current-session review, and src/app/background-networking/actions.ts exposes Supabase signOut({ scope: \"others\" }) to revoke other active sessions.",
+      "publicClaim": "Participants can inspect the current background-networking session window and revoke other active Supabase sessions from the dashboard."
+    },
+    {
       "key": "device_session_review_gate",
       "label": "Device/session review gate",
       "status": "required_before_scale",
-      "evidence": "The public pilot does not yet publish device inventory, session revocation, or anomalous-session review evidence.",
-      "publicClaim": "Sensitive admin scale requires a device/session review and revocation procedure."
+      "evidence": "Participant current-session review and other-session revocation are implemented, but the public pilot does not yet publish provider-wide device inventory, anomalous-session alerting, or completed operator session-review evidence.",
+      "publicClaim": "Sensitive admin scale requires provider-level device inventory and anomalous-session review evidence in addition to participant session revocation."
     },
     {
       "key": "key_rotation_gate",

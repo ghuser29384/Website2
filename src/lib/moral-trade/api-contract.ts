@@ -245,6 +245,9 @@ export function validateMoralTradeApiContractProfile(
   const apiContractRoute = profile.routes.find(
     (route) => route.key === "moral_trade_api_contract",
   );
+  const aggregateHealthResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "moral_trade_aggregate_health_response",
+  );
   const apiContractResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "api_contract_response",
   );
@@ -379,6 +382,12 @@ export function validateMoralTradeApiContractProfile(
   );
   const incidentResponseHealthResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "incident_response_health_response",
+  );
+  const transparencyReportRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_transparency_report",
+  );
+  const transparencyReportResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "transparency_report_response",
   );
   const reviewWorkflowEvaluateRoute = profile.routes.find(
     (route) => route.key === "moral_trade_review_workflow_evaluate",
@@ -947,6 +956,55 @@ export function validateMoralTradeApiContractProfile(
         ),
       incidentResponseHealthRoute
         ? `${incidentResponseHealthRoute.key}:${incidentResponseHealthRoute.cacheControl}`
+        : "missing",
+    ),
+    check(
+      "transparency-report-route",
+      "Transparency report route is aggregate-only, thresholded, and health-audited",
+      transparencyReportRoute?.method === "GET" &&
+        transparencyReportRoute.path === "/api/moral-trade/transparency/report" &&
+        transparencyReportRoute.auth === "public" &&
+        transparencyReportRoute.cacheControl === "no_store_dynamic" &&
+        transparencyReportRoute.rateLimitSurface === "public_contract_read" &&
+        transparencyReportRoute.privacyClass === "public_contract" &&
+        /threshold rules|aggregate-only|never expose participant ids|profile text|source notes|exact wishes|contact details|private evidence artifacts/i.test(
+          transparencyReportRoute.fallback,
+        ) &&
+        Boolean(
+          transparencyReportResponse?.fields.some(
+            (field) => field.key === "validation" && field.type === "validator_result",
+          ),
+        ) &&
+        Boolean(
+          transparencyReportResponse?.fields.some(
+            (field) =>
+              field.key === "publicContract" &&
+              field.privacy === "public_contract" &&
+              /minimum public count|metric definitions|privacy rules/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          transparencyReportResponse?.fields.some(
+            (field) =>
+              field.key === "report" &&
+              field.privacy === "public_contract" &&
+              /Thresholded aggregate metrics only|small nonzero samples are suppressed|no private case records/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          aggregateHealthResponse?.fields.some(
+            (field) =>
+              field.key === "transparencyReportValidation" &&
+              field.type === "validator_result" &&
+              /small-sample suppression|private-field exclusion/i.test(field.description),
+          ),
+        ),
+      transparencyReportRoute
+        ? `${transparencyReportRoute.key}:${transparencyReportRoute.cacheControl}:${transparencyReportRoute.rateLimitSurface}`
         : "missing",
     ),
     check(

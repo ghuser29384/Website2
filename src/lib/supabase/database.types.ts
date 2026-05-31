@@ -291,6 +291,28 @@ export interface Database {
           assurance_minimum_cents: number;
           assurance_deadline_at: string | null;
           evidence_url: string;
+          offer_expires_at: string | null;
+          baseline_bond_enabled: boolean;
+          baseline_bond_amount_cents: number;
+          baseline_bond_currency: string;
+          baseline_bond_forfeit_destination_id: string | null;
+          baseline_bond_evidence_due_at: string | null;
+          baseline_bond_evidence_standard: string;
+          baseline_bond_evidence_url: string;
+          baseline_bond_status:
+            | "none"
+            | "pending_payment"
+            | "posted"
+            | "refunded_after_match"
+            | "evidence_due"
+            | "evidence_submitted"
+            | "refunded_after_evidence"
+            | "forfeited"
+            | "cancelled_by_review";
+          baseline_bond_reviewed_by: string | null;
+          baseline_bond_reviewed_at: string | null;
+          baseline_bond_review_notes: string;
+          baseline_bond_appeal_window_ends_at: string | null;
           moderation_status: "clear" | "flagged" | "blocked";
           moderation_notes: string;
           moderation_reviewed_by: string | null;
@@ -323,6 +345,28 @@ export interface Database {
           assurance_minimum_cents?: number;
           assurance_deadline_at?: string | null;
           evidence_url?: string;
+          offer_expires_at?: string | null;
+          baseline_bond_enabled?: boolean;
+          baseline_bond_amount_cents?: number;
+          baseline_bond_currency?: string;
+          baseline_bond_forfeit_destination_id?: string | null;
+          baseline_bond_evidence_due_at?: string | null;
+          baseline_bond_evidence_standard?: string;
+          baseline_bond_evidence_url?: string;
+          baseline_bond_status?:
+            | "none"
+            | "pending_payment"
+            | "posted"
+            | "refunded_after_match"
+            | "evidence_due"
+            | "evidence_submitted"
+            | "refunded_after_evidence"
+            | "forfeited"
+            | "cancelled_by_review";
+          baseline_bond_reviewed_by?: string | null;
+          baseline_bond_reviewed_at?: string | null;
+          baseline_bond_review_notes?: string;
+          baseline_bond_appeal_window_ends_at?: string | null;
           moderation_status?: "clear" | "flagged" | "blocked";
           moderation_notes?: string;
           moderation_reviewed_by?: string | null;
@@ -354,6 +398,28 @@ export interface Database {
           assurance_minimum_cents?: number;
           assurance_deadline_at?: string | null;
           evidence_url?: string;
+          offer_expires_at?: string | null;
+          baseline_bond_enabled?: boolean;
+          baseline_bond_amount_cents?: number;
+          baseline_bond_currency?: string;
+          baseline_bond_forfeit_destination_id?: string | null;
+          baseline_bond_evidence_due_at?: string | null;
+          baseline_bond_evidence_standard?: string;
+          baseline_bond_evidence_url?: string;
+          baseline_bond_status?:
+            | "none"
+            | "pending_payment"
+            | "posted"
+            | "refunded_after_match"
+            | "evidence_due"
+            | "evidence_submitted"
+            | "refunded_after_evidence"
+            | "forfeited"
+            | "cancelled_by_review";
+          baseline_bond_reviewed_by?: string | null;
+          baseline_bond_reviewed_at?: string | null;
+          baseline_bond_review_notes?: string;
+          baseline_bond_appeal_window_ends_at?: string | null;
           moderation_status?: "clear" | "flagged" | "blocked";
           moderation_notes?: string;
           moderation_reviewed_by?: string | null;

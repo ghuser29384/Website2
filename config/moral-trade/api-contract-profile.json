@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.6-2026-05",
+  "version": "moral-trade-api-contract-v0.7-2026-05",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -626,7 +626,7 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, data-model, policy-bundle, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, and API-contract validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, and API-contract validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
@@ -647,6 +647,7 @@
         { "key": "evaluationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Evaluation contract validator result." },
         { "key": "performanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Performance and route-resilience validator result." },
         { "key": "externalityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Externality due-diligence validator result." },
+        { "key": "transparencyReportValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Aggregate transparency report validator result for metric coverage, small-sample suppression, and private-field exclusion." },
         { "key": "apiContractValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "API contract validator result." },
         { "key": "aiGovernanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validator result for documentation, fairness, and human-control gates." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published codes, route keys, schema keys, transition rules, and metric names." },

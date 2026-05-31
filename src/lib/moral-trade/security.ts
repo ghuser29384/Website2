@@ -75,6 +75,7 @@ const REQUIRED_CONTROLS = [
   "background_field_encryption_keyring",
   "server_only_secret_management",
   "two_factor_admin_gate",
+  "participant_session_review_revocation",
   "device_session_review_gate",
   "key_rotation_gate",
   "platform_abuse_throttling",
@@ -174,6 +175,8 @@ export function auditMoralTradeSecurityScaleReadiness({
 export function validateMoralTradeSecurityImplementation({
   actionsSource,
   adminSource,
+  backgroundAccountSecuritySource,
+  backgroundAccountSecurityPanelSource,
   backgroundActionsSource,
   backgroundFieldEncryptionSource,
   mpgfAdminActionsSource,
@@ -183,6 +186,8 @@ export function validateMoralTradeSecurityImplementation({
 }: {
   actionsSource: string;
   adminSource: string;
+  backgroundAccountSecuritySource: string;
+  backgroundAccountSecurityPanelSource: string;
   backgroundActionsSource: string;
   backgroundFieldEncryptionSource: string;
   mpgfAdminActionsSource: string;
@@ -265,8 +270,20 @@ export function validateMoralTradeSecurityImplementation({
         /rotationReady/.test(backgroundFieldEncryptionSource) &&
         /BACKGROUND_FIELD_ENCRYPTION_KEYS or BACKGROUND_FIELD_ENCRYPTION_KEY/.test(
           backgroundFieldEncryptionSource,
-        ),
+      ),
       "background sensitive text should encrypt with versioned key ids, support legacy decrypt, and fail closed without configured key material.",
+    ),
+    check(
+      "participant-session-review-source",
+      "Participant session review and other-session revocation are implemented",
+      /BACKGROUND_SESSION_REVIEW_CONTROL_VERSION/.test(backgroundAccountSecuritySource) &&
+        /getClaims/.test(backgroundAccountSecuritySource) &&
+        /session_id/.test(backgroundAccountSecuritySource) &&
+        /accessTokenWindowStatus/.test(backgroundAccountSecuritySource) &&
+        /signOut\(\{\s*scope:\s*"others"\s*\}\)/.test(backgroundActionsSource) &&
+        /Revoke other sessions/.test(backgroundAccountSecurityPanelSource) &&
+        /sessionIdSuffix/.test(backgroundAccountSecurityPanelSource),
+      "participants should see current-session JWT review data and be able to revoke other Supabase sessions from the dashboard.",
     ),
     check(
       "attribution-cookie-boundary-source",
@@ -331,9 +348,15 @@ export function validateMoralTradeSecurityProfile(
       "admin-and-key-scale-gates",
       "MFA is enforced while device/session review and key rotation still gate sensitive scale",
       controlMap.get("two_factor_admin_gate")?.status === "implemented" &&
+        controlMap.get("participant_session_review_revocation")?.status === "implemented" &&
         controlMap.get("device_session_review_gate")?.status === "required_before_scale" &&
         controlMap.get("key_rotation_gate")?.status === "required_before_scale",
-      ["two_factor_admin_gate", "device_session_review_gate", "key_rotation_gate"]
+      [
+        "two_factor_admin_gate",
+        "participant_session_review_revocation",
+        "device_session_review_gate",
+        "key_rotation_gate",
+      ]
         .map((key) => `${key}:${controlMap.get(key)?.status ?? "missing"}`)
         .join(", "),
     ),

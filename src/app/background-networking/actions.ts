@@ -990,3 +990,18 @@ export async function removeBackgroundNetworkingMfaAction(
     status: "removed",
   };
 }
+
+export async function revokeOtherBackgroundNetworkingSessionsAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  await requireViewer(returnTo);
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signOut({ scope: "others" });
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", "Could not revoke other active sessions.");
+  }
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Other active sessions were revoked.");
+}
