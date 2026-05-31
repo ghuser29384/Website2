@@ -87,6 +87,10 @@ import {
   loadMpgfPublicGoodsKpiSnapshot,
 } from "./mpgf/public-goods-kpis";
 import {
+  buildMpgfPublicGoodsExperimentAssignmentRow,
+  persistMpgfPublicGoodsExperimentAssignment,
+} from "./mpgf/public-goods-experiments";
+import {
   evaluateMpgfExactPilotGate,
   evaluateMpgfGovernanceMachineryGate,
   evaluateMpgfPayoutComplianceGate,
@@ -731,6 +735,49 @@ test("MPGF public-goods subscriptions, experiments, and feature flag stay option
   assert.equal(featureFlag.defaultCaptureMode, "external_handoff");
   assert.equal(featureFlag.widensPublicAccessAutomatically, false);
   assert.ok(demoMpgfPublicGoodsSubscriptions.some((row) => row.poolId === demoMpgfMatchPool.id));
+});
+
+test("MPGF public-goods experiment assignments persist hashed variants only", async () => {
+  const assignmentRows = buildMpgfPublicGoodsExperimentAssignmentRow({
+    userId: "private-user@example.org",
+    profileId: "not-a-uuid",
+    experimentKey: "public_goods_assurance_framing_v1",
+    variants: ["pledge_only_if_threshold_met", "donate_now_control"],
+    assignedAt: "2026-05-30T12:00:00.000Z",
+  });
+  const dryRun = await persistMpgfPublicGoodsExperimentAssignment({
+    userId: "private-user@example.org",
+    profileId: "not-a-uuid",
+    experimentKey: "public_goods_assurance_framing_v1",
+    variants: ["pledge_only_if_threshold_met", "donate_now_control"],
+    assignedAt: "2026-05-30T12:00:00.000Z",
+    dryRun: true,
+  });
+  const route = readFileSync("src/app/api/mpgf/public-goods/experiments/assign/route.ts", "utf8");
+  const experiments = readFileSync("src/lib/mpgf/public-goods-experiments.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260529_mpgf_verified_assurance_matching.sql", "utf8");
+  const serialized = JSON.stringify(dryRun);
+
+  assert.equal(assignmentRows.row.profile_id, null);
+  assert.equal(assignmentRows.row.analytics_policy, "privacy_safe_no_raw_private_text");
+  assert.equal(assignmentRows.row.user_ref_hash.includes("private-user"), false);
+  assert.equal(dryRun.status, "dry_run");
+  assert.equal(dryRun.assignment.analyticsPolicy, "privacy_safe_no_raw_private_text");
+  assert.equal(serialized.includes("private-user@example.org"), false);
+  assert.match(route, /MPGF_PUBLIC_GOODS_EXPERIMENT_SECRET/);
+  assert.match(route, /persistMpgfPublicGoodsExperimentAssignment/);
+  assert.match(experiments, /mpgf_public_goods_experiment_assignments/);
+  assert.match(experiments, /onConflict: "experiment_key,user_ref_hash"/);
+  assert.match(migration, /unique \(experiment_key, user_ref_hash\)/);
+  assert.throws(
+    () =>
+      buildMpgfPublicGoodsExperimentAssignmentRow({
+        userId: "test",
+        experimentKey: "private@example.org",
+        variants: ["safe_a", "safe_b"],
+      }),
+    /cannot contain raw private text/,
+  );
 });
 
 test("MPGF public-goods cohort access stays invited before public widening", () => {
