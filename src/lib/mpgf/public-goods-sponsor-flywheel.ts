@@ -57,6 +57,30 @@ export interface MpgfPublicGoodsSponsorPoolFlywheel {
   calcHash: string;
 }
 
+export interface MpgfPublicGoodsSponsorPoolDepositReceipt {
+  ok: true;
+  poolId: string;
+  roundId: string;
+  deposit: MpgfPublicGoodsSponsorPoolLedgerEntry;
+  reviewRequiredBeforeMatching: boolean;
+  finalPayoutAuthorized: false;
+}
+
+export interface MpgfPublicGoodsTradeSurplusCommitment {
+  ok: true;
+  id: string;
+  poolId: string;
+  roundId: string;
+  sourceType: "donation_offset_surplus" | "trade_surplus_tithe";
+  tradeOrOffsetRefHash: string;
+  amountCents: number;
+  status: "committed_pending_settlement" | "settled_to_sponsor_pool" | "voided";
+  custodyMode: "partner_or_provider_held_not_platform_custody";
+  settlementPath: "/api/mpgf/trade-surplus/settle";
+  createdAt: string;
+  calcHash: string;
+}
+
 const demoSponsorPoolRefills = [
   {
     id: "sponsor-flywheel-anchor-demo",
@@ -228,6 +252,144 @@ export function buildMpgfPublicGoodsSponsorPoolFlywheel({
         entry.countsTowardMatching,
       ]),
     ),
+  };
+}
+
+export function recordMpgfPublicGoodsSponsorPoolDeposit({
+  pool = demoMpgfMatchPool,
+  round = demoMpgfAssuranceRound,
+  sourceType = "direct_sponsor_deposit",
+  privateSourceRef,
+  amountCents,
+  publicMemo,
+  receivedAt = new Date("2026-05-31T12:00:00.000Z").toISOString(),
+  status = "pending_review",
+}: {
+  pool?: MpgfPublicGoodsMatchPool;
+  round?: MpgfPublicGoodsRound;
+  sourceType?: MpgfPublicGoodsSponsorPoolSourceType;
+  privateSourceRef: string;
+  amountCents: number;
+  publicMemo?: string;
+  receivedAt?: string;
+  status?: MpgfPublicGoodsSponsorPoolLedgerEntry["status"];
+}): MpgfPublicGoodsSponsorPoolDepositReceipt {
+  if (!privateSourceRef.trim()) {
+    throw new Error("MPGF sponsor-pool deposits require a private source reference.");
+  }
+
+  const normalizedAmountCents = clampCents(amountCents);
+
+  if (normalizedAmountCents <= 0) {
+    throw new Error("MPGF sponsor-pool deposits require a positive amount.");
+  }
+
+  const sourceRefHash = hashSourceRef(privateSourceRef);
+  const deposit: MpgfPublicGoodsSponsorPoolLedgerEntry = {
+    id: `sponsor-flywheel-deposit-${sourceRefHash.slice(7, 19)}`,
+    poolId: pool.id,
+    roundId: round.id,
+    sourceType,
+    sourceRefHash,
+    amountCents: normalizedAmountCents,
+    status,
+    custodyMode: "partner_or_provider_held_not_platform_custody",
+    publicMemo: publicMemo?.trim() || "Sponsor-pool refill pending review before matching.",
+    receivedAt,
+    countsTowardMatching: status === "available",
+  };
+
+  return {
+    ok: true,
+    poolId: pool.id,
+    roundId: round.id,
+    deposit,
+    reviewRequiredBeforeMatching: status !== "available",
+    finalPayoutAuthorized: false,
+  };
+}
+
+export function commitMpgfPublicGoodsTradeSurplus({
+  pool = demoMpgfMatchPool,
+  round = demoMpgfAssuranceRound,
+  sourceType = "trade_surplus_tithe",
+  privateTradeOrOffsetRef,
+  amountCents,
+  createdAt = new Date("2026-05-31T12:00:00.000Z").toISOString(),
+}: {
+  pool?: MpgfPublicGoodsMatchPool;
+  round?: MpgfPublicGoodsRound;
+  sourceType?: "donation_offset_surplus" | "trade_surplus_tithe";
+  privateTradeOrOffsetRef: string;
+  amountCents: number;
+  createdAt?: string;
+}): MpgfPublicGoodsTradeSurplusCommitment {
+  if (!privateTradeOrOffsetRef.trim()) {
+    throw new Error("MPGF trade-surplus commitments require a private trade or offset reference.");
+  }
+
+  const normalizedAmountCents = clampCents(amountCents);
+
+  if (normalizedAmountCents <= 0) {
+    throw new Error("MPGF trade-surplus commitments require a positive amount.");
+  }
+
+  const tradeOrOffsetRefHash = hashSourceRef(privateTradeOrOffsetRef);
+  const id = `trade-surplus-commitment-${tradeOrOffsetRefHash.slice(7, 19)}`;
+  const calcHashValue = calcHash([
+    id,
+    pool.id,
+    round.id,
+    sourceType,
+    tradeOrOffsetRefHash,
+    normalizedAmountCents,
+    "committed_pending_settlement",
+  ]);
+
+  return {
+    ok: true,
+    id,
+    poolId: pool.id,
+    roundId: round.id,
+    sourceType,
+    tradeOrOffsetRefHash,
+    amountCents: normalizedAmountCents,
+    status: "committed_pending_settlement",
+    custodyMode: "partner_or_provider_held_not_platform_custody",
+    settlementPath: "/api/mpgf/trade-surplus/settle",
+    createdAt,
+    calcHash: calcHashValue,
+  };
+}
+
+export function settleMpgfPublicGoodsTradeSurplus({
+  commitment,
+  providerEventVerified = false,
+  settledAt = new Date("2026-05-31T12:05:00.000Z").toISOString(),
+}: {
+  commitment: MpgfPublicGoodsTradeSurplusCommitment;
+  providerEventVerified?: boolean;
+  settledAt?: string;
+}) {
+  const receipt = recordMpgfPublicGoodsSponsorPoolDeposit({
+    sourceType: commitment.sourceType,
+    privateSourceRef: commitment.tradeOrOffsetRefHash,
+    amountCents: commitment.amountCents,
+    publicMemo: "Settled trade-surplus or donation-offset surplus refill for the MPGF sponsor pool.",
+    receivedAt: settledAt,
+    status: providerEventVerified ? "available" : "pending_review",
+  });
+
+  return {
+    ok: true,
+    commitment: {
+      ...commitment,
+      status: providerEventVerified ? "settled_to_sponsor_pool" as const : commitment.status,
+    },
+    sponsorPoolDeposit: receipt.deposit,
+    providerEventVerified,
+    reviewRequiredBeforeMatching: !providerEventVerified,
+    finalPayoutAuthorized: false as const,
   };
 }
 

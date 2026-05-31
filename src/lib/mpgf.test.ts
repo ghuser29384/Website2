@@ -118,7 +118,10 @@ import {
 import {
   MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY,
   buildMpgfPublicGoodsSponsorPoolFlywheel,
+  commitMpgfPublicGoodsTradeSurplus,
   getMpgfPublicGoodsSponsorPoolFlywheelApi,
+  recordMpgfPublicGoodsSponsorPoolDeposit,
+  settleMpgfPublicGoodsTradeSurplus,
 } from "./mpgf/public-goods-sponsor-flywheel";
 import {
   buildMpgfPublicGoodsRefundReconciliationPlan,
@@ -630,6 +633,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.sponsorPool.verificationWeightPolicy, "identity_confidence_only_no_moral_reputation");
   assert.equal(round.round.sponsorPool.flywheelPolicy, "trade_surplus_funded_verified_plural_assurance");
   assert.equal(round.round.sponsorPool.flywheelPath, `/api/mpgf/sponsor-pools/${demoMpgfMatchPool.id}`);
+  assert.equal(round.round.sponsorPool.depositPath, `/api/mpgf/sponsor-pools/${demoMpgfMatchPool.id}/deposits`);
+  assert.equal(round.round.sponsorPool.tradeSurplusCommitPath, "/api/mpgf/trade-surplus/commit");
   assert.ok(round.round.sponsorPool.flywheelSourceTypes.includes("donation_offset_surplus"));
   assert.ok(round.round.sponsorPool.flywheelSourceTypes.includes("trade_surplus_tithe"));
   assert.ok(campaigns);
@@ -716,6 +721,9 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/rounds/[roundId]/hash/route.ts", /calculationHash/],
     ["src/app/api/mpgf/procedural-badges/route.ts", /getMpgfPublicGoodsProceduralBadgesApi/],
     ["src/app/api/mpgf/sponsor-pools/[poolId]/route.ts", /getMpgfPublicGoodsSponsorPoolFlywheelApi/],
+    ["src/app/api/mpgf/sponsor-pools/[poolId]/deposits/route.ts", /recordMpgfPublicGoodsSponsorPoolDeposit/],
+    ["src/app/api/mpgf/trade-surplus/commit/route.ts", /commitMpgfPublicGoodsTradeSurplus/],
+    ["src/app/api/mpgf/trade-surplus/settle/route.ts", /settleMpgfPublicGoodsTradeSurplus/],
     ["src/app/api/mpgf/audit/ledger/route.ts", /getMpgfPublicGoodsLedgerApi/],
     ["src/app/api/mpgf/providers/stripe/webhook/route.ts", /webhookCanAuthorizeFinalPayout: false/],
     ["src/app/api/mpgf/contributions/manual-evidence/route.ts", /manualEvidenceFallback: true/],
@@ -1067,6 +1075,61 @@ test("MPGF sponsor-pool flywheel aggregates trade surplus without private source
     "donation-offset-surplus-private",
     "successful-moral-trade-tithe-private",
     "demo-sponsor-circle-member",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("MPGF sponsor deposits and trade surplus settle through the shared flywheel", () => {
+  const deposit = recordMpgfPublicGoodsSponsorPoolDeposit({
+    privateSourceRef: "private-direct-sponsor-deposit-001",
+    amountCents: 40_000,
+    publicMemo: "Direct sponsor deposit pending review.",
+  });
+  const commitment = commitMpgfPublicGoodsTradeSurplus({
+    privateTradeOrOffsetRef: "private-successful-trade-surplus-001",
+    amountCents: 15_000,
+    sourceType: "trade_surplus_tithe",
+  });
+  const settlement = settleMpgfPublicGoodsTradeSurplus({
+    commitment,
+    providerEventVerified: true,
+  });
+  const serialized = JSON.stringify({ deposit, commitment, settlement });
+  const depositRoute = readFileSync("src/app/api/mpgf/sponsor-pools/[poolId]/deposits/route.ts", "utf8");
+  const commitRoute = readFileSync("src/app/api/mpgf/trade-surplus/commit/route.ts", "utf8");
+  const settleRoute = readFileSync("src/app/api/mpgf/trade-surplus/settle/route.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260531_mpgf_trade_surplus_commitments.sql", "utf8");
+
+  assert.equal(deposit.reviewRequiredBeforeMatching, true);
+  assert.equal(deposit.finalPayoutAuthorized, false);
+  assert.equal(deposit.deposit.sourceType, "direct_sponsor_deposit");
+  assert.equal(deposit.deposit.status, "pending_review");
+  assert.equal(deposit.deposit.countsTowardMatching, false);
+  assert.match(deposit.deposit.sourceRefHash, /^sha256:/);
+  assert.equal(commitment.status, "committed_pending_settlement");
+  assert.equal(commitment.settlementPath, "/api/mpgf/trade-surplus/settle");
+  assert.equal(commitment.custodyMode, "partner_or_provider_held_not_platform_custody");
+  assert.match(commitment.tradeOrOffsetRefHash, /^sha256:/);
+  assert.match(commitment.calcHash, /^sha256:/);
+  assert.equal(settlement.commitment.status, "settled_to_sponsor_pool");
+  assert.equal(settlement.sponsorPoolDeposit.sourceType, "trade_surplus_tithe");
+  assert.equal(settlement.sponsorPoolDeposit.status, "available");
+  assert.equal(settlement.sponsorPoolDeposit.countsTowardMatching, true);
+  assert.equal(settlement.finalPayoutAuthorized, false);
+  assert.match(depositRoute, /Sign in to record an MPGF sponsor-pool deposit/);
+  assert.match(depositRoute, /recordMpgfPublicGoodsSponsorPoolDeposit/);
+  assert.match(commitRoute, /commitMpgfPublicGoodsTradeSurplus/);
+  assert.match(settleRoute, /settleMpgfPublicGoodsTradeSurplus/);
+  assert.match(migration, /mpgf_public_goods_trade_surplus_commitments/);
+  assert.match(migration, /donation_offset_surplus/);
+  assert.match(migration, /trade_surplus_tithe/);
+  assert.match(migration, /partner_or_provider_held_not_platform_custody/);
+  assert.match(migration, /raw counterparty, payment, and offset records are private by default/);
+
+  for (const forbidden of [
+    "private-direct-sponsor-deposit-001",
+    "private-successful-trade-surplus-001",
   ]) {
     assert.equal(serialized.includes(forbidden), false);
   }
