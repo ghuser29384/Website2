@@ -656,7 +656,8 @@ export default async function MoralTradeTechnicalSpecPage() {
               <p>
                 POST /api/moral-trade/challenge-appeal/evaluate returns scoped factor codes,
                 standing checks, required artifacts, privacy actions, provenance activity, and
-                stateMutation false.
+                stateMutation false. Requested outcomes are advisory and must match the appeal
+                trigger before reviewers can route them.
               </p>
             </article>
             <article className="panel protocol-contract-card">

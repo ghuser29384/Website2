@@ -1,5 +1,5 @@
 export const MORAL_TRADE_CHALLENGE_APPEAL_CONTRACT_VERSION =
-  "moral-trade-challenge-appeal-v0.1";
+  "moral-trade-challenge-appeal-v0.2";
 export const MORAL_TRADE_CHALLENGE_APPEAL_VALIDATOR_VERSION =
   "moral-trade-challenge-appeal-validator-v0.1";
 
@@ -200,6 +200,71 @@ const APPROVED_FACTOR_CODES = [
   "private_details_redacted",
 ] as const satisfies readonly MoralTradeChallengeAppealFactorCode[];
 
+const REQUESTED_OUTCOME_TRIGGER_COMPATIBILITY: Record<
+  MoralTradeAppealTrigger,
+  readonly MoralTradeChallengeAppealOutcome[]
+> = {
+  duplicate_proof: [
+    "request_evidence",
+    "route_human_review",
+    "open_challenge_window",
+    "block_reliance",
+    "close_unresolved",
+  ],
+  coercive_baseline: [
+    "request_evidence",
+    "route_human_review",
+    "open_challenge_window",
+    "block_reliance",
+    "close_unresolved",
+  ],
+  wrong_scope_evidence: [
+    "request_evidence",
+    "route_human_review",
+    "open_challenge_window",
+    "block_reliance",
+    "correct_record",
+    "close_unresolved",
+  ],
+  material_factual_error: [
+    "request_evidence",
+    "route_human_review",
+    "open_challenge_window",
+    "block_reliance",
+    "correct_record",
+    "close_unresolved",
+  ],
+  privacy_disclosure_error: [
+    "route_human_review",
+    "block_reliance",
+    "correct_record",
+    "close_unresolved",
+  ],
+  externality_remedy_gap: [
+    "request_evidence",
+    "route_human_review",
+    "open_challenge_window",
+    "block_reliance",
+    "record_remedy",
+    "close_unresolved",
+  ],
+  reviewer_conflict: [
+    "request_evidence",
+    "route_human_review",
+    "uphold_decision",
+    "correct_record",
+    "close_unresolved",
+  ],
+  policy_misapplied: [
+    "request_evidence",
+    "route_human_review",
+    "uphold_decision",
+    "block_reliance",
+    "correct_record",
+    "close_unresolved",
+  ],
+};
+
 const CONTRACT_TESTS = [
   "challenge_appeal_contract_validator",
   "challenge_appeal_evaluate_route_contract",
@@ -301,6 +366,24 @@ function defaultOutcomeForInput(
   return "route_human_review";
 }
 
+function requestedOutcomeIsCompatible(input: MoralTradeChallengeAppealInput) {
+  return Boolean(
+    input.requestedOutcome &&
+      REQUESTED_OUTCOME_TRIGGER_COMPATIBILITY[input.trigger].includes(input.requestedOutcome),
+  );
+}
+
+function outcomeForInput(
+  input: MoralTradeChallengeAppealInput,
+  blockers: readonly string[],
+): MoralTradeChallengeAppealOutcome {
+  if (!blockers.length && requestedOutcomeIsCompatible(input)) {
+    return input.requestedOutcome!;
+  }
+
+  return defaultOutcomeForInput(input, blockers);
+}
+
 function requiredArtifactsForInput(input: MoralTradeChallengeAppealInput) {
   const artifacts = ["prior review decision and reason codes"];
 
@@ -379,6 +462,10 @@ function getInputBlockers(input: MoralTradeChallengeAppealInput) {
     blockers.push("reviewer_conflict_disclosure_required");
   }
 
+  if (input.requestedOutcome && !requestedOutcomeIsCompatible(input)) {
+    blockers.push(`requested_outcome_not_compatible:${input.requestedOutcome}:${input.trigger}`);
+  }
+
   if (input.containsPrivateDetails) {
     blockers.push("private_details_must_be_redacted_before_review");
   }
@@ -405,7 +492,7 @@ export function evaluateMoralTradeChallengeAppeal(
     factorCodes.push("standing_established");
   }
 
-  if (input.standing === "affected_party") {
+  if (input.standing === "affected_party" && standingAccepted) {
     factorCodes.push("affected_party_standing");
   }
 
@@ -427,7 +514,7 @@ export function evaluateMoralTradeChallengeAppeal(
     factorCodes.push("private_details_redacted");
   }
 
-  const outcome = defaultOutcomeForInput(input, inputBlockers);
+  const outcome = outcomeForInput(input, inputBlockers);
   let status: MoralTradeChallengeAppealStatus = "ready_for_human_review";
 
   if (input.containsPrivateDetails) {
@@ -513,6 +600,15 @@ export function validateMoralTradeChallengeAppealDecision(
       `${decision.status}; blockers ${decision.blockers.length}`,
     ),
     check(
+      "standing-factor-consistency",
+      "Affected-party standing factors require an accepted privacy-safe standing summary",
+      !decision.blockers.includes("affected_party_standing_summary_required") ||
+        (!decision.standingAccepted &&
+          !decision.factorCodes.includes("standing_established") &&
+          !decision.factorCodes.includes("affected_party_standing")),
+      `${decision.standingAccepted}; ${factorCodes.join(", ")}`,
+    ),
+    check(
       "private-details-route-redaction",
       "Private-detail blockers produce redaction actions",
       !decision.blockers.includes("private_details_must_be_redacted_before_review") ||
@@ -554,6 +650,7 @@ export function getMoralTradeChallengeAppealContract(): MoralTradeChallengeAppea
       "Appeals do not reopen unrelated moral disagreements by default and do not create platform-wide moral rankings.",
       "Participant, counterparty, affected-party, reviewer, admin-safety, and external-verifier standing are explicit; affected-party standing needs a privacy-safe summary.",
       "Externality remedy appeals must name the remedy gap before reliance, completion badges, or public reputation claims proceed.",
+      "Requested outcomes are advisory and must be compatible with the appeal trigger before reviewers can route them.",
       "Private details, exact wishes, contact data, raw notes, and sensitive constraints are redacted before reviewer routing.",
       "Every challenge or appeal packet names a provenance activity, traceability step, reason codes, and human reviewer scope.",
       "Safety blocking, matching disclosure, reviewed completion, and dispute resolution remain human-controlled.",

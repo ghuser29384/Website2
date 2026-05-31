@@ -124,6 +124,29 @@ test("redacted profile matching blocks unresolved location, privacy, and exclusi
   assert.equal(validateMoralTradeMatchSignal(signal).status, "pass");
 });
 
+test("redacted profile matching honors phrase-level stated exclusions", () => {
+  const signal = evaluateMoralTradeRedactedProfileMatch({
+    left: {
+      ...leftProfile,
+      statedExclusions: ["no political campaign offsets"],
+    },
+    right: {
+      ...rightProfile,
+      causeAreas: ["Political campaign", "Public health"],
+      tradeModes: ["donation_offset"],
+      verificationPreferences: ["receipt"],
+    },
+  });
+
+  assert.equal(signal.status, "not_matchable");
+  assert.ok(signal.blockers.includes("stated_exclusion_conflict"));
+  assert.equal(signal.confidenceBand, "low");
+  assert.equal(signal.humanReviewRequired, true);
+  assert.ok(!signal.factorCodes.includes("stated_exclusions_clear"));
+  assert.match(signal.participantExplanation.summary, /stated_exclusion_conflict/);
+  assert.equal(validateMoralTradeMatchSignal(signal).status, "pass");
+});
+
 test("redacted profile matching ignores unsupported private inference fields", () => {
   const signal = evaluateMoralTradeRedactedProfileMatch({
     left: {

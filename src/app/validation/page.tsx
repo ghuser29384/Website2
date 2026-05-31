@@ -239,6 +239,10 @@ export default async function ValidationPage() {
                   .join(", ")}
                 .
               </p>
+              <p className="route-text">
+                Requested outcomes are advisory and must match the appeal trigger before reviewer
+                routing.
+              </p>
             </article>
           </div>
         </section>

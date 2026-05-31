@@ -243,6 +243,15 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_evaluate_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_evaluate_request"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "challenge_appeal_evaluate_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "appeal" &&
+          /requested outcome/i.test(field.description),
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_evaluate_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_evaluate_request"));

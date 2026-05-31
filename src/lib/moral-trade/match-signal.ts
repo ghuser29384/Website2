@@ -1,6 +1,6 @@
-export const MORAL_TRADE_MATCH_SIGNAL_VERSION = "moral-trade-match-signal-v0.1";
+export const MORAL_TRADE_MATCH_SIGNAL_VERSION = "moral-trade-match-signal-v0.2";
 export const MORAL_TRADE_MATCH_SIGNAL_CONTRACT_VERSION =
-  "moral-trade-match-signal-contract-v0.1-2026-05";
+  "moral-trade-match-signal-contract-v0.2-2026-05";
 export const MORAL_TRADE_MATCH_SIGNAL_CONTRACT_VALIDATOR_VERSION =
   "moral-trade-match-signal-contract-validator-v0.1";
 
@@ -206,6 +206,14 @@ function normalize(value: string) {
   return value.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
 }
 
+function normalizedTokens(value: string) {
+  return normalize(value)
+    .split(" ")
+    .map((token) => token.replace(/[^a-z0-9]/g, ""))
+    .map((token) => (token.length > 3 ? token.replace(/s$/, "") : token))
+    .filter(Boolean);
+}
+
 function normalizedSet(values: readonly string[]) {
   return new Set(values.map(normalize).filter(Boolean));
 }
@@ -231,14 +239,32 @@ function hasPrivacyStop(profile: MoralTradeRedactedProfile) {
 }
 
 function hasStatedExclusionConflict(profile: MoralTradeRedactedProfile, counterparty: MoralTradeRedactedProfile) {
-  const exclusions = normalizedSet(profile.statedExclusions);
   const counterpartyPublicFields = [
     ...counterparty.causeAreas,
     ...counterparty.tradeModes,
     ...counterparty.verificationPreferences,
-  ].map(normalize);
+  ]
+    .map(normalize)
+    .filter(Boolean);
 
-  return counterpartyPublicFields.some((field) => exclusions.has(field));
+  return profile.statedExclusions.some((exclusion) => {
+    const normalizedExclusion = normalize(exclusion);
+    const exclusionTokens = new Set(normalizedTokens(exclusion));
+
+    if (!normalizedExclusion || !exclusionTokens.size) {
+      return false;
+    }
+
+    return counterpartyPublicFields.some((field) => {
+      const fieldTokens = normalizedTokens(field);
+
+      return (
+        normalizedExclusion === field ||
+        normalizedExclusion.includes(field) ||
+        (fieldTokens.length > 0 && fieldTokens.every((token) => exclusionTokens.has(token)))
+      );
+    });
+  });
 }
 
 function locationConstraintSatisfied(left: MoralTradeRedactedProfile, right: MoralTradeRedactedProfile) {

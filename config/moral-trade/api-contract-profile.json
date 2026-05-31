@@ -934,7 +934,7 @@
       "key": "challenge_appeal_evaluate_request",
       "purpose": "Ephemeral challenge or appeal packet for deterministic scope, standing, privacy, remedy, and provenance routing without live state mutation.",
       "fields": [
-        { "key": "appeal", "type": "challenge_appeal_packet", "required": true, "privacy": "private_request", "description": "Request id, subject, standing category, appeal trigger, scoped claim or evidence ids, summary, affected-party standing, remedy request, and private-detail flag." }
+        { "key": "appeal", "type": "challenge_appeal_packet", "required": true, "privacy": "private_request", "description": "Request id, subject, standing category, appeal trigger, scoped claim or evidence ids, summary, affected-party standing, remedy request, requested outcome, and private-detail flag." }
       ]
     },
     {

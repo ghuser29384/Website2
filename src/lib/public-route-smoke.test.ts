@@ -1871,6 +1871,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(validationPage, /Standing categories/);
   assert.match(validationPage, /Appeal triggers/);
   assert.match(validationPage, /Allowed outcomes/);
+  assert.match(validationPage, /Requested outcomes are advisory/);
   assert.match(validationPage, /Trust metrics should be published/);
   assert.match(validationSource, /Intake reviewer/);
   assert.match(validationSource, /Evidence reviewer/);
@@ -2432,6 +2433,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /challengeAppealContract\.standingCategories/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/challenge-appeal\/contract/);
   assert.match(technicalSpecPage, /POST \/api\/moral-trade\/challenge-appeal\/evaluate/);
+  assert.match(technicalSpecPage, /Requested outcomes are advisory/);
   assert.match(technicalSpecPage, /Disclosure grant contract/);
   assert.match(technicalSpecPage, /Privacy grants now have a staged, field-level contract/);
   assert.match(technicalSpecPage, /disclosureContract\.disclosureFields/);

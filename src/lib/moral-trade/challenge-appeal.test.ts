@@ -58,9 +58,12 @@ test("challenge appeal evaluation requires affected-party standing and remedy pa
 
   assert.equal(decision.status, "needs_standing");
   assert.equal(decision.outcome, "route_human_review");
+  assert.equal(decision.standingAccepted, false);
   assert.ok(decision.blockers.includes("affected_party_standing_summary_required"));
   assert.ok(decision.blockers.includes("remedy_requested_required"));
   assert.ok(decision.factorCodes.includes("externality_remedy_review"));
+  assert.equal(decision.factorCodes.includes("affected_party_standing"), false);
+  assert.equal(decision.factorCodes.includes("standing_established"), false);
   assert.ok(decision.requiredArtifacts.includes("affected-party standing summary and remedy path"));
   assert.equal(validateMoralTradeChallengeAppealDecision(decision).status, "pass");
 });
@@ -79,6 +82,41 @@ test("challenge appeal evaluation blocks private-detail packets until redacted",
   assert.ok(decision.factorCodes.includes("private_details_redacted"));
   assert.ok(decision.factorCodes.includes("privacy_disclosure_review"));
   assert.match(decision.privacyActions.join(" "), /redact exact wishes/i);
+  assert.equal(validateMoralTradeChallengeAppealDecision(decision).status, "pass");
+});
+
+test("challenge appeal evaluation honors compatible requested outcomes without state mutation", () => {
+  const decision = evaluateMoralTradeChallengeAppeal({
+    ...baseAppeal,
+    subject: "externality_trigger",
+    trigger: "externality_remedy_gap",
+    challengeWindowOpen: false,
+    requestedOutcome: "record_remedy",
+  });
+
+  assert.equal(decision.status, "ready_for_human_review");
+  assert.equal(decision.outcome, "record_remedy");
+  assert.equal(decision.stateMutation, false);
+  assert.deepEqual(decision.blockers, []);
+  assert.ok(decision.factorCodes.includes("externality_remedy_review"));
+  assert.equal(validateMoralTradeChallengeAppealDecision(decision).status, "pass");
+});
+
+test("challenge appeal evaluation rejects incompatible requested outcomes", () => {
+  const decision = evaluateMoralTradeChallengeAppeal({
+    ...baseAppeal,
+    subject: "externality_trigger",
+    trigger: "externality_remedy_gap",
+    requestedOutcome: "correct_record",
+  });
+
+  assert.equal(decision.status, "needs_scope");
+  assert.equal(decision.outcome, "request_evidence");
+  assert.ok(
+    decision.blockers.includes(
+      "requested_outcome_not_compatible:correct_record:externality_remedy_gap",
+    ),
+  );
   assert.equal(validateMoralTradeChallengeAppealDecision(decision).status, "pass");
 });
 
