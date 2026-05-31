@@ -5,6 +5,15 @@ import {
 } from "@/lib/background-field-encryption";
 import { getBackgroundTokens } from "@/lib/background-networking";
 import { buildSourceSummaryRows } from "@/lib/background-opportunity-briefs";
+import {
+  resolveBackgroundSourceSummaryFieldScope,
+  validateBackgroundSourceSummaryRetentionScope,
+  type BackgroundSourceSummaryFieldScopeConnection,
+} from "@/lib/background-source-permissions";
+import {
+  buildMoralTradeApiRateLimitResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
@@ -14,6 +23,7 @@ export const dynamic = "force-dynamic";
 
 type BackgroundSourceSummaryType =
   NonNullable<Database["public"]["Tables"]["background_source_summaries"]["Insert"]["source_type"]>;
+type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
 
 const SOURCE_TYPES = new Set<BackgroundSourceSummaryType>([
   "manual",
@@ -36,7 +46,10 @@ function stringField(value: unknown) {
 
 function stringList(value: unknown) {
   return Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string").map((entry) => entry.trim()).filter(Boolean)
+    ? value
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
     : [];
 }
 
@@ -56,6 +69,19 @@ function privateJson(body: Record<string, unknown>, status = 200) {
 }
 
 export async function POST(request: Request) {
+  const rateLimit = takeMoralTradeApiRateLimitSlot(
+    request,
+    "background_source_summary_write",
+  );
+
+  if (rateLimit.limited) {
+    return buildMoralTradeApiRateLimitResponse(
+      rateLimit,
+      "Rate-limited source summary writes return no storage result until the window resets.",
+      "private, no-store",
+    );
+  }
+
   if (!hasSupabaseEnv()) {
     return privateJson({ error: "Supabase is not configured." }, 503);
   }
@@ -84,15 +110,51 @@ export async function POST(request: Request) {
   const summaryText = stringField(body.summaryText);
   const label = stringField(body.label);
   const normalizedSourceType = sourceType(body.sourceType);
+  const sourceConnectionId = stringField(body.sourceConnectionId) || null;
+  let sourceConnection: BackgroundSourceSummaryFieldScopeConnection | null = null;
+
+  if (sourceConnectionId) {
+    const { data, error } = await supabase
+      .from("source_connections")
+      .select("id, access_status, allowed_field_keys, retention_expires_at")
+      .eq("id", sourceConnectionId)
+      .eq("profile_id", user.id)
+      .maybeSingle();
+
+    if (error || !data) {
+      return privateJson(
+        { error: "Selected source connection was not found for this profile." },
+        404,
+      );
+    }
+
+    sourceConnection = data as Pick<
+      SourceConnectionRow,
+      "id" | "access_status" | "allowed_field_keys" | "retention_expires_at"
+    >;
+  }
+
+  const fieldScope = resolveBackgroundSourceSummaryFieldScope({
+    requestedFieldKeys: stringList(body.allowedFieldKeys),
+    sourceConnection,
+  });
   const { receipt, sourceSummary, validationErrors } = buildSourceSummaryRows({
-    allowedFieldKeys: stringList(body.allowedFieldKeys),
+    allowedFieldKeys: fieldScope.allowedFieldKeys,
     label,
     profileId: user.id,
     purpose: stringField(body.purpose),
     retentionDays: stringField(body.retentionDays) || 90,
-    sourceConnectionId: stringField(body.sourceConnectionId) || null,
+    sourceConnectionId,
     sourceType: normalizedSourceType,
   });
+
+  validationErrors.push(...fieldScope.errors);
+  validationErrors.push(
+    ...validateBackgroundSourceSummaryRetentionScope({
+      sourceConnection,
+      summaryRetentionExpiresAt: sourceSummary.retention_expires_at,
+    }),
+  );
 
   if (!summaryText) {
     validationErrors.push("Source summary text is required.");

@@ -130,6 +130,8 @@ const REQUIRED_RATE_LIMITS = [
   "disclosure_evaluate",
   "review_workflow_evaluate",
   "profile_portability",
+  "background_source_summary_write",
+  "background_intro_packet_write",
   "wish_registry_search",
   "analytics_ingest",
 ] as const;

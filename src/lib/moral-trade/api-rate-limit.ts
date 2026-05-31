@@ -20,6 +20,8 @@ export type MoralTradeApiRateLimitSurface =
   | "disclosure_evaluate"
   | "review_workflow_evaluate"
   | "profile_portability"
+  | "background_source_summary_write"
+  | "background_intro_packet_write"
   | "wish_registry_search"
   | "analytics_ingest";
 
@@ -42,6 +44,8 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   disclosure_evaluate: { limit: 30, windowMs: 60_000 },
   review_workflow_evaluate: { limit: 60, windowMs: 60_000 },
   profile_portability: { limit: 12, windowMs: 60_000 },
+  background_source_summary_write: { limit: 12, windowMs: 60_000 },
+  background_intro_packet_write: { limit: 12, windowMs: 60_000 },
   wish_registry_search: { limit: 60, windowMs: 60_000 },
   analytics_ingest: { limit: 120, windowMs: 60_000 },
 } as const satisfies Record<MoralTradeApiRateLimitSurface, { limit: number; windowMs: number }>;

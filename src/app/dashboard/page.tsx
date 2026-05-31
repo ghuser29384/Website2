@@ -1727,6 +1727,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     <option value="other">Other</option>
                   </select>
                 </label>
+                {dashboardData?.sourceConnections.length ? (
+                  <label className="field">
+                    <span>Source permission</span>
+                    <select name="source_connection_id" defaultValue="">
+                      <option value="">Manual summary without saved connector</option>
+                      {dashboardData.sourceConnections
+                        .filter((connection) => connection.access_status !== "revoked")
+                        .slice(0, 8)
+                        .map((connection) => (
+                          <option key={`summary-connection-${connection.id}`} value={connection.id}>
+                            {connection.label} · {connection.access_status} · expires{" "}
+                            {connection.retention_expires_at
+                              ? new Date(connection.retention_expires_at).toLocaleDateString()
+                              : "not set"}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                ) : null}
                 <label className="field">
                   <span>User-reviewed summary</span>
                   <textarea

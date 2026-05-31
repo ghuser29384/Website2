@@ -41,6 +41,8 @@ test("operations profile publishes security, rate-limit, retention, fallback, an
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "disclosure_evaluate" && surface.limit === 30));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "review_workflow_evaluate" && surface.limit === 60));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "profile_portability" && surface.limit === 12));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "background_source_summary_write" && surface.limit === 12));
+  assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "background_intro_packet_write" && surface.limit === 12));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "wish_registry_search" && surface.limit > 0));
   assert.ok(profile.rateLimitSurfaces.some((surface) => surface.key === "analytics_ingest" && surface.limit === 120));
   assert.deepEqual(

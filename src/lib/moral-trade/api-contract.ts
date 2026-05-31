@@ -125,6 +125,8 @@ const REQUIRED_ROUTES = [
   "profile_schema",
   "profile_export",
   "profile_import",
+  "background_source_summary_create",
+  "background_intro_packet_create",
   "wish_registry_search",
   "funnel_events",
 ] as const;

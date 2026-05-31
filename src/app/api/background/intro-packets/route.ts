@@ -4,6 +4,10 @@ import {
   buildIntroPacketRow,
   validateIntroPacketInput,
 } from "@/lib/background-opportunity-briefs";
+import {
+  buildMoralTradeApiRateLimitResponse,
+  takeMoralTradeApiRateLimitSlot,
+} from "@/lib/moral-trade/api-rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 
@@ -32,6 +36,16 @@ function privateJson(body: Record<string, unknown>, status = 200) {
 }
 
 export async function POST(request: Request) {
+  const rateLimit = takeMoralTradeApiRateLimitSlot(request, "background_intro_packet_write");
+
+  if (rateLimit.limited) {
+    return buildMoralTradeApiRateLimitResponse(
+      rateLimit,
+      "Rate-limited intro packet requests return no review packet until the window resets.",
+      "private, no-store",
+    );
+  }
+
   if (!hasSupabaseEnv()) {
     return privateJson({ error: "Supabase is not configured." }, 503);
   }

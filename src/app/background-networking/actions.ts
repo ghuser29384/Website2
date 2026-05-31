@@ -29,14 +29,21 @@ import {
   validateBackgroundSelfServeDeletion,
   validateProfileDataRightRequest,
 } from "@/lib/background-privacy-controls";
-import { validateBackgroundSourcePermission } from "@/lib/background-source-permissions";
+import {
+  resolveBackgroundSourceSummaryFieldScope,
+  validateBackgroundSourceSummaryRetentionScope,
+  validateBackgroundSourcePermission,
+  type BackgroundSourceSummaryFieldScopeConnection,
+} from "@/lib/background-source-permissions";
 import { requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
+import { takeRateLimitSlot } from "@/lib/rate-limit";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 type SourceConnectionInsert = Database["public"]["Tables"]["source_connections"]["Insert"];
+type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
 type SourceConnectionUpdate = Database["public"]["Tables"]["source_connections"]["Update"];
 type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Insert"];
 type MatchConciergeRequestRow =
@@ -96,6 +103,26 @@ async function collectMutationResult(
 
   if (result.error) {
     failures.push(`${label}: ${result.error.message ?? "database error"}`);
+  }
+}
+
+function enforceBackgroundActionRateLimit({
+  key,
+  limit,
+  message,
+  returnTo,
+  windowMs,
+}: {
+  key: string;
+  limit: number;
+  message: string;
+  returnTo: string;
+  windowMs: number;
+}) {
+  const result = takeRateLimitSlot(key, { limit, windowMs });
+
+  if (result.limited) {
+    redirectWithMessage(returnTo, "error", message);
   }
 }
 
@@ -318,16 +345,57 @@ export async function saveBackgroundSourceSummaryAction(formData: FormData) {
   }
 
   const viewer = await requireViewer(returnTo);
+  enforceBackgroundActionRateLimit({
+    key: `background-source-summary:${viewer.authUser.id}`,
+    limit: 12,
+    message: "Too many reviewed source summaries were saved recently. Try again shortly.",
+    returnTo,
+    windowMs: 60 * 1000,
+  });
   const sourceType = normalizeSourceConnectionProvider(readOptional(formData, "source_type"));
+  const sourceConnectionId = readOptional(formData, "source_connection_id") || null;
+  const supabase = await createClient();
+  let sourceConnection: BackgroundSourceSummaryFieldScopeConnection | null = null;
+
+  if (sourceConnectionId) {
+    const { data, error } = await supabase
+      .from("source_connections")
+      .select("id, access_status, allowed_field_keys, retention_expires_at")
+      .eq("id", sourceConnectionId)
+      .eq("profile_id", viewer.authUser.id)
+      .maybeSingle();
+
+    if (error || !data) {
+      redirectWithMessage(returnTo, "error", "Selected source connection was not found.");
+    }
+
+    sourceConnection = data as Pick<
+      SourceConnectionRow,
+      "id" | "access_status" | "allowed_field_keys" | "retention_expires_at"
+    >;
+  }
+
+  const fieldScope = resolveBackgroundSourceSummaryFieldScope({
+    requestedFieldKeys: readRepeatedStrings(formData, "allowed_field_keys"),
+    sourceConnection,
+  });
   const { receipt, sourceSummary, validationErrors } = buildSourceSummaryRows({
-    allowedFieldKeys: readRepeatedStrings(formData, "allowed_field_keys"),
+    allowedFieldKeys: fieldScope.allowedFieldKeys,
     label,
     profileId: viewer.authUser.id,
     purpose: readOptional(formData, "purpose"),
     retentionDays: readOptional(formData, "retention_days") || 90,
-    sourceConnectionId: readOptional(formData, "source_connection_id") || null,
+    sourceConnectionId,
     sourceType,
   });
+
+  validationErrors.push(...fieldScope.errors);
+  validationErrors.push(
+    ...validateBackgroundSourceSummaryRetentionScope({
+      sourceConnection,
+      summaryRetentionExpiresAt: sourceSummary.retention_expires_at,
+    }),
+  );
 
   if (validationErrors.length) {
     redirectWithMessage(returnTo, "error", validationErrors.join(" "));
@@ -353,7 +421,6 @@ export async function saveBackgroundSourceSummaryAction(formData: FormData) {
     );
   }
 
-  const supabase = await createClient();
   const { data: receiptRow, error: receiptError } = await supabase
     .from("background_grant_receipts")
     .insert(receipt)
@@ -432,6 +499,13 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
   }
 
   const viewer = await requireViewer(returnTo);
+  enforceBackgroundActionRateLimit({
+    key: `background-intro-packet:${viewer.authUser.id}`,
+    limit: 12,
+    message: "Too many intro packet requests were created recently. Try again shortly.",
+    returnTo,
+    windowMs: 60 * 1000,
+  });
   const matchId = readOptional(formData, "match_id") || null;
   const opportunityBriefId = readOptional(formData, "opportunity_brief_id") || null;
   const counterpartyProfileId = readOptional(formData, "counterparty_profile_id") || null;

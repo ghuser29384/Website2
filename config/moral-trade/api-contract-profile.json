@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.7-2026-05",
+  "version": "moral-trade-api-contract-v0.8-2026-05",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -445,6 +445,30 @@
       "rateLimitSurface": "profile_portability",
       "cacheControl": "private_no_store",
       "fallback": "Fail closed if the viewer is missing; validate payload shape and import mode before writing, and do not import counterparty-linked records."
+    },
+    {
+      "key": "background_source_summary_create",
+      "method": "POST",
+      "path": "/api/background/source-summaries",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_source_summary_create_request",
+      "responseSchema": "background_source_summary_create_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication, a viewer-owned source connection when one is named, field-bounded consent within that connection's approved fields, retention expiry that does not outlive the selected connection permission, and configured encryption before storing a reviewed source summary; rate-limited writes return no storage result and raw source ingestion stays disabled."
+    },
+    {
+      "key": "background_intro_packet_create",
+      "method": "POST",
+      "path": "/api/background/intro-packets",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_intro_packet_create_request",
+      "responseSchema": "background_intro_packet_create_response",
+      "rateLimitSurface": "background_intro_packet_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication, concrete purpose, and field-bounded requested details before queueing a reviewed introduction packet; rate-limited requests create no packet and send no outreach."
     },
     {
       "key": "wish_registry_search",
@@ -1120,6 +1144,51 @@
         { "key": "importedCounts", "type": "object", "required": true, "privacy": "private_authenticated", "description": "Counts by imported collection." },
         { "key": "schemaUrl", "type": "path", "required": true, "privacy": "private_authenticated", "description": "Public schema endpoint for the import contract." },
         { "key": "privacyNotice", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Counterparty-linked records are not imported." }
+      ]
+    },
+    {
+      "key": "background_source_summary_create_request",
+      "purpose": "Authenticated reviewed source-summary intake for approved manual summaries only, with field-bounded consent and retention controls.",
+      "fields": [
+        { "key": "summaryText", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Owner-reviewed summary text encrypted before storage; raw feed payloads, hidden instructions, and unapproved source bodies are not accepted as public data." },
+        { "key": "label", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Owner-visible source summary label." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Narrow purpose for using the summary in deterministic matching." },
+        { "key": "allowedFieldKeys", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Allowed broad field keys after source-permission normalization; when sourceConnectionId is supplied, fields must stay within that viewer-owned connection's approved field list." },
+        { "key": "retentionDays", "type": "integer", "required": false, "privacy": "private_authenticated", "description": "Retention window normalized to the approved background source retention options; when sourceConnectionId is supplied, the resulting expiry cannot outlive that source connection's permission expiry." },
+        { "key": "sourceConnectionId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional viewer-owned source connection that records consent scope and allowed fields; unknown, inactive, expired, or cross-profile connections fail closed and never authorize raw ingestion." },
+        { "key": "sourceType", "type": "enum", "required": false, "privacy": "private_authenticated", "description": "Manual, social, blog, email, calendar, chat_history, search_profile, or other." },
+        { "key": "sourceUrl", "type": "url_or_empty", "required": false, "privacy": "private_authenticated", "description": "Optional source locator for the viewer-owned reviewed note; raw source content is not copied to analytics or public previews." }
+      ]
+    },
+    {
+      "key": "background_source_summary_create_response",
+      "purpose": "Private no-store result for a reviewed source summary, consent receipt, and matching source note.",
+      "fields": [
+        { "key": "consentReceiptId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned receipt recording consent fields, purpose, audience stage, status, and expiry." },
+        { "key": "sourceSummaryId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned encrypted source-summary row id." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "reviewed_source_summary_saved when storage succeeds; rate-limited or invalid requests produce no storage result." },
+        { "key": "rawIngestionAllowed", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; source connectors remain manual-summary and reviewed-summary only." }
+      ]
+    },
+    {
+      "key": "background_intro_packet_create_request",
+      "purpose": "Authenticated introduction-review packet request that asks for field-bounded details without disclosure or outreach.",
+      "fields": [
+        { "key": "purpose", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Concrete purpose for the reviewed introduction packet." },
+        { "key": "requestedFieldKeys", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Requested disclosure fields to be reviewed; at least one field is required and duplicates are removed." },
+        { "key": "counterpartyProfileId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional counterparty profile id for reviewer context; it does not reveal identity or contact details by itself." },
+        { "key": "matchId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional match suggestion id for audit context." },
+        { "key": "opportunityBriefId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional opportunity brief id updated only for the authenticated requester." },
+        { "key": "requesterAnswers", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Structured answers to reviewer questions; raw private notes and contact details remain gated by the intro review process." }
+      ]
+    },
+    {
+      "key": "background_intro_packet_create_response",
+      "purpose": "Private no-store result for a queued intro packet with no autonomous outreach.",
+      "fields": [
+        { "key": "introPacketId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned reviewed introduction packet id." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "reviewed_intro_packet_requested when the packet is queued for review; rate-limited or invalid requests create no packet." },
+        { "key": "outreachSent", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; the endpoint queues review and never contacts a counterparty." }
       ]
     },
     {

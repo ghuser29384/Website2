@@ -66,9 +66,85 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.routes.some((route) => route.key === "profile_import"));
   assert.ok(profile.routes.some((route) => route.key === "profile_export" && route.rateLimitSurface === "profile_portability"));
   assert.ok(profile.routes.some((route) => route.key === "profile_import" && route.rateLimitSurface === "profile_portability"));
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_source_summary_create" &&
+        route.path === "/api/background/source-summaries" &&
+        route.auth === "authenticated" &&
+        route.cacheControl === "private_no_store" &&
+        route.rateLimitSurface === "background_source_summary_write" &&
+        /viewer-owned source connection/i.test(route.fallback) &&
+        /does not outlive/i.test(route.fallback) &&
+        /raw source ingestion stays disabled/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_intro_packet_create" &&
+        route.path === "/api/background/intro-packets" &&
+        route.auth === "authenticated" &&
+        route.cacheControl === "private_no_store" &&
+        route.rateLimitSurface === "background_intro_packet_write" &&
+        /send no outreach/i.test(route.fallback),
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "wish_registry_search"));
   assert.ok(profile.routes.some((route) => route.key === "funnel_events"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_export_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_create_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_create_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_source_summary_create_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "rawIngestionAllowed" &&
+          field.required &&
+          /Always false/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_source_summary_create_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "sourceConnectionId" &&
+          /viewer-owned source connection/i.test(field.description) &&
+          /cross-profile connections fail closed/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_source_summary_create_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "retentionDays" &&
+          /cannot outlive/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_source_summary_create_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "allowedFieldKeys" &&
+          /approved field list/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_intro_packet_create_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "outreachSent" &&
+          field.required &&
+          /Always false/i.test(field.description),
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "empty_request"));
   assert.ok(
     profile.schemaDefinitions
@@ -216,6 +292,8 @@ test("api contract implementation audit proves route metadata is backed by execu
   assert.deepEqual(audit.orphanedRateLimitSurfaces, []);
   assert.ok(audit.implementedRateLimitSurfaces.includes("public_contract_read"));
   assert.ok(audit.implementedRateLimitSurfaces.includes("offer_collection_read"));
+  assert.ok(audit.implementedRateLimitSurfaces.includes("background_source_summary_write"));
+  assert.ok(audit.implementedRateLimitSurfaces.includes("background_intro_packet_write"));
   assert.ok(audit.implementedRateLimitSurfaces.includes("analytics_ingest"));
   assert.ok(audit.implementedCacheControls.includes("no_store_dynamic"));
   assert.ok(audit.implementedCacheControls.includes("private_no_store"));

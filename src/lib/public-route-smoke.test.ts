@@ -762,10 +762,14 @@ test("background source connector permissions stay field-limited and raw-ingesti
     "src/app/api/moral-trade/background-rls-audit/contract/route.ts",
   );
   const backgroundActions = readRepoFile("src/app/background-networking/actions.ts");
+  const sourceSummariesRoute = readRepoFile("src/app/api/background/source-summaries/route.ts");
+  const introPacketsRoute = readRepoFile("src/app/api/background/intro-packets/route.ts");
   const backgroundNetworkingSource = readRepoFile("src/lib/background-networking.ts");
   const backgroundAiShadowSource = readRepoFile("src/lib/background-ai-shadow.ts");
   const backgroundCapabilityGateSource = readRepoFile("src/lib/background-capability-gates.ts");
   const backgroundRlsAuditSource = readRepoFile("src/lib/background-rls-audit.ts");
+  const apiRateLimitSource = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const legacyActions = readRepoFile("src/app/actions.ts");
   const schemaSource = readRepoFile("supabase/schema.sql");
   const migrationSource = readRepoFile(
@@ -795,6 +799,26 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(backgroundActions, /access_status: "revoked"/);
   assert.match(backgroundActions, /\.update\(payload, \{ count: "exact" \}\)/);
   assert.match(backgroundActions, /Source permission revoked for future matching/);
+  assert.match(backgroundActions, /resolveBackgroundSourceSummaryFieldScope/);
+  assert.match(backgroundActions, /validateBackgroundSourceSummaryRetentionScope/);
+  assert.match(backgroundActions, /background-source-summary/);
+  assert.match(backgroundActions, /background-intro-packet/);
+  assert.match(backgroundActions, /\.eq\("profile_id", viewer\.authUser\.id\)/);
+  assert.match(sourceSummariesRoute, /takeMoralTradeApiRateLimitSlot/);
+  assert.match(sourceSummariesRoute, /background_source_summary_write/);
+  assert.match(sourceSummariesRoute, /buildMoralTradeApiRateLimitResponse/);
+  assert.match(sourceSummariesRoute, /resolveBackgroundSourceSummaryFieldScope/);
+  assert.match(sourceSummariesRoute, /validateBackgroundSourceSummaryRetentionScope/);
+  assert.match(sourceSummariesRoute, /\.eq\("profile_id", user\.id\)/);
+  assert.match(sourceSummariesRoute, /rawIngestionAllowed: false/);
+  assert.match(introPacketsRoute, /takeMoralTradeApiRateLimitSlot/);
+  assert.match(introPacketsRoute, /background_intro_packet_write/);
+  assert.match(introPacketsRoute, /buildMoralTradeApiRateLimitResponse/);
+  assert.match(introPacketsRoute, /outreachSent: false/);
+  assert.match(apiRateLimitSource, /background_source_summary_write: \{ limit: 12/);
+  assert.match(apiRateLimitSource, /background_intro_packet_write: \{ limit: 12/);
+  assert.match(apiContractProfile, /background_source_summary_create/);
+  assert.match(apiContractProfile, /background_intro_packet_create/);
   assert.match(backgroundNetworkingSource, /hasActiveBackgroundSourcePermission/);
   assert.match(backgroundNetworkingSource, /hasActiveProfileSourcePermission/);
   assert.match(backgroundNetworkingSource, /activeProfileSources/);
