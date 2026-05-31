@@ -29,6 +29,7 @@ export const BACKGROUND_BRIEF_REVEAL_NOTICE =
 
 export const BACKGROUND_INTRO_PACKET_DEFAULT_QUESTIONS = [
   "What narrow decision would this first conversation help you make?",
+  "What happens if no trade or introduction occurs?",
   "Which field-bound details are necessary before meeting?",
   "What constraint would make the introduction unsafe or unproductive?",
 ] as const;

@@ -4995,6 +4995,7 @@ export async function createMatchConciergeRequestAction(formData: FormData) {
   const offerSummary = readOptional(formData, "offer_summary");
   const askSummary = readOptional(formData, "ask_summary");
   const constraints = readOptional(formData, "constraints");
+  const noTradeBaseline = readOptional(formData, "no_trade_baseline");
   const targetPreview = readOptional(formData, "target_preview");
 
   if (!intentSummary || (!targetProfileId && !targetPreview && !askSummary)) {
@@ -5005,12 +5006,21 @@ export async function createMatchConciergeRequestAction(formData: FormData) {
     );
   }
 
+  if (noTradeBaseline.trim().length < 12) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "State what happens if no trade or introduction occurs before requesting concierge review.",
+    );
+  }
+
   const safetyBlock = detectBlockedWishText([
     ...causeAreas,
     intentSummary,
     offerSummary,
     askSummary,
     constraints,
+    noTradeBaseline,
     targetPreview,
   ]);
 
@@ -5033,6 +5043,7 @@ export async function createMatchConciergeRequestAction(formData: FormData) {
     offer_summary: truncateText(offerSummary, 900),
     ask_summary: truncateText(askSummary, 900),
     constraints: truncateText(constraints, 900),
+    no_trade_baseline: truncateText(noTradeBaseline, 900),
     desired_timeline: truncateText(readOptional(formData, "desired_timeline"), 240),
     risk_notes: "",
     status: "open",
@@ -5065,6 +5076,7 @@ export async function createMatchConciergeRequestAction(formData: FormData) {
       route: payload.route,
       causeAreas,
       hasTargetProfile: Boolean(targetProfileId),
+      noTradeBaselineRecorded: true,
       slaDueAt: payload.sla_due_at,
     },
   });
@@ -5839,6 +5851,61 @@ export async function savePrivacyGrantAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Privacy grant saved.");
+}
+
+export async function revokePrivacyGrantAction(formData: FormData) {
+  if (!hasSupabaseEnv()) {
+    redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
+  }
+
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const grantId = readRequired(formData, "grant_id");
+
+  if (!grantId) {
+    redirectWithMessage(returnTo, "error", "Privacy grant ID is required.");
+  }
+
+  const viewer = await requireViewer(returnTo);
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { count, error } = await supabase
+    .from("privacy_grants")
+    .update({
+      expires_at: now,
+      notes: buildDisclosureGrantNotes({
+        ownerNote: "Revoked from Consent Center.",
+        purpose: "Stop future disclosure under this grant.",
+      }),
+      status: "revoked",
+      updated_at: now,
+    }, { count: "exact" })
+    .eq("id", grantId)
+    .eq("profile_id", viewer.authUser.id);
+
+  if (error) {
+    logSupabaseActionError("Failed to revoke privacy grant", error, {
+      grantId,
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", error.message);
+  }
+
+  if (!count) {
+    redirectWithMessage(returnTo, "error", "Privacy grant was not found.");
+  }
+
+  await recordServerFunnelEvent({
+    eventType: "privacy_grant_changed",
+    metadata: {
+      status: "revoked",
+    },
+    path: returnTo,
+    profileId: viewer.authUser.id,
+    supabase,
+  });
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Privacy grant revoked.");
 }
 
 export async function respondPrivacyAccessRequestAction(formData: FormData) {

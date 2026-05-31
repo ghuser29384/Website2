@@ -95,6 +95,7 @@ test("intro packets require purpose and bounded requested fields", () => {
   assert.deepEqual(packet.requested_field_keys, ["exact_wish", "source_summary"]);
   assert.equal(packet.review_state, "requested");
   assert.match(packet.reveal_capsule ?? "", /no contact details/i);
+  assert.ok(packet.mutual_questions.some((question) => /no trade/i.test(question)));
 });
 
 test("source summaries are scoped, expiring, and raw-ingestion disabled", () => {

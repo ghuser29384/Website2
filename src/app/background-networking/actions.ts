@@ -414,10 +414,19 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const purpose = readOptional(formData, "purpose");
   const requestedFieldKeys = readRepeatedStrings(formData, "requested_field_keys");
+  const noTradeBaseline = readOptional(formData, "no_trade_baseline");
   const validation = validateIntroPacketInput({ purpose, requestedFieldKeys });
 
   if (validation.errors.length) {
     redirectWithMessage(returnTo, "error", validation.errors.join(" "));
+  }
+
+  if (noTradeBaseline.trim().length < 12) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "State the no-trade baseline before requesting an introduction packet.",
+    );
   }
 
   const viewer = await requireViewer(returnTo);
@@ -433,6 +442,7 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
     requesterAnswers: {
       boundaries: readOptional(formData, "boundaries"),
       firstQuestion: readOptional(formData, "first_question"),
+      noTradeBaseline,
     },
     requesterProfileId: viewer.authUser.id,
   });
@@ -465,6 +475,7 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
       desired_timeline: "Review before any direct introduction.",
       intent_summary: `Reviewed introduction packet requested. ${purpose}`.slice(0, 900),
       match_id: matchId,
+      no_trade_baseline: noTradeBaseline.slice(0, 900),
       offer_summary: "",
       requester_profile_id: viewer.authUser.id,
       route: "private_match",

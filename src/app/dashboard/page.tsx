@@ -24,6 +24,7 @@ import {
   refreshStripeConnectAccountAction,
   reportMatchSuggestionAction,
   respondPrivacyAccessRequestAction,
+  revokePrivacyGrantAction,
   saveHelperStrategyAction,
   savePersonalDelegateAction,
   savePrivacyGrantAction,
@@ -914,6 +915,107 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <BackgroundAccountSecurityPanel initialSummary={accountSecuritySummary} />
           </div>
 
+          <div className="panel data-card data-card-wide" id="consent-center">
+            <p className="detail-kicker">Consent Center</p>
+            <h3>Purpose, expiry, fields, and revocation in one place</h3>
+            <p className="route-text">
+              Review what can influence matching or disclosure before any exact wishes, contact
+              details, or source summaries move beyond your account.
+            </p>
+            <div className="data-grid">
+              {(dashboardData?.sourceConnections ?? []).slice(0, 3).map((connection) => (
+                <article className="mini-list-item" key={`consent-source-${connection.id}`}>
+                  <strong>{connection.label}</strong>
+                  <span>
+                    Purpose: {connection.consent_notes || connection.access_scope || "Not specified"}
+                  </span>
+                  <span>
+                    Effect: {connection.access_status.replaceAll("_", " ")} · raw ingestion{" "}
+                    {connection.raw_ingestion_allowed ? "requested" : "off"}
+                    {connection.ai_shadow_mode_allowed ? " · AI shadow summary allowed" : ""}
+                  </span>
+                  <span>
+                    Fields:{" "}
+                    {(connection.allowed_field_keys ?? []).length
+                      ? (connection.allowed_field_keys ?? [])
+                          .map(formatBackgroundSourcePermissionFieldLabel)
+                          .join(", ")
+                      : "none selected"}
+                  </span>
+                  <span>
+                    Audience: profile matching only until a grant is approved ·{" "}
+                    {formatGrantExpiry(connection.retention_expires_at)}
+                  </span>
+                  <span>
+                    Last used: {formatDashboardDateTime(connection.last_imported_at ?? connection.updated_at)}
+                  </span>
+                  <span>Deletion effect: revocation stops future matching and AI shadow use.</span>
+                  {connection.access_status === "revoked" ? null : (
+                    <form action={revokeBackgroundSourceConnectionAction}>
+                      <input name="return_to" type="hidden" value="/dashboard#consent-center" />
+                      <input name="source_connection_id" type="hidden" value={connection.id} />
+                      <button className="button button-secondary button-mini" type="submit">
+                        Revoke source
+                      </button>
+                    </form>
+                  )}
+                </article>
+              ))}
+              {(dashboardData?.privacyGrants ?? []).slice(0, 3).map((grant) => (
+                <article className="mini-list-item" key={`consent-grant-${grant.id}`}>
+                  <strong>{formatDisclosureFieldLabel(grant.field_key)}</strong>
+                  <span>Purpose: {grant.notes || "No purpose recorded."}</span>
+                  <span>
+                    Effect: {grant.access_level} access at {grant.audience_stage} stage ·{" "}
+                    {grant.status}
+                  </span>
+                  <span>
+                    Fields: {formatDisclosureFieldLabel(grant.field_key)} ·{" "}
+                    {formatGrantExpiry(grant.expires_at)}
+                  </span>
+                  <span>
+                    Audience: {grant.counterparty_id ? `Counterparty ${grant.counterparty_id}` : "No counterparty bound"}
+                  </span>
+                  <span>Last used: {formatDashboardDateTime(grant.updated_at)}</span>
+                  <span>Deletion effect: revocation removes future disclosure under this grant.</span>
+                  {grant.status === "granted" ? (
+                    <form action={revokePrivacyGrantAction}>
+                      <input name="return_to" type="hidden" value="/dashboard#consent-center" />
+                      <input name="grant_id" type="hidden" value={grant.id} />
+                      <button className="button button-secondary button-mini" type="submit">
+                        Revoke grant
+                      </button>
+                    </form>
+                  ) : null}
+                </article>
+              ))}
+              {[...incomingPrivacyAccessRequests, ...outgoingPrivacyAccessRequests]
+                .slice(0, 3)
+                .map((request) => (
+                  <article className="mini-list-item" key={`consent-request-${request.id}`}>
+                    <strong>Disclosure request · {request.status}</strong>
+                    <span>Purpose: {request.purpose}</span>
+                    <span>
+                      Effect if approved: {request.requested_stage} access to{" "}
+                      {request.requested_fields.map(formatDisclosureFieldLabel).join(", ")}
+                    </span>
+                    <span>
+                      Audience: requester {request.requester_profile_id} · owner{" "}
+                      {request.owner_profile_id}
+                    </span>
+                    <span>Last used: {formatDashboardDateTime(request.created_at)}</span>
+                    <span>Deletion effect: denied or withdrawn requests do not create grants.</span>
+                  </article>
+                ))}
+              {!(dashboardData?.sourceConnections.length || dashboardData?.privacyGrants.length || incomingPrivacyAccessRequests.length || outgoingPrivacyAccessRequests.length) ? (
+                <article className="mini-list-item">
+                  <strong>No active consent records.</strong>
+                  <span>Source permissions, grants, and disclosure requests will appear here.</span>
+                </article>
+              ) : null}
+            </div>
+          </div>
+
           <div className="panel data-card data-card-wide">
             <p className="detail-kicker">State machine</p>
             <h3>Suggestions move through explicit consent stages</h3>
@@ -1099,6 +1201,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           placeholder="Disclosure, timing, or safety constraints for reviewer triage."
                         />
                       </label>
+                      <label className="field">
+                        <span>No-trade baseline</span>
+                        <textarea
+                          name="no_trade_baseline"
+                          placeholder="What happens if this introduction does not occur?"
+                          required
+                          rows={2}
+                        />
+                      </label>
                       <button className="button button-primary button-mini" type="submit">
                         Request reviewed intro packet
                       </button>
@@ -1140,15 +1251,24 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   />
                 </label>
               </div>
-              <label className="field">
-                <span>Structured intent</span>
-                <textarea
+                <label className="field">
+                  <span>Structured intent</span>
+                  <textarea
                   name="intent_summary"
                   placeholder="What real introduction would help you decide whether a bounded moral trade is possible?"
                   required
                   rows={3}
-                />
-              </label>
+                  />
+                </label>
+                <label className="field">
+                  <span>No-trade baseline</span>
+                  <textarea
+                    name="no_trade_baseline"
+                    placeholder="What would you do, not do, or keep unchanged if no introduction happens?"
+                    required
+                    rows={3}
+                  />
+                </label>
               <div className="field-grid">
                 <label className="field">
                   <span>Offer</span>
@@ -1322,12 +1442,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </article>
 
             <article className="panel data-card">
-              <p className="detail-kicker">Consent ledger</p>
-              <h3>External source connections</h3>
+              <p className="detail-kicker">Consent Center</p>
+              <h3>Source, field, purpose, and expiry controls</h3>
               <p className="route-text">
                 Record what could be connected later. This stores consent and scope only; no
                 social, email, calendar, or chatbot data is imported. Active external connectors
                 need explicit field permissions, a retention window, and consent notes.
+              </p>
+              <p className="route-text">
+                Exposure previews below show what a connection or reviewed summary can influence
+                before it affects matching. Raw source text, contact details, and exact wishes stay
+                out of public routes, emails, analytics, and autonomous outreach.
               </p>
               <p className="route-text">
                 AI shadow readiness: {aiShadowReadiness.ready}/{aiShadowReadiness.total} source(s)
@@ -1441,19 +1566,29 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   {dashboardData.sourceConnections.slice(0, 4).map((connection) => (
                     <li key={connection.id}>
                       <div className="source-permission-row">
-                        <span>
-                          {connection.label} ({connection.provider}, {connection.access_status},{" "}
-                          {connection.import_mode}) · fields{" "}
-                          {(connection.allowed_field_keys ?? []).length
-                            ? (connection.allowed_field_keys ?? [])
-                                .map(formatBackgroundSourcePermissionFieldLabel)
-                                .join(", ")
-                            : "not set"}
-                          {connection.retention_expires_at
-                            ? ` · expires ${new Date(connection.retention_expires_at).toLocaleDateString()}`
-                            : ""}
-                          {connection.ai_shadow_mode_allowed ? " · AI shadow mode allowed" : ""}
-                        </span>
+                        <div>
+                          <strong>
+                            {connection.label} ({connection.provider}, {connection.access_status},{" "}
+                            {connection.import_mode})
+                          </strong>
+                          <p>
+                            <strong>Allowed fields:</strong>{" "}
+                            {(connection.allowed_field_keys ?? []).length
+                              ? (connection.allowed_field_keys ?? [])
+                                  .map(formatBackgroundSourcePermissionFieldLabel)
+                                  .join(", ")
+                              : "not set"}
+                            {connection.retention_expires_at
+                              ? `; expires ${new Date(connection.retention_expires_at).toLocaleDateString()}`
+                              : "; no expiry recorded"}
+                            {connection.ai_shadow_mode_allowed ? "; AI shadow mode allowed" : ""}
+                          </p>
+                          <p>
+                            <strong>Exposure preview:</strong> this source can influence only the
+                            listed matching fields after review; raw ingestion is{" "}
+                            {connection.raw_ingestion_allowed ? "flagged for reviewer follow-up" : "disabled"}.
+                          </p>
+                        </div>
                         {connection.access_status === "revoked" ? null : (
                           <form action={revokeBackgroundSourceConnectionAction}>
                             <input name="return_to" type="hidden" value="/dashboard" />
@@ -1535,11 +1670,56 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <ul className="clean-list">
                   {dashboardData.sourceSummaries.slice(0, 4).map((summary) => (
                     <li key={summary.id}>
-                      {summary.label} ({summary.status}) · fields{" "}
-                      {summary.allowed_field_keys.map(formatBackgroundSourcePermissionFieldLabel).join(", ")}
+                      <strong>
+                        {summary.label} ({summary.status})
+                      </strong>
+                      <p>
+                        <strong>Purpose:</strong> {summary.purpose || "No purpose recorded."}
+                      </p>
+                      <p>
+                        <strong>Allowed fields:</strong>{" "}
+                        {summary.allowed_field_keys.length
+                          ? summary.allowed_field_keys
+                              .map(formatBackgroundSourcePermissionFieldLabel)
+                              .join(", ")
+                          : "not set"}
+                        ; expires {new Date(summary.retention_expires_at).toLocaleDateString()}
+                      </p>
+                      <p>
+                        <strong>Exposure preview:</strong> the reviewed summary may affect broad
+                        match explanations only through the fields above; the raw summary stays
+                        private and raw ingestion remains disabled.
+                      </p>
                     </li>
                   ))}
                 </ul>
+              ) : null}
+              {dashboardData?.grantReceipts.length ? (
+                <div className="mini-list">
+                  <p className="detail-kicker">Grant receipts</p>
+                  {dashboardData.grantReceipts.slice(0, 4).map((receipt) => (
+                    <div className="mini-list-item" key={receipt.id}>
+                      <strong>
+                        {receipt.receipt_kind.replaceAll("_", " ")} · {receipt.status}
+                      </strong>
+                      <span>
+                        Purpose: {receipt.purpose || "No purpose recorded."}
+                      </span>
+                      <span>
+                        Fields:{" "}
+                        {receipt.field_keys.length
+                          ? receipt.field_keys.map(formatDisclosureFieldLabel).join(", ")
+                          : "not set"}
+                      </span>
+                      <span>
+                        Audience: {receipt.audience_stage}; expires{" "}
+                        {receipt.expires_at
+                          ? new Date(receipt.expires_at).toLocaleDateString()
+                          : "not set"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               ) : null}
             </article>
 

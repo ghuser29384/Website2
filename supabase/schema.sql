@@ -1180,6 +1180,7 @@ create table if not exists public.match_concierge_requests (
   offer_summary text not null default '',
   ask_summary text not null default '',
   constraints text not null default '',
+  no_trade_baseline text not null default '',
   desired_timeline text not null default '',
   risk_notes text not null default '',
   status text not null default 'open' check (status in ('open', 'triaged', 'waiting_on_requester', 'waiting_on_counterparty', 'introduced', 'declined', 'closed')),

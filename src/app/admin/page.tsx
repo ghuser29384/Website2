@@ -100,6 +100,19 @@ function formatSlaState(value: string | null) {
   return diffMs < 0 ? `Overdue by ${hours}h` : `Due in ${hours}h`;
 }
 
+function getMetadataValue(metadata: Record<string, unknown>, key: string) {
+  return metadata[key];
+}
+
+function getMetadataBoolean(metadata: Record<string, unknown>, key: string) {
+  return getMetadataValue(metadata, key) === true;
+}
+
+function getMetadataString(metadata: Record<string, unknown>, key: string) {
+  const value = getMetadataValue(metadata, key);
+  return typeof value === "string" ? value : "";
+}
+
 async function loadAdminQueues() {
   const supabase = createServiceClient();
   const [
@@ -384,6 +397,22 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   }
   const limitedQueryEvents =
     queues?.backgroundQueryEvents.filter((event) => event.was_limited).length ?? 0;
+  const sparseFloorHitEvents =
+    queues?.backgroundQueryEvents.filter((event) =>
+      getMetadataBoolean(event.metadata, "floorApplied"),
+    ).length ?? 0;
+  const anomalyReviewEvents =
+    queues?.backgroundQueryEvents.filter((event) =>
+      ["medium", "high"].includes(getMetadataString(event.metadata, "anomalyLevel")),
+    ).length ?? 0;
+  const queryBudgetRiskSignals =
+    queues?.riskSignals.filter((signal) =>
+      [
+        "background_query_budget_pressure",
+        "narrow_registry_search_pattern",
+        "sparse_registry_search",
+      ].includes(signal.signal_type),
+    ).length ?? 0;
   const openConciergeAppeals =
     queues?.matchConciergeRequests.filter((entry) =>
       ["requested", "under_review"].includes(entry.request.appeal_status),
@@ -865,6 +894,11 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           <strong>Constraints:</strong> {request.constraints}
                         </p>
                       ) : null}
+                      {request.no_trade_baseline ? (
+                        <p className="route-text">
+                          <strong>No-trade baseline:</strong> {request.no_trade_baseline}
+                        </p>
+                      ) : null}
                       {request.target_preview ? (
                         <p className="route-text">
                           <strong>Target preview:</strong> {request.target_preview}
@@ -1044,6 +1078,32 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <p>
                   Inspect coarse reason codes, workflow stages, and query-budget pressure without
                   opening raw wishes, source notes, or private search text.
+                </p>
+              </div>
+              <div className="panel data-card data-card-wide">
+                <p className="detail-kicker">Privacy and safety dashboard</p>
+                <h3>Enumeration pressure and weekly review cues</h3>
+                <dl className="values-summary compact-summary">
+                  <div>
+                    <dt>Sparse floor hits</dt>
+                    <dd>{sparseFloorHitEvents}</dd>
+                  </div>
+                  <div>
+                    <dt>Budget limited</dt>
+                    <dd>{limitedQueryEvents}</dd>
+                  </div>
+                  <div>
+                    <dt>Anomaly reviews</dt>
+                    <dd>{anomalyReviewEvents}</dd>
+                  </div>
+                  <div>
+                    <dt>Query risk signals</dt>
+                    <dd>{queryBudgetRiskSignals}</dd>
+                  </div>
+                </dl>
+                <p className="route-text">
+                  Review sparse-floor hits and medium/high anomaly events weekly; exact queries and
+                  wish text stay out of this console.
                 </p>
               </div>
               <div className="panel data-card data-card-wide">

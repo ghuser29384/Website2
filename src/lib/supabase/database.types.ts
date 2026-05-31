@@ -2241,6 +2241,7 @@ export interface Database {
           offer_summary: string;
           ask_summary: string;
           constraints: string;
+          no_trade_baseline: string;
           desired_timeline: string;
           risk_notes: string;
           status:
@@ -2276,6 +2277,7 @@ export interface Database {
           offer_summary?: string;
           ask_summary?: string;
           constraints?: string;
+          no_trade_baseline?: string;
           desired_timeline?: string;
           risk_notes?: string;
           status?:
@@ -2309,6 +2311,7 @@ export interface Database {
           offer_summary?: string;
           ask_summary?: string;
           constraints?: string;
+          no_trade_baseline?: string;
           desired_timeline?: string;
           risk_notes?: string;
           status?:

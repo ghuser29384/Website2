@@ -28,7 +28,7 @@ function getSingleSearchParam(value: string | string[] | undefined) {
 function buildOfferCreationReturnTo(searchParams: Record<string, string | string[] | undefined>) {
   const params = new URLSearchParams();
 
-  for (const key of ["mode", "example", "source_offer"] as const) {
+  for (const key of ["mode", "example", "source_offer", "template"] as const) {
     const value = getSingleSearchParam(searchParams[key]);
 
     if (value) {
@@ -39,6 +39,249 @@ function buildOfferCreationReturnTo(searchParams: Record<string, string | string
   const query = params.toString();
 
   return query ? `/offers/new?${query}` : "/offers/new";
+}
+
+const MORAL_TRADE_TYPE_TEMPLATES: Record<string, OfferTemplate> = {
+  "reciprocal-mixed": {
+    title: "Reciprocal mixed trade",
+    description:
+      "Two parties each take an action the other side values more than their own cost.",
+    mode: "pledge",
+    offeredCause: "Global poverty",
+    requestedCause: "Animal welfare",
+    compromiseCause: "Not needed",
+    offerAction:
+      "I will give a bounded share of income or time to the counterparty's priority cause during the review period.",
+    requestAction:
+      "The counterparty will make a bounded diet, donation, or service pledge for the cause I prioritize.",
+    baselineStatement:
+      "Without this trade, neither side would expect to take the specific reciprocal action on this timeline.",
+    exitCondition:
+      "If either side declines, misses evidence, or materially changes the scope before acceptance, the trade expires unresolved.",
+    notes:
+      "Use this for mixed trades where each side sees the other action as worth more than their own sacrifice. Edit the causes, amounts, and evidence before publishing.",
+    offerImpact: "7",
+    minCounterpartyImpact: "6",
+    verification: "Public pledge",
+    duration: "30 days",
+    paymentIntervalUnit: "none",
+    paymentIntervalValue: "1",
+    trustLevel: "3",
+  },
+  "moral-for-prudential": {
+    title: "Moral-for-prudential trade",
+    description:
+      "A moral agent pays or rewards a counterparty for a verified behavior change.",
+    mode: "payment",
+    offeredCause: "Animal welfare",
+    requestedCause: "Financial support",
+    compromiseCause: "Not needed",
+    offerAction:
+      "I will make the stated payment or reward only after the counterparty completes the verified behavior change.",
+    requestAction:
+      "The counterparty will adopt the specified pledge or habit change for the agreed review period.",
+    baselineStatement:
+      "Without this trade, I would not expect this counterparty to adopt the behavior on the stated timeline.",
+    exitCondition:
+      "If completion evidence is missing, disputed, or late, payment remains pending review and the trade is not marked complete.",
+    notes:
+      "Use this for incentive-backed moral trades. Keep payment external unless the platform explicitly supports the provider and review flow.",
+    offerImpact: "7",
+    minCounterpartyImpact: "6",
+    verification: "Payment pending verification",
+    duration: "3 months",
+    paymentIntervalUnit: "none",
+    paymentIntervalValue: "1",
+    trustLevel: "4",
+  },
+  "pure-opposed-cause": {
+    title: "Pure opposed-cause redirect",
+    description:
+      "Opposed efforts redirect into one mutually acceptable public-good destination.",
+    mode: "offset",
+    offeredCause: "Democracy",
+    requestedCause: "Gun rights",
+    compromiseCause: "Global poverty",
+    offerAction:
+      "I will redirect my planned opposed-cause donation into the named compromise destination if the match clears review.",
+    requestAction:
+      "The counterparty will redirect their planned opposed-cause donation into the same compromise destination.",
+    baselineStatement:
+      "Both parties should state a credible no-trade baseline for the opposed donation they would otherwise make.",
+    exitCondition:
+      "If the match does not clear by the deadline, the unmatched surplus rule controls and the offer remains unresolved until reviewed.",
+    notes:
+      "Use this for pure opposed-cause trades where two canceling efforts become one shared good. Campaign contribution offsets remain prohibited.",
+    offerImpact: "7",
+    minCounterpartyImpact: "7",
+    verification: "Manual review required",
+    duration: "3 months",
+    paymentIntervalUnit: "none",
+    paymentIntervalValue: "1",
+    trustLevel: "4",
+    offset: {
+      baselineAmountUsd: "1000",
+      requestedMatchingAmountUsd: "1000",
+      baselineOpposedCause: "Democracy",
+      requestedOpposedCause: "Gun rights",
+      participationMode: "direct",
+      compromiseDestinationId: "givewell-top-charities-fund",
+      offsetRatio: "1",
+      timeHorizon: "one_off",
+      verificationMethod: "receipts_uploaded",
+      unmatchedSurplusRule: "donate_to_compromise_destination",
+    },
+  },
+  intrapersonal: {
+    title: "Intrapersonal trade",
+    description:
+      "A self-binding pledge bundles prudential desire with a moral concern.",
+    mode: "pledge",
+    offeredCause: "Climate",
+    requestedCause: "Financial support",
+    compromiseCause: "Climate resilience",
+    offerAction:
+      "I will take the lower-harm option and record the savings, inconvenience, or avoided action in a public pledge log.",
+    requestAction:
+      "A counterparty or reviewer will witness the pledge terms and optionally match the resulting donation or offset.",
+    baselineStatement:
+      "Without this pledge, I would probably choose the prudentially easier option and would not make the moral bundle explicit.",
+    exitCondition:
+      "If the action becomes impractical or evidence is missing, the pledge pauses rather than being counted as completed.",
+    notes:
+      "Use this for divided-self trades: travel versus climate, spending versus giving, convenience versus concern. Edit the witness or match request if no counterparty is needed.",
+    offerImpact: "6",
+    minCounterpartyImpact: "4",
+    verification: "Peer witness",
+    duration: "30 days",
+    paymentIntervalUnit: "none",
+    paymentIntervalValue: "1",
+    trustLevel: "3",
+  },
+  "bargained-coordination": {
+    title: "Bargained coordination",
+    description:
+      "Repeated structure, alternation, or batching makes a blocked deal acceptable.",
+    mode: "pledge",
+    offeredCause: "Community service",
+    requestedCause: "Public health",
+    compromiseCause: "Not needed",
+    offerAction:
+      "I will support project A in the specified rounds if the counterparty supports project B in the paired rounds.",
+    requestAction:
+      "The counterparty will accept the alternation schedule or repeated-round rule before either side relies on the deal.",
+    baselineStatement:
+      "A one-shot version is not acceptable to one side; the repeated structure is what makes cooperation feasible.",
+    exitCondition:
+      "If either party misses a scheduled round or rejects the alternation rule, the remaining rounds pause until both reconfirm.",
+    notes:
+      "Use this for bargaining, turn-taking, and repeated coordination trades where the average package is better than the default.",
+    offerImpact: "7",
+    minCounterpartyImpact: "6",
+    verification: "Peer witness",
+    duration: "3 months",
+    paymentIntervalUnit: "month",
+    paymentIntervalValue: "1",
+    trustLevel: "3",
+  },
+  "lottery-mediated": {
+    title: "Lottery-mediated trade",
+    description:
+      "A public random draw chooses among acceptable projects according to agreed probabilities.",
+    mode: "pledge",
+    offeredCause: "Animal welfare",
+    requestedCause: "Global poverty",
+    compromiseCause: "Future flourishing",
+    offerAction:
+      "I will honor the project selected by the agreed randomization rule and provide evidence after the draw.",
+    requestAction:
+      "The counterparty will accept the same probability rule and honor the selected project if their side wins the draw.",
+    baselineStatement:
+      "Without the lottery, the parties would stay stuck between projects and no mutually acceptable deterministic choice would clear.",
+    exitCondition:
+      "If the randomization method is not public, reproducible, or accepted before the draw, the trade expires unresolved.",
+    notes:
+      "Use this when chance can bridge a disagreement that certainty cannot. State the draw method, weights, seed, deadline, and evidence.",
+    offerImpact: "7",
+    minCounterpartyImpact: "6",
+    verification: "Evidence-gated",
+    duration: "30 days",
+    paymentIntervalUnit: "none",
+    paymentIntervalValue: "1",
+    trustLevel: "4",
+  },
+  "side-payment": {
+    title: "Side-payment trade",
+    description:
+      "Compensation moves a project across the counterparty's acceptability boundary.",
+    mode: "payment",
+    offeredCause: "Public health",
+    requestedCause: "Financial support",
+    compromiseCause: "Not needed",
+    offerAction:
+      "I will provide the stated side payment or compensation after the counterparty completes the agreed project support.",
+    requestAction:
+      "The counterparty will support, refrain from blocking, or participate in the specified project once compensation terms are accepted.",
+    baselineStatement:
+      "Without the side payment, the project would remain outside the counterparty's acceptable set.",
+    exitCondition:
+      "If payment evidence, project completion evidence, or consent is missing, the trade remains unresolved pending review.",
+    notes:
+      "Use this for compensation-backed cooperation without claiming the parties have the same moral values.",
+    offerImpact: "7",
+    minCounterpartyImpact: "6",
+    verification: "Payment pending verification",
+    duration: "3 months",
+    paymentIntervalUnit: "none",
+    paymentIntervalValue: "1",
+    trustLevel: "4",
+  },
+  "market-mediated": {
+    title: "Market-mediated moral barter",
+    description:
+      "A pooled or auditable offer lets many counterparties clear moral barter at a shared ratio.",
+    mode: "offset",
+    offeredCause: "Democracy",
+    requestedCause: "Gun rights",
+    compromiseCause: "Global poverty",
+    offerAction:
+      "I will join the clearing pool on my side and redirect the matched amount if the pool reaches its review threshold.",
+    requestAction:
+      "Counterparties on the other side will join the same clearing layer and redirect matched amounts under the published ratio.",
+    baselineStatement:
+      "The pool only counts commitments tied to genuine baseline intentions and reviewable external evidence.",
+    exitCondition:
+      "If the clearing threshold is not reached by the deadline, the pool closes or follows its published unmatched-surplus rule.",
+    notes:
+      "Use this for market-mediated moral barter: offers, ratios, receipts, and residual unmatched flows should be auditable.",
+    offerImpact: "7",
+    minCounterpartyImpact: "7",
+    verification: "Manual review required",
+    duration: "3 months",
+    paymentIntervalUnit: "none",
+    paymentIntervalValue: "1",
+    trustLevel: "4",
+    offset: {
+      baselineAmountUsd: "500",
+      requestedMatchingAmountUsd: "500",
+      baselineOpposedCause: "Democracy",
+      requestedOpposedCause: "Gun rights",
+      participationMode: "pool",
+      compromiseDestinationId: "givewell-top-charities-fund",
+      offsetRatio: "1",
+      timeHorizon: "one_off",
+      verificationMethod: "receipts_uploaded",
+      unmatchedSurplusRule: "donate_to_compromise_destination",
+    },
+  },
+};
+
+function getMoralTradeTypeTemplate(templateId: string | undefined): OfferTemplate | null {
+  if (!templateId) {
+    return null;
+  }
+
+  return MORAL_TRADE_TYPE_TEMPLATES[templateId] ?? null;
 }
 
 function getWorkedExampleTemplate(exampleId: string | undefined): OfferTemplate | null {
@@ -135,8 +378,10 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
       resolvedSearchParams.offset_pool_side === "side_b")
       ? resolvedSearchParams.offset_pool_side
       : "";
+  const requestedTemplateId = getSingleSearchParam(resolvedSearchParams.template);
   const requestedExampleId = getSingleSearchParam(resolvedSearchParams.example);
   const requestedSourceOfferId = getSingleSearchParam(resolvedSearchParams.source_offer);
+  const initialMoralTradeTypeTemplate = getMoralTradeTypeTemplate(requestedTemplateId);
   const initialExampleTemplate = getWorkedExampleTemplate(requestedExampleId);
   const offerCreationReturnTo = buildOfferCreationReturnTo(resolvedSearchParams);
   const supabaseReady = hasSupabaseEnv();
@@ -151,7 +396,8 @@ export default async function NewOfferPage({ searchParams }: NewOfferPageProps) 
   const initialLiveOfferTemplate = viewer
     ? await getLiveOfferTemplate(requestedSourceOfferId)
     : null;
-  const initialTemplate = initialExampleTemplate ?? initialLiveOfferTemplate;
+  const initialTemplate =
+    initialMoralTradeTypeTemplate ?? initialExampleTemplate ?? initialLiveOfferTemplate;
   const donationOffsetOverview = supabaseReady && viewer ? await getDonationOffsetOverview() : null;
   const availablePools =
     donationOffsetOverview?.pools.map((pool) => ({

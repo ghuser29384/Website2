@@ -20,6 +20,14 @@ export interface BackgroundQueryBudgetDecision {
   used: number;
 }
 
+export interface RegistrySearchAnomalyInput {
+  floorApplied: boolean;
+  recentSimilarCount?: number;
+  resultCount: number;
+  specificity: number;
+  wasLimited?: boolean;
+}
+
 export const BACKGROUND_QUERY_DAILY_LIMITS: Record<BackgroundQueryScope, number> = {
   delegate_scan: 60,
   manual_scan: 30,
@@ -121,5 +129,48 @@ export function shouldApplySparseResultPrivacyFloor({
   resultCount: number;
   specificity: number;
 }) {
-  return resultCount > 0 && resultCount < 3 && specificity >= 3;
+  return resultCount > 0 && ((resultCount < 3 && specificity >= 3) || (resultCount < 5 && specificity >= 5));
+}
+
+export function scoreRegistrySearchAnomaly({
+  floorApplied,
+  recentSimilarCount = 0,
+  resultCount,
+  specificity,
+  wasLimited = false,
+}: RegistrySearchAnomalyInput) {
+  let score = 0;
+
+  if (specificity >= 3) {
+    score += 2;
+  }
+
+  if (specificity >= 5) {
+    score += 2;
+  }
+
+  if (resultCount > 0 && resultCount < 5) {
+    score += 2;
+  }
+
+  if (floorApplied) {
+    score += 3;
+  }
+
+  if (recentSimilarCount >= 3) {
+    score += 2;
+  }
+
+  if (recentSimilarCount >= 6) {
+    score += 2;
+  }
+
+  if (wasLimited) {
+    score += 3;
+  }
+
+  return {
+    level: score >= 9 ? "high" : score >= 6 ? "medium" : score >= 3 ? "low" : "none",
+    score,
+  } as const;
 }

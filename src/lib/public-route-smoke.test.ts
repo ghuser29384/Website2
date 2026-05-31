@@ -1152,10 +1152,20 @@ test("activation loop includes concierge intake, admin triage, SLA, and audit tr
 
   assert.match(backgroundPage, /id="concierge-intake"/);
   assert.match(backgroundPage, /createMatchConciergeRequestAction/);
+  assert.match(backgroundPage, /name="no_trade_baseline"/);
   assert.match(registryPage, /Request concierge intro/);
+  assert.match(registryPage, /No trade occurs; both participants keep their current plans/);
   assert.match(dashboardPage, /Private match concierge/);
   assert.match(dashboardPage, /matchConciergeRequests/);
+  assert.match(dashboardPage, /Consent Center/);
+  assert.match(dashboardPage, /Revoke grant/);
+  assert.match(dashboardPage, /No-trade baseline/);
+  assert.match(dashboardPage, /Exposure previews below show what a connection or reviewed summary can influence/);
+  assert.match(dashboardPage, /raw summary stays\s+private and raw ingestion remains disabled/);
+  assert.match(dashboardPage, /Grant receipts/);
   assert.match(adminPage, /Match concierge/);
+  assert.match(adminPage, /Privacy and safety dashboard/);
+  assert.match(adminPage, /No-trade baseline/);
   assert.match(adminPage, /updateMatchConciergeRequestAction/);
   assert.match(adminPage, /formatSlaState/);
   assert.match(adminPage, /match_concierge_events/);
@@ -1169,8 +1179,10 @@ test("activation loop includes concierge intake, admin triage, SLA, and audit tr
   assert.match(actionsSource, /evaluateAdminOperatorAccess/);
   assert.match(actionsSource, /request_created/);
   assert.match(actionsSource, /request_triaged/);
+  assert.match(actionsSource, /no_trade_baseline/);
   assert.match(appDataSource, /listMatchConciergeRequestsForUser/);
   assert.match(schemaSource, /match_concierge_requests/);
+  assert.match(schemaSource, /no_trade_baseline/);
   assert.match(schemaSource, /match_concierge_events/);
   assert.match(schemaSource, /sla_due_at/);
   assert.match(migrationSource, /match_concierge_requests/);

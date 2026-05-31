@@ -640,6 +640,15 @@ export default async function BackgroundNetworkingPage({
                   rows={4}
                 />
               </label>
+              <label className="field">
+                <span>No-trade baseline</span>
+                <textarea
+                  name="no_trade_baseline"
+                  placeholder="What happens if no trade or introduction occurs?"
+                  required
+                  rows={3}
+                />
+              </label>
               <div className="field-grid">
                 <label className="field">
                   <span>What you can offer</span>

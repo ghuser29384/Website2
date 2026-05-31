@@ -450,6 +450,11 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                             type="hidden"
                             value="Please check whether this possible counterparty is open to a bounded moral trade before any exact wishes or contact details are shared."
                           />
+                          <input
+                            name="no_trade_baseline"
+                            type="hidden"
+                            value="No trade occurs; both participants keep their current plans and no private details are disclosed."
+                          />
                           <button className="button button-secondary button-mini" type="submit">
                             Request concierge intro
                           </button>
