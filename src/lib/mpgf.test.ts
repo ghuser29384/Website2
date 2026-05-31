@@ -91,6 +91,7 @@ import {
 } from "./mpgf/public-goods-kpis";
 import { buildMpgfPublicGoodsOperationsDashboard } from "./mpgf/public-goods-operations";
 import {
+  buildMpgfPublicGoodsRefundReconciliationPlan,
   buildMpgfSubscriptionCancellationUpdate,
   canRecordMpgfSponsorPoolInvoice,
 } from "./mpgf/real-money";
@@ -968,6 +969,67 @@ test("MPGF real-money subscription cancellation stops future sponsor-pool increm
   assert.match(sharedStripeWebhookRoute, /customer\.subscription\.deleted/);
   assert.match(sharedStripeWebhookRoute, /customer\.subscription\.updated/);
   assert.match(dedicatedStripeWebhookRoute, /handleMpgfStripeWebhookEvent/);
+});
+
+test("MPGF public-goods refunds back out pre-close pledges and task post-close reconciliation", () => {
+  const metadata = {
+    mpgf_public_goods_round_id: "round-public-goods-demo-2026-06",
+    mpgf_public_goods_campaign_id: "campaign-global-health-basic-needs",
+  };
+  const preClosePlan = buildMpgfPublicGoodsRefundReconciliationPlan({
+    paymentIntentId: "payment-intent-public-goods",
+    metadata,
+    roundStatus: "open",
+    fullyRefunded: true,
+    amountRefundedCents: 2_500,
+    providerRefundId: "refund-pre-close",
+    providerChargeId: "charge-pre-close",
+    refundedAt: "2026-06-10T12:00:00.000Z",
+  });
+  const postClosePlan = buildMpgfPublicGoodsRefundReconciliationPlan({
+    paymentIntentId: "payment-intent-public-goods",
+    metadata,
+    roundStatus: "published",
+    fullyRefunded: false,
+    amountRefundedCents: 1_000,
+    providerRefundId: "refund-post-close",
+    providerChargeId: "charge-post-close",
+    refundedAt: "2026-07-10T12:00:00.000Z",
+  });
+  const noPublicGoodsPlan = buildMpgfPublicGoodsRefundReconciliationPlan({
+    paymentIntentId: "payment-intent-ordinary",
+    metadata: {},
+    roundStatus: "open",
+    fullyRefunded: true,
+    amountRefundedCents: 2_500,
+    providerRefundId: "refund-ordinary",
+    refundedAt: "2026-06-10T12:00:00.000Z",
+  });
+  const realMoney = readFileSync("src/lib/mpgf/real-money.ts", "utf8");
+  const migration = readFileSync(
+    "supabase/migrations/20260531_mpgf_public_goods_refund_reconciliation.sql",
+    "utf8",
+  );
+
+  assert.equal(preClosePlan?.action, "back_out_counted_contribution_before_round_close");
+  assert.deepEqual(preClosePlan?.pledgeUpdate, {
+    status: "voided",
+    eligibilityState: "blocked",
+  });
+  assert.equal(preClosePlan?.paymentProofRow.status, "superseded");
+  assert.equal(preClosePlan?.paymentProofRow.reason_code, "external_handoff_failed");
+  assert.equal(preClosePlan?.sourceEventRef, "stripe_refund:refund-pre-close");
+  assert.equal(postClosePlan?.action, "create_post_close_reconciliation_task");
+  assert.equal(postClosePlan?.reviewCaseRow.state, "needs_evidence");
+  assert.match(String(postClosePlan?.reviewCaseRow.public_notes), /after round close requires MPGF reconciliation/);
+  assert.equal(noPublicGoodsPlan, null);
+  assert.match(realMoney, /back_out_counted_contribution_before_round_close/);
+  assert.match(realMoney, /create_post_close_reconciliation_task/);
+  assert.match(realMoney, /mpgf_public_goods_pledges/);
+  assert.match(realMoney, /mpgf_public_goods_review_cases/);
+  assert.match(realMoney, /metadata_json/);
+  assert.match(migration, /mpgf_public_goods_pledges_payment_intent_ref_idx/);
+  assert.match(migration, /mpgf_public_goods_payment_proofs_source_event_ref_idx/);
 });
 
 test("MPGF public-goods review console uses bounded reason codes and appeal states", () => {
