@@ -893,13 +893,96 @@ export function summarizeMpgfPublicGoodsReviewConsole({
 
 export function getMpgfPublicGoodsFeatureFlagStatus() {
   const enabled = process.env.FEATURE_MPGF_ENABLED !== "false" && process.env.MPGF_PUBLIC_GOODS_ENABLED !== "false";
+  const cohort = process.env.MPGF_PUBLIC_GOODS_COHORT || "invited_demo";
+  const accessMode =
+    cohort === "public" || cohort === "public_beta" || cohort === "open"
+      ? "public_beta"
+      : "invited_cohort";
+  const invitedUserRefs = parseMpgfPublicGoodsCohortList(process.env.MPGF_PUBLIC_GOODS_INVITED_USER_REFS);
+  const invitedEmails = parseMpgfPublicGoodsCohortList(process.env.MPGF_PUBLIC_GOODS_INVITED_EMAILS);
 
   return {
     enabled,
-    cohort: process.env.MPGF_PUBLIC_GOODS_COHORT || "invited_demo",
+    cohort,
+    accessMode,
+    invitedCohortRequired: accessMode === "invited_cohort",
+    inviteListConfigured: invitedUserRefs.length + invitedEmails.length > 0,
+    allowedInviteCount: invitedUserRefs.length + invitedEmails.length,
     defaultCaptureMode: "external_handoff" as const,
     widensPublicAccessAutomatically: false,
   };
+}
+
+function parseMpgfPublicGoodsCohortList(value: string | undefined) {
+  return (value ?? "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isDemoMpgfPublicGoodsUserRef(userId: string) {
+  return /^(demo-|test-|browser-public-goods-supporter$|local-)/i.test(userId.trim());
+}
+
+export function evaluateMpgfPublicGoodsCohortAccess(input: { userId: string; email?: string | null }) {
+  const flag = getMpgfPublicGoodsFeatureFlagStatus();
+  const userRef = input.userId.trim().toLowerCase();
+  const emailRef = input.email?.trim().toLowerCase() ?? "";
+
+  if (!flag.enabled) {
+    return {
+      allowed: false,
+      cohort: flag.cohort,
+      accessMode: "disabled" as const,
+      reason: "public_goods_feature_disabled",
+      widensPublicAccessAutomatically: false,
+    };
+  }
+
+  if (flag.accessMode === "public_beta") {
+    return {
+      allowed: true,
+      cohort: flag.cohort,
+      accessMode: flag.accessMode,
+      reason: "public_goods_public_beta_enabled",
+      widensPublicAccessAutomatically: false,
+    };
+  }
+
+  const invitedUserRefs = new Set(parseMpgfPublicGoodsCohortList(process.env.MPGF_PUBLIC_GOODS_INVITED_USER_REFS));
+  const invitedEmails = new Set(parseMpgfPublicGoodsCohortList(process.env.MPGF_PUBLIC_GOODS_INVITED_EMAILS));
+  const inviteListConfigured = invitedUserRefs.size + invitedEmails.size > 0;
+  const demoFixtureAllowed = !inviteListConfigured && isDemoMpgfPublicGoodsUserRef(input.userId);
+  const invited =
+    invitedUserRefs.has(userRef) ||
+    (Boolean(emailRef) && invitedEmails.has(emailRef)) ||
+    demoFixtureAllowed;
+
+  return {
+    allowed: invited,
+    cohort: flag.cohort,
+    accessMode: flag.accessMode,
+    reason: invited
+      ? demoFixtureAllowed
+        ? "public_goods_demo_fixture_allowed"
+        : "public_goods_invited_cohort_member"
+      : inviteListConfigured
+        ? "public_goods_invited_cohort_required"
+        : "public_goods_invite_list_missing",
+    widensPublicAccessAutomatically: false,
+  };
+}
+
+export function assertMpgfPublicGoodsCohortAccess(input: { userId: string; email?: string | null }) {
+  const access = evaluateMpgfPublicGoodsCohortAccess(input);
+
+  if (!access.allowed) {
+    throw new Error(
+      `MPGF public-goods pledges are limited to the invited cohort before widening (${access.reason}).`,
+    );
+  }
+
+  return access;
 }
 
 export function getMpgfCampaignAssuranceStatus(

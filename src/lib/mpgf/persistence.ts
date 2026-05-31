@@ -10,7 +10,7 @@ import {
   demoMpgfMatchPool,
   demoMpgfPublicGoodsCampaigns,
 } from "./data";
-import { createMpgfPublicGoodsPledge } from "./mechanism";
+import { assertMpgfPublicGoodsCohortAccess, createMpgfPublicGoodsPledge } from "./mechanism";
 import type { MpgfParticipantState, MpgfPoolProposalRecord } from "./participant-types";
 import {
   bucketMpgfPublicGoodsAmountCents,
@@ -89,6 +89,7 @@ export interface SavePoolProposalInput extends Required<MpgfParticipantIdentity>
 }
 
 export interface RecordPublicGoodsPledgeInput extends Required<MpgfParticipantIdentity> {
+  email?: string | null;
   idempotencyKey: string;
   campaignId: string;
   amountCents: number;
@@ -1002,6 +1003,8 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
   if (!campaign) {
     throw new Error("MPGF public-goods pledge requires a known assurance campaign.");
   }
+
+  assertMpgfPublicGoodsCohortAccess({ userId: input.userId, email: input.email });
 
   const amountCents = toPositiveInteger(input.amountCents, "Public-goods pledge amount");
   const identityAdapter = evaluateMpgfPublicGoodsIdentityAdapter({

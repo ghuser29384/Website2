@@ -152,6 +152,7 @@ export async function recordMpgfPublicGoodsPledgeAction(input: {
     const persisted = await persistMpgfPublicGoodsPledge({
       userId: viewer.userId,
       displayName: viewer.displayName,
+      email: viewer.email,
       idempotencyKey: input.idempotencyKey,
       campaignId: input.campaignId,
       amountCents: Math.max(1, centsFromDollars(input.amountDollars)),

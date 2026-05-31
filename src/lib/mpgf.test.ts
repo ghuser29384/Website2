@@ -24,6 +24,7 @@ import {
   createMpgfRecurringContributionCommitment,
   computeMpgfCampaignQfScore,
   assignMpgfPublicGoodsExperiment,
+  evaluateMpgfPublicGoodsCohortAccess,
   getMpgfPublicGoodsFeatureFlagStatus,
   isLedgerBalanced,
   materializeMpgfRecurringPledgeForCycle,
@@ -696,6 +697,76 @@ test("MPGF public-goods subscriptions, experiments, and feature flag stay option
   assert.equal(featureFlag.defaultCaptureMode, "external_handoff");
   assert.equal(featureFlag.widensPublicAccessAutomatically, false);
   assert.ok(demoMpgfPublicGoodsSubscriptions.some((row) => row.poolId === demoMpgfMatchPool.id));
+});
+
+test("MPGF public-goods cohort access stays invited before public widening", () => {
+  const previousEnabled = process.env.MPGF_PUBLIC_GOODS_ENABLED;
+  const previousCohort = process.env.MPGF_PUBLIC_GOODS_COHORT;
+  const previousInvitedUsers = process.env.MPGF_PUBLIC_GOODS_INVITED_USER_REFS;
+  const previousInvitedEmails = process.env.MPGF_PUBLIC_GOODS_INVITED_EMAILS;
+
+  try {
+    process.env.MPGF_PUBLIC_GOODS_ENABLED = "true";
+    process.env.MPGF_PUBLIC_GOODS_COHORT = "invited_demo";
+    delete process.env.MPGF_PUBLIC_GOODS_INVITED_USER_REFS;
+    delete process.env.MPGF_PUBLIC_GOODS_INVITED_EMAILS;
+
+    const defaultFlag = getMpgfPublicGoodsFeatureFlagStatus();
+    const nonInvited = evaluateMpgfPublicGoodsCohortAccess({ userId: "real-user" });
+    const demoFixture = evaluateMpgfPublicGoodsCohortAccess({ userId: "demo-supporter-alix" });
+
+    process.env.MPGF_PUBLIC_GOODS_INVITED_USER_REFS = "real-user";
+    const invitedByUserRef = evaluateMpgfPublicGoodsCohortAccess({ userId: "real-user" });
+
+    process.env.MPGF_PUBLIC_GOODS_INVITED_USER_REFS = "";
+    process.env.MPGF_PUBLIC_GOODS_INVITED_EMAILS = "invited@example.org";
+    const invitedByEmail = evaluateMpgfPublicGoodsCohortAccess({
+      userId: "another-real-user",
+      email: "invited@example.org",
+    });
+
+    process.env.MPGF_PUBLIC_GOODS_COHORT = "public_beta";
+    delete process.env.MPGF_PUBLIC_GOODS_INVITED_EMAILS;
+    const publicBeta = evaluateMpgfPublicGoodsCohortAccess({ userId: "any-real-user" });
+    const persistence = readFileSync("src/lib/mpgf/persistence.ts", "utf8");
+    const actions = readFileSync("src/app/mpgf/actions.ts", "utf8");
+
+    assert.equal(defaultFlag.invitedCohortRequired, true);
+    assert.equal(defaultFlag.widensPublicAccessAutomatically, false);
+    assert.equal(nonInvited.allowed, false);
+    assert.equal(nonInvited.reason, "public_goods_invite_list_missing");
+    assert.equal(demoFixture.allowed, true);
+    assert.equal(invitedByUserRef.allowed, true);
+    assert.equal(invitedByEmail.allowed, true);
+    assert.equal(publicBeta.allowed, true);
+    assert.equal(publicBeta.accessMode, "public_beta");
+    assert.match(persistence, /assertMpgfPublicGoodsCohortAccess/);
+    assert.match(actions, /email: viewer\.email/);
+  } finally {
+    if (previousEnabled === undefined) {
+      delete process.env.MPGF_PUBLIC_GOODS_ENABLED;
+    } else {
+      process.env.MPGF_PUBLIC_GOODS_ENABLED = previousEnabled;
+    }
+
+    if (previousCohort === undefined) {
+      delete process.env.MPGF_PUBLIC_GOODS_COHORT;
+    } else {
+      process.env.MPGF_PUBLIC_GOODS_COHORT = previousCohort;
+    }
+
+    if (previousInvitedUsers === undefined) {
+      delete process.env.MPGF_PUBLIC_GOODS_INVITED_USER_REFS;
+    } else {
+      process.env.MPGF_PUBLIC_GOODS_INVITED_USER_REFS = previousInvitedUsers;
+    }
+
+    if (previousInvitedEmails === undefined) {
+      delete process.env.MPGF_PUBLIC_GOODS_INVITED_EMAILS;
+    } else {
+      process.env.MPGF_PUBLIC_GOODS_INVITED_EMAILS = previousInvitedEmails;
+    }
+  }
 });
 
 test("MPGF public-goods analytics keeps only privacy-safe buckets and factor codes", async () => {
