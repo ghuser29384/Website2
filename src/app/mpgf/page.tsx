@@ -52,6 +52,9 @@ export default async function MpgfPage() {
     <MpgfPageFrame
       actions={
         <>
+          <Link className="button button-secondary" href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>
+            View public round
+          </Link>
           <Link className="button button-primary" href="/mpgf/contribute">
             Submit manual evidence
           </Link>
@@ -72,6 +75,7 @@ export default async function MpgfPage() {
         <a href="#why-this-is-hard">Why this is hard</a>
         <a href="#what-this-pilot-tests">What this pilot tests</a>
         <a href="#assurance-matching">Assurance matching</a>
+        <Link href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>Public round</Link>
         <a href="#evidence-review">Evidence review</a>
         <a href="#candidate-pools">Candidate pools</a>
         <a href="#allocation-process">Allocation process</a>
@@ -257,7 +261,11 @@ export default async function MpgfPage() {
           })}
         </div>
         <p className="mpgf-small">
-          Round: {demoMpgfAssuranceRound.name}. Demo budget for the older ballot allocation remains{" "}
+          Round:{" "}
+          <Link className="inline-link" href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>
+            {demoMpgfAssuranceRound.name}
+          </Link>
+          . Demo budget for the older ballot allocation remains{" "}
           {formatUsd(publicSummary.budgetCents)} and external payouts remain {formatUsd(publicSummary.externallyPaidCents)}.
         </p>
       </section>

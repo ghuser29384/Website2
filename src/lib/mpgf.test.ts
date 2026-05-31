@@ -538,6 +538,28 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     assert.match(source, expected);
     assert.doesNotMatch(source, /token voting/i);
   }
+
+  const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const mpgfHubPage = readFileSync("src/app/mpgf/page.tsx", "utf8");
+
+  for (const expected of [
+    /Sponsor-pool size/,
+    /Round closes/,
+    /Verified donors/,
+    /Direct contributions/,
+    /Threshold status/,
+    /Estimated match/,
+    /Final match/,
+    /Evidence and destination proof/,
+    /Appeal or dissent note/,
+    /milestoneSchedule/,
+    /getMpgfPublicGoodsMatchPreviewApi/,
+    /getMpgfPublicGoodsAllocationReportApi/,
+  ]) {
+    assert.match(roundPage, expected);
+  }
+
+  assert.match(mpgfHubPage, new RegExp(`/mpgf/rounds/\\$\\{demoMpgfAssuranceRound\\.id\\}`));
 });
 
 test("MPGF public-goods campaign service validates schema, deadlines, and prohibited claims", () => {

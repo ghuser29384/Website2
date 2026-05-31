@@ -3382,12 +3382,12 @@ main {
 
 .moral-animation-opposed-left {
   left: 0.9rem;
-  border-color: rgba(213, 94, 0, 0.45);
+  border-color: rgba(166, 95, 50, 0.34);
 }
 
 .moral-animation-opposed-right {
   right: 0.9rem;
-  border-color: rgba(204, 121, 167, 0.45);
+  border-color: rgba(130, 104, 139, 0.34);
 }
 
 .moral-animation-arrow {
@@ -3432,10 +3432,10 @@ main {
   top: 4.28rem;
   z-index: 4;
   padding: 0.2rem 0.48rem;
-  border: 1px solid rgba(248, 244, 234, 0.24);
+  border: 1px solid rgba(79, 117, 159, 0.2);
   border-radius: 999px;
-  background: rgba(24, 32, 38, 0.86);
-  color: var(--mt-paper);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--mt-ink);
   font-size: 0.64rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -3454,9 +3454,9 @@ main {
   width: 8.8rem;
   height: 4.3rem;
   padding: 0.55rem;
-  border: 1px solid rgba(86, 180, 233, 0.48);
+  border: 1px solid rgba(107, 151, 200, 0.32);
   border-radius: var(--radius-sm);
-  background: rgba(86, 180, 233, 0.08);
+  background: rgba(232, 240, 248, 0.58);
   overflow: hidden;
   transform: translateX(-50%);
 }
@@ -3464,6 +3464,7 @@ main {
 .moral-animation-reservoir strong {
   position: relative;
   z-index: 2;
+  color: var(--mt-ink);
   font-size: 0.78rem;
   line-height: 1.15;
 }
@@ -3472,7 +3473,7 @@ main {
   position: absolute;
   inset: auto 0 0 0;
   height: 100%;
-  background: linear-gradient(180deg, rgba(86, 180, 233, 0.08), rgba(86, 180, 233, 0.42));
+  background: linear-gradient(180deg, rgba(107, 151, 200, 0.08), rgba(107, 151, 200, 0.26));
   transform: scaleY(0.12);
   transform-origin: bottom center;
   animation: mt-reservoir-fill 6s ease-in-out infinite;
@@ -3515,14 +3516,14 @@ main {
 .moral-animation-self-left {
   left: 1rem;
   top: 1.35rem;
-  border-color: rgba(204, 121, 167, 0.48);
+  border-color: rgba(130, 104, 139, 0.34);
   animation: mt-self-left 6s ease-in-out infinite;
 }
 
 .moral-animation-self-right {
   right: 1rem;
   top: 1.35rem;
-  border-color: rgba(86, 180, 233, 0.48);
+  border-color: rgba(107, 151, 200, 0.34);
   animation: mt-self-right 6s ease-in-out infinite;
 }
 
@@ -3534,7 +3535,7 @@ main {
   z-index: 2;
   height: 0.22rem;
   border-radius: 999px;
-  background: rgba(248, 244, 234, 0.16);
+  background: rgba(79, 117, 159, 0.16);
   overflow: hidden;
 }
 
@@ -3554,7 +3555,7 @@ main {
   left: 50%;
   top: 60%;
   z-index: 3;
-  color: rgba(248, 244, 234, 0.74);
+  color: var(--mt-muted);
   font-size: 0.66rem;
   transform: translateX(-50%);
 }
@@ -3566,7 +3567,7 @@ main {
   z-index: 1;
   width: 6.2rem;
   height: 6.2rem;
-  border: 1px solid rgba(0, 158, 115, 0.36);
+  border: 1px solid rgba(63, 112, 92, 0.22);
   border-radius: 50%;
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.4);
@@ -3583,9 +3584,9 @@ main {
   top: 51%;
   z-index: 4;
   padding: 0.24rem 0.42rem;
-  border: 1px solid rgba(248, 244, 234, 0.2);
+  border: 1px solid rgba(107, 151, 200, 0.2);
   border-radius: 999px;
-  background: rgba(86, 180, 233, 0.14);
+  background: rgba(232, 240, 248, 0.76);
   color: var(--mt-sky);
   font-size: 0.64rem;
   font-weight: 800;
@@ -3612,7 +3613,7 @@ main {
 .moral-animation-axis {
   position: absolute;
   z-index: 1;
-  background: rgba(248, 244, 234, 0.36);
+  background: rgba(79, 117, 159, 0.28);
 }
 
 .moral-animation-axis-x {
@@ -3658,8 +3659,9 @@ main {
 .moral-animation-default-point {
   left: 33%;
   bottom: 34%;
-  border-color: rgba(248, 244, 234, 0.42);
-  color: rgba(248, 244, 234, 0.78);
+  border-color: rgba(79, 117, 159, 0.24);
+  color: var(--mt-muted);
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .moral-animation-feasible-zone {
@@ -3667,15 +3669,15 @@ main {
   top: 0.82rem;
   width: 6.1rem;
   min-height: 4.2rem;
-  border-color: rgba(0, 158, 115, 0.34);
-  background: rgba(0, 158, 115, 0.1);
+  border-color: rgba(63, 112, 92, 0.24);
+  background: rgba(237, 242, 236, 0.78);
   color: var(--mt-green);
 }
 
 .moral-animation-point-a {
   left: 63%;
   bottom: 29%;
-  border-color: rgba(213, 94, 0, 0.55);
+  border-color: rgba(166, 95, 50, 0.38);
   color: var(--mt-orange);
   animation: mt-point-a 5.8s ease-in-out infinite;
 }
@@ -3683,7 +3685,7 @@ main {
 .moral-animation-point-b {
   left: 38%;
   bottom: 62%;
-  border-color: rgba(86, 180, 233, 0.55);
+  border-color: rgba(107, 151, 200, 0.38);
   color: var(--mt-sky);
   animation: mt-point-b 5.8s ease-in-out infinite;
 }
@@ -3723,7 +3725,7 @@ main {
   z-index: 2;
   width: 31%;
   height: 1px;
-  background: rgba(230, 159, 0, 0.65);
+  background: rgba(169, 120, 46, 0.58);
   transform: rotate(-38deg) scaleX(0.2);
   transform-origin: left center;
   animation: mt-average-line 5.8s ease-in-out infinite;
@@ -3732,14 +3734,14 @@ main {
 .moral-animation-lottery-a {
   left: 18%;
   bottom: 29%;
-  border-color: rgba(213, 94, 0, 0.55);
+  border-color: rgba(166, 95, 50, 0.38);
   color: var(--mt-orange);
 }
 
 .moral-animation-lottery-b {
   left: 76%;
   bottom: 29%;
-  border-color: rgba(86, 180, 233, 0.55);
+  border-color: rgba(107, 151, 200, 0.38);
   color: var(--mt-sky);
 }
 
@@ -3771,17 +3773,17 @@ main {
   z-index: 4;
   width: 0.88rem;
   height: 0.88rem;
-  border: 2px solid var(--mt-paper);
+  border: 2px solid #ffffff;
   border-radius: 50%;
   background: var(--mt-purple);
-  box-shadow: 0 0 0 0.32rem rgba(204, 121, 167, 0.22);
+  box-shadow: 0 0 0 0.32rem rgba(130, 104, 139, 0.16);
   animation: mt-lottery-marker 6s ease-in-out infinite;
 }
 
 .moral-animation-lottery-weight {
   left: 50%;
   bottom: 0.78rem;
-  border-color: rgba(204, 121, 167, 0.5);
+  border-color: rgba(130, 104, 139, 0.36);
   color: var(--mt-purple);
   transform: translateX(-50%);
   animation: mt-label-reveal 6s ease-in-out infinite;
@@ -3794,7 +3796,7 @@ main {
   z-index: 3;
   width: 2.2rem;
   height: 2.2rem;
-  border: 0.26rem solid rgba(248, 244, 234, 0.18);
+  border: 0.26rem solid rgba(79, 117, 159, 0.14);
   border-top-color: var(--mt-purple);
   border-radius: 50%;
   animation: mt-spinner 6s ease-in-out infinite;
@@ -3803,7 +3805,7 @@ main {
 .moral-animation-side-a {
   left: 28%;
   bottom: 56%;
-  border-color: rgba(213, 94, 0, 0.55);
+  border-color: rgba(166, 95, 50, 0.38);
   color: var(--mt-orange);
 }
 
@@ -3819,7 +3821,7 @@ main {
   z-index: 2;
   width: 46%;
   height: 1px;
-  background: rgba(230, 159, 0, 0.72);
+  background: rgba(169, 120, 46, 0.62);
   transform: rotate(-22deg) scaleX(0.12);
   transform-origin: left center;
   animation: mt-comp-line 6s ease-in-out infinite;
@@ -3835,7 +3837,7 @@ main {
   left: 36%;
   bottom: 44%;
   background: var(--mt-amber);
-  box-shadow: 0 0 0 0.22rem rgba(230, 159, 0, 0.18);
+  box-shadow: 0 0 0 0.22rem rgba(169, 120, 46, 0.14);
   animation: mt-packet 6s ease-in-out infinite;
 }
 
@@ -3846,7 +3848,7 @@ main {
 .moral-animation-deal-point {
   left: 38%;
   bottom: 42%;
-  border-color: rgba(0, 158, 115, 0.56);
+  border-color: rgba(63, 112, 92, 0.38);
   color: var(--mt-green);
   animation: mt-deal-point 6s ease-in-out infinite;
 }
@@ -3866,7 +3868,7 @@ main {
   justify-content: space-between;
   min-height: 1.38rem;
   padding: 0.14rem 0.38rem;
-  color: rgba(248, 244, 234, 0.72);
+  color: var(--mt-muted);
   font-size: 0.6rem;
   animation: mt-order-row 5.8s ease-in-out infinite;
 }
@@ -3887,9 +3889,9 @@ main {
   justify-content: center;
   width: 2rem;
   height: 2rem;
-  border: 1px solid rgba(86, 180, 233, 0.5);
+  border: 1px solid rgba(107, 151, 200, 0.34);
   border-radius: 50%;
-  background: rgba(86, 180, 233, 0.12);
+  background: rgba(232, 240, 248, 0.78);
   color: var(--mt-sky);
   font-size: 0.72rem;
   font-weight: 800;
@@ -3905,28 +3907,28 @@ main {
   right: 16%;
   top: 32%;
   color: var(--mt-orange);
-  border-color: rgba(213, 94, 0, 0.5);
+  border-color: rgba(166, 95, 50, 0.36);
 }
 
 .moral-animation-market-node-three {
   left: 40%;
   bottom: 20%;
   color: var(--mt-green);
-  border-color: rgba(0, 158, 115, 0.5);
+  border-color: rgba(63, 112, 92, 0.36);
 }
 
 .moral-animation-market-node-four {
   right: 18%;
   bottom: 18%;
   color: var(--mt-purple);
-  border-color: rgba(204, 121, 167, 0.5);
+  border-color: rgba(130, 104, 139, 0.36);
 }
 
 .moral-animation-market-line {
   position: absolute;
   z-index: 2;
   height: 1px;
-  background: rgba(86, 180, 233, 0.42);
+  background: rgba(79, 117, 159, 0.3);
   transform-origin: left center;
   animation: mt-market-line 5.8s ease-in-out infinite;
 }
@@ -3956,7 +3958,7 @@ main {
   left: 50%;
   top: 50%;
   width: 6.5rem;
-  border-color: rgba(230, 159, 0, 0.48);
+  border-color: rgba(169, 120, 46, 0.36);
   color: var(--mt-amber);
   transform: translate(-50%, -50%);
   animation: mt-label-pulse 5.8s ease-in-out infinite;
@@ -3966,14 +3968,14 @@ main {
   right: 0.85rem;
   top: 0.9rem;
   color: var(--mt-green);
-  border-color: rgba(0, 158, 115, 0.42);
+  border-color: rgba(63, 112, 92, 0.32);
 }
 
 .moral-animation-market-residual {
   right: 0.85rem;
   bottom: 0.86rem;
   color: var(--mt-purple);
-  border-color: rgba(204, 121, 167, 0.42);
+  border-color: rgba(130, 104, 139, 0.32);
   animation: mt-residual 5.8s ease-in-out infinite;
 }
 
@@ -4329,12 +4331,12 @@ main {
   0%,
   42%,
   100% {
-    background: rgba(248, 244, 234, 0.08);
+    background: rgba(255, 255, 255, 0.58);
   }
 
   52%,
   64% {
-    background: rgba(213, 94, 0, 0.2);
+    background: rgba(166, 95, 50, 0.14);
   }
 }
 
@@ -4342,12 +4344,12 @@ main {
   0%,
   52%,
   100% {
-    background: rgba(248, 244, 234, 0.08);
+    background: rgba(255, 255, 255, 0.58);
   }
 
   66%,
   78% {
-    background: rgba(86, 180, 233, 0.2);
+    background: rgba(107, 151, 200, 0.14);
   }
 }
 
@@ -4462,7 +4464,7 @@ main {
 @keyframes mt-order-row {
   0%,
   32% {
-    color: rgba(248, 244, 234, 0.72);
+    color: var(--mt-muted);
   }
 
   44%,
@@ -4489,13 +4491,13 @@ main {
   0%,
   42%,
   100% {
-    box-shadow: 0 0 0 0 rgba(86, 180, 233, 0);
+    box-shadow: 0 0 0 0 rgba(107, 151, 200, 0);
     transform: scale(1);
   }
 
   60%,
   76% {
-    box-shadow: 0 0 0 0.34rem rgba(86, 180, 233, 0.12);
+    box-shadow: 0 0 0 0.34rem rgba(107, 151, 200, 0.1);
     transform: scale(1.06);
   }
 }
@@ -4509,7 +4511,7 @@ main {
 
   58%,
   78% {
-    box-shadow: 0 0 0 0.32rem rgba(230, 159, 0, 0.12);
+    box-shadow: 0 0 0 0.32rem rgba(169, 120, 46, 0.1);
   }
 }
 
