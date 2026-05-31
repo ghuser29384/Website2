@@ -840,7 +840,10 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(backgroundNotificationPolicySource, /BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS/);
   assert.match(backgroundNotificationPolicySource, /dailyCap/);
   assert.match(backgroundNotificationPolicySource, /quietHoursStart/);
+  assert.match(backgroundNotificationPolicySource, /sourceCooldownHours/);
   assert.match(backgroundNotificationsSource, /shouldSendBackgroundNotificationImmediately/);
+  assert.match(backgroundNotificationsSource, /last_discovery_sent_at/);
+  assert.match(backgroundNotificationsSource, /source_cooldown_hours/);
   assert.match(apiRateLimitSource, /background_source_summary_write: \{ limit: 12/);
   assert.match(apiRateLimitSource, /background_intro_packet_write: \{ limit: 12/);
   assert.match(apiRateLimitSource, /background_opportunity_brief_read: \{ limit: 60/);
@@ -887,6 +890,8 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(schemaSource, /source_connections_raw_ingestion_disabled_check/);
   assert.match(schemaSource, /background_match_feedback/);
   assert.match(schemaSource, /background_opportunity_briefs_feedback_reason_check/);
+  assert.match(schemaSource, /source_cooldown_hours/);
+  assert.match(schemaSource, /last_discovery_sent_at/);
   assert.match(migrationSource, /source_connections_allowed_field_keys_check/);
   assert.match(migrationSource, /source_connections_raw_ingestion_disabled_check/);
 });
@@ -1092,6 +1097,7 @@ test("privacy and terms publish processor retention and data-request transparenc
   assert.match(privacyPage, /Payment and donation references/);
   assert.match(privacyPage, /Analytics and attribution/);
   assert.match(privacyPage, /Notifications/);
+  assert.match(privacyPage, /source cooldowns/);
   assert.match(privacyPage, /Supabase for authentication and database storage/);
   assert.match(privacyPage, /Stripe for participant payment objects; Every\.org for off-site donation routes/);
   assert.match(privacyPage, /future analytics tools must follow the same redaction rules/);

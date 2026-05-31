@@ -131,8 +131,8 @@
     {
       "key": "notification_delivery_lifecycle",
       "label": "Notification delivery lifecycle",
-      "scope": "Email/in-app delivery rows, digest preferences, opt-out state, and failed-delivery diagnostics.",
-      "retentionWindow": "Preference rows and delivery records are retained to honor opt-outs, diagnose failed delivery, and avoid exposing private wish text in notifications.",
+      "scope": "Email/in-app delivery rows, digest preferences, quiet-hour windows, source cooldown state, opt-out state, and failed-delivery diagnostics.",
+      "retentionWindow": "Preference rows and delivery records are retained to honor opt-outs, enforce discovery cooldowns, diagnose failed delivery, and avoid exposing private wish text in notifications.",
       "evidence": "Privacy page publishes notification processor boundaries and notification retention purpose."
     },
     {

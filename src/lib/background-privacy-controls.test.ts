@@ -53,6 +53,7 @@ test("default background notification preferences use inbox and digest, not push
   assert.equal(matchDigest?.dailyCap, 1);
   assert.equal(matchDigest?.quietHoursStart, 22);
   assert.equal(matchDigest?.quietHoursEnd, 8);
+  assert.equal(matchDigest?.sourceCooldownHours, 24);
 });
 
 test("preference rows preserve explicit opt-outs and keep disabled push off", () => {

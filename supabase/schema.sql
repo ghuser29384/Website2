@@ -1454,6 +1454,8 @@ create table if not exists public.background_notification_preferences (
   quiet_hours_start smallint check (quiet_hours_start is null or quiet_hours_start between 0 and 23),
   quiet_hours_end smallint check (quiet_hours_end is null or quiet_hours_end between 0 and 23),
   daily_cap smallint check (daily_cap is null or daily_cap between 0 and 24),
+  source_cooldown_hours smallint check (source_cooldown_hours is null or source_cooldown_hours between 0 and 168),
+  last_discovery_sent_at timestamptz,
   last_digest_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
@@ -1463,6 +1465,12 @@ create table if not exists public.background_notification_preferences (
 alter table public.background_notification_preferences add column if not exists quiet_hours_start smallint;
 alter table public.background_notification_preferences add column if not exists quiet_hours_end smallint;
 alter table public.background_notification_preferences add column if not exists daily_cap smallint;
+alter table public.background_notification_preferences add column if not exists source_cooldown_hours smallint;
+alter table public.background_notification_preferences add column if not exists last_discovery_sent_at timestamptz;
+alter table public.background_notification_preferences drop constraint if exists background_notification_preferences_source_cooldown_check;
+alter table public.background_notification_preferences add constraint background_notification_preferences_source_cooldown_check check (
+  source_cooldown_hours is null or source_cooldown_hours between 0 and 168
+);
 
 create table if not exists public.profile_data_right_requests (
   id uuid primary key default gen_random_uuid(),

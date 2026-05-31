@@ -21,6 +21,7 @@ export interface BackgroundNotificationPreferenceDraft {
   profileId: string;
   quietHoursEnd?: number | null;
   quietHoursStart?: number | null;
+  sourceCooldownHours?: number | null;
 }
 
 export interface ProfileDataRightValidationInput {
@@ -265,6 +266,7 @@ export function createDefaultBackgroundNotificationPreferences(profileId: string
       profileId,
       quietHoursEnd: 8,
       quietHoursStart: 22,
+      sourceCooldownHours: eventKind === "match_suggestions" ? 24 : null,
     });
     rows.push({
       channel: "web_push",
@@ -287,6 +289,7 @@ export function normalizeBackgroundNotificationPreferenceDraft({
   profileId,
   quietHoursEnd,
   quietHoursStart,
+  sourceCooldownHours,
 }: BackgroundNotificationPreferenceDraft): BackgroundNotificationPreferenceDraft | null {
   if (!EVENT_KIND_VALUES.has(eventKind) || !CHANNEL_VALUES.has(channel)) {
     return null;
@@ -303,6 +306,7 @@ export function normalizeBackgroundNotificationPreferenceDraft({
     profileId,
     quietHoursEnd,
     quietHoursStart,
+    sourceCooldownHours,
   };
 }
 

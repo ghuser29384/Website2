@@ -64,3 +64,30 @@ test("quiet hours and daily caps suppress discovery immediacy", () => {
     false,
   );
 });
+
+test("source cooldowns suppress repeated discovery notifications", () => {
+  assert.equal(
+    shouldSendBackgroundNotificationImmediately({
+      channel: "email_digest",
+      digestCadence: "immediate",
+      enabled: true,
+      eventKind: "match_suggestions",
+      lastSourceNotificationAt: "2026-05-31T12:00:00.000Z",
+      now: new Date("2026-05-31T18:00:00.000Z"),
+      sourceCooldownHours: 24,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldSendBackgroundNotificationImmediately({
+      channel: "email_digest",
+      digestCadence: "immediate",
+      enabled: true,
+      eventKind: "match_suggestions",
+      lastSourceNotificationAt: "2026-05-30T12:00:00.000Z",
+      now: new Date("2026-05-31T18:00:00.000Z"),
+      sourceCooldownHours: 24,
+    }),
+    true,
+  );
+});

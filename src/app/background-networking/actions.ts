@@ -716,6 +716,7 @@ export async function saveBackgroundNotificationPreferencesAction(formData: Form
     profile_id: preference.profileId,
     quiet_hours_end: preference.quietHoursEnd ?? null,
     quiet_hours_start: preference.quietHoursStart ?? null,
+    source_cooldown_hours: preference.sourceCooldownHours ?? null,
     updated_at: new Date().toISOString(),
   }));
   const supabase = await createClient();

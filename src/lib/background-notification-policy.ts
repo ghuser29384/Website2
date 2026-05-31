@@ -23,10 +23,12 @@ export interface BackgroundNotificationPolicyInput {
   enabled: boolean;
   eventKind: BackgroundNotificationEventKind;
   immediateSentToday?: number;
+  lastSourceNotificationAt?: string | null;
   now?: Date;
   quietHoursEnd?: number | null;
   quietHoursStart?: number | null;
   quietUntil?: string | null;
+  sourceCooldownHours?: number | null;
 }
 
 function isQuietHour({
@@ -55,6 +57,28 @@ function isQuietHour({
   return hour >= quietHoursStart && hour < quietHoursEnd;
 }
 
+function isInsideSourceCooldown({
+  lastSourceNotificationAt,
+  now,
+  sourceCooldownHours,
+}: {
+  lastSourceNotificationAt?: string | null;
+  now: Date;
+  sourceCooldownHours?: number | null;
+}) {
+  if (!lastSourceNotificationAt || !sourceCooldownHours || sourceCooldownHours <= 0) {
+    return false;
+  }
+
+  const lastSentAt = Date.parse(lastSourceNotificationAt);
+
+  if (!Number.isFinite(lastSentAt)) {
+    return false;
+  }
+
+  return now.getTime() - lastSentAt < sourceCooldownHours * 60 * 60 * 1000;
+}
+
 export function shouldSendBackgroundNotificationImmediately({
   channel,
   dailyCap = 1,
@@ -62,10 +86,12 @@ export function shouldSendBackgroundNotificationImmediately({
   enabled,
   eventKind,
   immediateSentToday = 0,
+  lastSourceNotificationAt,
   now = new Date(),
   quietHoursEnd,
   quietHoursStart,
   quietUntil,
+  sourceCooldownHours,
 }: BackgroundNotificationPolicyInput) {
   if (!enabled || digestCadence === "none") {
     return false;
@@ -89,6 +115,17 @@ export function shouldSendBackgroundNotificationImmediately({
   }
 
   if (isDiscovery && dailyCap !== null && immediateSentToday >= dailyCap) {
+    return false;
+  }
+
+  if (
+    isDiscovery &&
+    isInsideSourceCooldown({
+      lastSourceNotificationAt,
+      now,
+      sourceCooldownHours,
+    })
+  ) {
     return false;
   }
 

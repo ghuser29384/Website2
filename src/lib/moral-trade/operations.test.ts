@@ -71,6 +71,14 @@ test("operations profile publishes security, rate-limit, retention, fallback, an
   assert.ok(profile.retentionControls.some((control) => control.key === "payment_donation_reference_lifecycle"));
   assert.ok(profile.retentionControls.some((control) => control.key === "analytics_attribution_lifecycle"));
   assert.ok(profile.retentionControls.some((control) => control.key === "notification_delivery_lifecycle"));
+  assert.ok(
+    profile.retentionControls.some(
+      (control) =>
+        control.key === "notification_delivery_lifecycle" &&
+        /source cooldown/i.test(control.scope) &&
+        /discovery cooldowns/i.test(control.retentionWindow),
+    ),
+  );
   assert.ok(profile.retentionControls.some((control) => control.key === "data_right_request_lifecycle"));
   assert.ok(
     profile.retentionControls.every((control) => control.scope && control.retentionWindow && control.evidence),

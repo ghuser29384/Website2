@@ -349,8 +349,9 @@ export default async function PrivacyPage() {
           <h2>Notifications</h2>
           <p>
             The dashboard exposes in-app, digest email, and web-push preference rows by event type.
-            Email copy for background networking stays generic and leaves exact wishes, contact
-            details, private asks, source notes, and sensitive constraints in the dashboard.
+            Discovery alerts default to digest cadence with quiet hours and source cooldowns. Email
+            copy for background networking stays generic and leaves exact wishes, contact details,
+            private asks, source notes, and sensitive constraints in the dashboard.
           </p>
         </section>
         <section className="panel data-card data-card-wide">

@@ -2592,6 +2592,8 @@ export interface Database {
           quiet_hours_start: number | null;
           quiet_hours_end: number | null;
           daily_cap: number | null;
+          source_cooldown_hours: number | null;
+          last_discovery_sent_at: string | null;
           last_digest_at: string | null;
           created_at: string;
           updated_at: string;
@@ -2613,6 +2615,8 @@ export interface Database {
           quiet_hours_start?: number | null;
           quiet_hours_end?: number | null;
           daily_cap?: number | null;
+          source_cooldown_hours?: number | null;
+          last_discovery_sent_at?: string | null;
           last_digest_at?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -2632,6 +2636,8 @@ export interface Database {
           quiet_hours_start?: number | null;
           quiet_hours_end?: number | null;
           daily_cap?: number | null;
+          source_cooldown_hours?: number | null;
+          last_discovery_sent_at?: string | null;
           last_digest_at?: string | null;
           updated_at?: string;
         };
