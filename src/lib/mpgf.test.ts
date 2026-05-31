@@ -614,15 +614,45 @@ test("MPGF public-goods review console uses bounded reason codes and appeal stat
     reviewerId: "reviewer-test",
     publicNotes: "Open challenge window for destination proof review.",
   });
+  const appealRequested = reviewMpgfPublicGoodsCampaign({
+    campaign,
+    action: "challenge",
+    reasonCode: "appeal_requested",
+    reviewerId: "reviewer-test",
+    publicNotes: "Participant requested appeal of public-goods destination review.",
+  });
+  const appealUpheld = reviewMpgfPublicGoodsCampaign({
+    campaign: appealRequested.campaign,
+    action: "approve",
+    reasonCode: "appeal_upheld",
+    reviewerId: "reviewer-test",
+    publicNotes: "Appeal was upheld after public-goods review.",
+  });
+  const appealDenied = reviewMpgfPublicGoodsCampaign({
+    campaign: appealRequested.campaign,
+    action: "block",
+    reasonCode: "appeal_denied",
+    reviewerId: "reviewer-test",
+    publicNotes: "Appeal was denied after public-goods review.",
+  });
   const consoleSummary = summarizeMpgfPublicGoodsReviewConsole();
+  const adminPage = readFileSync("src/app/mpgf/admin/[section]/page.tsx", "utf8");
 
   assert.equal(reviewed.campaign.reviewStatus, "challenge_window");
   assert.equal(reviewed.reviewCase.allowedNextActions.includes("finalize"), true);
   assert.equal(reviewed.createsPayoutAuthorization, false);
+  assert.equal(appealRequested.reviewCase.appealStatus, "appeal_requested");
+  assert.equal(appealRequested.campaign.reviewStatus, "challenge_window");
+  assert.equal(appealUpheld.reviewCase.appealStatus, "appeal_upheld");
+  assert.equal(appealUpheld.campaign.reviewStatus, "approved");
+  assert.equal(appealDenied.reviewCase.appealStatus, "appeal_denied");
+  assert.equal(appealDenied.campaign.reviewStatus, "blocked");
   assert.ok(consoleSummary.reasonCodes.includes("blocked_threat_baseline"));
   assert.equal(consoleSummary.privacySafeAnalyticsOnly, true);
   assert.equal(consoleSummary.rawPrivateTextStoredInAnalytics, false);
   assert.equal(demoMpgfPublicGoodsReviewCases.some((reviewCase) => reviewCase.reasonCode === "needs_destination_evidence"), true);
+  assert.match(adminPage, /appeal_upheld/);
+  assert.match(adminPage, /appeal_denied/);
   assert.throws(
     () =>
       reviewMpgfPublicGoodsCampaign({

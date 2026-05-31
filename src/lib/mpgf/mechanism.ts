@@ -298,7 +298,7 @@ const publicGoodsReasonCodes = new Set<MpgfPublicGoodsReviewReasonCode>(MPGF_PUB
 const publicGoodsAllowedReviewReasons: Record<MpgfPublicGoodsReviewAction, readonly MpgfPublicGoodsReviewReasonCode[]> = {
   approve: ["destination_verified", "challenge_resolved", "external_handoff_verified", "appeal_upheld"],
   needs_evidence: ["needs_destination_evidence", "needs_identity_evidence", "external_handoff_failed"],
-  block: ["blocked_threat_baseline", "blocked_destination_risk", "duplicate_identity_blocked"],
+  block: ["blocked_threat_baseline", "blocked_destination_risk", "duplicate_identity_blocked", "appeal_denied"],
   challenge: ["challenge_opened", "appeal_requested"],
   finalize: ["challenge_resolved", "external_handoff_verified", "destination_verified"],
 };
@@ -361,6 +361,14 @@ function allowedNextReviewActions(status: MpgfPublicGoodsCampaign["reviewStatus"
   }
 
   return [];
+}
+
+function appealStatusForReasonCode(reasonCode: MpgfPublicGoodsReviewReasonCode) {
+  if (reasonCode === "appeal_requested" || reasonCode === "appeal_denied" || reasonCode === "appeal_upheld") {
+    return reasonCode;
+  }
+
+  return "none";
 }
 
 export function validateMpgfPublicGoodsCampaign(
@@ -692,7 +700,7 @@ export function reviewMpgfPublicGoodsCampaign(input: {
     reviewerId: input.reviewerId,
     openedAt: now.toISOString(),
     closedAt: input.action === "challenge" || input.action === "needs_evidence" ? undefined : now.toISOString(),
-    appealStatus: input.reasonCode === "appeal_requested" ? "appeal_requested" : "none",
+    appealStatus: appealStatusForReasonCode(input.reasonCode),
     challengeWindowEndsAt,
     publicNotes: input.publicNotes.trim(),
     allowedNextActions: allowedNextReviewActions(nextStatus),

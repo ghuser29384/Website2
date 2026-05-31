@@ -345,6 +345,36 @@ export default async function MpgfAdminSectionPage({ params }: MpgfAdminSectionP
                               </button>
                             </form>
                           ))}
+                          {item.appealStatus === "appeal_requested" ? (
+                            <>
+                              <form action={recordMpgfPublicGoodsReviewAction}>
+                                <input name="campaign_id" type="hidden" value={item.campaignId} />
+                                <input name="review_action" type="hidden" value="approve" />
+                                <input name="reason_code" type="hidden" value="appeal_upheld" />
+                                <input
+                                  name="public_notes"
+                                  type="hidden"
+                                  value="Admin upheld the public-goods appeal and returned the campaign to approved review state."
+                                />
+                                <button className="button button-secondary" type="submit">
+                                  uphold appeal
+                                </button>
+                              </form>
+                              <form action={recordMpgfPublicGoodsReviewAction}>
+                                <input name="campaign_id" type="hidden" value={item.campaignId} />
+                                <input name="review_action" type="hidden" value="block" />
+                                <input name="reason_code" type="hidden" value="appeal_denied" />
+                                <input
+                                  name="public_notes"
+                                  type="hidden"
+                                  value="Admin denied the public-goods appeal and kept the campaign blocked from payable status."
+                                />
+                                <button className="button button-secondary" type="submit">
+                                  deny appeal
+                                </button>
+                              </form>
+                            </>
+                          ) : null}
                         </div>
                       </div>
                       <span className="mpgf-gate-status mpgf-gate-status-pending_review">
