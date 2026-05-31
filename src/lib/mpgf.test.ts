@@ -68,6 +68,7 @@ import {
   buildMpgfPublicGoodsAnalyticsEvent,
   recordMpgfPublicGoodsAnalyticsEvent,
 } from "./mpgf/public-goods-analytics";
+import { evaluateMpgfPublicGoodsIdentityAdapter } from "./mpgf/public-goods-identity";
 import { buildMpgfPublicGoodsReconciliationRows } from "./mpgf/public-goods-reconciliation";
 import {
   normalizeMpgfPublicGoodsReasonCode,
@@ -486,6 +487,53 @@ test("MPGF public-goods pledge service supports capture modes and identity gatin
       }),
     /payment intent reference/,
   );
+});
+
+test("MPGF public-goods identity adapter supports external proof scores without raw provider data", () => {
+  const external = evaluateMpgfPublicGoodsIdentityAdapter({
+    userId: "external-proof-user",
+    provider: "external_proof_of_personhood",
+    externalHumanScore: 0.84,
+    externalHumanScoreScale: "unit_interval",
+    providerPayload: {
+      providerRef: "human-passport:redacted-score-0-84",
+      scoreBand: "high",
+    },
+  });
+  const duplicate = evaluateMpgfPublicGoodsIdentityAdapter({
+    userId: "duplicate-user",
+    provider: "repository_profile",
+    humanScoreBps: 8_000,
+    duplicateUserRefs: ["duplicate-user"],
+  });
+  const persistence = readFileSync("src/lib/mpgf/persistence.ts", "utf8");
+
+  assert.equal(external.attestation.provider, "external_proof_of_personhood");
+  assert.equal(external.attestation.humanScoreBps, 8_400);
+  assert.equal(external.eligibilityHint, "eligible");
+  assert.match(external.attestation.redactedReference, /external_proof_of_personhood:redacted:/);
+  assert.equal(duplicate.eligibilityHint, "duplicate_identity");
+  assert.equal(duplicate.attestation.status, "revoked");
+  assert.throws(
+    () =>
+      evaluateMpgfPublicGoodsIdentityAdapter({
+        userId: "raw-provider-user",
+        provider: "external_proof_of_personhood",
+        providerPayload: { email: "private@example.com" },
+      }),
+    /cannot store raw provider field/,
+  );
+  assert.throws(
+    () =>
+      evaluateMpgfPublicGoodsIdentityAdapter({
+        userId: "raw-reference-user",
+        provider: "repository_profile",
+        redactedReference: "repository-profile:private@example.com",
+      }),
+    /must be redacted/,
+  );
+  assert.match(persistence, /evaluateMpgfPublicGoodsIdentityAdapter/);
+  assert.match(persistence, /identityAdapter\.duplicateUserRefs/);
 });
 
 test("MPGF public-goods review console uses bounded reason codes and appeal states", () => {

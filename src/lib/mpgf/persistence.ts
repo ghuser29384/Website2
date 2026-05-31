@@ -10,12 +10,13 @@ import {
   demoMpgfMatchPool,
   demoMpgfPublicGoodsCampaigns,
 } from "./data";
-import { createMpgfPublicGoodsIdentityAttestation, createMpgfPublicGoodsPledge } from "./mechanism";
+import { createMpgfPublicGoodsPledge } from "./mechanism";
 import type { MpgfParticipantState, MpgfPoolProposalRecord } from "./participant-types";
 import {
   bucketMpgfPublicGoodsAmountCents,
   recordMpgfPublicGoodsAnalyticsEvent,
 } from "./public-goods-analytics";
+import { evaluateMpgfPublicGoodsIdentityAdapter } from "./public-goods-identity";
 import type {
   MpgfBallot,
   MpgfBallotWeight,
@@ -1002,13 +1003,13 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
   }
 
   const amountCents = toPositiveInteger(input.amountCents, "Public-goods pledge amount");
-  const identityAttestation = createMpgfPublicGoodsIdentityAttestation({
+  const identityAdapter = evaluateMpgfPublicGoodsIdentityAdapter({
     userId: input.userId,
     provider: "repository_profile",
     humanScoreBps: 8_000,
-    expiresAt: "2026-12-31T23:59:59.000Z",
-    redactedReference: `repository-profile:${input.userId.slice(0, 8)}:redacted`,
+    redactedReference: undefined,
   });
+  const identityAttestation = identityAdapter.attestation;
   const pledge = createMpgfPublicGoodsPledge({
     campaign,
     userId: input.userId,
@@ -1018,6 +1019,7 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
     isRecurring: input.isRecurring,
     supporterReason: input.supporterReason,
     identityAttestation,
+    duplicateUserRefs: identityAdapter.duplicateUserRefs,
   });
   const supabase = (await createClient()) as SupabaseAny;
   const reservation = await reserveIdempotency<{
@@ -1043,7 +1045,7 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
     return reservation.result;
   }
 
-  const warnings: string[] = [];
+  const warnings: string[] = [...identityAdapter.warnings];
 
   try {
     const attestationInsert = await supabase.from("mpgf_public_goods_identity_attestations").insert({
