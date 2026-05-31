@@ -1,4 +1,4 @@
-# Moral Trade Codex Build Instruction
+# Core Moral Trade Codex Build Instruction
 
 This is the canonical repository instruction for improving the core Moral Trade feature from the two source documents:
 
@@ -82,4 +82,4 @@ Also confirm that the change does not introduce:
 
 ## Non-Claims
 
-This instruction is a repository verification artifact. It does not prove live marketplace liquidity, successful real-world trades, production uptime, payment custody, tax/legal treatment, or zero security risk.
+This instruction is a repository verification artifact. It does not prove live production liquidity, successful real-world trades, production uptime, payment custody, tax/legal treatment, or zero security risk.

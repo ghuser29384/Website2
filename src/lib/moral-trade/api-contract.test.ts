@@ -300,6 +300,13 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "incident_response_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "performance_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "externality_health_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "externality_health_response")
+      ?.fields.some(
+        (field) => field.key === "publicContract" && /trigger-standard matrix/i.test(field.description),
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "ai_governance_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "document_coverage_health_response"));
   assert.ok(
@@ -308,7 +315,34 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
       ?.fields.some(
         (field) =>
           field.key === "validation" &&
-          /source documents, recommendation families/i.test(field.description),
+          /source documents, source artifact hashes/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "document_coverage_health_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "sourceDocumentArtifacts" &&
+          /Hash-checked Markdown and PDF source artifacts/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "document_coverage_health_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "sourceStackReferences" &&
+          /Recommended source-stack traceability records/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "document_coverage_health_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "canonicalInstruction" &&
+          /SHA-256 artifact hash/i.test(field.description),
       ),
   );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "ai_shadow_contract_response"));

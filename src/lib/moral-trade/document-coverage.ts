@@ -1,14 +1,16 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 export const MORAL_TRADE_DOCUMENT_COVERAGE_VALIDATOR_VERSION =
-  "moral-trade-document-coverage-validator-v0.1";
+  "moral-trade-document-coverage-validator-v0.4";
 
 export type MoralTradeDocumentSource = {
   key: string;
   label: string;
   path: string;
   required: boolean;
+  expectedSha256: string;
   requiredPhrases: string[];
 };
 
@@ -22,10 +24,28 @@ export type MoralTradeDocumentRequirement = {
   routeEvidence: string[];
 };
 
+export type MoralTradeCanonicalInstruction = {
+  path: string;
+  requiredPhrases: string[];
+  verificationCommands: string[];
+  routeEvidence: string[];
+};
+
+export type MoralTradeRecommendedSourceReference = {
+  key: string;
+  priority: "highest" | "high" | "medium_high" | "medium";
+  source: string;
+  guidance: string;
+  evidenceFiles: string[];
+  routeEvidence: string[];
+};
+
 export type MoralTradeDocumentCoverageProfile = {
   version: string;
   purpose: string;
   sourceDocuments: MoralTradeDocumentSource[];
+  canonicalInstruction: MoralTradeCanonicalInstruction;
+  sourceStackReferences: MoralTradeRecommendedSourceReference[];
   requirements: MoralTradeDocumentRequirement[];
   nonClaims: string[];
 };
@@ -37,13 +57,25 @@ export type MoralTradeDocumentCoverageCheck = {
   evidence: string;
 };
 
+export type MoralTradeSourceDocumentArtifact = {
+  key: string;
+  path: string;
+  artifactHash: string | null;
+  expectedHash: string;
+  present: boolean;
+  hashMatches: boolean;
+};
+
 export type MoralTradeDocumentCoverageValidation = {
   status: "pass" | "fail";
   validatorName: "moral-trade-document-coverage";
   validatorVersion: string;
   profileVersion: string;
   sourceDocumentCount: number;
+  sourceStackCount: number;
   requirementCount: number;
+  sourceDocumentArtifacts: MoralTradeSourceDocumentArtifact[];
+  canonicalInstructionHash: string | null;
   checks: MoralTradeDocumentCoverageCheck[];
   blockers: string[];
 };
@@ -66,6 +98,20 @@ function readTextIfExists(filePath: string) {
   return readFileSync(absolutePath, "utf8");
 }
 
+function hashFileIfExists(filePath: string) {
+  const absolutePath = rootPath(filePath);
+
+  if (!existsSync(absolutePath)) {
+    return null;
+  }
+
+  return `sha256:${createHash("sha256").update(readFileSync(absolutePath)).digest("hex")}`;
+}
+
+function hashText(text: string) {
+  return `sha256:${createHash("sha256").update(text).digest("hex")}`;
+}
+
 function hasAll(values: readonly string[], required: readonly string[]) {
   return required.every((entry) => values.includes(entry));
 }
@@ -84,8 +130,23 @@ function check(
   };
 }
 
+const REQUIRED_RECOMMENDED_SOURCE_STACK_KEYS = [
+  "toby_ord_moral_trade",
+  "moraltrade_public_materials",
+  "oecd_due_diligence",
+  "un_guiding_principles",
+  "ilo_principles",
+  "eti_fairtrade_standards",
+  "open_supply_hub",
+  "w3c_prov",
+  "gs1_epcis",
+  "nist_ai_rmf_xai",
+  "fairness_and_ml_docs",
+  "human_ai_interaction",
+] as const;
+
 export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfile = {
-  version: "moral-trade-document-coverage-v0.2-2026-05",
+  version: "moral-trade-document-coverage-v0.5-2026-05",
   purpose:
     "Requirement-to-evidence coverage map for the Moral Trade improvement documents: the public validator suite should show which implementation artifacts answer each recommendation without inventing production evidence.",
   sourceDocuments: [
@@ -94,6 +155,8 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
       label: "Improving the Moral Trade Feature at MoralTrade.org markdown",
       path: "moral trade4.md",
       required: true,
+      expectedSha256:
+        "sha256:8d9c8cc38efcc51011306b93019a400c0236af9aa1c8989444e45744fde6cd11",
       requiredPhrases: [
         "formalize the core moral-trade data model and public validator suite",
         "instrumented workflow cards",
@@ -108,7 +171,220 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
       label: "Improving the Moral Trade Feature at MoralTrade.org PDF",
       path: "Improving the Moral Trade Feature at MoralTrade.org.pdf",
       required: true,
+      expectedSha256:
+        "sha256:c006e0c0bfcb915b45585c24d39a4216ac1e61721bf24e12d859240240b0f509",
       requiredPhrases: [],
+    },
+  ],
+  canonicalInstruction: {
+    path: "docs/moral-trade/codex-build-instruction.md",
+    requiredPhrases: [
+      "Core Moral Trade Codex Build Instruction",
+      "canonical repository instruction",
+      "validator-backed, privacy-preserving, reviewable product behavior",
+      "No global platform ranking of moral value.",
+      "No autonomous outreach or counterparty disclosure.",
+      "No raw private-feed mining.",
+      "Matching and copilot output remain factor-code, confidence-band, consent-gated, and human-reviewed.",
+      "Required Public Contracts",
+      "Required Local Gates",
+      "Review Checklist",
+      "does not prove live production liquidity",
+    ],
+    verificationCommands: [
+      "node --import tsx --test src/lib/moral-trade/*.test.ts src/lib/background-ai-shadow.test.ts src/lib/background-networking.test.ts src/lib/background-notification-policy.test.ts src/lib/background-notifications.test.ts src/lib/background-privacy-controls.test.ts src/lib/background-explanations.test.ts src/lib/background-opportunity-briefs.test.ts src/lib/wish-registry.test.ts src/lib/public-route-smoke.test.ts",
+      "npm run lint",
+      "git diff --check",
+    ],
+    routeEvidence: [
+      "/api/moral-trade/health",
+      "/api/moral-trade/document-coverage/health",
+      "/api/moral-trade/api-contract",
+      "/api/moral-trade/data-model/contract",
+      "/api/moral-trade/schemas",
+      "/api/moral-trade/copilot/contract",
+      "/api/moral-trade/review-workflow/contract",
+      "/api/moral-trade/reasoning/packets",
+      "/api/moral-trade/provenance/schema",
+      "/api/moral-trade/match-signal/contract",
+      "/api/moral-trade/disclosure/contract",
+      "/api/moral-trade/challenge-appeal/contract",
+      "/api/moral-trade/evaluation/health",
+      "/api/moral-trade/operations/health",
+      "/api/moral-trade/security/health",
+      "/api/moral-trade/performance/health",
+      "/api/moral-trade/incident-response/health",
+      "/api/moral-trade/externality/health",
+      "/api/moral-trade/ai-governance/health",
+      "/api/moral-trade/transparency/report",
+    ],
+  },
+  sourceStackReferences: [
+    {
+      key: "toby_ord_moral_trade",
+      priority: "highest",
+      source: "amirrorclear.net / Toby Ord, Moral Trade",
+      guidance:
+        "Default baselines, Pareto improvement, factual trust, counterfactual trust, bargaining, and perverse-incentive controls.",
+      evidenceFiles: [
+        "src/lib/moral-trade/protocol.ts",
+        "src/lib/proposal-review.ts",
+        "src/app/anti-threat-baseline/page.tsx",
+      ],
+      routeEvidence: ["/api/moral-trade/health", "/validation"],
+    },
+    {
+      key: "moraltrade_public_materials",
+      priority: "highest",
+      source: "MoralTrade.org public materials",
+      guidance:
+        "Current product commitments, safety boundaries, deterministic matching posture, privacy model, and review-state language remain authoritative.",
+      evidenceFiles: [
+        "docs/moral-trade/codex-build-instruction.md",
+        "src/app/moral-trade/technical-spec/page.tsx",
+        "src/lib/moral-trade/api-contract.ts",
+      ],
+      routeEvidence: [
+        "/moral-trade/technical-spec",
+        "/api/moral-trade/document-coverage/health",
+      ],
+    },
+    {
+      key: "oecd_due_diligence",
+      priority: "high",
+      source: "OECD Due Diligence Guidance for Responsible Business Conduct",
+      guidance:
+        "Use the six-step due-diligence process for policy embedding, impact identification, mitigation, tracking, communication, and remediation.",
+      evidenceFiles: [
+        "config/moral-trade/externality-profile.json",
+        "src/lib/moral-trade/externality.ts",
+      ],
+      routeEvidence: ["/api/moral-trade/externality/health"],
+    },
+    {
+      key: "un_guiding_principles",
+      priority: "high",
+      source: "UN Guiding Principles on Business and Human Rights",
+      guidance:
+        "Externality and remedy logic must preserve affected-party standing, human-rights impact review, and remedy paths.",
+      evidenceFiles: [
+        "config/moral-trade/externality-profile.json",
+        "src/lib/moral-trade/challenge-appeal.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/externality/health",
+        "/api/moral-trade/challenge-appeal/contract",
+      ],
+    },
+    {
+      key: "ilo_principles",
+      priority: "high",
+      source: "ILO MNE Declaration and Fundamental Principles and Rights at Work",
+      guidance:
+        "Labor, supplier, pressure, forced-labor, child-labor, discrimination, association, and workplace claims require explicit externality standards.",
+      evidenceFiles: [
+        "config/moral-trade/externality-profile.json",
+        "src/lib/moral-trade/externality.ts",
+      ],
+      routeEvidence: ["/api/moral-trade/externality/health"],
+    },
+    {
+      key: "eti_fairtrade_standards",
+      priority: "high",
+      source: "ETI Base Code and Fairtrade Standards",
+      guidance:
+        "Ethical-trade, destination, producer, and certification-style claims need practical standard gates before reliance.",
+      evidenceFiles: [
+        "config/moral-trade/externality-profile.json",
+        "src/lib/moral-trade/externality.ts",
+      ],
+      routeEvidence: ["/api/moral-trade/externality/health"],
+    },
+    {
+      key: "open_supply_hub",
+      priority: "high",
+      source: "Open Supply Hub",
+      guidance:
+        "Supplier-like external entities need public identifier, deduplication, and traceability discipline.",
+      evidenceFiles: [
+        "src/lib/moral-trade/provenance.ts",
+        "config/moral-trade/externality-profile.json",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/provenance/schema",
+        "/api/moral-trade/externality/health",
+      ],
+    },
+    {
+      key: "w3c_prov",
+      priority: "high",
+      source: "W3C PROV",
+      guidance:
+        "Evidence claims should be represented as entities, activities, agents, traceability events, and scoped claim-artifact links.",
+      evidenceFiles: [
+        "src/lib/moral-trade/provenance.ts",
+        "supabase/migrations/20260529_moral_trade_provenance_persistence.sql",
+      ],
+      routeEvidence: ["/api/moral-trade/provenance/schema"],
+    },
+    {
+      key: "gs1_epcis",
+      priority: "medium_high",
+      source: "GS1 EPCIS 2.0",
+      guidance:
+        "Event-style traceability should keep interoperable what/where/why/agent records for external evidence.",
+      evidenceFiles: ["src/lib/moral-trade/provenance.ts"],
+      routeEvidence: ["/api/moral-trade/provenance/schema"],
+    },
+    {
+      key: "nist_ai_rmf_xai",
+      priority: "high",
+      source: "NIST AI RMF 1.0 and NIST XAI principles",
+      guidance:
+        "Any AI assistance needs governance, explainability, privacy, security, accountability, human control, and documented explanation layers.",
+      evidenceFiles: [
+        "config/moral-trade/ai-governance-profile.json",
+        "src/lib/moral-trade/ai-governance.ts",
+        "src/lib/moral-trade/copilot.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/ai-governance/health",
+        "/api/moral-trade/copilot/contract",
+      ],
+    },
+    {
+      key: "fairness_and_ml_docs",
+      priority: "high",
+      source:
+        "Hardt/Price/Srebro, Kleinberg/Mullainathan/Raghavan, Model Cards, and Datasheets for Datasets",
+      guidance:
+        "Fairness trade-offs, benchmark slices, model cards, datasheets, and promotion audits are required before any ML scaling.",
+      evidenceFiles: [
+        "config/moral-trade/evaluation-profile.json",
+        "config/moral-trade/ai-governance-profile.json",
+        "src/lib/moral-trade/evaluation.ts",
+        "src/lib/moral-trade/ai-governance.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/evaluation/health",
+        "/api/moral-trade/ai-governance/health",
+      ],
+    },
+    {
+      key: "human_ai_interaction",
+      priority: "high",
+      source: "Amershi et al. and Kulesza et al.",
+      guidance:
+        "Human-AI interaction should use staged explanation, bounded outputs, reviewer summaries, reversible assistance, and explanatory debugging.",
+      evidenceFiles: [
+        "config/moral-trade/copilot-contract.json",
+        "src/lib/moral-trade/copilot.ts",
+        "src/lib/moral-trade/evaluation.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/copilot/contract",
+        "/api/moral-trade/evaluation/health",
+      ],
     },
   ],
   requirements: [
@@ -292,7 +568,7 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
   ],
   nonClaims: [
     "This coverage profile proves repository artifacts and validator coverage, not live production liquidity or successful real-world trades.",
-    "The attached PDF is verified as present; the Markdown source is the phrase-checked requirements artifact used by this validator.",
+    "The attached PDF and Markdown source are verified as present and hash-checked; the Markdown source is the phrase-checked requirements artifact used by this validator.",
     "MPGF production evidence files remain separately governed and are not fabricated by this Moral Trade document-coverage profile.",
   ],
 };
@@ -305,7 +581,11 @@ export function validateMoralTradeDocumentCoverageProfile(
   profile: MoralTradeDocumentCoverageProfile = moralTradeDocumentCoverageProfile,
 ): MoralTradeDocumentCoverageValidation {
   const sourceKeys = profile.sourceDocuments.map((source) => source.key);
+  const sourceStackKeys = profile.sourceStackReferences.map((source) => source.key);
   const requirementKeys = profile.requirements.map((requirement) => requirement.key);
+  const duplicateSourceStackKeys = sourceStackKeys.filter(
+    (key, index) => sourceStackKeys.indexOf(key) !== index,
+  );
   const duplicateRequirementKeys = requirementKeys.filter(
     (key, index) => requirementKeys.indexOf(key) !== index,
   );
@@ -325,6 +605,46 @@ export function validateMoralTradeDocumentCoverageProfile(
         : exists
           ? `${source.path} exists${source.requiredPhrases.length ? " and contains required phrases" : ""}.`
           : `${source.path} is optional and absent.`,
+    );
+  });
+  const sourceDocumentArtifacts = profile.sourceDocuments.map((source) => {
+    const artifactHash = hashFileIfExists(source.path);
+
+    return {
+      key: source.key,
+      path: source.path,
+      artifactHash,
+      expectedHash: source.expectedSha256,
+      present: artifactHash != null,
+      hashMatches: artifactHash === source.expectedSha256,
+    } satisfies MoralTradeSourceDocumentArtifact;
+  });
+  const sourceArtifactChecks = sourceDocumentArtifacts.map((artifact) =>
+    check(
+      `source-artifact:${artifact.key}`,
+      `${artifact.path} source artifact hash`,
+      artifact.present && artifact.hashMatches,
+      artifact.present
+        ? `hash=${artifact.artifactHash}; expected=${artifact.expectedHash}`
+        : `${artifact.path} missing`,
+    ),
+  );
+  const sourceStackChecks = profile.sourceStackReferences.map((source) => {
+    const missingEvidence = source.evidenceFiles.filter((filePath) => !fileExists(filePath));
+    const hasRoutes = source.routeEvidence.length > 0;
+
+    return check(
+      `source-stack:${source.key}`,
+      `${source.source} implementation trace`,
+      missingEvidence.length === 0 && hasRoutes,
+      [
+        `priority=${source.priority}`,
+        `evidence=${source.evidenceFiles.length - missingEvidence.length}/${source.evidenceFiles.length}`,
+        `routes=${source.routeEvidence.length}`,
+        missingEvidence.length ? `missingEvidence=${missingEvidence.join("|")}` : "",
+      ]
+        .filter(Boolean)
+        .join(", "),
     );
   });
   const requirementChecks = profile.requirements.map((requirement) => {
@@ -352,6 +672,47 @@ export function validateMoralTradeDocumentCoverageProfile(
         .join(", "),
     );
   });
+  const canonicalInstructionText = readTextIfExists(profile.canonicalInstruction.path);
+  const canonicalInstructionHash = canonicalInstructionText
+    ? hashText(canonicalInstructionText)
+    : null;
+  const missingInstructionPhrases = profile.canonicalInstruction.requiredPhrases.filter(
+    (phrase) =>
+      !canonicalInstructionText?.toLowerCase().includes(phrase.toLowerCase()),
+  );
+  const missingInstructionCommands = profile.canonicalInstruction.verificationCommands.filter(
+    (command) => !canonicalInstructionText?.includes(command),
+  );
+  const missingInstructionRoutes = profile.canonicalInstruction.routeEvidence.filter(
+    (route) => !canonicalInstructionText?.includes(route),
+  );
+  const instructionChecks = [
+    check(
+      "instruction:canonical-build",
+      "Canonical build instruction is present and validator-bound",
+      Boolean(canonicalInstructionText) &&
+        missingInstructionPhrases.length === 0 &&
+        missingInstructionCommands.length === 0 &&
+        missingInstructionRoutes.length === 0,
+      [
+        canonicalInstructionText
+          ? `${profile.canonicalInstruction.path} exists`
+          : `${profile.canonicalInstruction.path} missing`,
+        canonicalInstructionHash ? `hash=${canonicalInstructionHash}` : "",
+        missingInstructionPhrases.length
+          ? `missingPhrases=${missingInstructionPhrases.join("|")}`
+          : "phrases=complete",
+        missingInstructionCommands.length
+          ? `missingCommands=${missingInstructionCommands.join("|")}`
+          : "commands=complete",
+        missingInstructionRoutes.length
+          ? `missingRoutes=${missingInstructionRoutes.join("|")}`
+          : "routes=complete",
+      ]
+        .filter(Boolean)
+        .join(", "),
+    ),
+  ];
   const structureChecks = [
     check(
       "structure:requirement-coverage",
@@ -374,15 +735,34 @@ export function validateMoralTradeDocumentCoverageProfile(
       duplicateRequirementKeys.length ? duplicateRequirementKeys.join(", ") : "No duplicate keys.",
     ),
     check(
+      "structure:recommended-source-stack",
+      "Coverage maps every recommended source-stack family",
+      hasAll(sourceStackKeys, REQUIRED_RECOMMENDED_SOURCE_STACK_KEYS) &&
+        duplicateSourceStackKeys.length === 0,
+      [
+        sourceStackKeys.join(", "),
+        duplicateSourceStackKeys.length ? `duplicates=${duplicateSourceStackKeys.join("|")}` : "",
+      ]
+        .filter(Boolean)
+        .join("; "),
+    ),
+    check(
       "structure:non-claims",
       "Coverage publishes non-claims",
       profile.nonClaims.some((nonClaim) => /not live production liquidity/i.test(nonClaim)) &&
-        profile.nonClaims.some((nonClaim) => /PDF is verified as present/i.test(nonClaim)) &&
+        profile.nonClaims.some((nonClaim) => /hash-checked/i.test(nonClaim)) &&
         profile.nonClaims.some((nonClaim) => /not fabricated/i.test(nonClaim)),
       profile.nonClaims.join(" | "),
     ),
   ];
-  const checks = [...sourceChecks, ...requirementChecks, ...structureChecks];
+  const checks = [
+    ...sourceChecks,
+    ...sourceArtifactChecks,
+    ...instructionChecks,
+    ...sourceStackChecks,
+    ...requirementChecks,
+    ...structureChecks,
+  ];
   const blockers = checks
     .filter((entry) => entry.status === "fail")
     .map((entry) => `${entry.id}: ${entry.label}`);
@@ -393,7 +773,10 @@ export function validateMoralTradeDocumentCoverageProfile(
     validatorVersion: MORAL_TRADE_DOCUMENT_COVERAGE_VALIDATOR_VERSION,
     profileVersion: profile.version,
     sourceDocumentCount: profile.sourceDocuments.length,
+    sourceStackCount: profile.sourceStackReferences.length,
     requirementCount: profile.requirements.length,
+    sourceDocumentArtifacts,
+    canonicalInstructionHash,
     checks,
     blockers,
   };

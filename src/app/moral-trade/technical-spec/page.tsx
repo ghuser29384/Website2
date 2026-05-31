@@ -1508,6 +1508,17 @@ export default async function MoralTradeTechnicalSpecPage() {
               </ul>
             </article>
             <article className="panel protocol-contract-card">
+              <h3>Trigger-standard matrix</h3>
+              <ul className="clean-list">
+                {externalityProfile.triggerStandardMatrix.slice(0, 5).map((entry) => (
+                  <li key={entry.triggerCode}>
+                    {entry.triggerCode.replaceAll("_", " ")}:{" "}
+                    {entry.requiredStandards.join(", ")}
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
               <h3>Remedy controls</h3>
               <ul className="clean-list">
                 {externalityProfile.remedyControls.map((control) => (

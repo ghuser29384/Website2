@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.9-2026-05",
+  "version": "moral-trade-api-contract-v0.13-2026-05",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -372,7 +372,7 @@
       "responseSchema": "document_coverage_health_response",
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
-      "fallback": "Return document-coverage blockers that map the Moral Trade improvement documents to implemented validators, routes, and tests; never fabricate production evidence or claim live liquidity."
+      "fallback": "Return document-coverage blockers that map the Moral Trade improvement documents and canonical build instruction to implemented validators, routes, and tests; never fabricate production evidence or claim live liquidity."
     },
     {
       "key": "moral_trade_ai_shadow_contract",
@@ -1113,11 +1113,11 @@
     },
     {
       "key": "externality_health_response",
-      "purpose": "Due-diligence steps, externality trigger codes, review standards, affected-party remedy controls, and allowed outcomes.",
+      "purpose": "Due-diligence steps, externality trigger codes, trigger-standard matrix, review standards, affected-party remedy controls, and allowed outcomes.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when externality validator passes." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Externality due-diligence validation result." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published due-diligence steps, triggers, standards, remedy controls, and outcomes." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published due-diligence steps, triggers, trigger-standard matrix, standards, remedy controls, and outcomes." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Externality blockers." }
       ]
     },
@@ -1142,8 +1142,11 @@
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the document coverage validation run." },
         { "key": "profileVersion", "type": "string", "required": true, "privacy": "public", "description": "Document coverage profile version." },
         { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable purpose for the document coverage contract." },
-        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for source documents, recommendation families, implementation evidence, test files, route evidence, and non-claims." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Published source-document records, requirement mappings, evidence files, test files, route evidence, and non-claims." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for source documents, source artifact hashes, recommendation families, implementation evidence, test files, route evidence, and non-claims." },
+        { "key": "sourceDocumentArtifacts", "type": "source_artifact_array", "required": true, "privacy": "public_contract", "description": "Hash-checked Markdown and PDF source artifacts used as the authoritative improvement documents." },
+        { "key": "sourceStackReferences", "type": "recommended_source_stack_array", "required": true, "privacy": "public_contract", "description": "Recommended source-stack traceability records that map Ord, MoralTrade.org public materials, OECD, UNGP, ILO, ETI/Fairtrade, Open Supply Hub, W3C PROV, GS1 EPCIS, NIST, fairness, documentation, and HCI guidance to concrete implementation files and public routes." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Published source-document records with SHA-256 artifact hashes, recommended source-stack traceability, canonical build instruction artifact hash, verification commands, requirement mappings, evidence files, test files, route evidence, and non-claims." },
+        { "key": "canonicalInstruction", "type": "object", "required": true, "privacy": "public_contract", "description": "Nested under publicContract: canonical Core Moral Trade build-instruction path, required phrase count, verification commands, route evidence, and SHA-256 artifact hash." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Document coverage blockers that prevent claiming the improvement documents are implemented." }
       ]
     },

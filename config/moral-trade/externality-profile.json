@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-externality-v0.1-2026-05",
+  "version": "moral-trade-externality-v0.2-2026-05",
   "purpose": "Public due-diligence contract for reviewing third-party externalities, affected-party standing, remedy paths, and ethical-trade standards before Moral Trade proposals become relied upon.",
   "dueDiligenceSteps": [
     {
@@ -107,6 +107,48 @@
       "scope": "Identifier, deduplication, and public traceability discipline for supplier-like entities."
     }
   ],
+  "triggerStandardMatrix": [
+    {
+      "triggerCode": "unrepresented_third_party",
+      "requiredStandards": ["oecd_due_diligence", "un_guiding_principles"],
+      "evidenceExpectations": ["affected-party class", "materiality statement", "remedy path"]
+    },
+    {
+      "triggerCode": "vulnerable_party_pressure",
+      "requiredStandards": ["oecd_due_diligence", "un_guiding_principles", "ilo_fundamental_principles"],
+      "evidenceExpectations": ["voluntariness screen", "pressure-risk explanation", "reviewer signoff"]
+    },
+    {
+      "triggerCode": "political_or_campaign_adjacent",
+      "requiredStandards": ["oecd_due_diligence", "un_guiding_principles"],
+      "evidenceExpectations": ["campaign-adjacency boundary", "blocked contribution check", "privacy-safe public reason code"]
+    },
+    {
+      "triggerCode": "paid_action_pressure",
+      "requiredStandards": ["oecd_due_diligence", "un_guiding_principles", "ilo_fundamental_principles"],
+      "evidenceExpectations": ["compensation-pressure screen", "baseline incentive review", "human reviewer approval"]
+    },
+    {
+      "triggerCode": "labor_or_supply_chain",
+      "requiredStandards": ["oecd_due_diligence", "un_guiding_principles", "ilo_fundamental_principles", "eti_base_code", "open_supply_hub"],
+      "evidenceExpectations": ["supplier identifier", "labor-claim scope", "traceability or dedupe evidence"]
+    },
+    {
+      "triggerCode": "recipient_or_destination_risk",
+      "requiredStandards": ["oecd_due_diligence", "un_guiding_principles", "fairtrade_standards"],
+      "evidenceExpectations": ["destination governance review", "producer or recipient criteria", "remedy path"]
+    },
+    {
+      "triggerCode": "environment_or_community_impact",
+      "requiredStandards": ["oecd_due_diligence", "un_guiding_principles", "fairtrade_standards"],
+      "evidenceExpectations": ["community impact statement", "ecosystem or animal-impact scope", "mitigation or remediation plan"]
+    },
+    {
+      "triggerCode": "perverse_incentive",
+      "requiredStandards": ["oecd_due_diligence", "un_guiding_principles"],
+      "evidenceExpectations": ["baseline credibility evidence", "newly escalated behavior screen", "challenge-window reason code"]
+    }
+  ],
   "remedyControls": [
     {
       "key": "affected_party_standing",
@@ -139,6 +181,7 @@
   "externalityTests": [
     "externality_profile_validator",
     "due_diligence_steps_contract",
+    "trigger_standard_matrix_contract",
     "affected_party_remedy_gate",
     "labor_supply_chain_standard_gate",
     "health_route_contract_smoke",

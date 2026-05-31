@@ -22,6 +22,13 @@ export async function GET(request: Request) {
 
   const profile = getMoralTradeDocumentCoverageProfile();
   const validation = validateMoralTradeDocumentCoverageProfile(profile);
+  const canonicalInstruction = {
+    path: profile.canonicalInstruction.path,
+    requiredPhraseCount: profile.canonicalInstruction.requiredPhrases.length,
+    verificationCommands: profile.canonicalInstruction.verificationCommands,
+    routeEvidence: profile.canonicalInstruction.routeEvidence,
+    artifactHash: validation.canonicalInstructionHash,
+  };
 
   return buildMoralTradeApiJsonResponse({
     ok: validation.status === "pass",
@@ -29,13 +36,36 @@ export async function GET(request: Request) {
     profileVersion: profile.version,
     purpose: profile.purpose,
     validation,
+    sourceDocumentArtifacts: validation.sourceDocumentArtifacts,
+    sourceStackReferences: profile.sourceStackReferences.map((source) => ({
+      key: source.key,
+      priority: source.priority,
+      source: source.source,
+      guidance: source.guidance,
+      evidenceFiles: source.evidenceFiles,
+      routeEvidence: source.routeEvidence,
+    })),
+    canonicalInstruction,
     publicContract: {
       sourceDocuments: profile.sourceDocuments.map((source) => ({
+        artifactHash:
+          validation.sourceDocumentArtifacts.find((artifact) => artifact.key === source.key)
+            ?.artifactHash ?? null,
+        expectedHash: source.expectedSha256,
         key: source.key,
         label: source.label,
         path: source.path,
         required: source.required,
         requiredPhraseCount: source.requiredPhrases.length,
+      })),
+      canonicalInstruction,
+      sourceStackReferences: profile.sourceStackReferences.map((source) => ({
+        key: source.key,
+        priority: source.priority,
+        source: source.source,
+        guidance: source.guidance,
+        evidenceFiles: source.evidenceFiles,
+        routeEvidence: source.routeEvidence,
       })),
       requirements: profile.requirements.map((requirement) => ({
         key: requirement.key,

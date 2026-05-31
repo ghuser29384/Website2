@@ -386,6 +386,11 @@ export async function GET(request: Request) {
       externalityReviewStandards: externalityProfile.reviewStandards.map(
         (standard) => standard.key,
       ),
+      externalityTriggerStandardMatrix:
+        externalityProfile.triggerStandardMatrix.map((entry) => ({
+          triggerCode: entry.triggerCode,
+          requiredStandards: entry.requiredStandards,
+        })),
       externalityRemedyControls: externalityProfile.remedyControls.map((control) => control.key),
       transparencyReportContractVersion: transparencyReportContract.version,
       transparencyReportMinimumPublicCount:
@@ -430,9 +435,20 @@ export async function GET(request: Request) {
       documentCoverageSourceDocuments: documentCoverageProfile.sourceDocuments.map(
         (source) => source.key,
       ),
+      documentCoverageSourceDocumentArtifacts:
+        documentCoverageValidation.sourceDocumentArtifacts,
+      documentCoverageSourceStackReferences:
+        documentCoverageProfile.sourceStackReferences.map((source) => source.key),
       documentCoverageRequirementKeys: documentCoverageProfile.requirements.map(
         (requirement) => requirement.key,
       ),
+      documentCoverageCanonicalInstruction: {
+        path: documentCoverageProfile.canonicalInstruction.path,
+        verificationCommands:
+          documentCoverageProfile.canonicalInstruction.verificationCommands,
+        routeEvidence: documentCoverageProfile.canonicalInstruction.routeEvidence,
+        artifactHash: documentCoverageValidation.canonicalInstructionHash,
+      },
       documentCoverageNonClaims: documentCoverageProfile.nonClaims,
       qualityMetrics: profile.qualityMetrics,
     },
