@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 
 import { createOfferAction } from "@/app/actions";
@@ -138,6 +138,25 @@ interface EvidenceProvenancePreflightItem {
   status: MoralTradeVerificationStepStatus;
 }
 
+interface TextareaTemplateSuggestion {
+  body: string;
+  keywords: readonly string[];
+  title: string;
+}
+
+interface TemplateTextareaSuggestionsProps {
+  helpText: string;
+  id?: string;
+  label: string;
+  name: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  required?: boolean;
+  rows?: number;
+  suggestions: readonly TextareaTemplateSuggestion[];
+  value: string;
+}
+
 const defaultOffsetFields = createDefaultDonationOffsetFields();
 
 const OFFER_TEMPLATES: OfferTemplate[] = [
@@ -234,6 +253,88 @@ const OFFER_TEMPLATES: OfferTemplate[] = [
   },
 ];
 
+const EXIT_CONDITION_TEMPLATE_SUGGESTIONS: TextareaTemplateSuggestion[] = [
+  {
+    title: "No acceptance by date",
+    body: "If no counterparty accepts by [date], the offer expires automatically.",
+    keywords: ["acceptance", "accepts", "date", "deadline", "expire", "expiry"],
+  },
+  {
+    title: "Evidence deadline missed",
+    body:
+      "If required evidence is not submitted by the deadline, the record remains unresolved and no completion badge is shown.",
+    keywords: ["badge", "completion", "deadline", "evidence", "missing", "unresolved"],
+  },
+  {
+    title: "Missed check-ins",
+    body:
+      "If either party misses two scheduled check-ins, the trade pauses until both parties reconfirm.",
+    keywords: ["check-ins", "missed", "pause", "reconfirm", "schedule"],
+  },
+  {
+    title: "Verification review",
+    body:
+      "If payment, donation, or offset evidence cannot be verified, the trade is paused for manual review.",
+    keywords: ["donation", "evidence", "manual review", "offset", "payment", "verify"],
+  },
+  {
+    title: "Material change before acceptance",
+    body:
+      "If a material fact changes before acceptance, either party may cancel before performance begins.",
+    keywords: ["acceptance", "cancel", "change", "material", "performance"],
+  },
+  {
+    title: "Baseline already completed",
+    body:
+      "If the agreed no-trade baseline has already been completed before matching, the offer expires.",
+    keywords: ["baseline", "completed", "expire", "matching", "no-trade"],
+  },
+  {
+    title: "Counterparty withdraws",
+    body:
+      "If the counterparty withdraws before the acceptance deadline, both parties are released from the commitment.",
+    keywords: ["acceptance", "commitment", "deadline", "released", "withdraw"],
+  },
+  {
+    title: "Platform safety review",
+    body:
+      "If the platform flags the trade for legality, safety, coercion, or threat concerns, the trade is paused pending review.",
+    keywords: ["coercion", "legality", "pause", "safety", "threat"],
+  },
+  {
+    title: "Mutual written cancellation",
+    body:
+      "If both parties mutually agree in writing, the trade can be cancelled before the evidence deadline.",
+    keywords: ["cancel", "deadline", "evidence", "mutual", "writing"],
+  },
+  {
+    title: "Completion date passes",
+    body:
+      "If the offer is not completed by [date], it expires and is marked incomplete rather than failed.",
+    keywords: ["complete", "date", "expire", "failed", "incomplete"],
+  },
+];
+
+const TEMPLATE_SUGGESTION_STOP_WORDS = new Set([
+  "and",
+  "are",
+  "before",
+  "both",
+  "can",
+  "for",
+  "from",
+  "has",
+  "have",
+  "into",
+  "not",
+  "the",
+  "this",
+  "until",
+  "what",
+  "when",
+  "with",
+]);
+
 function formatUsd(amount: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -252,6 +353,197 @@ function toDateInputValue(value: string | null) {
 
 function readFormControlValue(event: { currentTarget: EventTarget }) {
   return (event.currentTarget as unknown as { value: string }).value;
+}
+
+function getTemplateSuggestionTokens(value: string) {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9-]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 2 && !TEMPLATE_SUGGESTION_STOP_WORDS.has(token));
+}
+
+function getTemplateSuggestionSearchText(suggestion: TextareaTemplateSuggestion) {
+  return [suggestion.title, suggestion.body, ...suggestion.keywords].join(" ").toLowerCase();
+}
+
+function filterTemplateSuggestions(
+  suggestions: readonly TextareaTemplateSuggestion[],
+  value: string,
+) {
+  const tokens = getTemplateSuggestionTokens(value);
+
+  if (!tokens.length) {
+    return suggestions;
+  }
+
+  return suggestions.filter((suggestion) => {
+    const searchText = getTemplateSuggestionSearchText(suggestion);
+
+    return tokens.some((token) => searchText.includes(token));
+  });
+}
+
+function TemplateTextareaSuggestions({
+  helpText,
+  id,
+  label,
+  name,
+  onChange,
+  placeholder,
+  required = false,
+  rows = 3,
+  suggestions,
+  value,
+}: TemplateTextareaSuggestionsProps) {
+  const generatedId = useId();
+  const helpId = useId();
+  const instructionsId = useId();
+  const labelId = useId();
+  const listboxId = useId();
+  const textareaId = id ?? generatedId;
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const filteredSuggestions = useMemo(
+    () => filterTemplateSuggestions(suggestions, value),
+    [suggestions, value],
+  );
+  const highlightedIndex = filteredSuggestions.length
+    ? Math.min(activeIndex, filteredSuggestions.length - 1)
+    : -1;
+
+  function acceptSuggestion(suggestion: TextareaTemplateSuggestion) {
+    onChange(suggestion.body);
+    setIsOpen(false);
+    setActiveIndex(0);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Escape" && isOpen) {
+      event.preventDefault();
+      setIsOpen(false);
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setIsOpen(true);
+      setActiveIndex((currentIndex) =>
+        filteredSuggestions.length ? (currentIndex + 1) % filteredSuggestions.length : 0,
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsOpen(true);
+      setActiveIndex((currentIndex) =>
+        filteredSuggestions.length
+          ? (currentIndex - 1 + filteredSuggestions.length) % filteredSuggestions.length
+          : 0,
+      );
+      return;
+    }
+
+    if (
+      (event.key === "Enter" || event.key === "Tab") &&
+      isOpen &&
+      highlightedIndex >= 0
+    ) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+      }
+
+      acceptSuggestion(filteredSuggestions[highlightedIndex]);
+    }
+  }
+
+  return (
+    <div
+      className="field template-textarea-field"
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget as Node | null;
+
+        if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
+          setIsOpen(false);
+        }
+      }}
+    >
+      <label htmlFor={textareaId} id={labelId}>
+        {label}
+      </label>
+      <div className="template-textarea-shell">
+        <textarea
+          aria-activedescendant={
+            isOpen && highlightedIndex >= 0
+              ? `${listboxId}-option-${highlightedIndex}`
+              : undefined
+          }
+          aria-autocomplete="list"
+          aria-controls={listboxId}
+          aria-describedby={`${helpId} ${instructionsId}`}
+          id={textareaId}
+          name={name}
+          onChange={(event) => {
+            onChange(readFormControlValue(event));
+            setIsOpen(true);
+            setActiveIndex(0);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setActiveIndex(0);
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          required={required}
+          rows={rows}
+          value={value}
+        />
+        {isOpen ? (
+          <div className="template-suggestion-panel">
+            <div className="template-suggestion-panel-head">
+              <span>Templates</span>
+              <small>Optional</small>
+            </div>
+            {filteredSuggestions.length ? (
+              <div
+                className="template-suggestion-list"
+                id={listboxId}
+                role="listbox"
+                aria-label={`${label} templates`}
+              >
+                {filteredSuggestions.map((suggestion, index) => (
+                  <button
+                    aria-selected={index === highlightedIndex}
+                    className="template-suggestion-option"
+                    id={`${listboxId}-option-${index}`}
+                    key={suggestion.body}
+                    role="option"
+                    type="button"
+                    onClick={() => acceptSuggestion(suggestion)}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setActiveIndex(index)}
+                  >
+                    <strong>{suggestion.title}</strong>
+                    <span>{suggestion.body}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="template-suggestion-empty" role="status">
+                No matching templates. Custom text is fine.
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+      <small id={helpId}>{helpText}</small>
+      <span className="sr-only" id={instructionsId}>
+        Template suggestions appear after this field. Use arrow keys to move through suggestions,
+        Enter or Tab to accept the highlighted template, or Escape to close the suggestions.
+      </span>
+    </div>
+  );
 }
 
 function formatOfferModeLabel(mode: OfferMode) {
@@ -1287,21 +1579,17 @@ export function OfferCreateForm({
           </small>
         </label>
 
-        <label className="field">
-          <span>Exit, pause, or expiry condition</span>
-          <textarea
-            name="exit_condition"
-            onChange={(event) => setExitCondition(readFormControlValue(event))}
-            placeholder="e.g. If evidence is missing by the deadline, the record remains unresolved and no completion badge is shown."
-            required
-            rows={3}
-            value={exitCondition}
-          />
-          <small>
-            Short, bounded trades are easier to trust than open-ended commitments with unclear exit
-            rules.
-          </small>
-        </label>
+        <TemplateTextareaSuggestions
+          helpText="Short, bounded trades are easier to trust than open-ended commitments with unclear exit rules."
+          label="Exit, pause, or expiry condition"
+          name="exit_condition"
+          onChange={setExitCondition}
+          placeholder="e.g. If evidence is missing by the deadline, the record remains unresolved and no completion badge is shown."
+          required
+          rows={3}
+          suggestions={EXIT_CONDITION_TEMPLATE_SUGGESTIONS}
+          value={exitCondition}
+        />
 
         {isOffset ? (
           <label className="field">

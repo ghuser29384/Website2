@@ -2853,6 +2853,25 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(globalCss, /protocol-evidence-row-list/);
 });
 
+test("offer exit condition field exposes accessible template suggestions", () => {
+  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+  const globalCss = readRepoFile("src/app/globals.css");
+
+  assert.match(offerForm, /TemplateTextareaSuggestions/);
+  assert.match(offerForm, /EXIT_CONDITION_TEMPLATE_SUGGESTIONS/);
+  assert.match(offerForm, /If required evidence is not submitted by the deadline/);
+  assert.match(offerForm, /If payment, donation, or offset evidence cannot be verified/);
+  assert.match(offerForm, /aria-autocomplete="list"/);
+  assert.match(offerForm, /role="listbox"/);
+  assert.match(offerForm, /event\.key === "ArrowDown"/);
+  assert.match(offerForm, /event\.key === "ArrowUp"/);
+  assert.match(offerForm, /event\.key === "Escape"/);
+  assert.match(offerForm, /event\.key === "Enter" \|\| event\.key === "Tab"/);
+  assert.match(offerForm, /onChange=\{setExitCondition\}/);
+  assert.match(globalCss, /template-suggestion-panel/);
+  assert.match(globalCss, /template-suggestion-option\[aria-selected="true"\]/);
+});
+
 test("offers page keeps content before the footer in source order", () => {
   const offersPage = readRepoFile("src/app/offers/page.tsx");
   const mainIndex = offersPage.indexOf("<main");
