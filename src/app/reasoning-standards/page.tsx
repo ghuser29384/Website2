@@ -3,9 +3,22 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { StatusBadge } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import {
+  getMoralTradeCopilotContract,
+  validateMoralTradeCopilotContract,
+} from "@/lib/moral-trade/copilot";
+import {
+  getMoralTradeProvenanceContract,
+  validateMoralTradeProvenanceContract,
+} from "@/lib/moral-trade/provenance";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl } from "@/lib/seo";
+import {
+  getOfferReviewWorkflowContract,
+  validateOfferReviewWorkflowContract,
+} from "@/lib/proposal-review";
 
 export const metadata: Metadata = {
   title: "Reasoning standards",
@@ -23,8 +36,33 @@ export const metadata: Metadata = {
   },
 };
 
+function formatReasoningToken(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 export default async function ReasoningStandardsPage() {
   const viewer = await getViewer();
+  const reviewWorkflowContract = getOfferReviewWorkflowContract();
+  const reviewWorkflowValidation =
+    validateOfferReviewWorkflowContract(reviewWorkflowContract);
+  const copilotContract = getMoralTradeCopilotContract();
+  const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
+  const provenanceContract = getMoralTradeProvenanceContract();
+  const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
+  const protocolContractStatus =
+    reviewWorkflowValidation.status === "pass" &&
+    copilotValidation.status === "pass" &&
+    provenanceValidation.status === "pass"
+      ? "pass"
+      : "fail";
+  const protocolContractCheckCount =
+    reviewWorkflowValidation.checks.length +
+    copilotValidation.checks.length +
+    provenanceValidation.checks.length;
+  const protocolContractBlockerCount =
+    reviewWorkflowValidation.blockers.length +
+    copilotValidation.blockers.length +
+    provenanceValidation.blockers.length;
 
   return (
     <div className="page-shell">
@@ -118,6 +156,112 @@ export default async function ReasoningStandardsPage() {
               <p>
                 Payment language must stay aligned with the terms. Evidence-gated review,
                 third-party payment records, and pending verification are not legal escrow.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="protocol-backed-standards-heading">
+          <div className="section-head">
+            <p className="eyebrow">Protocol-backed standards</p>
+            <h2 id="protocol-backed-standards-heading">
+              The public standards now resolve to validator contracts.
+            </h2>
+            <p>
+              The audit asked Moral Trade to move from policy prose to policy-enforced workflows.
+              These checks expose the fixed review loop, approved copilot output, and provenance
+              rules behind a draft before anyone treats it as matchable or complete.
+            </p>
+          </div>
+
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Reasoning standard health</p>
+              <div className="protocol-workflow-card-head">
+                <h3>{protocolContractStatus}</h3>
+                <StatusBadge tone={protocolContractStatus === "pass" ? "default" : "warning"}>
+                  {protocolContractStatus}
+                </StatusBadge>
+              </div>
+              <p>
+                {protocolContractCheckCount} validator check(s),{" "}
+                {protocolContractBlockerCount} blocker(s) across the review workflow, copilot
+                contract, and provenance schema.
+              </p>
+            </div>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/api/moral-trade/review-workflow/contract">
+                Review workflow JSON
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/copilot/contract">
+                Copilot contract
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/provenance/schema">
+                Provenance schema
+              </Link>
+            </div>
+          </div>
+
+          <div className="review-workflow-grid" aria-label="Review workflow standard cards">
+            {reviewWorkflowContract.detailWorkflowCards.map((card) => (
+              <article className="panel review-workflow-card" key={card.key}>
+                <div className="review-workflow-card-head">
+                  <p className="detail-kicker">{formatReasoningToken(card.key)}</p>
+                  <StatusBadge tone="secondary">{card.requiredFactorCodes.length} factors</StatusBadge>
+                </div>
+                <h3>{card.label}</h3>
+                <p className="route-text">{card.purpose}</p>
+                <div className="review-factor-list" aria-label={`${card.label} required factor codes`}>
+                  {card.requiredFactorCodes.map((factorCode) => (
+                    <span key={factorCode}>{factorCode}</span>
+                  ))}
+                </div>
+                <p className="review-next-step">
+                  <strong>Rule:</strong> {card.nextStepRule}
+                </p>
+              </article>
+            ))}
+          </div>
+
+          <div className="protocol-review-grid">
+            <article className="panel data-card">
+              <h3>Fixed verification loop</h3>
+              <ol className="protocol-verification-list">
+                {copilotContract.verificationLoop.map((step) => (
+                  <li className="protocol-verification-step" key={step.key}>
+                    <span className="protocol-step-status">
+                      {step.blocksMatchable ? "Blocks" : "Routes"}
+                    </span>
+                    <strong>{step.label}</strong>
+                    <small>{formatReasoningToken(step.key)}</small>
+                  </li>
+                ))}
+              </ol>
+            </article>
+
+            <article className="panel data-card">
+              <h3>Approved copilot output</h3>
+              <ul className="clean-list">
+                {copilotContract.approvedOutputSections.map((section) => (
+                  <li key={section}>{formatReasoningToken(section)}</li>
+                ))}
+              </ul>
+              <p className="panel-note">
+                The contract permits summaries, cited evidence, uncertainty flags, and next steps;
+                it does not permit hidden reasoning or autonomous status changes.
+              </p>
+            </article>
+
+            <article className="panel data-card">
+              <h3>Evidence object rules</h3>
+              <ul className="clean-list">
+                {provenanceContract.validationRules.slice(0, 6).map((rule) => (
+                  <li key={rule.key}>{rule.label}</li>
+                ))}
+              </ul>
+              <p className="panel-note">
+                Artifacts, claims, review decisions, activities, agents, and traceability events
+                stay separate so proof can be challenged without broad moral overclaiming.
               </p>
             </article>
           </div>

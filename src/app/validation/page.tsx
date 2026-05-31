@@ -9,9 +9,14 @@ import {
   PageHero,
   SectionHeader,
   StepCard,
+  StatusBadge,
   TradeFlowDiagram,
 } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import {
+  getMoralTradeChallengeAppealContract,
+  validateMoralTradeChallengeAppealContract,
+} from "@/lib/moral-trade/challenge-appeal";
 import { validateMoralTradeProtocolProfile } from "@/lib/moral-trade/protocol";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -43,6 +48,9 @@ export const metadata: Metadata = {
 export default async function ValidationPage() {
   const viewer = await getViewer();
   const protocolValidation = validateMoralTradeProtocolProfile();
+  const challengeAppealContract = getMoralTradeChallengeAppealContract();
+  const challengeAppealValidation =
+    validateMoralTradeChallengeAppealContract(challengeAppealContract);
 
   return (
     <div className="page-shell">
@@ -166,6 +174,72 @@ export default async function ValidationPage() {
                 <p>{standard.detail}</p>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="challenge-appeal-heading">
+          <SectionHeader
+            eyebrow="Challenge and appeal contract"
+            id="challenge-appeal-heading"
+            title="Appeals are scoped to reviewable claims, not general moral disagreement."
+          >
+            Challenges can target a specific claim, evidence row, baseline concern, disclosure
+            decision, externality trigger, completion state, or policy flag. They do not mutate
+            live state by themselves; they route a human review lane with redacted provenance.
+          </SectionHeader>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Appeal contract {challengeAppealContract.version}</p>
+              <div className="protocol-workflow-card-head">
+                <h3>{challengeAppealValidation.status}</h3>
+                <StatusBadge tone={challengeAppealValidation.status === "pass" ? "default" : "warning"}>
+                  {challengeAppealValidation.status}
+                </StatusBadge>
+              </div>
+              <p>
+                {challengeAppealValidation.checks.length} check(s),{" "}
+                {challengeAppealValidation.blockers.length} blocker(s),{" "}
+                {challengeAppealContract.appealTriggers.length} trigger(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
+              Open appeal contract JSON
+            </Link>
+          </div>
+          <div className="data-grid">
+            <article className="panel data-card">
+              <h3>Reviewable subjects</h3>
+              <p className="route-text">
+                {challengeAppealContract.subjects.map((subject) => subject.replaceAll("_", " ")).join(", ")}.
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Standing categories</h3>
+              <p className="route-text">
+                {challengeAppealContract.standingCategories
+                  .map((standing) => standing.replaceAll("_", " "))
+                  .join(", ")}
+                .
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Appeal triggers</h3>
+              <p className="route-text">
+                {challengeAppealContract.appealTriggers
+                  .map((trigger) => trigger.replaceAll("_", " "))
+                  .join(", ")}
+                .
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Allowed outcomes</h3>
+              <p className="route-text">
+                {challengeAppealContract.allowedOutcomes
+                  .map((outcome) => outcome.replaceAll("_", " "))
+                  .join(", ")}
+                .
+              </p>
+            </article>
           </div>
         </section>
 

@@ -3,8 +3,12 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { Breadcrumbs } from "@/components/ui/page-primitives";
+import { Breadcrumbs, StatusBadge } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import {
+  getMoralTradeAiGovernanceProfile,
+  validateMoralTradeAiGovernanceProfile,
+} from "@/lib/moral-trade/ai-governance";
 import { buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -30,8 +34,15 @@ export const metadata: Metadata = {
   },
 };
 
+function formatMethodologyToken(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 export default async function MethodologyPage() {
   const viewer = await getViewer();
+  const aiGovernanceProfile = getMoralTradeAiGovernanceProfile();
+  const aiGovernanceValidation =
+    validateMoralTradeAiGovernanceProfile(aiGovernanceProfile);
   const breadcrumbStructuredData = buildBreadcrumbJsonLd([
     { href: "/methodology", label: "Methodology" },
   ]);
@@ -91,6 +102,75 @@ export default async function MethodologyPage() {
             with payment or pledges, shared terms, and consent-gated previews rather than AI
             inference.
           </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <div className="protocol-workflow-card-head">
+            <div>
+              <p className="eyebrow">AI governance contract</p>
+              <h2>No hidden ML matching or state changes.</h2>
+            </div>
+            <StatusBadge tone={aiGovernanceValidation.status === "pass" ? "default" : "warning"}>
+              {aiGovernanceValidation.status}
+            </StatusBadge>
+          </div>
+          <p>
+            The governance profile keeps current decisioning deterministic and schema-bound. Any
+            future model used beyond explanation rendering must first publish model cards,
+            datasheets, benchmark slices, intended-use limits, fairness audits, and change logs.
+          </p>
+          <div className="data-grid">
+            <article className="panel data-card">
+              <h3>Decisioning mode</h3>
+              <p className="route-text">
+                {formatMethodologyToken(aiGovernanceProfile.decisioningMode)}. ML matching:{" "}
+                {String(aiGovernanceProfile.mlEnabledForMatching)}; ML state changes:{" "}
+                {String(aiGovernanceProfile.mlEnabledForStateChanges)}.
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Permitted automation</h3>
+              <ul className="compact-list">
+                {aiGovernanceProfile.permittedAutomation.map((entry) => (
+                  <li key={entry.key}>{entry.label}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel data-card">
+              <h3>Prohibited uses</h3>
+              <ul className="compact-list">
+                {aiGovernanceProfile.prohibitedUses.map((entry) => (
+                  <li key={entry.key}>{entry.label}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel data-card">
+              <h3>Required before ML</h3>
+              <ul className="compact-list">
+                {aiGovernanceProfile.requiredDocumentationBeforeMl.map((entry) => (
+                  <li key={entry.key}>{entry.label}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <p className="route-text">
+            Fairness documentation must cover{" "}
+            {aiGovernanceProfile.fairnessDocumentation.metrics
+              .map(formatMethodologyToken)
+              .join(", ")}{" "}
+            across{" "}
+            {aiGovernanceProfile.fairnessDocumentation.slices
+              .map(formatMethodologyToken)
+              .join(", ")}
+            .
+          </p>
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/api/moral-trade/ai-governance/health">
+              Open AI governance JSON
+            </Link>
+            <Link className="button button-secondary" href="/moral-trade/technical-spec">
+              Inspect technical spec
+            </Link>
+          </div>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Wish registry and staged disclosure</h2>

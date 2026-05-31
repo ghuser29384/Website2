@@ -14,7 +14,7 @@ import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getMoralTradeProvenanceContract } from "./provenance";
 
 export const MORAL_TRADE_REASONING_PACKET_CONTRACT_VERSION =
-  "moral-trade-reasoning-packets-v0.1-2026-05";
+  "moral-trade-reasoning-packets-v0.2-2026-05";
 
 export const MORAL_TRADE_REASONING_PACKET_VALIDATOR_VERSION =
   "moral-trade-reasoning-packet-validator-v0.1";
@@ -24,6 +24,20 @@ export type MoralTradeReasoningStatusTone =
   | "human-review"
   | "needs-input"
   | "pass";
+
+export type MoralTradeReasoningPacketFilterKey =
+  | "all"
+  | "needs-evidence"
+  | "human-review"
+  | "blocked"
+  | "pass-with-limits";
+
+export interface MoralTradeReasoningPacketFilter {
+  key: MoralTradeReasoningPacketFilterKey;
+  label: string;
+  href: string;
+  description: string;
+}
 
 export interface MoralTradeReasoningPacket {
   id: string;
@@ -53,6 +67,8 @@ export interface MoralTradeReasoningPacketContract {
   publicApiRoute: "/api/moral-trade/reasoning/packets";
   packetCount: number;
   requiredPacketFields: Array<keyof MoralTradeReasoningPacket>;
+  supportedFilters: readonly MoralTradeReasoningPacketFilter[];
+  filterCounts: Record<MoralTradeReasoningPacketFilterKey, number>;
   linkedContracts: {
     reviewWorkflowContractVersion: string;
     reviewWorkflowCardCount: number;
@@ -83,6 +99,40 @@ export interface MoralTradeReasoningPacketContractValidation {
 }
 
 const PUBLIC_REASONING_PACKET_COUNT = 5;
+
+export const MORAL_TRADE_REASONING_PACKET_FILTERS: readonly MoralTradeReasoningPacketFilter[] =
+  [
+    {
+      key: "all",
+      label: "All records",
+      href: "/reasoning-center",
+      description: "All public worked-example reasoning packets.",
+    },
+    {
+      key: "needs-evidence",
+      label: "Needs evidence",
+      href: "/reasoning-center?status=needs-evidence",
+      description: "Packets with missing or underspecified evidence gates.",
+    },
+    {
+      key: "human-review",
+      label: "Human review",
+      href: "/reasoning-center?status=human-review",
+      description: "Packets with at least one gate routed to human review.",
+    },
+    {
+      key: "blocked",
+      label: "Blocked",
+      href: "/reasoning-center?status=blocked",
+      description: "Packets blocked by deterministic safety or policy gates.",
+    },
+    {
+      key: "pass-with-limits",
+      label: "Pass with limits",
+      href: "/reasoning-center?status=pass-with-limits",
+      description: "Packets structurally matchable only after human review and provenance checks.",
+    },
+  ];
 
 const REQUIRED_REASONING_PACKET_FIELDS = [
   "id",
@@ -147,6 +197,58 @@ export function getReasoningStatusTone(
     default:
       return "needs-input";
   }
+}
+
+export function getMoralTradeReasoningPacketFilterKey(
+  value: unknown,
+): MoralTradeReasoningPacketFilterKey {
+  const normalized = Array.isArray(value) ? value[0] : value;
+  const key = String(normalized ?? "all").trim().toLowerCase();
+
+  return MORAL_TRADE_REASONING_PACKET_FILTERS.some((filter) => filter.key === key)
+    ? (key as MoralTradeReasoningPacketFilterKey)
+    : "all";
+}
+
+export function reasoningPacketMatchesFilter(
+  packet: MoralTradeReasoningPacket,
+  filterKey: MoralTradeReasoningPacketFilterKey,
+) {
+  switch (filterKey) {
+    case "needs-evidence":
+      return (
+        packet.statusCode === "needs_evidence" ||
+        packet.decisionSteps.some(
+          (step) => step.blocksMatchable && step.status === "needs_input",
+        )
+      );
+    case "human-review":
+      return packet.decisionSteps.some((step) => step.status === "human_review");
+    case "blocked":
+      return packet.statusTone === "blocked" || packet.statusCode === "blocked";
+    case "pass-with-limits":
+      return packet.statusCode === "matchable" && packet.statusTone === "pass";
+    default:
+      return true;
+  }
+}
+
+export function filterMoralTradeReasoningPackets(
+  packets: readonly MoralTradeReasoningPacket[],
+  filterKey: MoralTradeReasoningPacketFilterKey,
+) {
+  return packets.filter((packet) => reasoningPacketMatchesFilter(packet, filterKey));
+}
+
+export function getMoralTradeReasoningPacketFilterCounts(
+  packets: readonly MoralTradeReasoningPacket[],
+) {
+  return Object.fromEntries(
+    MORAL_TRADE_REASONING_PACKET_FILTERS.map((filter) => [
+      filter.key,
+      filterMoralTradeReasoningPackets(packets, filter.key).length,
+    ]),
+  ) as Record<MoralTradeReasoningPacketFilterKey, number>;
 }
 
 export function getWorkedCaseBaselineStatement(offer: Offer) {
@@ -224,6 +326,8 @@ export function getMoralTradeReasoningPacketContract(
     publicApiRoute: "/api/moral-trade/reasoning/packets",
     packetCount: packets.length,
     requiredPacketFields: [...REQUIRED_REASONING_PACKET_FIELDS],
+    supportedFilters: MORAL_TRADE_REASONING_PACKET_FILTERS,
+    filterCounts: getMoralTradeReasoningPacketFilterCounts(packets),
     linkedContracts: {
       reviewWorkflowContractVersion: reviewWorkflowContract.version,
       reviewWorkflowCardCount: reviewWorkflowContract.detailWorkflowCards.length,
@@ -366,6 +470,33 @@ export function validateMoralTradeReasoningPacketContract(
               .join("|")}`,
         )
         .join("; "),
+    ),
+    reasoningPacketCheck(
+      "filter-contract",
+      "Reasoning packet filters expose query facets and counts",
+      MORAL_TRADE_REASONING_PACKET_FILTERS.every(
+        (filter) =>
+          contract.supportedFilters.some(
+            (contractFilter) =>
+              contractFilter.key === filter.key &&
+              contractFilter.href === filter.href &&
+              contractFilter.label === filter.label,
+          ),
+      ) &&
+        contract.filterCounts.all === packets.length &&
+        Object.values(contract.filterCounts).every(
+          (count) => Number.isInteger(count) && count >= 0,
+        ) &&
+        contract.supportedFilters.every((filter) => {
+          if (filter.key === "all") {
+            return filter.href === "/reasoning-center";
+          }
+
+          return filter.href.includes(`status=${filter.key}`);
+        }),
+      contract.supportedFilters
+        .map((filter) => `${filter.key}:${contract.filterCounts[filter.key]}`)
+        .join(", "),
     ),
     reasoningPacketCheck(
       "public-link-and-contract-source",

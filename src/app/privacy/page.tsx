@@ -3,8 +3,13 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { StatusBadge } from "@/components/ui/page-primitives";
 import { BACKGROUND_DATA_INVENTORY } from "@/lib/background-privacy-controls";
 import { getViewer } from "@/lib/app-data";
+import {
+  getMoralTradeDisclosureContract,
+  validateMoralTradeDisclosureContract,
+} from "@/lib/moral-trade/disclosure";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -63,8 +68,14 @@ const transparencyRows = [
   },
 ] as const;
 
+function formatPrivacyToken(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 export default async function PrivacyPage() {
   const viewer = await getViewer();
+  const disclosureContract = getMoralTradeDisclosureContract();
+  const disclosureValidation = validateMoralTradeDisclosureContract(disclosureContract);
 
   return (
     <div className="page-shell">
@@ -141,6 +152,59 @@ export default async function PrivacyPage() {
             app also exposes portable profile export and import endpoints so wish data can move
             later if a more decentralized registry becomes preferable.
           </p>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <div className="protocol-workflow-card-head">
+            <div>
+              <p className="eyebrow">Disclosure contract</p>
+              <h2>Disclosure is stage-bound, field-bound, and non-mutating.</h2>
+            </div>
+            <StatusBadge tone={disclosureValidation.status === "pass" ? "default" : "warning"}>
+              {disclosureValidation.status}
+            </StatusBadge>
+          </div>
+          <p>
+            The public disclosure contract defines which fields can move from registry preview to
+            consent and introduced stages. It names redacted fields, search privacy controls,
+            owner approval, expiry windows, and the rule that evaluation cannot reveal private
+            fields or change grants by itself.
+          </p>
+          <div className="data-grid">
+            <article className="panel data-card">
+              <h3>Audience stages</h3>
+              <p className="route-text">
+                {disclosureContract.audienceStages.map(formatPrivacyToken).join(", ")}.
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Access levels</h3>
+              <p className="route-text">
+                {disclosureContract.accessLevels.map(formatPrivacyToken).join(", ")}.
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Redacted by default</h3>
+              <p className="route-text">
+                {disclosureContract.redactedFields.map(formatPrivacyToken).join(", ")}.
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Search privacy controls</h3>
+              <ul className="compact-list">
+                {disclosureContract.searchPrivacyControls.map((control) => (
+                  <li key={control.key}>{control.label}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/api/moral-trade/disclosure/contract">
+              Open disclosure JSON
+            </Link>
+            <Link className="button button-secondary" href="/trust">
+              Review trust boundaries
+            </Link>
+          </div>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Payment data</h2>

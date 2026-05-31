@@ -3,7 +3,40 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { StatusBadge } from "@/components/ui/page-primitives";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
+import {
+  auditMoralTradeApiImplementationContract,
+  getMoralTradeApiContractProfile,
+  validateMoralTradeApiContractProfile,
+} from "@/lib/moral-trade/api-contract";
+import { validateMoralTradeAiGovernanceProfile } from "@/lib/moral-trade/ai-governance";
+import {
+  getMoralTradeChallengeAppealContract,
+  validateMoralTradeChallengeAppealContract,
+} from "@/lib/moral-trade/challenge-appeal";
+import { validateMoralTradeDataModelProfile } from "@/lib/moral-trade/data-model";
+import {
+  getMoralTradeDisclosureContract,
+  validateMoralTradeDisclosureContract,
+} from "@/lib/moral-trade/disclosure";
+import { validateMoralTradeEvaluationProfile } from "@/lib/moral-trade/evaluation";
+import { validateMoralTradeExternalityProfile } from "@/lib/moral-trade/externality";
+import { validateMoralTradeIncidentResponseProfile } from "@/lib/moral-trade/incident-response";
+import { validateMoralTradeOperationsProfile } from "@/lib/moral-trade/operations";
+import {
+  auditMoralTradeRouteRecoveryManifest,
+  getMoralTradePerformanceProfile,
+  validateMoralTradePerformanceProfile,
+} from "@/lib/moral-trade/performance";
+import { validateMoralTradeProvenanceContract } from "@/lib/moral-trade/provenance";
+import {
+  getMoralTradeReasoningPacketContract,
+  getMoralTradeReasoningPackets,
+  validateMoralTradeReasoningPacketContract,
+} from "@/lib/moral-trade/reasoning-packets";
+import { validateMoralTradeSecurityProfile } from "@/lib/moral-trade/security";
+import { validateMoralTradeProtocolProfile } from "@/lib/moral-trade/protocol";
 import { CANONICAL_WORKED_CASE_COUNT } from "@/lib/seed-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -28,8 +61,123 @@ function formatStatusCount(value: number | null) {
   return value === null ? "Pending" : new Intl.NumberFormat("en-US").format(value);
 }
 
+type ValidationSummary = {
+  status: "pass" | "fail";
+  checks?: readonly unknown[];
+  blockers: readonly string[];
+};
+
+function summarizeValidationSurfaces(...surfaces: readonly ValidationSummary[]) {
+  return {
+    status: surfaces.every((surface) => surface.status === "pass") ? "pass" : "fail",
+    checkCount: surfaces.reduce((total, surface) => total + (surface.checks?.length ?? 0), 0),
+    blockerCount: surfaces.reduce((total, surface) => total + surface.blockers.length, 0),
+  };
+}
+
 export default async function StatusPage() {
   const [viewer, overview] = await Promise.all([getViewer(), getMarketplaceOverview()]);
+  const coreProtocolValidation = validateMoralTradeProtocolProfile();
+  const dataModelValidation = validateMoralTradeDataModelProfile();
+  const provenanceValidation = validateMoralTradeProvenanceContract();
+  const reasoningPackets = getMoralTradeReasoningPackets();
+  const reasoningPacketValidation = validateMoralTradeReasoningPacketContract(
+    getMoralTradeReasoningPacketContract(reasoningPackets),
+    reasoningPackets,
+  );
+  const operationsValidation = validateMoralTradeOperationsProfile();
+  const securityValidation = validateMoralTradeSecurityProfile();
+  const evaluationValidation = validateMoralTradeEvaluationProfile();
+  const aiGovernanceValidation = validateMoralTradeAiGovernanceProfile();
+  const disclosureValidation = validateMoralTradeDisclosureContract(
+    getMoralTradeDisclosureContract(),
+  );
+  const challengeAppealValidation = validateMoralTradeChallengeAppealContract(
+    getMoralTradeChallengeAppealContract(),
+  );
+  const externalityValidation = validateMoralTradeExternalityProfile();
+  const incidentResponseValidation = validateMoralTradeIncidentResponseProfile();
+  const performanceProfile = getMoralTradePerformanceProfile();
+  const performanceValidation = validateMoralTradePerformanceProfile(performanceProfile);
+  const routeRecoveryAudit = auditMoralTradeRouteRecoveryManifest({
+    profile: performanceProfile,
+  });
+  const apiContractProfile = getMoralTradeApiContractProfile();
+  const apiContractValidation = validateMoralTradeApiContractProfile(apiContractProfile);
+  const apiImplementationAudit = auditMoralTradeApiImplementationContract(apiContractProfile);
+  const protocolHealthSurfaces = [
+    {
+      label: "Core protocol and data model",
+      href: "/api/moral-trade/health",
+      summary:
+        "Required fields, statuses, factor codes, transition rules, privacy classes, and relationship boundaries.",
+      ...summarizeValidationSurfaces(coreProtocolValidation, dataModelValidation),
+    },
+    {
+      label: "Evidence provenance",
+      href: "/api/moral-trade/provenance/schema",
+      summary:
+        "Evidence artifacts, claims, reviewer decisions, traceability events, agents, and append-only persistence tables.",
+      ...summarizeValidationSurfaces(provenanceValidation),
+    },
+    {
+      label: "Reasoning Center packets",
+      href: "/api/moral-trade/reasoning/packets",
+      summary:
+        "Structured public packets, cited evidence rows, uncertainty flags, filters, and next human-controlled steps.",
+      ...summarizeValidationSurfaces(reasoningPacketValidation),
+    },
+    {
+      label: "API contract and implementation",
+      href: "/api/moral-trade/api-contract",
+      summary:
+        "Public route schemas, cache controls, rate-limit surfaces, fallbacks, and implementation audit.",
+      ...summarizeValidationSurfaces(apiContractValidation, apiImplementationAudit),
+      checkCount: apiContractValidation.checks.length + apiImplementationAudit.routeCount,
+    },
+    {
+      label: "Disclosure grants and appeals",
+      href: "/api/moral-trade/disclosure/contract",
+      summary:
+        "Stage-bound disclosure grants, redacted fields, search privacy controls, appeal triggers, standing, and review outcomes.",
+      ...summarizeValidationSurfaces(disclosureValidation, challengeAppealValidation),
+    },
+    {
+      label: "Externality and remedy review",
+      href: "/api/moral-trade/externality/health",
+      summary:
+        "Third-party impact triggers, due-diligence steps, affected-party standing, remediation controls, and review standards.",
+      ...summarizeValidationSurfaces(externalityValidation),
+    },
+    {
+      label: "Incident response",
+      href: "/api/moral-trade/incident-response/health",
+      summary:
+        "Incident intake channels, severity levels, privacy-safe disclosure rules, readiness gates, and response-phase coverage.",
+      ...summarizeValidationSurfaces(incidentResponseValidation),
+    },
+    {
+      label: "Performance and route recovery",
+      href: "/api/moral-trade/performance/health",
+      summary:
+        "Observed route friction, Core Web Vitals targets, route recovery manifest coverage, and privacy-safe telemetry limits.",
+      ...summarizeValidationSurfaces(performanceValidation, routeRecoveryAudit),
+    },
+    {
+      label: "Operations and security",
+      href: "/api/moral-trade/operations/health",
+      summary:
+        "Security headers, private-cache controls, retention lifecycle, rate limits, security non-claims, and scale gates.",
+      ...summarizeValidationSurfaces(operationsValidation, securityValidation),
+    },
+    {
+      label: "Evaluation and AI governance",
+      href: "/api/moral-trade/evaluation/health",
+      summary:
+        "Quality metrics, privacy-safe slices, promotion gates, model-card requirements, and prohibited automation.",
+      ...summarizeValidationSurfaces(evaluationValidation, aiGovernanceValidation),
+    },
+  ] as const;
 
   return (
     <div className="page-shell">
@@ -117,6 +265,38 @@ export default async function StatusPage() {
                 without escrow, custody, tax advice, or platform-held funds.
               </p>
             </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="protocol-health-heading">
+          <div className="section-head">
+            <p className="eyebrow">Protocol health</p>
+            <h2 id="protocol-health-heading">Validator-backed surfaces you can audit now</h2>
+            <p>
+              The report recommends MPGF-style transparency for the core Moral Trade feature.
+              These public checks expose what is machine-checked today before any claim of scale,
+              automation, custody, or reliance.
+            </p>
+          </div>
+
+          <div className="data-grid">
+            {protocolHealthSurfaces.map((surface) => (
+              <article className="panel data-card" key={surface.label}>
+                <div className="protocol-workflow-card-head">
+                  <h3>{surface.label}</h3>
+                  <StatusBadge tone={surface.status === "pass" ? "default" : "warning"}>
+                    {surface.status}
+                  </StatusBadge>
+                </div>
+                <p className="route-text">{surface.summary}</p>
+                <p className="panel-note">
+                  {surface.checkCount} check(s), {surface.blockerCount} blocker(s).
+                </p>
+                <Link className="text-button" href={surface.href}>
+                  Open public JSON
+                </Link>
+              </article>
+            ))}
           </div>
         </section>
 

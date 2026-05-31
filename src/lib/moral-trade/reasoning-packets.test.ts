@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { GET as reasoningPacketsRoute } from "../../app/api/moral-trade/reasoning/packets/route";
 import {
+  MORAL_TRADE_REASONING_PACKET_FILTERS,
+  filterMoralTradeReasoningPackets,
+  getMoralTradeReasoningPacketFilterCounts,
+  getMoralTradeReasoningPacketFilterKey,
   getMoralTradeReasoningPacketContract,
   getMoralTradeReasoningPackets,
   validateMoralTradeReasoningPacketContract,
@@ -37,6 +42,55 @@ test("reasoning packet contract preserves linked validator contracts", () => {
   assert.ok(contract.linkedContracts.reviewWorkflowCardCount >= 6);
   assert.ok(contract.linkedContracts.provenanceValidationRuleCount >= 5);
   assert.equal(contract.linkedContracts.provenanceSampleBundleStatus, "pass");
+  assert.ok(contract.supportedFilters.some((filter) => filter.key === "needs-evidence"));
+  assert.equal(contract.filterCounts.all, contract.packetCount);
+});
+
+test("reasoning packet filters expose inspectable public subsets", () => {
+  const packets = getMoralTradeReasoningPackets();
+  const counts = getMoralTradeReasoningPacketFilterCounts(packets);
+  const needsEvidencePackets = filterMoralTradeReasoningPackets(packets, "needs-evidence");
+  const passWithLimitsPackets = filterMoralTradeReasoningPackets(packets, "pass-with-limits");
+  const blockedPackets = filterMoralTradeReasoningPackets(packets, "blocked");
+
+  assert.deepEqual(
+    MORAL_TRADE_REASONING_PACKET_FILTERS.map((filter) => filter.key),
+    ["all", "needs-evidence", "human-review", "blocked", "pass-with-limits"],
+  );
+  assert.equal(getMoralTradeReasoningPacketFilterKey("not-a-real-filter"), "all");
+  assert.equal(getMoralTradeReasoningPacketFilterKey(["needs-evidence"]), "needs-evidence");
+  assert.equal(counts.all, packets.length);
+  assert.equal(counts["needs-evidence"], needsEvidencePackets.length);
+  assert.equal(counts["pass-with-limits"], passWithLimitsPackets.length);
+  assert.equal(counts.blocked, blockedPackets.length);
+  assert.equal(needsEvidencePackets.length, 1);
+  assert.ok(needsEvidencePackets.every((packet) => packet.statusCode === "needs_evidence"));
+  assert.ok(passWithLimitsPackets.length > 0);
+  assert.ok(passWithLimitsPackets.every((packet) => packet.statusCode === "matchable"));
+  assert.equal(blockedPackets.length, 0);
+});
+
+test("reasoning packet API applies public status filters", async () => {
+  const response = await reasoningPacketsRoute(
+    new Request("http://localhost/api/moral-trade/reasoning/packets?status=needs-evidence"),
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.activeFilter, "needs-evidence");
+  assert.equal(payload.packetCount, 5);
+  assert.equal(payload.filteredPacketCount, 1);
+  assert.equal(payload.filterCounts.all, 5);
+  assert.equal(payload.filterCounts["needs-evidence"], 1);
+  assert.equal(payload.publicContract.filterCounts["pass-with-limits"], 4);
+  assert.ok(
+    payload.publicContract.supportedFilters.some(
+      (filter: { key: string }) => filter.key === "blocked",
+    ),
+  );
+  assert.equal(payload.packets.length, 1);
+  assert.equal(payload.packets[0].sourceOfferId, "seed-lina");
 });
 
 test("reasoning packet validation fails when public packet safeguards are weakened", () => {

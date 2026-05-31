@@ -6,6 +6,10 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import {
+  MORAL_TRADE_REASONING_PACKET_FILTERS,
+  filterMoralTradeReasoningPackets,
+  getMoralTradeReasoningPacketFilterCounts,
+  getMoralTradeReasoningPacketFilterKey,
   getMoralTradeReasoningPacketContract,
   getMoralTradeReasoningPackets,
 } from "@/lib/moral-trade/reasoning-packets";
@@ -42,8 +46,6 @@ const navSections = [
   { label: "Public goods", descriptor: "notes" },
   { label: "Open questions", descriptor: "drafts" },
 ] as const;
-
-const reviewFilters = ["All records", "Needs evidence", "Human review", "Blocked", "Pass with limits"] as const;
 
 const topics = [
   "Donation offsets",
@@ -93,7 +95,26 @@ async function getOptionalViewerForReasoningCenter() {
   }
 }
 
-export default async function ReasoningCenterPage() {
+interface ReasoningCenterPageProps {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function ReasoningCenterPage({
+  searchParams,
+}: ReasoningCenterPageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const activeFilterKey = getMoralTradeReasoningPacketFilterKey(
+    resolvedSearchParams.status,
+  );
+  const activeFilter =
+    MORAL_TRADE_REASONING_PACKET_FILTERS.find(
+      (filter) => filter.key === activeFilterKey,
+    ) ?? MORAL_TRADE_REASONING_PACKET_FILTERS[0];
+  const filterCounts = getMoralTradeReasoningPacketFilterCounts(reviewRecords);
+  const filteredReviewRecords = filterMoralTradeReasoningPackets(
+    reviewRecords,
+    activeFilterKey,
+  );
   const viewer = await getOptionalViewerForReasoningCenter();
   const isAuthenticated = Boolean(viewer);
   const breadcrumbStructuredData = buildBreadcrumbJsonLd([
@@ -107,7 +128,7 @@ export default async function ReasoningCenterPage() {
     description: reasoningCenterDescription,
     mainEntity: {
       "@type": "ItemList",
-      itemListElement: reviewRecords.map((record, index) => ({
+      itemListElement: filteredReviewRecords.map((record, index) => ({
         "@type": "ListItem",
         position: index + 1,
         url: getAbsoluteUrl(record.href),
@@ -175,6 +196,10 @@ export default async function ReasoningCenterPage() {
                 flags, evidence gaps, and the next human-controlled step before anyone relies on
                 them.
               </p>
+              <p className="reasoning-filter-summary">
+                Showing {filteredReviewRecords.length} of {reviewRecords.length} public packet
+                {reviewRecords.length === 1 ? "" : "s"} for {activeFilter.label.toLowerCase()}.
+              </p>
             </div>
             <Link className="button button-primary" href="/reasoning-standards">
               Standards
@@ -182,9 +207,15 @@ export default async function ReasoningCenterPage() {
           </header>
 
           <div className="reasoning-tabs" aria-label="Review filters">
-            {reviewFilters.map((tab, index) => (
-              <Link aria-current={index === 0 ? "page" : undefined} href="/reasoning-center" key={tab}>
-                {tab}
+            {MORAL_TRADE_REASONING_PACKET_FILTERS.map((filter) => (
+              <Link
+                aria-current={filter.key === activeFilterKey ? "page" : undefined}
+                href={filter.href}
+                key={filter.key}
+                title={filter.description}
+              >
+                <span>{filter.label}</span>
+                <small>{filterCounts[filter.key]}</small>
               </Link>
             ))}
           </div>
@@ -223,8 +254,12 @@ export default async function ReasoningCenterPage() {
             </article>
           </section>
 
-          <div className="reasoning-post-list" aria-label="Public review records">
-            {reviewRecords.map((record) => (
+          <div
+            className="reasoning-post-list"
+            aria-label={`${activeFilter.label} public review records`}
+          >
+            {filteredReviewRecords.length ? (
+              filteredReviewRecords.map((record) => (
               <article className="reasoning-post-row" key={record.title}>
                 <div
                   className={`reasoning-status-box reasoning-status-${record.statusTone}`}
@@ -301,7 +336,26 @@ export default async function ReasoningCenterPage() {
                   </div>
                 </div>
               </article>
-            ))}
+              ))
+            ) : (
+              <section className="reasoning-empty-state" aria-label="No matching packets">
+                <p className="eyebrow">No public packets</p>
+                <h2>No {activeFilter.label.toLowerCase()} records are published yet.</h2>
+                <p>
+                  The Reasoning Center only shows deterministic worked-example packets. Live
+                  private offers, exact wishes, contact details, and raw source notes stay out of
+                  this public index.
+                </p>
+                <div className="reasoning-empty-actions">
+                  <Link className="button button-secondary" href="/reasoning-center">
+                    Show all records
+                  </Link>
+                  <Link className="button button-secondary" href="/reasoning-standards">
+                    Review standards
+                  </Link>
+                </div>
+              </section>
+            )}
           </div>
         </section>
 

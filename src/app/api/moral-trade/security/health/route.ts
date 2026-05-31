@@ -33,11 +33,16 @@ export async function GET(request: Request) {
     publicContract: {
       controls: profile.controls.map((control) => ({
         key: control.key,
+        label: control.label,
         status: control.status,
+        publicClaim: control.publicClaim,
+        evidence: control.evidence,
       })),
       scaleGates: profile.scaleGates.map((gate) => ({
         key: gate.key,
+        label: gate.label,
         requires: gate.requires,
+        rule: gate.rule,
         readiness: auditMoralTradeSecurityScaleReadiness({
           gateKey: gate.key,
           profile,

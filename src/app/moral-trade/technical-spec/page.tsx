@@ -850,7 +850,8 @@ export default async function MoralTradeTechnicalSpecPage() {
               Public packets are derived from canonical worked examples and expose only structured
               summaries, cited evidence rows, step-by-step decision gates, uncertainty flags,
               reviewer scope, factor codes, and the next human-controlled step. The packet route is
-              validator-backed and does not export live private offers.
+              validator-backed, supports the same public status filters as the Reasoning Center,
+              and does not export live private offers.
             </p>
           </div>
           <div className="protocol-validator-card panel">
@@ -901,6 +902,21 @@ export default async function MoralTradeTechnicalSpecPage() {
                 {reasoningPacketContract.samplePackets[0]?.decisionSteps.slice(0, 4).map((step) => (
                   <li key={step.key}>
                     {step.status}: {step.label}
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Public filters</h3>
+              <p>
+                The packet API accepts the same status facet as the Reasoning Center, for example{" "}
+                <code>/api/moral-trade/reasoning/packets?status=needs-evidence</code>.
+              </p>
+              <ul className="clean-list">
+                {reasoningPacketContract.supportedFilters.map((filter) => (
+                  <li key={filter.key}>
+                    <Link href={filter.href}>{filter.label}</Link>:{" "}
+                    {reasoningPacketContract.filterCounts[filter.key]} packet(s)
                   </li>
                 ))}
               </ul>

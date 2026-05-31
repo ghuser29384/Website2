@@ -4,9 +4,15 @@ import Link from "next/link";
 import { createMatchConciergeRequestAction } from "@/app/actions";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { StatusBadge } from "@/components/ui/page-primitives";
 import { BACKGROUND_DATA_INVENTORY } from "@/lib/background-privacy-controls";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import {
+  getMoralTradeMatchSignalContract,
+  validateMoralTradeMatchSignal,
+  validateMoralTradeMatchSignalContract,
+} from "@/lib/moral-trade/match-signal";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { getAbsoluteUrl } from "@/lib/seo";
 
@@ -30,12 +36,28 @@ interface BackgroundNetworkingPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+function formatMatchSignalToken(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 export default async function BackgroundNetworkingPage({
   searchParams,
 }: BackgroundNetworkingPageProps) {
   const resolvedSearchParams = await searchParams;
   const formMessage = getFormMessage(resolvedSearchParams);
   const viewer = await getViewer();
+  const matchSignalContract = getMoralTradeMatchSignalContract();
+  const matchSignalValidation =
+    validateMoralTradeMatchSignalContract(matchSignalContract);
+  const sampleSignalValidation = validateMoralTradeMatchSignal(
+    matchSignalContract.sampleSignal,
+  );
+  const matchSignalStatus =
+    matchSignalValidation.status === "pass" && sampleSignalValidation.status === "pass"
+      ? "pass"
+      : "fail";
+  const matchSignalBlockerCount =
+    matchSignalValidation.blockers.length + sampleSignalValidation.blockers.length;
 
   return (
     <div className="page-shell">
@@ -171,6 +193,100 @@ export default async function BackgroundNetworkingPage({
                 Manual scans, helper jobs, saved searches, and signed-in registry searches are
                 budgeted and logged with hashed query fingerprints. Highly specific sparse
                 registry searches are withheld until the user broadens the query.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="match-signal-contract-heading">
+          <div className="section-head">
+            <p className="eyebrow">Match signal contract</p>
+            <h2 id="match-signal-contract-heading">
+              Suggestions explain public compatibility without revealing private wishes.
+            </h2>
+            <p>
+              The report recommends factor-code explanations, staged disclosure, and no autonomous
+              outreach. This contract keeps background matching to redacted profile previews, a
+              confidence band, explicit blockers, and human review before disclosure or contact.
+            </p>
+          </div>
+
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Redacted match-signal preview</p>
+              <div className="protocol-workflow-card-head">
+                <h3>{matchSignalStatus}</h3>
+                <StatusBadge tone={matchSignalStatus === "pass" ? "default" : "warning"}>
+                  {matchSignalStatus}
+                </StatusBadge>
+              </div>
+              <p>
+                {matchSignalValidation.checks.length} contract check(s),{" "}
+                {matchSignalBlockerCount} blocker(s), mode{" "}
+                {formatMatchSignalToken(matchSignalContract.decisioningMode)}.
+              </p>
+            </div>
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/api/moral-trade/match-signal/contract">
+                Open match contract
+              </Link>
+              <Link className="button button-secondary" href="/moral-trade/technical-spec">
+                Technical spec
+              </Link>
+              <Link className="button button-secondary" href="/privacy">
+                Disclosure rules
+              </Link>
+            </div>
+          </div>
+
+          <div className="protocol-review-grid">
+            <article className="panel data-card">
+              <h3>Why this sample appears</h3>
+              <p className="route-text">
+                {matchSignalContract.sampleSignal.participantExplanation.summary}
+              </p>
+              <div className="review-factor-list" aria-label="Sample match factor codes">
+                {matchSignalContract.sampleSignal.factorCodes.map((factorCode) => (
+                  <span key={factorCode}>{factorCode}</span>
+                ))}
+              </div>
+            </article>
+
+            <article className="panel data-card">
+              <h3>Counts, not hidden inference</h3>
+              <ul className="clean-list">
+                <li>
+                  Shared cause areas:{" "}
+                  {matchSignalContract.sampleSignal.counts.sharedCauseAreas}
+                </li>
+                <li>
+                  Cause-area complementarity:{" "}
+                  {matchSignalContract.sampleSignal.counts.causeAreaComplementarity}
+                </li>
+                <li>
+                  Compatible trade modes:{" "}
+                  {matchSignalContract.sampleSignal.counts.compatibleTradeModes}
+                </li>
+                <li>
+                  Compatible verification preferences:{" "}
+                  {matchSignalContract.sampleSignal.counts.compatibleVerificationPreferences}
+                </li>
+              </ul>
+              <p className="panel-note">
+                The evaluator does not infer ideology, psychology, protected traits, or hidden
+                preferences.
+              </p>
+            </article>
+
+            <article className="panel data-card">
+              <h3>Redactions and review gates</h3>
+              <ul className="clean-list">
+                {matchSignalContract.redactedFields.map((field) => (
+                  <li key={field}>{formatMatchSignalToken(field)}</li>
+                ))}
+              </ul>
+              <p className="panel-note">
+                {matchSignalContract.sampleSignal.participantExplanation.humanReviewNotice}
               </p>
             </article>
           </div>

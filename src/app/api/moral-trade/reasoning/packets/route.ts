@@ -4,6 +4,8 @@ import {
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
 import {
+  filterMoralTradeReasoningPackets,
+  getMoralTradeReasoningPacketFilterKey,
   getMoralTradeReasoningPacketContract,
   getMoralTradeReasoningPackets,
   validateMoralTradeReasoningPacketContract,
@@ -21,9 +23,13 @@ export async function GET(request: Request) {
     );
   }
 
-  const packets = getMoralTradeReasoningPackets();
-  const contract = getMoralTradeReasoningPacketContract(packets);
-  const validation = validateMoralTradeReasoningPacketContract(contract, packets);
+  const allPackets = getMoralTradeReasoningPackets();
+  const activeFilter = getMoralTradeReasoningPacketFilterKey(
+    new URL(request.url).searchParams.get("status"),
+  );
+  const packets = filterMoralTradeReasoningPackets(allPackets, activeFilter);
+  const contract = getMoralTradeReasoningPacketContract(allPackets);
+  const validation = validateMoralTradeReasoningPacketContract(contract, allPackets);
 
   return buildMoralTradeApiJsonResponse(
     {
@@ -31,11 +37,17 @@ export async function GET(request: Request) {
       checkedAt: new Date().toISOString(),
       contractVersion: contract.version,
       purpose: contract.purpose,
+      activeFilter,
+      packetCount: contract.packetCount,
+      filteredPacketCount: packets.length,
+      filterCounts: contract.filterCounts,
       validation,
       publicContract: {
         sourceRoute: contract.sourceRoute,
         publicApiRoute: contract.publicApiRoute,
         packetCount: contract.packetCount,
+        supportedFilters: contract.supportedFilters,
+        filterCounts: contract.filterCounts,
         requiredPacketFields: contract.requiredPacketFields,
         linkedContracts: contract.linkedContracts,
         invariants: contract.invariants,

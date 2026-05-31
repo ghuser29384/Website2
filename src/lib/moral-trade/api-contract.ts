@@ -382,6 +382,9 @@ export function validateMoralTradeApiContractProfile(
   const reasoningPacketsRoute = profile.routes.find(
     (route) => route.key === "moral_trade_reasoning_packets",
   );
+  const reasoningPacketsRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "reasoning_packets_request",
+  );
   const reasoningPacketsResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "reasoning_packets_response",
   );
@@ -946,10 +949,19 @@ export function validateMoralTradeApiContractProfile(
       "reasoning-packets-validator",
       "Reasoning packets route is public and validator-backed",
       reasoningPacketsRoute?.method === "GET" &&
+        reasoningPacketsRoute.requestSchema === "reasoning_packets_request" &&
         reasoningPacketsRoute.cacheControl === "no_store_dynamic" &&
         reasoningPacketsRoute.privacyClass === "public_contract" &&
-        /validator|private offers|hidden reasoning|global moral ranking/i.test(
+        /validator|filter facets|private offers|hidden reasoning|global moral ranking/i.test(
           reasoningPacketsRoute.fallback,
+        ) &&
+        Boolean(
+          reasoningPacketsRequest?.fields.some(
+            (field) =>
+              field.key === "status" &&
+              field.type === "enum" &&
+              field.required === false,
+          ),
         ) &&
         Boolean(
           reasoningPacketsResponse?.fields.some(
@@ -964,6 +976,16 @@ export function validateMoralTradeApiContractProfile(
         Boolean(
           reasoningPacketsResponse?.fields.some(
             (field) => field.key === "publicContract" && field.privacy === "public_contract",
+          ),
+        ) &&
+        Boolean(
+          reasoningPacketsResponse?.fields.some(
+            (field) => field.key === "activeFilter" && field.type === "enum",
+          ),
+        ) &&
+        Boolean(
+          reasoningPacketsResponse?.fields.some(
+            (field) => field.key === "filterCounts" && field.privacy === "public_contract",
           ),
         ),
       reasoningPacketsRoute

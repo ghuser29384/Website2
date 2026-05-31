@@ -3,8 +3,18 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { Breadcrumbs } from "@/components/ui/page-primitives";
+import { Breadcrumbs, StatusBadge } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
+import {
+  auditMoralTradeSecurityScaleReadiness,
+  getMoralTradeSecurityProfile,
+  validateMoralTradeSecurityProfile,
+  type MoralTradeSecurityControlStatus,
+} from "@/lib/moral-trade/security";
+import {
+  getMoralTradeOperationsProfile,
+  validateMoralTradeOperationsProfile,
+} from "@/lib/moral-trade/operations";
 import { buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -30,8 +40,35 @@ export const metadata: Metadata = {
   },
 };
 
+function formatSafetyToken(value: string) {
+  return value.replaceAll("_", " ");
+}
+
+function securityTone(status: MoralTradeSecurityControlStatus) {
+  if (status === "implemented") {
+    return "default";
+  }
+
+  if (status === "provider_boundary") {
+    return "secondary";
+  }
+
+  return "warning";
+}
+
 export default async function SafetyPage() {
   const viewer = await getViewer();
+  const securityProfile = getMoralTradeSecurityProfile();
+  const securityValidation = validateMoralTradeSecurityProfile(securityProfile);
+  const operationsProfile = getMoralTradeOperationsProfile();
+  const operationsValidation = validateMoralTradeOperationsProfile(operationsProfile);
+  const securityScaleGateReadiness = securityProfile.scaleGates.map((gate) => ({
+    ...gate,
+    readiness: auditMoralTradeSecurityScaleReadiness({
+      gateKey: gate.key,
+      profile: securityProfile,
+    }),
+  }));
   const breadcrumbStructuredData = buildBreadcrumbJsonLd([
     { href: "/safety", label: "Safety" },
   ]);
@@ -97,7 +134,161 @@ export default async function SafetyPage() {
             <Link className="button button-secondary" href="/api/moral-trade/incident-response/health">
               View incident response
             </Link>
+            <Link className="button button-secondary" href="/api/moral-trade/operations/health">
+              View operations health
+            </Link>
           </div>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <div className="protocol-workflow-card-head">
+            <div>
+              <p className="eyebrow">Security posture contract</p>
+              <h2>Controls, scale gates, and non-claims are public.</h2>
+            </div>
+            <StatusBadge tone={securityValidation.status === "pass" ? "default" : "warning"}>
+              {securityValidation.status}
+            </StatusBadge>
+          </div>
+          <p>
+            The security profile names browser headers, private cache rules, Supabase session
+            boundaries, provider encryption assumptions, admin-scale gates, key-rotation gates,
+            abuse throttles, and incident reporting. It also says what the pilot does not yet claim.
+          </p>
+          <div className="data-grid">
+            {securityProfile.controls.map((control) => (
+              <article className="panel data-card" key={control.key}>
+                <div className="protocol-workflow-card-head">
+                  <h3>{control.label}</h3>
+                  <StatusBadge tone={securityTone(control.status)}>
+                    {formatSafetyToken(control.status)}
+                  </StatusBadge>
+                </div>
+                <p className="route-text">{control.publicClaim}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <div className="protocol-workflow-card-head">
+            <div>
+              <p className="eyebrow">Operations contract</p>
+              <h2>Headers, sessions, retention, and fallback controls are inspectable.</h2>
+            </div>
+            <StatusBadge tone={operationsValidation.status === "pass" ? "default" : "warning"}>
+              {operationsValidation.status}
+            </StatusBadge>
+          </div>
+          <p>
+            The operations profile names the platform controls that were previously unspecified in
+            public materials: HTTP security headers, private no-store routes, rate-limit surfaces,
+            session/privacy controls, retention lifecycles, observability metrics, and safe
+            fallback behavior.
+          </p>
+          <div className="protocol-review-grid">
+            <article className="panel data-card">
+              <h3>Header and cache evidence</h3>
+              <ul className="clean-list">
+                {operationsProfile.securityHeaders.map((header) => (
+                  <li key={header.code}>
+                    <strong>{header.label}:</strong> {header.evidence}
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel data-card">
+              <h3>Privacy and session controls</h3>
+              <ul className="clean-list">
+                {operationsProfile.privacyAndSessionControls.map((control) => (
+                  <li key={control.key}>
+                    <strong>{control.label}:</strong> {control.evidence}
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel data-card">
+              <h3>Observability without private text</h3>
+              <ul className="clean-list">
+                {operationsProfile.observabilityMetrics.map((metric) => (
+                  <li key={metric}>{formatSafetyToken(metric)}</li>
+                ))}
+              </ul>
+              <p className="panel-note">
+                Operational telemetry is framed as counts, route health, latency, Web Vitals,
+                privacy incidents, fallbacks, and review SLAs rather than raw wishes or source
+                notes.
+              </p>
+            </article>
+          </div>
+          <div className="protocol-review-grid">
+            <article className="panel data-card">
+              <h3>Rate-limit surfaces</h3>
+              <p className="route-text">
+                {operationsProfile.rateLimitSurfaces.length} surfaces, including{" "}
+                {operationsProfile.rateLimitSurfaces
+                  .slice(0, 8)
+                  .map((surface) => `${formatSafetyToken(surface.key)} (${surface.limit}/${surface.window})`)
+                  .join(", ")}
+                .
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Retention lifecycle controls</h3>
+              <p className="route-text">
+                {operationsProfile.retentionControls
+                  .map((control) => formatSafetyToken(control.key))
+                  .join(", ")}
+                .
+              </p>
+            </article>
+            <article className="panel data-card">
+              <h3>Fallback and rollout gates</h3>
+              <ul className="clean-list">
+                {operationsProfile.fallbackControls.map((control) => (
+                  <li key={control.key}>{control.rule}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/api/moral-trade/operations/health">
+              Open operations JSON
+            </Link>
+            <Link className="button button-secondary" href="/moral-trade/technical-spec">
+              Inspect technical spec
+            </Link>
+          </div>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Security scale gates</h2>
+          <p>
+            Expansion is blocked unless the named controls are implemented or consciously held at a
+            provider boundary. This keeps sensitive admin, paid-action, and trust-badge scale from
+            outrunning the current security evidence.
+          </p>
+          <div className="data-grid">
+            {securityScaleGateReadiness.map((gate) => (
+              <article className="panel data-card" key={gate.key}>
+                <div className="protocol-workflow-card-head">
+                  <h3>{gate.label}</h3>
+                  <StatusBadge tone={gate.readiness.status === "pass" ? "default" : "warning"}>
+                    {gate.readiness.status}
+                  </StatusBadge>
+                </div>
+                <p className="route-text">{gate.rule}</p>
+                <p className="panel-note">
+                  Requires {gate.requires.map(formatSafetyToken).join(", ")}.
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+        <section className="panel data-card data-card-wide">
+          <h2>Public security non-claims</h2>
+          <ul className="trust-check-list">
+            {securityProfile.publicNonClaims.map((nonClaim) => (
+              <li key={nonClaim}>{nonClaim}</li>
+            ))}
+          </ul>
         </section>
         <section className="panel data-card data-card-wide">
           <h2>Background networking boundaries</h2>

@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { StatusBadge } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
 import {
   MEASUREMENT_BASELINE_ROUTES,
@@ -12,6 +13,11 @@ import {
   MEASUREMENT_ROADMAP,
   type MeasurementStage,
 } from "@/lib/measurement-plan";
+import {
+  getMoralTradeEvaluationProfile,
+  getMoralTradeEvaluationSampleAudits,
+  validateMoralTradeEvaluationProfile,
+} from "@/lib/moral-trade/evaluation";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -66,8 +72,60 @@ function getSpecsForStage(stage: MeasurementStage) {
   return MEASUREMENT_EVENT_SPECS.filter((spec) => spec.stage === stage);
 }
 
+const evaluationMetricGroups = [
+  {
+    title: "Draft and review quality",
+    summary:
+      "Tracks whether structured drafts become valid faster while reviewers still overrule weak suggestions.",
+    metricKeys: [
+      "draft_completion_rate",
+      "time_to_valid_draft",
+      "explanation_helpfulness",
+      "reviewer_efficiency_minutes",
+      "human_overrule_rate",
+    ],
+  },
+  {
+    title: "Safety precision",
+    summary:
+      "Keeps blocking, privacy, and false-match checks visible before expanding any assisted workflow.",
+    metricKeys: [
+      "blocked_proposal_precision",
+      "privacy_leakage_incidents",
+      "false_match_rate",
+    ],
+  },
+  {
+    title: "Surfacing parity",
+    summary:
+      "Looks for material preview gaps across privacy-thresholded slices before broader rollout.",
+    metricKeys: ["subgroup_surfacing_parity"],
+  },
+  {
+    title: "Dispute health",
+    summary:
+      "Reports whether evidence, appeals, duplicate-proof issues, and unresolved disputes are improving.",
+    metricKeys: [
+      "appeal_overturn_rate",
+      "evidence_review_sla",
+      "duplicate_proof_miss_rate",
+      "unresolved_dispute_share",
+    ],
+  },
+] as const;
+
+function formatContractToken(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 export default async function MeasurementPage() {
   const viewer = await getViewer();
+  const evaluationProfile = getMoralTradeEvaluationProfile();
+  const evaluationValidation = validateMoralTradeEvaluationProfile(evaluationProfile);
+  const evaluationSampleAudits = getMoralTradeEvaluationSampleAudits();
+  const evaluationMetricsByKey = new Map(
+    evaluationProfile.metrics.map((metric) => [metric.key, metric]),
+  );
 
   return (
     <div className="page-shell">
@@ -119,6 +177,65 @@ export default async function MeasurementPage() {
               </div>
             </div>
           ))}
+        </section>
+
+        <section aria-labelledby="quality-audits-heading">
+          <div className="protocol-workflow-card-head">
+            <div>
+              <p className="eyebrow">Protocol-quality audits</p>
+              <h2 id="quality-audits-heading">Copilot and review metrics stay public.</h2>
+            </div>
+            <StatusBadge tone={evaluationValidation.status === "pass" ? "default" : "warning"}>
+              {evaluationValidation.status}
+            </StatusBadge>
+          </div>
+          <p>
+            The evaluation contract measures whether assistance improves clarity without replacing
+            human review, leaking private content, hiding false matches, or under-surfacing
+            thresholded groups.
+          </p>
+          <p className="route-text">
+            Cadence: {formatContractToken(evaluationProfile.cadence)}. Privacy boundaries:{" "}
+            {evaluationProfile.privacyBoundaries.map(formatContractToken).join(", ")}.
+          </p>
+          <div className="data-grid">
+            {evaluationMetricGroups.map((group) => (
+              <article className="panel data-card" key={group.title}>
+                <h3>{group.title}</h3>
+                <p className="route-text">{group.summary}</p>
+                <ul className="compact-list">
+                  {group.metricKeys.map((metricKey) => {
+                    const metric = evaluationMetricsByKey.get(metricKey);
+
+                    return (
+                      <li key={metricKey}>
+                        <strong>{metric?.label ?? formatContractToken(metricKey)}:</strong>{" "}
+                        {metric?.target ?? "required by evaluation profile"}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </article>
+            ))}
+            <article className="panel data-card">
+              <h3>Sample audit evidence</h3>
+              <p className="route-text">
+                Surfacing parity sample:{" "}
+                {evaluationSampleAudits.surfacingParityAudit.status} across{" "}
+                {evaluationSampleAudits.surfacingParityAudit.eligibleCount} eligible previews, with{" "}
+                {evaluationSampleAudits.surfacingParityAudit.reviewedDeviationCount} reviewed
+                deviation log(s) and{" "}
+                {evaluationSampleAudits.surfacingParityAudit.unreviewedDeviationCount} unreviewed.
+              </p>
+              <p className="route-text">
+                UX readiness sample: {evaluationSampleAudits.uxReadinessAudit.status}; blockers:{" "}
+                {evaluationSampleAudits.uxReadinessAudit.blockers.length}.
+              </p>
+              <Link className="text-button" href="/api/moral-trade/evaluation/health">
+                Open evaluation JSON
+              </Link>
+            </article>
+          </div>
         </section>
 
         <section className="panel data-card data-card-wide">

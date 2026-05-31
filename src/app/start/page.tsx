@@ -4,7 +4,8 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { IconMark } from "@/components/ui/page-primitives";
-import { getViewer } from "@/lib/app-data";
+import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
+import { CANONICAL_WORKED_CASE_COUNT } from "@/lib/seed-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { VISITOR_PATHS } from "@/lib/visitor-paths";
@@ -39,8 +40,32 @@ const structuredData = {
   })),
 };
 
+function formatOptionalCount(value: number | null) {
+  return value === null ? "Pending" : new Intl.NumberFormat("en-US").format(value);
+}
+
 export default async function StartPage() {
-  const viewer = await getViewer();
+  const [viewer, marketplaceOverview] = await Promise.all([
+    getViewer(),
+    getMarketplaceOverview(),
+  ]);
+  const pilotSnapshot = [
+    {
+      icon: "marketplace",
+      label: "Live offers",
+      value: formatOptionalCount(marketplaceOverview.openOfferCount),
+    },
+    {
+      icon: "example",
+      label: "Worked examples",
+      value: String(CANONICAL_WORKED_CASE_COUNT),
+    },
+    {
+      icon: "profile",
+      label: "Public profiles",
+      value: formatOptionalCount(marketplaceOverview.publicProfileCount),
+    },
+  ] as const;
 
   return (
     <div className="page-shell">
@@ -74,11 +99,18 @@ export default async function StartPage() {
             </div>
           </section>
 
-          <aside className="hero-panel panel">
-            <p className="eyebrow">Current stage</p>
+          <aside className="growth-progress-card panel" aria-label="Pilot inventory">
+            <p className="eyebrow">Pilot inventory</p>
+            {pilotSnapshot.map((item) => (
+              <div className="growth-progress-stat" key={item.label}>
+                <IconMark name={item.icon} />
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
             <p className="hero-followup">
-              The pilot is strongest when visitors start with one low-risk, reviewable action.
-              Examples and cohort routes come before broad marketplace assumptions.
+              No liquidity claim: examples and cohort routes come before broad marketplace
+              assumptions.
             </p>
           </aside>
         </div>

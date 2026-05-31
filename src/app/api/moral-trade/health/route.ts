@@ -299,6 +299,10 @@ export async function GET(request: Request) {
       reviewWorkflowContractTests: reviewWorkflowContract.contractTests,
       reasoningPacketContractVersion: reasoningPacketContract.version,
       reasoningPacketCount: reasoningPacketContract.packetCount,
+      reasoningPacketFilters: reasoningPacketContract.supportedFilters.map(
+        (filter) => filter.key,
+      ),
+      reasoningPacketFilterCounts: reasoningPacketContract.filterCounts,
       reasoningPacketRequiredFields:
         reasoningPacketContract.requiredPacketFields,
       reasoningPacketDecisionStepKeys:

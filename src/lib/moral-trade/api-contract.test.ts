@@ -111,7 +111,30 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_evaluate_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "reasoning_packets_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "reasoning_packets_response"));
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_reasoning_packets" &&
+        route.requestSchema === "reasoning_packets_request",
+    ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "reasoning_packets_request")
+      ?.fields.some((field) => field.key === "status" && field.required === false),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "reasoning_packets_response")
+      ?.fields.some((field) => field.key === "activeFilter" && field.type === "enum"),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "reasoning_packets_response")
+      ?.fields.some((field) => field.key === "filterCounts" && field.privacy === "public_contract"),
+  );
   assert.ok(
     profile.schemaDefinitions
       .find((schema) => schema.key === "operations_health_response")
