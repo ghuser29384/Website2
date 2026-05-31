@@ -89,6 +89,7 @@ import {
   buildMpgfPublicGoodsKpiSnapshot,
   loadMpgfPublicGoodsKpiSnapshot,
 } from "./mpgf/public-goods-kpis";
+import { buildMpgfPublicGoodsOperationsDashboard } from "./mpgf/public-goods-operations";
 import {
   buildMpgfPublicGoodsExperimentAssignmentRow,
   persistMpgfPublicGoodsExperimentAssignment,
@@ -1494,6 +1495,75 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
       process.env.MPGF_PUBLIC_GOODS_COHORT = previousCohort;
     }
   }
+});
+
+test("MPGF public-goods operations dashboard alerts on payment, replay, and dispute freezes", () => {
+  const dashboard = buildMpgfPublicGoodsOperationsDashboard({
+    generatedAt: "2026-05-29T12:00:00.000Z",
+    webhookEvents: [
+      {
+        provider: "stripe",
+        providerEventId: "evt_failed_private_ref",
+        eventType: "checkout.session.async_payment_failed",
+        status: "failed",
+        processed: true,
+        processingError: "provider_payment_failed",
+        replayAttemptCount: 0,
+        createdAt: "2026-05-29T10:00:00.000Z",
+      },
+      {
+        provider: "stripe",
+        providerEventId: "evt_replay_private_ref",
+        eventType: "checkout.session.completed",
+        status: "processed",
+        processed: true,
+        replayAttemptCount: 1,
+        lastReplayedAt: "2026-05-29T11:00:00.000Z",
+        createdAt: "2026-05-29T09:00:00.000Z",
+      },
+    ],
+  });
+  const alertKinds = new Set(dashboard.incidents.alerts.map((alert) => alert.kind));
+  const serialized = JSON.stringify(dashboard);
+  const route = readFileSync("src/app/api/mpgf/public-goods/operations/route.ts", "utf8");
+  const operations = readFileSync("src/lib/mpgf/public-goods-operations.ts", "utf8");
+  const realMoney = readFileSync("src/lib/mpgf/real-money.ts", "utf8");
+  const replayMigration = readFileSync(
+    "supabase/migrations/20260531_mpgf_payment_webhook_replay_alerts.sql",
+    "utf8",
+  );
+
+  assert.equal(dashboard.privacyPolicy, "private_admin_operations_no_raw_webhook_payloads");
+  assert.equal(dashboard.status, "attention_required");
+  assert.equal(dashboard.alerting.configured, true);
+  assert.equal(dashboard.alerting.secretPolicy, "secret_values_never_returned");
+  assert.equal(alertKinds.has("payment_failure"), true);
+  assert.equal(alertKinds.has("webhook_replay_attempt"), true);
+  assert.equal(alertKinds.has("dispute_freeze"), true);
+  assert.equal(dashboard.dashboardCounters.reviewSlaHours, 48);
+  assert.equal(typeof dashboard.dashboardCounters.reviewSlaSampleReady, "boolean");
+  assert.equal(typeof dashboard.dashboardCounters.identityFlagRateBps === "number", true);
+  assert.equal(dashboard.dashboardCounters.thresholdClearRateBps, 5000);
+  assert.equal(dashboard.dashboardCounters.paymentFailureCount, 1);
+  assert.equal(dashboard.dashboardCounters.webhookReplayAttemptCount, 1);
+  assert.ok(dashboard.dashboardCounters.disputeFreezeCount > 0);
+  assert.ok(dashboard.dashboardCounters.payoutHoldCampaignCount > 0);
+  assert.equal(dashboard.rolloutGate.widensPublicAccessAutomatically, false);
+  assert.equal(serialized.includes("evt_failed_private_ref"), false);
+  assert.equal(serialized.includes("evt_replay_private_ref"), false);
+  assert.doesNotMatch(serialized, /raw_body|payload_json|privateEvidence|supporterReason|receipt_url|evidenceUrl|whsec|sk_live/i);
+  assert.match(route, /MPGF_PUBLIC_GOODS_OPERATIONS_SECRET/);
+  assert.match(route, /loadMpgfPublicGoodsOperationsDashboard/);
+  assert.match(route, /private_admin_operations_no_raw_webhook_payloads/);
+  assert.match(operations, /payment_failure/);
+  assert.match(operations, /webhook_replay_attempt/);
+  assert.match(operations, /dispute_freeze/);
+  assert.match(operations, /reviewSlaHours/);
+  assert.match(operations, /identityFlagRateBps/);
+  assert.match(operations, /thresholdClearRateBps/);
+  assert.match(operations, /payoutHoldCents/);
+  assert.match(realMoney, /replay_attempt_count/);
+  assert.match(replayMigration, /last_replayed_at/);
 });
 
 test("MPGF public-goods migration covers required entities and RLS policies", () => {

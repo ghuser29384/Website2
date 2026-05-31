@@ -884,6 +884,14 @@ export async function handleMpgfStripeWebhookEvent(input: {
   }
 
   if (eventRecord.data.processed) {
+    await supabase
+      .from("mpgf_payment_webhook_events")
+      .update({
+        replay_attempt_count: 1,
+        last_replayed_at: new Date().toISOString(),
+      })
+      .eq("id", eventRecord.data.id);
+
     return { handled: true, status: "already_processed" as const };
   }
 
