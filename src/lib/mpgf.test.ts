@@ -59,6 +59,10 @@ import {
   demoMpgfPublicGoodsSubscriptions,
   mpgfPublicRoutes,
 } from "./mpgf/data";
+import {
+  buildMpgfPublicGoodsAllocationResultRows,
+  persistMpgfPublicGoodsAllocationResults,
+} from "./mpgf/public-goods-allocation-results";
 import { buildMpgfPublicGoodsReconciliationRows } from "./mpgf/public-goods-reconciliation";
 import {
   normalizeMpgfPublicGoodsReasonCode,
@@ -379,6 +383,37 @@ test("MPGF assurance output preserves the no-custody external-handoff posture", 
   assert.ok(payable.every((line) => line.custodyMode === "no_custody_external_handoff"));
   assert.ok(payable.every((line) => line.proofRequired === "external_destination_receipt" || line.proofRequired === "signed_intent_review"));
   assert.ok(allocation.proofPageRequired);
+});
+
+test("MPGF public-goods allocation finalization builds persistable no-payout-leak rows", async () => {
+  const allocation = allocateMpgfAssuranceRound();
+  const rows = buildMpgfPublicGoodsAllocationResultRows({
+    allocation,
+    finalizedAt: "2026-05-30T12:00:00.000Z",
+  });
+  const globalHealth = rows.find((row) => row.campaign_id === "campaign-global-health-basic-needs");
+  const resilience = rows.find((row) => row.campaign_id === "campaign-existential-risk-resilience");
+  const dryRun = await persistMpgfPublicGoodsAllocationResults({
+    allocation,
+    dryRun: true,
+    finalizedAt: "2026-05-30T12:00:00.000Z",
+  });
+  const route = readFileSync("src/app/api/mpgf/public-goods/allocate/route.ts", "utf8");
+
+  assert.equal(rows.length, allocation.lines.length);
+  assert.ok(globalHealth);
+  assert.ok(resilience);
+  assert.equal(globalHealth.status, "payable");
+  assert.ok(globalHealth.total_payout_cents > 0);
+  assert.ok(globalHealth.qf_bonus_cents <= globalHealth.qf_bonus_cap_cents);
+  assert.notEqual(resilience.status, "payable");
+  assert.equal(resilience.total_payout_cents, 0);
+  assert.equal(dryRun.status, "dry_run");
+  assert.equal(dryRun.persistedCount, 0);
+  assert.match(route, /MPGF_ALLOCATION_SECRET/);
+  assert.match(route, /persistMpgfPublicGoodsAllocationResults/);
+  assert.match(route, /proofPageRequired/);
+  assert.match(route, /qfBonusCapCents/);
 });
 
 test("MPGF public-goods campaign service validates schema, deadlines, and prohibited claims", () => {
