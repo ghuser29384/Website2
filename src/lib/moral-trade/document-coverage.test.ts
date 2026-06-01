@@ -15,7 +15,25 @@ test("document coverage profile maps improvement docs to implementation evidence
   assert.equal(validation.status, "pass");
   assert.ok(validation.canonicalInstructionHash?.startsWith("sha256:"));
   assert.equal(validation.sourceStackCount, profile.sourceStackReferences.length);
+  assert.equal(validation.testingPlanLayerCount, profile.testingPlanCoverage.length);
   assert.ok(profile.sourceStackReferences.length >= 12);
+  assert.equal(profile.testingPlanCoverage.length, 7);
+  assert.ok(
+    profile.testingPlanCoverage.some(
+      (layer) =>
+        layer.key === "fairness_tests" &&
+        layer.testFiles.includes("src/lib/moral-trade/evaluation.test.ts") &&
+        layer.routeEvidence.includes("/api/moral-trade/evaluation/health"),
+    ),
+  );
+  assert.ok(
+    profile.testingPlanCoverage.some(
+      (layer) =>
+        layer.key === "resilience_tests" &&
+        layer.evidenceFiles.includes("src/lib/moral-trade/performance.ts") &&
+        layer.testFiles.includes("src/lib/moral-trade/performance.test.ts"),
+    ),
+  );
   assert.ok(
     profile.sourceStackReferences.some(
       (source) =>
@@ -131,6 +149,14 @@ test("document coverage validation fails when source phrases or evidence files w
           }
         : source,
     ),
+    testingPlanCoverage: profile.testingPlanCoverage.map((layer) =>
+      layer.key === "privacy_tests"
+        ? {
+            ...layer,
+            testFiles: [...layer.testFiles, "src/lib/missing-privacy-boundary.test.ts"],
+          }
+        : layer,
+    ),
     requirements: profile.requirements.map((requirement) =>
       requirement.key === "workflow_cards_factor_codes"
         ? {
@@ -171,6 +197,14 @@ test("document coverage validation fails when source phrases or evidence files w
   assert.ok(
     validation.checks.some(
       (entry) =>
+        entry.id === "testing-plan:privacy_tests" &&
+        entry.status === "fail" &&
+        entry.evidence.includes("src/lib/missing-privacy-boundary.test.ts"),
+    ),
+  );
+  assert.ok(
+    validation.checks.some(
+      (entry) =>
         entry.id === "requirement:workflow_cards_factor_codes" &&
         entry.status === "fail" &&
         entry.evidence.includes("src/lib/missing-workflow.ts"),
@@ -203,6 +237,13 @@ test("document coverage route publishes the public contract without private stat
     ),
   );
   assert.ok(
+    body.testingPlanCoverage.some(
+      (layer: { key: string; passCondition: string }) =>
+        layer.key === "schema_tests" &&
+        /missing required fields enter matchable/i.test(layer.passCondition),
+    ),
+  );
+  assert.ok(
     body.publicContract.sourceDocuments.every(
       (source: { artifactHash: string; expectedHash: string }) =>
         source.artifactHash.startsWith("sha256:") && source.expectedHash.startsWith("sha256:"),
@@ -226,6 +267,13 @@ test("document coverage route publishes the public contract without private stat
       (source: { key: string; evidenceFiles: string[] }) =>
         source.key === "human_ai_interaction" &&
         source.evidenceFiles.includes("src/lib/moral-trade/copilot.ts"),
+    ),
+  );
+  assert.ok(
+    body.publicContract.testingPlanCoverage.some(
+      (layer: { key: string; testFiles: string[] }) =>
+        layer.key === "resilience_tests" &&
+        layer.testFiles.includes("src/lib/moral-trade/operations.test.ts"),
     ),
   );
   assert.ok(

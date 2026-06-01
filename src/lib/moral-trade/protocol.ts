@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import protocolProfileJson from "../../../config/moral-trade/protocol-profile.json";
 
-export const MORAL_TRADE_PROTOCOL_VALIDATOR_VERSION = "moral-trade-core-validator-v0.1";
+export const MORAL_TRADE_PROTOCOL_VALIDATOR_VERSION = "moral-trade-core-validator-v0.2";
 export const MORAL_TRADE_TRANSITION_EVENT_SCHEMA_VERSION =
   "moral-trade-transition-event-v0.1";
 
@@ -12,6 +12,7 @@ export type MoralTradeProtocolProfile = {
   requiredProposalFields: Array<{ key: string; label: string }>;
   statusValues: string[];
   stateTransitionRules: MoralTradeStateTransitionRule[];
+  decisionPipeline: MoralTradeDecisionPipelineStep[];
   guardrails: Array<{ code: string; label: string; rule: string }>;
   factorCodes: Array<{ code: string; label: string; description: string }>;
   evidenceSchemas: Array<{ key: string; label: string; required: string[] }>;
@@ -40,6 +41,16 @@ export interface MoralTradeStateTransitionRule {
   allowedTo: string[];
   requires: string[];
   provenanceActivity: string;
+}
+
+export interface MoralTradeDecisionPipelineStep {
+  key: string;
+  label: string;
+  sourceDocumentStep: string;
+  requiredSignals: string[];
+  passCondition: string;
+  failureStatus: string;
+  blocksMatchable: boolean;
 }
 
 export interface MoralTradeProposalStateTransitionInput {
@@ -141,6 +152,17 @@ const REQUIRED_GUARDRAILS = [
   "no_global_moral_ranking",
   "privacy_redaction_required",
   "separate_trust_axes",
+] as const;
+
+const REQUIRED_DECISION_PIPELINE_STEPS = [
+  "schema_completeness",
+  "anti_threat_policy",
+  "factual_evidence_readiness",
+  "counterfactual_baseline",
+  "externality_review",
+  "privacy_redaction",
+  "match_explanation",
+  "human_review_routing",
 ] as const;
 
 const REQUIRED_FACTOR_CODES = [
@@ -616,23 +638,45 @@ export function validateMoralTradeProposalStateTransition(
   };
 }
 
-export function validateMoralTradeProtocolProfile(): MoralTradeProtocolValidation {
-  const transitionStatusValues = protocolProfile.stateTransitionRules.flatMap((rule) => [
+export function validateMoralTradeProtocolProfile(
+  profile: MoralTradeProtocolProfile = protocolProfile,
+): MoralTradeProtocolValidation {
+  const transitionStatusValues = profile.stateTransitionRules.flatMap((rule) => [
     rule.from,
     ...rule.allowedTo,
   ]);
-  const provenancePersistence = protocolProfile.provenancePersistence ?? {
+  const provenancePersistence = profile.provenancePersistence ?? {
     accessRules: [],
     strategy: "",
     tables: [],
   };
+  const decisionPipelineKeys = profile.decisionPipeline.map((step) => step.key);
+  const duplicateDecisionPipelineKeys = decisionPipelineKeys.filter(
+    (key, index) => decisionPipelineKeys.indexOf(key) !== index,
+  );
+  const transitionRequirementKeys = new Set(
+    profile.stateTransitionRules.flatMap((rule) => rule.requires),
+  );
+  const knownDecisionSignals = new Set([
+    ...transitionRequirementKeys,
+    ...profile.guardrails.map((guardrail) => guardrail.code),
+    ...profile.factorCodes.map((factor) => factor.code),
+    "getMissingMoralTradeRequiredProposalFields",
+    "policy_conflicts_block_matchable",
+    "requiredProposalFields",
+  ]);
+  const unknownDecisionSignals = profile.decisionPipeline.flatMap((step) =>
+    step.requiredSignals
+      .filter((signal) => !knownDecisionSignals.has(signal))
+      .map((signal) => `${step.key}:${signal}`),
+  );
   const checks = [
     check(
       "required-proposal-fields",
       "Required proposal fields",
-      protocolProfile.requiredProposalFields.length >= 9 &&
+      profile.requiredProposalFields.length >= 9 &&
         hasAll(
-          protocolProfile.requiredProposalFields.map((field) => field.key),
+          profile.requiredProposalFields.map((field) => field.key),
           [
             "format",
             "cause_areas",
@@ -645,20 +689,20 @@ export function validateMoralTradeProtocolProfile(): MoralTradeProtocolValidatio
             "public_description",
           ],
         ),
-      `${protocolProfile.requiredProposalFields.length} required field(s) published.`,
+      `${profile.requiredProposalFields.length} required field(s) published.`,
     ),
     check(
       "status-values",
       "Review status values",
-      hasAll(protocolProfile.statusValues, REQUIRED_STATUSES),
-      protocolProfile.statusValues.join(", "),
+      hasAll(profile.statusValues, REQUIRED_STATUSES),
+      profile.statusValues.join(", "),
     ),
     check(
       "state-transition-rules",
       "Proposal state transition rules",
-      protocolProfile.stateTransitionRules.length >= 6 &&
+      profile.stateTransitionRules.length >= 6 &&
         hasAll(
-          protocolProfile.stateTransitionRules.map((rule) => rule.from),
+          profile.stateTransitionRules.map((rule) => rule.from),
           [
             "draft",
             "submitted",
@@ -670,61 +714,90 @@ export function validateMoralTradeProtocolProfile(): MoralTradeProtocolValidatio
             "completion_reviewed",
           ],
         ) &&
-        transitionStatusValues.every((status) => protocolProfile.statusValues.includes(status)) &&
-        protocolProfile.stateTransitionRules.every(
+        transitionStatusValues.every((status) => profile.statusValues.includes(status)) &&
+        profile.stateTransitionRules.every(
           (rule) =>
             rule.requires.includes("transition_event_recorded") &&
-            protocolProfile.provenanceModel.activities.includes(rule.provenanceActivity),
+            profile.provenanceModel.activities.includes(rule.provenanceActivity),
         ) &&
-        protocolProfile.stateTransitionRules
+        profile.stateTransitionRules
           .filter((rule) => rule.allowedTo.includes("matchable"))
           .every((rule) => hasAll(rule.requires, MATCHABLE_PROFILE_REQUIREMENTS)),
-      `${protocolProfile.stateTransitionRules.length} state transition rule(s) publish allowed edges, required checks, and provenance activities.`,
+      `${profile.stateTransitionRules.length} state transition rule(s) publish allowed edges, required checks, and provenance activities.`,
+    ),
+    check(
+      "decision-pipeline",
+      "Proposed decision logic is public and signal-bound",
+      hasAll(decisionPipelineKeys, REQUIRED_DECISION_PIPELINE_STEPS) &&
+        duplicateDecisionPipelineKeys.length === 0 &&
+        unknownDecisionSignals.length === 0 &&
+        profile.decisionPipeline.every(
+          (step) =>
+            step.sourceDocumentStep.length >= 30 &&
+            step.passCondition.length >= 30 &&
+            step.requiredSignals.length > 0 &&
+            profile.statusValues.includes(step.failureStatus),
+        ) &&
+        profile.decisionPipeline
+          .filter((step) =>
+            [
+              "schema_completeness",
+              "anti_threat_policy",
+              "factual_evidence_readiness",
+              "counterfactual_baseline",
+              "privacy_redaction",
+              "human_review_routing",
+            ].includes(step.key),
+          )
+          .every((step) => step.blocksMatchable),
+      unknownDecisionSignals.length
+        ? `unknownSignals=${unknownDecisionSignals.join(", ")}`
+        : profile.decisionPipeline.map((step) => `${step.key}->${step.failureStatus}`).join(", "),
     ),
     check(
       "guardrails",
       "Safety and privacy guardrails",
       hasAll(
-        protocolProfile.guardrails.map((guardrail) => guardrail.code),
+        profile.guardrails.map((guardrail) => guardrail.code),
         REQUIRED_GUARDRAILS,
       ),
-      `${protocolProfile.guardrails.length} guardrail(s), including anti-threat and redaction rules.`,
+      `${profile.guardrails.length} guardrail(s), including anti-threat and redaction rules.`,
     ),
     check(
       "factor-codes",
       "Public factor-code explanations",
       hasAll(
-        protocolProfile.factorCodes.map((factor) => factor.code),
+        profile.factorCodes.map((factor) => factor.code),
         REQUIRED_FACTOR_CODES,
       ),
-      `${protocolProfile.factorCodes.length} factor code(s) available for match and review explanations.`,
+      `${profile.factorCodes.length} factor code(s) available for match and review explanations.`,
     ),
     check(
       "evidence-schemas",
       "Evidence schemas by trade format",
       hasAll(
-        protocolProfile.evidenceSchemas.map((schema) => schema.key),
+        profile.evidenceSchemas.map((schema) => schema.key),
         REQUIRED_EVIDENCE_SCHEMAS,
       ),
-      protocolProfile.evidenceSchemas.map((schema) => schema.key).join(", "),
+      profile.evidenceSchemas.map((schema) => schema.key).join(", "),
     ),
     check(
       "provenance-model",
       "Provenance objects",
-      protocolProfile.provenanceModel.entities.length >= 3 &&
-        protocolProfile.provenanceModel.activities.length >= 3 &&
-        protocolProfile.provenanceModel.agents.length >= 3,
-      `${protocolProfile.provenanceModel.entities.length} entities, ${protocolProfile.provenanceModel.activities.length} activities, ${protocolProfile.provenanceModel.agents.length} agents.`,
+      profile.provenanceModel.entities.length >= 3 &&
+        profile.provenanceModel.activities.length >= 3 &&
+        profile.provenanceModel.agents.length >= 3,
+      `${profile.provenanceModel.entities.length} entities, ${profile.provenanceModel.activities.length} activities, ${profile.provenanceModel.agents.length} agents.`,
     ),
     check(
       "provenance-object-schemas",
       "Provenance object schemas",
       hasAll(
-        protocolProfile.provenanceObjectSchemas.map((schema) => schema.key),
+        profile.provenanceObjectSchemas.map((schema) => schema.key),
         REQUIRED_PROVENANCE_OBJECT_SCHEMAS,
       ) &&
-        protocolProfile.provenanceObjectSchemas.every((schema) => schema.required.length >= 3),
-      `${protocolProfile.provenanceObjectSchemas.length} object schema(s) published for evidence and review provenance.`,
+        profile.provenanceObjectSchemas.every((schema) => schema.required.length >= 3),
+      `${profile.provenanceObjectSchemas.length} object schema(s) published for evidence and review provenance.`,
     ),
     check(
       "provenance-persistence",
@@ -735,7 +808,7 @@ export function validateMoralTradeProtocolProfile(): MoralTradeProtocolValidatio
       ) &&
         provenancePersistence.tables.every(
           (table) =>
-            protocolProfile.provenanceObjectSchemas.some(
+            profile.provenanceObjectSchemas.some(
               (schema) => schema.key === table.objectSchemaKey,
             ) &&
             table.requiredColumns.includes("owner_profile_id") &&
@@ -748,10 +821,10 @@ export function validateMoralTradeProtocolProfile(): MoralTradeProtocolValidatio
     check(
       "quality-metrics",
       "Quality and safety metrics",
-      protocolProfile.qualityMetrics.length >= 7 &&
-        protocolProfile.qualityMetrics.includes("privacy_leakage_incidents") &&
-        protocolProfile.qualityMetrics.includes("human_overrule_rate"),
-      `${protocolProfile.qualityMetrics.length} metric(s) published.`,
+      profile.qualityMetrics.length >= 7 &&
+        profile.qualityMetrics.includes("privacy_leakage_incidents") &&
+        profile.qualityMetrics.includes("human_overrule_rate"),
+      `${profile.qualityMetrics.length} metric(s) published.`,
     ),
   ];
   const blockers = checks
@@ -762,7 +835,7 @@ export function validateMoralTradeProtocolProfile(): MoralTradeProtocolValidatio
     status: blockers.length ? "fail" : "pass",
     validatorName: "moral-trade-core-protocol-profile",
     validatorVersion: MORAL_TRADE_PROTOCOL_VALIDATOR_VERSION,
-    profileVersion: protocolProfile.version,
+    profileVersion: profile.version,
     checks,
     blockers,
   };

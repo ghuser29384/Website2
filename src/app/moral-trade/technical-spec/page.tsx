@@ -87,6 +87,10 @@ import {
   getMoralTradeAiGovernanceProfile,
   validateMoralTradeAiGovernanceProfile,
 } from "@/lib/moral-trade/ai-governance";
+import {
+  getMoralTradeDocumentCoverageProfile,
+  validateMoralTradeDocumentCoverageProfile,
+} from "@/lib/moral-trade/document-coverage";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -164,6 +168,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const apiContractValidation = validateMoralTradeApiContractProfile(apiContractProfile);
   const aiGovernanceProfile = getMoralTradeAiGovernanceProfile();
   const aiGovernanceValidation = validateMoralTradeAiGovernanceProfile(aiGovernanceProfile);
+  const documentCoverageProfile = getMoralTradeDocumentCoverageProfile();
+  const documentCoverageValidation =
+    validateMoralTradeDocumentCoverageProfile(documentCoverageProfile);
   const apiRateLimitSurfaces = Array.from(
     new Set(apiContractProfile.routes.map((route) => route.rateLimitSurface)),
   );
@@ -250,6 +257,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               <Link className="button button-secondary" href="/api/moral-trade/api-contract">
                 View API contract
               </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/document-coverage/health">
+                View document coverage
+              </Link>
             </>
           }
         >
@@ -278,6 +288,75 @@ export default async function MoralTradeTechnicalSpecPage() {
       </header>
 
       <main id="main-content" tabIndex={-1}>
+        <section className="section section-white" aria-labelledby="document-coverage-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Document coverage contract</p>
+            <h2 id="document-coverage-heading">
+              The improvement report is mapped to validator evidence.
+            </h2>
+            <p>
+              The source Markdown and PDF are hash-checked, and the report testing plan is now
+              mapped as schema, policy, evidence, privacy, fairness, UX, and resilience coverage
+              before any broad completion claim is made.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Document coverage {documentCoverageProfile.version}
+              </p>
+              <h3>Status {documentCoverageValidation.status}</h3>
+              <p>
+                {documentCoverageValidation.checks.length} check(s),{" "}
+                {documentCoverageValidation.sourceDocumentCount} source document(s),{" "}
+                {documentCoverageValidation.testingPlanLayerCount} testing-plan layer(s).
+              </p>
+            </div>
+            <Link
+              className="button button-secondary"
+              href="/api/moral-trade/document-coverage/health"
+            >
+              Open coverage JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Source artifacts</h3>
+              <ul className="clean-list">
+                {documentCoverageValidation.sourceDocumentArtifacts.map((artifact) => (
+                  <li key={artifact.key}>
+                    {artifact.key}: {artifact.hashMatches ? "hash matched" : "hash blocked"}
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Testing plan coverage</h3>
+              <ul className="clean-list">
+                {documentCoverageProfile.testingPlanCoverage.map((layer) => (
+                  <li key={layer.key}>{layer.label}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Recommended source stack</h3>
+              <p>
+                {documentCoverageProfile.sourceStackReferences.length} source family mappings
+                connect Ord, product commitments, due diligence, provenance, AI governance, and
+                HCI guidance to code and public routes.
+              </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Canonical gates</h3>
+              <ul className="clean-list">
+                {documentCoverageProfile.canonicalInstruction.verificationCommands.map((command) => (
+                  <li key={command}>{command}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
         <section className="section section-white" aria-labelledby="contract-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Public contract</p>
@@ -307,6 +386,16 @@ export default async function MoralTradeTechnicalSpecPage() {
                   </StatusBadge>
                 ))}
               </div>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Decision pipeline</h3>
+              <ul className="clean-list">
+                {profile.decisionPipeline.map((step) => (
+                  <li key={step.key}>
+                    {step.label}: {step.failureStatus.replaceAll("_", " ")}
+                  </li>
+                ))}
+              </ul>
             </article>
             <article className="panel protocol-contract-card">
               <h3>State transitions</h3>

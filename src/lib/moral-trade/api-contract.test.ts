@@ -223,6 +223,13 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   );
   assert.ok(
     profile.schemaDefinitions
+      .find((schema) => schema.key === "moral_trade_aggregate_health_response")
+      ?.fields.some(
+        (field) => field.key === "publicContract" && /decision pipeline/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
       .find((schema) => schema.key === "provenance_schema_response")
       ?.fields.some((field) => field.key === "sampleBundleSummary"),
   );
@@ -334,6 +341,17 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
         (field) =>
           field.key === "sourceStackReferences" &&
           /Recommended source-stack traceability records/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "document_coverage_health_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "testingPlanCoverage" &&
+          /schema, policy, evidence, privacy, fairness, UX, and resilience/i.test(
+            field.description,
+          ),
       ),
   );
   assert.ok(

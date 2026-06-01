@@ -238,6 +238,12 @@ export async function GET(request: Request) {
       policyBundleRedactions: policyBundleContract.redactionPolicy.map((entry) => entry.key),
       policyBundleContractTests: policyBundleContract.contractTests,
       statusValues: profile.statusValues,
+      decisionPipeline: profile.decisionPipeline.map((step) => ({
+        key: step.key,
+        requiredSignals: step.requiredSignals,
+        failureStatus: step.failureStatus,
+        blocksMatchable: step.blocksMatchable,
+      })),
       stateTransitionRules: profile.stateTransitionRules.map((rule) => ({
         key: rule.key,
         from: rule.from,
@@ -439,6 +445,8 @@ export async function GET(request: Request) {
         documentCoverageValidation.sourceDocumentArtifacts,
       documentCoverageSourceStackReferences:
         documentCoverageProfile.sourceStackReferences.map((source) => source.key),
+      documentCoverageTestingPlanCoverage:
+        documentCoverageProfile.testingPlanCoverage.map((layer) => layer.key),
       documentCoverageRequirementKeys: documentCoverageProfile.requirements.map(
         (requirement) => requirement.key,
       ),

@@ -8,6 +8,7 @@ import {
   validateMoralTradeStateTransitionEventRecord,
   validateMoralTradeProposalStateTransition,
   validateMoralTradeProtocolProfile,
+  type MoralTradeProtocolProfile,
 } from "./protocol";
 
 test("core moral trade protocol profile publishes validator-backed contracts", () => {
@@ -67,6 +68,19 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
   assert.ok(profile.qualityMetrics.includes("privacy_leakage_incidents"));
   assert.ok(profile.statusValues.includes("completion_reviewed"));
   assert.ok(profile.statusValues.includes("disputed_unresolved"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "schema_completeness"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "anti_threat_policy"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "factual_evidence_readiness"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "counterfactual_baseline"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "externality_review"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "privacy_redaction"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "match_explanation"));
+  assert.ok(profile.decisionPipeline.some((step) => step.key === "human_review_routing"));
+  assert.ok(
+    profile.decisionPipeline
+      .filter((step) => step.blocksMatchable)
+      .every((step) => profile.statusValues.includes(step.failureStatus)),
+  );
   assert.ok(profile.stateTransitionRules.some((rule) => rule.from === "draft"));
   assert.ok(
     profile.stateTransitionRules
@@ -81,6 +95,36 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
           rule.requires.includes("match_explanation_before_matchable") &&
           rule.requires.includes("human_review_before_matchable"),
       ),
+  );
+});
+
+test("protocol profile validation fails when proposed decision logic is weakened", () => {
+  const profile = getMoralTradeProtocolProfile();
+  const weakened: MoralTradeProtocolProfile = {
+    ...profile,
+    decisionPipeline: profile.decisionPipeline
+      .filter((step) => step.key !== "anti_threat_policy")
+      .map((step) =>
+        step.key === "schema_completeness"
+          ? {
+              ...step,
+              failureStatus: "silent_pass",
+              requiredSignals: ["unknown_decision_signal"],
+            }
+          : step,
+      ),
+  };
+  const validation = validateMoralTradeProtocolProfile(weakened);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("decision-pipeline")));
+  assert.ok(
+    validation.checks.some(
+      (check) =>
+        check.id === "decision-pipeline" &&
+        check.status === "fail" &&
+        check.evidence.includes("unknown_decision_signal"),
+    ),
   );
 });
 

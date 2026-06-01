@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-core-v0.1.3-2026-05",
+  "version": "moral-trade-core-v0.1.4-2026-05",
   "purpose": "Public contract for core Moral Trade proposal review, matching explanations, evidence states, and provenance.",
   "requiredProposalFields": [
     { "key": "format", "label": "Trade format" },
@@ -87,6 +87,80 @@
       "allowedTo": ["disputed_unresolved", "blocked"],
       "requires": ["dispute_record_before_unresolved", "transition_event_recorded"],
       "provenanceActivity": "review_completed"
+    }
+  ],
+  "decisionPipeline": [
+    {
+      "key": "schema_completeness",
+      "label": "Schema completeness",
+      "sourceDocumentStep": "Check required format, action, request, baseline, duration, exit-condition, verification, cause-area, and public-boundary fields before judging readiness.",
+      "requiredSignals": ["requiredProposalFields", "getMissingMoralTradeRequiredProposalFields"],
+      "passCondition": "All required proposal fields are present before submitted, matchable, challenge-window, or completion states.",
+      "failureStatus": "needs_clarification",
+      "blocksMatchable": true
+    },
+    {
+      "key": "anti_threat_policy",
+      "label": "Anti-threat and prohibited-content screen",
+      "sourceDocumentStep": "Block threats, coercion, doxxing, harassment, fraud, illegality, political-campaign offsets, and newly escalated harmful behavior before any reliance.",
+      "requiredSignals": ["anti_threat_baseline", "policy_conflicts_block_matchable"],
+      "passCondition": "No seeded prohibited pattern or policy conflict can become matchable or complete without a block or human-reviewed policy path.",
+      "failureStatus": "blocked",
+      "blocksMatchable": true
+    },
+    {
+      "key": "factual_evidence_readiness",
+      "label": "Factual evidence readiness",
+      "sourceDocumentStep": "Assess whether the offered action has a receipt, log, attestation, provider record, public pledge, or manual review path.",
+      "requiredSignals": ["evidence_rule_named", "evidence_sufficiency_before_matchable"],
+      "passCondition": "Factual action claims name a reviewable proof method and evidence review is complete before matchable or completion states.",
+      "failureStatus": "needs_evidence",
+      "blocksMatchable": true
+    },
+    {
+      "key": "counterfactual_baseline",
+      "label": "Counterfactual baseline credibility",
+      "sourceDocumentStep": "Assess the no-trade default separately from factual proof, including prior intent, history, dated support, or challenge need.",
+      "requiredSignals": ["baseline_stated", "baseline_credibility_before_matchable"],
+      "passCondition": "Baseline credibility is reviewed before matchable status, with weak baselines routed to challenge or human review.",
+      "failureStatus": "needs_human_review",
+      "blocksMatchable": true
+    },
+    {
+      "key": "externality_review",
+      "label": "Externality-review trigger",
+      "sourceDocumentStep": "Detect third-party impacts, vulnerable-party pressure, political adjacency, supply-chain concerns, destination risk, environmental/community impact, and perverse incentives.",
+      "requiredSignals": ["externality_review_required", "externality_trigger_before_matchable"],
+      "passCondition": "Material externality triggers are identified, mapped to review standards, and routed to challenge-window or remedy review before reliance.",
+      "failureStatus": "challenge_window",
+      "blocksMatchable": true
+    },
+    {
+      "key": "privacy_redaction",
+      "label": "Privacy and redaction",
+      "sourceDocumentStep": "Verify exact wishes, contact details, private source notes, sensitive constraints, and disclosure-stage data are redacted before public preview.",
+      "requiredSignals": ["privacy_safe_preview", "privacy_redaction_before_matchable"],
+      "passCondition": "Private data is redacted and disclosure stage is compatible before match explanations or public previews are emitted.",
+      "failureStatus": "needs_human_review",
+      "blocksMatchable": true
+    },
+    {
+      "key": "match_explanation",
+      "label": "Match explanation generation",
+      "sourceDocumentStep": "Generate only factor-code, confidence-band, and redaction-note explanations from explicit rule outputs.",
+      "requiredSignals": ["match_explanation_before_matchable", "privacy_safe_preview"],
+      "passCondition": "A public-safe factor-code explanation exists before a candidate is treated as matchable.",
+      "failureStatus": "needs_human_review",
+      "blocksMatchable": true
+    },
+    {
+      "key": "human_review_routing",
+      "label": "Human-review routing",
+      "sourceDocumentStep": "Route safety, trust, counterfactual, disclosure, externality, completion, and dispute decisions to humans while automation stays advisory.",
+      "requiredSignals": ["human_review_before_matchable", "human_review_before_completion"],
+      "passCondition": "Human review is recorded before matchable or completion states, and decision-changing automation remains prohibited.",
+      "failureStatus": "needs_human_review",
+      "blocksMatchable": true
     }
   ],
   "guardrails": [

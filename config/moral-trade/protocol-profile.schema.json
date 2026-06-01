@@ -9,6 +9,7 @@
     "requiredProposalFields",
     "statusValues",
     "stateTransitionRules",
+    "decisionPipeline",
     "guardrails",
     "factorCodes",
     "evidenceSchemas",
@@ -60,6 +61,37 @@
             "uniqueItems": true
           },
           "provenanceActivity": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "decisionPipeline": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "sourceDocumentStep",
+          "requiredSignals",
+          "passCondition",
+          "failureStatus",
+          "blocksMatchable"
+        ],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "sourceDocumentStep": { "type": "string", "minLength": 1 },
+          "requiredSignals": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "passCondition": { "type": "string", "minLength": 1 },
+          "failureStatus": { "type": "string", "minLength": 1 },
+          "blocksMatchable": { "type": "boolean" }
         },
         "additionalProperties": false
       }

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 export const MORAL_TRADE_DOCUMENT_COVERAGE_VALIDATOR_VERSION =
-  "moral-trade-document-coverage-validator-v0.4";
+  "moral-trade-document-coverage-validator-v0.5";
 
 export type MoralTradeDocumentSource = {
   key: string;
@@ -40,12 +40,22 @@ export type MoralTradeRecommendedSourceReference = {
   routeEvidence: string[];
 };
 
+export type MoralTradeTestingPlanLayer = {
+  key: string;
+  label: string;
+  passCondition: string;
+  evidenceFiles: string[];
+  testFiles: string[];
+  routeEvidence: string[];
+};
+
 export type MoralTradeDocumentCoverageProfile = {
   version: string;
   purpose: string;
   sourceDocuments: MoralTradeDocumentSource[];
   canonicalInstruction: MoralTradeCanonicalInstruction;
   sourceStackReferences: MoralTradeRecommendedSourceReference[];
+  testingPlanCoverage: MoralTradeTestingPlanLayer[];
   requirements: MoralTradeDocumentRequirement[];
   nonClaims: string[];
 };
@@ -73,6 +83,7 @@ export type MoralTradeDocumentCoverageValidation = {
   profileVersion: string;
   sourceDocumentCount: number;
   sourceStackCount: number;
+  testingPlanLayerCount: number;
   requirementCount: number;
   sourceDocumentArtifacts: MoralTradeSourceDocumentArtifact[];
   canonicalInstructionHash: string | null;
@@ -145,8 +156,18 @@ const REQUIRED_RECOMMENDED_SOURCE_STACK_KEYS = [
   "human_ai_interaction",
 ] as const;
 
+const REQUIRED_TESTING_PLAN_LAYER_KEYS = [
+  "schema_tests",
+  "policy_tests",
+  "evidence_tests",
+  "privacy_tests",
+  "fairness_tests",
+  "ux_tests",
+  "resilience_tests",
+] as const;
+
 export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfile = {
-  version: "moral-trade-document-coverage-v0.5-2026-05",
+  version: "moral-trade-document-coverage-v0.6-2026-05",
   purpose:
     "Requirement-to-evidence coverage map for the Moral Trade improvement documents: the public validator suite should show which implementation artifacts answer each recommendation without inventing production evidence.",
   sourceDocuments: [
@@ -387,6 +408,154 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
       ],
     },
   ],
+  testingPlanCoverage: [
+    {
+      key: "schema_tests",
+      label: "Schema tests",
+      passCondition:
+        "No invalid state transitions; no missing required fields enter matchable status.",
+      evidenceFiles: [
+        "src/lib/moral-trade/protocol.ts",
+        "src/lib/moral-trade/data-model.ts",
+        "src/lib/moral-trade/schema-registry.ts",
+      ],
+      testFiles: [
+        "src/lib/moral-trade/protocol.test.ts",
+        "src/lib/moral-trade/data-model.test.ts",
+        "src/lib/moral-trade/schema-registry.test.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/health",
+        "/api/moral-trade/data-model/contract",
+        "/api/moral-trade/schemas",
+      ],
+    },
+    {
+      key: "policy_tests",
+      label: "Policy tests",
+      passCondition:
+        "Seeded threats, coercion, fraud, illegal asks, doxxing, political-campaign offsets, and escalated-harm fixtures never silently pass.",
+      evidenceFiles: [
+        "src/lib/moral-trade/policy-bundle.ts",
+        "src/lib/moral-trade/copilot.ts",
+        "src/lib/proposal-review.ts",
+      ],
+      testFiles: [
+        "src/lib/moral-trade/policy-bundle.test.ts",
+        "src/lib/moral-trade/copilot.test.ts",
+        "src/lib/proposal-review.test.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/policy-bundle/contract",
+        "/api/moral-trade/copilot/review",
+        "/api/moral-trade/review-workflow/evaluate",
+      ],
+    },
+    {
+      key: "evidence_tests",
+      label: "Evidence tests",
+      passCondition:
+        "Wrong-scope, duplicate, stale, unhashable, or unreviewed artifacts cannot produce reviewed completion.",
+      evidenceFiles: [
+        "src/lib/moral-trade/provenance.ts",
+        "src/lib/moral-trade/evidence-persistence.ts",
+        "src/lib/moral-trade/agreement-write-path.ts",
+      ],
+      testFiles: [
+        "src/lib/moral-trade/provenance.test.ts",
+        "src/lib/moral-trade/evidence-persistence.test.ts",
+        "src/lib/moral-trade/agreement-write-path.test.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/provenance/schema",
+        "/api/moral-trade/reasoning/packets",
+      ],
+    },
+    {
+      key: "privacy_tests",
+      label: "Privacy tests",
+      passCondition:
+        "Exact wish text, sensitive constraints, raw source notes, contact details, and private match text stay out of public cards and analytics.",
+      evidenceFiles: [
+        "src/lib/moral-trade/disclosure.ts",
+        "src/lib/moral-trade/match-signal.ts",
+        "src/lib/background-privacy-controls.ts",
+        "src/lib/moral-trade/transparency-report.ts",
+      ],
+      testFiles: [
+        "src/lib/moral-trade/disclosure.test.ts",
+        "src/lib/moral-trade/match-signal.test.ts",
+        "src/lib/background-privacy-controls.test.ts",
+        "src/lib/moral-trade/transparency-report.test.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/disclosure/contract",
+        "/api/moral-trade/match-signal/contract",
+        "/api/moral-trade/transparency/report",
+      ],
+    },
+    {
+      key: "fairness_tests",
+      label: "Fairness tests",
+      passCondition:
+        "Cause-area, geography, mode, privacy-stage, and governed sensitive-attribute surfacing deviations are thresholded, redacted, and reviewed.",
+      evidenceFiles: [
+        "config/moral-trade/evaluation-profile.json",
+        "src/lib/moral-trade/evaluation.ts",
+        "src/lib/moral-trade/ai-governance.ts",
+      ],
+      testFiles: [
+        "src/lib/moral-trade/evaluation.test.ts",
+        "src/lib/moral-trade/ai-governance.test.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/evaluation/health",
+        "/api/moral-trade/ai-governance/health",
+      ],
+    },
+    {
+      key: "ux_tests",
+      label: "UX tests",
+      passCondition:
+        "Time to first valid draft, explanation usefulness, reviewer efficiency, and overrule stability improve or receive a public reason code before promotion.",
+      evidenceFiles: [
+        "config/moral-trade/evaluation-profile.json",
+        "src/lib/moral-trade/evaluation.ts",
+        "src/app/moral-trade/technical-spec/page.tsx",
+      ],
+      testFiles: [
+        "src/lib/moral-trade/evaluation.test.ts",
+        "src/lib/public-route-smoke.test.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/evaluation/health",
+        "/moral-trade/technical-spec",
+      ],
+    },
+    {
+      key: "resilience_tests",
+      label: "Resilience tests",
+      passCondition:
+        "Copilot failures, provider outages, route errors, and state-transition replays fall back to deterministic or manual paths without mutating state.",
+      evidenceFiles: [
+        "src/lib/moral-trade/operations.ts",
+        "src/lib/moral-trade/performance.ts",
+        "src/lib/moral-trade/copilot.ts",
+        "src/lib/moral-trade/offer-write-path.ts",
+      ],
+      testFiles: [
+        "src/lib/moral-trade/operations.test.ts",
+        "src/lib/moral-trade/performance.test.ts",
+        "src/lib/moral-trade/copilot.test.ts",
+        "src/lib/moral-trade/offer-write-path.test.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/operations/health",
+        "/api/moral-trade/performance/health",
+        "/api/moral-trade/copilot/review",
+      ],
+    },
+  ],
   requirements: [
     {
       key: "core_data_model_public_validator_suite",
@@ -582,12 +751,16 @@ export function validateMoralTradeDocumentCoverageProfile(
 ): MoralTradeDocumentCoverageValidation {
   const sourceKeys = profile.sourceDocuments.map((source) => source.key);
   const sourceStackKeys = profile.sourceStackReferences.map((source) => source.key);
+  const testingPlanLayerKeys = profile.testingPlanCoverage.map((layer) => layer.key);
   const requirementKeys = profile.requirements.map((requirement) => requirement.key);
   const duplicateSourceStackKeys = sourceStackKeys.filter(
     (key, index) => sourceStackKeys.indexOf(key) !== index,
   );
   const duplicateRequirementKeys = requirementKeys.filter(
     (key, index) => requirementKeys.indexOf(key) !== index,
+  );
+  const duplicateTestingPlanLayerKeys = testingPlanLayerKeys.filter(
+    (key, index) => testingPlanLayerKeys.indexOf(key) !== index,
   );
   const sourceChecks = profile.sourceDocuments.map((source) => {
     const exists = fileExists(source.path);
@@ -642,6 +815,29 @@ export function validateMoralTradeDocumentCoverageProfile(
         `evidence=${source.evidenceFiles.length - missingEvidence.length}/${source.evidenceFiles.length}`,
         `routes=${source.routeEvidence.length}`,
         missingEvidence.length ? `missingEvidence=${missingEvidence.join("|")}` : "",
+      ]
+        .filter(Boolean)
+        .join(", "),
+    );
+  });
+  const testingPlanChecks = profile.testingPlanCoverage.map((layer) => {
+    const missingEvidence = layer.evidenceFiles.filter((filePath) => !fileExists(filePath));
+    const missingTests = layer.testFiles.filter((filePath) => !fileExists(filePath));
+    const hasRoutes = layer.routeEvidence.length > 0;
+
+    return check(
+      `testing-plan:${layer.key}`,
+      `${layer.label} coverage`,
+      missingEvidence.length === 0 &&
+        missingTests.length === 0 &&
+        hasRoutes &&
+        layer.passCondition.length >= 30,
+      [
+        `evidence=${layer.evidenceFiles.length - missingEvidence.length}/${layer.evidenceFiles.length}`,
+        `tests=${layer.testFiles.length - missingTests.length}/${layer.testFiles.length}`,
+        `routes=${layer.routeEvidence.length}`,
+        missingEvidence.length ? `missingEvidence=${missingEvidence.join("|")}` : "",
+        missingTests.length ? `missingTests=${missingTests.join("|")}` : "",
       ]
         .filter(Boolean)
         .join(", "),
@@ -747,6 +943,20 @@ export function validateMoralTradeDocumentCoverageProfile(
         .join("; "),
     ),
     check(
+      "structure:testing-plan-coverage",
+      "Coverage maps every report testing-plan layer",
+      hasAll(testingPlanLayerKeys, REQUIRED_TESTING_PLAN_LAYER_KEYS) &&
+        duplicateTestingPlanLayerKeys.length === 0,
+      [
+        testingPlanLayerKeys.join(", "),
+        duplicateTestingPlanLayerKeys.length
+          ? `duplicates=${duplicateTestingPlanLayerKeys.join("|")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("; "),
+    ),
+    check(
       "structure:non-claims",
       "Coverage publishes non-claims",
       profile.nonClaims.some((nonClaim) => /not live production liquidity/i.test(nonClaim)) &&
@@ -760,6 +970,7 @@ export function validateMoralTradeDocumentCoverageProfile(
     ...sourceArtifactChecks,
     ...instructionChecks,
     ...sourceStackChecks,
+    ...testingPlanChecks,
     ...requirementChecks,
     ...structureChecks,
   ];
@@ -774,6 +985,7 @@ export function validateMoralTradeDocumentCoverageProfile(
     profileVersion: profile.version,
     sourceDocumentCount: profile.sourceDocuments.length,
     sourceStackCount: profile.sourceStackReferences.length,
+    testingPlanLayerCount: profile.testingPlanCoverage.length,
     requirementCount: profile.requirements.length,
     sourceDocumentArtifacts,
     canonicalInstructionHash,

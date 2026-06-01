@@ -45,6 +45,14 @@ export async function GET(request: Request) {
       evidenceFiles: source.evidenceFiles,
       routeEvidence: source.routeEvidence,
     })),
+    testingPlanCoverage: profile.testingPlanCoverage.map((layer) => ({
+      key: layer.key,
+      label: layer.label,
+      passCondition: layer.passCondition,
+      evidenceFiles: layer.evidenceFiles,
+      testFiles: layer.testFiles,
+      routeEvidence: layer.routeEvidence,
+    })),
     canonicalInstruction,
     publicContract: {
       sourceDocuments: profile.sourceDocuments.map((source) => ({
@@ -66,6 +74,14 @@ export async function GET(request: Request) {
         guidance: source.guidance,
         evidenceFiles: source.evidenceFiles,
         routeEvidence: source.routeEvidence,
+      })),
+      testingPlanCoverage: profile.testingPlanCoverage.map((layer) => ({
+        key: layer.key,
+        label: layer.label,
+        passCondition: layer.passCondition,
+        evidenceFiles: layer.evidenceFiles,
+        testFiles: layer.testFiles,
+        routeEvidence: layer.routeEvidence,
       })),
       requirements: profile.requirements.map((requirement) => ({
         key: requirement.key,
