@@ -48,6 +48,25 @@ function readAmountBucket(record: Record<string, unknown>) {
   return undefined;
 }
 
+function readSupportSignalMode(record: Record<string, unknown>) {
+  const value = readString(record, "supportSignalMode");
+
+  return value === "common_ground_support" || value === "dissent_review_requested" ? value : undefined;
+}
+
+function readSupportSignalState(record: Record<string, unknown>) {
+  const value = readString(record, "supportSignalState");
+
+  return value === "signal_only" ||
+    value === "pledge_saved" ||
+    value === "pending_verification" ||
+    value === "threshold_cleared" ||
+    value === "counted" ||
+    value === "payout_in_milestones"
+    ? value
+    : undefined;
+}
+
 function parseEventJson(record: Record<string, unknown>): MpgfPublicGoodsAnalyticsEventJson {
   const visibilityMode = readString(record, "visibilityMode");
   const captureMode = readString(record, "captureMode");
@@ -60,6 +79,10 @@ function parseEventJson(record: Record<string, unknown>): MpgfPublicGoodsAnalyti
     proofStatus: readString(record, "proofStatus"),
     publicEvidenceSource: readString(record, "publicEvidenceSource"),
     surface: "protected_job",
+    supportSignalMode: readSupportSignalMode(record),
+    supportSignalState: readSupportSignalState(record),
+    privateByDefault: record.privateByDefault === true ? true : undefined,
+    publicAggregationOnly: record.publicAggregationOnly === true ? true : undefined,
     cohort: readString(record, "cohort"),
     variant: readString(record, "variant"),
   };

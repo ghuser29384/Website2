@@ -1380,6 +1380,13 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(supportSignalRoute, /Sign in to record an MPGF support signal/);
   assert.match(supportSignalRoute, /private_by_default: true/);
   assert.match(supportSignalRoute, /publicAggregationOnly: true/);
+  assert.match(supportSignalRoute, /support_signal_recorded/);
+  assert.match(supportSignalRoute, /supportSignalMode/);
+  const analyticsEventJsonBlock = supportSignalRoute.slice(
+    supportSignalRoute.indexOf("eventJson: {"),
+    supportSignalRoute.indexOf("});", supportSignalRoute.indexOf("eventJson: {")),
+  );
+  assert.equal(analyticsEventJsonBlock.includes("moralCluster"), false);
   assert.match(supportSignalRoute, /noGlobalMoralRanking: true/);
   assert.match(supportSignalRoute, /moral_cluster_hash/);
   assert.match(supportSignalRoute, /mpgf_support_signals/);
@@ -2507,6 +2514,18 @@ test("MPGF public-goods analytics keeps only privacy-safe buckets and factor cod
       surface: "protected_job",
     },
   });
+  const supportSignalEvent = buildMpgfPublicGoodsAnalyticsEvent({
+    eventType: "support_signal_recorded",
+    userId: "private-signal-user",
+    campaignId: "campaign-global-health-basic-needs",
+    eventJson: {
+      surface: "mpgf_participant_action",
+      supportSignalMode: "common_ground_support",
+      supportSignalState: "signal_only",
+      privateByDefault: true,
+      publicAggregationOnly: true,
+    },
+  });
   const route = readFileSync("src/app/api/mpgf/public-goods/analytics/route.ts", "utf8");
   const persistence = readFileSync("src/lib/mpgf/persistence.ts", "utf8");
 
@@ -2515,6 +2534,9 @@ test("MPGF public-goods analytics keeps only privacy-safe buckets and factor cod
   assert.equal("amountCents" in event.event_json, false);
   assert.equal(dryRun.status, "dry_run");
   assert.equal(dryRun.row.event_json.thresholdPassed, true);
+  assert.equal(supportSignalEvent.event_json.supportSignalMode, "common_ground_support");
+  assert.equal(supportSignalEvent.event_json.privateByDefault, true);
+  assert.equal("moralCluster" in supportSignalEvent.event_json, false);
   assert.throws(
     () =>
       buildMpgfPublicGoodsAnalyticsEvent({
@@ -2531,8 +2553,17 @@ test("MPGF public-goods analytics keeps only privacy-safe buckets and factor cod
       }),
     /looks like contact data/,
   );
+  assert.throws(
+    () =>
+      buildMpgfPublicGoodsAnalyticsEvent({
+        eventType: "support_signal_recorded",
+        eventJson: { moralCluster: "humanitarian" } as never,
+      }),
+    /cannot store raw or sensitive field/,
+  );
   assert.match(route, /MPGF_ANALYTICS_SECRET/);
   assert.match(route, /bucketMpgfPublicGoodsAmountCents/);
+  assert.match(route, /supportSignalMode/);
   assert.match(route, /recordMpgfPublicGoodsAnalyticsEvent/);
   assert.doesNotMatch(route, /supporterReason/);
   assert.match(persistence, /pledge_intent_recorded/);
@@ -2624,6 +2655,30 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
           created_at: "2026-05-03T12:00:00.000Z",
         },
         {
+          event_type: "support_signal_recorded",
+          campaign_id: "campaign-global-health-basic-needs",
+          event_json: {
+            surface: "mpgf_participant_action",
+            supportSignalMode: "common_ground_support",
+            supportSignalState: "signal_only",
+            privateByDefault: true,
+            publicAggregationOnly: true,
+          },
+          created_at: "2026-05-03T12:30:00.000Z",
+        },
+        {
+          event_type: "support_signal_recorded",
+          campaign_id: "campaign-animal-welfare-transition",
+          event_json: {
+            surface: "mpgf_participant_action",
+            supportSignalMode: "dissent_review_requested",
+            supportSignalState: "signal_only",
+            privateByDefault: true,
+            publicAggregationOnly: true,
+          },
+          created_at: "2026-05-03T13:00:00.000Z",
+        },
+        {
           event_type: "pledge_intent_recorded",
           campaign_id: "campaign-global-health-basic-needs",
           event_json: {
@@ -2663,6 +2718,10 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     const serialized = JSON.stringify(snapshot);
 
     assert.equal(snapshot.privacyPolicy, "aggregate_only_no_user_or_reason_text");
+    assert.equal(snapshot.coordination.supportSignalEventCount, 2);
+    assert.equal(snapshot.coordination.commonGroundSupportSignalEventCount, 1);
+    assert.equal(snapshot.coordination.dissentReviewSignalEventCount, 1);
+    assert.equal(snapshot.coordination.supportSignalToPledgeIntentBps, 5000);
     assert.equal(snapshot.coordination.thresholdClearedCampaignCount, 2);
     assert.equal(snapshot.coordination.thresholdClearRateBps, 5000);
     assert.equal(snapshot.coordination.medianHoursToThreshold, 154.5);
@@ -2696,6 +2755,7 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.match(route, /loadMpgfPublicGoodsKpiSnapshot/);
     assert.match(kpis, /reviewerMedianHoursToClose/);
     assert.match(kpis, /thresholdClearRateBps/);
+    assert.match(kpis, /supportSignalToPledgeIntentBps/);
     assert.match(kpis, /retainedRecurringDonors3MonthBps/);
     assert.match(kpis, /campaignConcentrationTopDirectShareBps/);
     assert.match(kpis, /medianCapAdjustedCountedContributionCents/);

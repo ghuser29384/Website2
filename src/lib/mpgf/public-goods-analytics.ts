@@ -16,6 +16,7 @@ type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
 
 export type MpgfPublicGoodsAnalyticsEventType =
   | "campaign_viewed"
+  | "support_signal_recorded"
   | "pledge_intent_recorded"
   | "threshold_status_evaluated"
   | "external_handoff_reconciled"
@@ -43,6 +44,10 @@ export interface MpgfPublicGoodsAnalyticsEventJson {
   proofStatus?: string;
   publicEvidenceSource?: string;
   surface?: "public_campaign_page" | "mpgf_participant_action" | "protected_job" | "review_console";
+  supportSignalMode?: "common_ground_support" | "dissent_review_requested";
+  supportSignalState?: "signal_only" | "pledge_saved" | "pending_verification" | "threshold_cleared" | "counted" | "payout_in_milestones";
+  privateByDefault?: true;
+  publicAggregationOnly?: true;
   preCommitmentStatus?: "not_precommitted" | "already_planned" | "unknown";
   netNewFundingProxy?: "likely_net_new" | "already_planned" | "uncertain";
   cohort?: string;
@@ -69,6 +74,7 @@ export interface RecordMpgfPublicGoodsAnalyticsEventResult {
 
 const allowedEventTypes = new Set<MpgfPublicGoodsAnalyticsEventType>([
   "campaign_viewed",
+  "support_signal_recorded",
   "pledge_intent_recorded",
   "threshold_status_evaluated",
   "external_handoff_reconciled",
@@ -78,7 +84,7 @@ const allowedEventTypes = new Set<MpgfPublicGoodsAnalyticsEventType>([
 ]);
 
 const forbiddenAnalyticsKeyPattern =
-  /email|phone|contact|private[_-]?wish|raw[_-]?evidence|raw[_-]?text|source[_-]?note|receipt[_-]?text|supporter[_-]?reason|payment[_-]?secret|provider[_-]?payload|token|password|private[_-]?key/i;
+  /email|phone|contact|private[_-]?wish|raw[_-]?evidence|raw[_-]?text|source[_-]?note|receipt[_-]?text|supporter[_-]?reason|support[_-]?reason|signal[_-]?reason|moral[_-]?cluster|payment[_-]?secret|provider[_-]?payload|token|password|private[_-]?key/i;
 
 function hasServiceRoleEnv() {
   return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);

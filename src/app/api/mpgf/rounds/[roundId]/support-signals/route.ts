@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
+import { recordMpgfPublicGoodsAnalyticsEvent } from "@/lib/mpgf/public-goods-analytics";
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
 import {
   createMpgfPublicGoodsSupportSignal,
@@ -130,6 +131,33 @@ async function persistSupportSignal(signal: MpgfPublicGoodsSupportSignal, profil
   throw new Error(`Could not persist MPGF support signal: ${summarizeDbError(inserted.error)}`);
 }
 
+async function recordSupportSignalAnalytics(signal: MpgfPublicGoodsSupportSignal, userId: string) {
+  try {
+    const result = await recordMpgfPublicGoodsAnalyticsEvent({
+      eventType: "support_signal_recorded",
+      userId,
+      campaignId: signal.campaignId,
+      eventJson: {
+        surface: "mpgf_participant_action",
+        supportSignalMode: signal.countsForCommonGround ? "common_ground_support" : "dissent_review_requested",
+        supportSignalState: "signal_only",
+        privateByDefault: true,
+        publicAggregationOnly: true,
+      },
+    });
+
+    return {
+      status: result.status,
+      warning: result.warning,
+    };
+  } catch (error) {
+    return {
+      status: "not_configured" as const,
+      warning: error instanceof Error ? error.message : "Could not record privacy-safe support-signal analytics.",
+    };
+  }
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ roundId: string }> }) {
   const { roundId } = await params;
   const contract = getMpgfPublicGoodsSupportSignalContractApi(roundId);
@@ -189,12 +217,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
       createdAt: new Date().toISOString(),
     });
     const persistence = await persistSupportSignal(supportSignal, viewer.authUser.id);
+    const analytics = await recordSupportSignalAnalytics(supportSignal, viewer.authUser.id);
 
     return NextResponse.json(
       {
         ok: true,
         supportSignal,
         persistence,
+        analytics,
         currentState: "signal_only",
         nextStates: contract.collectiveActionStates,
         privacyPolicy: contract.privacyPolicy,

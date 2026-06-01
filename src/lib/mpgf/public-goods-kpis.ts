@@ -55,6 +55,10 @@ export interface MpgfPublicGoodsKpiSnapshot {
   privacyPolicy: "aggregate_only_no_user_or_reason_text";
   coordination: {
     campaignCount: number;
+    supportSignalEventCount: number;
+    commonGroundSupportSignalEventCount: number;
+    dissentReviewSignalEventCount: number;
+    supportSignalToPledgeIntentBps: number | null;
     pledgeIntentCount: number;
     campaignViewEventCount: number;
     pledgeIntentEventCount: number;
@@ -303,6 +307,17 @@ function netNewFundingProxy(event: MpgfPublicGoodsKpiAnalyticsEvent) {
   return null;
 }
 
+function supportSignalMode(event: MpgfPublicGoodsKpiAnalyticsEvent) {
+  const eventJson = event.event_json ?? {};
+  const mode = eventJson.supportSignalMode;
+
+  if (mode === "common_ground_support" || mode === "dissent_review_requested") {
+    return mode;
+  }
+
+  return null;
+}
+
 function thresholdReachedAt(campaign: MpgfPublicGoodsCampaign, pledges: MpgfPublicGoodsPledge[]) {
   const userAmounts = new Map<string, number>();
   const sortedPledges = pledges
@@ -443,6 +458,13 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     })
     .filter((value): value is number => value != null);
   const campaignViewEventCount = analyticsEvents.filter((event) => event.event_type === "campaign_viewed").length;
+  const supportSignalEvents = analyticsEvents.filter((event) => event.event_type === "support_signal_recorded");
+  const commonGroundSupportSignalEventCount = supportSignalEvents.filter(
+    (event) => supportSignalMode(event) === "common_ground_support",
+  ).length;
+  const dissentReviewSignalEventCount = supportSignalEvents.filter(
+    (event) => supportSignalMode(event) === "dissent_review_requested",
+  ).length;
   const pledgeIntentEventCount = analyticsEvents.filter((event) => event.event_type === "pledge_intent_recorded").length;
   const pledgeIntentCount = pledgeIntentEventCount > 0 ? pledgeIntentEventCount : activePledges.length;
   const thresholdClearedCampaignCount = assuranceStatuses.filter((status) => status.thresholdPassed).length;
@@ -497,6 +519,10 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     privacyPolicy: "aggregate_only_no_user_or_reason_text",
     coordination: {
       campaignCount: campaigns.length,
+      supportSignalEventCount: supportSignalEvents.length,
+      commonGroundSupportSignalEventCount,
+      dissentReviewSignalEventCount,
+      supportSignalToPledgeIntentBps: rateBps(pledgeIntentEventCount, supportSignalEvents.length),
       pledgeIntentCount,
       campaignViewEventCount,
       pledgeIntentEventCount,
