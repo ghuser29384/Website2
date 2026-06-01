@@ -47,6 +47,17 @@ export interface MpgfPublicGoodsKpiAnalyticsEvent {
   created_at: string;
 }
 
+export interface MpgfPublicGoodsFundingExperimentCatalogItem {
+  experimentKey: string;
+  comparison: string;
+  control: string;
+  treatment: string;
+  primaryMetric: string;
+  guardrailMetrics: string[];
+  privacyPolicy: "aggregate_assignment_no_raw_private_text";
+  noGlobalMoralRanking: true;
+}
+
 export interface MpgfPublicGoodsKpiSnapshot {
   generatedAt: string;
   roundId: string;
@@ -92,6 +103,22 @@ export interface MpgfPublicGoodsKpiSnapshot {
     likelyNetNewFundingEventCount: number;
     likelyNetNewFundingShareBps: number | null;
   };
+  funding: {
+    verifiedDollarsRoutedCents: number;
+    verifiedSupporterCountPerWinningCampaign: number | null;
+    thresholdClearRateBps: number | null;
+    sponsorLeverageRatioBps: number | null;
+    autoVerifiedContributionShareBps: number | null;
+    autoVerifiedContributionCount: number;
+    manualVerifiedContributionCount: number;
+    medianHoursFromPledgeToCounted: number | null;
+    sponsorPoolRefillRateBps: number | null;
+    sponsorPoolMonthlyRefillCents: number;
+    reviewSlaAttainmentBps: number | null;
+    disputeRateBps: number | null;
+    appealOverturnRateBps: number | null;
+    donorRetentionIntoNextRoundBps: number | null;
+  };
   handoffProof: {
     externalHandoffPledgeCount: number;
     verifiedExternalHandoffProofCount: number;
@@ -125,6 +152,11 @@ export interface MpgfPublicGoodsKpiSnapshot {
     monthlyRunRateCents: number;
     retainedRecurringDonors3MonthBps: number | null;
     retainedRecurringDonors6MonthBps: number | null;
+  };
+  experimentBacklog: {
+    recommendedCount: number;
+    activeAssignmentEventCount: number;
+    experiments: MpgfPublicGoodsFundingExperimentCatalogItem[];
   };
   rolloutGate: {
     accessMode: "invited_cohort" | "public_beta";
@@ -318,6 +350,51 @@ function supportSignalMode(event: MpgfPublicGoodsKpiAnalyticsEvent) {
   return null;
 }
 
+function fundingExperimentCatalog(): MpgfPublicGoodsFundingExperimentCatalogItem[] {
+  return [
+    {
+      experimentKey: "mpgf_manual_evidence_vs_webhook_auto_import_v1",
+      comparison: "manual_evidence_against_webhook_auto_import",
+      control: "manual_external_payment_evidence",
+      treatment: "provider_webhook_auto_import",
+      primaryMetric: "autoVerifiedContributionShareBps",
+      guardrailMetrics: ["reviewSlaAttainmentBps", "disputeRateBps", "rawPrivateTextStored"],
+      privacyPolicy: "aggregate_assignment_no_raw_private_text",
+      noGlobalMoralRanking: true,
+    },
+    {
+      experimentKey: "mpgf_static_ordering_vs_common_ground_personalization_v1",
+      comparison: "static_campaign_ordering_against_private_common_ground_ordering",
+      control: "static_campaign_ordering",
+      treatment: "private_common_ground_priority_grouping",
+      primaryMetric: "supportSignalToPledgeIntentBps",
+      guardrailMetrics: ["noGlobalMoralRanking", "dissentReviewSignalEventCount"],
+      privacyPolicy: "aggregate_assignment_no_raw_private_text",
+      noGlobalMoralRanking: true,
+    },
+    {
+      experimentKey: "mpgf_donate_now_vs_unlock_round_framing_v1",
+      comparison: "donate_now_against_unlock_the_round_assurance_framing",
+      control: "donate_now",
+      treatment: "unlock_the_round",
+      primaryMetric: "pageViewToPledgeIntentBps",
+      guardrailMetrics: ["likelyNetNewFundingShareBps", "refund_or_dispute_rate"],
+      privacyPolicy: "aggregate_assignment_no_raw_private_text",
+      noGlobalMoralRanking: true,
+    },
+    {
+      experimentKey: "mpgf_default_off_vs_suggested_sponsor_refill_v1",
+      comparison: "default_off_against_suggested_recurring_sponsor_pool_refill",
+      control: "recurring_refill_default_off",
+      treatment: "lightly_suggested_recurring_refill",
+      primaryMetric: "sponsorPoolRefillRateBps",
+      guardrailMetrics: ["donorRetentionIntoNextRoundBps", "subscriptionCancellationShareBps"],
+      privacyPolicy: "aggregate_assignment_no_raw_private_text",
+      noGlobalMoralRanking: true,
+    },
+  ];
+}
+
 function thresholdReachedAt(campaign: MpgfPublicGoodsCampaign, pledges: MpgfPublicGoodsPledge[]) {
   const userAmounts = new Map<string, number>();
   const sortedPledges = pledges
@@ -374,6 +451,10 @@ function sumVerifiedProofs(paymentProofs: MpgfPublicGoodsPaymentProof[]) {
   return paymentProofs
     .filter((proof) => proof.status === "verified")
     .reduce((sum, proof) => sum + proof.amountVerifiedCents, 0);
+}
+
+function isAutoVerifiedProof(proof: MpgfPublicGoodsPaymentProof) {
+  return proof.reconciliationSource === "fiscal_host_webhook" || proof.reconciliationSource === "sponsor_signed_intent";
 }
 
 function countFundedCampaignsWithVerifiedProofs(lines: MpgfPublicGoodsAllocationLine[], paymentProofs: MpgfPublicGoodsPaymentProof[]) {
@@ -490,6 +571,23 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       proof.amountVerifiedCents > 0 &&
       (proof.reconciliationSource === "external_receipt" || proof.reconciliationSource === "fiscal_host_webhook"),
   ).length;
+  const verifiedProofs = paymentProofs.filter((proof) => proof.status === "verified" && proof.amountVerifiedCents > 0);
+  const autoVerifiedProofs = verifiedProofs.filter(isAutoVerifiedProof);
+  const manualVerifiedProofs = verifiedProofs.filter((proof) => !isAutoVerifiedProof(proof));
+  const pledgesById = new Map(pledges.map((pledge) => [pledge.id, pledge]));
+  const hoursFromPledgeToCounted = verifiedProofs
+    .map((proof) => {
+      const pledge = proof.pledgeId ? pledgesById.get(proof.pledgeId) : undefined;
+      const pledgedAtMs = parseDateMs(pledge?.createdAt);
+      const verifiedAtMs = parseDateMs(proof.verifiedAt);
+
+      if (pledgedAtMs == null || verifiedAtMs == null || verifiedAtMs < pledgedAtMs) {
+        return null;
+      }
+
+      return roundHours((verifiedAtMs - pledgedAtMs) / (60 * 60 * 1000));
+    })
+    .filter((value): value is number => value != null);
   const fundedCampaignCount = payableLines.filter((line) => line.totalPayoutCents > 0).length;
   const fundedCampaignsWithVerifiedProofCount = countFundedCampaignsWithVerifiedProofs(roundAllocation.lines, paymentProofs);
   const disputeCaseCount = reviewCases.filter(
@@ -500,7 +598,23 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       reviewCase.appealStatus !== "none",
   ).length;
   const appealCaseCount = reviewCases.filter((reviewCase) => reviewCase.appealStatus !== "none").length;
+  const reviewSlaHours = 72;
+  const reviewSlaAttainmentBps = rateBps(
+    reviewDurations.filter((duration) => duration <= reviewSlaHours).length,
+    reviewDurations.length,
+  );
+  const appealOverturnRateBps = rateBps(
+    reviewCases.filter((reviewCase) => reviewCase.appealStatus === "appeal_upheld").length,
+    appealCaseCount,
+  );
   const activeSubscriptionCount = subscriptions.filter((subscription) => subscription.status === "active").length;
+  const recurringMonthlyRunRateCents = monthlyRunRateCents(subscriptions);
+  const retainedRecurringDonors3MonthBps = retentionBps(subscriptions, generatedAt, 3);
+  const retainedRecurringDonors6MonthBps = retentionBps(subscriptions, generatedAt, 6);
+  const experiments = fundingExperimentCatalog();
+  const activeExperimentAssignmentEventCount = analyticsEvents.filter(
+    (event) => event.event_type === "experiment_assigned" || event.event_type === "experiment_assignment_recorded",
+  ).length;
   const featureFlag = getMpgfPublicGoodsFeatureFlagStatus();
   const accessMode = featureFlag.accessMode === "public_beta" ? "public_beta" : "invited_cohort";
   const reviewerTimingSampleReady = reviewDurations.length >= 3;
@@ -559,6 +673,24 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       likelyNetNewFundingEventCount,
       likelyNetNewFundingShareBps: rateBps(likelyNetNewFundingEventCount, netNewFundingEvents.length),
     },
+    funding: {
+      verifiedDollarsRoutedCents: sumVerifiedProofs(paymentProofs),
+      verifiedSupporterCountPerWinningCampaign: payableLines.length
+        ? Math.round(payableLines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0) / payableLines.length)
+        : null,
+      thresholdClearRateBps: rateBps(thresholdClearedCampaignCount, campaigns.length),
+      sponsorLeverageRatioBps: rateBps(matchAllocatedCents, payableDirectEligibleCents),
+      autoVerifiedContributionShareBps: rateBps(autoVerifiedProofs.length, verifiedProofs.length),
+      autoVerifiedContributionCount: autoVerifiedProofs.length,
+      manualVerifiedContributionCount: manualVerifiedProofs.length,
+      medianHoursFromPledgeToCounted: median(hoursFromPledgeToCounted),
+      sponsorPoolRefillRateBps: rateBps(recurringMonthlyRunRateCents, sponsorPoolCents),
+      sponsorPoolMonthlyRefillCents: recurringMonthlyRunRateCents,
+      reviewSlaAttainmentBps,
+      disputeRateBps: rateBps(disputeCaseCount, Math.max(1, reviewCases.length)),
+      appealOverturnRateBps,
+      donorRetentionIntoNextRoundBps: retainedRecurringDonors3MonthBps,
+    },
     handoffProof: {
       externalHandoffPledgeCount,
       verifiedExternalHandoffProofCount,
@@ -589,9 +721,14 @@ export function buildMpgfPublicGoodsKpiSnapshot({
     recurring: {
       subscriptionCount: subscriptions.length,
       activeSubscriptionCount,
-      monthlyRunRateCents: monthlyRunRateCents(subscriptions),
-      retainedRecurringDonors3MonthBps: retentionBps(subscriptions, generatedAt, 3),
-      retainedRecurringDonors6MonthBps: retentionBps(subscriptions, generatedAt, 6),
+      monthlyRunRateCents: recurringMonthlyRunRateCents,
+      retainedRecurringDonors3MonthBps,
+      retainedRecurringDonors6MonthBps,
+    },
+    experimentBacklog: {
+      recommendedCount: experiments.length,
+      activeAssignmentEventCount: activeExperimentAssignmentEventCount,
+      experiments,
     },
     rolloutGate: {
       accessMode,

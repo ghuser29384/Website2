@@ -648,6 +648,9 @@ export interface MpgfPublicGoodsAllocationLine {
 export interface MpgfPublicGoodsRoundAllocation {
   roundId: string;
   matchPoolId: string;
+  formulaVersion: "cg_vqaf_capital_constrained_qf_v1";
+  qfAllocationPolicy: "capital_constrained_lambda_bisection_with_per_campaign_cap";
+  qfLambda: number;
   baseMatchBudgetCents: number;
   qfBonusBudgetCents: number;
   baseMatchAllocatedCents: number;

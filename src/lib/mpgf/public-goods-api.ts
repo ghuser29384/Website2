@@ -27,6 +27,10 @@ import {
   getMpgfPublicGoodsIdentityIntegrityReportApi,
 } from "./public-goods-identity-integrity";
 import { buildMpgfPublicGoodsMilestoneSchedule } from "./public-goods-milestones";
+import {
+  MPGF_PUBLIC_GOODS_POSTMORTEM_POLICY,
+  getMpgfPublicGoodsPostmortemReportApi,
+} from "./public-goods-postmortem";
 import { getMpgfPublicGoodsProceduralBadgesApi } from "./public-goods-procedural-badges";
 import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
 import {
@@ -210,6 +214,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
   const supportSignalContract = getMpgfPublicGoodsSupportSignalContractApi(roundId);
   const identityIntegrity = getMpgfPublicGoodsIdentityIntegrityReportApi(roundId);
   const thresholdCalibration = getMpgfPublicGoodsThresholdCalibrationReportApi(roundId);
+  const postmortem = getMpgfPublicGoodsPostmortemReportApi(roundId);
 
   return {
     ok: true,
@@ -231,6 +236,9 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
         budgetCents: demoMpgfMatchPool.budgetCents,
         baseMatchBudgetCents: allocation.baseMatchBudgetCents,
         qfBonusBudgetCents: allocation.qfBonusBudgetCents,
+        formulaVersion: allocation.formulaVersion,
+        qfAllocationPolicy: allocation.qfAllocationPolicy,
+        qfLambda: allocation.qfLambda,
         perDonorQfCapCents: demoMpgfMatchPool.restrictionsJson.perDonorQfCapCents,
         verificationWeightPolicy: demoMpgfMatchPool.restrictionsJson.verificationWeightPolicy,
         flywheelPolicy: sponsorPoolFlywheel.flywheelPolicy,
@@ -291,6 +299,20 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
             ranksOperationalCalibrationOnly: thresholdCalibration.ranksOperationalCalibrationOnly,
             suggestedChangeCount: thresholdCalibration.suggestedChangeCount,
             holdForReviewCount: thresholdCalibration.holdForReviewCount,
+          }
+        : null,
+      postmortem: postmortem
+        ? {
+            policy: MPGF_PUBLIC_GOODS_POSTMORTEM_POLICY,
+            reportPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/postmortem`,
+            publicPostmortemTemplatePublished: postmortem.publicPostmortemTemplatePublished,
+            currentRoundMutationAllowed: postmortem.currentRoundMutationAllowed,
+            parameterResetPolicy: postmortem.parameterResetPolicy,
+            noGlobalMoralRanking: postmortem.noGlobalMoralRanking,
+            noDonorMoralReputationWeighting: postmortem.noDonorMoralReputationWeighting,
+            requiredArtifactCount: postmortem.requiredPublicArtifacts.length,
+            nextRoundSuggestedChangeCount: postmortem.nextRoundParameterReset.suggestedChangeCount,
+            experimentCount: postmortem.experimentSummary.recommendedCount,
           }
         : null,
       finalization: {
@@ -474,6 +496,9 @@ export function getMpgfPublicGoodsMatchPreviewApi(
     roundId,
     final: false,
     incidentFreezePolicy: "hide_mutable_match_preview_until_resolved",
+    formulaVersion: allocation.formulaVersion,
+    qfAllocationPolicy: allocation.qfAllocationPolicy,
+    qfLambda: allocation.qfLambda,
     calcHash: publicCalcHash(previewRows),
     rows: previewRows,
   };
@@ -522,8 +547,13 @@ export function getMpgfPublicGoodsAllocationReportApi(roundId: string = demoMpgf
     roundId,
     final: true,
     regenerationPolicy: "allocation_report_regenerates_from_underlying_contribution_records_collapsed_by_identity",
+    formulaVersion: allocation.formulaVersion,
+    qfAllocationPolicy: allocation.qfAllocationPolicy,
+    qfLambda: allocation.qfLambda,
     calcHash: publicCalcHash(rows),
     sponsorPoolCents: allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
+    baseMatchBudgetCents: allocation.baseMatchBudgetCents,
+    qfBonusBudgetCents: allocation.qfBonusBudgetCents,
     baseMatchAllocatedCents: allocation.baseMatchAllocatedCents,
     qfBonusAllocatedCents: allocation.qfBonusAllocatedCents,
     totalPayoutCents: allocation.totalPayoutCents,

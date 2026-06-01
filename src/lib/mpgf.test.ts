@@ -40,6 +40,7 @@ import {
   runMpgfPublicRuntimeReadinessCheck,
   saveMpgfBallotDraft,
   selectMpgfLiveSolver,
+  solveMpgfCapitalConstrainedQfLambda,
   solveMpgfByCertifiedBranchAndBound,
   solveMpgfByCompleteRegionEnumeration,
   getMpgfCampaignAssuranceStatus,
@@ -64,6 +65,7 @@ import {
   demoMpgfPublicGoodsSubscriptions,
   mpgfPublicRoutes,
 } from "./mpgf/data";
+import type { MpgfPublicGoodsPledge } from "./mpgf/types";
 import {
   buildMpgfPublicGoodsAllocationResultRows,
   buildMpgfPublicGoodsAllocationSourceProofMap,
@@ -101,6 +103,11 @@ import {
   buildMpgfPublicGoodsKpiSnapshot,
   loadMpgfPublicGoodsKpiSnapshot,
 } from "./mpgf/public-goods-kpis";
+import {
+  MPGF_PUBLIC_GOODS_POSTMORTEM_POLICY,
+  buildMpgfPublicGoodsPostmortemReport,
+  getMpgfPublicGoodsPostmortemReportApi,
+} from "./mpgf/public-goods-postmortem";
 import { buildMpgfPublicGoodsOperationsDashboard } from "./mpgf/public-goods-operations";
 import {
   MPGF_PUBLIC_GOODS_CHALLENGE_POLICY,
@@ -456,6 +463,9 @@ test("MPGF assurance matching allocates sponsor match and capped identity-aware 
   assert.ok(resilience);
   assert.equal(summary.payableCampaignCount, 2);
   assert.equal(summary.proofPageRequired, true);
+  assert.equal(allocation.formulaVersion, "cg_vqaf_capital_constrained_qf_v1");
+  assert.equal(allocation.qfAllocationPolicy, "capital_constrained_lambda_bisection_with_per_campaign_cap");
+  assert.ok(allocation.qfLambda > 0);
   assert.equal(globalHealth.status, "payable");
   assert.equal(animalWelfare.status, "payable");
   assert.equal(resilience.baseMatchCents, 0);
@@ -466,6 +476,79 @@ test("MPGF assurance matching allocates sponsor match and capped identity-aware 
   assert.ok(animalWelfare.qfBonusCents <= animalWelfare.qfBonusCapCents);
   assert.equal(allocation.baseMatchAllocatedCents, globalHealth.baseMatchCents + animalWelfare.baseMatchCents);
   assert.equal(allocation.qfBonusAllocatedCents, globalHealth.qfBonusCents + animalWelfare.qfBonusCents);
+});
+
+test("MPGF assurance QF solves lambda before applying campaign bonus caps", () => {
+  const campaignA = {
+    ...demoMpgfPublicGoodsCampaigns[0]!,
+    id: "campaign-qf-cap-high-signal",
+    slug: "qf-cap-high-signal",
+    thresholdAmountCents: 1,
+    thresholdSupporters: 1,
+    reviewStatus: "approved" as const,
+  };
+  const campaignB = {
+    ...demoMpgfPublicGoodsCampaigns[1]!,
+    id: "campaign-qf-cap-remainder",
+    slug: "qf-cap-remainder",
+    thresholdAmountCents: 1,
+    thresholdSupporters: 1,
+    reviewStatus: "approved" as const,
+  };
+  const pledge = (campaignId: string, userId: string): MpgfPublicGoodsPledge => ({
+    id: `pledge-${campaignId}-${userId}`,
+    campaignId,
+    userId,
+    amountCents: 1_000,
+    visibilityMode: "private_amount",
+    isRecurring: false,
+    captureMode: "external_handoff",
+    eligibilityState: "eligible",
+    humanScoreBps: 10_000,
+    status: "pledged",
+    createdAt: "2026-05-15T12:00:00.000Z",
+  });
+  const pledges = [
+    pledge(campaignA.id, "a-1"),
+    pledge(campaignA.id, "a-2"),
+    pledge(campaignA.id, "a-3"),
+    pledge(campaignA.id, "a-4"),
+    pledge(campaignA.id, "a-5"),
+    pledge(campaignB.id, "b-1"),
+    pledge(campaignB.id, "b-2"),
+  ];
+  const qfLambda = solveMpgfCapitalConstrainedQfLambda(
+    [
+      { qfScore: 20_000, qfBonusCapCents: 500 },
+      { qfScore: 2_000, qfBonusCapCents: 200 },
+    ],
+    600,
+  );
+  const allocation = allocateMpgfAssuranceRound({
+    campaigns: [campaignA, campaignB],
+    pledges,
+    round: {
+      ...demoMpgfAssuranceRound,
+      qfCapMultiple: 0.1,
+    },
+    matchPool: {
+      ...demoMpgfMatchPool,
+      budgetCents: 600,
+      baseMatchRatio: 0,
+      qfBonusCents: 600,
+    },
+  });
+  const lineA = allocation.lines.find((line) => line.campaignId === campaignA.id);
+  const lineB = allocation.lines.find((line) => line.campaignId === campaignB.id);
+
+  assert.ok(qfLambda > 0.049 && qfLambda < 0.051);
+  assert.ok(lineA);
+  assert.ok(lineB);
+  assert.equal(allocation.qfBonusBudgetCents, 600);
+  assert.equal(allocation.qfBonusAllocatedCents, 600);
+  assert.equal(lineA.qfBonusCents, lineA.qfBonusCapCents);
+  assert.equal(lineB.qfBonusCents, 100);
+  assert.equal(lineA.qfBonusCents + lineB.qfBonusCents, allocation.qfBonusAllocatedCents);
 });
 
 test("MPGF assurance QF collapses duplicate identities and expires missed thresholds", () => {
@@ -654,6 +737,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   const allocations = getMpgfPublicGoodsAllocationReportApi(demoMpgfAssuranceRound.id);
   const identityIntegrity = getMpgfPublicGoodsIdentityIntegrityReportApi(demoMpgfAssuranceRound.id);
   const thresholdCalibration = getMpgfPublicGoodsThresholdCalibrationReportApi(demoMpgfAssuranceRound.id);
+  const postmortem = getMpgfPublicGoodsPostmortemReportApi(demoMpgfAssuranceRound.id);
   const ledger = getMpgfPublicGoodsLedgerApi();
 
   assert.equal(rounds.privacyPolicy, MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY);
@@ -700,6 +784,16 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.thresholdCalibration?.parametersLockedBeforeDonationsOpen, true);
   assert.equal(round.round.thresholdCalibration?.noGlobalMoralRanking, true);
   assert.equal(round.round.thresholdCalibration?.ranksOperationalCalibrationOnly, true);
+  assert.equal(round.round.postmortem?.policy, MPGF_PUBLIC_GOODS_POSTMORTEM_POLICY);
+  assert.equal(round.round.postmortem?.reportPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/postmortem`);
+  assert.equal(round.round.postmortem?.publicPostmortemTemplatePublished, true);
+  assert.equal(round.round.postmortem?.currentRoundMutationAllowed, false);
+  assert.equal(
+    round.round.postmortem?.parameterResetPolicy,
+    "next_round_only_after_public_postmortem_and_before_donations_open",
+  );
+  assert.equal(round.round.postmortem?.noGlobalMoralRanking, true);
+  assert.ok((round.round.postmortem?.requiredArtifactCount ?? 0) >= 5);
   assert.equal(round.round.finalization.policy, MPGF_PUBLIC_GOODS_FINALIZATION_POLICY);
   assert.equal(round.round.finalization.previewPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize-preview`);
   assert.equal(round.round.finalization.proofPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`);
@@ -714,6 +808,9 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.match(round.round.sponsorPool.visibleCommitment, /challenge match/i);
   assert.ok(Number(round.round.sponsorPool.perDonorQfCapCents) > 0);
   assert.equal(round.round.sponsorPool.verificationWeightPolicy, "identity_confidence_only_no_moral_reputation");
+  assert.equal(round.round.sponsorPool.formulaVersion, "cg_vqaf_capital_constrained_qf_v1");
+  assert.equal(round.round.sponsorPool.qfAllocationPolicy, "capital_constrained_lambda_bisection_with_per_campaign_cap");
+  assert.ok(round.round.sponsorPool.qfLambda > 0);
   assert.equal(round.round.sponsorPool.flywheelPolicy, "trade_surplus_funded_verified_plural_assurance");
   assert.equal(round.round.sponsorPool.flywheelPath, `/api/mpgf/sponsor-pools/${demoMpgfMatchPool.id}`);
   assert.equal(round.round.sponsorPool.depositPath, `/api/mpgf/sponsor-pools/${demoMpgfMatchPool.id}/deposits`);
@@ -746,6 +843,9 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(preview.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.equal(preview.final, false);
   assert.equal(preview.incidentFreezePolicy, "hide_mutable_match_preview_until_resolved");
+  assert.equal(preview.formulaVersion, "cg_vqaf_capital_constrained_qf_v1");
+  assert.equal(preview.qfAllocationPolicy, "capital_constrained_lambda_bisection_with_per_campaign_cap");
+  assert.ok(preview.qfLambda > 0);
   assert.match(preview.calcHash, /^sha256:/);
   assert.ok(preview.rows.every((row) => typeof row.verifiedDonorCount === "number"));
   assert.ok(frozenPreview);
@@ -767,6 +867,10 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     allocations.regenerationPolicy,
     "allocation_report_regenerates_from_underlying_contribution_records_collapsed_by_identity",
   );
+  assert.equal(allocations.formulaVersion, "cg_vqaf_capital_constrained_qf_v1");
+  assert.equal(allocations.qfAllocationPolicy, "capital_constrained_lambda_bisection_with_per_campaign_cap");
+  assert.ok(allocations.qfLambda > 0);
+  assert.equal(allocations.qfBonusAllocatedCents <= allocations.qfBonusBudgetCents, true);
   assert.ok(allocations.totalPayoutCents > 0);
   assert.ok(allocations.rows.every((row) => row.custodyMode === "no_custody_external_handoff"));
   const allocationReportRow = allocations.rows.find((row) => row.campaignId === "campaign-animal-welfare-transition");
@@ -783,6 +887,10 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(thresholdCalibration.policy, MPGF_PUBLIC_GOODS_THRESHOLD_CALIBRATION_POLICY);
   assert.equal(thresholdCalibration.currentRoundMutationAllowed, false);
   assert.equal(getMpgfPublicGoodsThresholdCalibrationReportApi("unknown-round"), null);
+  assert.ok(postmortem);
+  assert.equal(postmortem.policy, MPGF_PUBLIC_GOODS_POSTMORTEM_POLICY);
+  assert.equal(postmortem.currentRoundMutationAllowed, false);
+  assert.equal(getMpgfPublicGoodsPostmortemReportApi("unknown-round"), null);
   assert.equal(ledger.ledgerPolicy, "public_aggregate_no_donor_rows_no_receipt_urls");
   assert.equal(ledger.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.ok(ledger.rows.every((row) => row.releasedTotalCents === 0));
@@ -802,6 +910,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     allocations,
     identityIntegrity,
     thresholdCalibration,
+    postmortem,
     ledger,
   });
 
@@ -822,6 +931,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", /getMpgfPublicGoodsCgVqafReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/identity-integrity/route.ts", /getMpgfPublicGoodsIdentityIntegrityReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/threshold-calibration/route.ts", /getMpgfPublicGoodsThresholdCalibrationReportApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/postmortem/route.ts", /getMpgfPublicGoodsPostmortemReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/support-signals/route.ts", /createMpgfPublicGoodsSupportSignal/],
     ["src/app/api/mpgf/campaigns/[campaignId]/route.ts", /getMpgfPublicGoodsCampaignApi/],
     ["src/app/api/mpgf/campaigns/[campaignId]/proof-path/route.ts", /getMpgfPublicGoodsCampaignProofPathApi/],
@@ -1812,6 +1922,14 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
       (item) => item.key === "legal_review" && item.status === "pending_external_review",
     ),
   );
+  assert.ok(governance.postmortem);
+  assert.equal(governance.postmortem.publicPostmortemTemplatePublished, true);
+  assert.equal(governance.postmortem.currentRoundMutationAllowed, false);
+  assert.ok(
+    governance.deploymentChecklist.beforeProd.some(
+      (item) => item.key === "public_postmortem_template" && item.status === "published",
+    ),
+  );
 
   for (const forbidden of ["private@example", "charityReceiptRef", "externalReceiptRef", "supporterReason"]) {
     assert.equal(governanceJson.includes(forbidden), false);
@@ -1821,6 +1939,7 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
     /Named operator roster/,
     /Reviewer panel structure/,
     /Locked round parameters/,
+    /Public postmortem/,
     /Campaign thresholds/,
     /Funds-flow separation/,
     /Partner-held roles/,
@@ -2148,6 +2267,60 @@ test("MPGF threshold calibration recommends next-round gates without mid-round r
     "redactedReference",
     "providerPayload",
     "private@example",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("MPGF public postmortem publishes aggregate outcomes and next-round parameter reset evidence", () => {
+  const report = getMpgfPublicGoodsPostmortemReportApi(demoMpgfAssuranceRound.id);
+  const unknownReport = getMpgfPublicGoodsPostmortemReportApi("unknown-round");
+  const directReport = buildMpgfPublicGoodsPostmortemReport();
+  const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/postmortem/route.ts", "utf8");
+  const publicApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
+  const governance = getMpgfPublicGoodsGovernanceApi();
+  const governancePage = readFileSync("src/app/mpgf/governance/page.tsx", "utf8");
+
+  assert.ok(report);
+  assert.equal(unknownReport, null);
+  assert.equal(report.policy, MPGF_PUBLIC_GOODS_POSTMORTEM_POLICY);
+  assert.equal(directReport.policy, report.policy);
+  assert.equal(report.privacyPolicy, "aggregate_only_no_private_donor_reasons_receipts_or_reviewer_notes");
+  assert.equal(report.publicPostmortemTemplatePublished, true);
+  assert.equal(report.currentRoundMutationAllowed, false);
+  assert.equal(report.parameterResetPolicy, "next_round_only_after_public_postmortem_and_before_donations_open");
+  assert.equal(report.noGlobalMoralRanking, true);
+  assert.equal(report.noDonorMoralReputationWeighting, true);
+  assert.ok(report.requiredPublicArtifacts.some((artifact) => artifact.key === "allocation_report"));
+  assert.ok(report.requiredPublicArtifacts.some((artifact) => artifact.key === "funding_kpis"));
+  assert.ok(report.requiredPublicArtifacts.some((artifact) => artifact.key === "threshold_calibration"));
+  assert.equal(report.fundingOutcomes.thresholdClearRateBps, 5000);
+  assert.ok((report.fundingOutcomes.sponsorLeverageRatioBps ?? 0) > 0);
+  assert.equal(report.experimentSummary.recommendedCount, 4);
+  assert.ok(report.experimentSummary.experimentKeys.includes("mpgf_donate_now_vs_unlock_round_framing_v1"));
+  assert.ok(report.nextRoundParameterReset.rows.length >= demoMpgfPublicGoodsCampaigns.length);
+  assert.equal(report.nextRoundParameterReset.thresholdCalibrationPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/threshold-calibration`);
+  assert.match(report.calcHash, /^sha256:/);
+  assert.ok(governance.postmortem);
+  assert.equal(governance.postmortem.currentRoundMutationAllowed, false);
+  assert.equal(governance.postmortem.requiredPublicArtifacts.length, report.requiredPublicArtifacts.length);
+  assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(route, /getMpgfPublicGoodsPostmortemReportApi/);
+  assert.match(publicApi, /postmortem/);
+  assert.match(publicApi, /parameterResetPolicy/);
+  assert.match(governancePage, /Public postmortem/);
+  assert.match(governancePage, /Parameter resets happen only between rounds/);
+  assert.match(governancePage, /Open public postmortem JSON/);
+
+  const serialized = JSON.stringify({ report, governance: governance.postmortem });
+
+  for (const forbidden of [
+    "demo-supporter",
+    "supporterReason",
+    "charityReceiptRef",
+    "externalReceiptRef",
+    "private@example",
+    "redactedReference",
   ]) {
     assert.equal(serialized.includes(forbidden), false);
   }
@@ -2868,6 +3041,29 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
           },
           created_at: "2026-05-03T14:00:00.000Z",
         },
+        {
+          event_type: "experiment_assignment_recorded",
+          campaign_id: null,
+          event_json: {
+            experimentKey: "mpgf_manual_evidence_vs_webhook_auto_import_v1",
+            variant: "provider_webhook_auto_import",
+          },
+          created_at: "2026-05-03T14:05:00.000Z",
+        },
+      ],
+      paymentProofs: [
+        ...demoMpgfPublicGoodsPaymentProofs,
+        {
+          ...demoMpgfPublicGoodsPaymentProofs[0],
+          id: "payment-proof-global-health-webhook-demo",
+          pledgeId: "pledge-assurance-global-health-2",
+          externalReceiptRef: "provider-event:redacted-global-health-002",
+          charityReceiptRef: "charity-receipt:redacted-global-health-002",
+          amountVerifiedCents: 9_000,
+          reconciliationSource: "fiscal_host_webhook",
+          verifiedAt: "2026-05-05T16:30:00.000Z",
+          createdAt: "2026-05-05T16:00:00.000Z",
+        },
       ],
     });
     const retentionSnapshot = buildMpgfPublicGoodsKpiSnapshot({
@@ -2915,6 +3111,32 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.equal(snapshot.donorEconomics.netNewFundingSurveyEventCount, 1);
     assert.equal(snapshot.donorEconomics.likelyNetNewFundingEventCount, 1);
     assert.equal(snapshot.donorEconomics.likelyNetNewFundingShareBps, 10000);
+    assert.equal(snapshot.funding.verifiedDollarsRoutedCents, 19_000);
+    assert.equal(snapshot.funding.verifiedSupporterCountPerWinningCampaign, 3);
+    assert.equal(snapshot.funding.thresholdClearRateBps, 5000);
+    assert.ok(snapshot.funding.sponsorLeverageRatioBps !== null && snapshot.funding.sponsorLeverageRatioBps > 0);
+    assert.equal(snapshot.funding.autoVerifiedContributionShareBps, 5000);
+    assert.equal(snapshot.funding.autoVerifiedContributionCount, 1);
+    assert.equal(snapshot.funding.manualVerifiedContributionCount, 1);
+    assert.equal(snapshot.funding.medianHoursFromPledgeToCounted, 131);
+    assert.equal(snapshot.funding.sponsorPoolMonthlyRefillCents, 2_500);
+    assert.equal(snapshot.funding.sponsorPoolRefillRateBps, 167);
+    assert.equal(snapshot.funding.reviewSlaAttainmentBps, 10000);
+    assert.equal(snapshot.funding.disputeRateBps, snapshot.review.disputeRateBps);
+    assert.equal(snapshot.funding.donorRetentionIntoNextRoundBps, snapshot.recurring.retainedRecurringDonors3MonthBps);
+    assert.equal(snapshot.experimentBacklog.recommendedCount, 4);
+    assert.equal(snapshot.experimentBacklog.activeAssignmentEventCount, 1);
+    assert.ok(
+      snapshot.experimentBacklog.experiments.some(
+        (experiment) => experiment.comparison === "manual_evidence_against_webhook_auto_import",
+      ),
+    );
+    assert.ok(snapshot.experimentBacklog.experiments.every((experiment) => experiment.noGlobalMoralRanking));
+    assert.ok(
+      snapshot.experimentBacklog.experiments.every(
+        (experiment) => experiment.privacyPolicy === "aggregate_assignment_no_raw_private_text",
+      ),
+    );
     assert.ok(
       snapshot.donorEconomics.campaignConcentrationTopDirectShareBps !== null &&
         snapshot.donorEconomics.campaignConcentrationTopDirectShareBps > 0,
@@ -2940,6 +3162,15 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.match(kpis, /campaignConcentrationTopDirectShareBps/);
     assert.match(kpis, /medianCapAdjustedCountedContributionCents/);
     assert.match(kpis, /netNewFundingProxy/);
+    assert.match(kpis, /verifiedDollarsRoutedCents/);
+    assert.match(kpis, /autoVerifiedContributionShareBps/);
+    assert.match(kpis, /medianHoursFromPledgeToCounted/);
+    assert.match(kpis, /sponsorPoolRefillRateBps/);
+    assert.match(kpis, /donorRetentionIntoNextRoundBps/);
+    assert.match(kpis, /mpgf_manual_evidence_vs_webhook_auto_import_v1/);
+    assert.match(kpis, /mpgf_static_ordering_vs_common_ground_personalization_v1/);
+    assert.match(kpis, /mpgf_donate_now_vs_unlock_round_framing_v1/);
+    assert.match(kpis, /mpgf_default_off_vs_suggested_sponsor_refill_v1/);
     assert.doesNotMatch(kpis, /user_ref_hash/);
   } finally {
     if (previousCohort === undefined) {

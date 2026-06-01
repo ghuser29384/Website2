@@ -131,6 +131,10 @@ const ledgerTransactionTemplates: LedgerTransactionTemplate[] = [
   { transactionType: "demo_allocation_reserved", debitAccount: "demo_allocation_pool", creditAccount: "demo_allocation_reserved" },
 ];
 
+export const MPGF_PUBLIC_GOODS_ALLOCATION_FORMULA_VERSION = "cg_vqaf_capital_constrained_qf_v1";
+export const MPGF_PUBLIC_GOODS_QF_ALLOCATION_POLICY =
+  "capital_constrained_lambda_bisection_with_per_campaign_cap";
+
 export function formatUsd(cents: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -195,6 +199,83 @@ function distributeIntegerBudget<T extends { id: string }>(
   }
 
   return result;
+}
+
+export function solveMpgfCapitalConstrainedQfLambda(
+  items: Array<{ qfScore: number; qfBonusCapCents: number }>,
+  budgetCents: number,
+) {
+  const budget = clampNonNegativeInteger(budgetCents);
+  const active = items
+    .map((item) => ({
+      qfScore: Number.isFinite(item.qfScore) ? Math.max(0, item.qfScore) : 0,
+      qfBonusCapCents: clampNonNegativeInteger(item.qfBonusCapCents),
+    }))
+    .filter((item) => item.qfScore > 0 && item.qfBonusCapCents > 0);
+
+  if (!active.length || budget <= 0) {
+    return 0;
+  }
+
+  const totalCapCents = active.reduce((sum, item) => sum + item.qfBonusCapCents, 0);
+
+  if (totalCapCents <= budget) {
+    return Math.max(...active.map((item) => item.qfBonusCapCents / item.qfScore));
+  }
+
+  const allocationAt = (lambda: number) =>
+    active.reduce((sum, item) => sum + Math.min(item.qfBonusCapCents, lambda * item.qfScore), 0);
+  let low = 0;
+  let high = 1;
+
+  while (allocationAt(high) < budget) {
+    high *= 2;
+  }
+
+  for (let iteration = 0; iteration < 64; iteration += 1) {
+    const mid = (low + high) / 2;
+
+    if (allocationAt(mid) > budget) {
+      high = mid;
+    } else {
+      low = mid;
+    }
+  }
+
+  return low;
+}
+
+function allocateMpgfCapitalConstrainedQfBonus(
+  items: Array<{ campaignId: string; qfScore: number; qfBonusCapCents: number }>,
+  budgetCents: number,
+  lambda: number,
+) {
+  const budget = clampNonNegativeInteger(budgetCents);
+  const rows = items.map((item) => {
+    const qfScore = Number.isFinite(item.qfScore) ? Math.max(0, item.qfScore) : 0;
+    const qfBonusCapCents = clampNonNegativeInteger(item.qfBonusCapCents);
+    const exact = qfScore > 0 && lambda > 0 ? Math.min(qfBonusCapCents, lambda * qfScore) : 0;
+    const floor = Math.floor(exact);
+
+    return {
+      campaignId: item.campaignId,
+      qfBonusCapCents,
+      floor,
+      remainder: exact - floor,
+    };
+  });
+  const allocations = new Map(rows.map((row) => [row.campaignId, row.floor]));
+  const assignedFloor = rows.reduce((sum, row) => sum + row.floor, 0);
+  const remaining = Math.max(0, budget - assignedFloor);
+
+  for (const row of [...rows]
+    .filter((candidate) => candidate.floor < candidate.qfBonusCapCents)
+    .sort((left, right) => right.remainder - left.remainder || left.campaignId.localeCompare(right.campaignId))
+    .slice(0, remaining)) {
+    allocations.set(row.campaignId, (allocations.get(row.campaignId) ?? 0) + 1);
+  }
+
+  return allocations;
 }
 
 function isActiveAssurancePledge(pledge: MpgfPublicGoodsPledge) {
@@ -1248,6 +1329,7 @@ export function allocateMpgfAssuranceRound({
   const statuses = new Map(campaigns.map((campaign) => [campaign.id, getMpgfCampaignAssuranceStatus(campaign, pledges, now)]));
   const payableCampaigns = campaigns.filter((campaign) => statuses.get(campaign.id)?.status === "payable");
   const baseMatchBudgetCents = Math.max(0, matchPool.budgetCents - matchPool.qfBonusCents);
+  const qfBonusBudgetCents = round.qfEnabled ? clampNonNegativeInteger(matchPool.qfBonusCents) : 0;
   const baseMatchRawByCampaign = new Map(
     payableCampaigns.map((campaign) => {
       const status = statuses.get(campaign.id);
@@ -1265,19 +1347,17 @@ export function allocateMpgfAssuranceRound({
       round.qfEnabled ? computeMpgfCampaignQfScore(campaign, pledges, getMpgfPerDonorQfCapCents(campaign, matchPool)) : 0,
     ]),
   );
-  const uncappedQfByCampaign = distributeIntegerBudget(
-    payableCampaigns,
-    round.qfEnabled ? matchPool.qfBonusCents : 0,
-    (campaign) => qfScoresByCampaign.get(campaign.id) ?? 0,
-  );
-  const qfByCampaign = new Map(
-    payableCampaigns.map((campaign) => {
-      const status = statuses.get(campaign.id);
-      const qfBonusCapCents = Math.floor((status?.directEligibleCents ?? 0) * round.qfCapMultiple);
+  const qfBonusInputs = payableCampaigns.map((campaign) => {
+    const status = statuses.get(campaign.id);
 
-      return [campaign.id, Math.min(uncappedQfByCampaign.get(campaign.id) ?? 0, qfBonusCapCents)];
-    }),
-  );
+    return {
+      campaignId: campaign.id,
+      qfScore: qfScoresByCampaign.get(campaign.id) ?? 0,
+      qfBonusCapCents: Math.floor((status?.directEligibleCents ?? 0) * round.qfCapMultiple),
+    };
+  });
+  const qfLambda = solveMpgfCapitalConstrainedQfLambda(qfBonusInputs, qfBonusBudgetCents);
+  const qfByCampaign = allocateMpgfCapitalConstrainedQfBonus(qfBonusInputs, qfBonusBudgetCents, qfLambda);
 
   const lines: MpgfPublicGoodsAllocationLine[] = campaigns.map((campaign) => {
     const status = statuses.get(campaign.id) ?? getMpgfCampaignAssuranceStatus(campaign, pledges, now);
@@ -1310,8 +1390,11 @@ export function allocateMpgfAssuranceRound({
   return {
     roundId: round.id,
     matchPoolId: matchPool.id,
+    formulaVersion: MPGF_PUBLIC_GOODS_ALLOCATION_FORMULA_VERSION,
+    qfAllocationPolicy: MPGF_PUBLIC_GOODS_QF_ALLOCATION_POLICY,
+    qfLambda: Number(qfLambda.toFixed(12)),
     baseMatchBudgetCents,
-    qfBonusBudgetCents: round.qfEnabled ? matchPool.qfBonusCents : 0,
+    qfBonusBudgetCents,
     baseMatchAllocatedCents,
     qfBonusAllocatedCents,
     totalDirectEligibleCents: lines.reduce((sum, line) => sum + (line.status === "payable" ? line.directEligibleCents : 0), 0),

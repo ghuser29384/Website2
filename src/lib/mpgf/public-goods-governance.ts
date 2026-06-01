@@ -3,6 +3,8 @@ import {
   demoMpgfMatchPool,
   demoMpgfPublicGoodsCampaigns,
 } from "./data";
+import { MPGF_PUBLIC_GOODS_ALLOCATION_FORMULA_VERSION } from "./mechanism";
+import { getMpgfPublicGoodsPostmortemReportApi } from "./public-goods-postmortem";
 import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
 import { getMpgfPublicGoodsThresholdCalibrationReportApi } from "./public-goods-threshold-calibration";
 
@@ -95,6 +97,7 @@ export function getMpgfPublicGoodsGovernanceApi() {
   const perDonorQfCapCents = Number(demoMpgfMatchPool.restrictionsJson.perDonorQfCapCents ?? 0);
   const sponsorPoolFlywheel = buildMpgfPublicGoodsSponsorPoolFlywheel();
   const thresholdCalibration = getMpgfPublicGoodsThresholdCalibrationReportApi(demoMpgfAssuranceRound.id);
+  const postmortem = getMpgfPublicGoodsPostmortemReportApi(demoMpgfAssuranceRound.id);
 
   return {
     ok: true,
@@ -123,7 +126,7 @@ export function getMpgfPublicGoodsGovernanceApi() {
     },
     roundRules: {
       roundId: demoMpgfAssuranceRound.id,
-      formulaVersion: "verified-qf-assurance-v1",
+      formulaVersion: MPGF_PUBLIC_GOODS_ALLOCATION_FORMULA_VERSION,
       startsAt: demoMpgfAssuranceRound.startsAt,
       endsAt: demoMpgfAssuranceRound.endsAt,
       sponsorPoolCents: demoMpgfMatchPool.budgetCents,
@@ -170,6 +173,21 @@ export function getMpgfPublicGoodsGovernanceApi() {
             confidence: row.confidence,
           })),
           calcHash: thresholdCalibration.calcHash,
+        }
+      : null,
+    postmortem: postmortem
+      ? {
+          policy: postmortem.policy,
+          apiPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/postmortem`,
+          publicPostmortemTemplatePublished: postmortem.publicPostmortemTemplatePublished,
+          currentRoundMutationAllowed: postmortem.currentRoundMutationAllowed,
+          parameterResetPolicy: postmortem.parameterResetPolicy,
+          fundingOutcomes: postmortem.fundingOutcomes,
+          disputeAndReviewSummary: postmortem.disputeAndReviewSummary,
+          requiredPublicArtifacts: postmortem.requiredPublicArtifacts,
+          nextRoundSuggestedChangeCount: postmortem.nextRoundParameterReset.suggestedChangeCount,
+          experimentCount: postmortem.experimentSummary.recommendedCount,
+          calcHash: postmortem.calcHash,
         }
       : null,
     fundsFlowSeparation: {
@@ -247,7 +265,7 @@ export function getMpgfPublicGoodsGovernanceApi() {
         { key: "webhook_signature_replay_check", status: "configured_gate_required", evidencePath: "/api/mpgf/health" },
         { key: "shadow_round_fake_money", status: "running_demo_round", evidencePath: `/mpgf/rounds/${demoMpgfAssuranceRound.id}` },
         { key: "public_audit_backfill", status: "planned_before_real_money", evidencePath: "/api/mpgf/audit/ledger" },
-        { key: "public_postmortem_template", status: "published_template_pending", evidencePath: "/mpgf/governance#incident-dispute-lane" },
+        { key: "public_postmortem_template", status: "published", evidencePath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/postmortem` },
       ],
       afterFirstRealMoneyRound: [
         "publish allocation report",

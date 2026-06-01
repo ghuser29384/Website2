@@ -220,6 +220,52 @@ export default async function MpgfGovernancePage() {
           </article>
         ) : null}
 
+        {governance.postmortem ? (
+          <article className="mpgf-panel">
+            <p className="eyebrow">Public postmortem</p>
+            <h2>Parameter resets happen only between rounds</h2>
+            <p>
+              The postmortem template publishes funding outcomes, dispute summary, experiment
+              backlog, and next-round parameter reset evidence without private donor rows.
+            </p>
+            <dl className="mpgf-summary-grid">
+              <div>
+                <dt>Template</dt>
+                <dd>{governance.postmortem.publicPostmortemTemplatePublished ? "published" : "pending"}</dd>
+              </div>
+              <div>
+                <dt>Current round mutation</dt>
+                <dd>{governance.postmortem.currentRoundMutationAllowed ? "allowed" : "blocked"}</dd>
+              </div>
+              <div>
+                <dt>Suggested resets</dt>
+                <dd>{governance.postmortem.nextRoundSuggestedChangeCount}</dd>
+              </div>
+              <div>
+                <dt>Experiments</dt>
+                <dd>{governance.postmortem.experimentCount}</dd>
+              </div>
+            </dl>
+            <div className="mpgf-table" aria-label="Public postmortem artifacts">
+              <div className="mpgf-table-row mpgf-table-head">
+                <span>Artifact</span>
+                <span>Status</span>
+                <span>Path</span>
+              </div>
+              {governance.postmortem.requiredPublicArtifacts.map((artifact) => (
+                <div className="mpgf-table-row" key={artifact.key}>
+                  <span>{statusLabel(artifact.key)}</span>
+                  <span>{statusLabel(artifact.status)}</span>
+                  <span>{artifact.path}</span>
+                </div>
+              ))}
+            </div>
+            <Link className="inline-link" href={governance.postmortem.apiPath}>
+              Open public postmortem JSON
+            </Link>
+          </article>
+        ) : null}
+
         <article className="mpgf-panel">
           <p className="eyebrow">Campaign thresholds</p>
           <h2>Published thresholds before contributions</h2>
