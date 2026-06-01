@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-security-v0.2-2026-05",
+  "version": "moral-trade-security-v0.3-2026-06",
   "purpose": "Public security posture contract for Moral Trade headers, session boundaries, provider encryption assumptions, secret/key management, abuse throttling, and scale gates.",
   "controls": [
     {
@@ -66,6 +66,13 @@
       "publicClaim": "Participants can inspect the current background-networking session window and revoke other active Supabase sessions from the dashboard."
     },
     {
+      "key": "contact_disclosure_mfa_step_up",
+      "label": "Contact disclosure MFA step-up",
+      "status": "implemented",
+      "evidence": "src/lib/background-disclosure.ts requires contact-level grants or contact_email field disclosure to pass requiresContactDisclosureStepUp; src/lib/background-disclosure.test.ts covers the contact disclosure step-up boundary.",
+      "publicClaim": "Contact-level introductions require an explicit disclosure stage and MFA step-up before contact details can be released."
+    },
+    {
       "key": "device_session_review_gate",
       "label": "Device/session review gate",
       "status": "required_before_scale",
@@ -124,6 +131,7 @@
       "requires": [
         "private_no_store_cache",
         "supabase_auth_cookies",
+        "contact_disclosure_mfa_step_up",
         "platform_abuse_throttling",
         "incident_response_reporting"
       ],

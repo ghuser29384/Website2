@@ -29,7 +29,7 @@ const firstActions = [
   {
     title: "Clone a worked example",
     description: "Adapt a past example to your context and invite one counterparty.",
-    href: "/offers?view=examples",
+    href: "/worked-examples",
     icon: "example",
   },
   {

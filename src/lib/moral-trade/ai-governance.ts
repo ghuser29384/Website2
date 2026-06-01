@@ -70,7 +70,7 @@ export interface MoralTradeAiGovernanceValidation {
   blockers: string[];
 }
 
-const aiGovernanceProfile = aiGovernanceProfileJson as MoralTradeAiGovernanceProfile;
+const aiGovernanceProfile = aiGovernanceProfileJson as unknown as MoralTradeAiGovernanceProfile;
 
 const REQUIRED_DOCUMENTATION = [
   "model_card",

@@ -68,6 +68,16 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
       (route) => route.key === "moral_trade_background_capability_gates_contract",
     ),
   );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_private_overlap_contract" &&
+        route.path === "/api/moral-trade/private-overlap/contract" &&
+        route.responseSchema === "private_overlap_contract_response" &&
+        /formal cryptographic review/i.test(route.fallback) &&
+        /raw tags/i.test(route.fallback),
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_transparency_report"));
   assert.ok(
     profile.routes.some(
@@ -232,6 +242,7 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_brief_list_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_feedback_create_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_feedback_create_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "private_overlap_contract_response"));
   assert.ok(
     profile.schemaDefinitions
       .find((schema) => schema.key === "background_source_summary_create_response")

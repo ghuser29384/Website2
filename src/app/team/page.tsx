@@ -12,13 +12,13 @@ export const metadata: Metadata = {
   description:
     "Current public accountability surface for Moral Trade operators, reviewer responsibilities, advisor roles, conflicts, and publication commitments.",
   alternates: {
-    canonical: "/team",
+    canonical: "/team-and-governance",
   },
   openGraph: {
     title: "Moral Trade team and governance",
     description:
       "See what is public about Moral Trade's pilot operators, governance responsibilities, reviewer roles, and publication commitments.",
-    url: getAbsoluteUrl("/team"),
+    url: getAbsoluteUrl("/team-and-governance"),
     type: "website",
   },
 };

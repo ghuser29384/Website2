@@ -135,6 +135,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
   const copilotRolloutReadiness =
     getMoralTradeCopilotRolloutReadinessAudits(copilotContract);
+  const copilotBlockingVerificationSteps = copilotContract.verificationLoop.filter(
+    (step) => step.blocksMatchable,
+  );
   const matchSignalContract = getMoralTradeMatchSignalContract();
   const matchSignalValidation =
     validateMoralTradeMatchSignalContract(matchSignalContract);
@@ -198,7 +201,7 @@ export default async function MoralTradeTechnicalSpecPage() {
         />
         <Breadcrumbs
           items={[
-            { href: "/moral-trade", label: "Moral trade" },
+            { href: "/what-is-moral-trade", label: "Moral trade" },
             { href: "/moral-trade/technical-spec", label: "Technical spec" },
           ]}
         />
@@ -1099,6 +1102,18 @@ export default async function MoralTradeTechnicalSpecPage() {
               <ul className="clean-list">
                 {copilotContract.guardrails.map((guardrail) => (
                   <li key={guardrail.code}>{guardrail.label}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Matchability gate</h3>
+              <p>
+                <code>validateMoralTradeCopilotOutput</code> rejects <code>matchable</code> output
+                unless every blocking verification step has status <code>pass</code>.
+              </p>
+              <ul className="clean-list">
+                {copilotBlockingVerificationSteps.map((step) => (
+                  <li key={step.key}>{step.label}</li>
                 ))}
               </ul>
             </article>

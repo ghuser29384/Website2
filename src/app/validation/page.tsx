@@ -18,7 +18,7 @@ import {
   validateMoralTradeChallengeAppealContract,
 } from "@/lib/moral-trade/challenge-appeal";
 import { validateMoralTradeProtocolProfile } from "@/lib/moral-trade/protocol";
-import { getAbsoluteUrl } from "@/lib/seo";
+import { buildBreadcrumbJsonLd, buildWebPageJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import {
   TRUST_BADGE_LADDER,
@@ -51,9 +51,30 @@ export default async function ValidationPage() {
   const challengeAppealContract = getMoralTradeChallengeAppealContract();
   const challengeAppealValidation =
     validateMoralTradeChallengeAppealContract(challengeAppealContract);
+  const validationStructuredData = buildWebPageJsonLd({
+    name: "Validation and evidence",
+    description:
+      "How Moral Trade turns manual review into validator scopes, evidence states, challenge windows, and transaction-linked trust badges.",
+    path: "/validation",
+  });
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([
+    { href: "/validation", label: "Validation" },
+  ]);
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(validationStructuredData),
+        }}
+        type="application/ld+json"
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <header className="hero">
         <SiteTopbar
           brandHref="/"

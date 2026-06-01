@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-copilot-v0.1.2-2026-05",
+  "version": "moral-trade-copilot-v0.1.3-2026-06",
   "purpose": "Strict contract for schema-bound Moral Trade drafting, critique, explanation, evidence-metadata review, evidence-checklist, and reviewer-summary assistance.",
   "permittedRoles": [
     {
@@ -184,6 +184,11 @@
       "code": "anti_threat_escalation",
       "label": "Anti-threat escalation",
       "rule": "Return blocked with policy reason for threat, coercion, doxxing, harassment, fraud, illegality, or newly escalated harmful behavior."
+    },
+    {
+      "code": "verification_loop_matchability_gate",
+      "label": "Verification loop gates matchability",
+      "rule": "A copilot output with status matchable is invalid unless every verification step marked blocksMatchable has status pass."
     }
   ],
   "verificationLoop": [

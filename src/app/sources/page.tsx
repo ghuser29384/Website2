@@ -4,7 +4,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
-import { getAbsoluteUrl } from "@/lib/seo";
+import { buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -50,7 +50,7 @@ const primarySources = [
 const internalReferences = [
   {
     title: "Moral Trade primer",
-    href: "/moral-trade",
+    href: "/what-is-moral-trade",
     detail: "Plain-language definition, examples, limits, and trust problems.",
   },
   {
@@ -60,7 +60,7 @@ const internalReferences = [
   },
   {
     title: "Anti-threat baseline",
-    href: "/anti-threat-baseline",
+    href: "/anti-threat-rules",
     detail: "Threat rejection, no-trade baselines, cooling-off periods, and externality review.",
   },
   {
@@ -72,7 +72,7 @@ const internalReferences = [
 
 const structuredData = {
   "@context": "https://schema.org",
-  "@type": "CollectionPage",
+  "@type": "WebPage",
   name: "Moral Trade sources",
   url: getAbsoluteUrl("/sources"),
   description: metadata.description,
@@ -87,11 +87,18 @@ const structuredData = {
 
 export default async function SourcesPage() {
   const viewer = await getViewer();
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([
+    { href: "/sources", label: "Sources" },
+  ]);
 
   return (
     <div className="page-shell">
       <script
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        type="application/ld+json"
+      />
+      <script
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbStructuredData) }}
         type="application/ld+json"
       />
       <SiteTopbar

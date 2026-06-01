@@ -121,6 +121,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_document_coverage_health",
   "moral_trade_ai_shadow_contract",
   "moral_trade_background_capability_gates_contract",
+  "moral_trade_private_overlap_contract",
   "moral_trade_background_rls_audit_contract",
   "moral_trade_transparency_report",
   "profile_schema",

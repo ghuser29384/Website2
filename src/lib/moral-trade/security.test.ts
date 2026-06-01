@@ -45,6 +45,10 @@ test("security profile publishes headers, sessions, provider boundaries, non-cla
     "implemented",
   );
   assert.equal(
+    profile.controls.find((control) => control.key === "contact_disclosure_mfa_step_up")?.status,
+    "implemented",
+  );
+  assert.equal(
     profile.controls.find((control) => control.key === "incident_response_reporting")?.status,
     "implemented",
   );
@@ -57,6 +61,7 @@ test("security implementation source keeps headers, cache, and sessions aligned"
   const validation = validateMoralTradeSecurityImplementation({
     actionsSource: readRepoFile("src/app/actions.ts"),
     adminSource: readRepoFile("src/lib/admin.ts"),
+    backgroundDisclosureSource: readRepoFile("src/lib/background-disclosure.ts"),
     backgroundAccountSecuritySource: readRepoFile("src/lib/background-account-security.ts"),
     backgroundAccountSecurityPanelSource: readRepoFile(
       "src/components/dashboard/background-account-security-panel.tsx",
@@ -74,6 +79,11 @@ test("security implementation source keeps headers, cache, and sessions aligned"
   assert.ok(
     validation.checks.some(
       (check) => check.id === "supabase-session-refresh-source" && check.status === "pass",
+    ),
+  );
+  assert.ok(
+    validation.checks.some(
+      (check) => check.id === "contact-disclosure-step-up-source" && check.status === "pass",
     ),
   );
 });
@@ -117,6 +127,7 @@ test("security scale readiness passes when a gate's required controls are implem
       [
         "two_factor_admin_gate",
         "participant_session_review_revocation",
+        "contact_disclosure_mfa_step_up",
         "device_session_review_gate",
         "key_rotation_gate",
         "incident_response_reporting",

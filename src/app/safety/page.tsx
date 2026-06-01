@@ -102,7 +102,7 @@ export default async function SafetyPage() {
             the trade? Proposals involving threat creation, newly escalated harmful behavior, or
             coercive compensation requests should be rejected or sent to challenge review.
           </p>
-          <Link className="text-button" href="/anti-threat-baseline">
+          <Link className="text-button" href="/anti-threat-rules">
             Read anti-threat baseline rules
           </Link>
         </section>

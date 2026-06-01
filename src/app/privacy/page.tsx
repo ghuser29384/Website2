@@ -162,7 +162,8 @@ export default async function PrivacyPage() {
             summaries only and cannot change live matching, ranking, disclosure, or outreach.
             Live source connectors, AI assist mode, and private-overlap computation require a DPIA,
             lawful-basis record, privacy-design review, and external security/privacy review before
-            expansion.
+            expansion. Private overlap checks are not live; any future pilot must not use free text
+            and must not reveal raw tags.
           </p>
           <ul className="compact-list">
             {BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.map((option) => (

@@ -11,30 +11,56 @@ import {
   TradeFlowDiagram,
 } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
-import { getAbsoluteUrl } from "@/lib/seo";
+import { buildBreadcrumbJsonLd, buildWebPageJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+
+const paidActionOffersDescription =
+  "Moral Trade keeps general paid action offers deferred until identity, dispute, legal, and evidence workflows are mature enough for higher-trust paid moral action pilots.";
 
 export const metadata: Metadata = {
   title: "Deferred paid action offers",
-  description:
-    "Why paid moral-trade action offers are deferred until validation, identity, dispute, and compliance workflows are mature.",
+  description: paidActionOffersDescription,
   alternates: {
     canonical: "/paid-action-offers",
   },
   openGraph: {
-    title: "Deferred paid action offers",
-    description:
-      "Paid action offers remain outside the mainstream Moral Trade launch wedge while trust and compliance workflows mature.",
+    title: "Deferred paid action offers | Moral Trade",
+    description: paidActionOffersDescription,
     url: getAbsoluteUrl("/paid-action-offers"),
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Deferred paid action offers | Moral Trade",
+    description: paidActionOffersDescription,
   },
 };
 
 export default async function PaidActionOffersPage() {
   const viewer = await getViewer();
+  const paidActionStructuredData = buildWebPageJsonLd({
+    name: "Deferred paid action offers | Moral Trade",
+    description: paidActionOffersDescription,
+    path: "/paid-action-offers",
+  });
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([
+    { href: "/paid-action-offers", label: "Paid action offers" },
+  ]);
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(paidActionStructuredData),
+        }}
+        type="application/ld+json"
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <header className="hero">
         <SiteTopbar
           brandHref="/"
@@ -50,7 +76,7 @@ export default async function PaidActionOffersPage() {
           description="The pilot keeps general paid action offers out of the mainstream creation path until identity, dispute, legal, and evidence workflows are strong enough for the higher trust burden."
           actions={
             <>
-              <Link className="button button-primary" href="/offers?mode=payment">
+              <Link className="button button-primary" href="/worked-examples">
                 View worked examples
               </Link>
               <Link className="button button-secondary" href="/validation">

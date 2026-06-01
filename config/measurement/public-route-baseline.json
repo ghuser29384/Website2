@@ -21,9 +21,9 @@
   ],
   "routes": [
     { "path": "/", "family": "home", "stage": "orientation" },
-    { "path": "/moral-trade", "family": "primer", "stage": "orientation" },
+    { "path": "/what-is-moral-trade", "family": "primer", "stage": "orientation" },
     { "path": "/offers", "family": "marketplace", "stage": "orientation" },
-    { "path": "/offers?view=examples", "family": "worked_examples", "stage": "orientation" },
+    { "path": "/worked-examples", "family": "worked_examples", "stage": "orientation" },
     { "path": "/cohort", "family": "cohort", "stage": "activation" },
     { "path": "/signup", "family": "account", "stage": "activation" },
     { "path": "/login", "family": "account", "stage": "activation" },

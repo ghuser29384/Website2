@@ -1284,7 +1284,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       icon="marketplace"
                       actions={
                         <>
-                          <Link className="button button-secondary" href="/offers?view=examples">
+                          <Link className="button button-secondary" href="/worked-examples">
                             View worked examples
                           </Link>
                           <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
@@ -1306,7 +1306,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                             <p className="eyebrow">Worked examples</p>
                             <h3 id="empty-example-preview-heading">Study the structure before live offers arrive.</h3>
                           </div>
-                          <Link className="text-button" href="/offers?view=examples">
+                          <Link className="text-button" href="/worked-examples">
                             Open all examples
                           </Link>
                         </div>
@@ -1450,7 +1450,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                     <p className="detail-kicker">{entry.cause}</p>
                     <h3>{entry.listing?.title}</h3>
                     <p className="route-text">{entry.listing?.offering}</p>
-                    <Link className="text-button" href={`/offers?view=examples&cause=${encodeURIComponent(entry.cause)}`}>
+                    <Link className="text-button" href={`/worked-examples&cause=${encodeURIComponent(entry.cause)}`}>
                       Inspect example
                     </Link>
                   </article>
@@ -1485,7 +1485,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <h3>Validation rulebook</h3>
               <p>Reviewer scope, evidence states, challenge windows, and proof uniqueness checks.</p>
             </Link>
-            <Link className="panel teaser-card" href="/anti-threat-baseline">
+            <Link className="panel teaser-card" href="/anti-threat-rules">
               <IconMark name="safety" />
               <h3>Anti-threat baseline rules</h3>
               <p>No threat creation, no compensation for newly escalated harmful behavior, and third-party externality review.</p>

@@ -48,7 +48,7 @@ test("public navigation exposes professional marketplace routes", () => {
   const globalCss = readRepoFile("src/app/globals.css");
 
   assert.deepEqual(labels, ["Understand", "Explore", "Join", "Trust"]);
-  assert.equal(getTopbarActions(false).primaryAction.href, "/offers?view=examples");
+  assert.equal(getTopbarActions(false).primaryAction.href, "/worked-examples");
   assert.equal(getTopbarActions(false).primaryAction.label, "See example");
   assert.equal(getTopbarActions(true).primaryAction.href, "/offers/new?mode=offset");
   assert.equal(getTopbarActions(true).primaryAction.label, "Trade");
@@ -68,15 +68,15 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.ok(hrefs.includes("/donation-offsets"));
   assert.ok(hrefs.includes("/donate"));
   assert.ok(hrefs.includes("/validation"));
-  assert.ok(hrefs.includes("/offers?view=examples"));
+  assert.ok(hrefs.includes("/worked-examples"));
   assert.ok(hrefs.includes("/measurement"));
   assert.ok(hrefs.includes("/accessibility"));
   assert.ok(hrefs.includes("/faq"));
   assert.ok(hrefs.includes("/sources"));
   assert.ok(hrefs.includes("/background-networking"));
   assert.ok(hrefs.includes("/cohort"));
-  assert.ok(hrefs.includes("/team"));
-  assert.ok(hrefs.includes("/updates"));
+  assert.ok(hrefs.includes("/team-and-governance"));
+  assert.ok(hrefs.includes("/pilot-updates"));
   assert.ok(hrefs.includes("/contact"));
   assert.ok(hrefs.includes("/trust"));
   assert.ok(hrefs.includes("/status"));
@@ -99,7 +99,7 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(siteSource, /\/trust/);
   assert.match(siteSource, /\/projects/);
   assert.match(siteSource, /\/start/);
-  assert.match(siteSource, /\/updates/);
+  assert.match(siteSource, /\/pilot-updates/);
   assert.match(siteSource, /\/measurement/);
   assert.match(siteSource, /\/accessibility/);
   assert.match(siteSource, /href: "\/sources", label: "Sources"/);
@@ -121,7 +121,7 @@ test("offer save surfaces avoid shopping-cart framing", () => {
   const offerDetailPage = readRepoFile("src/app/offers/[offerId]/page.tsx");
   const notFoundPage = readRepoFile("src/app/not-found.tsx");
   const actionsSource = readRepoFile("src/app/actions.ts");
-  const robotsSource = readRepoFile("src/app/robots.ts");
+  const robotsSource = readRepoFile("src/app/robots.txt/route.ts");
   const publicOffersSource = readRepoFile("src/lib/public-offers.ts");
   const offerFollowsSource = readRepoFile("src/lib/offer-follows.ts");
   const offerCreateSimilarSource = readRepoFile("src/lib/offer-create-similar.ts");
@@ -148,7 +148,9 @@ test("offer save surfaces avoid shopping-cart framing", () => {
   assert.match(cartRedirectPage, /redirect\("\/saved-offers"\)/);
   assert.match(dashboardPage, /Open saved offers/);
   assert.match(dashboardPage, /href="\/saved-offers"/);
-  assert.match(robotsSource, /"\/saved-offers"/);
+  assert.match(robotsSource, /OAI-SearchBot/);
+  assert.match(robotsSource, /Claude-SearchBot/);
+  assert.equal(robotsSource.includes("Disallow"), false);
   assert.match(offerDetailPage, /Interest and saved-offer activity/);
   assert.match(actionsSource, /Saved offer/);
   assert.match(actionsSource, /revalidatePath\("\/saved-offers"\)/);
@@ -540,7 +542,7 @@ test("visitor router exposes four intent paths before deeper marketplace mechani
   assert.match(visitorPathsSource, /key: "test"/);
   assert.match(visitorPathsSource, /key: "donate"/);
   assert.match(visitorPathsSource, /key: "join-build"/);
-  assert.match(visitorPathsSource, /\/offers\?view=examples/);
+  assert.match(visitorPathsSource, /\/worked-examples/);
   assert.match(visitorPathsSource, /\/cohort/);
   assert.match(siteSearchSource, /Choose your path/);
   assert.match(siteSearchSource, /visitor router/);
@@ -674,9 +676,12 @@ test("background networking and reasoning routes are distinct resilient public r
   assert.match(backgroundPage, /aiShadowContract\.prohibitedEffects/);
   assert.match(backgroundPage, /Capability gates/);
   assert.match(backgroundPage, /Open gate contract/);
+  assert.match(backgroundPage, /Private-overlap checks are not live/);
+  assert.match(backgroundPage, /Private overlap contract/);
   assert.match(backgroundPage, /capabilityGateContract\.gates/);
   assert.match(backgroundPage, /capabilityGateValidation\.expansionReady/);
   assert.match(backgroundPage, /\/api\/moral-trade\/background-capability-gates\/contract/);
+  assert.match(backgroundPage, /\/api\/moral-trade\/private-overlap\/contract/);
   assert.match(backgroundPage, /RLS and encryption audit/);
   assert.match(backgroundPage, /Open RLS contract/);
   assert.match(backgroundPage, /rlsAuditContract\.tableRequirements/);
@@ -766,6 +771,9 @@ test("background source connector permissions stay field-limited and raw-ingesti
   const capabilityGateRoute = readRepoFile(
     "src/app/api/moral-trade/background-capability-gates/contract/route.ts",
   );
+  const privateOverlapContractRoute = readRepoFile(
+    "src/app/api/moral-trade/private-overlap/contract/route.ts",
+  );
   const rlsAuditContractRoute = readRepoFile(
     "src/app/api/moral-trade/background-rls-audit/contract/route.ts",
   );
@@ -804,6 +812,7 @@ test("background source connector permissions stay field-limited and raw-ingesti
   const backgroundSourceAssistSource = readRepoFile("src/lib/background-source-assist.ts");
   const backgroundAiShadowSource = readRepoFile("src/lib/background-ai-shadow.ts");
   const backgroundCapabilityGateSource = readRepoFile("src/lib/background-capability-gates.ts");
+  const backgroundPrivateOverlapSource = readRepoFile("src/lib/background-private-overlap.ts");
   const backgroundRlsAuditSource = readRepoFile("src/lib/background-rls-audit.ts");
   const backgroundNotificationPolicySource = readRepoFile(
     "src/lib/background-notification-policy.ts",
@@ -926,6 +935,8 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(apiContractProfile, /background_opportunity_list/);
   assert.match(apiContractProfile, /background_opportunity_feedback_create/);
   assert.match(apiContractProfile, /background_opportunity_feedback_create_alias/);
+  assert.match(apiContractProfile, /moral_trade_private_overlap_contract/);
+  assert.match(apiContractProfile, /private_overlap_contract_response/);
   assert.match(backgroundNetworkingSource, /hasActiveBackgroundSourcePermission/);
   assert.match(backgroundNetworkingSource, /hasActiveProfileSourcePermission/);
   assert.match(backgroundNetworkingSource, /hasActiveBackgroundProfileSignal/);
@@ -947,10 +958,19 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(backgroundCapabilityGateSource, /validateBackgroundCapabilityGateContract/);
   assert.match(backgroundCapabilityGateSource, /DPIA and documented privacy-design review/);
   assert.match(backgroundCapabilityGateSource, /privacy_preserving_overlap/);
+  assert.match(backgroundCapabilityGateSource, /private_overlap_contract/);
   assert.match(backgroundCapabilityGateSource, /raw_private_feed_training/);
   assert.match(capabilityGateRoute, /getBackgroundCapabilityGateContract/);
   assert.match(capabilityGateRoute, /validateBackgroundCapabilityGateContract/);
   assert.match(capabilityGateRoute, /expansionReady/);
+  assert.match(backgroundPrivateOverlapSource, /design_review_only/);
+  assert.match(backgroundPrivateOverlapSource, /formal cryptographic design review/);
+  assert.match(backgroundPrivateOverlapSource, /free_text/);
+  assert.match(backgroundPrivateOverlapSource, /raw_tag/);
+  assert.match(backgroundPrivateOverlapSource, /deterministic broad-preview matching/);
+  assert.match(privateOverlapContractRoute, /getBackgroundPrivateOverlapContract/);
+  assert.match(privateOverlapContractRoute, /validateBackgroundPrivateOverlapContract/);
+  assert.match(privateOverlapContractRoute, /Private overlap checks are not live/);
   assert.match(backgroundRlsAuditSource, /validateBackgroundRlsAuditSchema/);
   assert.match(backgroundRlsAuditSource, /match_audit_events/);
   assert.match(backgroundRlsAuditSource, /background_match_feedback/);
@@ -984,22 +1004,22 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(introRequestMigrationSource, /background_intro_packets_contact_approval_status_check/);
 });
 
-test("global loading and error states expose route-specific recovery instead of generic dead ends", () => {
+test("global loading stays silent while error states expose route-specific recovery", () => {
   const loadingPage = readRepoFile("src/app/loading.tsx");
   const errorPage = readRepoFile("src/app/error.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
   const performanceProfile = readRepoFile("config/moral-trade/performance-profile.json");
 
-  assert.match(loadingPage, /Preparing route/);
-  assert.match(loadingPage, /No state change/);
-  assert.match(loadingPage, /Route loading safeguards/);
-  assert.match(loadingPage, /does not submit drafts, disclose counterparties, or change review status/);
+  assert.match(loadingPage, /return null/);
+  assert.equal(loadingPage.includes("Preparing route"), false);
+  assert.equal(loadingPage.includes("Preparing the requested view"), false);
+  assert.equal(loadingPage.includes("<h1"), false);
   assert.equal(loadingPage.includes("Loading Moral Trade."), false);
   assert.match(errorPage, /Recoverable route error/);
   assert.match(errorPage, /This page did not finish rendering/);
   assert.match(errorPage, /No proposal status, match disclosure, or evidence decision is/);
   assert.match(errorPage, /\/moral-trade\/technical-spec/);
-  assert.match(errorPage, /\/offers\?view=examples/);
+  assert.match(errorPage, /\/worked-examples/);
   assert.match(errorPage, /\/reasoning-standards/);
   assert.match(errorPage, /SiteTopbar/);
   assert.equal(errorPage.includes("Something failed"), false);
@@ -1136,7 +1156,7 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   assert.match(MEASUREMENT_PERFORMANCE_BASELINE.command, /npm run measure:routes/);
   assert.equal(MEASUREMENT_PERFORMANCE_BASELINE.baseUrlEnv, "MORALTRADE_BASE_URL");
   assert.equal(MEASUREMENT_PERFORMANCE_BASELINE.outputPathEnv, "MORALTRADE_BASELINE_OUTPUT");
-  assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.routes.some((route) => route.path === "/offers?view=examples"));
+  assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.routes.some((route) => route.path === "/worked-examples"));
   assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.devices.some((device) => device.key === "mobile"));
   assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.requiredChecks.includes("no_framework_overlay"));
   assert.match(measurementPage, /Protocol-quality audits/);
@@ -1199,6 +1219,9 @@ test("privacy and terms publish processor retention and data-request transparenc
   assert.match(privacyPage, /cannot change live matching, ranking, disclosure, or outreach/);
   assert.match(privacyPage, /Live source connectors, AI assist mode, and private-overlap computation require a DPIA/);
   assert.match(privacyPage, /lawful-basis record, privacy-design review, and external security\/privacy review/);
+  assert.match(privacyPage, /Private overlap checks are not live/);
+  assert.match(privacyPage, /must not use free text/);
+  assert.match(privacyPage, /must not reveal raw tags/);
   assert.match(privacyPage, /saveAnalyticsPreferenceAction/);
   assert.match(privacyPage, /Turn off optional analytics/);
   assert.match(privacyPage, /Allow minimal analytics/);
@@ -1594,12 +1617,13 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(measurementPlanSource, /Exact wishes, source notes, private constraints/);
   assert.match(updatesPage, /public archive for what changed/);
   assert.match(teamPage, /Who is publicly accountable for the pilot/);
-  assert.match(sitemapSource, /\/moral-trade/);
+  assert.match(sitemapSource, /\/what-is-moral-trade/);
   assert.match(sitemapSource, /\/moral-trade\/technical-spec/);
   assert.match(sitemapSource, /\/about/);
   assert.match(sitemapSource, /\/how-it-works/);
   assert.match(sitemapSource, /\/projects/);
-  assert.match(sitemapSource, /\/anti-threat-baseline/);
+  assert.match(sitemapSource, /\/worked-examples/);
+  assert.match(sitemapSource, /\/anti-threat-rules/);
   assert.match(sitemapSource, /\/research/);
   assert.match(sitemapSource, /\/measurement/);
   assert.match(sitemapSource, /\/accessibility/);
@@ -1607,8 +1631,8 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(sitemapSource, /\/trust/);
   assert.match(sitemapSource, /\/contact/);
   assert.match(sitemapSource, /\/status/);
-  assert.match(sitemapSource, /\/updates/);
-  assert.match(sitemapSource, /\/team/);
+  assert.match(sitemapSource, /\/pilot-updates/);
+  assert.match(sitemapSource, /\/team-and-governance/);
   assert.match(siteSearchSource, /Projects/);
   assert.match(siteSearchSource, /How it works/);
   assert.match(siteSearchSource, /Team and governance/);
@@ -1727,6 +1751,10 @@ test("public contract APIs enforce the documented public contract read throttle"
     },
     {
       path: "src/app/api/moral-trade/background-capability-gates/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
+    {
+      path: "src/app/api/moral-trade/private-overlap/contract/route.ts",
       cacheControl: "no_store_dynamic",
     },
     {
@@ -1880,6 +1908,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const schemaSource = readRepoFile("supabase/schema.sql");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
+  const privateOverlapSource = readRepoFile("src/lib/background-private-overlap.ts");
   const documentCoverageSource = readRepoFile("src/lib/moral-trade/document-coverage.ts");
   const moralTradeBuildInstruction = readRepoFile(
     "docs/moral-trade/codex-build-instruction.md",
@@ -1945,6 +1974,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const performanceHealthRoute = readRepoFile("src/app/api/moral-trade/performance/health/route.ts");
   const externalityHealthRoute = readRepoFile("src/app/api/moral-trade/externality/health/route.ts");
   const aiGovernanceHealthRoute = readRepoFile("src/app/api/moral-trade/ai-governance/health/route.ts");
+  const privateOverlapContractRoute = readRepoFile(
+    "src/app/api/moral-trade/private-overlap/contract/route.ts",
+  );
   const apiContractRoute = readRepoFile("src/app/api/moral-trade/api-contract/route.ts");
   const documentCoverageHealthRoute = readRepoFile(
     "src/app/api/moral-trade/document-coverage/health/route.ts",
@@ -2153,6 +2185,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
     moralTradeBuildInstruction,
     /\/api\/moral-trade\/document-coverage\/health/,
   );
+  assert.match(moralTradeBuildInstruction, /\/api\/moral-trade\/private-overlap\/contract/);
+  assert.match(moralTradeBuildInstruction, /background-private-overlap\.test\.ts/);
   assert.match(moralTradeBuildInstruction, /does not prove live production liquidity/);
   assert.match(documentCoverageSource, /canonicalInstruction/);
   assert.match(documentCoverageSource, /canonicalInstructionHash/);
@@ -2486,6 +2520,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_ai_governance_health/);
   assert.match(apiContractSource, /moral_trade_ai_shadow_contract/);
   assert.match(apiContractSource, /moral_trade_background_capability_gates_contract/);
+  assert.match(apiContractSource, /moral_trade_private_overlap_contract/);
   assert.match(apiContractSource, /moral_trade_background_rls_audit_contract/);
   assert.match(apiContractSource, /moral_trade_transparency_report/);
   assert.match(apiContractSource, /moral_trade_api_contract/);
@@ -2521,6 +2556,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /moral_trade_background_capability_gates_contract/);
   assert.match(apiContractProfile, /DPIA, lawful-basis, privacy-design, external-review/);
   assert.match(apiContractProfile, /source connector workers, AI assist mode, and private-overlap computation cannot expand/);
+  assert.match(apiContractProfile, /private_overlap_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_private_overlap_contract/);
+  assert.match(apiContractProfile, /formal cryptographic review/);
+  assert.match(apiContractProfile, /must not use free text or reveal raw tags/);
   assert.match(apiContractProfile, /background_rls_audit_contract_response/);
   assert.match(apiContractProfile, /moral_trade_background_rls_audit_contract/);
   assert.match(apiContractProfile, /row-level security, participant-scoped policies/);
@@ -2943,6 +2982,15 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiGovernanceHealthRoute, /sampleDocumentationPackets/);
   assert.match(aiGovernanceHealthRoute, /explanationControls/);
   assert.match(aiGovernanceHealthRoute, /prohibitedUses/);
+  assert.match(privateOverlapSource, /BACKGROUND_PRIVATE_OVERLAP_CONTRACT_VERSION/);
+  assert.match(privateOverlapSource, /design_review_only/);
+  assert.match(privateOverlapSource, /futureStoredFields/);
+  assert.match(privateOverlapSource, /blocked_pending_crypto_review/);
+  assert.match(privateOverlapSource, /formal cryptographic design review/);
+  assert.match(privateOverlapSource, /deterministic broad-preview matching/);
+  assert.match(privateOverlapContractRoute, /getBackgroundPrivateOverlapContract/);
+  assert.match(privateOverlapContractRoute, /validateBackgroundPrivateOverlapContract/);
+  assert.match(privateOverlapContractRoute, /publicNonClaim/);
   assert.match(apiContractRoute, /validateMoralTradeApiContractProfile/);
   assert.match(apiContractRoute, /auditMoralTradeApiImplementationContract/);
   assert.match(apiContractRoute, /implementationAudit/);

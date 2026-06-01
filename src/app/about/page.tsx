@@ -67,7 +67,7 @@ export default async function AboutPage() {
               <Link className="button button-primary" href="/projects">
                 Browse projects
               </Link>
-              <Link className="button button-secondary" href="/team">
+              <Link className="button button-secondary" href="/team-and-governance">
                 Meet the operators
               </Link>
             </div>
@@ -111,12 +111,12 @@ export default async function AboutPage() {
               <p className="route-text">See worked examples, the Public Goods Fund, and upcoming pilot surfaces.</p>
               <span className="inline-link">Open Projects</span>
             </Link>
-            <Link className="panel data-card" href="/team">
+            <Link className="panel data-card" href="/team-and-governance">
               <h3>Who runs this?</h3>
               <p className="route-text">Review current operator routes, reviewer responsibilities, and governance gaps.</p>
               <span className="inline-link">Open Team and Governance</span>
             </Link>
-            <Link className="panel data-card" href="/updates">
+            <Link className="panel data-card" href="/pilot-updates">
               <h3>What changed recently?</h3>
               <p className="route-text">Read pilot logs, governance updates, and planned transparency reports.</p>
               <span className="inline-link">Open Updates</span>

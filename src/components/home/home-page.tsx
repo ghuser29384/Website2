@@ -59,7 +59,7 @@ const activationCards: ReadonlyArray<{
   {
     title: "Clone a worked example",
     description: "Prefill a low-risk case, adjust terms, and keep scores party-relative.",
-    href: "/offers?view=examples",
+    href: "/worked-examples",
     actionLabel: "Choose a worked example",
   },
   {
@@ -112,7 +112,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
               anyone relies on the result.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/offers?view=examples">
+              <Link className="button button-primary" href="/worked-examples">
                 See a worked example
               </Link>
               <Link className="button button-secondary" href={isAuthenticated ? cohortHref : "/cohort"}>
@@ -284,7 +284,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
             })}
           </div>
           <div className="section-actions">
-            <Link className="button button-primary" href="/offers?view=examples">
+            <Link className="button button-primary" href="/worked-examples">
               Browse all worked examples
             </Link>
             <Link className="button button-secondary" href="/cohort">

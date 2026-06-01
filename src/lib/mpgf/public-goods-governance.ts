@@ -83,6 +83,53 @@ const reviewerPanelRoles = [
   },
 ] as const;
 
+const legalComplianceReadiness = {
+  status: "framework_published_external_review_required",
+  evidencePath: "/mpgf/real-money-terms",
+  productionMoneyMovementAllowed: false,
+  externalCounselApprovalRequired: true,
+  partnerHeldCustodyRequired: true,
+  requiredBeforeRealMoney: [
+    {
+      key: "aml_kyc_screening",
+      owner: "payment partner, fiscal sponsor, or approved payout operator",
+      status: "required_before_real_money",
+      policy:
+        "AML/KYC or KYB screening must be completed by the partner responsible for custody, receipt issuance, or payout execution before MPGF treats funds as releasable.",
+    },
+    {
+      key: "sanctions_screening",
+      owner: "payment partner, fiscal sponsor, or approved payout operator",
+      status: "required_before_real_money",
+      policy:
+        "Sanctions checks must cover recipient, fiscal sponsor, payout operator, and restricted sponsor sources before any production payout authorization.",
+    },
+    {
+      key: "charitable_solicitation_and_receipts",
+      owner: "legal counsel plus receipt-issuing partner",
+      status: "required_before_real_money",
+      policy:
+        "Public copy may not claim tax deductibility, charitable-solicitation compliance, or receipt authority unless approved wording is provided by the legal recipient or partner.",
+    },
+    {
+      key: "money_transmission_and_custody_review",
+      owner: "legal counsel plus payment partner",
+      status: "required_before_real_money",
+      policy:
+        "Moral Trade keeps allocation records separate from custody; any direct custody, escrow, or payout execution role requires jurisdiction-specific review before enablement.",
+    },
+  ],
+  publicArtifacts: [
+    "docs/mpgf/legal-configuration-manifest.md",
+    "docs/mpgf/payment-production-readiness.md",
+    "docs/mpgf/privacy-launch-profile.md",
+    "docs/mpgf/receipt-template-approval.md",
+    "docs/mpgf/data-retention-policy.md",
+    "docs/mpgf/launch-readiness-report.md",
+    "docs/mpgf/production-claims-and-values-registry.md",
+  ],
+} as const;
+
 export function getMpgfPublicGoodsGovernanceApi() {
   const campaignThresholds = demoMpgfPublicGoodsCampaigns.map((campaign) => ({
     campaignId: campaign.id,
@@ -235,6 +282,7 @@ export function getMpgfPublicGoodsGovernanceApi() {
         "No public copy claims tax treatment, escrow, or guaranteed effectiveness without approved partner wording.",
       ],
     },
+    legalComplianceReadiness,
     incidentAndDisputeLane: {
       publicStatusPath: "/mpgf/governance#incident-dispute-lane",
       appealEndpoint: "/api/mpgf/appeals",
@@ -261,6 +309,11 @@ export function getMpgfPublicGoodsGovernanceApi() {
         { key: "round_rules_caps_thresholds_refund_policy", status: "published", evidencePath: "/mpgf/governance" },
         { key: "fiscal_sponsor_or_partner_custodian", status: "pending_external_review", evidencePath: "/mpgf/governance" },
         { key: "legal_review", status: "pending_external_review", evidencePath: "/mpgf/real-money-terms" },
+        {
+          key: "aml_kyc_sanctions_framework",
+          status: "published_framework_pending_external_review",
+          evidencePath: "/mpgf/real-money-terms",
+        },
         { key: "admin_reviewer_mfa", status: "blocked_until_gate_passes", evidencePath: "/mpgf/admin" },
         { key: "webhook_signature_replay_check", status: "configured_gate_required", evidencePath: "/api/mpgf/health" },
         { key: "shadow_round_fake_money", status: "running_demo_round", evidencePath: `/mpgf/rounds/${demoMpgfAssuranceRound.id}` },

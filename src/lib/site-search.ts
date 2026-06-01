@@ -47,7 +47,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["about", "mission", "what exists", "what is live", "boundaries", "operator"],
   },
   {
-    href: "/moral-trade",
+    href: "/what-is-moral-trade",
     label: "What is moral trade?",
     summary: "A short primer on voluntary cooperation across moral disagreement.",
     kind: "learn",
@@ -75,7 +75,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["how it works", "steps", "baseline", "proof", "review", "first action"],
   },
   {
-    href: "/anti-threat-baseline",
+    href: "/anti-threat-rules",
     label: "Anti-threat and baseline integrity",
     summary: "Rules for threat rejection, no-trade baselines, cooling-off periods, and externality review.",
     kind: "learn",
@@ -172,7 +172,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     ],
   },
   {
-    href: "/offers?view=examples",
+    href: "/worked-examples",
     label: "Worked examples",
     summary: "Clone or inspect seeded examples before publishing a live trade.",
     kind: "trade",
@@ -193,7 +193,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["status", "roadmap", "pilot updates", "live offers", "prototype", "liquidity"],
   },
   {
-    href: "/updates",
+    href: "/pilot-updates",
     label: "Pilot updates",
     summary: "Read public pilot logs, governance updates, transparency notes, and case-study plans.",
     kind: "learn",
@@ -214,7 +214,7 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
     keywords: ["contact", "support", "safety concern", "operator", "partnership", "recourse"],
   },
   {
-    href: "/team",
+    href: "/team-and-governance",
     label: "Team and governance",
     summary: "Review operator routes, reviewer responsibilities, governance gaps, and publication commitments.",
     kind: "learn",

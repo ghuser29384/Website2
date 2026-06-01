@@ -59,7 +59,7 @@ export const MPGF_COPY = {
   support_or_access:
     "For MPGF access or support, contact support@moraltrade.org.",
   plainLanguageSummary:
-    "The Moral Public Goods Fund coordinates support for goods many moral views value. The upgraded contribution flow starts with an Every.org fast route when available, then keeps manual evidence as a reviewed fallback.",
+    "The Moral Public Goods Fund coordinates support for goods many moral views value. The upgraded contribution flow starts with an Every.org fast route when available, then keeps manual external-payment evidence as a reviewed fallback.",
   moralPublicGoods:
     "Moral public goods are things many people value for moral reasons, such as global health, existential-risk reduction, animal welfare, and durable public-interest knowledge.",
   moralTrade:

@@ -310,7 +310,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
                     control your profile privacy before publishing.
                   </p>
                   <div className="hero-actions">
-                    <Link className="button button-secondary" href="/offers?view=examples">
+                    <Link className="button button-secondary" href="/worked-examples">
                       View worked examples
                     </Link>
                     <Link className="button button-primary" href={viewer ? "/dashboard" : "/signup"}>

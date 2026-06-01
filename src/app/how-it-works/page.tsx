@@ -4,13 +4,15 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { getViewer } from "@/lib/app-data";
-import { getAbsoluteUrl } from "@/lib/seo";
+import { buildArticleJsonLd, buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+
+const howItWorksDescription =
+  "A plain-language walkthrough of Moral Trade: start with one low-risk example, write the baseline, agree on proof, review risks, and decide whether to continue.";
 
 export const metadata: Metadata = {
   title: "How It Works",
-  description:
-    "A plain-language walkthrough of Moral Trade: start with one low-risk example, write the baseline, agree on proof, review risks, and decide whether to continue.",
+  description: howItWorksDescription,
   alternates: {
     canonical: "/how-it-works",
   },
@@ -48,9 +50,29 @@ const steps = [
 
 export default async function HowItWorksPage() {
   const viewer = await getViewer();
+  const articleStructuredData = buildArticleJsonLd({
+    headline: "How Moral Trade works",
+    description: howItWorksDescription,
+    path: "/how-it-works",
+  });
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([
+    { href: "/how-it-works", label: "How it works" },
+  ]);
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(articleStructuredData),
+        }}
+        type="application/ld+json"
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <header className="hero">
         <SiteTopbar
           brandHref="/"
@@ -68,7 +90,7 @@ export default async function HowItWorksPage() {
               on proof. Review risks. Then decide whether to continue.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/offers?view=examples">
+              <Link className="button button-primary" href="/worked-examples">
                 See a worked example
               </Link>
               <Link className="button button-secondary" href="/validation">
@@ -111,7 +133,7 @@ export default async function HowItWorksPage() {
             <h2 id="how-next-heading">Choose a low-friction first path</h2>
           </div>
           <div className="data-grid">
-            <Link className="panel data-card" href="/offers?view=examples">
+            <Link className="panel data-card" href="/worked-examples">
               <h3>Learn from an example</h3>
               <p className="route-text">See complete terms without mistaking examples for live demand.</p>
               <span className="inline-link">Open worked examples</span>

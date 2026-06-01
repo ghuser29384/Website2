@@ -4,7 +4,7 @@ import path from "node:path";
 import performanceProfileJson from "../../../config/moral-trade/performance-profile.json";
 
 export const MORAL_TRADE_PERFORMANCE_VALIDATOR_VERSION =
-  "moral-trade-performance-validator-v0.4";
+  "moral-trade-performance-validator-v0.5";
 
 export type MoralTradePerformanceThreshold = {
   operator: "lte" | "gte" | "eq";
@@ -189,8 +189,14 @@ const SAMPLE_ROUTE_RECOVERY_MANIFEST = [
     routeFamilyKey: "core_protocol_contract",
     path: "/moral-trade/technical-spec",
     serverRenderable: true,
-    recoverySurfaces: ["global_error_boundary", "safe_navigation", "contract_links"],
+    recoverySurfaces: [
+      "route_segment_error_boundary",
+      "contract_json_fallbacks",
+      "global_error_boundary",
+      "safe_navigation",
+    ],
     stateMutationOnFallback: false,
+    evidenceFile: "src/app/moral-trade/technical-spec/error.tsx",
   },
   {
     routeFamilyKey: "core_protocol_contract",

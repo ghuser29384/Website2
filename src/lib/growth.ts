@@ -93,7 +93,7 @@ export const FIRST_ACTIONS = [
   {
     value: "clone_example",
     label: "Clone a worked example",
-    href: "/offers?view=examples",
+    href: "/worked-examples",
     actionLabel: "Open worked examples",
   },
   {

@@ -42,7 +42,7 @@ import {
   validateMoralTradeTransparencyReportContract,
 } from "@/lib/moral-trade/transparency-report";
 import { CANONICAL_WORKED_CASE_COUNT } from "@/lib/seed-data";
-import { getAbsoluteUrl } from "@/lib/seo";
+import { buildBreadcrumbJsonLd, buildWebPageJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -192,9 +192,30 @@ export default async function StatusPage() {
       ...summarizeValidationSurfaces(transparencyReportValidation),
     },
   ] as const;
+  const statusStructuredData = buildWebPageJsonLd({
+    name: "Moral Trade pilot status",
+    description:
+      "Current Moral Trade pilot status: what is live, what is reviewed, what is not guaranteed, and what comes next.",
+    path: "/status",
+  });
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([
+    { href: "/status", label: "Pilot status" },
+  ]);
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(statusStructuredData),
+        }}
+        type="application/ld+json"
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <header className="hero">
         <SiteTopbar
           brandHref="/"
@@ -213,7 +234,7 @@ export default async function StatusPage() {
               and submitting reviewable proof artifacts.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/offers?view=examples">
+              <Link className="button button-primary" href="/worked-examples">
                 Browse worked examples
               </Link>
               <Link className="button button-secondary" href="/trust">

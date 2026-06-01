@@ -326,7 +326,7 @@ export default async function MeasurementPage() {
             <Link className="button button-secondary" href="/trust">
               Trust boundaries
             </Link>
-            <Link className="button button-primary" href="/updates">
+            <Link className="button button-primary" href="/pilot-updates">
               Pilot updates
             </Link>
           </div>

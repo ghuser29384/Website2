@@ -78,6 +78,11 @@ test("copilot contract requires strict bundle, approved output, guardrails, and 
   assert.ok(contract.approvedOutputSections.includes("reviewer_summary"));
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_chain_of_thought"));
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_autonomous_outreach"));
+  assert.ok(
+    contract.guardrails.some(
+      (guardrail) => guardrail.code === "verification_loop_matchability_gate",
+    ),
+  );
   assert.ok(contract.promptTemplates.some((template) => template.key === "system_prompt"));
   assert.ok(contract.promptTemplates.some((template) => template.key === "draft_repair_prompt"));
   assert.ok(contract.promptTemplates.some((template) => template.key === "matching_prompt"));
@@ -230,9 +235,43 @@ test("copilot contract route publishes rollout readiness evidence", async () => 
     ),
   );
   assert.ok(body.publicContract.rolloutReadinessSignals.includes("low_risk_task_scope"));
+  assert.ok(
+    body.publicContract.guardrails.some(
+      (guardrail: { code: string; rule: string }) =>
+        guardrail.code === "verification_loop_matchability_gate" &&
+        /status matchable is invalid/i.test(guardrail.rule),
+    ),
+  );
+  assert.ok(
+    body.publicContract.verificationLoop.some(
+      (step: { key: string; blocksMatchable: boolean }) =>
+        step.key === "baseline_credibility" && step.blocksMatchable,
+    ),
+  );
+  assert.deepEqual(body.publicContract.verificationMatchabilityGate, {
+    guardrailCode: "verification_loop_matchability_gate",
+    blockingStepKeys: [
+      "schema_completeness",
+      "anti_threat",
+      "baseline_credibility",
+      "evidence_sufficiency",
+      "privacy_redaction",
+    ],
+    requiredStatus: "pass",
+    enforcedBy: "validateMoralTradeCopilotOutput",
+  });
   assert.equal(body.publicContract.rolloutReadiness[0].targetStage, "shadow_mode");
   assert.equal(body.publicContract.rolloutReadiness[0].status, "pass");
   assert.equal(body.publicContract.rolloutReadiness[1].status, "blocked");
+});
+
+test("technical spec exposes the copilot matchability verification gate", () => {
+  const technicalSpecPage = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
+
+  assert.match(technicalSpecPage, /copilotBlockingVerificationSteps/);
+  assert.match(technicalSpecPage, /Matchability gate/);
+  assert.match(technicalSpecPage, /validateMoralTradeCopilotOutput/);
+  assert.match(technicalSpecPage, /blocking verification step has status/);
 });
 
 test("copilot review route remains deterministic and non-mutating", () => {
@@ -273,6 +312,47 @@ test("copilot output uses approved schema and redacted factor-code explanations"
   assert.match(output.reviewer_summary, /What is being offered/);
   assert.equal(output.reviewer_summary.split(/\s+/).filter(Boolean).length <= 180, true);
   assert.deepEqual(output.citations, ["proposal:local-draft"]);
+});
+
+test("copilot output validation makes blocking verification steps hard matchability gates", () => {
+  const output = buildMoralTradeCopilotOutput(completeDraft, ["proposal:local-draft"]);
+
+  output.verification_loop = output.verification_loop.map((step) =>
+    step.key === "baseline_credibility"
+      ? {
+          ...step,
+          status: "needs_input",
+          detail: "Baseline evidence was removed after the draft was marked matchable.",
+        }
+      : step,
+  );
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(output.status, "matchable");
+  assert.equal(validation.status, "fail");
+  assert.ok(
+    validation.blockers.some((blocker) =>
+      blocker.includes("matchable_verification_loop: blocking steps must pass"),
+    ),
+  );
+});
+
+test("copilot output validation rejects verification-loop contract flag drift", () => {
+  const output = buildMoralTradeCopilotOutput(completeDraft, ["proposal:local-draft"]);
+
+  output.verification_loop = output.verification_loop.map((step) =>
+    step.key === "privacy_redaction" ? { ...step, blocks_matchable: false } : step,
+  );
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(
+    validation.blockers.some((blocker) =>
+      blocker.includes("verification_loop_contract_mismatch: privacy_redaction"),
+    ),
+  );
 });
 
 test("copilot evidence metadata accepts only redacted already-submitted evidence fields", () => {

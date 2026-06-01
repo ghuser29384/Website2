@@ -1,7 +1,7 @@
 import securityProfileJson from "../../../config/moral-trade/security-profile.json";
 
 export const MORAL_TRADE_SECURITY_VALIDATOR_VERSION =
-  "moral-trade-security-validator-v0.2";
+  "moral-trade-security-validator-v0.3";
 
 export type MoralTradeSecurityControlStatus =
   | "implemented"
@@ -76,6 +76,7 @@ const REQUIRED_CONTROLS = [
   "server_only_secret_management",
   "two_factor_admin_gate",
   "participant_session_review_revocation",
+  "contact_disclosure_mfa_step_up",
   "device_session_review_gate",
   "key_rotation_gate",
   "platform_abuse_throttling",
@@ -175,6 +176,7 @@ export function auditMoralTradeSecurityScaleReadiness({
 export function validateMoralTradeSecurityImplementation({
   actionsSource,
   adminSource,
+  backgroundDisclosureSource,
   backgroundAccountSecuritySource,
   backgroundAccountSecurityPanelSource,
   backgroundActionsSource,
@@ -186,6 +188,7 @@ export function validateMoralTradeSecurityImplementation({
 }: {
   actionsSource: string;
   adminSource: string;
+  backgroundDisclosureSource: string;
   backgroundAccountSecuritySource: string;
   backgroundAccountSecurityPanelSource: string;
   backgroundActionsSource: string;
@@ -286,6 +289,15 @@ export function validateMoralTradeSecurityImplementation({
       "participants should see current-session JWT review data and be able to revoke other Supabase sessions from the dashboard.",
     ),
     check(
+      "contact-disclosure-step-up-source",
+      "Contact disclosure requires MFA step-up before contact details can be released",
+      /requiresContactDisclosureStepUp/.test(backgroundDisclosureSource) &&
+        /accessLevel === "contact"/.test(backgroundDisclosureSource) &&
+        /contact_email/.test(backgroundDisclosureSource) &&
+        /introduced/.test(backgroundDisclosureSource),
+      "contact-level grants or contact_email disclosure should require step-up and introduced-stage disclosure.",
+    ),
+    check(
       "attribution-cookie-boundary-source",
       "Attribution cookie keeps narrow security boundary",
       /sameSite:\s*"lax"/.test(supabaseProxySource) &&
@@ -347,13 +359,15 @@ export function validateMoralTradeSecurityProfile(
     check(
       "admin-and-key-scale-gates",
       "MFA is enforced while device/session review and key rotation still gate sensitive scale",
-      controlMap.get("two_factor_admin_gate")?.status === "implemented" &&
+        controlMap.get("two_factor_admin_gate")?.status === "implemented" &&
         controlMap.get("participant_session_review_revocation")?.status === "implemented" &&
+        controlMap.get("contact_disclosure_mfa_step_up")?.status === "implemented" &&
         controlMap.get("device_session_review_gate")?.status === "required_before_scale" &&
         controlMap.get("key_rotation_gate")?.status === "required_before_scale",
       [
         "two_factor_admin_gate",
         "participant_session_review_revocation",
+        "contact_disclosure_mfa_step_up",
         "device_session_review_gate",
         "key_rotation_gate",
       ]

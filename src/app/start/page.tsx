@@ -90,10 +90,10 @@ export default async function StartPage() {
               want to learn, test an example, donate, or join/build.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/offers?view=examples">
+              <Link className="button button-primary" href="/worked-examples">
                 Test a worked example
               </Link>
-              <Link className="button button-secondary" href="/moral-trade">
+              <Link className="button button-secondary" href="/what-is-moral-trade">
                 Read the primer
               </Link>
             </div>
@@ -184,7 +184,7 @@ export default async function StartPage() {
             </p>
           </div>
           <div className="hero-actions">
-            <Link className="button button-primary" href="/offers?view=examples">
+            <Link className="button button-primary" href="/worked-examples">
               Browse worked examples
             </Link>
             <Link className="button button-secondary" href="/trust">

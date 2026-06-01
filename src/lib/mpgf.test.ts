@@ -236,6 +236,7 @@ import {
   validateMpgfDirectWorkingFixtures,
   validateMpgfPayoutProviderProfile,
   validateMpgfInstructionMechanicalNormalization,
+  validateMpgfLegalReadinessArtifacts,
   validateMpgfPhaseA,
   validateMpgfProductionDeploymentTarget,
   validateMpgfPublicExperienceProfile,
@@ -317,6 +318,7 @@ test("MPGF direct-working validators pass with the exact-pilot formal source loc
   assert.equal(validateMpgfCopyLibrary().status, "passed");
   assert.equal(validateMpgfRateLimits().status, "passed");
   assert.equal(validateMpgfPayoutProviderProfile().status, "passed");
+  assert.equal(validateMpgfLegalReadinessArtifacts().status, "passed");
   assert.equal(validateMpgfDataRetentionPolicy().status, "passed");
   assert.equal(validateMpgfReceiptTemplateRegistry().status, "passed");
   assert.equal(validateMpgfPublicExperienceProfile().status, "passed");
@@ -1896,6 +1898,7 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
   const governanceRoute = readFileSync("src/app/api/mpgf/governance/route.ts", "utf8");
   const mpgfHubPage = readFileSync("src/app/mpgf/page.tsx", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const realMoneyTermsPage = readFileSync("src/app/mpgf/real-money-terms/page.tsx", "utf8");
 
   assert.equal(governance.privacyPolicy, MPGF_PUBLIC_GOODS_GOVERNANCE_PRIVACY_POLICY);
   assert.equal(governance.operatorRoster.length >= 3, true);
@@ -1913,6 +1916,16 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
   assert.ok(governance.fundsFlowSeparation.roles.some((role) => role.key === "sponsor_pool_custodian"));
   assert.ok(governance.fundsFlowSeparation.roles.some((role) => role.key === "payout_executor"));
   assert.ok(governance.fundsFlowSeparation.invariants.some((invariant) => /verified webhook events/i.test(invariant)));
+  assert.equal(governance.legalComplianceReadiness.productionMoneyMovementAllowed, false);
+  assert.equal(governance.legalComplianceReadiness.externalCounselApprovalRequired, true);
+  assert.equal(governance.legalComplianceReadiness.partnerHeldCustodyRequired, true);
+  assert.ok(
+    governance.legalComplianceReadiness.requiredBeforeRealMoney.some((gate) => gate.key === "aml_kyc_screening"),
+  );
+  assert.ok(
+    governance.legalComplianceReadiness.requiredBeforeRealMoney.some((gate) => gate.key === "sanctions_screening"),
+  );
+  assert.ok(governance.legalComplianceReadiness.publicArtifacts.length >= 7);
   assert.equal(governance.incidentAndDisputeLane.pausesUnreleasedMilestones, true);
   assert.ok(governance.whatRoundDoesNotDecide.some((note) => /No global moral ranking/i.test(note)));
   assert.ok(governance.prohibitedGovernanceMechanisms.includes("token_voting"));
@@ -1930,6 +1943,12 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
       (item) => item.key === "public_postmortem_template" && item.status === "published",
     ),
   );
+  assert.ok(
+    governance.deploymentChecklist.beforeProd.some(
+      (item) => item.key === "aml_kyc_sanctions_framework" && item.status === "published_framework_pending_external_review",
+    ),
+  );
+  assert.equal(validateMpgfLegalReadinessArtifacts().status, "passed");
 
   for (const forbidden of ["private@example", "charityReceiptRef", "externalReceiptRef", "supporterReason"]) {
     assert.equal(governanceJson.includes(forbidden), false);
@@ -1943,6 +1962,8 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
     /Campaign thresholds/,
     /Funds-flow separation/,
     /Partner-held roles/,
+    /Legal and compliance readiness/,
+    /Compliance gates/,
     /Public incident and dispute lane/,
     /What this round does not decide/,
     /No global moral ranking/,
@@ -1955,6 +1976,8 @@ test("MPGF public-goods governance publication covers roles, rules, disputes, an
   assert.match(governanceRoute, /getMpgfPublicGoodsGovernanceApi/);
   assert.match(mpgfHubPage, /\/mpgf\/governance/);
   assert.match(roundPage, /\/mpgf\/governance/);
+  assert.match(realMoneyTermsPage, /AML\/KYC and sanctions checks are production gates/);
+  assert.match(realMoneyTermsPage, /External approval is required before money movement/);
 });
 
 test("MPGF manual evidence security signs receipt access and stores scan metadata", () => {

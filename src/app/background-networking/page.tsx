@@ -330,6 +330,8 @@ export default async function BackgroundNetworkingPage({
               public gate keeps source connectors, AI summarization, and private-overlap
               computation default-off, shadow-only, or design-only until DPIA, lawful-basis,
               privacy-design, external review, and human-control checks are satisfied.
+              Private-overlap checks are not live; any future pilot must use curated tags only,
+              not free text or raw tag disclosure.
             </p>
           </div>
 
@@ -359,6 +361,12 @@ export default async function BackgroundNetworkingPage({
               </Link>
               <Link className="button button-secondary" href="/safety">
                 Safety posture
+              </Link>
+              <Link
+                className="button button-secondary"
+                href="/api/moral-trade/private-overlap/contract"
+              >
+                Private overlap contract
               </Link>
             </div>
           </div>

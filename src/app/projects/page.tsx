@@ -37,7 +37,7 @@ const projectCards: ReadonlyArray<{
     status: "Live learning surface",
     description:
       "Review seeded examples with terms, baselines, evidence rules, and manual-review notes before anyone relies on a real proposal.",
-    href: "/offers?view=examples",
+    href: "/worked-examples",
     icon: "example",
     actionLabel: "Browse examples",
   },
@@ -115,7 +115,7 @@ export default async function ProjectsPage() {
               goods pilot, and the workflows that are still cohort-mediated or upcoming.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/offers?view=examples">
+              <Link className="button button-primary" href="/worked-examples">
                 See a worked example
               </Link>
               <Link className="button button-secondary" href="/mpgf">

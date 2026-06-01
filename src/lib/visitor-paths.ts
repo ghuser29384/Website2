@@ -18,7 +18,7 @@ export const VISITOR_PATHS = [
     homeTitle: "Read what exists today",
     description:
       "See what the pilot supports, what it does not promise, and why review matters.",
-    href: "/moral-trade",
+    href: "/what-is-moral-trade",
     icon: "source",
     actionLabel: "Read the plain-language primer",
     fit: "Best if you are new to moral trade and want the plain-language version first.",
@@ -29,7 +29,7 @@ export const VISITOR_PATHS = [
     homeTitle: "See a worked example",
     description:
       "Inspect a complete, non-live example before drafting or relying on a real trade.",
-    href: "/offers?view=examples",
+    href: "/worked-examples",
     icon: "example",
     actionLabel: "Open worked examples",
     fit: "Best if you want to understand the mechanism by looking at concrete terms.",

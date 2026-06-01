@@ -12,13 +12,13 @@ export const metadata: Metadata = {
   description:
     "Public Moral Trade pilot updates, transparency notes, governance logs, and case-study placeholders.",
   alternates: {
-    canonical: "/updates",
+    canonical: "/pilot-updates",
   },
   openGraph: {
     title: "Moral Trade pilot updates",
     description:
       "A public archive for pilot logs, governance updates, case studies, and transparency notes.",
-    url: getAbsoluteUrl("/updates"),
+    url: getAbsoluteUrl("/pilot-updates"),
     type: "website",
   },
 };
@@ -70,7 +70,7 @@ export default async function UpdatesPage() {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: "Moral Trade pilot updates",
-    url: getAbsoluteUrl("/updates"),
+    url: getAbsoluteUrl("/pilot-updates"),
     description: "Public pilot logs, governance updates, case studies, and transparency notes.",
     mainEntity: {
       "@type": "ItemList",

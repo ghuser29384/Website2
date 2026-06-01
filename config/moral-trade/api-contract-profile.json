@@ -399,6 +399,18 @@
       "fallback": "Return background capability-gate blockers; source connector workers, AI assist mode, and private-overlap computation cannot expand without DPIA, lawful-basis records, privacy-design review, external review, and human-control gates."
     },
     {
+      "key": "moral_trade_private_overlap_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/private-overlap/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "private_overlap_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return private-overlap design-review blockers; live /api/background/private-overlap routes, persistent overlap tables, free-text inputs, raw tags, and matching-state mutations are not shipped until DPIA, formal cryptographic review, threat modeling, external review, and deletion tests pass."
+    },
+    {
       "key": "moral_trade_background_rls_audit_contract",
       "method": "GET",
       "path": "/api/moral-trade/background-rls-audit/contract",
@@ -983,6 +995,20 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for required gates, DPIA requirements, separate consent, raw-content boundaries, staging, and human control." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Gate list, release state, lawful basis, retention rule, prohibited effects, required reviews before expansion, current blockers, invariants, and test hooks." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent capability expansion." }
+      ]
+    },
+    {
+      "key": "private_overlap_contract_response",
+      "purpose": "Public design-only private-overlap contract for curated sensitive tags, blocked live endpoints, no persistent overlap tables, no free text, no raw tags, counts-only output, and required cryptographic/privacy reviews.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the private-overlap design contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the contract validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Private-overlap design contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable design-only private-overlap purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for design-only release state, review gates, curated namespaces, blinded-only future storage, blocked endpoints, counts-only output, and deterministic fallback." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Release state, blocked live endpoint plan, allowed tag namespaces, forbidden inputs, forbidden stored fields, future blinded-token fields, participant output limits, required reviews, and fallback behavior." },
+        { "key": "publicNonClaim", "type": "string", "required": true, "privacy": "public_contract", "description": "Plain-language public non-claim that private overlap is not live and future checks must not use free text or reveal raw tags." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent shipping private-overlap endpoints or storage." }
       ]
     },
     {

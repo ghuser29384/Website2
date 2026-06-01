@@ -10,7 +10,7 @@ import {
 } from "@/lib/proposal-review";
 
 export const MORAL_TRADE_COPILOT_CONTRACT_VALIDATOR_VERSION =
-  "moral-trade-copilot-contract-validator-v0.2";
+  "moral-trade-copilot-contract-validator-v0.3";
 
 type CopilotRole = {
   key: string;
@@ -271,6 +271,7 @@ const REQUIRED_GUARDRAILS = [
   "no_private_feed_ingestion",
   "separate_trust_axes",
   "anti_threat_escalation",
+  "verification_loop_matchability_gate",
 ] as const;
 
 const REQUIRED_PROMPT_TEMPLATES = [
@@ -1063,6 +1064,9 @@ export function buildMoralTradeCopilotOutput(
 
 export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput) {
   const blockers: string[] = [];
+  const verificationContractByKey = new Map(
+    copilotContract.verificationLoop.map((step) => [step.key, step]),
+  );
 
   if (!copilotContract.statusValues.includes(output.status)) {
     blockers.push("status: unrecognized copilot status");
@@ -1100,6 +1104,32 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
     )
   ) {
     blockers.push("verification_loop: every fixed verification step needs status and detail");
+  }
+
+  const verificationContractMismatches = output.verification_loop
+    .filter(
+      (step) =>
+        verificationContractByKey.get(step.key)?.blocksMatchable !== step.blocks_matchable,
+    )
+    .map((step) => step.key);
+
+  if (verificationContractMismatches.length) {
+    blockers.push(
+      `verification_loop_contract_mismatch: ${verificationContractMismatches.join(", ")}`,
+    );
+  }
+
+  const blockingVerificationFailures = output.verification_loop
+    .filter(
+      (step) =>
+        verificationContractByKey.get(step.key)?.blocksMatchable && step.status !== "pass",
+    )
+    .map((step) => `${step.key}:${step.status}`);
+
+  if (output.status === "matchable" && blockingVerificationFailures.length) {
+    blockers.push(
+      `matchable_verification_loop: blocking steps must pass before matchable status: ${blockingVerificationFailures.join(", ")}`,
+    );
   }
 
   if (output.clarification_questions.length > 5) {

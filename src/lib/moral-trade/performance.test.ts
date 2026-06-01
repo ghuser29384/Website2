@@ -31,6 +31,9 @@ test("performance profile publishes route resilience, Web Vitals, latency, and n
 
 test("route recovery manifest covers Reasoning Center and public route families", () => {
   const audit = auditMoralTradeRouteRecoveryManifest();
+  const technicalSpecEntry = audit.entries.find(
+    (entry) => entry.path === "/moral-trade/technical-spec",
+  );
   const reasoningEntry = audit.entries.find((entry) => entry.path === "/reasoning-center");
   const reasoningPacketJsonEntry = audit.entries.find(
     (entry) => entry.path === "/api/moral-trade/reasoning/packets",
@@ -39,6 +42,13 @@ test("route recovery manifest covers Reasoning Center and public route families"
   assert.equal(audit.status, "pass");
   assert.equal(audit.coveredRouteCount, audit.routeCount);
   assert.equal(audit.coverageRatio, 1);
+  assert.equal(technicalSpecEntry?.stateMutationOnFallback, false);
+  assert.equal(
+    technicalSpecEntry?.evidenceFile,
+    "src/app/moral-trade/technical-spec/error.tsx",
+  );
+  assert.ok(technicalSpecEntry?.recoverySurfaces.includes("route_segment_error_boundary"));
+  assert.ok(technicalSpecEntry?.recoverySurfaces.includes("contract_json_fallbacks"));
   assert.equal(reasoningEntry?.stateMutationOnFallback, false);
   assert.equal(reasoningEntry?.evidenceFile, "src/app/reasoning-center/error.tsx");
   assert.ok(reasoningEntry?.recoverySurfaces.includes("route_segment_error_boundary"));

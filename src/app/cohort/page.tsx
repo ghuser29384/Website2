@@ -41,7 +41,7 @@ const cohortStartPaths = [
     title: "Browse worked examples",
     description:
       "Inspect pledge swaps, donation offsets, and public-good commitments before drafting anything public.",
-    href: "/offers?view=examples",
+    href: "/worked-examples",
     icon: "example",
     actionLabel: "Open worked examples",
   },

@@ -5,7 +5,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs, SectionHeader } from "@/components/ui/page-primitives";
 import { getViewer } from "@/lib/app-data";
-import { buildBreadcrumbJsonLd, buildFaqPageJsonLd } from "@/lib/seo";
+import { buildBreadcrumbJsonLd, buildFaqPageJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 const faqDescription =
@@ -16,6 +16,17 @@ export const metadata: Metadata = {
   description: faqDescription,
   alternates: {
     canonical: "/faq",
+  },
+  openGraph: {
+    title: "Moral Trade FAQ",
+    description: faqDescription,
+    url: getAbsoluteUrl("/faq"),
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Moral Trade FAQ",
+    description: faqDescription,
   },
 };
 
@@ -91,7 +102,7 @@ export default async function FaqPage() {
         <section className="section section-white">
           <SectionHeader eyebrow="Next steps" title="Read the standards or inspect examples." />
           <div className="hero-actions">
-            <Link className="button button-primary" href="/offers?view=examples">
+            <Link className="button button-primary" href="/worked-examples">
               View worked examples
             </Link>
             <Link className="button button-secondary" href="/methodology">

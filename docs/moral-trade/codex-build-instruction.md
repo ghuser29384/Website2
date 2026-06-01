@@ -42,6 +42,7 @@ Core Moral Trade readiness evidence is spread across public contract routes. A b
 - `/api/moral-trade/incident-response/health`
 - `/api/moral-trade/externality/health`
 - `/api/moral-trade/ai-governance/health`
+- `/api/moral-trade/private-overlap/contract`
 - `/api/moral-trade/transparency/report`
 
 ## Required Local Gates
@@ -49,7 +50,7 @@ Core Moral Trade readiness evidence is spread across public contract routes. A b
 Run the focused core Moral Trade suite before treating a change as locally verified:
 
 ```bash
-node --import tsx --test src/lib/moral-trade/*.test.ts src/lib/background-ai-shadow.test.ts src/lib/background-networking.test.ts src/lib/background-notification-policy.test.ts src/lib/background-notifications.test.ts src/lib/background-privacy-controls.test.ts src/lib/background-explanations.test.ts src/lib/background-opportunity-briefs.test.ts src/lib/wish-registry.test.ts src/lib/public-route-smoke.test.ts
+node --import tsx --test src/lib/moral-trade/*.test.ts src/lib/background-ai-shadow.test.ts src/lib/background-networking.test.ts src/lib/background-notification-policy.test.ts src/lib/background-notifications.test.ts src/lib/background-privacy-controls.test.ts src/lib/background-explanations.test.ts src/lib/background-opportunity-briefs.test.ts src/lib/background-private-overlap.test.ts src/lib/wish-registry.test.ts src/lib/public-route-smoke.test.ts
 ```
 
 Run repository lint and whitespace checks:

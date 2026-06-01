@@ -41,7 +41,25 @@ export async function GET(request: Request) {
       strictInputBundle: contract.strictInputBundle,
       approvedOutputSections: contract.approvedOutputSections,
       guardrailCodes: contract.guardrails.map((guardrail) => guardrail.code),
+      guardrails: contract.guardrails.map((guardrail) => ({
+        code: guardrail.code,
+        label: guardrail.label,
+        rule: guardrail.rule,
+      })),
       verificationSteps: contract.verificationLoop.map((step) => step.key),
+      verificationLoop: contract.verificationLoop.map((step) => ({
+        key: step.key,
+        label: step.label,
+        blocksMatchable: step.blocksMatchable,
+      })),
+      verificationMatchabilityGate: {
+        guardrailCode: "verification_loop_matchability_gate",
+        blockingStepKeys: contract.verificationLoop
+          .filter((step) => step.blocksMatchable)
+          .map((step) => step.key),
+        requiredStatus: "pass",
+        enforcedBy: "validateMoralTradeCopilotOutput",
+      },
       rolloutStages: contract.rolloutStages.map((stage) => stage.key),
       rolloutReadinessSignals: contract.rolloutReadinessSignals.map((signal) => signal.key),
       rolloutReadiness: rolloutReadiness.map((audit) => ({

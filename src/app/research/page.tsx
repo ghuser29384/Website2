@@ -102,7 +102,7 @@ export default async function ResearchPage() {
             <Link className="button button-secondary" href="/validation">
               Validation
             </Link>
-            <Link className="button button-secondary" href="/anti-threat-baseline">
+            <Link className="button button-secondary" href="/anti-threat-rules">
               Anti-threat baseline rules
             </Link>
             <Link className="button button-secondary" href="/reasoning-standards">
@@ -130,7 +130,7 @@ export default async function ResearchPage() {
             interface. The team and governance page should identify operators, reviewer
             responsibilities, and advisor roles as they become formal.
           </p>
-          <Link className="text-button" href="/team">
+          <Link className="text-button" href="/team-and-governance">
             View team and governance
           </Link>
         </section>
@@ -141,7 +141,7 @@ export default async function ResearchPage() {
             Follow the cohort, reviewer governance, and public-goods pilot without treating the
             site as a liquid marketplace before the trust problem is solved.
           </p>
-          <Link className="button button-primary" href="/updates">
+          <Link className="button button-primary" href="/pilot-updates">
             Read pilot updates
           </Link>
         </section>

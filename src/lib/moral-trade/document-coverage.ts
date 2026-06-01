@@ -214,7 +214,7 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
       "does not prove live production liquidity",
     ],
     verificationCommands: [
-      "node --import tsx --test src/lib/moral-trade/*.test.ts src/lib/background-ai-shadow.test.ts src/lib/background-networking.test.ts src/lib/background-notification-policy.test.ts src/lib/background-notifications.test.ts src/lib/background-privacy-controls.test.ts src/lib/background-explanations.test.ts src/lib/background-opportunity-briefs.test.ts src/lib/wish-registry.test.ts src/lib/public-route-smoke.test.ts",
+      "node --import tsx --test src/lib/moral-trade/*.test.ts src/lib/background-ai-shadow.test.ts src/lib/background-networking.test.ts src/lib/background-notification-policy.test.ts src/lib/background-notifications.test.ts src/lib/background-privacy-controls.test.ts src/lib/background-explanations.test.ts src/lib/background-opportunity-briefs.test.ts src/lib/background-private-overlap.test.ts src/lib/wish-registry.test.ts src/lib/public-route-smoke.test.ts",
       "npm run lint",
       "git diff --check",
     ],
@@ -238,6 +238,7 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
       "/api/moral-trade/incident-response/health",
       "/api/moral-trade/externality/health",
       "/api/moral-trade/ai-governance/health",
+      "/api/moral-trade/private-overlap/contract",
       "/api/moral-trade/transparency/report",
     ],
   },

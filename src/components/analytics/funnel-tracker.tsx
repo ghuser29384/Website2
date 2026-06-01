@@ -20,7 +20,9 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
   if (href.includes("/login")) return "sign_in_started";
   if (href.includes("/signup")) return "signup_start";
   if (href.includes("/cohort")) return "cohort_interest_started";
-  if (href.includes("/offers?view=examples")) return "worked_example_opened";
+  if (href.includes("/worked-examples") || href.includes("/offers?view=examples")) {
+    return "worked_example_opened";
+  }
   if (href.includes("/offers/new") && href.includes("example=")) return "clone_example_action";
   if (href.includes("/offers/new")) return "create_trade_started";
   if (href.includes("/dashboard#wish-profile")) return "wish_profile_started";

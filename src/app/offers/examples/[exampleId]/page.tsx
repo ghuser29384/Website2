@@ -148,7 +148,7 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
         />
         <Breadcrumbs
           items={[
-            { href: "/offers?view=examples", label: "Worked examples" },
+            { href: "/worked-examples", label: "Worked examples" },
             { href: canonicalPath, label: title },
           ]}
         />
@@ -165,10 +165,10 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
               <Link className="button button-primary" href={createHref}>
                 Create similar
               </Link>
-              <Link className="button button-secondary" href="/offers?view=examples">
+              <Link className="button button-secondary" href="/worked-examples">
                 Back to examples
               </Link>
-              <Link className="button button-secondary" href="/moral-trade">
+              <Link className="button button-secondary" href="/what-is-moral-trade">
                 Read primer
               </Link>
             </div>

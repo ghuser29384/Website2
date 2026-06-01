@@ -379,6 +379,63 @@ export default async function MpgfGovernancePage() {
         </article>
       </section>
 
+      <section className="mpgf-detail-grid">
+        <article className="mpgf-panel">
+          <p className="eyebrow">Legal and compliance readiness</p>
+          <h2>Production money movement remains blocked</h2>
+          <dl className="mpgf-summary-grid">
+            <div>
+              <dt>Status</dt>
+              <dd>{statusLabel(governance.legalComplianceReadiness.status)}</dd>
+            </div>
+            <div>
+              <dt>Money movement</dt>
+              <dd>
+                {governance.legalComplianceReadiness.productionMoneyMovementAllowed ? "allowed" : "blocked"}
+              </dd>
+            </div>
+            <div>
+              <dt>External counsel</dt>
+              <dd>{governance.legalComplianceReadiness.externalCounselApprovalRequired ? "required" : "not required"}</dd>
+            </div>
+            <div>
+              <dt>Custody</dt>
+              <dd>
+                {governance.legalComplianceReadiness.partnerHeldCustodyRequired
+                  ? "partner-held required"
+                  : "platform-held allowed"}
+              </dd>
+            </div>
+          </dl>
+          <p>
+            AML/KYC, sanctions, charitable-solicitation, receipt, custody, and money-transmission
+            checks are production gates, not allocation inputs or donor moral reputation signals.
+          </p>
+          <Link className="inline-link" href={governance.legalComplianceReadiness.evidencePath}>
+            Open real-money terms
+          </Link>
+        </article>
+
+        <article className="mpgf-panel">
+          <p className="eyebrow">Compliance gates</p>
+          <h2>Partner and counsel checks before release</h2>
+          <div className="mpgf-table" aria-label="MPGF legal and compliance readiness gates">
+            <div className="mpgf-table-row mpgf-table-head">
+              <span>Gate</span>
+              <span>Owner</span>
+              <span>Status</span>
+            </div>
+            {governance.legalComplianceReadiness.requiredBeforeRealMoney.map((gate) => (
+              <div className="mpgf-table-row" key={gate.key}>
+                <span>{statusLabel(gate.key)}</span>
+                <span>{gate.owner}</span>
+                <span>{statusLabel(gate.status)}</span>
+              </div>
+            ))}
+          </div>
+        </article>
+      </section>
+
       <section className="mpgf-detail-grid" id="incident-dispute-lane">
         <article className="mpgf-panel">
           <p className="eyebrow">Conflict, recusal, and appeal paths</p>

@@ -13,12 +13,21 @@ import { getPerformanceBondConfig } from "@/lib/performance-bonds";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
+import { getAbsoluteUrl } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "New offer",
-  robots: {
-    index: false,
-    follow: false,
+  title: "Draft a Moral Trade offer",
+  description:
+    "Draft a bounded Moral Trade proposal with explicit actions, reciprocal terms, no-trade baseline, exit conditions, and evidence rules.",
+  alternates: {
+    canonical: "/offers/new",
+  },
+  openGraph: {
+    title: "Draft a Moral Trade offer",
+    description:
+      "Create a structured pledge swap or donation offset proposal with baselines, evidence, and review boundaries.",
+    url: getAbsoluteUrl("/offers/new"),
+    type: "website",
   },
 };
 

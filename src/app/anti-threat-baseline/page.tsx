@@ -17,13 +17,13 @@ export const metadata: Metadata = {
   description:
     "Rules for rejecting coercive moral-trade proposals, checking counterfactual baselines, and reviewing third-party externalities.",
   alternates: {
-    canonical: "/anti-threat-baseline",
+    canonical: "/anti-threat-rules",
   },
   openGraph: {
     title: "Anti-Threat and Baseline Integrity",
     description:
       "No threat creation, no compensation for newly escalated harmful behavior, and no reliance without a no-trade baseline statement.",
-    url: getAbsoluteUrl("/anti-threat-baseline"),
+    url: getAbsoluteUrl("/anti-threat-rules"),
     type: "article",
   },
 };

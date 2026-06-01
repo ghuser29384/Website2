@@ -18,21 +18,23 @@ import {
   formatProtocolReviewStatus,
   type MoralTradeVerificationStepStatus,
 } from "@/lib/proposal-review";
-import { getAbsoluteUrl } from "@/lib/seo";
+import { buildArticleJsonLd, buildBreadcrumbJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+
+const moralTradeDescription =
+  "A primer on voluntary moral trade, worked examples, safety boundaries, and the trust problems the pilot is designed to test.";
 
 export const metadata: Metadata = {
   title: "What Is Moral Trade?",
-  description:
-    "A primer on voluntary moral trade, worked examples, safety boundaries, and the trust problems the pilot is designed to test.",
+  description: moralTradeDescription,
   alternates: {
-    canonical: "/moral-trade",
+    canonical: "/what-is-moral-trade",
   },
   openGraph: {
     title: "What Is Moral Trade?",
     description:
       "Moral trade lets people with different moral priorities cooperate when each can make a concession that matters less to them and more to the other side.",
-    url: getAbsoluteUrl("/moral-trade"),
+    url: getAbsoluteUrl("/what-is-moral-trade"),
     type: "article",
   },
 };
@@ -195,9 +197,29 @@ export default async function MoralTradePrimerPage() {
   const viewer = await getViewer();
   const profile = getMoralTradeProtocolProfile();
   const factorDictionary = new Map(profile.factorCodes.map((factor) => [factor.code, factor.label]));
+  const articleStructuredData = buildArticleJsonLd({
+    headline: "What Is Moral Trade?",
+    description: moralTradeDescription,
+    path: "/what-is-moral-trade",
+  });
+  const breadcrumbStructuredData = buildBreadcrumbJsonLd([
+    { href: "/what-is-moral-trade", label: "What is moral trade?" },
+  ]);
 
   return (
     <div className="page-shell">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(articleStructuredData),
+        }}
+        type="application/ld+json"
+      />
+      <script
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbStructuredData),
+        }}
+        type="application/ld+json"
+      />
       <header className="hero">
         <SiteTopbar
           brandHref="/"
@@ -205,7 +227,7 @@ export default async function MoralTradePrimerPage() {
           {...getTopbarActions(Boolean(viewer))}
           showLogout={Boolean(viewer)}
         />
-        <Breadcrumbs items={[{ href: "/moral-trade", label: "Primer" }]} />
+        <Breadcrumbs items={[{ href: "/what-is-moral-trade", label: "Primer" }]} />
 
         <PageHero
           actions={
@@ -213,7 +235,7 @@ export default async function MoralTradePrimerPage() {
               <Link className="button button-primary" href="/cohort">
                 Join the founding cohort
               </Link>
-              <Link className="button button-secondary" href="/offers?view=examples">
+              <Link className="button button-secondary" href="/worked-examples">
                 Browse worked examples
               </Link>
               <Link className="button button-secondary" href="/moral-trade/technical-spec">
@@ -404,7 +426,7 @@ export default async function MoralTradePrimerPage() {
         <section className="section section-subtle" aria-labelledby="next-heading">
           <SectionHeader eyebrow="Where to go next" id="next-heading" title="Move from primer to reviewable records." />
           <div className="teaser-grid">
-            <Link className="panel teaser-card" href="/anti-threat-baseline">
+            <Link className="panel teaser-card" href="/anti-threat-rules">
               <h3>Anti-threat rules</h3>
               <p>Baseline integrity, cooling-off rules, and rejected proposal examples.</p>
             </Link>

@@ -1973,18 +1973,103 @@ export function validateMpgfRateLimits() {
 }
 
 export function validateMpgfLegalReadinessArtifacts() {
-  const requiredPaths = [
-    "docs/mpgf/legal-configuration-manifest.md",
-    "docs/mpgf/payment-production-readiness.md",
-    "docs/mpgf/privacy-launch-profile.md",
-    "docs/mpgf/receipt-template-approval.md",
-    "docs/mpgf/data-retention-policy.md",
-    "docs/mpgf/launch-readiness-report.md",
-    "docs/mpgf/production-claims-and-values-registry.md",
+  const requiredArtifacts = [
+    {
+      path: "docs/mpgf/legal-configuration-manifest.md",
+      markers: [
+        "external counsel approval required before real-money enablement",
+        "partner-held custody",
+        "AML/KYC",
+        "sanctions",
+        "no tax",
+        "no escrow",
+      ],
+    },
+    {
+      path: "docs/mpgf/payment-production-readiness.md",
+      markers: [
+        "Every.org partner webhook",
+        "Stripe SetupIntent",
+        "PaymentIntent only after threshold",
+        "Stripe-Signature",
+        "idempotency",
+        "manual proof fallback",
+      ],
+    },
+    {
+      path: "docs/mpgf/privacy-launch-profile.md",
+      markers: [
+        "no raw private wishes in analytics",
+        "aggregate-only reporting",
+        "support signals private by default",
+        "hashed provider identifiers",
+        "donor rows are not public",
+      ],
+    },
+    {
+      path: "docs/mpgf/receipt-template-approval.md",
+      markers: [
+        "no tax receipt",
+        "partner receipt issuer",
+        "webhook confirmed",
+        "manual external evidence pending review",
+      ],
+    },
+    {
+      path: "docs/mpgf/data-retention-policy.md",
+      markers: [
+        "raw card data is never stored",
+        "provider identifiers hashed",
+        "receipt URLs private",
+        "deletion or revocation requests",
+        "audit log retention",
+      ],
+    },
+    {
+      path: "docs/mpgf/launch-readiness-report.md",
+      markers: [
+        "production real money remains blocked",
+        "shadow round",
+        "AML/KYC/sanctions screening",
+        "external counsel approval required before real-money enablement",
+        "public postmortem",
+      ],
+    },
+    {
+      path: "docs/mpgf/production-claims-and-values-registry.md",
+      markers: [
+        "no global moral ranking",
+        "no donor moral reputation weighting",
+        "no custody",
+        "no escrow",
+        "no guaranteed effectiveness",
+        "partner-held",
+      ],
+    },
   ];
-  const errors = requiredPaths
-    .filter((filePath) => !existsSync(rootPath(filePath)))
-    .map((filePath) => issue("legal-readiness-artifact", `Missing legal/readiness artifact ${filePath}.`, filePath));
+  const errors: MpgfValidationIssue[] = [];
+
+  for (const artifact of requiredArtifacts) {
+    const text = readTextIfExists(artifact.path);
+
+    if (!text) {
+      errors.push(issue("legal-readiness-artifact", `Missing legal/readiness artifact ${artifact.path}.`, artifact.path));
+      continue;
+    }
+
+    const normalizedText = text.toLowerCase();
+    for (const marker of artifact.markers) {
+      if (!normalizedText.includes(marker.toLowerCase())) {
+        errors.push(
+          issue(
+            "legal-readiness-artifact-marker",
+            `${artifact.path} must document ${marker}.`,
+            artifact.path,
+          ),
+        );
+      }
+    }
+  }
 
   return result("validateMpgfLegalReadinessArtifacts", errors);
 }
