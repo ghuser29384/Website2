@@ -262,8 +262,9 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
             <p className="eyebrow">Experimental wish registry</p>
             <h1>Search broad previews first.</h1>
             <p className="hero-text">
-              Search broad previews first; exact asks and contact details require mutual consent.
-              This prototype searches public preview fields only.
+              You can browse broad previews now. Exact asks, exact wishes, and contact details
+              stay hidden unless both sides explicitly approve the next stage. This prototype
+              searches public preview fields only.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={viewer ? "/dashboard" : "/signup"}>
@@ -382,7 +383,7 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
             <p>
               {sparsePrivacyFloorApplied
                 ? "That search was too specific for the current registry size, so results are withheld until the query is broader."
-                : "Each card links to the public profile. Private details remain hidden until both sides consent to an introduction."}
+                : "Each card links to the public profile. Exact asks, exact wishes, and contact details stay hidden unless both sides explicitly approve the next stage."}
             </p>
           </div>
 
@@ -502,8 +503,8 @@ export default async function WishRegistryPage({ searchParams }: WishRegistryPag
                     ))}
                   </div>
                   <p className="panel-note">
-                    Demo preview. Exact asks and contact details require mutual consent before
-                    disclosure.
+                    Demo preview. Exact asks, exact wishes, and contact details stay hidden unless
+                    both sides explicitly approve the next stage.
                   </p>
                 </article>
               ))

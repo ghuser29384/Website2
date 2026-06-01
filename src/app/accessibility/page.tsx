@@ -47,6 +47,11 @@ const qaScopes = [
       "Check review cards, factor-code lists, status badges, proof upload language, and challenge paths for understandable names and states.",
   },
   {
+    title: "Authenticated background networking",
+    detail:
+      "Check the opportunity inbox, consent dialogs, source-summary review, notification settings, and self-serve deletion flow with keyboard and screen-reader scenarios before wider rollout.",
+  },
+  {
     title: "Mobile and loading states",
     detail:
       "Check that route-specific loading and recovery states do not trap keyboard users or hide the first meaningful content.",

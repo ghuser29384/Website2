@@ -849,6 +849,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <article className="panel data-card">
               <p className="detail-kicker">Notification controls</p>
               <h3>Inbox plus digest defaults</h3>
+              <p className="route-text">
+                Discovery alerts are digest-first by default. No one is contacted on your behalf.
+                Exact wishes, contact details, source notes, and sensitive constraints stay in the
+                dashboard rather than email or push copy.
+              </p>
               <form action={saveBackgroundNotificationPreferencesAction} className="compact-form">
                 <input name="return_to" type="hidden" value="/dashboard" />
                 <div className="mini-list">
@@ -960,6 +965,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <p className="route-text">
                 Removes: {BACKGROUND_SELF_SERVE_DELETION_SURFACES.slice(0, 6).join("; ")}.
                 Safety and budget audit rows are retained only as redacted or anonymized records.
+                Exact wishes, previews, source summaries, saved searches, grants, suggestions,
+                notifications, intro artifacts, and queued background-networking emails are removed
+                from participant-facing matching state.
               </p>
               {dashboardData?.errors.profileDataRightRequests ? (
                 <p className="route-text">Could not load data-right requests.</p>
@@ -1617,6 +1625,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 Exposure previews below show what a connection or reviewed summary can influence
                 before it affects matching. Raw source text, contact details, and exact wishes stay
                 out of public routes, emails, analytics, and autonomous outreach.
+              </p>
+              <p className="route-text">
+                Raw source content is not stored for matching. You review and approve a summary
+                before it can affect your profile.
               </p>
               <p className="route-text">
                 AI shadow readiness: {aiShadowReadiness.ready}/{aiShadowReadiness.total} source(s)

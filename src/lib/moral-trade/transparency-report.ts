@@ -62,6 +62,13 @@ export interface MoralTradeTransparencyReportValidation {
   validatorVersion: typeof MORAL_TRADE_TRANSPARENCY_REPORT_VALIDATOR_VERSION;
 }
 
+export interface MoralTradeTransparencySourceTableAudit {
+  checkedTables: string[];
+  missingTables: string[];
+  status: "pass" | "fail";
+  validatorName: "moral-trade-transparency-source-tables";
+}
+
 type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
   from: (table: string) => any;
 };
@@ -91,6 +98,7 @@ const CONTRACT_TESTS = [
   "transparency_report_contract_smoke",
   "transparency_report_threshold_suppression",
   "transparency_report_no_private_fields",
+  "transparency_report_metric_source_schema_audit",
   "transparency_report_public_route_smoke",
 ] as const;
 
@@ -358,12 +366,47 @@ export function validateMoralTradeTransparencyReportContract(
     blockers.push("threshold_suppression_test_missing");
   }
 
+  if (!contract.contractTests.includes("transparency_report_metric_source_schema_audit")) {
+    blockers.push("metric_source_schema_audit_test_missing");
+  }
+
   return {
     blockers,
     contractVersion: MORAL_TRADE_TRANSPARENCY_REPORT_VERSION,
     status: blockers.length ? "fail" : "pass",
     validatorName: "moral-trade-transparency-report",
     validatorVersion: MORAL_TRADE_TRANSPARENCY_REPORT_VALIDATOR_VERSION,
+  };
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function auditMoralTradeTransparencyMetricSourceTables({
+  contract = getMoralTradeTransparencyReportContract(),
+  schemaSql,
+}: {
+  contract?: MoralTradeTransparencyReportContract;
+  schemaSql: string;
+}): MoralTradeTransparencySourceTableAudit {
+  const checkedTables = Array.from(
+    new Set(contract.metricDefinitions.flatMap((metric) => metric.sourceTables)),
+  ).sort();
+  const missingTables = checkedTables.filter((table) => {
+    const tablePattern = new RegExp(
+      `create table(?: if not exists)? public\\.${escapeRegExp(table)}\\b`,
+      "i",
+    );
+
+    return !tablePattern.test(schemaSql);
+  });
+
+  return {
+    checkedTables,
+    missingTables,
+    status: missingTables.length ? "fail" : "pass",
+    validatorName: "moral-trade-transparency-source-tables",
   };
 }
 

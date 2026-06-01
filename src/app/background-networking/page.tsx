@@ -745,6 +745,42 @@ export default async function BackgroundNetworkingPage({
           </div>
         </section>
 
+        <section className="section section-white" aria-labelledby="cohort-packs-heading">
+          <div className="section-head">
+            <p className="eyebrow">Cohort pilot packs</p>
+            <h2 id="cohort-packs-heading">Start with specific communities before broad rollout</h2>
+            <p>
+              Background networking should prove itself in reviewed niches before making wider
+              discovery claims. Pilot packs give operators a narrow audience, a clear matchmaker
+              role, and a weekly funnel to inspect.
+            </p>
+          </div>
+
+          <div className="editorial-grid">
+            <article className="panel editorial-card">
+              <h3>Donor circles</h3>
+              <p>
+                Use broad cause previews, donation-route constraints, and reviewed introduction
+                requests to find reciprocal pledge or donation-offset conversations.
+              </p>
+            </article>
+            <article className="panel editorial-card">
+              <h3>Reading groups</h3>
+              <p>
+                Let a facilitator collect private wish profiles, review opportunity briefs, and
+                decide which broad previews merit consent-gated follow-up.
+              </p>
+            </article>
+            <article className="panel editorial-card">
+              <h3>Organization cohorts</h3>
+              <p>
+                Keep outreach inside partner-approved boundaries while operators track brief opens,
+                intro requests, and declined-match reasons.
+              </p>
+            </article>
+          </div>
+        </section>
+
         <section className="section section-white">
           <div className="section-head">
             <p className="eyebrow">Where to use it</p>

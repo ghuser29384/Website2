@@ -14,7 +14,7 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "Join the founding cohort",
   description:
-    "Create a Moral Trade account, then start with one low-risk action: clone an example, create a broad wish preview, or log a public-good action.",
+    "Create a Moral Trade account, then start with one low-risk action: clone an example, create a private wish profile and choose what becomes a broad preview, or log a public-good action.",
   robots: {
     index: false,
     follow: false,
@@ -33,8 +33,8 @@ const firstActions = [
     icon: "example",
   },
   {
-    title: "Create broad wish preview",
-    description: "Draft a broad wish or need and preview how it might be matched.",
+    title: "Create a private wish profile",
+    description: "Choose what, if anything, becomes a broad preview for matching.",
     href: "/dashboard#wish-profile",
     icon: "source",
   },
