@@ -1948,7 +1948,7 @@ export interface Database {
             | "mute_or_dismiss";
           hidden_fields_notice: string;
           reveal_consequence_notice: string;
-          status: "open" | "opened" | "dismissed" | "interested" | "muted" | "packet_requested" | "expired";
+          status: "open" | "opened" | "dismissed" | "interested" | "maybe_later" | "muted" | "packet_requested" | "expired";
           expires_at: string;
           seen_at: string | null;
           feedback_reason:
@@ -1956,6 +1956,7 @@ export interface Database {
             | "bad_timing"
             | "too_vague"
             | "safety_concern"
+            | "maybe_later"
             | "interested"
             | null;
           created_at: string;
@@ -1981,7 +1982,7 @@ export interface Database {
             | "mute_or_dismiss";
           hidden_fields_notice?: string;
           reveal_consequence_notice?: string;
-          status?: "open" | "opened" | "dismissed" | "interested" | "muted" | "packet_requested" | "expired";
+          status?: "open" | "opened" | "dismissed" | "interested" | "maybe_later" | "muted" | "packet_requested" | "expired";
           expires_at?: string;
           seen_at?: string | null;
           feedback_reason?:
@@ -1989,6 +1990,7 @@ export interface Database {
             | "bad_timing"
             | "too_vague"
             | "safety_concern"
+            | "maybe_later"
             | "interested"
             | null;
           created_at?: string;
@@ -2012,7 +2014,7 @@ export interface Database {
             | "mute_or_dismiss";
           hidden_fields_notice?: string;
           reveal_consequence_notice?: string;
-          status?: "open" | "opened" | "dismissed" | "interested" | "muted" | "packet_requested" | "expired";
+          status?: "open" | "opened" | "dismissed" | "interested" | "maybe_later" | "muted" | "packet_requested" | "expired";
           expires_at?: string;
           seen_at?: string | null;
           feedback_reason?:
@@ -2020,6 +2022,7 @@ export interface Database {
             | "bad_timing"
             | "too_vague"
             | "safety_concern"
+            | "maybe_later"
             | "interested"
             | null;
           updated_at?: string;
@@ -2032,12 +2035,13 @@ export interface Database {
           profile_id: string;
           opportunity_brief_id: string;
           match_id: string | null;
-          outcome: "dismissed" | "interested";
+          outcome: "dismissed" | "maybe_later" | "interested";
           reason_code:
             | "not_relevant"
             | "bad_timing"
             | "too_vague"
             | "safety_concern"
+            | "maybe_later"
             | "interested";
           created_at: string;
           updated_at: string;
@@ -2047,24 +2051,26 @@ export interface Database {
           profile_id: string;
           opportunity_brief_id: string;
           match_id?: string | null;
-          outcome: "dismissed" | "interested";
+          outcome: "dismissed" | "maybe_later" | "interested";
           reason_code:
             | "not_relevant"
             | "bad_timing"
             | "too_vague"
             | "safety_concern"
+            | "maybe_later"
             | "interested";
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           match_id?: string | null;
-          outcome?: "dismissed" | "interested";
+          outcome?: "dismissed" | "maybe_later" | "interested";
           reason_code?:
             | "not_relevant"
             | "bad_timing"
             | "too_vague"
             | "safety_concern"
+            | "maybe_later"
             | "interested";
           updated_at?: string;
         };
@@ -2206,6 +2212,9 @@ export interface Database {
           retention_expires_at: string;
           status: "draft" | "reviewed" | "active" | "expired" | "revoked";
           raw_ingestion_allowed: false;
+          redaction_report: Record<string, unknown>;
+          summary_version: number;
+          approved_at: string | null;
           sensitive_ciphertexts: Record<string, string>;
           sensitive_encryption_version: string;
           created_at: string;
@@ -2232,6 +2241,9 @@ export interface Database {
           retention_expires_at: string;
           status?: "draft" | "reviewed" | "active" | "expired" | "revoked";
           raw_ingestion_allowed?: false;
+          redaction_report?: Record<string, unknown>;
+          summary_version?: number;
+          approved_at?: string | null;
           sensitive_ciphertexts?: Record<string, string>;
           sensitive_encryption_version?: string;
           created_at?: string;
@@ -2256,9 +2268,111 @@ export interface Database {
           retention_expires_at?: string;
           status?: "draft" | "reviewed" | "active" | "expired" | "revoked";
           raw_ingestion_allowed?: false;
+          redaction_report?: Record<string, unknown>;
+          summary_version?: number;
+          approved_at?: string | null;
           sensitive_ciphertexts?: Record<string, string>;
           sensitive_encryption_version?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_profile_signals: {
+        Row: {
+          id: string;
+          profile_id: string;
+          source: "manual" | "approved_source_summary" | "interview";
+          source_connection_id: string | null;
+          source_summary_id: string | null;
+          signal_key: string;
+          signal_value: string;
+          allowed_field_key:
+            | "cause_priorities"
+            | "capability_tags"
+            | "offer_ask_terms"
+            | "verification_preferences"
+            | "availability_context"
+            | "safety_constraints";
+          sensitivity: "broad" | "specific";
+          confidence_band: "low" | "medium" | "high";
+          status: "active" | "stale" | "expired" | "revoked";
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          source: "manual" | "approved_source_summary" | "interview";
+          source_connection_id?: string | null;
+          source_summary_id?: string | null;
+          signal_key: string;
+          signal_value: string;
+          allowed_field_key:
+            | "cause_priorities"
+            | "capability_tags"
+            | "offer_ask_terms"
+            | "verification_preferences"
+            | "availability_context"
+            | "safety_constraints";
+          sensitivity: "broad" | "specific";
+          confidence_band: "low" | "medium" | "high";
+          status?: "active" | "stale" | "expired" | "revoked";
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          source?: "manual" | "approved_source_summary" | "interview";
+          source_connection_id?: string | null;
+          source_summary_id?: string | null;
+          signal_key?: string;
+          signal_value?: string;
+          allowed_field_key?:
+            | "cause_priorities"
+            | "capability_tags"
+            | "offer_ask_terms"
+            | "verification_preferences"
+            | "availability_context"
+            | "safety_constraints";
+          sensitivity?: "broad" | "specific";
+          confidence_band?: "low" | "medium" | "high";
+          status?: "active" | "stale" | "expired" | "revoked";
+          expires_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_shadow_runs: {
+        Row: {
+          id: string;
+          profile_id: string;
+          source_connection_id: string | null;
+          source_summary_id: string | null;
+          model_name: string;
+          purpose: "signal_extraction" | "clarification_draft";
+          output_json: Record<string, unknown>;
+          was_promoted: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          source_connection_id?: string | null;
+          source_summary_id?: string | null;
+          model_name?: string;
+          purpose: "signal_extraction" | "clarification_draft";
+          output_json: Record<string, unknown>;
+          was_promoted?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          source_connection_id?: string | null;
+          source_summary_id?: string | null;
+          model_name?: string;
+          purpose?: "signal_extraction" | "clarification_draft";
+          output_json?: Record<string, unknown>;
+          was_promoted?: boolean;
         };
         Relationships: [];
       };

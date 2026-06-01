@@ -266,6 +266,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ).length ?? 0;
   const activeSourceSummaryCount =
     dashboardData?.sourceSummaries.filter((summary) => summary.status === "active").length ?? 0;
+  const activeProfileSignalCount =
+    dashboardData?.profileSignals.filter((signal) => signal.status === "active").length ?? 0;
+  const unpromotedShadowRunCount =
+    dashboardData?.shadowRuns.filter((run) => !run.was_promoted).length ?? 0;
   const activeGrantReceiptCount =
     dashboardData?.grantReceipts.filter((receipt) => receipt.status === "active").length ?? 0;
   const queryBudgetEvents = dashboardData?.backgroundQueryEvents ?? [];
@@ -731,8 +735,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <h3>Background networking status</h3>
             <p className="route-text">
               Scans use only your saved wish profile, broad registry previews, saved searches, and
-              manual source summaries. They do not read private feeds, send outreach, or reveal
-              exact wishes without consent.
+              manual or approved source summaries. Draft source-assist runs stay review-first; raw
+              external text is not used for matching, outreach, or disclosure.
             </p>
             <dl className="values-summary compact-summary">
               <div>
@@ -777,6 +781,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <dt>Provenance</dt>
                 <dd>
                   {dashboardData?.matchExplanationSnapshots.length ?? 0} explanation snapshot(s)
+                </dd>
+              </div>
+              <div>
+                <dt>Source assist</dt>
+                <dd>
+                  {activeProfileSignalCount} approved signal(s); {unpromotedShadowRunCount} draft
+                  summary run(s)
                 </dd>
               </div>
             </dl>
@@ -1200,6 +1211,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <span className="source-pill">Open briefs: {openOpportunityBriefCount}</span>
                 <span className="source-pill">Intro packets: {introPacketReviewCount}</span>
                 <span className="source-pill">Source summaries: {activeSourceSummaryCount}</span>
+                <span className="source-pill">Approved signals: {activeProfileSignalCount}</span>
+                <span className="source-pill">Draft summaries: {unpromotedShadowRunCount}</span>
                 <span className="source-pill">Receipts: {activeGrantReceiptCount}</span>
               </div>
               <form action={refreshBackgroundMatchesAction}>
@@ -1280,6 +1293,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <input name="feedback_reason" type="hidden" value="interested" />
                         <button className="button button-secondary button-mini" type="submit">
                           Interested
+                        </button>
+                      </form>
+                      <form action={updateOpportunityBriefStatusAction}>
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                        <input name="status" type="hidden" value="maybe_later" />
+                        <input name="feedback_outcome" type="hidden" value="maybe_later" />
+                        <input name="feedback_reason" type="hidden" value="maybe_later" />
+                        <button className="button button-secondary button-mini" type="submit">
+                          Maybe later
                         </button>
                       </form>
                       <form action={updateOpportunityBriefStatusAction}>

@@ -149,8 +149,8 @@ export default async function PrivacyPage() {
           <p>
             The dashboard can record possible links to blogs, email, calendar records, chatbot
             history, search profiles, and other sources. For now, these records store consent
-            scope, import mode, and manual summaries only. The app does not automatically ingest,
-            scrape, or search raw external data.
+            scope, import mode, reviewed summaries, and approved derived profile signals only. The
+            app does not automatically ingest, scrape, or search raw external data.
           </p>
           <p className="route-text">
             Active external connectors require a separate source permission, consent notes, one of

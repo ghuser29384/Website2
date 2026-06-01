@@ -5,11 +5,13 @@ export const BACKGROUND_OPPORTUNITY_FEEDBACK_REASONS = [
   "bad_timing",
   "too_vague",
   "safety_concern",
+  "maybe_later",
   "interested",
 ] as const;
 
 export const BACKGROUND_OPPORTUNITY_FEEDBACK_OUTCOMES = [
   "dismissed",
+  "maybe_later",
   "interested",
 ] as const;
 
@@ -39,7 +41,15 @@ export function normalizeBackgroundOpportunityFeedbackOutcome(
 export function getOpportunityBriefStatusForFeedback(
   outcome: BackgroundOpportunityFeedbackOutcome,
 ): OpportunityBriefStatus {
-  return outcome === "interested" ? "interested" : "dismissed";
+  if (outcome === "interested") {
+    return "interested";
+  }
+
+  if (outcome === "maybe_later") {
+    return "maybe_later";
+  }
+
+  return "dismissed";
 }
 
 export function isBackgroundOpportunityFeedbackPairAllowed({
@@ -49,9 +59,15 @@ export function isBackgroundOpportunityFeedbackPairAllowed({
   outcome: BackgroundOpportunityFeedbackOutcome;
   reasonCode: BackgroundOpportunityFeedbackReason;
 }) {
-  return outcome === "interested"
-    ? reasonCode === "interested"
-    : reasonCode !== "interested";
+  if (outcome === "interested") {
+    return reasonCode === "interested";
+  }
+
+  if (outcome === "maybe_later") {
+    return reasonCode === "maybe_later";
+  }
+
+  return reasonCode !== "interested" && reasonCode !== "maybe_later";
 }
 
 export function buildBackgroundOpportunityFeedbackRow({

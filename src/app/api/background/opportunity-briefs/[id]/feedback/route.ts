@@ -71,7 +71,8 @@ export async function POST(
     normalizeBackgroundOpportunityFeedbackReason(stringField(body.reasonCode));
   const requestedOutcome = normalizeBackgroundOpportunityFeedbackOutcome(stringField(body.outcome));
   const outcome =
-    requestedOutcome ?? (reason === "interested" ? "interested" : "dismissed");
+    requestedOutcome ??
+    (reason === "interested" ? "interested" : reason === "maybe_later" ? "maybe_later" : "dismissed");
 
   if (!reason) {
     return privateJson({ error: "Choose a supported opportunity feedback reason." }, 400);

@@ -66,6 +66,10 @@ type BackgroundIntroPacketRow =
   Database["public"]["Tables"]["background_intro_packets"]["Row"];
 type BackgroundSourceSummaryRow =
   Database["public"]["Tables"]["background_source_summaries"]["Row"];
+type BackgroundProfileSignalRow =
+  Database["public"]["Tables"]["background_profile_signals"]["Row"];
+type BackgroundShadowRunRow =
+  Database["public"]["Tables"]["background_shadow_runs"]["Row"];
 type BackgroundGrantReceiptRow =
   Database["public"]["Tables"]["background_grant_receipts"]["Row"];
 type BackgroundProfileInterviewAnswerRow =
@@ -299,6 +303,8 @@ export interface DashboardDataResult {
   opportunityBriefs: BackgroundOpportunityBriefRow[];
   introPackets: BackgroundIntroPacketRow[];
   sourceSummaries: BackgroundSourceSummaryRow[];
+  profileSignals: BackgroundProfileSignalRow[];
+  shadowRuns: BackgroundShadowRunRow[];
   grantReceipts: BackgroundGrantReceiptRow[];
   profileInterviewAnswers: BackgroundProfileInterviewAnswerRow[];
   collectivePolicies: BackgroundCollectivePolicyRow[];
@@ -344,6 +350,8 @@ export interface DashboardDataResult {
     opportunityBriefs: string | null;
     introPackets: string | null;
     sourceSummaries: string | null;
+    profileSignals: string | null;
+    shadowRuns: string | null;
     grantReceipts: string | null;
     profileInterviewAnswers: string | null;
     collectivePolicies: string | null;
@@ -2535,6 +2543,48 @@ async function listBackgroundSourceSummariesForUser(
   );
 }
 
+async function listBackgroundProfileSignalsForUser(
+  userId: string,
+): Promise<BackgroundProfileSignalRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_profile_signals")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(DASHBOARD_PAGE_SIZE);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundProfileSignalRow[];
+}
+
+async function listBackgroundShadowRunsForUser(userId: string): Promise<BackgroundShadowRunRow[]> {
+  if (!hasSupabaseEnv()) {
+    return [];
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("background_shadow_runs")
+    .select("*")
+    .eq("profile_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(24);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as BackgroundShadowRunRow[];
+}
+
 async function listBackgroundGrantReceiptsForUser(
   userId: string,
 ): Promise<BackgroundGrantReceiptRow[]> {
@@ -3215,6 +3265,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
       opportunityBriefs: [],
       introPackets: [],
       sourceSummaries: [],
+      profileSignals: [],
+      shadowRuns: [],
       grantReceipts: [],
       profileInterviewAnswers: [],
       collectivePolicies: [],
@@ -3260,6 +3312,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
         opportunityBriefs: null,
         introPackets: null,
         sourceSummaries: null,
+        profileSignals: null,
+        shadowRuns: null,
         grantReceipts: null,
         profileInterviewAnswers: null,
         collectivePolicies: null,
@@ -3310,6 +3364,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     opportunityBriefs: null,
     introPackets: null,
     sourceSummaries: null,
+    profileSignals: null,
+    shadowRuns: null,
     grantReceipts: null,
     profileInterviewAnswers: null,
     collectivePolicies: null,
@@ -3592,6 +3648,24 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     const message = error instanceof Error ? error.message : "Unable to load source summaries.";
     errors.sourceSummaries = message;
     console.error("[supabase] Failed to load source summaries", { message, userId });
+  }
+
+  let profileSignals: BackgroundProfileSignalRow[] = [];
+  try {
+    profileSignals = await listBackgroundProfileSignalsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load profile signals.";
+    errors.profileSignals = message;
+    console.error("[supabase] Failed to load profile signals", { message, userId });
+  }
+
+  let shadowRuns: BackgroundShadowRunRow[] = [];
+  try {
+    shadowRuns = await listBackgroundShadowRunsForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to load shadow source runs.";
+    errors.shadowRuns = message;
+    console.error("[supabase] Failed to load shadow source runs", { message, userId });
   }
 
   let grantReceipts: BackgroundGrantReceiptRow[] = [];
@@ -3885,6 +3959,8 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     opportunityBriefs,
     introPackets,
     sourceSummaries,
+    profileSignals,
+    shadowRuns,
     grantReceipts,
     profileInterviewAnswers,
     collectivePolicies,

@@ -11,8 +11,10 @@ import {
 
 test("opportunity feedback normalizes to a closed reason and outcome lattice", () => {
   assert.equal(normalizeBackgroundOpportunityFeedbackReason("bad_timing"), "bad_timing");
+  assert.equal(normalizeBackgroundOpportunityFeedbackReason("maybe_later"), "maybe_later");
   assert.equal(normalizeBackgroundOpportunityFeedbackReason("raw private reason"), null);
   assert.equal(normalizeBackgroundOpportunityFeedbackOutcome("interested"), "interested");
+  assert.equal(normalizeBackgroundOpportunityFeedbackOutcome("maybe_later"), "maybe_later");
   assert.equal(normalizeBackgroundOpportunityFeedbackOutcome("opened"), null);
   assert.equal(
     isBackgroundOpportunityFeedbackPairAllowed({
@@ -35,10 +37,25 @@ test("opportunity feedback normalizes to a closed reason and outcome lattice", (
     }),
     false,
   );
+  assert.equal(
+    isBackgroundOpportunityFeedbackPairAllowed({
+      outcome: "maybe_later",
+      reasonCode: "maybe_later",
+    }),
+    true,
+  );
+  assert.equal(
+    isBackgroundOpportunityFeedbackPairAllowed({
+      outcome: "dismissed",
+      reasonCode: "maybe_later",
+    }),
+    false,
+  );
 });
 
 test("opportunity feedback maps to safe brief states", () => {
   assert.equal(getOpportunityBriefStatusForFeedback("interested"), "interested");
+  assert.equal(getOpportunityBriefStatusForFeedback("maybe_later"), "maybe_later");
   assert.equal(getOpportunityBriefStatusForFeedback("dismissed"), "dismissed");
 });
 

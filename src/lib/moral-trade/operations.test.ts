@@ -68,6 +68,14 @@ test("operations profile publishes security, rate-limit, retention, fallback, an
   assert.ok(profile.privacyAndSessionControls.some((control) => control.key === "email_outbox_safety_gate"));
   assert.ok(profile.retentionControls.some((control) => control.key === "account_profile_lifecycle"));
   assert.ok(profile.retentionControls.some((control) => control.key === "private_wish_source_lifecycle"));
+  assert.ok(
+    profile.retentionControls.some(
+      (control) =>
+        control.key === "private_wish_source_lifecycle" &&
+        /profile signals/i.test(control.scope) &&
+        /raw source text/i.test(control.retentionWindow),
+    ),
+  );
   assert.ok(profile.retentionControls.some((control) => control.key === "evidence_provenance_lifecycle"));
   assert.ok(profile.retentionControls.some((control) => control.key === "payment_donation_reference_lifecycle"));
   assert.ok(profile.retentionControls.some((control) => control.key === "analytics_attribution_lifecycle"));

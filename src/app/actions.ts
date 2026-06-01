@@ -189,6 +189,8 @@ type WishProfileRow = Database["public"]["Tables"]["wish_profiles"]["Row"];
 type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"]["Row"];
 type ProfileSourceRow = Database["public"]["Tables"]["profile_sources"]["Row"];
 type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
+type BackgroundProfileSignalRow =
+  Database["public"]["Tables"]["background_profile_signals"]["Row"];
 type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Row"];
 type ProfileSourceInsert = Database["public"]["Tables"]["profile_sources"]["Insert"];
 type ClarificationQuestionInsert = Database["public"]["Tables"]["clarification_questions"]["Insert"];
@@ -4481,10 +4483,16 @@ export async function saveWishProfileAction(formData: FormData) {
     { data: currentWishProfile, error: currentWishProfileError },
     { data: currentProfileSources, error: currentProfileSourcesError },
     { data: currentSourceConnections, error: currentSourceConnectionsError },
+    { data: currentProfileSignals, error: currentProfileSignalsError },
   ] = await Promise.all([
     supabase.from("wish_profiles").select("*").eq("profile_id", viewer.authUser.id).maybeSingle(),
     supabase.from("profile_sources").select("*").eq("profile_id", viewer.authUser.id),
     supabase.from("source_connections").select("*").eq("profile_id", viewer.authUser.id),
+    supabase
+      .from("background_profile_signals")
+      .select("*")
+      .eq("profile_id", viewer.authUser.id)
+      .eq("status", "active"),
   ]);
 
   if (currentWishProfileError) {
@@ -4509,6 +4517,12 @@ export async function saveWishProfileAction(formData: FormData) {
     );
   }
 
+  if (currentProfileSignalsError) {
+    logSupabaseActionError("Failed to reload profile signals after save", currentProfileSignalsError, {
+      userId: viewer.authUser.id,
+    });
+  }
+
   const profileSourcesRows = ((currentProfileSources ?? []) as ProfileSourceRow[]).map((row) =>
     overlayBackgroundRecordSensitiveText(row, PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS),
   );
@@ -4521,6 +4535,7 @@ export async function saveWishProfileAction(formData: FormData) {
   const activeSourceConnectionRows = sourceConnectionRows.filter((row) =>
     hasActiveBackgroundSourcePermission(row),
   );
+  const profileSignalRows = (currentProfileSignals ?? []) as BackgroundProfileSignalRow[];
   const insertedEntryRows = ((insertedEntries ?? []) as WishEntryRow[]).map((row) =>
     overlayEncryptedWishEntryBody(row),
   );
@@ -4553,7 +4568,8 @@ export async function saveWishProfileAction(formData: FormData) {
     participantKind,
     profileId: viewer.authUser.id,
     publicPreview: sharePublicPreview ? publicPreview : "",
-    sourceCount: activeProfileSourcesRows.length + activeSourceConnectionRows.length,
+    sourceCount:
+      activeProfileSourcesRows.length + activeSourceConnectionRows.length + profileSignalRows.length,
     uncertaintyNotes,
     verificationPreferences,
     wishText,
@@ -4580,6 +4596,7 @@ export async function saveWishProfileAction(formData: FormData) {
       connections: sourceConnectionRows,
       entries: insertedEntryRows,
       profile: decryptedWishProfile,
+      profileSignals: profileSignalRows,
       profileSources: profileSourcesRows,
     });
     let encryptedSynthesisFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
@@ -6150,7 +6167,7 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const viewer = await requireViewer(returnTo);
   const supabase = await createClient();
-  const [{ data: profile }, { data: entries }, { data: sources }, { data: connections }] =
+  const [{ data: profile }, { data: entries }, { data: sources }, { data: connections }, { data: signals }] =
     await Promise.all([
       supabase.from("wish_profiles").select("*").eq("profile_id", viewer.authUser.id).maybeSingle(),
       supabase
@@ -6160,6 +6177,11 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
         .eq("safety_status", "clear"),
       supabase.from("profile_sources").select("*").eq("profile_id", viewer.authUser.id),
       supabase.from("source_connections").select("*").eq("profile_id", viewer.authUser.id),
+      supabase
+        .from("background_profile_signals")
+        .select("*")
+        .eq("profile_id", viewer.authUser.id)
+        .eq("status", "active"),
     ]);
 
   if (!profile) {
@@ -6173,6 +6195,7 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
   const sourceConnectionRows = ((connections ?? []) as SourceConnectionRow[]).map((row) =>
     overlayBackgroundRecordSensitiveText(row, SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS),
   );
+  const profileSignalRows = (signals ?? []) as BackgroundProfileSignalRow[];
   const decryptedProfile = overlayBackgroundRecordSensitiveText(
     profile as WishProfileRow,
     WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
@@ -6181,6 +6204,7 @@ export async function refreshProfileSynthesisAction(formData: FormData) {
     connections: sourceConnectionRows,
     entries: rows,
     profile: decryptedProfile,
+    profileSignals: profileSignalRows,
     profileSources: profileSourceRows,
   });
   let encryptedSynthesisFields: ReturnType<typeof prepareRecordSensitiveTextFields>;

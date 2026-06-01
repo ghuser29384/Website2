@@ -168,6 +168,36 @@ const TABLE_REQUIREMENTS: BackgroundRlsTableRequirement[] = [
     table: "background_source_summaries",
   },
   {
+    category: "private_source",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 4,
+    rationale:
+      "Approved profile signals are derived from reviewed summaries and must stop at owner-scoped matching inputs.",
+    requiredFragments: ["profile_id = (select auth.uid())"],
+    requiredPolicies: [
+      "background_profile_signals_select_own",
+      "background_profile_signals_insert_own",
+      "background_profile_signals_update_own",
+      "background_profile_signals_delete_own",
+    ],
+    table: "background_profile_signals",
+  },
+  {
+    category: "private_source",
+    disallowAnonPolicies: true,
+    minimumPolicyCount: 4,
+    rationale:
+      "Shadow source-assist runs may retain redacted draft output only and must remain owner-scoped.",
+    requiredFragments: ["profile_id = (select auth.uid())"],
+    requiredPolicies: [
+      "background_shadow_runs_select_own",
+      "background_shadow_runs_insert_own",
+      "background_shadow_runs_update_own",
+      "background_shadow_runs_delete_own",
+    ],
+    table: "background_shadow_runs",
+  },
+  {
     category: "private_profile",
     disallowAnonPolicies: true,
     minimumPolicyCount: 4,
@@ -749,6 +779,8 @@ export function validateBackgroundRlsAuditContract(
       tableNames.includes("wish_profiles") &&
         tableNames.includes("background_intent_claims") &&
         tableNames.includes("profile_sources") &&
+        tableNames.includes("background_profile_signals") &&
+        tableNames.includes("background_shadow_runs") &&
         tableNames.includes("match_suggestions") &&
         tableNames.includes("privacy_grants") &&
         tableNames.includes("match_concierge_requests") &&

@@ -108,8 +108,8 @@
     {
       "key": "private_wish_source_lifecycle",
       "label": "Private wish and source lifecycle",
-      "scope": "Private wishes, source summaries, matching preferences, and consent-gated background-networking inputs.",
-      "retentionWindow": "Kept only for the consent scope or review workflow that needs it; exact wishes and source notes remain excluded from public cards, analytics, public contract routes, and search previews.",
+      "scope": "Private wishes, source summaries, approved source-derived profile signals, matching preferences, and consent-gated background-networking inputs.",
+      "retentionWindow": "Kept only for the consent scope or review workflow that needs it; expired or revoked source summaries and profile signals stop affecting matching, and exact wishes, raw source text, source notes, and shadow-run drafts remain excluded from public cards, analytics, public contract routes, and search previews.",
       "evidence": "Data-model and disclosure contracts require field-level grants, stage scope, expiry, and private/public boundaries before disclosure."
     },
     {

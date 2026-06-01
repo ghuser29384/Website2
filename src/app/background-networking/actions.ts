@@ -209,7 +209,13 @@ function normalizeCollectiveRetentionDays(value: number): BackgroundCollectiveRe
 }
 
 function normalizeOpportunityBriefStatus(value: string): BackgroundOpportunityBriefStatus | null {
-  if (value === "opened" || value === "dismissed" || value === "interested" || value === "muted") {
+  if (
+    value === "opened" ||
+    value === "dismissed" ||
+    value === "interested" ||
+    value === "maybe_later" ||
+    value === "muted"
+  ) {
     return value;
   }
 
@@ -226,11 +232,13 @@ export async function updateOpportunityBriefStatusAction(formData: FormData) {
   const status = normalizeOpportunityBriefStatus(readOptional(formData, "status"));
   const feedbackReason =
     normalizeBackgroundOpportunityFeedbackReason(readOptional(formData, "feedback_reason")) ??
-    (status === "interested" ? "interested" : null);
+    (status === "interested" ? "interested" : status === "maybe_later" ? "maybe_later" : null);
   const fallbackFeedbackOutcome =
     status === "interested"
       ? "interested"
-      : status === "dismissed" || status === "muted"
+      : status === "maybe_later"
+        ? "maybe_later"
+        : status === "dismissed" || status === "muted"
         ? "dismissed"
         : null;
   const feedbackOutcome =
@@ -490,11 +498,20 @@ export async function saveBackgroundSourceSummaryAction(formData: FormData) {
 
   const { error: summaryError } = await supabase.from("background_source_summaries").insert({
     ...sourceSummary,
+    approved_at: new Date().toISOString(),
     consent_receipt_id: receiptRow.id,
     purpose: encryptedSummaryFields.plaintextFields.purpose,
+    redaction_report: {
+      removedDirectQuotes: 0,
+      removedEmails: 0,
+      removedPhones: 0,
+      removedPreciseLocations: 0,
+      removedUrls: 0,
+    },
     sensitive_ciphertexts: encryptedSummaryFields.ciphertexts,
     sensitive_encryption_version: encryptedSummaryFields.version,
     summary_text: encryptedSummaryFields.plaintextFields.summary_text,
+    summary_version: 1,
   });
 
   if (summaryError) {
@@ -903,6 +920,20 @@ export async function revokeBackgroundSourceConnectionAction(formData: FormData)
     redirectWithMessage(returnTo, "error", "Source connection was not found.");
   }
 
+  await Promise.all([
+    supabase
+      .from("background_source_summaries")
+      .update({ status: "revoked", updated_at: now })
+      .eq("profile_id", viewer.authUser.id)
+      .eq("source_connection_id", connectionId),
+    supabase
+      .from("background_profile_signals")
+      .update({ status: "revoked", updated_at: now })
+      .eq("profile_id", viewer.authUser.id)
+      .eq("source_connection_id", connectionId)
+      .eq("status", "active"),
+  ]);
+
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Source permission revoked for future matching.");
 }
@@ -1206,6 +1237,16 @@ export async function deleteBackgroundNetworkingDataAction(formData: FormData) {
     failures,
     "source summaries",
     supabase.from("background_source_summaries").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "profile signals",
+    supabase.from("background_profile_signals").delete().eq("profile_id", profileId),
+  );
+  await collectMutationResult(
+    failures,
+    "shadow source runs",
+    supabase.from("background_shadow_runs").delete().eq("profile_id", profileId),
   );
   await collectMutationResult(
     failures,

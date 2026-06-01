@@ -596,14 +596,27 @@ export async function POST(request: Request) {
     { data: entryRows, error: entryError },
     { data: profileSourceRows, error: sourceError },
     { data: sourceConnectionRows, error: connectionError },
+    { data: profileSignalRows, error: signalError },
   ] = await Promise.all([
     supabase.from("wish_profiles").select("*").eq("profile_id", profileId).maybeSingle(),
     supabase.from("wish_entries").select("*").eq("profile_id", profileId),
     supabase.from("profile_sources").select("*").eq("profile_id", profileId),
     supabase.from("source_connections").select("*").eq("profile_id", profileId),
+    supabase
+      .from("background_profile_signals")
+      .select("*")
+      .eq("profile_id", profileId)
+      .eq("status", "active"),
   ]);
 
-  if (!profileError && !entryError && !sourceError && !connectionError && profileRow) {
+  if (
+    !profileError &&
+    !entryError &&
+    !sourceError &&
+    !connectionError &&
+    !signalError &&
+    profileRow
+  ) {
     const decryptedProfile = overlayBackgroundRecordSensitiveText(
       profileRow,
       WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
@@ -625,6 +638,8 @@ export async function POST(request: Request) {
       connections: decryptedSourceConnections,
       entries: decryptedEntries,
       profile: decryptedProfile,
+      profileSignals:
+        (profileSignalRows ?? []) as Database["public"]["Tables"]["background_profile_signals"]["Row"][],
       profileSources: decryptedProfileSources,
     });
     let encryptedSynthesisFields: ReturnType<typeof prepareRecordSensitiveTextFields>;

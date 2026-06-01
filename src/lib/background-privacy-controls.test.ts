@@ -108,6 +108,12 @@ test("privacy inventory separates sensitive stores from public previews", () => 
   assert.ok(
     BACKGROUND_DATA_INVENTORY.some((item) => item.surface.includes("background_match_feedback")),
   );
+  assert.ok(
+    BACKGROUND_DATA_INVENTORY.some((item) => item.surface.includes("background_profile_signals")),
+  );
+  assert.ok(
+    BACKGROUND_DATA_INVENTORY.some((item) => item.surface.includes("background_shadow_runs")),
+  );
   assert.ok(BACKGROUND_DATA_INVENTORY.some((item) => item.classification === "private-profile"));
   assert.ok(BACKGROUND_SENSITIVE_FIELD_KEYS.includes("exact_wish"));
   assert.equal(isBackgroundSensitiveFieldKey("exact_wish"), true);

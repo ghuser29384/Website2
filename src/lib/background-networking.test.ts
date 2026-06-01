@@ -141,3 +141,46 @@ test("deterministic synthesis ignores expired profile source notes", () => {
   assert.doesNotMatch(synthesis.capabilities, /Expired source capability/);
   assert.doesNotMatch(synthesis.uncertainty, /Expired source note/);
 });
+
+test("deterministic synthesis reads only approved active profile signals", () => {
+  const signal = (
+    overrides: Partial<NonNullable<SynthesisInput["profileSignals"]>[number]>,
+  ): NonNullable<SynthesisInput["profileSignals"]>[number] =>
+    ({
+      allowed_field_key: "capability_tags",
+      confidence_band: "medium",
+      expires_at: "2099-01-01T00:00:00.000Z",
+      sensitivity: "broad",
+      signal_key: "capability_tag",
+      signal_value: "grantmaking",
+      source: "approved_source_summary",
+      status: "active",
+      ...overrides,
+    }) as NonNullable<SynthesisInput["profileSignals"]>[number];
+  const synthesis = buildDeterministicSynthesis({
+    connections: [],
+    entries: [],
+    profile: {
+      brokerage_preference: "",
+      capabilities: "",
+      causes: [],
+      constraints: "",
+      location_city: null,
+      location_region: null,
+      public_preview: "",
+      uncertainty_notes: "",
+      verification_preferences: "",
+    } as SynthesisInput["profile"],
+    profileSignals: [
+      signal({}),
+      signal({ signal_value: "expiredsignal", expires_at: "2000-01-01T00:00:00.000Z" }),
+      signal({ signal_value: "revokedsignal", status: "revoked" }),
+    ],
+    profileSources: [],
+  });
+
+  assert.equal(synthesis.source_count, 1);
+  assert.ok(synthesis.capability_tags.includes("grantmaking"));
+  assert.doesNotMatch(synthesis.capabilities, /expiredsignal/);
+  assert.doesNotMatch(synthesis.capabilities, /revokedsignal/);
+});

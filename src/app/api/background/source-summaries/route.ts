@@ -197,11 +197,20 @@ export async function POST(request: Request) {
     .from("background_source_summaries")
     .insert({
       ...sourceSummary,
+      approved_at: new Date().toISOString(),
       consent_receipt_id: receiptRow.id,
       purpose: encryptedSummaryFields.plaintextFields.purpose,
+      redaction_report: {
+        removedDirectQuotes: 0,
+        removedEmails: 0,
+        removedPhones: 0,
+        removedPreciseLocations: 0,
+        removedUrls: 0,
+      },
       sensitive_ciphertexts: encryptedSummaryFields.ciphertexts,
       sensitive_encryption_version: encryptedSummaryFields.version,
       summary_text: encryptedSummaryFields.plaintextFields.summary_text,
+      summary_version: 1,
     })
     .select("id")
     .maybeSingle();

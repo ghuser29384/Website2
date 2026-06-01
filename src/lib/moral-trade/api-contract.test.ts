@@ -85,6 +85,41 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "background_source_connection_create" &&
+        route.path === "/api/background/source-connections" &&
+        route.auth === "authenticated" &&
+        route.cacheControl === "private_no_store" &&
+        route.rateLimitSurface === "background_source_summary_write" &&
+        /raw-ingestion disabled/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_source_summary_draft" &&
+        route.path === "/api/background/source-connections/:id/draft-summary" &&
+        /raw source text only in request memory/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_source_summary_approve" &&
+        route.path === "/api/background/source-summaries/:id/approve" &&
+        /active profile signals/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_profile_signal_recompute" &&
+        route.path === "/api/background/profile-signals/recompute" &&
+        /marking expired, revoked, or stale signals/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "background_source_summary_create" &&
         route.path === "/api/background/source-summaries" &&
         route.auth === "authenticated" &&
@@ -121,6 +156,16 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "background_opportunity_list" &&
+        route.path === "/api/background/opportunities" &&
+        route.auth === "authenticated" &&
+        route.rateLimitSurface === "background_opportunity_brief_read" &&
+        /broad-preview cards/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "background_opportunity_feedback_create" &&
         route.path === "/api/background/opportunity-briefs/:id/feedback" &&
         route.auth === "authenticated" &&
@@ -130,9 +175,23 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
         /no outreach is sent/i.test(route.fallback),
     ),
   );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_opportunity_feedback_create_alias" &&
+        route.path === "/api/background/opportunities/:id/feedback" &&
+        route.auth === "authenticated" &&
+        route.rateLimitSurface === "background_opportunity_feedback_write" &&
+        /same owner-only access/i.test(route.fallback),
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "wish_registry_search"));
   assert.ok(profile.routes.some((route) => route.key === "funnel_events"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_export_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_connection_create_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_draft_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_approve_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_profile_signal_recompute_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_create_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_create_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_request"));

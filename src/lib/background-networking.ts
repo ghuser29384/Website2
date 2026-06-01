@@ -7,6 +7,8 @@ type WishProfilePreviewRow = Database["public"]["Views"]["wish_profile_previews"
 type ProfileSourceRow = Database["public"]["Tables"]["profile_sources"]["Row"];
 type SourceConnectionRow = Database["public"]["Tables"]["source_connections"]["Row"];
 type ProfileSynthesisRow = Database["public"]["Tables"]["profile_syntheses"]["Row"];
+type BackgroundProfileSignalRow =
+  Database["public"]["Tables"]["background_profile_signals"]["Row"];
 
 export interface DeterministicSignals {
   askTerms: string[];
@@ -149,6 +151,23 @@ export function hasActiveProfileSourcePermission(
   return Number.isFinite(expiresAt) && expiresAt > now.getTime();
 }
 
+export function hasActiveBackgroundProfileSignal(
+  signal: Pick<BackgroundProfileSignalRow, "expires_at" | "status">,
+  now = new Date(),
+) {
+  if (signal.status !== "active") {
+    return false;
+  }
+
+  if (!signal.expires_at) {
+    return true;
+  }
+
+  const expiresAt = Date.parse(signal.expires_at);
+
+  return Number.isFinite(expiresAt) && expiresAt > now.getTime();
+}
+
 function summarizeLines(values: string[], fallback: string, maxLength = 420) {
   const compactValues = values
     .map((value) => truncateBackgroundText(value, 180))
@@ -238,11 +257,13 @@ export function buildDeterministicSynthesis({
   connections,
   entries,
   profile,
+  profileSignals = [],
   profileSources,
 }: {
   connections: SourceConnectionRow[];
   entries: WishEntryRow[];
   profile: WishProfileRow;
+  profileSignals?: BackgroundProfileSignalRow[];
   profileSources: ProfileSourceRow[];
 }): DeterministicSynthesisPayload {
   const wishes = entries.filter((entry) => entry.entry_type === "wish").map((entry) => entry.body);
@@ -254,7 +275,25 @@ export function buildDeterministicSynthesis({
   const activeSourceConnections = connections.filter((connection) =>
     hasActiveBackgroundSourcePermission(connection),
   );
-  const sourceCount = activeProfileSources.length + activeSourceConnections.length;
+  const activeProfileSignals = profileSignals.filter((signal) =>
+    hasActiveBackgroundProfileSignal(signal),
+  );
+  const signalValuesByField = new Map<string, string[]>();
+
+  for (const signal of activeProfileSignals) {
+    signalValuesByField.set(signal.allowed_field_key, [
+      ...(signalValuesByField.get(signal.allowed_field_key) ?? []),
+      signal.signal_value,
+    ]);
+  }
+
+  const signalOfferAskTerms = signalValuesByField.get("offer_ask_terms") ?? [];
+  const signalCapabilityTags = signalValuesByField.get("capability_tags") ?? [];
+  const signalCausePriorities = signalValuesByField.get("cause_priorities") ?? [];
+  const signalConstraintFlags = signalValuesByField.get("safety_constraints") ?? [];
+  const signalVerificationPreferences = signalValuesByField.get("verification_preferences") ?? [];
+  const sourceCount =
+    activeProfileSources.length + activeSourceConnections.length + activeProfileSignals.length;
   const missingFields = buildMissingFields({
     asks,
     capabilities: profile.capabilities,
@@ -265,16 +304,22 @@ export function buildDeterministicSynthesis({
     offers,
     publicPreview: profile.public_preview,
     sourceCount,
-    verificationPreferences: profile.verification_preferences,
+    verificationPreferences: [profile.verification_preferences, ...signalVerificationPreferences]
+      .filter(Boolean)
+      .join(" "),
     wishes,
   });
 
-  const causeScore = profile.causes.length ? 22 : 0;
+  const causeScore = profile.causes.length || signalCausePriorities.length ? 22 : 0;
   const wishScore = wishes.length ? 18 : 0;
-  const offerScore = offers.length || profile.capabilities ? 15 : 0;
-  const askScore = asks.length ? 15 : 0;
-  const constraintScore = profile.constraints ? 10 : 0;
-  const verificationScore = profile.verification_preferences ? 8 : 0;
+  const offerScore =
+    offers.length || profile.capabilities || signalCapabilityTags.length || signalOfferAskTerms.length
+      ? 15
+      : 0;
+  const askScore = asks.length || signalOfferAskTerms.length ? 15 : 0;
+  const constraintScore = profile.constraints || signalConstraintFlags.length ? 10 : 0;
+  const verificationScore =
+    profile.verification_preferences || signalVerificationPreferences.length ? 8 : 0;
   const previewScore = profile.public_preview ? 7 : 0;
   const sourceScore = Math.min(5, sourceCount);
   const confidenceScore = clamp(
@@ -290,16 +335,25 @@ export function buildDeterministicSynthesis({
     100,
   );
 
-  const offerTerms = getBackgroundTokens(`${profile.capabilities} ${offers.join(" ")}`, 16);
-  const askTerms = getBackgroundTokens(`${asks.join(" ")} ${wishes.join(" ")}`, 16);
-  const capabilityTags = uniqueStrings([...offerTerms, ...getBackgroundTokens(profile.capabilities, 10)]).slice(
-    0,
-    16,
-  );
+  const offerTerms = uniqueStrings([
+    ...getBackgroundTokens(`${profile.capabilities} ${offers.join(" ")}`, 16),
+    ...signalOfferAskTerms,
+  ]).slice(0, 16);
+  const askTerms = uniqueStrings([
+    ...getBackgroundTokens(`${asks.join(" ")} ${wishes.join(" ")}`, 16),
+    ...signalOfferAskTerms,
+  ]).slice(0, 16);
+  const capabilityTags = uniqueStrings([
+    ...offerTerms,
+    ...getBackgroundTokens(profile.capabilities, 10),
+    ...signalCapabilityTags,
+  ]).slice(0, 16);
   const constraintFlags = buildConstraintFlags([
     profile.constraints,
     profile.verification_preferences,
     profile.brokerage_preference,
+    ...signalConstraintFlags,
+    ...signalVerificationPreferences,
   ]);
   const uncertaintyFlags = buildUncertaintyFlags(
     [profile.uncertainty_notes, ...activeProfileSources.map((source) => source.notes)],
@@ -310,6 +364,9 @@ export function buildDeterministicSynthesis({
     hopes: summarizeLines(
       [
         profile.causes.length ? `Cause priorities: ${profile.causes.join(", ")}` : "",
+        signalCausePriorities.length
+          ? `Reviewed source priorities: ${signalCausePriorities.join(", ")}`
+          : "",
         ...wishes,
       ],
       "No concrete hopes have been stated yet.",
@@ -326,6 +383,9 @@ export function buildDeterministicSynthesis({
     capabilities: summarizeLines(
       [
         profile.capabilities,
+        signalCapabilityTags.length
+          ? `Reviewed source capabilities: ${signalCapabilityTags.join(", ")}`
+          : "",
         ...offers,
         ...activeProfileSources.map((source) => source.snapshot_excerpt || source.notes),
       ],
@@ -345,7 +405,10 @@ export function buildDeterministicSynthesis({
     confidence_score: confidenceScore,
     source_count: sourceCount,
     synthesis_version: "deterministic-v2",
-    cause_priorities: (profile.causes ?? []).slice(0, 10),
+    cause_priorities: uniqueStrings([...(profile.causes ?? []), ...signalCausePriorities]).slice(
+      0,
+      10,
+    ),
     offer_terms: offerTerms,
     ask_terms: askTerms,
     capability_tags: capabilityTags,

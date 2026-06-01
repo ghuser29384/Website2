@@ -771,12 +771,30 @@ test("background source connector permissions stay field-limited and raw-ingesti
   );
   const backgroundActions = readRepoFile("src/app/background-networking/actions.ts");
   const sourceSummariesRoute = readRepoFile("src/app/api/background/source-summaries/route.ts");
+  const sourceConnectionsRoute = readRepoFile("src/app/api/background/source-connections/route.ts");
+  const sourceConnectionRevokeRoute = readRepoFile(
+    "src/app/api/background/source-connections/[id]/route.ts",
+  );
+  const sourceConnectionDraftRoute = readRepoFile(
+    "src/app/api/background/source-connections/[id]/draft-summary/route.ts",
+  );
+  const sourceSummaryApproveRoute = readRepoFile(
+    "src/app/api/background/source-summaries/[id]/approve/route.ts",
+  );
+  const profileSignalRecomputeRoute = readRepoFile(
+    "src/app/api/background/profile-signals/recompute/route.ts",
+  );
   const introPacketsRoute = readRepoFile("src/app/api/background/intro-packets/route.ts");
   const opportunityBriefsRoute = readRepoFile("src/app/api/background/opportunity-briefs/route.ts");
   const opportunityFeedbackRoute = readRepoFile(
     "src/app/api/background/opportunity-briefs/[id]/feedback/route.ts",
   );
+  const opportunitiesAliasRoute = readRepoFile("src/app/api/background/opportunities/route.ts");
+  const opportunityFeedbackAliasRoute = readRepoFile(
+    "src/app/api/background/opportunities/[id]/feedback/route.ts",
+  );
   const backgroundNetworkingSource = readRepoFile("src/lib/background-networking.ts");
+  const backgroundSourceAssistSource = readRepoFile("src/lib/background-source-assist.ts");
   const backgroundAiShadowSource = readRepoFile("src/lib/background-ai-shadow.ts");
   const backgroundCapabilityGateSource = readRepoFile("src/lib/background-capability-gates.ts");
   const backgroundRlsAuditSource = readRepoFile("src/lib/background-rls-audit.ts");
@@ -791,6 +809,9 @@ test("background source connector permissions stay field-limited and raw-ingesti
   const schemaSource = readRepoFile("supabase/schema.sql");
   const migrationSource = readRepoFile(
     "supabase/migrations/20260531_background_source_connection_permissions.sql",
+  );
+  const sourceAssistMigrationSource = readRepoFile(
+    "supabase/migrations/20260601_background_source_assisted_profile_signals.sql",
   );
 
   assert.ok(BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.length >= 6);
@@ -828,6 +849,18 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(sourceSummariesRoute, /validateBackgroundSourceSummaryRetentionScope/);
   assert.match(sourceSummariesRoute, /\.eq\("profile_id", user\.id\)/);
   assert.match(sourceSummariesRoute, /rawIngestionAllowed: false/);
+  assert.match(sourceConnectionsRoute, /validateBackgroundSourcePermission/);
+  assert.match(sourceConnectionsRoute, /raw_ingestion_allowed: false/);
+  assert.match(sourceConnectionsRoute, /source_connection_recorded/);
+  assert.match(sourceConnectionRevokeRoute, /source_connection_revoked/);
+  assert.match(sourceConnectionRevokeRoute, /background_profile_signals/);
+  assert.match(sourceConnectionDraftRoute, /buildReviewedSourceDraftSummary/);
+  assert.match(sourceConnectionDraftRoute, /rawTextPersisted: false/);
+  assert.match(sourceConnectionDraftRoute, /background_shadow_runs/);
+  assert.match(sourceSummaryApproveRoute, /buildBackgroundProfileSignalRows/);
+  assert.match(sourceSummaryApproveRoute, /approved_source_summary_promoted/);
+  assert.match(profileSignalRecomputeRoute, /profile_signals_recomputed/);
+  assert.match(profileSignalRecomputeRoute, /background_profile_signals/);
   assert.match(introPacketsRoute, /takeMoralTradeApiRateLimitSlot/);
   assert.match(introPacketsRoute, /background_intro_packet_write/);
   assert.match(introPacketsRoute, /buildMoralTradeApiRateLimitResponse/);
@@ -838,7 +871,10 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(opportunityFeedbackRoute, /background_opportunity_feedback_write/);
   assert.match(opportunityFeedbackRoute, /isBackgroundOpportunityFeedbackPairAllowed/);
   assert.match(opportunityFeedbackRoute, /outreachSent: false/);
+  assert.match(opportunitiesAliasRoute, /opportunity-briefs\/route/);
+  assert.match(opportunityFeedbackAliasRoute, /opportunity-briefs\/\[id\]\/feedback\/route/);
   assert.match(opportunityFeedbackSource, /BACKGROUND_OPPORTUNITY_FEEDBACK_REASONS/);
+  assert.match(opportunityFeedbackSource, /maybe_later/);
   assert.match(opportunityFeedbackSource, /isBackgroundOpportunityFeedbackPairAllowed/);
   assert.match(backgroundNotificationPolicySource, /BACKGROUND_DISCOVERY_NOTIFICATION_EVENTS/);
   assert.match(backgroundNotificationPolicySource, /dailyCap/);
@@ -854,13 +890,24 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(apiRateLimitSource, /background_opportunity_brief_read: \{ limit: 60/);
   assert.match(apiRateLimitSource, /background_opportunity_feedback_write: \{ limit: 30/);
   assert.match(apiContractProfile, /background_source_summary_create/);
+  assert.match(apiContractProfile, /background_source_connection_create/);
+  assert.match(apiContractProfile, /background_source_summary_draft/);
+  assert.match(apiContractProfile, /background_source_summary_approve/);
+  assert.match(apiContractProfile, /background_profile_signal_recompute/);
   assert.match(apiContractProfile, /background_intro_packet_create/);
   assert.match(apiContractProfile, /background_opportunity_brief_list/);
+  assert.match(apiContractProfile, /background_opportunity_list/);
   assert.match(apiContractProfile, /background_opportunity_feedback_create/);
+  assert.match(apiContractProfile, /background_opportunity_feedback_create_alias/);
   assert.match(backgroundNetworkingSource, /hasActiveBackgroundSourcePermission/);
   assert.match(backgroundNetworkingSource, /hasActiveProfileSourcePermission/);
+  assert.match(backgroundNetworkingSource, /hasActiveBackgroundProfileSignal/);
+  assert.match(backgroundNetworkingSource, /profileSignals/);
   assert.match(backgroundNetworkingSource, /activeProfileSources/);
   assert.match(backgroundNetworkingSource, /activeSourceConnections/);
+  assert.match(backgroundSourceAssistSource, /review_first_source_summary_no_raw_persistence/);
+  assert.match(backgroundSourceAssistSource, /redactBackgroundSourceAssistRawText/);
+  assert.match(backgroundSourceAssistSource, /removedEmails/);
   assert.match(backgroundAiShadowSource, /getBackgroundAiShadowContract/);
   assert.match(backgroundAiShadowSource, /validateBackgroundAiShadowContract/);
   assert.match(backgroundAiShadowSource, /approved_summary_shadow_evaluation_only/);
@@ -895,10 +942,15 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(schemaSource, /source_connections_raw_ingestion_disabled_check/);
   assert.match(schemaSource, /background_match_feedback/);
   assert.match(schemaSource, /background_opportunity_briefs_feedback_reason_check/);
+  assert.match(schemaSource, /background_profile_signals/);
+  assert.match(schemaSource, /background_shadow_runs/);
+  assert.match(schemaSource, /redaction_report/);
   assert.match(schemaSource, /source_cooldown_hours/);
   assert.match(schemaSource, /last_discovery_sent_at/);
   assert.match(migrationSource, /source_connections_allowed_field_keys_check/);
   assert.match(migrationSource, /source_connections_raw_ingestion_disabled_check/);
+  assert.match(sourceAssistMigrationSource, /background_profile_signals/);
+  assert.match(sourceAssistMigrationSource, /background_shadow_runs/);
 });
 
 test("global loading and error states expose route-specific recovery instead of generic dead ends", () => {
@@ -1103,6 +1155,7 @@ test("privacy and terms publish processor retention and data-request transparenc
   assert.match(privacyPage, /Analytics and attribution/);
   assert.match(privacyPage, /Notifications/);
   assert.match(privacyPage, /source cooldowns/);
+  assert.match(privacyPage, /approved derived profile signals/);
   assert.match(privacyPage, /Supabase for authentication and database storage/);
   assert.match(privacyPage, /Stripe for participant payment objects; Every\.org for off-site donation routes/);
   assert.match(privacyPage, /future analytics tools must follow the same redaction rules/);

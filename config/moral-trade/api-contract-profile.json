@@ -459,6 +459,66 @@
       "fallback": "Fail closed if the viewer is missing; validate payload shape and import mode before writing, and do not import counterparty-linked records."
     },
     {
+      "key": "background_source_connection_create",
+      "method": "POST",
+      "path": "/api/background/source-connections",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_source_connection_create_request",
+      "responseSchema": "background_source_connection_create_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication, explicit field scope, supported retention, configured encryption, and raw-ingestion disabled before saving a source connection consent record."
+    },
+    {
+      "key": "background_source_connection_revoke",
+      "method": "DELETE",
+      "path": "/api/background/source-connections/:id",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_source_connection_revoke_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer-owned source connection access before revoking the connection and excluding dependent source summaries and profile signals from future matching."
+    },
+    {
+      "key": "background_source_summary_draft",
+      "method": "POST",
+      "path": "/api/background/source-connections/:id/draft-summary",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_source_summary_draft_request",
+      "responseSchema": "background_source_summary_draft_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication and viewer-owned source connection access; use raw source text only in request memory, persist only redacted shadow output, and return a reviewable summary draft with redaction counts and allowed-field signals."
+    },
+    {
+      "key": "background_source_summary_approve",
+      "method": "POST",
+      "path": "/api/background/source-summaries/:id/approve",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_source_summary_approve_request",
+      "responseSchema": "background_source_summary_approve_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication before approving a viewer-owned shadow summary run into an encrypted reviewed source summary and active profile signals; raw source text remains outside storage."
+    },
+    {
+      "key": "background_profile_signal_recompute",
+      "method": "POST",
+      "path": "/api/background/profile-signals/recompute",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_profile_signal_recompute_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication and recompute only viewer-owned derived profile-signal status, marking expired, revoked, or stale signals out of matching without exposing raw source content."
+    },
+    {
       "key": "background_source_summary_create",
       "method": "POST",
       "path": "/api/background/source-summaries",
@@ -495,6 +555,18 @@
       "fallback": "Require viewer authentication and return only viewer-owned broad-preview opportunity cards; rate-limited reads return no private brief data, and exact wishes, private asks, source notes, constraints, and contact details stay out of the response."
     },
     {
+      "key": "background_opportunity_list",
+      "method": "GET",
+      "path": "/api/background/opportunities",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_opportunity_brief_list_response",
+      "rateLimitSurface": "background_opportunity_brief_read",
+      "cacheControl": "private_no_store",
+      "fallback": "Alias for the authenticated opportunity brief list used by the background-networking MVI; it returns only viewer-owned broad-preview cards and never exact wishes, private asks, source notes, constraints, or contact details."
+    },
+    {
       "key": "background_opportunity_feedback_create",
       "method": "POST",
       "path": "/api/background/opportunity-briefs/:id/feedback",
@@ -505,6 +577,18 @@
       "rateLimitSurface": "background_opportunity_feedback_write",
       "cacheControl": "private_no_store",
       "fallback": "Require viewer authentication, owner-only brief access, and closed reason/outcome codes before recording feedback; duplicate submissions update the existing feedback row, rate-limited requests create no state change, and no outreach is sent."
+    },
+    {
+      "key": "background_opportunity_feedback_create_alias",
+      "method": "POST",
+      "path": "/api/background/opportunities/:id/feedback",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_opportunity_feedback_create_request",
+      "responseSchema": "background_opportunity_feedback_create_response",
+      "rateLimitSurface": "background_opportunity_feedback_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Alias for authenticated opportunity feedback; it applies the same owner-only access, closed reason/outcome lattice, duplicate-update behavior, rate-limit failure mode, and no-outreach guarantee."
     },
     {
       "key": "wish_registry_search",
@@ -1175,6 +1259,8 @@
         { "key": "profile", "type": "object_or_null", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned public profile row." },
         { "key": "wishProfile", "type": "object_or_null", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned wish profile row." },
         { "key": "wishEntries", "type": "array", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned wish entries only." },
+        { "key": "backgroundProfileSignals", "type": "array", "required": false, "privacy": "private_authenticated", "description": "Viewer-owned approved source-derived profile signals." },
+        { "key": "backgroundShadowRuns", "type": "array", "required": false, "privacy": "private_authenticated", "description": "Viewer-owned redacted shadow source-assist runs; raw external source text is not exported because it is not stored." },
         { "key": "schemaUrl", "type": "path", "required": true, "privacy": "private_authenticated", "description": "Public schema endpoint for import/export shape." },
         { "key": "importUrl", "type": "path", "required": true, "privacy": "private_authenticated", "description": "Authenticated import endpoint." },
         { "key": "privacyNotice", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Boundary note: other users' private wish data is not exported." }
@@ -1199,6 +1285,84 @@
         { "key": "importedCounts", "type": "object", "required": true, "privacy": "private_authenticated", "description": "Counts by imported collection." },
         { "key": "schemaUrl", "type": "path", "required": true, "privacy": "private_authenticated", "description": "Public schema endpoint for the import contract." },
         { "key": "privacyNotice", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Counterparty-linked records are not imported." }
+      ]
+    },
+    {
+      "key": "background_source_connection_create_request",
+      "purpose": "Authenticated source-connection consent record for review-first source-assisted profiling.",
+      "fields": [
+        { "key": "label", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Owner-visible source connection label." },
+        { "key": "provider", "type": "enum", "required": false, "privacy": "private_authenticated", "description": "Manual, social, blog, email/email_export, calendar/calendar_export, chat_history/chat_export, search_profile, webpage, or other." },
+        { "key": "allowedFieldKeys", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Allowed broad source fields that any later reviewed summary may influence." },
+        { "key": "retentionDays", "type": "integer", "required": false, "privacy": "private_authenticated", "description": "Retention window normalized to the supported source-permission options." },
+        { "key": "aiShadowModeAllowed", "type": "boolean", "required": false, "privacy": "private_authenticated", "description": "Optional consent for shadow-only evaluation of approved summaries; it cannot mutate matching or disclosure state." },
+        { "key": "rawIngestionAllowed", "type": "boolean", "required": false, "privacy": "public_contract", "description": "Ignored unless false; raw ingestion remains disabled." }
+      ]
+    },
+    {
+      "key": "background_source_connection_create_response",
+      "purpose": "Private no-store source connection creation result.",
+      "fields": [
+        { "key": "id", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned source connection id." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "source_connection_recorded when consent scope is saved." },
+        { "key": "rawIngestionAllowed", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false for this pass." },
+        { "key": "retentionExpiresAt", "type": "iso_datetime", "required": true, "privacy": "private_authenticated", "description": "Computed expiry for this source permission." }
+      ]
+    },
+    {
+      "key": "background_source_connection_revoke_response",
+      "purpose": "Private no-store source connection revocation result.",
+      "fields": [
+        { "key": "id", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Revoked viewer-owned source connection id." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "source_connection_revoked when the connection and dependent matching signals are disabled." },
+        { "key": "downstreamSignalsExcluded", "type": "boolean", "required": true, "privacy": "public_contract", "description": "True when derived profile signals are marked out of future matching." }
+      ]
+    },
+    {
+      "key": "background_source_summary_draft_request",
+      "purpose": "Authenticated ephemeral raw-text intake for review-first source summary drafting.",
+      "fields": [
+        { "key": "id", "type": "path_uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned source connection id." },
+        { "key": "rawText", "type": "string", "required": true, "privacy": "private_authenticated_ephemeral", "description": "Raw source text used only in request memory to produce a redacted draft summary; it is never stored." }
+      ]
+    },
+    {
+      "key": "background_source_summary_draft_response",
+      "purpose": "Private no-store redacted source summary draft and shadow run id.",
+      "fields": [
+        { "key": "shadowRunId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned shadow run containing redacted output only." },
+        { "key": "draftSummary", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Redacted draft summary the user must approve before it can influence profile signals." },
+        { "key": "redactionReport", "type": "object", "required": true, "privacy": "private_authenticated", "description": "Counts for removed emails, phones, URLs, direct quotes, and precise locations." },
+        { "key": "rawTextPersisted", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." }
+      ]
+    },
+    {
+      "key": "background_source_summary_approve_request",
+      "purpose": "Authenticated approval of a redacted source summary shadow run.",
+      "fields": [
+        { "key": "id", "type": "path_uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned shadow run id from draft-summary response." },
+        { "key": "purpose", "type": "string", "required": false, "privacy": "private_authenticated", "description": "Narrow purpose for promoting this approved summary into matching signals." },
+        { "key": "retentionDays", "type": "integer", "required": false, "privacy": "private_authenticated", "description": "Retention window that cannot outlive the associated source connection permission." }
+      ]
+    },
+    {
+      "key": "background_source_summary_approve_response",
+      "purpose": "Private no-store approval result for encrypted source summary and active profile signals.",
+      "fields": [
+        { "key": "sourceSummaryId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Encrypted reviewed source summary row id." },
+        { "key": "profileSignalsCreated", "type": "integer", "required": true, "privacy": "private_authenticated", "description": "Count of active derived profile-signal rows created from the approved summary." },
+        { "key": "rawTextPersisted", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "approved_source_summary_promoted when approval succeeds." }
+      ]
+    },
+    {
+      "key": "background_profile_signal_recompute_response",
+      "purpose": "Private no-store recomputation result for derived profile signal lifecycle state.",
+      "fields": [
+        { "key": "expired", "type": "integer", "required": true, "privacy": "private_authenticated", "description": "Count of active profile signals marked expired." },
+        { "key": "revoked", "type": "integer", "required": true, "privacy": "private_authenticated", "description": "Count of active profile signals marked revoked." },
+        { "key": "stale", "type": "integer", "required": true, "privacy": "private_authenticated", "description": "Count of active profile signals marked stale." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "profile_signals_recomputed when lifecycle enforcement completes." }
       ]
     },
     {
@@ -1259,8 +1423,8 @@
       "purpose": "Authenticated opportunity feedback over closed reason and outcome codes.",
       "fields": [
         { "key": "id", "type": "path_uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned opportunity brief id from the route path; cross-profile ids fail closed." },
-        { "key": "reason", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "Closed reason code only: not_relevant, bad_timing, too_vague, safety_concern, or interested. Free-text feedback is not accepted." },
-        { "key": "outcome", "type": "enum", "required": false, "privacy": "private_authenticated", "description": "Closed outcome code: dismissed or interested. Interested outcome requires interested reason; dismissed outcome cannot use interested reason." }
+        { "key": "reason", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "Closed reason code only: not_relevant, bad_timing, too_vague, safety_concern, maybe_later, or interested. Free-text feedback is not accepted." },
+        { "key": "outcome", "type": "enum", "required": false, "privacy": "private_authenticated", "description": "Closed outcome code: dismissed, maybe_later, or interested. Interested outcome requires interested reason; maybe_later outcome requires maybe_later reason; dismissed outcome cannot use interested or maybe_later reason." }
       ]
     },
     {

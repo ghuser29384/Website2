@@ -22,6 +22,7 @@ test("transparency report contract publishes required aggregate-only metrics", (
   assert.ok(metricKeys.includes("opportunity_briefs_opened"));
   assert.ok(metricKeys.includes("opportunity_feedback_submitted"));
   assert.ok(metricKeys.includes("opportunity_briefs_dismissed"));
+  assert.ok(metricKeys.includes("opportunity_briefs_deferred"));
   assert.ok(metricKeys.includes("opportunity_interest_marked"));
   assert.ok(metricKeys.includes("declined_intro_requests"));
   assert.ok(metricKeys.includes("disclosure_grants_created"));
