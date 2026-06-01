@@ -149,6 +149,21 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
     title: campaign.title,
     verifiedDonorCount: campaign.verifiedDonorCount,
   }));
+  const campaignUnlockMetrics = campaignResult.campaigns.map((campaign) => {
+    const previewRow = preview.rows.find((row) => row.campaignId === campaign.campaignId);
+    const cgRow = cgVqaf.rows.find((row) => row.campaignId === campaign.campaignId);
+
+    return {
+      campaignId: campaign.campaignId,
+      directEligibleCents: campaign.directEligibleCents,
+      estimatedBaseMatchCents: previewRow?.estimatedBaseMatchCents ?? campaign.baseMatchCents,
+      estimatedBonusCapCents: cgRow?.bonusCapCents ?? previewRow?.estimatedQfBonusCents,
+      status: campaign.campaignStatus,
+      thresholdDonors: campaign.thresholdDonors,
+      title: campaign.title,
+      verifiedDonorCount: campaign.verifiedDonorCount,
+    };
+  });
 
   return (
     <MpgfPageFrame
@@ -195,6 +210,41 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
         <div className="mpgf-kpi">
           <span>Verified donors</span>
           <strong>{round.verifiedDonorCount}</strong>
+        </div>
+      </section>
+
+      <section className="section section-white" aria-label="Above-the-fold campaign unlock metrics">
+        <div className="section-head section-head-compact">
+          <p className="eyebrow">Campaign unlock board</p>
+          <h2>Direct support, supporter breadth, base match, and bonus range</h2>
+        </div>
+        <div className="mpgf-pool-directory">
+          {campaignUnlockMetrics.map((campaign) => (
+            <article className="mpgf-panel" key={`unlock-${campaign.campaignId}`}>
+              <p className="eyebrow">{statusLabel(campaign.status)}</p>
+              <h3>{campaign.title}</h3>
+              <dl className="mpgf-headline-metrics" aria-label={`${campaign.title} top campaign funding metrics`}>
+                <div>
+                  <dt>Verified direct</dt>
+                  <dd>{formatUsd(campaign.directEligibleCents)}</dd>
+                </div>
+                <div>
+                  <dt>Verified supporters</dt>
+                  <dd>
+                    {campaign.verifiedDonorCount}/{campaign.thresholdDonors}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Guaranteed base match</dt>
+                  <dd>{formatMaybeUsd(campaign.estimatedBaseMatchCents)}</dd>
+                </div>
+                <div>
+                  <dt>Estimated bonus range</dt>
+                  <dd>{formatBonusRange(campaign.estimatedBonusCapCents)}</dd>
+                </div>
+              </dl>
+            </article>
+          ))}
         </div>
       </section>
 
