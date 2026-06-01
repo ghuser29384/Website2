@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getViewer } from "@/lib/app-data";
 import { demoMpgfAssuranceRound } from "@/lib/mpgf/data";
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
 import {
@@ -43,7 +44,7 @@ function exitUrlFor(requestUrl: string) {
   return new URL("/mpgf/contribute/cancel", url.origin).toString();
 }
 
-function responseFor(record: Record<string, unknown>, requestUrl: string) {
+async function responseFor(record: Record<string, unknown>, requestUrl: string) {
   const campaignId = stringField(record, "campaignId");
 
   if (!campaignId) {
@@ -53,12 +54,14 @@ function responseFor(record: Record<string, unknown>, requestUrl: string) {
     );
   }
 
+  const viewer = await getViewer();
+  const userRef = stringField(record, "userRef") ?? viewer?.authUser.id;
   const partnerDonationId = buildMpgfEveryOrgPartnerDonationId({
     campaignId,
     conditionalPledgeId: stringField(record, "conditionalPledgeId"),
     pledgeIntentId: stringField(record, "pledgeIntentId"),
     roundId: stringField(record, "roundId") ?? demoMpgfAssuranceRound.id,
-    userRef: stringField(record, "userRef"),
+    userRef,
   });
   const donateLink = buildMpgfEveryOrgDonateLink({
     amountCents: numberField(record, "amountCents"),
@@ -68,7 +71,7 @@ function responseFor(record: Record<string, unknown>, requestUrl: string) {
     pledgeIntentId: stringField(record, "pledgeIntentId"),
     roundId: stringField(record, "roundId") ?? undefined,
     successUrl: stringField(record, "successUrl") ?? successUrlFor(requestUrl, partnerDonationId),
-    userRef: stringField(record, "userRef"),
+    userRef,
     webhookToken: publicWebhookToken(),
   });
 
@@ -96,7 +99,7 @@ export async function GET(request: Request) {
   };
 
   try {
-    return responseFor(record, request.url);
+    return await responseFor(record, request.url);
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Could not create MPGF Every.org Donate Link." },
@@ -113,7 +116,7 @@ export async function POST(request: Request) {
       throw new Error("MPGF Every.org Donate Link expects a JSON object.");
     }
 
-    return responseFor(payload as Record<string, unknown>, request.url);
+    return await responseFor(payload as Record<string, unknown>, request.url);
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Could not create MPGF Every.org Donate Link." },

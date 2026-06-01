@@ -1100,6 +1100,9 @@ test("MPGF contribution intents verify identity before conditional payment autho
   const migration = readFileSync("supabase/migrations/20260531_mpgf_contribution_intents.sql", "utf8");
   const contributionPage = readFileSync("src/app/mpgf/contribute/page.tsx", "utf8");
   const consoleSource = readFileSync("src/components/mpgf/mpgf-console.tsx", "utf8");
+  const fastRouteIndex = consoleSource.indexOf("1. Every.org fast route");
+  const savedCommitmentIndex = consoleSource.indexOf("2. Saved commitment");
+  const manualProofIndex = consoleSource.indexOf("3. Manual proof fallback");
 
   assert.ok(contributionFlow);
   assert.equal(unknownFlow, null);
@@ -1161,8 +1164,13 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(migration, /capture_only_after_threshold_review_and_challenge_window/);
   assert.match(migration, /final_payout_authorized boolean not null default false check \(final_payout_authorized = false\)/);
   assert.match(contributionPage, /Every\.org fast route/);
-  assert.match(consoleSource, /Contribution intent/);
-  assert.match(consoleSource, /Create contribution intent/);
+  assert.ok(fastRouteIndex >= 0);
+  assert.ok(savedCommitmentIndex > fastRouteIndex);
+  assert.ok(manualProofIndex > savedCommitmentIndex);
+  assert.match(consoleSource, /Open Every\.org fast route/);
+  assert.match(consoleSource, /Save Stripe commitment/);
+  assert.match(consoleSource, /Save pledge intent/);
+  assert.match(consoleSource, /Manual proof fallback/);
 
   for (const forbidden of [
     "demo-contributor-private-user",
@@ -1282,6 +1290,7 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.equal(unverifiedWebhook.status, "rejected");
   assert.equal(unverifiedWebhook.webhookArrivedBeforeSignIn, true);
   assert.equal(unverifiedWebhook.autoCreatesContributionEvidence, false);
+  assert.match(donateLinkRoute, /getViewer/);
   assert.match(donateLinkRoute, /MPGF_EVERY_ORG_PUBLIC_WEBHOOK_TOKEN/);
   assert.match(donateLinkRoute, /pending_webhook_not_counted/);
   assert.match(webhookRoute, /MPGF_EVERY_ORG_WEBHOOK_SHARED_SECRET/);
@@ -3117,6 +3126,8 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
       generatedAt: "2026-06-15T12:00:00.000Z",
     });
     const route = readFileSync("src/app/api/mpgf/public-goods/kpis/route.ts", "utf8");
+    const dryRunGateIndex = route.indexOf("if (dryRun)");
+    const secretGateIndex = route.indexOf("if (!kpiSecret())");
     const kpis = readFileSync("src/lib/mpgf/public-goods-kpis.ts", "utf8");
     const serialized = JSON.stringify(snapshot);
 
@@ -3177,6 +3188,9 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.equal(retentionSnapshot.recurring.retainedRecurringDonors3MonthBps, 5000);
     assert.equal(retentionSnapshot.recurring.retainedRecurringDonors6MonthBps, 5000);
     assert.equal(dryRun.status, "dry_run");
+    assert.ok(dryRunGateIndex >= 0);
+    assert.ok(secretGateIndex > dryRunGateIndex);
+    assert.match(route, /publicScope: "dry_run_aggregate"/);
     assert.equal(serialized.includes("demo-supporter"), false);
     assert.equal(serialized.includes("private-old"), false);
     assert.equal(serialized.includes("supporterReason"), false);
