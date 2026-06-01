@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
+import {
+  bucketMpgfPublicGoodsAmountCents,
+  recordMpgfPublicGoodsAnalyticsEvent,
+} from "@/lib/mpgf/public-goods-analytics";
 import { createMpgfStripeSavedCommitmentSetup } from "@/lib/mpgf/public-goods-stripe-commitments";
 import { getStripe, hasStripeEnv } from "@/lib/stripe";
 
@@ -26,6 +30,44 @@ function centsField(record: Record<string, unknown>) {
   return Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
 }
 
+async function recordSetupIntentAnalytics(input: {
+  amountCents: number;
+  campaignId: string;
+  userId: string;
+}) {
+  try {
+    const result = await recordMpgfPublicGoodsAnalyticsEvent({
+      eventType: "contribution_route_selected",
+      userId: input.userId,
+      campaignId: input.campaignId,
+      eventJson: {
+        amountBucket: bucketMpgfPublicGoodsAmountCents(input.amountCents),
+        captureMode: "stored_payment_method",
+        surface: "mpgf_participant_action",
+        contributionRoute: "stripe_setup_intent_saved_commitment",
+        contributionFunnelStep: "setup_intent_started",
+        supportSignalState: "pledge_saved",
+        privateByDefault: true,
+        publicAggregationOnly: true,
+        netNewFundingProxy: "uncertain",
+      },
+    });
+
+    return {
+      ok: result.ok,
+      status: result.status,
+      eventType: result.row.event_type,
+      warning: result.warning,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: "not_configured" as const,
+      warning: error instanceof Error ? error.message : "Could not record MPGF saved-commitment analytics.",
+    };
+  }
+}
+
 export async function POST(request: Request) {
   const viewer = await getViewer();
 
@@ -44,6 +86,11 @@ export async function POST(request: Request) {
       roundId: stringField(record, "roundId") || undefined,
       userRef: viewer.authUser.id,
     });
+    const analytics = await recordSetupIntentAnalytics({
+      amountCents: baseSetup.amountCents,
+      campaignId: baseSetup.campaignId,
+      userId: viewer.authUser.id,
+    });
 
     if (!hasStripeEnv()) {
       return NextResponse.json(
@@ -54,6 +101,7 @@ export async function POST(request: Request) {
           clientSecret: null,
           createsChargeImmediately: false,
           finalPayoutAuthorized: false,
+          analytics,
         },
         { status: 503, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
       );
@@ -100,6 +148,7 @@ export async function POST(request: Request) {
         conditionalPaymentIntentPath: "/api/mpgf/stripe/conditional-payment-intents",
         reviewRequiredBeforeCounting: true,
         finalPayoutAuthorized: false,
+        analytics,
       },
       { status: 201, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );

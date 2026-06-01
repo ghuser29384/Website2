@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type ContributionCadence = "one_time" | "monthly";
+type ContributionMode = "fast_route" | "saved_commitment" | "manual_proof_fallback";
 
 export interface MpgfContributionModalCampaign {
   campaignId: string;
@@ -28,7 +28,10 @@ interface MpgfContributionModalProps {
 
 interface CheckoutResponse {
   ok?: boolean;
-  checkoutUrl?: string;
+  donateLink?: {
+    href?: string;
+  };
+  nextAction?: string;
   message?: string;
   error?: string;
 }
@@ -49,6 +52,49 @@ function assignBrowserLocation(url: string) {
   (globalThis as unknown as { location?: { assign: (target: string) => void } }).location?.assign(url);
 }
 
+function recordContributionRouteFunnelEvent(mode: ContributionMode) {
+  const payload = JSON.stringify({
+    eventType: mode === "manual_proof_fallback" ? "evidence_submission_started" : "donation_route_clicked",
+    path: globalThis.location?.pathname ?? "/mpgf/rounds",
+    metadata: {
+      targetKind: "mpgf_public_good",
+      mode,
+      stage: "mpgf_contribution_route",
+      step: mode,
+    },
+  });
+
+  if (typeof navigator.sendBeacon === "function") {
+    navigator.sendBeacon("/api/funnel-events", new Blob([payload], { type: "application/json" }));
+    return;
+  }
+
+  void fetch("/api/funnel-events", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: payload,
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
+function payloadMessage(payload: CheckoutResponse, fallback: string) {
+  if (payload.error?.trim()) {
+    return payload.error;
+  }
+
+  if (payload.message?.trim()) {
+    return payload.message;
+  }
+
+  if (payload.nextAction?.trim()) {
+    return payload.nextAction.replaceAll("_", " ");
+  }
+
+  return fallback;
+}
+
 export function MpgfContributionModal({
   campaigns,
   perDonorCapCents,
@@ -58,27 +104,38 @@ export function MpgfContributionModal({
   viewerPresent,
 }: MpgfContributionModalProps) {
   const [open, setOpen] = useState(false);
-  const [cadence, setCadence] = useState<ContributionCadence>("one_time");
-  const [oneTimeDollars, setOneTimeDollars] = useState(25);
-  const [monthlyDollars, setMonthlyDollars] = useState(15);
+  const [mode, setMode] = useState<ContributionMode>("fast_route");
+  const [amountDollars, setAmountDollars] = useState(25);
   const [campaignId, setCampaignId] = useState(campaigns[0]?.campaignId ?? "");
   const [countForMatching, setCountForMatching] = useState(true);
   const [pending, setPending] = useState(false);
   const [statusMessage, setStatusMessage] = useState(
-    "Choose a one-time campaign gift or a monthly sponsor-pool sustainer.",
+    "Use the Every.org fast route first; saved commitments and manual proof remain available when needed.",
   );
 
-  const selectedCampaign =
-    cadence === "one_time" ? campaigns.find((campaign) => campaign.campaignId === campaignId) : undefined;
-  const activeAmountCents = amountToCents(cadence === "monthly" ? monthlyDollars : oneTimeDollars);
-  const countedCents = countForMatching && cadence === "one_time" ? Math.min(activeAmountCents, perDonorCapCents) : 0;
-  const endpoint =
-    cadence === "monthly"
-      ? "/api/mpgf/contributions/subscription-session"
-      : "/api/mpgf/contributions/checkout-session";
+  const selectedCampaign = campaigns.find((campaign) => campaign.campaignId === campaignId);
+  const activeAmountCents = amountToCents(amountDollars);
+  const countedCents =
+    countForMatching && mode !== "manual_proof_fallback" ? Math.min(activeAmountCents, perDonorCapCents) : 0;
   const modalDescription =
-    "One-time gifts can target an approved campaign and count up to the donor cap after identity checks. " +
-    "Monthly sustainers refill the sponsor pool and do not let sponsors micromanage allocations after a round opens.";
+    "Fast-route gifts open Every.org and stay pending until webhook import. Saved commitments use Stripe SetupIntent first. Manual proof is the fallback when integrations cannot import.";
+  const modeSummary = {
+    fast_route: {
+      actionLabel: "Open Every.org fast route",
+      route: "Every.org Donate Link",
+      state: "pending webhook import",
+    },
+    saved_commitment: {
+      actionLabel: "Save Stripe commitment",
+      route: "Stripe SetupIntent first",
+      state: "saved, not charged",
+    },
+    manual_proof_fallback: {
+      actionLabel: "Open manual proof fallback",
+      route: "reviewed manual evidence",
+      state: "fallback review",
+    },
+  } satisfies Record<ContributionMode, { actionLabel: string; route: string; state: string }>;
 
   useEffect(() => {
     if (!open) {
@@ -96,14 +153,9 @@ export function MpgfContributionModal({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [open]);
 
-  async function startCheckout() {
-    if (!viewerPresent) {
-      setStatusMessage("Sign in before creating an MPGF Checkout session.");
-      return;
-    }
-
-    if (!realMoneyReady) {
-      setStatusMessage("Integrated checkout is still gated; manual external-payment evidence remains available.");
+  async function startFastRoute() {
+    if (!selectedCampaign) {
+      setStatusMessage("Choose a campaign before opening the Every.org fast route.");
       return;
     }
 
@@ -113,36 +165,97 @@ export function MpgfContributionModal({
     }
 
     setPending(true);
-    setStatusMessage("Preparing checkout.");
+    setStatusMessage("Preparing Every.org Donate Link.");
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch("/api/mpgf/every-org/donate-link", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           amountCents: activeAmountCents,
-          campaignId: cadence === "one_time" ? campaignId : null,
-          countForMatching: cadence === "one_time" && countForMatching,
-          perDonorCapCents,
+          campaignId,
           roundId,
-          sponsorPoolContribution: cadence === "monthly",
+        }),
+      });
+      const result = (await response.json().catch(() => ({}))) as CheckoutResponse;
+      const donateHref = result.donateLink?.href;
+
+      setStatusMessage(
+        payloadMessage(result, "Every.org Donate Link response received; webhook review is still required."),
+      );
+
+      if (response.ok && donateHref) {
+        assignBrowserLocation(donateHref);
+        return;
+      }
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Could not create Every.org Donate Link.");
+    }
+
+    setPending(false);
+  }
+
+  async function saveCommitment() {
+    if (!viewerPresent) {
+      setStatusMessage("Sign in before saving a Stripe SetupIntent commitment.");
+      return;
+    }
+
+    if (!selectedCampaign) {
+      setStatusMessage("Choose a campaign before saving a conditional commitment.");
+      return;
+    }
+
+    if (activeAmountCents < 100) {
+      setStatusMessage("Contribution amount must be at least $1.");
+      return;
+    }
+
+    setPending(true);
+    setStatusMessage("Saving SetupIntent-first commitment.");
+
+    try {
+      const response = await fetch("/api/mpgf/stripe/setup-intent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amountCents: activeAmountCents,
+          campaignId,
+          roundId,
         }),
       });
       const result = (await response.json().catch(() => ({}))) as CheckoutResponse;
 
-      setStatusMessage(result.message ?? result.error ?? "Checkout session response received.");
-
-      if (result.checkoutUrl) {
-        assignBrowserLocation(result.checkoutUrl);
-        return;
-      }
+      setStatusMessage(
+        response.ok
+          ? payloadMessage(result, "SetupIntent saved. Webhook review is still required before counting.")
+          : payloadMessage(result, "Could not save a Stripe SetupIntent commitment."),
+      );
     } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : "Could not create checkout session.");
+      setStatusMessage(error instanceof Error ? error.message : "Could not save a Stripe SetupIntent commitment.");
     }
 
     setPending(false);
+  }
+
+  function handlePrimaryAction() {
+    recordContributionRouteFunnelEvent(mode);
+
+    if (mode === "fast_route") {
+      void startFastRoute();
+      return;
+    }
+
+    if (mode === "saved_commitment") {
+      void saveCommitment();
+      return;
+    }
+
+    assignBrowserLocation(`/mpgf/contribute?campaignId=${encodeURIComponent(campaignId)}#manual-proof-fallback`);
   }
 
   return (
@@ -173,63 +286,52 @@ export function MpgfContributionModal({
               {modalDescription}
             </p>
 
-            <div className="mpgf-segmented-control" role="group" aria-label="Contribution cadence">
+            <div className="mpgf-segmented-control" role="group" aria-label="Contribution route">
               <button
-                aria-pressed={cadence === "one_time"}
+                aria-pressed={mode === "fast_route"}
                 type="button"
-                onClick={() => setCadence("one_time")}
+                onClick={() => setMode("fast_route")}
               >
-                One-time contribution
+                1. Fast route
               </button>
               <button
-                aria-pressed={cadence === "monthly"}
+                aria-pressed={mode === "saved_commitment"}
                 type="button"
-                onClick={() => setCadence("monthly")}
+                onClick={() => setMode("saved_commitment")}
               >
-                Monthly sponsor-pool sustainer
+                2. Saved commitment
+              </button>
+              <button
+                aria-pressed={mode === "manual_proof_fallback"}
+                type="button"
+                onClick={() => setMode("manual_proof_fallback")}
+              >
+                3. Manual proof fallback
               </button>
             </div>
 
             <div className="mpgf-modal-grid">
               <div className="mpgf-form-grid">
-                {cadence === "one_time" ? (
-                  <label>
-                    One-time contribution
-                    <span className="mpgf-money-input">
-                      <span>$</span>
-                      <input
-                        min="1"
-                        step="1"
-                        type="number"
-                        value={oneTimeDollars}
-                        onChange={(event) => setOneTimeDollars(Number(event.currentTarget.value))}
-                      />
-                    </span>
-                  </label>
-                ) : (
-                  <label>
-                    Monthly sponsor-pool sustainer
-                    <span className="mpgf-money-input">
-                      <span>$</span>
-                      <input
-                        min="1"
-                        step="1"
-                        type="number"
-                        value={monthlyDollars}
-                        onChange={(event) => setMonthlyDollars(Number(event.currentTarget.value))}
-                      />
-                    </span>
-                  </label>
-                )}
+                <label>
+                  Contribution amount
+                  <span className="mpgf-money-input">
+                    <span>$</span>
+                    <input
+                      min="1"
+                      step="1"
+                      type="number"
+                      value={amountDollars}
+                      onChange={(event) => setAmountDollars(Number(event.currentTarget.value))}
+                    />
+                  </span>
+                </label>
 
                 <label>
-                  Optional campaign gift
+                  Campaign
                   <select
-                    disabled={cadence === "monthly"}
-                    value={cadence === "monthly" ? "" : campaignId}
+                    value={campaignId}
                     onChange={(event) => setCampaignId(event.currentTarget.value)}
                   >
-                    <option value="">Sponsor pool only</option>
                     {campaigns.map((campaign) => (
                       <option key={campaign.campaignId} value={campaign.campaignId}>
                         {campaign.title}
@@ -241,7 +343,7 @@ export function MpgfContributionModal({
                 <label className="checkbox-label">
                   <input
                     checked={countForMatching}
-                    disabled={cadence === "monthly"}
+                    disabled={mode === "manual_proof_fallback"}
                     type="checkbox"
                     onChange={(event) => setCountForMatching(event.currentTarget.checked)}
                   />
@@ -285,6 +387,14 @@ export function MpgfContributionModal({
                   </dd>
                 </div>
                 <div>
+                  <dt>Route</dt>
+                  <dd>{modeSummary[mode].route}</dd>
+                </div>
+                <div>
+                  <dt>Counting state</dt>
+                  <dd>{modeSummary[mode].state}</dd>
+                </div>
+                <div>
                   <dt>Threshold</dt>
                   <dd>
                     {selectedCampaign
@@ -301,17 +411,17 @@ export function MpgfContributionModal({
 
             <div className="mpgf-modal-note-grid">
               <div>
-                <h3>Receipts and refunds</h3>
+                <h3>Fast route first</h3>
                 <p>
-                  Checkout receipts come from the payment or fiscal partner. Refunds before round
-                  close back out counted support; later refunds create a reconciliation task.
+                  Every.org returns to a pending state. Only partner webhook import and MPGF review
+                  can make the contribution count.
                 </p>
               </div>
               <div>
-                <h3>Verification and identity</h3>
+                <h3>Saved commitment</h3>
                 <p>
-                  Matching weight uses identity confidence only. Unverified gifts can still be
-                  routed, but hidden moral scores never increase donor influence.
+                  Stripe saves the payment method with future-use consent; PaymentIntent creation
+                  waits for threshold, review, and challenge gates.
                 </p>
               </div>
             </div>
@@ -319,22 +429,27 @@ export function MpgfContributionModal({
             <div className="mpgf-inline-actions">
               <button
                 className="button button-primary"
-                disabled={pending || activeAmountCents < 100 || !viewerPresent || !realMoneyReady}
+                disabled={
+                  pending ||
+                  activeAmountCents < 100 ||
+                  !campaignId ||
+                  (mode === "saved_commitment" && !viewerPresent)
+                }
                 type="button"
-                onClick={startCheckout}
+                onClick={handlePrimaryAction}
               >
-                {cadence === "monthly" ? "Start monthly" : "Continue to checkout"}
+                {modeSummary[mode].actionLabel}
               </button>
               <Link className="button button-secondary" href="/mpgf/contribute">
-                Use manual evidence
+                Full contribution console
               </Link>
             </div>
             <p className="mpgf-small" role="status">
-              {statusMessage}
+              {statusMessage} {realMoneyReady ? "Integrated provider gates are ready." : "Integrated provider gates remain planned."}
             </p>
-            {!viewerPresent ? (
+            {!viewerPresent && mode === "saved_commitment" ? (
               <Link className="inline-link" href={`/login?returnTo=/mpgf/rounds/${roundId}`}>
-                Sign in before creating a checkout session.
+                Sign in before saving a Stripe commitment.
               </Link>
             ) : null}
           </section>

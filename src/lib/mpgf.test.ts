@@ -436,6 +436,7 @@ test("MPGF canonical hash normalizes optional JSON edge fields", () => {
 test("MPGF public route evidence includes pool proposal route", () => {
   assert.ok(mpgfPublicRoutes.includes("/mpgf/pools/new"));
   assert.ok(mpgfPublicRoutes.includes("/mpgf/governance"));
+  assert.ok(mpgfPublicRoutes.includes("/mpgf/metrics"));
 });
 
 test("MPGF verified assurance campaigns gate on amount, supporters, and review", () => {
@@ -1048,21 +1049,36 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   for (const expected of [
     /role="dialog"/,
     /aria-modal="true"/,
-    /One-time contribution/,
-    /Monthly sponsor-pool sustainer/,
-    /Optional campaign gift/,
-    /Sponsor pool only/,
+    /1\. Fast route/,
+    /2\. Saved commitment/,
+    /3\. Manual proof fallback/,
+    /Every\.org Donate Link/,
+    /pending webhook import/,
+    /Stripe SetupIntent first/,
+    /saved, not charged/,
+    /reviewed manual evidence/,
+    /Contribution amount/,
+    /Campaign/,
     /Count my gift for matching up to cap/,
-    /Receipts and refunds/,
-    /Verification and identity/,
-    /\/api\/mpgf\/contributions\/checkout-session/,
-    /\/api\/mpgf\/contributions\/subscription-session/,
+    /Fast route first/,
+    /Saved commitment/,
+    /\/api\/mpgf\/every-org\/donate-link/,
+    /\/api\/mpgf\/stripe\/setup-intent/,
+    /\/api\/funnel-events/,
+    /donation_route_clicked/,
+    /evidence_submission_started/,
+    /mpgf_contribution_route/,
+    /Open manual proof fallback/,
     /perDonorCapCents/,
     /countForMatching/,
     /campaignId/,
   ]) {
     assert.match(contributionModal, expected);
   }
+  assert.doesNotMatch(contributionModal, /\/api\/mpgf\/contributions\/checkout-session/);
+  assert.doesNotMatch(contributionModal, /\/api\/mpgf\/contributions\/subscription-session/);
+  assert.ok(contributionModal.indexOf("1. Fast route") < contributionModal.indexOf("2. Saved commitment"));
+  assert.ok(contributionModal.indexOf("2. Saved commitment") < contributionModal.indexOf("3. Manual proof fallback"));
   for (const expected of [
     /mpgf_public_goods_round_id/,
     /mpgf_public_goods_campaign_id/,
@@ -1119,9 +1135,13 @@ test("MPGF contribution intents verify identity before conditional payment autho
   const migration = readFileSync("supabase/migrations/20260531_mpgf_contribution_intents.sql", "utf8");
   const contributionPage = readFileSync("src/app/mpgf/contribute/page.tsx", "utf8");
   const consoleSource = readFileSync("src/components/mpgf/mpgf-console.tsx", "utf8");
+  const contributionModal = readFileSync("src/components/mpgf/mpgf-contribution-modal.tsx", "utf8");
   const fastRouteIndex = consoleSource.indexOf("1. Every.org fast route");
   const savedCommitmentIndex = consoleSource.indexOf("2. Saved commitment");
   const manualProofIndex = consoleSource.indexOf("3. Manual proof fallback");
+  const modalFastRouteIndex = contributionModal.indexOf("1. Fast route");
+  const modalSavedCommitmentIndex = contributionModal.indexOf("2. Saved commitment");
+  const modalManualProofIndex = contributionModal.indexOf("3. Manual proof fallback");
 
   assert.ok(contributionFlow);
   assert.equal(unknownFlow, null);
@@ -1186,10 +1206,23 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.ok(fastRouteIndex >= 0);
   assert.ok(savedCommitmentIndex > fastRouteIndex);
   assert.ok(manualProofIndex > savedCommitmentIndex);
+  assert.ok(modalFastRouteIndex >= 0);
+  assert.ok(modalSavedCommitmentIndex > modalFastRouteIndex);
+  assert.ok(modalManualProofIndex > modalSavedCommitmentIndex);
   assert.match(consoleSource, /Open Every\.org fast route/);
   assert.match(consoleSource, /Save Stripe commitment/);
   assert.match(consoleSource, /Save pledge intent/);
   assert.match(consoleSource, /Manual proof fallback/);
+  assert.match(consoleSource, /id="manual-proof-fallback"/);
+  assert.match(contributionModal, /\/api\/mpgf\/every-org\/donate-link/);
+  assert.match(contributionModal, /\/api\/mpgf\/stripe\/setup-intent/);
+  assert.match(contributionModal, /\/api\/funnel-events/);
+  assert.match(contributionModal, /donation_route_clicked/);
+  assert.match(contributionModal, /evidence_submission_started/);
+  assert.match(contributionModal, /mpgf_contribution_route/);
+  assert.match(contributionModal, /Open manual proof fallback/);
+  assert.match(contributionModal, /#manual-proof-fallback/);
+  assert.doesNotMatch(contributionModal, /checkout-session/);
 
   for (const forbidden of [
     "demo-contributor-private-user",
@@ -1310,6 +1343,10 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.equal(unverifiedWebhook.webhookArrivedBeforeSignIn, true);
   assert.equal(unverifiedWebhook.autoCreatesContributionEvidence, false);
   assert.match(donateLinkRoute, /getViewer/);
+  assert.match(donateLinkRoute, /recordMpgfPublicGoodsAnalyticsEvent/);
+  assert.match(donateLinkRoute, /contribution_route_selected/);
+  assert.match(donateLinkRoute, /every_org_fast_route/);
+  assert.match(donateLinkRoute, /provider_link_created/);
   assert.match(donateLinkRoute, /MPGF_EVERY_ORG_PUBLIC_WEBHOOK_TOKEN/);
   assert.match(donateLinkRoute, /pending_webhook_not_counted/);
   assert.match(webhookRoute, /MPGF_EVERY_ORG_WEBHOOK_SHARED_SECRET/);
@@ -1489,6 +1526,10 @@ test("MPGF Stripe saved commitments use SetupIntent-first before conditional Pay
   assert.equal(rejectedWebhook.status, "rejected");
   assert.equal(rejectedWebhook.stateChangeAllowed, false);
   assert.match(setupRoute, /setupIntents\.create/);
+  assert.match(setupRoute, /recordMpgfPublicGoodsAnalyticsEvent/);
+  assert.match(setupRoute, /contribution_route_selected/);
+  assert.match(setupRoute, /stripe_setup_intent_saved_commitment/);
+  assert.match(setupRoute, /setup_intent_started/);
   assert.match(setupRoute, /usage: "off_session"/);
   assert.match(setupRoute, /createsChargeImmediately: false/);
   assert.match(workerRoute, /MPGF_STRIPE_CONDITIONAL_WORKER_SECRET/);
@@ -2999,6 +3040,22 @@ test("MPGF public-goods analytics keeps only privacy-safe buckets and factor cod
       publicAggregationOnly: true,
     },
   });
+  const contributionRouteEvent = buildMpgfPublicGoodsAnalyticsEvent({
+    eventType: "contribution_route_selected",
+    userId: "private-route-user",
+    campaignId: "campaign-global-health-basic-needs",
+    eventJson: {
+      amountBucket: bucketMpgfPublicGoodsAmountCents(2_500),
+      captureMode: "external_handoff",
+      surface: "public_campaign_page",
+      contributionRoute: "every_org_fast_route",
+      contributionFunnelStep: "provider_link_created",
+      supportSignalState: "pending_verification",
+      privateByDefault: true,
+      publicAggregationOnly: true,
+      netNewFundingProxy: "uncertain",
+    },
+  });
   const route = readFileSync("src/app/api/mpgf/public-goods/analytics/route.ts", "utf8");
   const persistence = readFileSync("src/lib/mpgf/persistence.ts", "utf8");
 
@@ -3010,6 +3067,11 @@ test("MPGF public-goods analytics keeps only privacy-safe buckets and factor cod
   assert.equal(supportSignalEvent.event_json.supportSignalMode, "common_ground_support");
   assert.equal(supportSignalEvent.event_json.privateByDefault, true);
   assert.equal("moralCluster" in supportSignalEvent.event_json, false);
+  assert.equal(contributionRouteEvent.event_type, "contribution_route_selected");
+  assert.equal(contributionRouteEvent.event_json.contributionRoute, "every_org_fast_route");
+  assert.equal(contributionRouteEvent.event_json.contributionFunnelStep, "provider_link_created");
+  assert.equal(contributionRouteEvent.event_json.amountBucket, "10_to_49");
+  assert.equal(contributionRouteEvent.user_ref_hash?.includes("private-route-user"), false);
   assert.throws(
     () =>
       buildMpgfPublicGoodsAnalyticsEvent({
@@ -3036,6 +3098,8 @@ test("MPGF public-goods analytics keeps only privacy-safe buckets and factor cod
   );
   assert.match(route, /MPGF_ANALYTICS_SECRET/);
   assert.match(route, /bucketMpgfPublicGoodsAmountCents/);
+  assert.match(route, /contributionRoute/);
+  assert.match(route, /contributionFunnelStep/);
   assert.match(route, /supportSignalMode/);
   assert.match(route, /recordMpgfPublicGoodsAnalyticsEvent/);
   assert.doesNotMatch(route, /supporterReason/);
@@ -3210,6 +3274,8 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
       generatedAt: "2026-06-15T12:00:00.000Z",
     });
     const route = readFileSync("src/app/api/mpgf/public-goods/kpis/route.ts", "utf8");
+    const metricsPage = readFileSync("src/app/mpgf/metrics/page.tsx", "utf8");
+    const hubPage = readFileSync("src/app/mpgf/page.tsx", "utf8");
     const dryRunGateIndex = route.indexOf("if (dryRun)");
     const secretGateIndex = route.indexOf("if (!kpiSecret())");
     const kpis = readFileSync("src/lib/mpgf/public-goods-kpis.ts", "utf8");
@@ -3280,6 +3346,22 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.equal(serialized.includes("supporterReason"), false);
     assert.match(route, /MPGF_PUBLIC_GOODS_KPI_SECRET/);
     assert.match(route, /loadMpgfPublicGoodsKpiSnapshot/);
+    assert.match(metricsPage, /loadMpgfPublicGoodsKpiSnapshot\(\{ dryRun: true \}\)/);
+    assert.match(metricsPage, /Verified dollars routed to moral public goods/);
+    assert.match(metricsPage, /Verified-supporter count per winning campaign/);
+    assert.match(metricsPage, /Threshold-clear rate/);
+    assert.match(metricsPage, /Sponsor leverage ratio/);
+    assert.match(metricsPage, /Auto-verified share of contributions/);
+    assert.match(metricsPage, /Time from pledge to counted contribution/);
+    assert.match(metricsPage, /Sponsor-pool refill rate/);
+    assert.match(metricsPage, /Review SLA attainment/);
+    assert.match(metricsPage, /Dispute rate and overturn rate/);
+    assert.match(metricsPage, /Donor retention into next round/);
+    assert.match(metricsPage, /Aggregate only/);
+    assert.match(metricsPage, /A\/B tests without moral ranking/);
+    assert.match(metricsPage, /widensPublicAccessAutomatically/);
+    assert.match(hubPage, /\/mpgf\/metrics/);
+    assert.match(hubPage, /Funding metrics/);
     assert.match(kpis, /reviewerMedianHoursToClose/);
     assert.match(kpis, /thresholdClearRateBps/);
     assert.match(kpis, /supportSignalToPledgeIntentBps/);

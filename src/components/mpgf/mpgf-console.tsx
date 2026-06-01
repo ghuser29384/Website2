@@ -917,7 +917,7 @@ export function MpgfConsole({
             </p>
           </section>
 
-          <section className="mpgf-panel mpgf-panel-primary">
+          <section className="mpgf-panel mpgf-panel-primary" id="manual-proof-fallback">
             <p className="eyebrow">3. Manual proof fallback</p>
             <h2>Use reviewed evidence only when integrations cannot import</h2>
             <p>{MPGF_COPY.manualExternalPaymentEvidence}</p>

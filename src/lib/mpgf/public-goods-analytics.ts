@@ -16,6 +16,7 @@ type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
 
 export type MpgfPublicGoodsAnalyticsEventType =
   | "campaign_viewed"
+  | "contribution_route_selected"
   | "support_signal_recorded"
   | "pledge_intent_recorded"
   | "threshold_status_evaluated"
@@ -44,6 +45,8 @@ export interface MpgfPublicGoodsAnalyticsEventJson {
   proofStatus?: string;
   publicEvidenceSource?: string;
   surface?: "public_campaign_page" | "mpgf_participant_action" | "protected_job" | "review_console";
+  contributionRoute?: "every_org_fast_route" | "stripe_setup_intent_saved_commitment" | "manual_proof_fallback";
+  contributionFunnelStep?: "route_selected" | "provider_link_created" | "setup_intent_started" | "fallback_opened";
   supportSignalMode?: "common_ground_support" | "dissent_review_requested";
   supportSignalState?: "signal_only" | "pledge_saved" | "pending_verification" | "threshold_cleared" | "counted" | "payout_in_milestones";
   privateByDefault?: true;
@@ -74,6 +77,7 @@ export interface RecordMpgfPublicGoodsAnalyticsEventResult {
 
 const allowedEventTypes = new Set<MpgfPublicGoodsAnalyticsEventType>([
   "campaign_viewed",
+  "contribution_route_selected",
   "support_signal_recorded",
   "pledge_intent_recorded",
   "threshold_status_evaluated",

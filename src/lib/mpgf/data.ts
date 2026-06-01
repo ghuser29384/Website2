@@ -630,6 +630,7 @@ export const mpgfPublicRoutes = [
   "/mpgf",
   "/mpgf/about",
   "/mpgf/governance",
+  "/mpgf/metrics",
   "/mpgf/contribute",
   "/mpgf/contribute/success",
   "/mpgf/contribute/cancel",

@@ -4,6 +4,10 @@ import { getViewer } from "@/lib/app-data";
 import { demoMpgfAssuranceRound } from "@/lib/mpgf/data";
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
 import {
+  bucketMpgfPublicGoodsAmountCents,
+  recordMpgfPublicGoodsAnalyticsEvent,
+} from "@/lib/mpgf/public-goods-analytics";
+import {
   buildMpgfEveryOrgDonateLink,
   buildMpgfEveryOrgPartnerDonationId,
 } from "@/lib/mpgf/public-goods-every-org";
@@ -44,6 +48,48 @@ function exitUrlFor(requestUrl: string) {
   return new URL("/mpgf/contribute/cancel", url.origin).toString();
 }
 
+async function recordDonateLinkAnalytics({
+  amountCents,
+  campaignId,
+  userId,
+}: {
+  amountCents?: number;
+  campaignId: string;
+  userId?: string;
+}) {
+  try {
+    const result = await recordMpgfPublicGoodsAnalyticsEvent({
+      eventType: "contribution_route_selected",
+      userId,
+      campaignId,
+      eventJson: {
+        ...(typeof amountCents === "number" ? { amountBucket: bucketMpgfPublicGoodsAmountCents(amountCents) } : {}),
+        captureMode: "external_handoff",
+        surface: "public_campaign_page",
+        contributionRoute: "every_org_fast_route",
+        contributionFunnelStep: "provider_link_created",
+        supportSignalState: "pending_verification",
+        privateByDefault: true,
+        publicAggregationOnly: true,
+        netNewFundingProxy: "uncertain",
+      },
+    });
+
+    return {
+      ok: result.ok,
+      status: result.status,
+      eventType: result.row.event_type,
+      warning: result.warning,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: "not_configured" as const,
+      warning: error instanceof Error ? error.message : "Could not record MPGF fast-route analytics.",
+    };
+  }
+}
+
 async function responseFor(record: Record<string, unknown>, requestUrl: string) {
   const campaignId = stringField(record, "campaignId");
 
@@ -56,6 +102,7 @@ async function responseFor(record: Record<string, unknown>, requestUrl: string) 
 
   const viewer = await getViewer();
   const userRef = stringField(record, "userRef") ?? viewer?.authUser.id;
+  const amountCents = numberField(record, "amountCents");
   const partnerDonationId = buildMpgfEveryOrgPartnerDonationId({
     campaignId,
     conditionalPledgeId: stringField(record, "conditionalPledgeId"),
@@ -64,7 +111,7 @@ async function responseFor(record: Record<string, unknown>, requestUrl: string) 
     userRef,
   });
   const donateLink = buildMpgfEveryOrgDonateLink({
-    amountCents: numberField(record, "amountCents"),
+    amountCents,
     campaignId,
     conditionalPledgeId: stringField(record, "conditionalPledgeId"),
     exitUrl: stringField(record, "exitUrl") ?? exitUrlFor(requestUrl),
@@ -73,6 +120,11 @@ async function responseFor(record: Record<string, unknown>, requestUrl: string) 
     successUrl: stringField(record, "successUrl") ?? successUrlFor(requestUrl, partnerDonationId),
     userRef,
     webhookToken: publicWebhookToken(),
+  });
+  const analytics = await recordDonateLinkAnalytics({
+    amountCents,
+    campaignId,
+    userId: viewer?.authUser.id,
   });
 
   return NextResponse.json(
@@ -83,6 +135,7 @@ async function responseFor(record: Record<string, unknown>, requestUrl: string) 
       webhookPath: "/api/mpgf/every-org/webhook",
       reviewRequiredBeforeCounting: true,
       finalPayoutAuthorized: false,
+      analytics,
     },
     { headers: MPGF_PUBLIC_GOODS_API_HEADERS },
   );
