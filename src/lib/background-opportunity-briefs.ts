@@ -22,6 +22,23 @@ type ProfileInterviewAnswerInsert =
 
 export const BACKGROUND_OPPORTUNITY_BRIEF_VERSION = "background-opportunity-brief-v1";
 
+export const BACKGROUND_OPPORTUNITY_BRIEF_DELIVERY_STATES = [
+  "pending",
+  "delivered",
+  "opened",
+  "interested",
+  "maybe_later",
+  "dismissed",
+  "expired",
+] as const;
+
+export const BACKGROUND_OPPORTUNITY_BRIEF_ACTIONS = [
+  "request_more_detail",
+  "maybe_later",
+  "dismiss",
+  "report_concern",
+] as const;
+
 export const BACKGROUND_BRIEF_HIDDEN_FIELDS_NOTICE =
   "Exact wishes, private asks, contact details, raw source notes, and sensitive constraints stay hidden until a purpose-bound grant or mutual consent.";
 
@@ -50,6 +67,28 @@ function compactText(value: string, maxLength = MAX_TEXT_LENGTH) {
 
 function uniqueStrings(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+export function normalizeOpportunityBriefDeliveryState(value?: string | null) {
+  if (
+    BACKGROUND_OPPORTUNITY_BRIEF_DELIVERY_STATES.includes(
+      value as (typeof BACKGROUND_OPPORTUNITY_BRIEF_DELIVERY_STATES)[number],
+    )
+  ) {
+    return value as (typeof BACKGROUND_OPPORTUNITY_BRIEF_DELIVERY_STATES)[number];
+  }
+
+  if (value === "open" || value === "packet_requested" || value === "muted") {
+    return "delivered";
+  }
+
+  return "pending";
+}
+
+export function getOpportunityBriefDeliveryStateForFeedback(
+  outcome: "dismissed" | "interested" | "maybe_later",
+) {
+  return outcome;
 }
 
 function addDays(now: Date, days: number) {
@@ -104,13 +143,16 @@ export function buildOpportunityBriefRow({
   return {
     candidate_profile_id: candidateProfileId ?? null,
     confidence_band: explanation.confidenceBand,
+    delivery_state: "pending",
     factor_codes: explanation.factorCodes,
     hidden_fields_notice: BACKGROUND_BRIEF_HIDDEN_FIELDS_NOTICE,
+    human_review_required: true,
     match_id: matchId,
     next_step_type: nextStepType,
     profile_id: profileId,
     redacted_fields: explanation.redactedSurfaces,
     reveal_consequence_notice: BACKGROUND_BRIEF_REVEAL_NOTICE,
+    review_status: "human_review_required",
     safe_summary: explanation.summary,
     shared_counts: {
       factorCodeCount: explanation.factorCodes.length,
@@ -147,13 +189,16 @@ export function formatOpportunityBriefNextStep(
 
 export function serializeOpportunityBriefCard(row: {
   confidence_band: string;
+  delivery_state?: string | null;
   factor_codes: string[];
   hidden_fields_notice: string;
+  human_review_required?: boolean | null;
   id: string;
   next_step_type: string;
   profile_id: string;
   redacted_fields?: string[] | null;
   reveal_consequence_notice: string;
+  review_status?: string | null;
   safe_summary?: string | null;
   shared_counts?: Record<string, unknown> | null;
   status: string;
@@ -161,14 +206,19 @@ export function serializeOpportunityBriefCard(row: {
   why_text: string;
 }) {
   return {
+    actions: [...BACKGROUND_OPPORTUNITY_BRIEF_ACTIONS],
     confidenceBand: row.confidence_band,
+    deliveryState: normalizeOpportunityBriefDeliveryState(row.delivery_state ?? row.status),
     factorCodes: uniqueStrings(row.factor_codes),
     hiddenFieldsNotice: row.hidden_fields_notice || BACKGROUND_BRIEF_HIDDEN_FIELDS_NOTICE,
+    humanReviewRequired: row.human_review_required ?? true,
     id: row.id,
     nextStep: formatOpportunityBriefNextStep(row.next_step_type),
     profileId: row.profile_id,
     redactedFields: uniqueStrings(row.redacted_fields ?? []),
+    redactionNotice: row.hidden_fields_notice || BACKGROUND_BRIEF_HIDDEN_FIELDS_NOTICE,
     revealConsequenceNotice: row.reveal_consequence_notice || BACKGROUND_BRIEF_REVEAL_NOTICE,
+    reviewStatus: row.review_status ?? "human_review_required",
     safeSummary: compactText(row.safe_summary ?? row.why_text, 500),
     sharedCounts: row.shared_counts ?? {},
     status: row.status,

@@ -1935,6 +1935,7 @@ export interface Database {
           match_id: string | null;
           title: string;
           confidence_band: "High" | "Moderate" | "Tentative" | "Exploratory";
+          delivery_state: "pending" | "delivered" | "opened" | "interested" | "maybe_later" | "dismissed" | "expired";
           factor_codes: string[];
           shared_counts: Record<string, unknown>;
           safe_summary: string;
@@ -1947,7 +1948,9 @@ export interface Database {
             | "review_profile"
             | "mute_or_dismiss";
           hidden_fields_notice: string;
+          human_review_required: boolean;
           reveal_consequence_notice: string;
+          review_status: "human_review_required" | "review_cleared" | "blocked";
           status: "open" | "opened" | "dismissed" | "interested" | "maybe_later" | "muted" | "packet_requested" | "expired";
           expires_at: string;
           seen_at: string | null;
@@ -1969,6 +1972,7 @@ export interface Database {
           match_id?: string | null;
           title?: string;
           confidence_band?: "High" | "Moderate" | "Tentative" | "Exploratory";
+          delivery_state?: "pending" | "delivered" | "opened" | "interested" | "maybe_later" | "dismissed" | "expired";
           factor_codes?: string[];
           shared_counts?: Record<string, unknown>;
           safe_summary?: string;
@@ -1981,7 +1985,9 @@ export interface Database {
             | "review_profile"
             | "mute_or_dismiss";
           hidden_fields_notice?: string;
+          human_review_required?: boolean;
           reveal_consequence_notice?: string;
+          review_status?: "human_review_required" | "review_cleared" | "blocked";
           status?: "open" | "opened" | "dismissed" | "interested" | "maybe_later" | "muted" | "packet_requested" | "expired";
           expires_at?: string;
           seen_at?: string | null;
@@ -2001,6 +2007,7 @@ export interface Database {
           match_id?: string | null;
           title?: string;
           confidence_band?: "High" | "Moderate" | "Tentative" | "Exploratory";
+          delivery_state?: "pending" | "delivered" | "opened" | "interested" | "maybe_later" | "dismissed" | "expired";
           factor_codes?: string[];
           shared_counts?: Record<string, unknown>;
           safe_summary?: string;
@@ -2013,7 +2020,9 @@ export interface Database {
             | "review_profile"
             | "mute_or_dismiss";
           hidden_fields_notice?: string;
+          human_review_required?: boolean;
           reveal_consequence_notice?: string;
+          review_status?: "human_review_required" | "review_cleared" | "blocked";
           status?: "open" | "opened" | "dismissed" | "interested" | "maybe_later" | "muted" | "packet_requested" | "expired";
           expires_at?: string;
           seen_at?: string | null;
@@ -2471,6 +2480,7 @@ export interface Database {
           max_auto_grant_stage: "registry" | "consent" | "introduced";
           group_public_preview: string;
           default_retention_days: 30 | 90 | 180 | 365;
+          contact_disclosure_requires_owner_step_up: boolean;
           disclosure_rules: Record<string, unknown>;
           created_at: string;
           updated_at: string;
@@ -2483,6 +2493,7 @@ export interface Database {
           max_auto_grant_stage?: "registry" | "consent" | "introduced";
           group_public_preview?: string;
           default_retention_days?: 30 | 90 | 180 | 365;
+          contact_disclosure_requires_owner_step_up?: boolean;
           disclosure_rules?: Record<string, unknown>;
           created_at?: string;
           updated_at?: string;
@@ -2493,6 +2504,7 @@ export interface Database {
           max_auto_grant_stage?: "registry" | "consent" | "introduced";
           group_public_preview?: string;
           default_retention_days?: 30 | 90 | 180 | 365;
+          contact_disclosure_requires_owner_step_up?: boolean;
           disclosure_rules?: Record<string, unknown>;
           updated_at?: string;
         };
@@ -3776,32 +3788,35 @@ export interface Database {
         Row: {
           collective_id: string;
           profile_id: string;
-          role: "owner" | "admin" | "member" | "viewer";
+          role: "owner" | "admin" | "delegate" | "reviewer" | "member" | "viewer";
           status: "invited" | "active" | "removed";
           delegation_scope: string;
           can_approve_matches: boolean;
           can_grant_privacy: boolean;
           can_manage_bounties: boolean;
+          permissions: string[];
           created_at: string;
         };
         Insert: {
           collective_id: string;
           profile_id: string;
-          role?: "owner" | "admin" | "member" | "viewer";
+          role?: "owner" | "admin" | "delegate" | "reviewer" | "member" | "viewer";
           status?: "invited" | "active" | "removed";
           delegation_scope?: string;
           can_approve_matches?: boolean;
           can_grant_privacy?: boolean;
           can_manage_bounties?: boolean;
+          permissions?: string[];
           created_at?: string;
         };
         Update: {
-          role?: "owner" | "admin" | "member" | "viewer";
+          role?: "owner" | "admin" | "delegate" | "reviewer" | "member" | "viewer";
           status?: "invited" | "active" | "removed";
           delegation_scope?: string;
           can_approve_matches?: boolean;
           can_grant_privacy?: boolean;
           can_manage_bounties?: boolean;
+          permissions?: string[];
         };
         Relationships: [];
       };

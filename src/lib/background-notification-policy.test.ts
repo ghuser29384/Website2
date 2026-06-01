@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { shouldSendBackgroundNotificationImmediately } from "@/lib/background-notification-policy";
+import {
+  shouldSendBackgroundNotificationImmediately,
+  shouldSendBriefNow,
+} from "@/lib/background-notification-policy";
 
 test("discovery notifications default to digest unless explicitly immediate", () => {
   assert.equal(
@@ -89,5 +92,73 @@ test("source cooldowns suppress repeated discovery notifications", () => {
       sourceCooldownHours: 24,
     }),
     true,
+  );
+});
+
+test("opportunity brief notifications never send private detail immediately", () => {
+  const result = shouldSendBriefNow({
+    confidenceBand: "High",
+    containsPrivateWishText: true,
+    digestEnabled: false,
+    immediateHighConfidenceEnabled: true,
+    reviewStatus: "review_cleared",
+    riskLevel: "low",
+  });
+
+  assert.equal(result.allowed, false);
+  assert.equal(result.deliveryMode, "none");
+  assert.match(result.reason, /private/i);
+});
+
+test("opportunity brief notifications respect quiet hours and daily caps", () => {
+  const quietHoursDecision = shouldSendBriefNow({
+    confidenceBand: "High",
+    digestEnabled: true,
+    immediateHighConfidenceEnabled: true,
+    nowLocalTime: "23:15",
+    quietHours: { end: "08:00", start: "22:00" },
+    reviewStatus: "review_cleared",
+    riskLevel: "low",
+  });
+  const capDecision = shouldSendBriefNow({
+    confidenceBand: "High",
+    dailyCap: 1,
+    digestEnabled: true,
+    immediateHighConfidenceEnabled: true,
+    reviewStatus: "review_cleared",
+    riskLevel: "low",
+    sentToday: 1,
+  });
+
+  assert.deepEqual(
+    { allowed: quietHoursDecision.allowed, deliveryMode: quietHoursDecision.deliveryMode },
+    { allowed: true, deliveryMode: "digest" },
+  );
+  assert.deepEqual(
+    { allowed: capDecision.allowed, deliveryMode: capDecision.deliveryMode },
+    { allowed: true, deliveryMode: "digest" },
+  );
+});
+
+test("opportunity brief notifications send immediately only after review-cleared high confidence", () => {
+  assert.deepEqual(
+    shouldSendBriefNow({
+      confidenceBand: "Moderate",
+      digestEnabled: true,
+      immediateHighConfidenceEnabled: true,
+      reviewStatus: "review_cleared",
+      riskLevel: "low",
+    }).deliveryMode,
+    "digest",
+  );
+  assert.deepEqual(
+    shouldSendBriefNow({
+      confidenceBand: "High",
+      digestEnabled: true,
+      immediateHighConfidenceEnabled: true,
+      reviewStatus: "review_cleared",
+      riskLevel: "low",
+    }).deliveryMode,
+    "immediate",
   );
 });

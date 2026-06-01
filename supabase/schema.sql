@@ -1529,6 +1529,7 @@ create table if not exists public.collective_members (
   can_approve_matches boolean not null default false,
   can_grant_privacy boolean not null default false,
   can_manage_bounties boolean not null default false,
+  permissions text[] not null default '{}',
   created_at timestamptz not null default timezone('utc', now()),
   primary key (collective_id, profile_id)
 );
@@ -1823,6 +1824,22 @@ alter table public.collective_members add column if not exists delegation_scope 
 alter table public.collective_members add column if not exists can_approve_matches boolean not null default false;
 alter table public.collective_members add column if not exists can_grant_privacy boolean not null default false;
 alter table public.collective_members add column if not exists can_manage_bounties boolean not null default false;
+alter table public.collective_members add column if not exists permissions text[] not null default '{}';
+alter table public.collective_members drop constraint if exists collective_members_role_check;
+alter table public.collective_members add constraint collective_members_role_check
+check (role in ('owner', 'admin', 'delegate', 'reviewer', 'member', 'viewer'));
+alter table public.collective_members drop constraint if exists collective_members_permissions_check;
+alter table public.collective_members add constraint collective_members_permissions_check
+check (
+  permissions <@ array[
+    'edit_broad_preview',
+    'approve_source_summary',
+    'request_intro',
+    'approve_contact_disclosure',
+    'revoke_grants',
+    'change_discoverability'
+  ]::text[]
+);
 
 create or replace view public.wish_profile_previews as
 select
@@ -5380,6 +5397,7 @@ create table if not exists public.background_opportunity_briefs (
   match_id uuid references public.match_suggestions (id) on delete set null,
   title text not null default 'Opportunity brief',
   confidence_band text not null default 'Exploratory' check (confidence_band in ('High', 'Moderate', 'Tentative', 'Exploratory')),
+  delivery_state text not null default 'pending' check (delivery_state in ('pending', 'delivered', 'opened', 'interested', 'maybe_later', 'dismissed', 'expired')),
   factor_codes text[] not null default '{}',
   shared_counts jsonb not null default '{}'::jsonb,
   safe_summary text not null default '',
@@ -5387,7 +5405,9 @@ create table if not exists public.background_opportunity_briefs (
   why_text text not null default '',
   next_step_type text not null default 'review_profile' check (next_step_type in ('answer_questions', 'request_intro_packet', 'request_detail', 'review_profile', 'mute_or_dismiss')),
   hidden_fields_notice text not null default 'Exact wishes, private asks, contact details, raw source notes, and sensitive constraints stay hidden until a purpose-bound grant or mutual consent.',
+  human_review_required boolean not null default true,
   reveal_consequence_notice text not null default 'Requesting more detail queues a reviewed, field-bound step; it does not send contact details or introduce anyone automatically.',
+  review_status text not null default 'human_review_required' check (review_status in ('human_review_required', 'review_cleared', 'blocked')),
   status text not null default 'open' check (status in ('open', 'opened', 'dismissed', 'interested', 'maybe_later', 'muted', 'packet_requested', 'expired')),
   expires_at timestamptz not null default (timezone('utc', now()) + interval '14 days'),
   seen_at timestamptz,
@@ -5403,8 +5423,19 @@ create table if not exists public.background_opportunity_briefs (
 alter table public.background_opportunity_briefs add column if not exists shared_counts jsonb not null default '{}'::jsonb;
 alter table public.background_opportunity_briefs add column if not exists safe_summary text not null default '';
 alter table public.background_opportunity_briefs add column if not exists redacted_fields text[] not null default '{}';
+alter table public.background_opportunity_briefs add column if not exists delivery_state text not null default 'pending';
+alter table public.background_opportunity_briefs add column if not exists review_status text not null default 'human_review_required';
+alter table public.background_opportunity_briefs add column if not exists human_review_required boolean not null default true;
 alter table public.background_opportunity_briefs add column if not exists seen_at timestamptz;
 alter table public.background_opportunity_briefs add column if not exists feedback_reason text;
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_delivery_state_check;
+alter table public.background_opportunity_briefs
+add constraint background_opportunity_briefs_delivery_state_check
+check (delivery_state in ('pending', 'delivered', 'opened', 'interested', 'maybe_later', 'dismissed', 'expired'));
+alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_review_status_check;
+alter table public.background_opportunity_briefs
+add constraint background_opportunity_briefs_review_status_check
+check (review_status in ('human_review_required', 'review_cleared', 'blocked'));
 alter table public.background_opportunity_briefs drop constraint if exists background_opportunity_briefs_status_check;
 alter table public.background_opportunity_briefs
 add constraint background_opportunity_briefs_status_check
@@ -5604,10 +5635,14 @@ create table if not exists public.background_collective_policies (
   max_auto_grant_stage text not null default 'consent' check (max_auto_grant_stage in ('registry', 'consent', 'introduced')),
   group_public_preview text not null default '',
   default_retention_days smallint not null default 90 check (default_retention_days in (30, 90, 180, 365)),
+  contact_disclosure_requires_owner_step_up boolean not null default true,
   disclosure_rules jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.background_collective_policies
+  add column if not exists contact_disclosure_requires_owner_step_up boolean not null default true;
 
 create table if not exists public.background_mute_rules (
   id uuid primary key default gen_random_uuid(),
@@ -5650,6 +5685,9 @@ on public.background_opportunity_briefs (profile_id, status, expires_at asc, cre
 
 create index if not exists background_opportunity_briefs_match_idx
 on public.background_opportunity_briefs (match_id, profile_id);
+
+create index if not exists background_opportunity_briefs_delivery_state_idx
+on public.background_opportunity_briefs (profile_id, delivery_state, updated_at desc);
 
 create index if not exists background_match_feedback_profile_idx
 on public.background_match_feedback (profile_id, outcome, updated_at desc);

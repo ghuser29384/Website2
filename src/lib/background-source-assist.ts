@@ -9,6 +9,13 @@ export const BACKGROUND_SOURCE_ASSIST_VERSION = "background-source-assist-v1";
 export const BACKGROUND_SOURCE_ASSIST_MODEL_NAME = "deterministic-redaction-v1";
 export const BACKGROUND_SOURCE_ASSIST_ALLOWED_USE =
   "review_first_source_summary_no_raw_persistence";
+export const BACKGROUND_SOURCE_ASSIST_ALLOWED_SOURCE_KINDS = [
+  "public_url",
+  "manual_paste",
+  "linkedin_export",
+  "substack_post",
+  "other",
+] as const;
 
 type BackgroundProfileSignalInsert =
   Database["public"]["Tables"]["background_profile_signals"]["Insert"];
@@ -36,6 +43,22 @@ export interface BackgroundSourceAssistDraftSummary {
   extractedSignals: BackgroundSourceAssistSignal[];
   redactionReport: BackgroundSourceAssistRedactionReport;
   summaryText: string;
+}
+
+export interface BackgroundSourceAssistLaneValidationInput {
+  allowedFieldKeys?: string[];
+  consentNote?: string;
+  continuousSyncRequested?: boolean;
+  rawIngestionAllowed?: boolean;
+  retentionDays?: number;
+  sourceKind?: string;
+}
+
+export interface BackgroundSourceAssistLaneValidationResult {
+  allowedFieldKeys: BackgroundSourcePermissionField[];
+  errors: string[];
+  rawIngestionAllowed: false;
+  sourceKind: (typeof BACKGROUND_SOURCE_ASSIST_ALLOWED_SOURCE_KINDS)[number];
 }
 
 const REDACTION_PATTERNS: Array<{
@@ -152,6 +175,57 @@ function incrementReport(
 
 function matchCount(value: string, pattern: RegExp) {
   return Array.from(value.matchAll(pattern)).length;
+}
+
+export function normalizeBackgroundSourceAssistSourceKind(value?: string | null) {
+  if (
+    BACKGROUND_SOURCE_ASSIST_ALLOWED_SOURCE_KINDS.includes(
+      value as (typeof BACKGROUND_SOURCE_ASSIST_ALLOWED_SOURCE_KINDS)[number],
+    )
+  ) {
+    return value as (typeof BACKGROUND_SOURCE_ASSIST_ALLOWED_SOURCE_KINDS)[number];
+  }
+
+  return "other";
+}
+
+export function validateBackgroundSourceAssistLane({
+  allowedFieldKeys = [],
+  consentNote = "",
+  continuousSyncRequested = false,
+  rawIngestionAllowed = false,
+  retentionDays = 90,
+  sourceKind = "other",
+}: BackgroundSourceAssistLaneValidationInput): BackgroundSourceAssistLaneValidationResult {
+  const normalizedFields = normalizeBackgroundSourcePermissionFields(allowedFieldKeys);
+  const errors: string[] = [];
+
+  if (rawIngestionAllowed) {
+    errors.push("Raw source ingestion is not available for source-assisted background networking.");
+  }
+
+  if (continuousSyncRequested) {
+    errors.push("Continuous source crawling is not available; submit a reviewed source summary instead.");
+  }
+
+  if (!normalizedFields.length) {
+    errors.push("Choose at least one broad field this reviewed source may influence.");
+  }
+
+  if (consentNote.trim().length < 12) {
+    errors.push("Add a consent note before using a source-assisted summary.");
+  }
+
+  if (![30, 90, 180, 365].includes(retentionDays)) {
+    errors.push("Choose a supported source-summary retention window.");
+  }
+
+  return {
+    allowedFieldKeys: normalizedFields,
+    errors,
+    rawIngestionAllowed: false,
+    sourceKind: normalizeBackgroundSourceAssistSourceKind(sourceKind),
+  };
 }
 
 export function redactBackgroundSourceAssistRawText(rawText: string): {

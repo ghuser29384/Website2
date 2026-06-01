@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getDefaultBackgroundCollectivePermissions } from "@/lib/background-collective-auth";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -168,6 +169,7 @@ export async function POST(request: Request) {
     can_manage_bounties: true,
     collective_id: collective.id,
     delegation_scope: "Full authority for initial setup.",
+    permissions: getDefaultBackgroundCollectivePermissions("owner"),
     profile_id: user.id,
     role: "owner",
     status: "active",
@@ -178,6 +180,7 @@ export async function POST(request: Request) {
     approval_threshold: numberField(body.approvalThreshold, 1, 1, 20),
     approver_roles: approverRoles.length ? approverRoles : ["owner", "admin"],
     collective_id: collective.id,
+    contact_disclosure_requires_owner_step_up: true,
     default_retention_days: retentionDaysField(body.defaultRetentionDays),
     disclosure_rules: {
       requirePurpose: true,

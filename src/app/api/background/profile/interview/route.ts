@@ -4,6 +4,7 @@ import {
   prepareRecordSensitiveTextFields,
 } from "@/lib/background-field-encryption";
 import { buildProfileInterviewAnswerRow } from "@/lib/background-opportunity-briefs";
+import { buildBackgroundRefinementItems } from "@/lib/background-refinement";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -31,15 +32,59 @@ function privateJson(body: Record<string, unknown>, status = 200) {
   });
 }
 
+async function getUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return { supabase, user };
+}
+
+export async function GET() {
+  if (!hasSupabaseEnv()) {
+    return privateJson({ error: "Supabase is not configured." }, 503);
+  }
+
+  const { supabase, user } = await getUser();
+
+  if (!user) {
+    return privateJson({ error: "Authentication required." }, 401);
+  }
+
+  const { data: profile, error } = await supabase
+    .from("wish_profiles")
+    .select("causes, capabilities, verification_preferences, constraints, brokerage_preference")
+    .eq("profile_id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    return privateJson({ error: error.message }, 500);
+  }
+
+  return privateJson({
+    items: buildBackgroundRefinementItems({
+      causeAreas: profile?.causes ?? [],
+      exclusions: profile?.constraints ? [profile.constraints] : [],
+      offeredCapabilities: profile?.capabilities ? [profile.capabilities] : [],
+      requestedCounterpartyKinds: profile?.brokerage_preference
+        ? [profile.brokerage_preference]
+        : [],
+      verificationPreferences: profile?.verification_preferences
+        ? [profile.verification_preferences]
+        : [],
+    }),
+    privacyNotice:
+      "Refinement questions are generated from missing explicit fields. Answers stay private until separately approved for preview or matching signals.",
+  });
+}
+
 export async function POST(request: Request) {
   if (!hasSupabaseEnv()) {
     return privateJson({ error: "Supabase is not configured." }, 503);
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getUser();
 
   if (!user) {
     return privateJson({ error: "Authentication required." }, 401);

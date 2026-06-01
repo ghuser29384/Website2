@@ -6,6 +6,7 @@ import {
   buildBackgroundProfileSignalRows,
   buildReviewedSourceDraftSummary,
   redactBackgroundSourceAssistRawText,
+  validateBackgroundSourceAssistLane,
 } from "@/lib/background-source-assist";
 
 test("source-assisted draft summaries redact contact payloads before persistence", () => {
@@ -60,4 +61,21 @@ test("approved source draft signals become active profile signal rows", () => {
   assert.equal(rows[0]?.source_connection_id, "connection-1");
   assert.equal(rows[0]?.source_summary_id, "summary-1");
   assert.equal(rows[0]?.status, "active");
+});
+
+test("source-assisted lane forbids raw ingestion and continuous sync", () => {
+  const validation = validateBackgroundSourceAssistLane({
+    allowedFieldKeys: ["cause_priorities", "not_allowed"],
+    consentNote: "Use this public source only for broad matching context.",
+    continuousSyncRequested: true,
+    rawIngestionAllowed: true,
+    retentionDays: 90,
+    sourceKind: "public_url",
+  });
+
+  assert.equal(validation.rawIngestionAllowed, false);
+  assert.equal(validation.sourceKind, "public_url");
+  assert.deepEqual(validation.allowedFieldKeys, ["cause_priorities"]);
+  assert.ok(validation.errors.some((error) => /raw source ingestion/i.test(error)));
+  assert.ok(validation.errors.some((error) => /continuous/i.test(error)));
 });

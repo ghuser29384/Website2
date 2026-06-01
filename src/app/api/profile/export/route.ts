@@ -4,6 +4,7 @@ import {
   buildMoralTradeApiRateLimitBlocker,
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
+import { buildBackgroundProfilePackage } from "@/lib/background-profile-package";
 import {
   PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
   PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
     wishEntries,
     personalDelegate,
     sourceConnections,
+    backgroundSourceSummaries,
     profileSources,
     backgroundProfileSignals,
     backgroundShadowRuns,
@@ -103,6 +105,10 @@ export async function GET(request: Request) {
     supabase.from("wish_entries").select("*").eq("profile_id", profileId),
     supabase.from("personal_delegates").select("*").eq("profile_id", profileId).maybeSingle(),
     supabase.from("source_connections").select("*").eq("profile_id", profileId),
+    supabase
+      .from("background_source_summaries")
+      .select("id, source_type, allowed_field_keys, retention_expires_at, status, approved_at, summary_text, summary_version")
+      .eq("profile_id", profileId),
     supabase.from("profile_sources").select("*").eq("profile_id", profileId),
     supabase.from("background_profile_signals").select("*").eq("profile_id", profileId),
     supabase.from("background_shadow_runs").select("*").eq("profile_id", profileId),
@@ -132,6 +138,7 @@ export async function GET(request: Request) {
     wishEntries.error,
     personalDelegate.error,
     sourceConnections.error,
+    backgroundSourceSummaries.error,
     profileSources.error,
     backgroundProfileSignals.error,
     backgroundShadowRuns.error,
@@ -178,8 +185,22 @@ export async function GET(request: Request) {
       )
     : null;
 
+  const exportedAt = new Date().toISOString();
+  const backgroundProfilePackage = buildBackgroundProfilePackage({
+    backgroundProfileSignals: backgroundProfileSignals.data ?? [],
+    exportedAt,
+    privacyGrants: privacyGrants.data ?? [],
+    sourceSummaries: backgroundSourceSummaries.data ?? [],
+    subject: {
+      id: profileId,
+      kind: exportedWishProfile?.participant_kind === "collective" ? "collective" : "participant",
+    },
+    wishProfile: exportedWishProfile,
+  });
+
   return jsonResponse({
-    exportedAt: new Date().toISOString(),
+    backgroundProfilePackage,
+    exportedAt,
     profile: profile.data,
     wishProfile: exportedWishProfile,
     wishEntries: exportedWishEntries,

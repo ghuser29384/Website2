@@ -7,6 +7,7 @@ import {
   normalizeBackgroundOpportunityFeedbackOutcome,
   normalizeBackgroundOpportunityFeedbackReason,
 } from "@/lib/background-opportunity-feedback";
+import { getOpportunityBriefDeliveryStateForFeedback } from "@/lib/background-opportunity-briefs";
 import {
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
@@ -126,6 +127,7 @@ export async function POST(
   const { error: updateError } = await supabase
     .from("background_opportunity_briefs")
     .update({
+      delivery_state: getOpportunityBriefDeliveryStateForFeedback(outcome),
       feedback_reason: reason,
       seen_at: now,
       status: getOpportunityBriefStatusForFeedback(outcome),

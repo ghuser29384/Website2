@@ -869,6 +869,10 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(dashboardPage, /Raw source content is not stored for matching/);
   assert.match(dashboardPage, /You review and approve a summary/);
   assert.match(dashboardPage, /queued background-networking emails/);
+  assert.match(dashboardPage, /delivery \{brief\.delivery_state\}/);
+  assert.match(dashboardPage, /brief\.review_status\.replaceAll/);
+  assert.match(dashboardPage, /Request more detail/);
+  assert.match(dashboardPage, /Report concern/);
   assert.match(backgroundActions, /validateBackgroundSourcePermission/);
   assert.match(backgroundActions, /allowed_field_keys: permission\.allowedFieldKeys/);
   assert.match(backgroundActions, /retention_expires_at: permission\.retentionExpiresAt/);

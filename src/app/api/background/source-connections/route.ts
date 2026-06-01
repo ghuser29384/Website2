@@ -19,6 +19,10 @@ const PROVIDER_ALIASES: Record<string, SourceConnectionInsert["provider"]> = {
   calendar_export: "calendar",
   chat_export: "chat_history",
   email_export: "email",
+  linkedin_export: "social",
+  manual_paste: "manual",
+  public_url: "blog",
+  substack_post: "blog",
   webpage: "blog",
 };
 
@@ -162,7 +166,7 @@ export async function POST(request: Request) {
   }
 
   const label = stringField(body.label);
-  const provider = normalizeProvider(body.provider);
+  const provider = normalizeProvider(body.provider ?? body.sourceKind ?? body.source_kind);
   const accessStatus = normalizeAccessStatus(body.accessStatus ?? body.access_status);
   const accessScope = stringField(body.accessScope ?? body.access_scope);
   const consentNotes = stringField(body.consentNotes ?? body.consent_notes);

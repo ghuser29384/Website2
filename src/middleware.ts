@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getPrivateNoStoreHeaders } from "@/lib/background-privacy-controls";
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const response = NextResponse.next();
   const headers = getPrivateNoStoreHeaders(request.nextUrl.pathname);
 

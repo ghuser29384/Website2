@@ -1258,12 +1258,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   <div className="mini-list-item" key={brief.id}>
                     <strong>{brief.title}</strong>
                     <span>
-                      {brief.confidence_band} confidence · {brief.status} · next step{" "}
+                      {brief.confidence_band} confidence · delivery {brief.delivery_state} · review{" "}
+                      {brief.review_status.replaceAll("_", " ")} · next step{" "}
                       {formatOpportunityBriefNextStep(brief.next_step_type)}
                     </span>
                     <span>{brief.why_text}</span>
                     <span>{brief.hidden_fields_notice}</span>
                     <span>{brief.reveal_consequence_notice}</span>
+                    {brief.human_review_required ? (
+                      <span>Human review remains required before detail disclosure or contact.</span>
+                    ) : null}
                     <div className="tag-row">
                       {brief.factor_codes.slice(0, 5).map((code) => (
                         <span className="source-pill" key={`${brief.id}-${code}`}>
@@ -1305,7 +1309,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <input name="feedback_outcome" type="hidden" value="interested" />
                         <input name="feedback_reason" type="hidden" value="interested" />
                         <button className="button button-secondary button-mini" type="submit">
-                          Interested
+                          Request more detail
                         </button>
                       </form>
                       <form action={updateOpportunityBriefStatusAction}>
@@ -1316,6 +1320,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <input name="feedback_reason" type="hidden" value="maybe_later" />
                         <button className="button button-secondary button-mini" type="submit">
                           Maybe later
+                        </button>
+                      </form>
+                      <form action={updateOpportunityBriefStatusAction}>
+                        <input name="return_to" type="hidden" value="/dashboard" />
+                        <input name="opportunity_brief_id" type="hidden" value={brief.id} />
+                        <input name="status" type="hidden" value="dismissed" />
+                        <input name="feedback_outcome" type="hidden" value="dismissed" />
+                        <input name="feedback_reason" type="hidden" value="safety_concern" />
+                        <button className="button button-secondary button-mini" type="submit">
+                          Report concern
                         </button>
                       </form>
                       <form action={updateOpportunityBriefStatusAction}>

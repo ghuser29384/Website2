@@ -31,6 +31,27 @@ export interface BackgroundNotificationPolicyInput {
   sourceCooldownHours?: number | null;
 }
 
+export interface BackgroundOpportunityBriefNotificationInput {
+  confidenceBand?: string | null;
+  containsContactDetails?: boolean;
+  containsPrivateWishText?: boolean;
+  containsSensitiveConstraint?: boolean;
+  dailyCap?: number | null;
+  digestEnabled?: boolean;
+  immediateHighConfidenceEnabled?: boolean;
+  nowLocalTime?: string;
+  quietHours?: { end: string; start: string } | null;
+  reviewStatus?: string | null;
+  riskLevel?: "low" | "medium" | "high";
+  sentToday?: number;
+}
+
+export interface BackgroundOpportunityBriefNotificationDecision {
+  allowed: boolean;
+  deliveryMode: "digest" | "immediate" | "none";
+  reason: string;
+}
+
 function isQuietHour({
   hour,
   quietHoursEnd,
@@ -77,6 +98,110 @@ function isInsideSourceCooldown({
   }
 
   return now.getTime() - lastSentAt < sourceCooldownHours * 60 * 60 * 1000;
+}
+
+function parseHour(value: string) {
+  const [rawHour] = value.split(":");
+  const hour = Number(rawHour);
+
+  return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null;
+}
+
+function isLocalTimeInsideQuietHours({
+  nowLocalTime,
+  quietHours,
+}: {
+  nowLocalTime?: string;
+  quietHours?: { end: string; start: string } | null;
+}) {
+  if (!nowLocalTime || !quietHours) {
+    return false;
+  }
+
+  const hour = parseHour(nowLocalTime);
+  const quietHoursStart = parseHour(quietHours.start);
+  const quietHoursEnd = parseHour(quietHours.end);
+
+  if (hour === null || quietHoursStart === null || quietHoursEnd === null) {
+    return false;
+  }
+
+  return isQuietHour({ hour, quietHoursEnd, quietHoursStart });
+}
+
+function isHighConfidenceBand(value?: string | null) {
+  return value === "high" || value === "High";
+}
+
+function digestDecision(reason: string): BackgroundOpportunityBriefNotificationDecision {
+  return { allowed: true, deliveryMode: "digest", reason };
+}
+
+function denyBriefNotification(reason: string): BackgroundOpportunityBriefNotificationDecision {
+  return { allowed: false, deliveryMode: "none", reason };
+}
+
+export function shouldSendBriefNow({
+  confidenceBand = "medium",
+  containsContactDetails = false,
+  containsPrivateWishText = false,
+  containsSensitiveConstraint = false,
+  dailyCap = 3,
+  digestEnabled = true,
+  immediateHighConfidenceEnabled = false,
+  nowLocalTime,
+  quietHours = { end: "08:00", start: "22:00" },
+  reviewStatus = "human_review_required",
+  riskLevel = "medium",
+  sentToday = 0,
+}: BackgroundOpportunityBriefNotificationInput): BackgroundOpportunityBriefNotificationDecision {
+  if (containsPrivateWishText || containsContactDetails || containsSensitiveConstraint) {
+    return denyBriefNotification(
+      "Opportunity brief notifications cannot include private wishes, contact details, or sensitive constraints.",
+    );
+  }
+
+  if (reviewStatus !== "review_cleared") {
+    return digestEnabled
+      ? digestDecision("Human review is still required, so the brief can only appear in a digest.")
+      : denyBriefNotification("Human review is still required before an immediate alert.");
+  }
+
+  if (riskLevel === "high") {
+    return digestEnabled
+      ? digestDecision("High-risk briefs are batched for review instead of sent immediately.")
+      : denyBriefNotification("High-risk briefs are not eligible for immediate notification.");
+  }
+
+  if (isLocalTimeInsideQuietHours({ nowLocalTime, quietHours })) {
+    return digestEnabled
+      ? digestDecision("Quiet hours are active, so the brief is held for digest delivery.")
+      : denyBriefNotification("Quiet hours are active.");
+  }
+
+  if (dailyCap !== null && sentToday >= dailyCap) {
+    return digestEnabled
+      ? digestDecision("Daily opportunity brief cap reached; the brief is held for digest delivery.")
+      : denyBriefNotification("Daily opportunity brief cap reached.");
+  }
+
+  if (!isHighConfidenceBand(confidenceBand)) {
+    return digestEnabled
+      ? digestDecision("Only high-confidence, review-cleared briefs can be sent immediately.")
+      : denyBriefNotification("Brief is below the immediate notification confidence threshold.");
+  }
+
+  if (!immediateHighConfidenceEnabled) {
+    return digestEnabled
+      ? digestDecision("Immediate high-confidence alerts are disabled; the brief is held for digest delivery.")
+      : denyBriefNotification("Opportunity brief notifications are disabled.");
+  }
+
+  return {
+    allowed: true,
+    deliveryMode: "immediate",
+    reason: "High-confidence, low-risk, review-cleared brief can be sent immediately.",
+  };
 }
 
 export function shouldSendBackgroundNotificationImmediately({

@@ -8,6 +8,7 @@ import {
   buildSourceSummaryRows,
   getBackgroundSourceRetentionExpiresAt,
   getGrantReceiptStatus,
+  getOpportunityBriefDeliveryStateForFeedback,
   serializeOpportunityBriefCard,
   validateIntroPacketInput,
 } from "@/lib/background-opportunity-briefs";
@@ -35,13 +36,16 @@ test("opportunity brief serialization keeps exact private wishes out of broad ca
   });
   const serialized = serializeOpportunityBriefCard({
     confidence_band: row.confidence_band ?? "Exploratory",
+    delivery_state: row.delivery_state ?? "pending",
     factor_codes: row.factor_codes ?? [],
     hidden_fields_notice: row.hidden_fields_notice ?? "",
+    human_review_required: row.human_review_required ?? true,
     id: "brief-1",
     next_step_type: row.next_step_type ?? "review_profile",
     profile_id: row.profile_id,
     redacted_fields: row.redacted_fields ?? [],
     reveal_consequence_notice: row.reveal_consequence_notice ?? "",
+    review_status: row.review_status ?? "human_review_required",
     safe_summary: row.safe_summary ?? "",
     shared_counts: row.shared_counts ?? {},
     status: row.status ?? "open",
@@ -53,6 +57,15 @@ test("opportunity brief serialization keeps exact private wishes out of broad ca
   assert.equal(rendered.includes(exactPrivateWish), false);
   assert.match(rendered, /Exact wishes/);
   assert.ok(serialized.redactedFields.length > 0);
+  assert.deepEqual(serialized.actions, [
+    "request_more_detail",
+    "maybe_later",
+    "dismiss",
+    "report_concern",
+  ]);
+  assert.equal(serialized.deliveryState, "pending");
+  assert.equal(serialized.humanReviewRequired, true);
+  assert.equal(serialized.reviewStatus, "human_review_required");
   assert.equal(serialized.sharedCounts.sharedCauseCount, 1);
   assert.deepEqual(row.factor_codes?.sort(), [
     "cause_overlap",
@@ -78,10 +91,19 @@ test("opportunity brief creation never advances disclosure or introduction state
   });
 
   assert.equal(row.status, "open");
+  assert.equal(row.delivery_state, "pending");
+  assert.equal(row.review_status, "human_review_required");
+  assert.equal(row.human_review_required, true);
   assert.equal(row.next_step_type, "request_intro_packet");
   assert.equal(row.hidden_fields_notice, BACKGROUND_BRIEF_HIDDEN_FIELDS_NOTICE);
   assert.equal("access_level" in row, false);
   assert.equal("identity_revealed" in row, false);
+});
+
+test("opportunity brief feedback maps to bg12 delivery lifecycle states", () => {
+  assert.equal(getOpportunityBriefDeliveryStateForFeedback("interested"), "interested");
+  assert.equal(getOpportunityBriefDeliveryStateForFeedback("maybe_later"), "maybe_later");
+  assert.equal(getOpportunityBriefDeliveryStateForFeedback("dismissed"), "dismissed");
 });
 
 test("intro packets require purpose and bounded requested fields", () => {
@@ -101,7 +123,7 @@ test("intro packets require purpose and bounded requested fields", () => {
   assert.deepEqual(packet.requested_field_keys, ["exact_wish", "source_summary"]);
   assert.equal(packet.review_state, "requested");
   assert.match(packet.reveal_capsule ?? "", /no contact details/i);
-  assert.ok(packet.mutual_questions.some((question) => /no trade/i.test(question)));
+  assert.ok((packet.mutual_questions ?? []).some((question) => /no trade/i.test(question)));
 });
 
 test("source summaries are scoped, expiring, and raw-ingestion disabled", () => {

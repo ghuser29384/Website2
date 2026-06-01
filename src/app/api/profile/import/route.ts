@@ -4,6 +4,10 @@ import { buildDeterministicSynthesis } from "@/lib/background-networking";
 import { buildBackgroundIntentClaims } from "@/lib/background-intent-claims";
 import { getBackgroundSourceRetentionExpiresAt } from "@/lib/background-opportunity-briefs";
 import {
+  buildWishProfileImportFromBackgroundPackage,
+  isBackgroundProfilePackageV1,
+} from "@/lib/background-profile-package";
+import {
   PROFILE_SOURCE_SENSITIVE_TEXT_FIELDS,
   PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
   SOURCE_CONNECTION_SENSITIVE_TEXT_FIELDS,
@@ -57,6 +61,10 @@ function jsonResponse(
   });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export async function POST(request: Request) {
   const rateLimit = takeMoralTradeApiRateLimitSlot(request, "profile_portability");
 
@@ -98,15 +106,16 @@ export async function POST(request: Request) {
     return jsonResponse({ error: "Authentication required." }, 401);
   }
 
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = await request.json().catch(() => null);
 
-  if (!body) {
+  if (!isRecord(body)) {
     return jsonResponse({ error: "Invalid JSON payload." }, 400);
   }
 
   const replaceExisting = body.replaceExisting === true;
   const profileId = user.id;
   const importedCounts = {
+    backgroundProfilePackage: 0,
     backgroundNotificationPreferences: 0,
     brokerageBounties: 0,
     helperStrategies: 0,
@@ -132,7 +141,19 @@ export async function POST(request: Request) {
     ]);
   }
 
-  const wishProfile = body.wishProfile as Record<string, unknown> | undefined;
+  const backgroundProfilePackage = isBackgroundProfilePackageV1(body.backgroundProfilePackage)
+    ? body.backgroundProfilePackage
+    : null;
+  const packageWishProfile: Record<string, unknown> | null = backgroundProfilePackage
+    ? buildWishProfileImportFromBackgroundPackage(backgroundProfilePackage)
+    : null;
+  const wishProfile: Record<string, unknown> | undefined =
+    (isRecord(body.wishProfile) ? body.wishProfile : undefined) ?? packageWishProfile ?? undefined;
+
+  if (backgroundProfilePackage) {
+    importedCounts.backgroundProfilePackage = 1;
+  }
+
   if (wishProfile) {
     let encryptedWishProfileFields: ReturnType<typeof prepareRecordSensitiveTextFields>;
 
