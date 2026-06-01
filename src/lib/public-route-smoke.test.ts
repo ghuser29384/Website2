@@ -121,7 +121,10 @@ test("offer save surfaces avoid shopping-cart framing", () => {
   const offerDetailPage = readRepoFile("src/app/offers/[offerId]/page.tsx");
   const notFoundPage = readRepoFile("src/app/not-found.tsx");
   const actionsSource = readRepoFile("src/app/actions.ts");
-  const robotsSource = readRepoFile("src/app/robots.txt/route.ts");
+  const robotsSource = [
+    readRepoFile("src/app/robots.txt/route.ts"),
+    readRepoFile("src/lib/crawlability-assets.ts"),
+  ].join("\n");
   const publicOffersSource = readRepoFile("src/lib/public-offers.ts");
   const offerFollowsSource = readRepoFile("src/lib/offer-follows.ts");
   const offerCreateSimilarSource = readRepoFile("src/lib/offer-create-similar.ts");
