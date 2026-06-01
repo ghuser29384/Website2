@@ -14,6 +14,9 @@ import type {
 export const MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY =
   "aggregate_sponsor_pool_sources_no_private_trade_or_payment_refs";
 
+export const MPGF_PUBLIC_GOODS_SPONSOR_POOL_REFILL_AUTOMATION_POLICY =
+  "automatic_recurring_tithe_and_surplus_refill_next_round_v1";
+
 export type MpgfPublicGoodsSponsorPoolSourceType =
   | "direct_sponsor_deposit"
   | "recurring_member_tithe"
@@ -34,6 +37,43 @@ export interface MpgfPublicGoodsSponsorPoolLedgerEntry {
   countsTowardMatching: boolean;
 }
 
+export interface MpgfPublicGoodsSponsorPoolRefillPlanEntry {
+  id: string;
+  poolId: string;
+  sourceType: Exclude<MpgfPublicGoodsSponsorPoolSourceType, "direct_sponsor_deposit">;
+  sourceRefHash: string;
+  grossSurplusCents: number;
+  routeShareBps: number;
+  routedAmountCents: number;
+  status: "available" | "pending_review";
+  custodyMode: "partner_or_provider_held_not_platform_custody";
+  publicMemo: string;
+  scheduledForRoundId: string;
+  receivedAt: string;
+  countsTowardMatching: boolean;
+}
+
+export interface MpgfPublicGoodsSponsorPoolRefillAutomationPlan {
+  ok: true;
+  poolId: string;
+  currentRoundId: string;
+  scheduledForRoundId: string;
+  policy: typeof MPGF_PUBLIC_GOODS_SPONSOR_POOL_REFILL_AUTOMATION_POLICY;
+  privacyPolicy: typeof MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY;
+  routesToFutureRoundsOnly: true;
+  noSponsorCampaignSteering: true;
+  custodyMode: "partner_or_provider_held_not_platform_custody";
+  publishedShareRules: Array<{
+    sourceType: Exclude<MpgfPublicGoodsSponsorPoolSourceType, "direct_sponsor_deposit">;
+    routeShareBps: number;
+  }>;
+  availableForNextRoundCents: number;
+  pendingReviewCents: number;
+  withheldCents: number;
+  entries: MpgfPublicGoodsSponsorPoolRefillPlanEntry[];
+  calcHash: string;
+}
+
 export interface MpgfPublicGoodsSponsorPoolFlywheel {
   ok: true;
   poolId: string;
@@ -47,6 +87,7 @@ export interface MpgfPublicGoodsSponsorPoolFlywheel {
   pendingReviewCents: number;
   voidedCents: number;
   unfundedSponsorPoolCents: number;
+  refillAutomation: MpgfPublicGoodsSponsorPoolRefillAutomationPlan;
   sourceBreakdown: Array<{
     sourceType: MpgfPublicGoodsSponsorPoolSourceType;
     availableCents: number;
@@ -111,6 +152,29 @@ const demoSponsorPoolRefills = [
   },
 ];
 
+const demoSurplusSources = [
+  {
+    sourceType: "donation_offset_surplus" as const,
+    privateSourceRef: "donation-offset-surplus-private-demo-2026-06",
+    grossSurplusCents: 50_000,
+    routeShareBps: 5_000,
+    providerEventVerified: true,
+    reviewerApproved: true,
+    occurredAt: "2026-05-25T00:00:00.000Z",
+    publicMemo: "Published donation-offset surplus share scheduled for the next public-goods sponsor pool.",
+  },
+  {
+    sourceType: "trade_surplus_tithe" as const,
+    privateSourceRef: "successful-moral-trade-tithe-private-demo-2026-06",
+    grossSurplusCents: 45_000,
+    routeShareBps: 5_000,
+    providerEventVerified: true,
+    reviewerApproved: true,
+    occurredAt: "2026-05-26T00:00:00.000Z",
+    publicMemo: "Published moral-trade surplus share scheduled for the next public-goods sponsor pool.",
+  },
+];
+
 function hashSourceRef(value: string) {
   return `sha256:${createHash("sha256").update(`mpgf-sponsor-pool-source:${value}`).digest("hex")}`;
 }
@@ -121,6 +185,18 @@ function calcHash(value: unknown) {
 
 function clampCents(value: number) {
   return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+function clampBps(value: number, fallback = 0) {
+  return Number.isFinite(value) ? Math.max(0, Math.min(10_000, Math.floor(value))) : fallback;
+}
+
+function nextRoundIdFor(round: MpgfPublicGoodsRound) {
+  return `${round.id}:next`;
+}
+
+function defaultRouteShareBps(sourceType: MpgfPublicGoodsSponsorPoolSourceType) {
+  return sourceType === "recurring_member_tithe" ? 10_000 : 5_000;
 }
 
 function subscriptionLedgerEntries({
@@ -198,6 +274,151 @@ function summarizeSourceBreakdown(entries: MpgfPublicGoodsSponsorPoolLedgerEntry
   });
 }
 
+function subscriptionRefillPlanEntries({
+  pool,
+  scheduledForRoundId,
+  subscriptions,
+}: {
+  pool: MpgfPublicGoodsMatchPool;
+  scheduledForRoundId: string;
+  subscriptions: MpgfPublicGoodsSubscription[];
+}): MpgfPublicGoodsSponsorPoolRefillPlanEntry[] {
+  return subscriptions
+    .filter((subscription) => subscription.poolId === pool.id && subscription.status === "active")
+    .map((subscription) => {
+      const sourceRefHash = hashSourceRef(`recurring-member-tithe:${subscription.id}`);
+      const grossSurplusCents =
+        subscription.interval === "annual"
+          ? Math.floor(clampCents(subscription.amountCents) / 12)
+          : clampCents(subscription.amountCents);
+      const routeShareBps = defaultRouteShareBps("recurring_member_tithe");
+      const routedAmountCents = Math.floor((grossSurplusCents * routeShareBps) / 10_000);
+
+      return {
+        id: `sponsor-refill-auto-${sourceRefHash.slice(7, 19)}`,
+        poolId: pool.id,
+        sourceType: "recurring_member_tithe",
+        sourceRefHash,
+        grossSurplusCents,
+        routeShareBps,
+        routedAmountCents,
+        status: "available",
+        custodyMode: "partner_or_provider_held_not_platform_custody",
+        publicMemo: "Recurring member tithe scheduled by the published sponsor-pool refill rule.",
+        scheduledForRoundId,
+        receivedAt: subscription.nextChargeAt,
+        countsTowardMatching: routedAmountCents > 0,
+      };
+    })
+    .filter((entry) => entry.routedAmountCents > 0);
+}
+
+export function buildMpgfPublicGoodsSponsorPoolRefillAutomationPlan({
+  pool = demoMpgfMatchPool,
+  round = demoMpgfAssuranceRound,
+  subscriptions = demoMpgfPublicGoodsSubscriptions,
+  surplusSources = demoSurplusSources,
+  scheduledForRoundId = nextRoundIdFor(round),
+}: {
+  pool?: MpgfPublicGoodsMatchPool;
+  round?: MpgfPublicGoodsRound;
+  subscriptions?: MpgfPublicGoodsSubscription[];
+  surplusSources?: Array<{
+    sourceType: "donation_offset_surplus" | "trade_surplus_tithe";
+    privateSourceRef: string;
+    grossSurplusCents: number;
+    routeShareBps?: number;
+    providerEventVerified?: boolean;
+    reviewerApproved?: boolean;
+    occurredAt?: string;
+    publicMemo?: string;
+  }>;
+  scheduledForRoundId?: string;
+} = {}): MpgfPublicGoodsSponsorPoolRefillAutomationPlan {
+  const subscriptionEntries = subscriptionRefillPlanEntries({
+    pool,
+    scheduledForRoundId,
+    subscriptions,
+  });
+  const surplusEntries = surplusSources.map((source) => {
+    const sourceRefHash = hashSourceRef(source.privateSourceRef);
+    const routeShareBps = clampBps(source.routeShareBps ?? defaultRouteShareBps(source.sourceType));
+    const grossSurplusCents = clampCents(source.grossSurplusCents);
+    const routedAmountCents = Math.floor((grossSurplusCents * routeShareBps) / 10_000);
+    const available = source.providerEventVerified === true && source.reviewerApproved === true;
+
+    return {
+      id: `sponsor-refill-auto-${sourceRefHash.slice(7, 19)}`,
+      poolId: pool.id,
+      sourceType: source.sourceType,
+      sourceRefHash,
+      grossSurplusCents,
+      routeShareBps,
+      routedAmountCents,
+      status: available ? "available" as const : "pending_review" as const,
+      custodyMode: "partner_or_provider_held_not_platform_custody" as const,
+      publicMemo:
+        source.publicMemo?.trim() ||
+        "Published trade or donation-offset surplus share scheduled for the next sponsor pool.",
+      scheduledForRoundId,
+      receivedAt: source.occurredAt ?? new Date("2026-05-31T12:00:00.000Z").toISOString(),
+      countsTowardMatching: available && routedAmountCents > 0,
+    };
+  }).filter((entry) => entry.routedAmountCents > 0);
+  const entries = [...subscriptionEntries, ...surplusEntries].sort(
+    (left, right) => left.receivedAt.localeCompare(right.receivedAt) || left.id.localeCompare(right.id),
+  );
+  const publishedShareRules = ([
+    "recurring_member_tithe",
+    "donation_offset_surplus",
+    "trade_surplus_tithe",
+  ] as const).map((sourceType) => ({
+    sourceType,
+    routeShareBps: defaultRouteShareBps(sourceType),
+  }));
+  const availableForNextRoundCents = entries
+    .filter((entry) => entry.status === "available" && entry.countsTowardMatching)
+    .reduce((sum, entry) => sum + entry.routedAmountCents, 0);
+  const pendingReviewCents = entries
+    .filter((entry) => entry.status === "pending_review")
+    .reduce((sum, entry) => sum + entry.routedAmountCents, 0);
+  const withheldCents = entries.reduce(
+    (sum, entry) => sum + Math.max(0, entry.grossSurplusCents - entry.routedAmountCents),
+    0,
+  );
+
+  return {
+    ok: true,
+    poolId: pool.id,
+    currentRoundId: round.id,
+    scheduledForRoundId,
+    policy: MPGF_PUBLIC_GOODS_SPONSOR_POOL_REFILL_AUTOMATION_POLICY,
+    privacyPolicy: MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY,
+    routesToFutureRoundsOnly: true,
+    noSponsorCampaignSteering: true,
+    custodyMode: "partner_or_provider_held_not_platform_custody",
+    publishedShareRules,
+    availableForNextRoundCents,
+    pendingReviewCents,
+    withheldCents,
+    entries,
+    calcHash: calcHash([
+      round.id,
+      scheduledForRoundId,
+      MPGF_PUBLIC_GOODS_SPONSOR_POOL_REFILL_AUTOMATION_POLICY,
+      entries.map((entry) => [
+        entry.sourceType,
+        entry.sourceRefHash,
+        entry.grossSurplusCents,
+        entry.routeShareBps,
+        entry.routedAmountCents,
+        entry.status,
+        entry.scheduledForRoundId,
+      ]),
+    ]),
+  };
+}
+
 export function buildMpgfPublicGoodsSponsorPoolFlywheel({
   pool = demoMpgfMatchPool,
   round = demoMpgfAssuranceRound,
@@ -209,6 +430,11 @@ export function buildMpgfPublicGoodsSponsorPoolFlywheel({
   subscriptions?: MpgfPublicGoodsSubscription[];
   extraEntries?: MpgfPublicGoodsSponsorPoolLedgerEntry[];
 } = {}): MpgfPublicGoodsSponsorPoolFlywheel {
+  const refillAutomation = buildMpgfPublicGoodsSponsorPoolRefillAutomationPlan({
+    pool,
+    round,
+    subscriptions,
+  });
   const entries = [
     ...demoLedgerEntries({ pool, round }),
     ...subscriptionLedgerEntries({ pool, round, subscriptions }),
@@ -238,6 +464,7 @@ export function buildMpgfPublicGoodsSponsorPoolFlywheel({
     pendingReviewCents,
     voidedCents,
     unfundedSponsorPoolCents: Math.max(0, pool.budgetCents - availableForRoundCents),
+    refillAutomation,
     sourceBreakdown,
     entries,
     calcHash: calcHash(

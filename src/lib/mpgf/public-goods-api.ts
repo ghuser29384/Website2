@@ -16,7 +16,9 @@ import {
 import { buildMpgfPublicGoodsAllocationSourceProofMap } from "./public-goods-allocation-results";
 import {
   MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY,
   getMpgfPublicGoodsCgVqafReportApi,
+  getMpgfPublicGoodsCommonGroundDiscoveryApi,
   getMpgfPublicGoodsSupportSignalContractApi,
 } from "./public-goods-cg-vqaf";
 import { getMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
@@ -212,6 +214,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
   const proceduralBadges = getMpgfPublicGoodsProceduralBadgesApi(roundId);
   const cgVqaf = getMpgfPublicGoodsCgVqafReportApi(roundId);
   const supportSignalContract = getMpgfPublicGoodsSupportSignalContractApi(roundId);
+  const commonGroundDiscovery = getMpgfPublicGoodsCommonGroundDiscoveryApi(roundId);
   const identityIntegrity = getMpgfPublicGoodsIdentityIntegrityReportApi(roundId);
   const thresholdCalibration = getMpgfPublicGoodsThresholdCalibrationReportApi(roundId);
   const postmortem = getMpgfPublicGoodsPostmortemReportApi(roundId);
@@ -247,6 +250,10 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
         tradeSurplusCommitPath: "/api/mpgf/trade-surplus/commit",
         tradeSurplusSettlePath: "/api/mpgf/trade-surplus/settle",
         flywheelAvailableForRoundCents: sponsorPoolFlywheel.availableForRoundCents,
+        refillAutomationPolicy: sponsorPoolFlywheel.refillAutomation.policy,
+        refillScheduledForRoundId: sponsorPoolFlywheel.refillAutomation.scheduledForRoundId,
+        refillAvailableForNextRoundCents: sponsorPoolFlywheel.refillAutomation.availableForNextRoundCents,
+        refillNoSponsorCampaignSteering: sponsorPoolFlywheel.refillAutomation.noSponsorCampaignSteering,
         flywheelSourceTypes: sponsorPoolFlywheel.sourceTypes,
       },
       contributionFlow,
@@ -255,12 +262,18 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
             policy: MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,
             formulaVersion: cgVqaf.formulaVersion,
             reportPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/cg-vqaf`,
+            commonGroundDiscoveryPolicy: MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY,
+            commonGroundDiscoveryPath:
+              supportSignalContract?.commonGroundDiscoveryPath ??
+              `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/common-ground-discovery`,
+            commonGroundOrderingExperimentKey: commonGroundDiscovery?.orderingExperimentKey ?? null,
             supportSignalPath: supportSignalContract?.supportSignalPath ?? `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/support-signals`,
             supportSignalPrivateByDefault: supportSignalContract?.privateByDefault ?? true,
             publicAggregationOnly: supportSignalContract?.publicAggregationOnly ?? true,
             supportSignalsSuppressed: cgVqaf.supportSignalsSuppressed,
             noGlobalMoralRanking: cgVqaf.noGlobalMoralRanking,
             ranksCoordinatabilityOnly: cgVqaf.ranksCoordinatabilityOnly,
+            learnsOverlappingReasons: commonGroundDiscovery?.learnsOverlappingReasons ?? true,
             signalOptions: supportSignalContract?.signalOptions ?? [],
             moralClusterOptions: supportSignalContract?.moralClusterOptions ?? [],
             collectiveActionStates: supportSignalContract?.collectiveActionStates ?? [],

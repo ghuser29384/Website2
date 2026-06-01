@@ -139,7 +139,9 @@ import {
 } from "./mpgf/public-goods-procedural-badges";
 import {
   MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY,
+  MPGF_PUBLIC_GOODS_SPONSOR_POOL_REFILL_AUTOMATION_POLICY,
   buildMpgfPublicGoodsSponsorPoolFlywheel,
+  buildMpgfPublicGoodsSponsorPoolRefillAutomationPlan,
   commitMpgfPublicGoodsTradeSurplus,
   getMpgfPublicGoodsSponsorPoolFlywheelApi,
   recordMpgfPublicGoodsSponsorPoolDeposit,
@@ -177,7 +179,10 @@ import {
 import {
   MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,
   MPGF_PUBLIC_GOODS_CG_VQAF_PRIVACY_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY,
+  buildMpgfPublicGoodsCommonGroundDiscovery,
   createMpgfPublicGoodsSupportSignal,
+  getMpgfPublicGoodsCommonGroundDiscoveryApi,
   getMpgfPublicGoodsCgVqafReportApi,
   getMpgfPublicGoodsSupportSignalContractApi,
 } from "./mpgf/public-goods-cg-vqaf";
@@ -756,6 +761,16 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(round.round.contributionFlow?.stateObjects.includes("provider_payment_event"));
   assert.equal(round.round.cgVqaf?.policy, MPGF_PUBLIC_GOODS_CG_VQAF_POLICY);
   assert.equal(round.round.cgVqaf?.reportPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/cg-vqaf`);
+  assert.equal(
+    round.round.cgVqaf?.commonGroundDiscoveryPath,
+    `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/common-ground-discovery`,
+  );
+  assert.equal(round.round.cgVqaf?.commonGroundDiscoveryPolicy, MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY);
+  assert.equal(
+    round.round.cgVqaf?.commonGroundOrderingExperimentKey,
+    "mpgf_static_ordering_vs_common_ground_personalization_v1",
+  );
+  assert.equal(round.round.cgVqaf?.learnsOverlappingReasons, true);
   assert.equal(round.round.cgVqaf?.supportSignalPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/support-signals`);
   assert.equal(round.round.cgVqaf?.supportSignalPrivateByDefault, true);
   assert.equal(round.round.cgVqaf?.publicAggregationOnly, true);
@@ -817,6 +832,10 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.sponsorPool.flywheelPath, `/api/mpgf/sponsor-pools/${demoMpgfMatchPool.id}`);
   assert.equal(round.round.sponsorPool.depositPath, `/api/mpgf/sponsor-pools/${demoMpgfMatchPool.id}/deposits`);
   assert.equal(round.round.sponsorPool.tradeSurplusCommitPath, "/api/mpgf/trade-surplus/commit");
+  assert.equal(round.round.sponsorPool.refillAutomationPolicy, MPGF_PUBLIC_GOODS_SPONSOR_POOL_REFILL_AUTOMATION_POLICY);
+  assert.equal(round.round.sponsorPool.refillScheduledForRoundId, `${demoMpgfAssuranceRound.id}:next`);
+  assert.equal(round.round.sponsorPool.refillAvailableForNextRoundCents, 50_000);
+  assert.equal(round.round.sponsorPool.refillNoSponsorCampaignSteering, true);
   assert.ok(round.round.sponsorPool.flywheelSourceTypes.includes("donation_offset_surplus"));
   assert.ok(round.round.sponsorPool.flywheelSourceTypes.includes("trade_surplus_tithe"));
   assert.ok(campaigns);
@@ -1505,6 +1524,9 @@ test("MPGF Stripe saved commitments use SetupIntent-first before conditional Pay
 test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation without moral ranking", () => {
   const report = getMpgfPublicGoodsCgVqafReportApi(demoMpgfAssuranceRound.id);
   const unknownReport = getMpgfPublicGoodsCgVqafReportApi("unknown-round");
+  const discovery = buildMpgfPublicGoodsCommonGroundDiscovery({ moralCluster: "humanitarian" });
+  const discoveryApi = getMpgfPublicGoodsCommonGroundDiscoveryApi(demoMpgfAssuranceRound.id, "humanitarian");
+  const unknownDiscoveryApi = getMpgfPublicGoodsCommonGroundDiscoveryApi("unknown-round", "humanitarian");
   const supportSignalContract = getMpgfPublicGoodsSupportSignalContractApi(demoMpgfAssuranceRound.id);
   const unknownSupportSignalContract = getMpgfPublicGoodsSupportSignalContractApi("unknown-round");
   const supportSignal = createMpgfPublicGoodsSupportSignal({
@@ -1515,20 +1537,49 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
     strengthBps: 6_200,
   });
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", "utf8");
+  const discoveryRoute = readFileSync(
+    "src/app/api/mpgf/rounds/[roundId]/common-ground-discovery/route.ts",
+    "utf8",
+  );
   const supportSignalRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/support-signals/route.ts", "utf8");
   const supportSignalPanel = readFileSync("src/components/mpgf/mpgf-support-signal-panel.tsx", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const poolsPage = readFileSync("src/app/mpgf/pools/page.tsx", "utf8");
   const mechanism = readFileSync("src/lib/mpgf/public-goods-cg-vqaf.ts", "utf8");
   const migration = readFileSync("supabase/migrations/20260601_mpgf_cg_vqaf_core.sql", "utf8");
-  const serialized = JSON.stringify({ report, supportSignal, supportSignalContract });
+  const serialized = JSON.stringify({ report, discovery, discoveryApi, supportSignal, supportSignalContract });
 
   assert.ok(report);
   assert.equal(unknownReport, null);
+  assert.equal(discovery.policy, MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY);
+  assert.equal(discovery.selectedMoralCluster, "humanitarian");
+  assert.equal(discovery.orderingExperimentKey, "mpgf_static_ordering_vs_common_ground_personalization_v1");
+  assert.equal(discovery.noGlobalMoralRanking, true);
+  assert.equal(discovery.ranksCoordinatabilityOnly, true);
+  assert.equal(discovery.ranksMoralTruth, false);
+  assert.equal(discovery.supportSignalsSuppressed, true);
+  assert.equal(discovery.learnsOverlappingReasons, true);
+  assert.ok(discoveryApi);
+  assert.equal(unknownDiscoveryApi, null);
+  assert.deepEqual(discovery.rows.map((row) => row.campaignId), discoveryApi.rows.map((row) => row.campaignId));
+  assert.ok(
+    discovery.rows.every((row, index, rows) =>
+      index === 0 || rows[index - 1].coordinatabilityScoreBps >= row.coordinatabilityScoreBps,
+    ),
+  );
+  assert.ok(discovery.rows.every((row) => row.noGlobalMoralRanking));
+  assert.ok(discovery.rows.some((row) => row.reasonCodes.includes("cross_cluster_support")));
+  assert.ok(discovery.rows.some((row) => row.reasonCodes.includes("selected_cluster_affinity")));
+  assert.match(discovery.calcHash, /^sha256:/);
   assert.ok(supportSignalContract);
   assert.equal(unknownSupportSignalContract, null);
   assert.equal(
     supportSignalContract.supportSignalPath,
     `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/support-signals`,
+  );
+  assert.equal(
+    supportSignalContract.commonGroundDiscoveryPath,
+    `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/common-ground-discovery`,
   );
   assert.equal(supportSignalContract.privateByDefault, true);
   assert.equal(supportSignalContract.publicAggregationOnly, true);
@@ -1561,6 +1612,9 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(supportSignal.calcHash, /^sha256:/);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsCgVqafReportApi/);
+  assert.match(discoveryRoute, /getMpgfPublicGoodsCommonGroundDiscoveryApi/);
+  assert.match(discoveryRoute, /isMpgfPublicGoodsMoralCluster/);
+  assert.match(discoveryRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(supportSignalRoute, /Sign in to record an MPGF support signal/);
   assert.match(supportSignalRoute, /private_by_default: true/);
   assert.match(supportSignalRoute, /publicAggregationOnly: true/);
@@ -1583,7 +1637,14 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(supportSignalPanel, /signal_only/);
   assert.match(supportSignalPanel, /Common-ground discovery/);
   assert.match(roundPage, /commonGroundScoreBps/);
+  assert.match(poolsPage, /buildMpgfPublicGoodsCommonGroundDiscovery/);
+  assert.match(poolsPage, /name="cluster"/);
+  assert.match(poolsPage, /Common-ground ordering/);
+  assert.match(poolsPage, /Campaign order ranks coordinatability, not moral truth/);
+  assert.match(poolsPage, /coordinatabilityScoreBps/);
   assert.match(mechanism, /solveCapitalConstrainedLambda/);
+  assert.match(mechanism, /private_common_ground_campaign_ordering_no_global_moral_ranking_v1/);
+  assert.match(mechanism, /ranksMoralTruth: false/);
   assert.match(mechanism, /bonus_j = min|cg_vqaf_capital_constrained_qf_v1/);
   assert.match(mechanism, /getMpgfPublicGoodsSupportSignalContractApi/);
   assert.match(migration, /mpgf_moral_profiles/);
@@ -1736,19 +1797,34 @@ test("MPGF procedural badges expose record facts without moral karma", () => {
 
 test("MPGF sponsor-pool flywheel aggregates trade surplus without private source refs", () => {
   const flywheel = buildMpgfPublicGoodsSponsorPoolFlywheel();
+  const refillPlan = buildMpgfPublicGoodsSponsorPoolRefillAutomationPlan();
   const api = getMpgfPublicGoodsSponsorPoolFlywheelApi(demoMpgfMatchPool.id);
   const unknown = getMpgfPublicGoodsSponsorPoolFlywheelApi("unknown-pool");
-  const serialized = JSON.stringify(flywheel);
+  const serialized = JSON.stringify({ flywheel, refillPlan });
   const route = readFileSync("src/app/api/mpgf/sponsor-pools/[poolId]/route.ts", "utf8");
   const governance = getMpgfPublicGoodsGovernanceApi();
   const governancePage = readFileSync("src/app/mpgf/governance/page.tsx", "utf8");
   const migration = readFileSync("supabase/migrations/20260531_mpgf_sponsor_pool_flywheel.sql", "utf8");
+  const automationMigration = readFileSync("supabase/migrations/20260601_mpgf_sponsor_pool_refill_automation.sql", "utf8");
 
   assert.ok(api);
   assert.equal(unknown, null);
   assert.equal(flywheel.privacyPolicy, MPGF_PUBLIC_GOODS_SPONSOR_FLYWHEEL_PRIVACY_POLICY);
   assert.equal(flywheel.flywheelPolicy, "trade_surplus_funded_verified_plural_assurance");
   assert.equal(flywheel.custodyMode, "partner_or_provider_held_not_platform_custody");
+  assert.equal(flywheel.refillAutomation.policy, MPGF_PUBLIC_GOODS_SPONSOR_POOL_REFILL_AUTOMATION_POLICY);
+  assert.equal(flywheel.refillAutomation.routesToFutureRoundsOnly, true);
+  assert.equal(flywheel.refillAutomation.noSponsorCampaignSteering, true);
+  assert.equal(flywheel.refillAutomation.availableForNextRoundCents, 50_000);
+  assert.equal(refillPlan.policy, flywheel.refillAutomation.policy);
+  assert.equal(refillPlan.entries.length, 3);
+  assert.equal(refillPlan.entries.every((entry) => entry.scheduledForRoundId.endsWith(":next")), true);
+  assert.equal(refillPlan.entries.every((entry) => entry.sourceRefHash.startsWith("sha256:")), true);
+  assert.equal(refillPlan.entries.every((entry) => entry.countsTowardMatching), true);
+  assert.ok(refillPlan.publishedShareRules.some((rule) => rule.sourceType === "recurring_member_tithe" && rule.routeShareBps === 10_000));
+  assert.ok(refillPlan.publishedShareRules.some((rule) => rule.sourceType === "donation_offset_surplus" && rule.routeShareBps === 5_000));
+  assert.ok(refillPlan.publishedShareRules.some((rule) => rule.sourceType === "trade_surplus_tithe" && rule.routeShareBps === 5_000));
+  assert.match(refillPlan.calcHash, /^sha256:/);
   assert.equal(flywheel.availableForRoundCents, demoMpgfMatchPool.budgetCents);
   assert.equal(flywheel.unfundedSponsorPoolCents, 0);
   assert.equal(flywheel.sourceBreakdown.find((source) => source.sourceType === "direct_sponsor_deposit")?.availableCents, 100_000);
@@ -1760,6 +1836,9 @@ test("MPGF sponsor-pool flywheel aggregates trade surplus without private source
   assert.ok(flywheel.entries.every((entry) => entry.custodyMode === "partner_or_provider_held_not_platform_custody"));
   assert.equal(governance.sponsorPoolFlywheel.apiPath, `/api/mpgf/sponsor-pools/${demoMpgfMatchPool.id}`);
   assert.equal(governance.sponsorPoolFlywheel.availableForRoundCents, demoMpgfMatchPool.budgetCents);
+  assert.equal(governance.sponsorPoolFlywheel.refillAutomationPolicy, MPGF_PUBLIC_GOODS_SPONSOR_POOL_REFILL_AUTOMATION_POLICY);
+  assert.equal(governance.sponsorPoolFlywheel.nextRoundRefillCents, 50_000);
+  assert.equal(governance.sponsorPoolFlywheel.noSponsorCampaignSteering, true);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsSponsorPoolFlywheelApi/);
   assert.match(governancePage, /Sponsor-pool flywheel/);
@@ -1770,6 +1849,11 @@ test("MPGF sponsor-pool flywheel aggregates trade surplus without private source
   assert.match(migration, /trade_surplus_tithe/);
   assert.match(migration, /partner_or_provider_held_not_platform_custody/);
   assert.match(migration, /raw donor, trade, payment, and offset identifiers are not public/);
+  assert.match(automationMigration, /route_share_bps/);
+  assert.match(automationMigration, /scheduled_for_round_id/);
+  assert.match(automationMigration, /provider_event_verified/);
+  assert.match(automationMigration, /reviewer_approved/);
+  assert.match(automationMigration, /sponsors cannot steer a specific campaign/);
 
   for (const forbidden of [
     "anchor-sponsor-private",

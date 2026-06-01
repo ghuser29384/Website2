@@ -24,6 +24,12 @@ export const MPGF_PUBLIC_GOODS_CG_VQAF_POLICY =
 export const MPGF_PUBLIC_GOODS_CG_VQAF_PRIVACY_POLICY =
   "support_signals_private_by_default_public_aggregates_only";
 
+export const MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY =
+  "private_common_ground_campaign_ordering_no_global_moral_ranking_v1";
+
+export const MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_PRIVACY_POLICY =
+  "private_cluster_lens_public_aggregate_scores_only";
+
 export type MpgfPublicGoodsSupportSignalType =
   | "strong_support"
   | "weak_common_ground_support"
@@ -174,6 +180,49 @@ export interface MpgfPublicGoodsCgVqafReport {
   finalPayoutCents: number;
   supportSignalsSuppressed: true;
   rows: MpgfPublicGoodsCgVqafRow[];
+  calcHash: string;
+}
+
+export type MpgfPublicGoodsCommonGroundDiscoveryReasonCode =
+  | "cross_cluster_support"
+  | "weak_common_ground_support"
+  | "selected_cluster_affinity"
+  | "verified_breadth_signal"
+  | "threshold_unlock_visible"
+  | "reviewable_campaign"
+  | "dissent_review_visible";
+
+export interface MpgfPublicGoodsCommonGroundDiscoveryRow {
+  campaignId: string;
+  status: string;
+  selectedClusterSupportBps: number;
+  crossClusterSupportBps: number;
+  operationalEligibilityBps: number;
+  thresholdProgressBps: number;
+  verifiedSupporterProgressBps: number;
+  commonGroundScoreBps: number;
+  coordinatabilityScoreBps: number;
+  moralClusterCount: number;
+  weakCommonGroundSignalCount: number;
+  dissentSignalCount: number;
+  reasonCodes: MpgfPublicGoodsCommonGroundDiscoveryReasonCode[];
+  noGlobalMoralRanking: true;
+  calculationHash: string;
+}
+
+export interface MpgfPublicGoodsCommonGroundDiscovery {
+  ok: true;
+  roundId: string;
+  policy: typeof MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY;
+  privacyPolicy: typeof MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_PRIVACY_POLICY;
+  selectedMoralCluster: MpgfPublicGoodsMoralCluster;
+  orderingExperimentKey: "mpgf_static_ordering_vs_common_ground_personalization_v1";
+  noGlobalMoralRanking: true;
+  ranksCoordinatabilityOnly: true;
+  ranksMoralTruth: false;
+  supportSignalsSuppressed: true;
+  learnsOverlappingReasons: true;
+  rows: MpgfPublicGoodsCommonGroundDiscoveryRow[];
   calcHash: string;
 }
 
@@ -479,6 +528,76 @@ function commonGroundStats(campaignId: string, supportSignals: MpgfPublicGoodsSu
   };
 }
 
+function averageBps(values: number[]) {
+  if (!values.length) {
+    return 0;
+  }
+
+  return clampBps(Math.floor(values.reduce((sum, value) => sum + value, 0) / values.length));
+}
+
+function reviewabilityBps(campaign: MpgfPublicGoodsCampaign) {
+  switch (campaign.reviewStatus) {
+    case "approved":
+    case "finalized":
+      return 10_000;
+    case "challenge_window":
+      return 7_500;
+    case "submitted":
+      return 5_000;
+    case "needs_evidence":
+      return 3_500;
+    case "draft":
+      return 2_000;
+    case "blocked":
+      return 0;
+    default:
+      return 0;
+  }
+}
+
+function discoveryReasonCodes({
+  row,
+  selectedClusterSupportBps,
+  operationalEligibilityBps,
+}: {
+  row: MpgfPublicGoodsCgVqafRow;
+  selectedClusterSupportBps: number;
+  operationalEligibilityBps: number;
+}) {
+  const reasonCodes: MpgfPublicGoodsCommonGroundDiscoveryReasonCode[] = [];
+
+  if (row.moralClusterCount >= 2) {
+    reasonCodes.push("cross_cluster_support");
+  }
+
+  if (row.weakCommonGroundSignalCount > 0) {
+    reasonCodes.push("weak_common_ground_support");
+  }
+
+  if (selectedClusterSupportBps > 0) {
+    reasonCodes.push("selected_cluster_affinity");
+  }
+
+  if (row.verifiedSupporterCount > 0) {
+    reasonCodes.push("verified_breadth_signal");
+  }
+
+  if (row.status === "payable" || row.status === "threshold_met" || operationalEligibilityBps >= 7_000) {
+    reasonCodes.push("threshold_unlock_visible");
+  }
+
+  if (operationalEligibilityBps >= 5_000) {
+    reasonCodes.push("reviewable_campaign");
+  }
+
+  if (row.dissentSignalCount > 0) {
+    reasonCodes.push("dissent_review_visible");
+  }
+
+  return reasonCodes;
+}
+
 function solveCapitalConstrainedLambda(items: Array<{ qSignalCents: number; bonusCapCents: number }>, budgetCents: number) {
   const budget = Math.max(0, Math.floor(budgetCents));
   const active = items.filter((item) => item.qSignalCents > 0 && item.bonusCapCents > 0);
@@ -677,12 +796,147 @@ export function buildMpgfPublicGoodsCgVqafReport({
   };
 }
 
+export function buildMpgfPublicGoodsCommonGroundDiscovery({
+  moralCluster = "institutional_pluralist",
+  campaigns = demoMpgfPublicGoodsCampaigns,
+  pledges = demoMpgfAssurancePledges,
+  round = demoMpgfAssuranceRound,
+  matchPool = demoMpgfMatchPool,
+  supportSignals = defaultSupportSignals(round),
+  now = new Date("2026-05-29T12:00:00.000Z"),
+}: {
+  moralCluster?: MpgfPublicGoodsMoralCluster;
+  campaigns?: MpgfPublicGoodsCampaign[];
+  pledges?: MpgfPublicGoodsPledge[];
+  round?: MpgfPublicGoodsRound;
+  matchPool?: MpgfPublicGoodsMatchPool;
+  supportSignals?: MpgfPublicGoodsSupportSignal[];
+  now?: Date;
+} = {}): MpgfPublicGoodsCommonGroundDiscovery {
+  const report = buildMpgfPublicGoodsCgVqafReport({
+    campaigns,
+    pledges,
+    round,
+    matchPool,
+    supportSignals,
+    now,
+  });
+  const campaignsById = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
+  const rows: MpgfPublicGoodsCommonGroundDiscoveryRow[] = report.rows.map((row) => {
+    const campaign = campaignsById.get(row.campaignId);
+    const status = campaign ? getMpgfCampaignAssuranceStatus(campaign, pledges, now) : null;
+    const selectedClusterSupportBps = averageBps(
+      supportSignals
+        .filter(
+          (signal) =>
+            signal.campaignId === row.campaignId &&
+            signal.moralCluster === moralCluster &&
+            signal.countsForCommonGround,
+        )
+        .map((signal) => signal.strengthBps),
+    );
+    const crossClusterSupportBps = clampBps(row.moralClusterCount * 2_500);
+    const thresholdProgressBps = status?.amountProgressBps ?? 0;
+    const verifiedSupporterProgressBps = status?.supporterProgressBps ?? 0;
+    const operationalEligibilityBps = clampBps(
+      Math.floor(
+        ((thresholdProgressBps + verifiedSupporterProgressBps + (campaign ? reviewabilityBps(campaign) : 0)) / 3),
+      ),
+    );
+    const coordinatabilityScoreBps = clampBps(
+      Math.floor(
+        row.commonGroundScoreBps * 0.35 +
+          selectedClusterSupportBps * 0.25 +
+          crossClusterSupportBps * 0.15 +
+          operationalEligibilityBps * 0.25,
+      ),
+    );
+    const reasonCodes = discoveryReasonCodes({
+      row,
+      selectedClusterSupportBps,
+      operationalEligibilityBps,
+    });
+    const calculationHash = hashValue([
+      round.id,
+      row.campaignId,
+      moralCluster,
+      selectedClusterSupportBps,
+      crossClusterSupportBps,
+      operationalEligibilityBps,
+      row.commonGroundScoreBps,
+      coordinatabilityScoreBps,
+      reasonCodes,
+    ]);
+
+    return {
+      campaignId: row.campaignId,
+      status: row.status,
+      selectedClusterSupportBps,
+      crossClusterSupportBps,
+      operationalEligibilityBps,
+      thresholdProgressBps,
+      verifiedSupporterProgressBps,
+      commonGroundScoreBps: row.commonGroundScoreBps,
+      coordinatabilityScoreBps,
+      moralClusterCount: row.moralClusterCount,
+      weakCommonGroundSignalCount: row.weakCommonGroundSignalCount,
+      dissentSignalCount: row.dissentSignalCount,
+      reasonCodes,
+      noGlobalMoralRanking: true as const,
+      calculationHash,
+    };
+  }).sort((left, right) => (
+    right.coordinatabilityScoreBps - left.coordinatabilityScoreBps ||
+    right.operationalEligibilityBps - left.operationalEligibilityBps ||
+    left.campaignId.localeCompare(right.campaignId)
+  ));
+  const calcHash = hashValue([
+    round.id,
+    MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY,
+    moralCluster,
+    rows.map((row) => [
+      row.campaignId,
+      row.coordinatabilityScoreBps,
+      row.operationalEligibilityBps,
+      row.reasonCodes,
+      row.calculationHash,
+    ]),
+  ]);
+
+  return {
+    ok: true,
+    roundId: round.id,
+    policy: MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY,
+    privacyPolicy: MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_PRIVACY_POLICY,
+    selectedMoralCluster: moralCluster,
+    orderingExperimentKey: "mpgf_static_ordering_vs_common_ground_personalization_v1",
+    noGlobalMoralRanking: true,
+    ranksCoordinatabilityOnly: true,
+    ranksMoralTruth: false,
+    supportSignalsSuppressed: true,
+    learnsOverlappingReasons: true,
+    rows,
+    calcHash,
+  };
+}
+
 export function getMpgfPublicGoodsCgVqafReportApi(roundId: string = demoMpgfAssuranceRound.id) {
   if (roundId !== demoMpgfAssuranceRound.id) {
     return null;
   }
 
   return buildMpgfPublicGoodsCgVqafReport();
+}
+
+export function getMpgfPublicGoodsCommonGroundDiscoveryApi(
+  roundId: string = demoMpgfAssuranceRound.id,
+  moralCluster: MpgfPublicGoodsMoralCluster = "institutional_pluralist",
+) {
+  if (roundId !== demoMpgfAssuranceRound.id) {
+    return null;
+  }
+
+  return buildMpgfPublicGoodsCommonGroundDiscovery({ moralCluster });
 }
 
 export function getMpgfPublicGoodsSupportSignalContractApi(roundId: string = demoMpgfAssuranceRound.id) {
@@ -697,6 +951,7 @@ export function getMpgfPublicGoodsSupportSignalContractApi(roundId: string = dem
     privacyPolicy: MPGF_PUBLIC_GOODS_CG_VQAF_PRIVACY_POLICY,
     supportSignalPath: `/api/mpgf/rounds/${roundId}/support-signals`,
     cgVqafReportPath: `/api/mpgf/rounds/${roundId}/cg-vqaf`,
+    commonGroundDiscoveryPath: `/api/mpgf/rounds/${roundId}/common-ground-discovery`,
     privateByDefault: true,
     publicAggregationOnly: true,
     rawSupportReasonsExcluded: true,
