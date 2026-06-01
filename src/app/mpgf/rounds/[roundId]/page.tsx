@@ -194,25 +194,6 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
       title={round.name}
       viewerPresent={Boolean(viewer)}
     >
-      <section className="mpgf-kpi-grid" aria-label="Round status">
-        <div className="mpgf-kpi">
-          <span>Sponsor-pool size</span>
-          <strong>{formatUsd(sponsorPoolCents)}</strong>
-        </div>
-        <div className="mpgf-kpi">
-          <span>Round closes</span>
-          <strong>{formatDate(round.closesAt)}</strong>
-        </div>
-        <div className="mpgf-kpi">
-          <span>Time remaining</span>
-          <strong>{formatCountdown(round.countdownSeconds)}</strong>
-        </div>
-        <div className="mpgf-kpi">
-          <span>Verified donors</span>
-          <strong>{round.verifiedDonorCount}</strong>
-        </div>
-      </section>
-
       <section className="section section-white" aria-label="Above-the-fold campaign unlock metrics">
         <div className="section-head section-head-compact">
           <p className="eyebrow">Campaign unlock board</p>
@@ -245,6 +226,25 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
               </dl>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section className="mpgf-kpi-grid" aria-label="Round status">
+        <div className="mpgf-kpi">
+          <span>Sponsor-pool size</span>
+          <strong>{formatUsd(sponsorPoolCents)}</strong>
+        </div>
+        <div className="mpgf-kpi">
+          <span>Round closes</span>
+          <strong>{formatDate(round.closesAt)}</strong>
+        </div>
+        <div className="mpgf-kpi">
+          <span>Time remaining</span>
+          <strong>{formatCountdown(round.countdownSeconds)}</strong>
+        </div>
+        <div className="mpgf-kpi">
+          <span>Verified donors</span>
+          <strong>{round.verifiedDonorCount}</strong>
         </div>
       </section>
 

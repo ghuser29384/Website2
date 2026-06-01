@@ -1028,6 +1028,11 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   ]) {
     assert.match(roundPage, expected);
   }
+  const unlockBoardIndex = roundPage.indexOf('aria-label="Above-the-fold campaign unlock metrics"');
+  const roundStatusIndex = roundPage.indexOf('aria-label="Round status"');
+
+  assert.ok(unlockBoardIndex >= 0);
+  assert.ok(roundStatusIndex > unlockBoardIndex);
 
   assert.match(roundPage, /MpgfContributionModal/);
   for (const expected of [
@@ -1069,6 +1074,11 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     /evidence_submission_started/,
     /mpgf_contribution_route/,
     /Open manual proof fallback/,
+    /If verified/,
+    /Unlock gap after route/,
+    /projectedDirectCents/,
+    /projectedVerifiedSupporters/,
+    /threshold would clear after provider import or evidence review/,
     /perDonorCapCents/,
     /countForMatching/,
     /campaignId/,
@@ -1221,6 +1231,10 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(contributionModal, /evidence_submission_started/);
   assert.match(contributionModal, /mpgf_contribution_route/);
   assert.match(contributionModal, /Open manual proof fallback/);
+  assert.match(contributionModal, /If verified/);
+  assert.match(contributionModal, /Unlock gap after route/);
+  assert.match(contributionModal, /projectedDirectCents/);
+  assert.match(contributionModal, /projectedVerifiedSupporters/);
   assert.match(contributionModal, /#manual-proof-fallback/);
   assert.doesNotMatch(contributionModal, /checkout-session/);
 
@@ -1296,6 +1310,8 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   const pendingPage = readFileSync("src/app/mpgf/contribute/every-org/pending/page.tsx", "utf8");
   const pageFrame = readFileSync("src/components/mpgf/mpgf-page-frame.tsx", "utf8");
   const migration = readFileSync("supabase/migrations/20260601_mpgf_every_org_fast_route.sql", "utf8");
+  const schemaSql = readFileSync("supabase/schema.sql", "utf8");
+  const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
 
   assert.equal(donateLink.policy, MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY);
   assert.equal(donateLink.privacyPolicy, MPGF_PUBLIC_GOODS_EVERY_ORG_PRIVACY_POLICY);
@@ -1351,6 +1367,10 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.match(donateLinkRoute, /pending_webhook_not_counted/);
   assert.match(webhookRoute, /MPGF_EVERY_ORG_WEBHOOK_SHARED_SECRET/);
   assert.match(webhookRoute, /recordMpgfEveryOrgPartnerWebhook/);
+  assert.match(webhookRoute, /createServiceClient/);
+  assert.match(webhookRoute, /MpgfEveryOrgPartnerEventInsert/);
+  assert.match(webhookRoute, /mpgf_every_org_partner_events/);
+  assert.match(webhookRoute, /persistence/);
   assert.match(webhookRoute, /finalPayoutAuthorized: false/);
   assert.match(pendingPage, /not counted, matched, or treated as verified from redirect alone/);
   assert.match(pageFrame, /Every\.org fast route/);
@@ -1360,6 +1380,13 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.match(migration, /auto_creates_contribution_evidence boolean not null default false/);
   assert.match(migration, /final_payout_authorized boolean not null default false check \(final_payout_authorized = false\)/);
   assert.match(migration, /Raw charge IDs, donor names, donor emails, private notes, and public testimony are not stored/);
+  assert.match(databaseTypes, /mpgf_every_org_partner_events: \{/);
+  assert.match(databaseTypes, /charge_id_hash: string/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_pledge_intents/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_every_org_partner_events/);
+  assert.match(schemaSql, /create policy "mpgf_every_org_partner_events_service_only"/);
+  assert.match(schemaSql, /grant all on[\s\S]*public\.mpgf_every_org_partner_events[\s\S]*to service_role/);
+  assert.match(schemaSql, /comment on table public\.mpgf_every_org_partner_events/);
 
   for (const forbidden of [
     "private-every-org-user-001",
@@ -1588,6 +1615,8 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   const poolsPage = readFileSync("src/app/mpgf/pools/page.tsx", "utf8");
   const mechanism = readFileSync("src/lib/mpgf/public-goods-cg-vqaf.ts", "utf8");
   const migration = readFileSync("supabase/migrations/20260601_mpgf_cg_vqaf_core.sql", "utf8");
+  const schemaSql = readFileSync("supabase/schema.sql", "utf8");
+  const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
   const serialized = JSON.stringify({ report, discovery, discoveryApi, supportSignal, supportSignalContract });
 
   assert.ok(report);
@@ -1669,6 +1698,8 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(supportSignalRoute, /noGlobalMoralRanking: true/);
   assert.match(supportSignalRoute, /moral_cluster_hash/);
   assert.match(supportSignalRoute, /mpgf_support_signals/);
+  assert.match(supportSignalRoute, /MpgfSupportSignalInsert/);
+  assert.doesNotMatch(supportSignalRoute, /SupabaseAny/);
   assert.match(supportSignalRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(mechanism, /Strongly support/);
   assert.match(mechanism, /Weak common-ground support/);
@@ -1700,6 +1731,37 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(migration, /stripe_setup_intent_saved_commitment/);
   assert.match(migration, /every_org_fast_route/);
   assert.match(migration, /no_global_moral_ranking boolean not null default true/);
+  for (const baseTable of [
+    "mpgf_cycles",
+    "mpgf_candidate_alternatives",
+    "mpgf_public_goods_match_pools",
+    "mpgf_public_goods_rounds",
+    "mpgf_public_goods_campaigns",
+    "mpgf_public_goods_pledges",
+    "mpgf_public_goods_analytics_events",
+  ]) {
+    assert.match(schemaSql, new RegExp(`create table if not exists public\\.${baseTable}`));
+  }
+  for (const table of [
+    "mpgf_moral_profiles",
+    "mpgf_support_signals",
+    "mpgf_conditional_pledges",
+    "mpgf_payment_method_tokens",
+    "mpgf_payment_events",
+    "mpgf_sponsor_pool_entries",
+    "mpgf_allocation_results",
+    "mpgf_dissent_notes",
+    "mpgf_milestones",
+  ]) {
+    assert.match(databaseTypes, new RegExp(`${table}: \\{`));
+    assert.match(schemaSql, new RegExp(`create table if not exists public\\.${table}`));
+  }
+  assert.match(schemaSql, /references public\.mpgf_public_goods_rounds \(id\) on delete cascade/);
+  assert.match(schemaSql, /references public\.mpgf_public_goods_campaigns \(id\) on delete cascade/);
+  assert.match(schemaSql, /comment on table public\.mpgf_support_signals/);
+  assert.match(databaseTypes, /signal_type: "strong_support" \| "weak_common_ground_support" \| "dissent_review_requested"/);
+  assert.match(databaseTypes, /payment_mode: "every_org_fast_route" \| "stripe_setup_intent_saved_commitment" \| "manual_proof_fallback"/);
+  assert.match(databaseTypes, /formula_version: "cg_vqaf_capital_constrained_qf_v1"/);
 
   for (const forbidden of [
     "private-cg-vqaf-user-001",

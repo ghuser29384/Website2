@@ -14,14 +14,13 @@ import {
   type MpgfPublicGoodsSupportSignal,
 } from "@/lib/mpgf/public-goods-cg-vqaf";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import type { Database } from "@/lib/supabase/database.types";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type SupabaseAny = Awaited<ReturnType<typeof createClient>> & {
-  from: (table: string) => any;
-};
+type MpgfSupportSignalInsert = Database["public"]["Tables"]["mpgf_support_signals"]["Insert"];
 
 interface DbErrorLike {
   code?: string | null;
@@ -72,8 +71,8 @@ async function persistSupportSignal(signal: MpgfPublicGoodsSupportSignal, profil
     };
   }
 
-  const supabase = (await createClient()) as SupabaseAny;
-  const row = {
+  const supabase = await createClient();
+  const row: MpgfSupportSignalInsert = {
     id: signal.id,
     round_id: signal.roundId,
     campaign_id: signal.campaignId,

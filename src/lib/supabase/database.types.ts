@@ -3901,6 +3901,462 @@ export interface Database {
         };
         Relationships: [];
       };
+      mpgf_pledge_intents: {
+        Row: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          profile_id: string | null;
+          user_ref_hash: string;
+          idempotency_key_hash: string;
+          amount_cents: number;
+          currency: "usd";
+          visibility_pref: "private_amount" | "public_supporter" | "public_reason";
+          payment_state:
+            | "intent_created"
+            | "identity_verified"
+            | "identity_pending_review"
+            | "authorization_pending"
+            | "authorized"
+            | "manual_evidence_required"
+            | "provider_event_received"
+            | "captured"
+            | "voided"
+            | "expired";
+          counting_state: "not_counted" | "preview_only" | "eligible_pending_thresholds" | "counted_after_review" | "excluded";
+          fallback_rule: Json;
+          capture_policy: "capture_only_after_threshold_review_and_challenge_window";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          profile_id?: string | null;
+          user_ref_hash: string;
+          idempotency_key_hash: string;
+          amount_cents: number;
+          currency?: "usd";
+          visibility_pref?: "private_amount" | "public_supporter" | "public_reason";
+          payment_state?:
+            | "intent_created"
+            | "identity_verified"
+            | "identity_pending_review"
+            | "authorization_pending"
+            | "authorized"
+            | "manual_evidence_required"
+            | "provider_event_received"
+            | "captured"
+            | "voided"
+            | "expired";
+          counting_state?: "not_counted" | "preview_only" | "eligible_pending_thresholds" | "counted_after_review" | "excluded";
+          fallback_rule?: Json;
+          capture_policy?: "capture_only_after_threshold_review_and_challenge_window";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          payment_state?:
+            | "intent_created"
+            | "identity_verified"
+            | "identity_pending_review"
+            | "authorization_pending"
+            | "authorized"
+            | "manual_evidence_required"
+            | "provider_event_received"
+            | "captured"
+            | "voided"
+            | "expired";
+          counting_state?: "not_counted" | "preview_only" | "eligible_pending_thresholds" | "counted_after_review" | "excluded";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      mpgf_moral_profiles: {
+        Row: {
+          profile_id: string;
+          primary_causes: string[];
+          secondary_common_ground_causes: string[];
+          privacy_stage: "private" | "aggregate_only" | "public_opt_in";
+          no_global_moral_ranking: true;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          primary_causes?: string[];
+          secondary_common_ground_causes?: string[];
+          privacy_stage?: "private" | "aggregate_only" | "public_opt_in";
+          no_global_moral_ranking?: true;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          primary_causes?: string[];
+          secondary_common_ground_causes?: string[];
+          privacy_stage?: "private" | "aggregate_only" | "public_opt_in";
+          no_global_moral_ranking?: true;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      mpgf_support_signals: {
+        Row: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          profile_id: string | null;
+          user_ref_hash: string;
+          moral_cluster_hash: string;
+          signal_type: "strong_support" | "weak_common_ground_support" | "dissent_review_requested";
+          strength_bps: number;
+          private_by_default: true;
+          counts_for_common_ground: boolean;
+          no_global_moral_ranking: true;
+          calc_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          profile_id?: string | null;
+          user_ref_hash: string;
+          moral_cluster_hash: string;
+          signal_type: "strong_support" | "weak_common_ground_support" | "dissent_review_requested";
+          strength_bps: number;
+          private_by_default?: true;
+          counts_for_common_ground?: boolean;
+          no_global_moral_ranking?: true;
+          calc_hash: string;
+          created_at?: string;
+        };
+        Update: {
+          profile_id?: string | null;
+          strength_bps?: number;
+          counts_for_common_ground?: boolean;
+          no_global_moral_ranking?: true;
+        };
+        Relationships: [];
+      };
+      mpgf_conditional_pledges: {
+        Row: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          profile_id: string | null;
+          amount_cents: number;
+          counted_cap_cents: number;
+          visibility: "private_amount" | "public_supporter" | "public_reason";
+          payment_mode: "every_org_fast_route" | "stripe_setup_intent_saved_commitment" | "manual_proof_fallback";
+          status:
+            | "signal_only"
+            | "pledge_saved"
+            | "pending_verification"
+            | "threshold_cleared"
+            | "counted"
+            | "voided"
+            | "expired";
+          deadline_at: string;
+          capture_policy: "capture_only_after_threshold_review_and_challenge_window";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          profile_id?: string | null;
+          amount_cents: number;
+          counted_cap_cents: number;
+          visibility?: "private_amount" | "public_supporter" | "public_reason";
+          payment_mode: "every_org_fast_route" | "stripe_setup_intent_saved_commitment" | "manual_proof_fallback";
+          status?:
+            | "signal_only"
+            | "pledge_saved"
+            | "pending_verification"
+            | "threshold_cleared"
+            | "counted"
+            | "voided"
+            | "expired";
+          deadline_at: string;
+          capture_policy?: "capture_only_after_threshold_review_and_challenge_window";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          amount_cents?: number;
+          counted_cap_cents?: number;
+          visibility?: "private_amount" | "public_supporter" | "public_reason";
+          status?:
+            | "signal_only"
+            | "pledge_saved"
+            | "pending_verification"
+            | "threshold_cleared"
+            | "counted"
+            | "voided"
+            | "expired";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      mpgf_every_org_partner_events: {
+        Row: {
+          id: string;
+          round_id: string;
+          campaign_id: string | null;
+          conditional_pledge_id: string | null;
+          pledge_intent_id: string | null;
+          contributor_ref_hash: string | null;
+          partner_donation_id_hash: string | null;
+          charge_id_hash: string;
+          nonprofit_ref_hash: string | null;
+          amount_cents: number;
+          net_amount_cents: number | null;
+          currency: string;
+          frequency: string | null;
+          donation_date: string | null;
+          status: "recorded" | "needs_review" | "rejected";
+          structure_verified: boolean;
+          webhook_verified: boolean;
+          auto_creates_contribution_evidence: boolean;
+          evidence_review_state: "pending_review" | "needs_review" | "rejected";
+          review_required_before_counting: true;
+          final_payout_authorized: false;
+          payload_hash: string;
+          append_only_hash: string;
+          received_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          round_id: string;
+          campaign_id?: string | null;
+          conditional_pledge_id?: string | null;
+          pledge_intent_id?: string | null;
+          contributor_ref_hash?: string | null;
+          partner_donation_id_hash?: string | null;
+          charge_id_hash: string;
+          nonprofit_ref_hash?: string | null;
+          amount_cents: number;
+          net_amount_cents?: number | null;
+          currency?: string;
+          frequency?: string | null;
+          donation_date?: string | null;
+          status: "recorded" | "needs_review" | "rejected";
+          structure_verified?: boolean;
+          webhook_verified?: boolean;
+          auto_creates_contribution_evidence?: boolean;
+          evidence_review_state: "pending_review" | "needs_review" | "rejected";
+          review_required_before_counting?: true;
+          final_payout_authorized?: false;
+          payload_hash: string;
+          append_only_hash: string;
+          received_at?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      mpgf_payment_method_tokens: {
+        Row: {
+          id: string;
+          profile_id: string | null;
+          provider: "stripe";
+          provider_customer_id_hash: string;
+          provider_payment_method_id_hash: string;
+          setup_status: "setup_intent_created" | "setup_succeeded" | "setup_failed" | "revoked";
+          future_use_consent_at: string | null;
+          raw_card_data_stored: false;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          profile_id?: string | null;
+          provider: "stripe";
+          provider_customer_id_hash: string;
+          provider_payment_method_id_hash: string;
+          setup_status: "setup_intent_created" | "setup_succeeded" | "setup_failed" | "revoked";
+          future_use_consent_at?: string | null;
+          raw_card_data_stored?: false;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          setup_status?: "setup_intent_created" | "setup_succeeded" | "setup_failed" | "revoked";
+          future_use_consent_at?: string | null;
+          raw_card_data_stored?: false;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      mpgf_payment_events: {
+        Row: {
+          id: string;
+          conditional_pledge_id: string | null;
+          provider: "stripe" | "every_org" | "fiscal_host" | "manual_evidence";
+          provider_event_id_hash: string;
+          provider_status: string;
+          amount_cents: number;
+          signature_verified: boolean;
+          payload_hash: string | null;
+          verified_at: string | null;
+          final_payout_authorized: false;
+          append_only_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          conditional_pledge_id?: string | null;
+          provider: "stripe" | "every_org" | "fiscal_host" | "manual_evidence";
+          provider_event_id_hash: string;
+          provider_status: string;
+          amount_cents: number;
+          signature_verified?: boolean;
+          payload_hash?: string | null;
+          verified_at?: string | null;
+          final_payout_authorized?: false;
+          append_only_hash: string;
+          created_at?: string;
+        };
+        Update: {
+          provider_status?: string;
+          signature_verified?: boolean;
+          verified_at?: string | null;
+          final_payout_authorized?: false;
+        };
+        Relationships: [];
+      };
+      mpgf_sponsor_pool_entries: {
+        Row: {
+          id: string;
+          round_id: string | null;
+          sponsor_pool_id: string;
+          source_type:
+            | "direct_sponsor_deposit"
+            | "recurring_member_tithe"
+            | "donation_offset_surplus"
+            | "trade_surplus_tithe";
+          amount_cents: number;
+          restricted_or_unrestricted: "restricted_to_round" | "unrestricted_future_rounds";
+          provenance_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          round_id?: string | null;
+          sponsor_pool_id: string;
+          source_type:
+            | "direct_sponsor_deposit"
+            | "recurring_member_tithe"
+            | "donation_offset_surplus"
+            | "trade_surplus_tithe";
+          amount_cents: number;
+          restricted_or_unrestricted: "restricted_to_round" | "unrestricted_future_rounds";
+          provenance_hash: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      mpgf_allocation_results: {
+        Row: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          eligible_direct_cents: number;
+          base_match_cents: number;
+          q_signal_cents: number;
+          bonus_match_cents: number;
+          final_allocated_cents: number;
+          formula_version: "cg_vqaf_capital_constrained_qf_v1";
+          lambda: number;
+          calculation_hash: string;
+          no_global_moral_ranking: true;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          eligible_direct_cents: number;
+          base_match_cents: number;
+          q_signal_cents: number;
+          bonus_match_cents: number;
+          final_allocated_cents: number;
+          formula_version: "cg_vqaf_capital_constrained_qf_v1";
+          lambda: number;
+          calculation_hash: string;
+          no_global_moral_ranking?: true;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      mpgf_dissent_notes: {
+        Row: {
+          id: string;
+          campaign_id: string;
+          filed_by_profile_id: string | null;
+          filer_ref_hash: string;
+          reason_code:
+            | "externality_review"
+            | "threat_baseline_review"
+            | "destination_review"
+            | "collusion_review"
+            | "other_reviewable_claim";
+          public_summary: string;
+          status: "opened" | "under_review" | "resolved" | "dismissed";
+          pauses_unreleased_milestones: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          campaign_id: string;
+          filed_by_profile_id?: string | null;
+          filer_ref_hash: string;
+          reason_code:
+            | "externality_review"
+            | "threat_baseline_review"
+            | "destination_review"
+            | "collusion_review"
+            | "other_reviewable_claim";
+          public_summary: string;
+          status?: "opened" | "under_review" | "resolved" | "dismissed";
+          pauses_unreleased_milestones?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          status?: "opened" | "under_review" | "resolved" | "dismissed";
+          pauses_unreleased_milestones?: boolean;
+        };
+        Relationships: [];
+      };
+      mpgf_milestones: {
+        Row: {
+          id: string;
+          campaign_id: string;
+          percent_release: number;
+          evidence_requirements: Json;
+          release_status: "pending" | "partner_release_pending" | "released" | "paused" | "voided";
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          campaign_id: string;
+          percent_release: number;
+          evidence_requirements?: Json;
+          release_status?: "pending" | "partner_release_pending" | "released" | "paused" | "voided";
+          created_at?: string;
+        };
+        Update: {
+          evidence_requirements?: Json;
+          release_status?: "pending" | "partner_release_pending" | "released" | "paused" | "voided";
+        };
+        Relationships: [];
+      };
     };
     Views: {
       wish_profile_previews: {

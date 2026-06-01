@@ -6354,3 +6354,729 @@ on public.performance_bond_audit_events
 for select
 to authenticated
 using (exists (select 1 from public.performance_bonds where performance_bonds.id = performance_bond_audit_events.bond_id and (performance_bonds.party_id = (select auth.uid()) or performance_bonds.counterparty_id = (select auth.uid()))));
+
+create table if not exists public.mpgf_cycles (
+  id text primary key,
+  label text not null,
+  stage text not null check (stage in ('pilot', 'public_beta', 'mature')),
+  mode text not null check (mode in ('non_real_money_demo', 'pledge_only', 'test_mode', 'real_money')),
+  currency text not null default 'usd' check (currency = 'usd'),
+  budget_cents integer not null default 0 check (budget_cents >= 0),
+  protocol_parameter_version text not null,
+  terms_version text not null,
+  privacy_version text not null,
+  status text not null default 'draft',
+  proposal_opens_at timestamptz,
+  ballot_opens_at timestamptz,
+  ballot_closes_at timestamptz,
+  summary_published_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_candidate_alternatives (
+  id text primary key,
+  cycle_id text references public.mpgf_cycles (id) on delete cascade,
+  name text not null,
+  short_name text not null,
+  cause_area text not null,
+  recipient_name text not null,
+  description text not null,
+  moral_public_good_rationale text not null,
+  outcome_unit text not null,
+  status text not null check (status in ('approved_demo', 'carryover_only', 'draft', 'rejected')),
+  operational_reliability_bps integer not null check (operational_reliability_bps between 0 and 10000),
+  risk_bps integer not null check (risk_bps between 0 and 10000),
+  tail_loss_bps integer not null check (tail_loss_bps between 0 and 10000),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_public_goods_match_pools (
+  id text primary key,
+  funder_type text not null check (
+    funder_type in ('demo_common_ground_pool', 'sponsor', 'subscription_pool', 'institution')
+  ),
+  budget_cents bigint not null check (budget_cents >= 0),
+  base_match_ratio numeric not null default 1 check (base_match_ratio >= 0),
+  qf_bonus_cents bigint not null default 0 check (qf_bonus_cents >= 0),
+  visible_commitment text not null,
+  restrictions_json jsonb not null default '{}'::jsonb,
+  status text not null default 'active' check (status in ('draft', 'active', 'paused', 'closed', 'voided')),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_public_goods_rounds (
+  id text primary key,
+  name text not null,
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  match_pool_id text not null references public.mpgf_public_goods_match_pools (id),
+  qf_enabled boolean not null default false,
+  qf_cap_multiple numeric not null default 1.5 check (qf_cap_multiple >= 0),
+  supporter_gate text not null check (
+    supporter_gate in ('demo_self_attestation', 'verified_human', 'repository_existing_verification')
+  ),
+  status text not null default 'scheduled' check (
+    status in ('draft', 'scheduled', 'open', 'allocation_pending', 'published', 'closed', 'emergency_suspended')
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_rounds_valid_window check (ends_at > starts_at)
+);
+
+create table if not exists public.mpgf_public_goods_campaigns (
+  id text primary key,
+  round_id text references public.mpgf_public_goods_rounds (id) on delete set null,
+  slug text not null unique,
+  pool_alternative_id text references public.mpgf_candidate_alternatives (id) on delete set null,
+  title text not null,
+  destination_type text not null check (
+    destination_type in ('external_charity', 'fiscal_host', 'internal_demo_pool', 'signed_sponsor_route')
+  ),
+  destination_ref text not null,
+  cause_tags text[] not null default '{}',
+  public_summary text not null,
+  threshold_amount_cents bigint not null check (threshold_amount_cents > 0),
+  threshold_supporters integer not null check (threshold_supporters > 0),
+  deadline_at timestamptz not null,
+  verification_method text not null,
+  baseline_rule text not null,
+  exit_rule text not null,
+  review_status text not null default 'draft' check (
+    review_status in ('draft', 'submitted', 'needs_evidence', 'challenge_window', 'approved', 'blocked', 'finalized')
+  ),
+  challenge_window_ends_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_public_goods_identity_attestations (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete cascade,
+  user_ref text not null,
+  provider text not null check (
+    provider in ('demo_self_attestation', 'repository_profile', 'external_proof_of_personhood')
+  ),
+  human_score_bps integer not null check (human_score_bps between 0 and 10000),
+  expires_at timestamptz not null,
+  status text not null check (status in ('active', 'expired', 'revoked', 'pending_review')),
+  redacted_reference text not null,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_public_goods_pledges (
+  id uuid primary key default gen_random_uuid(),
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref text not null,
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  visibility_mode text not null check (
+    visibility_mode in ('private_amount', 'public_supporter', 'public_reason')
+  ),
+  is_recurring boolean not null default false,
+  capture_mode text not null check (
+    capture_mode in ('external_handoff', 'stored_payment_method', 'signed_intent')
+  ),
+  eligibility_state text not null default 'pending_review' check (
+    eligibility_state in ('eligible', 'pending_review', 'duplicate_identity', 'below_minimum', 'blocked')
+  ),
+  human_score_bps integer not null default 0 check (human_score_bps between 0 and 10000),
+  status text not null default 'pledged' check (status in ('pledged', 'captured', 'voided', 'expired')),
+  supporter_reason text,
+  payment_intent_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_no_custody_default check (
+    capture_mode <> 'stored_payment_method' or payment_intent_ref is not null
+  )
+);
+
+create table if not exists public.mpgf_public_goods_allocation_results (
+  id uuid primary key default gen_random_uuid(),
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  direct_eligible_cents bigint not null check (direct_eligible_cents >= 0),
+  verified_supporter_count integer not null check (verified_supporter_count >= 0),
+  base_match_cents bigint not null check (base_match_cents >= 0),
+  qf_score numeric not null check (qf_score >= 0),
+  qf_bonus_cents bigint not null check (qf_bonus_cents >= 0),
+  qf_bonus_cap_cents bigint not null check (qf_bonus_cap_cents >= 0),
+  total_payout_cents bigint not null check (total_payout_cents >= 0),
+  status text not null check (
+    status in ('threshold_pending', 'threshold_met', 'review_pending', 'payable', 'expired', 'blocked')
+  ),
+  proof_required text not null check (
+    proof_required in ('external_destination_receipt', 'provider_webhook_and_review', 'signed_intent_review')
+  ),
+  custody_mode text not null check (
+    custody_mode in ('no_custody_external_handoff', 'provider_or_fiscal_host_required')
+  ),
+  finalized_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, campaign_id)
+);
+
+create table if not exists public.mpgf_public_goods_payment_proofs (
+  id uuid primary key default gen_random_uuid(),
+  pledge_id uuid references public.mpgf_public_goods_pledges (id) on delete set null,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  external_receipt_ref text,
+  charity_receipt_ref text,
+  amount_verified_cents bigint not null default 0 check (amount_verified_cents >= 0),
+  status text not null default 'pending_review' check (
+    status in ('pending_review', 'verified', 'rejected', 'superseded')
+  ),
+  reason_code text not null default 'needs_destination_evidence' check (
+    reason_code in (
+      'destination_verified',
+      'needs_destination_evidence',
+      'needs_identity_evidence',
+      'blocked_threat_baseline',
+      'blocked_destination_risk',
+      'challenge_opened',
+      'challenge_resolved',
+      'external_handoff_verified',
+      'external_handoff_failed',
+      'duplicate_identity_blocked',
+      'appeal_requested',
+      'appeal_denied',
+      'appeal_upheld'
+    )
+  ),
+  reconciliation_source text not null default 'external_receipt' check (
+    reconciliation_source in ('external_receipt', 'fiscal_host_webhook', 'sponsor_signed_intent')
+  ),
+  source_event_ref text,
+  verified_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_public_goods_review_cases (
+  id uuid primary key default gen_random_uuid(),
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  state text not null check (
+    state in ('draft', 'submitted', 'needs_evidence', 'challenge_window', 'approved', 'blocked', 'finalized')
+  ),
+  action text not null check (
+    action in ('approve', 'needs_evidence', 'block', 'challenge', 'finalize')
+  ),
+  reason_code text not null check (
+    reason_code in (
+      'destination_verified',
+      'needs_destination_evidence',
+      'needs_identity_evidence',
+      'blocked_threat_baseline',
+      'blocked_destination_risk',
+      'challenge_opened',
+      'challenge_resolved',
+      'external_handoff_verified',
+      'external_handoff_failed',
+      'duplicate_identity_blocked',
+      'appeal_requested',
+      'appeal_denied',
+      'appeal_upheld'
+    )
+  ),
+  reviewer_id uuid references public.profiles (id) on delete set null,
+  opened_at timestamptz not null default timezone('utc', now()),
+  closed_at timestamptz,
+  appeal_status text not null default 'none' check (
+    appeal_status in ('none', 'appeal_requested', 'appeal_denied', 'appeal_upheld')
+  ),
+  challenge_window_ends_at timestamptz,
+  public_notes text not null default '',
+  allowed_next_actions text[] not null default '{}'
+);
+
+create table if not exists public.mpgf_public_goods_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete cascade,
+  user_ref text not null,
+  pool_id text not null references public.mpgf_public_goods_match_pools (id) on delete cascade,
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  interval text not null check (interval in ('monthly', 'annual')),
+  status text not null default 'active' check (
+    status in ('active', 'paused', 'cancelled', 'past_due', 'expired')
+  ),
+  capture_mode text not null default 'external_handoff' check (
+    capture_mode in ('external_handoff', 'stored_payment_method', 'signed_intent')
+  ),
+  mode text not null default 'pledge_only' check (mode in ('pledge_only', 'test_payment', 'real_money')),
+  provider_subscription_ref text,
+  next_charge_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_subscription_no_hidden_provider check (
+    mode = 'pledge_only' or provider_subscription_ref is not null
+  )
+);
+
+create table if not exists public.mpgf_public_goods_experiment_assignments (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid references public.profiles (id) on delete cascade,
+  user_ref_hash text not null,
+  experiment_key text not null,
+  variant text not null,
+  analytics_policy text not null default 'privacy_safe_no_raw_private_text' check (
+    analytics_policy = 'privacy_safe_no_raw_private_text'
+  ),
+  assigned_at timestamptz not null default timezone('utc', now()),
+  unique (experiment_key, user_ref_hash)
+);
+
+create table if not exists public.mpgf_public_goods_analytics_events (
+  id uuid primary key default gen_random_uuid(),
+  user_ref_hash text,
+  experiment_assignment_id uuid references public.mpgf_public_goods_experiment_assignments (id) on delete set null,
+  event_type text not null,
+  campaign_id text references public.mpgf_public_goods_campaigns (id) on delete set null,
+  event_json jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_analytics_no_raw_contact check (
+    not (event_json ? 'email') and
+    not (event_json ? 'phone') and
+    not (event_json ? 'private_wish') and
+    not (event_json ? 'raw_evidence_text')
+  )
+);
+
+create table if not exists public.mpgf_pledge_intents (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  idempotency_key_hash text not null unique check (idempotency_key_hash ~ '^sha256:[0-9a-f]{64}$'),
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  visibility_pref text not null default 'private_amount' check (
+    visibility_pref in ('private_amount', 'public_supporter', 'public_reason')
+  ),
+  payment_state text not null default 'intent_created' check (
+    payment_state in (
+      'intent_created',
+      'identity_verified',
+      'identity_pending_review',
+      'authorization_pending',
+      'authorized',
+      'manual_evidence_required',
+      'provider_event_received',
+      'captured',
+      'voided',
+      'expired'
+    )
+  ),
+  counting_state text not null default 'preview_only' check (
+    counting_state in ('not_counted', 'preview_only', 'eligible_pending_thresholds', 'counted_after_review', 'excluded')
+  ),
+  fallback_rule jsonb not null default jsonb_build_object(
+    'manualEvidencePath', '/api/mpgf/evidence/manual',
+    'providerUnavailableMode', 'manual_evidence_after_review'
+  ),
+  capture_policy text not null default 'capture_only_after_threshold_review_and_challenge_window' check (
+    capture_policy = 'capture_only_after_threshold_review_and_challenge_window'
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_moral_profiles (
+  profile_id uuid primary key references public.profiles (id) on delete cascade,
+  primary_causes text[] not null default '{}',
+  secondary_common_ground_causes text[] not null default '{}',
+  privacy_stage text not null default 'private' check (privacy_stage in ('private', 'aggregate_only', 'public_opt_in')),
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_support_signals (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  moral_cluster_hash text not null check (moral_cluster_hash ~ '^sha256:[0-9a-f]{64}$'),
+  signal_type text not null check (
+    signal_type in ('strong_support', 'weak_common_ground_support', 'dissent_review_requested')
+  ),
+  strength_bps integer not null check (strength_bps between 0 and 10000),
+  private_by_default boolean not null default true check (private_by_default = true),
+  counts_for_common_ground boolean not null default true,
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  calc_hash text not null check (calc_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, campaign_id, user_ref_hash)
+);
+
+create table if not exists public.mpgf_conditional_pledges (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  amount_cents bigint not null check (amount_cents > 0),
+  counted_cap_cents bigint not null check (counted_cap_cents > 0),
+  visibility text not null default 'private_amount' check (visibility in ('private_amount', 'public_supporter', 'public_reason')),
+  payment_mode text not null check (payment_mode in ('every_org_fast_route', 'stripe_setup_intent_saved_commitment', 'manual_proof_fallback')),
+  status text not null default 'signal_only' check (
+    status in ('signal_only', 'pledge_saved', 'pending_verification', 'threshold_cleared', 'counted', 'voided', 'expired')
+  ),
+  deadline_at timestamptz not null,
+  capture_policy text not null default 'capture_only_after_threshold_review_and_challenge_window' check (
+    capture_policy = 'capture_only_after_threshold_review_and_challenge_window'
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_every_org_partner_events (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text references public.mpgf_public_goods_campaigns (id) on delete set null,
+  conditional_pledge_id text references public.mpgf_conditional_pledges (id) on delete set null,
+  pledge_intent_id text references public.mpgf_pledge_intents (id) on delete set null,
+  contributor_ref_hash text check (contributor_ref_hash is null or contributor_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  partner_donation_id_hash text check (partner_donation_id_hash is null or partner_donation_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  charge_id_hash text not null unique check (charge_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  nonprofit_ref_hash text check (nonprofit_ref_hash is null or nonprofit_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  amount_cents bigint not null check (amount_cents >= 0),
+  net_amount_cents bigint check (net_amount_cents is null or net_amount_cents >= 0),
+  currency text not null default 'USD' check (currency ~ '^[A-Z]{3}$'),
+  frequency text,
+  donation_date timestamptz,
+  status text not null check (status in ('recorded', 'needs_review', 'rejected')),
+  structure_verified boolean not null default false,
+  webhook_verified boolean not null default false,
+  auto_creates_contribution_evidence boolean not null default false,
+  evidence_review_state text not null check (evidence_review_state in ('pending_review', 'needs_review', 'rejected')),
+  review_required_before_counting boolean not null default true check (review_required_before_counting = true),
+  final_payout_authorized boolean not null default false check (final_payout_authorized = false),
+  payload_hash text not null check (payload_hash ~ '^sha256:[0-9a-f]{64}$'),
+  append_only_hash text not null check (append_only_hash ~ '^sha256:[0-9a-f]{64}$'),
+  received_at timestamptz not null default timezone('utc', now()),
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_every_org_events_recorded_requires_verified check (
+    status <> 'recorded'
+    or (
+      structure_verified = true
+      and webhook_verified = true
+      and partner_donation_id_hash is not null
+      and campaign_id is not null
+      and amount_cents > 0
+    )
+  )
+);
+
+create table if not exists public.mpgf_payment_method_tokens (
+  id text primary key,
+  profile_id uuid references public.profiles (id) on delete set null,
+  provider text not null check (provider in ('stripe')),
+  provider_customer_id_hash text not null check (provider_customer_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_payment_method_id_hash text not null check (provider_payment_method_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  setup_status text not null check (setup_status in ('setup_intent_created', 'setup_succeeded', 'setup_failed', 'revoked')),
+  future_use_consent_at timestamptz,
+  raw_card_data_stored boolean not null default false check (raw_card_data_stored = false),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_payment_events (
+  id text primary key,
+  conditional_pledge_id text references public.mpgf_conditional_pledges (id) on delete set null,
+  provider text not null check (provider in ('stripe', 'every_org', 'fiscal_host', 'manual_evidence')),
+  provider_event_id_hash text not null unique check (provider_event_id_hash ~ '^sha256:[0-9a-f]{64}$'),
+  provider_status text not null,
+  amount_cents bigint not null check (amount_cents >= 0),
+  signature_verified boolean not null default false,
+  payload_hash text check (payload_hash is null or payload_hash ~ '^sha256:[0-9a-f]{64}$'),
+  verified_at timestamptz,
+  final_payout_authorized boolean not null default false check (final_payout_authorized = false),
+  append_only_hash text not null check (append_only_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_sponsor_pool_entries (
+  id text primary key,
+  round_id text references public.mpgf_public_goods_rounds (id) on delete set null,
+  sponsor_pool_id text not null references public.mpgf_public_goods_match_pools (id) on delete cascade,
+  source_type text not null check (
+    source_type in ('direct_sponsor_deposit', 'recurring_member_tithe', 'donation_offset_surplus', 'trade_surplus_tithe')
+  ),
+  amount_cents bigint not null check (amount_cents > 0),
+  restricted_or_unrestricted text not null check (restricted_or_unrestricted in ('restricted_to_round', 'unrestricted_future_rounds')),
+  provenance_hash text not null check (provenance_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_allocation_results (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  eligible_direct_cents bigint not null check (eligible_direct_cents >= 0),
+  base_match_cents bigint not null check (base_match_cents >= 0),
+  q_signal_cents bigint not null check (q_signal_cents >= 0),
+  bonus_match_cents bigint not null check (bonus_match_cents >= 0),
+  final_allocated_cents bigint not null check (final_allocated_cents >= 0),
+  formula_version text not null check (formula_version = 'cg_vqaf_capital_constrained_qf_v1'),
+  lambda numeric not null check (lambda >= 0),
+  calculation_hash text not null check (calculation_hash ~ '^sha256:[0-9a-f]{64}$'),
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, campaign_id, formula_version)
+);
+
+create table if not exists public.mpgf_dissent_notes (
+  id text primary key,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  filed_by_profile_id uuid references public.profiles (id) on delete set null,
+  filer_ref_hash text not null check (filer_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  reason_code text not null check (
+    reason_code in ('externality_review', 'threat_baseline_review', 'destination_review', 'collusion_review', 'other_reviewable_claim')
+  ),
+  public_summary text not null,
+  status text not null default 'opened' check (status in ('opened', 'under_review', 'resolved', 'dismissed')),
+  pauses_unreleased_milestones boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_milestones (
+  id text primary key,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  percent_release integer not null check (percent_release between 0 and 100),
+  evidence_requirements jsonb not null default '{}'::jsonb,
+  release_status text not null default 'pending' check (
+    release_status in ('pending', 'partner_release_pending', 'released', 'paused', 'voided')
+  ),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists mpgf_public_goods_payment_proofs_source_event_idx
+on public.mpgf_public_goods_payment_proofs (reconciliation_source, source_event_ref)
+where source_event_ref is not null;
+
+create index if not exists mpgf_pledge_intents_round_campaign_idx
+on public.mpgf_pledge_intents (round_id, campaign_id, payment_state, counting_state);
+
+create index if not exists mpgf_pledge_intents_profile_idx
+on public.mpgf_pledge_intents (profile_id, created_at desc);
+
+create index if not exists mpgf_support_signals_round_campaign_idx
+on public.mpgf_support_signals (round_id, campaign_id, signal_type, created_at desc);
+
+create index if not exists mpgf_conditional_pledges_round_campaign_idx
+on public.mpgf_conditional_pledges (round_id, campaign_id, status, payment_mode);
+
+create index if not exists mpgf_every_org_partner_events_round_campaign_idx
+on public.mpgf_every_org_partner_events (round_id, campaign_id, status, received_at desc);
+
+create index if not exists mpgf_every_org_partner_events_pledge_idx
+on public.mpgf_every_org_partner_events (conditional_pledge_id, pledge_intent_id, received_at desc);
+
+create index if not exists mpgf_payment_events_pledge_idx
+on public.mpgf_payment_events (conditional_pledge_id, provider, created_at desc);
+
+create index if not exists mpgf_allocation_results_round_idx
+on public.mpgf_allocation_results (round_id, formula_version, campaign_id);
+
+alter table public.mpgf_public_goods_pledges enable row level security;
+alter table public.mpgf_public_goods_identity_attestations enable row level security;
+alter table public.mpgf_public_goods_payment_proofs enable row level security;
+alter table public.mpgf_public_goods_review_cases enable row level security;
+alter table public.mpgf_public_goods_subscriptions enable row level security;
+alter table public.mpgf_public_goods_experiment_assignments enable row level security;
+alter table public.mpgf_public_goods_analytics_events enable row level security;
+alter table public.mpgf_pledge_intents enable row level security;
+alter table public.mpgf_moral_profiles enable row level security;
+alter table public.mpgf_support_signals enable row level security;
+alter table public.mpgf_conditional_pledges enable row level security;
+alter table public.mpgf_every_org_partner_events enable row level security;
+alter table public.mpgf_payment_method_tokens enable row level security;
+alter table public.mpgf_payment_events enable row level security;
+alter table public.mpgf_sponsor_pool_entries enable row level security;
+alter table public.mpgf_allocation_results enable row level security;
+alter table public.mpgf_dissent_notes enable row level security;
+alter table public.mpgf_milestones enable row level security;
+
+drop policy if exists "mpgf_public_goods_pledges_select_own" on public.mpgf_public_goods_pledges;
+create policy "mpgf_public_goods_pledges_select_own"
+on public.mpgf_public_goods_pledges
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_public_goods_pledges_insert_own" on public.mpgf_public_goods_pledges;
+create policy "mpgf_public_goods_pledges_insert_own"
+on public.mpgf_public_goods_pledges
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_public_goods_review_cases_public_select" on public.mpgf_public_goods_review_cases;
+create policy "mpgf_public_goods_review_cases_public_select"
+on public.mpgf_public_goods_review_cases
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_pledge_intents_select_own" on public.mpgf_pledge_intents;
+create policy "mpgf_pledge_intents_select_own"
+on public.mpgf_pledge_intents
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_pledge_intents_insert_own" on public.mpgf_pledge_intents;
+create policy "mpgf_pledge_intents_insert_own"
+on public.mpgf_pledge_intents
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_moral_profiles_select_own" on public.mpgf_moral_profiles;
+create policy "mpgf_moral_profiles_select_own"
+on public.mpgf_moral_profiles
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_moral_profiles_write_own" on public.mpgf_moral_profiles;
+create policy "mpgf_moral_profiles_write_own"
+on public.mpgf_moral_profiles
+for all
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_support_signals_select_own" on public.mpgf_support_signals;
+create policy "mpgf_support_signals_select_own"
+on public.mpgf_support_signals
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_support_signals_insert_own" on public.mpgf_support_signals;
+create policy "mpgf_support_signals_insert_own"
+on public.mpgf_support_signals
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_conditional_pledges_select_own" on public.mpgf_conditional_pledges;
+create policy "mpgf_conditional_pledges_select_own"
+on public.mpgf_conditional_pledges
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_conditional_pledges_insert_own" on public.mpgf_conditional_pledges;
+create policy "mpgf_conditional_pledges_insert_own"
+on public.mpgf_conditional_pledges
+for insert
+to authenticated
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_every_org_partner_events_service_only" on public.mpgf_every_org_partner_events;
+create policy "mpgf_every_org_partner_events_service_only"
+on public.mpgf_every_org_partner_events
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "mpgf_payment_method_tokens_select_own" on public.mpgf_payment_method_tokens;
+create policy "mpgf_payment_method_tokens_select_own"
+on public.mpgf_payment_method_tokens
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_sponsor_pool_entries_public_select" on public.mpgf_sponsor_pool_entries;
+create policy "mpgf_sponsor_pool_entries_public_select"
+on public.mpgf_sponsor_pool_entries
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_allocation_results_public_select" on public.mpgf_allocation_results;
+create policy "mpgf_allocation_results_public_select"
+on public.mpgf_allocation_results
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_dissent_notes_public_select" on public.mpgf_dissent_notes;
+create policy "mpgf_dissent_notes_public_select"
+on public.mpgf_dissent_notes
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_milestones_public_select" on public.mpgf_milestones;
+create policy "mpgf_milestones_public_select"
+on public.mpgf_milestones
+for select
+to anon, authenticated
+using (true);
+
+grant select on
+  public.mpgf_public_goods_match_pools,
+  public.mpgf_public_goods_rounds,
+  public.mpgf_public_goods_campaigns,
+  public.mpgf_public_goods_allocation_results,
+  public.mpgf_public_goods_review_cases,
+  public.mpgf_sponsor_pool_entries,
+  public.mpgf_allocation_results,
+  public.mpgf_dissent_notes,
+  public.mpgf_milestones
+to anon, authenticated;
+
+grant select, insert on
+  public.mpgf_support_signals,
+  public.mpgf_conditional_pledges
+to authenticated;
+
+grant select, insert, update on public.mpgf_pledge_intents to authenticated;
+
+grant select on public.mpgf_payment_method_tokens to authenticated;
+
+grant all on
+  public.mpgf_public_goods_match_pools,
+  public.mpgf_public_goods_rounds,
+  public.mpgf_public_goods_campaigns,
+  public.mpgf_public_goods_identity_attestations,
+  public.mpgf_public_goods_pledges,
+  public.mpgf_public_goods_allocation_results,
+  public.mpgf_public_goods_payment_proofs,
+  public.mpgf_public_goods_review_cases,
+  public.mpgf_public_goods_subscriptions,
+  public.mpgf_public_goods_experiment_assignments,
+  public.mpgf_public_goods_analytics_events,
+  public.mpgf_pledge_intents,
+  public.mpgf_moral_profiles,
+  public.mpgf_support_signals,
+  public.mpgf_conditional_pledges,
+  public.mpgf_every_org_partner_events,
+  public.mpgf_payment_method_tokens,
+  public.mpgf_payment_events,
+  public.mpgf_sponsor_pool_entries,
+  public.mpgf_allocation_results,
+  public.mpgf_dissent_notes,
+  public.mpgf_milestones
+to service_role;
+
+comment on table public.mpgf_pledge_intents is
+  'First-class MPGF pledge_intent records for the production flow: verify identity, authorize conditionally, fall back to manual evidence only when provider integration is unavailable.';
+
+comment on table public.mpgf_support_signals is
+  'Private-by-default Common-Ground Verified Quadratic Assurance Funding support signals. Public outputs aggregate signal counts and moral-cluster breadth only; they do not create a global moral ranking.';
+
+comment on table public.mpgf_conditional_pledges is
+  'CG-VQAF conditional pledge records for fast Every.org routes, Stripe SetupIntent saved commitments, and manual proof fallback.';
+
+comment on table public.mpgf_every_org_partner_events is
+  'Append-only MPGF Every.org partner webhook imports. Dedupe by hashed chargeId, map partner metadata to round/campaign/pledge when present, auto-create reviewable contribution evidence, and never authorize final payout by webhook alone.';
+
+comment on column public.mpgf_every_org_partner_events.charge_id_hash is
+  'Hashed Every.org chargeId used as the idempotency key. Raw charge IDs, donor names, donor emails, private notes, and public testimony are not stored in this table.';
+
+comment on column public.mpgf_every_org_partner_events.partner_donation_id_hash is
+  'Hashed Donate Link partnerDonationId used to connect redirect-pending state with partner webhook import without exposing private donor references.';
+
+comment on table public.mpgf_payment_method_tokens is
+  'Stripe SetupIntent-first saved payment-method tokens. Provider ids are stored only as hashes; raw card data is never stored.';

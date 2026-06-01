@@ -117,6 +117,22 @@ export function MpgfContributionModal({
   const activeAmountCents = amountToCents(amountDollars);
   const countedCents =
     countForMatching && mode !== "manual_proof_fallback" ? Math.min(activeAmountCents, perDonorCapCents) : 0;
+  const projectedDirectCents = selectedCampaign ? selectedCampaign.directEligibleCents + activeAmountCents : 0;
+  const projectedVerifiedSupporters = selectedCampaign
+    ? Math.min(
+        selectedCampaign.thresholdDonors,
+        selectedCampaign.verifiedDonorCount + (activeAmountCents >= 100 ? 1 : 0),
+      )
+    : 0;
+  const thresholdGapAfterCents = selectedCampaign
+    ? Math.max(0, selectedCampaign.thresholdAmountCents - projectedDirectCents)
+    : 0;
+  const supporterGapAfter = selectedCampaign
+    ? Math.max(0, selectedCampaign.thresholdDonors - projectedVerifiedSupporters)
+    : 0;
+  const projectedThresholdCleared = selectedCampaign
+    ? selectedCampaign.thresholdPassed || (thresholdGapAfterCents === 0 && supporterGapAfter === 0)
+    : false;
   const modalDescription =
     "Fast-route gifts open Every.org and stay pending until webhook import. Saved commitments use Stripe SetupIntent first. Manual proof is the fallback when integrations cannot import.";
   const modeSummary = {
@@ -384,6 +400,28 @@ export function MpgfContributionModal({
                           selectedCampaign.countedForMatchCents,
                         )} counted`
                       : "Common pool"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>If verified</dt>
+                  <dd>
+                    {selectedCampaign
+                      ? `${formatUsd(projectedDirectCents)} direct; ${projectedVerifiedSupporters}/${
+                          selectedCampaign.thresholdDonors
+                        } supporters`
+                      : "Choose a campaign"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Unlock gap after route</dt>
+                  <dd>
+                    {selectedCampaign
+                      ? projectedThresholdCleared
+                        ? "threshold would clear after provider import or evidence review"
+                        : `${formatUsd(thresholdGapAfterCents)} and ${supporterGapAfter} supporter${
+                            supporterGapAfter === 1 ? "" : "s"
+                          } still needed`
+                      : "Choose a campaign"}
                   </dd>
                 </div>
                 <div>
