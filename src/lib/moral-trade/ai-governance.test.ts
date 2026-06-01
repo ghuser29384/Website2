@@ -6,6 +6,7 @@ import {
   validateMoralTradeAiGovernanceProfile,
   type MoralTradeAiGovernanceProfile,
 } from "@/lib/moral-trade/ai-governance";
+import { GET as aiGovernanceHealthRoute } from "@/app/api/moral-trade/ai-governance/health/route";
 
 test("AI governance profile requires documented, human-controlled, non-ranking automation", () => {
   const profile = getMoralTradeAiGovernanceProfile();
@@ -18,6 +19,25 @@ test("AI governance profile requires documented, human-controlled, non-ranking a
   assert.ok(profile.requiredDocumentationBeforeMl.some((entry) => entry.key === "dataset_datasheet"));
   assert.ok(profile.documentationTemplates.some((entry) => entry.key === "model_card"));
   assert.ok(profile.documentationTemplates.some((entry) => entry.key === "fairness_audit_report"));
+  assert.equal(
+    profile.sampleDocumentationPackets.length,
+    profile.requiredDocumentationBeforeMl.length,
+  );
+  assert.ok(profile.sampleDocumentationPackets.some((entry) => entry.key === "model_card"));
+  assert.ok(
+    profile.sampleDocumentationPackets.every(
+      (entry) =>
+        entry.reviewerStatus === "shadow_only" &&
+        Object.keys(entry.publicSummary).length >= 4 &&
+        entry.redactionNotes.some((note) => /raw_private_wish_text/i.test(note)) &&
+        entry.redactionNotes.some((note) => /contact_details/i.test(note)),
+    ),
+  );
+  assert.ok(
+    validation.checks.some(
+      (entry) => entry.id === "sample-documentation-packets" && entry.status === "pass",
+    ),
+  );
   assert.ok(
     profile.documentationTemplates.every((entry) =>
       entry.redactedFields.includes("raw_private_wish_text"),
@@ -74,11 +94,24 @@ test("AI governance validation fails if documentation templates leak private inp
           }
         : template,
     ),
+    sampleDocumentationPackets: profile.sampleDocumentationPackets.map((packet) =>
+      packet.key === "dataset_datasheet"
+        ? {
+            ...packet,
+            publicSummary: {
+              ...packet.publicSummary,
+              raw_private_wish_text: "exact private wish leaked",
+            },
+            redactionNotes: ["source_note_details withheld"],
+          }
+        : packet,
+    ),
   };
   const validation = validateMoralTradeAiGovernanceProfile(weakenedProfile);
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("documentation-templates")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("sample-documentation-packets")));
 });
 
 test("AI governance validation fails if fairness documentation or human control is missing", () => {
@@ -105,4 +138,30 @@ test("AI governance validation fails if fairness documentation or human control 
   assert.ok(validation.blockers.some((blocker) => blocker.includes("fairness-documentation")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("explanation-controls")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("human-controlled-decisions")));
+});
+
+test("AI governance health route publishes only redacted sample documentation packets", async () => {
+  const response = await aiGovernanceHealthRoute(
+    new Request("http://localhost/api/moral-trade/ai-governance/health"),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.validation.status, "pass");
+  assert.equal(body.publicContract.sampleDocumentationPacketCount, 6);
+  assert.ok(
+    body.publicContract.sampleDocumentationPackets.every(
+      (packet: {
+        key: string;
+        publicSummary: Record<string, unknown>;
+        redactionNotes: string[];
+      }) =>
+        packet.key &&
+        !Object.prototype.hasOwnProperty.call(packet.publicSummary, "raw_private_wish_text") &&
+        !Object.prototype.hasOwnProperty.call(packet.publicSummary, "contact_details") &&
+        packet.redactionNotes.some((note) => /raw_private_wish_text/i.test(note)) &&
+        packet.redactionNotes.some((note) => /contact_details/i.test(note)),
+    ),
+  );
 });

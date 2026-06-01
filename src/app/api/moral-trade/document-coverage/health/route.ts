@@ -89,6 +89,7 @@ export async function GET(request: Request) {
         recommendation: requirement.recommendation,
         sourceDocumentKeys: requirement.sourceDocumentKeys,
         evidenceFiles: requirement.evidenceFiles,
+        requiredEvidencePhrases: requirement.requiredEvidencePhrases,
         testFiles: requirement.testFiles,
         routeEvidence: requirement.routeEvidence,
       })),

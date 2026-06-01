@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.20-2026-05",
+  "version": "moral-trade-api-contract-v0.22-2026-05",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -336,7 +336,7 @@
       "responseSchema": "performance_health_response",
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
-      "fallback": "Return performance blockers and public non-claims; do not claim Core Web Vitals, API latency, or loading-state readiness without route-level evidence."
+      "fallback": "Return performance blockers, route segment error-boundary evidence, and public non-claims; do not claim Core Web Vitals, API latency, or loading-state readiness without route-level evidence."
     },
     {
       "key": "moral_trade_externality_health",
@@ -709,9 +709,9 @@
         { "key": "externalityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Externality due-diligence validator result." },
         { "key": "transparencyReportValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Aggregate transparency report validator result for metric coverage, small-sample suppression, and private-field exclusion." },
         { "key": "apiContractValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "API contract validator result." },
-        { "key": "aiGovernanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validator result for documentation, fairness, and human-control gates." },
-        { "key": "documentCoverageValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Document-coverage validator result mapping the improvement documents to source, implementation, route, and test evidence." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published codes, decision pipeline, route keys, schema keys, schema sample validation counts, schema sample failure counts, transition rules, and metric names." },
+        { "key": "aiGovernanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validator result for documentation, redacted sample documentation packets, fairness, and human-control gates." },
+        { "key": "documentCoverageValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Document-coverage validator result mapping the improvement documents to source, implementation phrase, route, and test evidence." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published codes, decision pipeline, route keys, schema keys, schema sample validation counts, schema sample failure counts, AI-governance sample documentation packet count, document-coverage evidence phrase count, transition rules, and metric names." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Validator blockers that prevent readiness claims." }
       ]
     },
@@ -1102,12 +1102,12 @@
     },
     {
       "key": "performance_health_response",
-      "purpose": "Performance and route-resilience targets, instrumentation controls, route families, release gates, and public non-claims.",
+      "purpose": "Performance and route-resilience targets, instrumentation controls, route families, route segment error-boundary evidence, release gates, and public non-claims.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when performance profile validator passes." },
         { "key": "measurementCadence", "type": "string", "required": true, "privacy": "public", "description": "Performance measurement cadence." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Performance profile validation result." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published metric targets, instrumentation controls, route families, release gates, and non-claims." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published metric targets, instrumentation controls, route families, route segment error-boundary evidence, release gates, and non-claims." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Performance profile blockers." }
       ]
     },
@@ -1130,7 +1130,7 @@
         { "key": "mlEnabledForMatching", "type": "boolean", "required": true, "privacy": "public", "description": "False unless documented ML matching is explicitly approved." },
         { "key": "mlEnabledForStateChanges", "type": "boolean", "required": true, "privacy": "public", "description": "False because safety, disclosure, completion, and disputes remain human-controlled." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validation result." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Required documentation, machine-checkable documentation templates, permitted automation, prohibited uses, fairness documentation, explanation controls, and external standards." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Required documentation, machine-checkable documentation templates, redacted sample documentation packets, permitted automation, prohibited uses, fairness documentation, explanation controls, and external standards." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "AI governance blockers." }
       ]
     },
@@ -1142,11 +1142,11 @@
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the document coverage validation run." },
         { "key": "profileVersion", "type": "string", "required": true, "privacy": "public", "description": "Document coverage profile version." },
         { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable purpose for the document coverage contract." },
-        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for source documents, source artifact hashes, recommendation families, testing-plan layers, implementation evidence, test files, route evidence, and non-claims." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for source documents, source artifact hashes, recommendation families, testing-plan layers, implementation evidence files, required implementation evidence phrases, test files, route evidence, and non-claims." },
         { "key": "sourceDocumentArtifacts", "type": "source_artifact_array", "required": true, "privacy": "public_contract", "description": "Hash-checked Markdown and PDF source artifacts used as the authoritative improvement documents." },
         { "key": "sourceStackReferences", "type": "recommended_source_stack_array", "required": true, "privacy": "public_contract", "description": "Recommended source-stack traceability records that map Ord, MoralTrade.org public materials, OECD, UNGP, ILO, ETI/Fairtrade, Open Supply Hub, W3C PROV, GS1 EPCIS, NIST, fairness, documentation, and HCI guidance to concrete implementation files and public routes." },
         { "key": "testingPlanCoverage", "type": "testing_plan_layer_array", "required": true, "privacy": "public_contract", "description": "Report testing-plan layer records for schema, policy, evidence, privacy, fairness, UX, and resilience checks with mapped evidence files, test files, route evidence, and pass conditions." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Published source-document records with SHA-256 artifact hashes, recommended source-stack traceability, testing-plan coverage, canonical build instruction artifact hash, verification commands, requirement mappings, evidence files, test files, route evidence, and non-claims." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Published source-document records with SHA-256 artifact hashes, recommended source-stack traceability, testing-plan coverage, canonical build instruction artifact hash, verification commands, requirement mappings, evidence files, required implementation evidence phrases, test files, route evidence, and non-claims." },
         { "key": "canonicalInstruction", "type": "object", "required": true, "privacy": "public_contract", "description": "Nested under publicContract: canonical Core Moral Trade build-instruction path, required phrase count, verification commands, route evidence, and SHA-256 artifact hash." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Document coverage blockers that prevent claiming the improvement documents are implemented." }
       ]

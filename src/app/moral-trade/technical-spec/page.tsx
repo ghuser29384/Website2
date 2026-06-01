@@ -179,6 +179,10 @@ export default async function MoralTradeTechnicalSpecPage() {
   const documentCoverageProfile = getMoralTradeDocumentCoverageProfile();
   const documentCoverageValidation =
     validateMoralTradeDocumentCoverageProfile(documentCoverageProfile);
+  const documentCoverageEvidencePhraseCount = documentCoverageProfile.requirements.reduce(
+    (total, requirement) => total + requirement.requiredEvidencePhrases.length,
+    0,
+  );
   const apiRateLimitSurfaces = Array.from(
     new Set(apiContractProfile.routes.map((route) => route.rateLimitSurface)),
   );
@@ -317,7 +321,8 @@ export default async function MoralTradeTechnicalSpecPage() {
               <p>
                 {documentCoverageValidation.checks.length} check(s),{" "}
                 {documentCoverageValidation.sourceDocumentCount} source document(s),{" "}
-                {documentCoverageValidation.testingPlanLayerCount} testing-plan layer(s).
+                {documentCoverageValidation.testingPlanLayerCount} testing-plan layer(s),{" "}
+                {documentCoverageEvidencePhraseCount} implementation phrase gate(s).
               </p>
             </div>
             <Link
@@ -353,6 +358,17 @@ export default async function MoralTradeTechnicalSpecPage() {
                 connect Ord, product commitments, due diligence, provenance, AI governance, and
                 HCI guidance to code and public routes.
               </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Requirement phrase gates</h3>
+              <ul className="clean-list">
+                {documentCoverageProfile.requirements.map((requirement) => (
+                  <li key={requirement.key}>
+                    {requirement.label}: {requirement.requiredEvidencePhrases.length} phrase
+                    gate(s)
+                  </li>
+                ))}
+              </ul>
             </article>
             <article className="panel protocol-contract-card">
               <h3>Canonical gates</h3>
@@ -1268,6 +1284,15 @@ export default async function MoralTradeTechnicalSpecPage() {
                 {routeRecoveryAudit.routeCount} route(s) covered, recovery ratio{" "}
                 {routeRecoveryAudit.coverageRatio}.
               </p>
+              <ul className="clean-list">
+                {routeRecoveryAudit.entries
+                  .filter((entry) => entry.evidenceFile)
+                  .map((entry) => (
+                    <li key={`${entry.path}-${entry.evidenceFile}`}>
+                      {entry.path}: {entry.evidenceFile}
+                    </li>
+                  ))}
+              </ul>
             </article>
           </div>
           <div className="data-grid">
@@ -1655,7 +1680,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               <p>
                 {aiGovernanceValidation.checks.length} check(s),{" "}
                 {aiGovernanceValidation.blockers.length} blocker(s), decisioning mode{" "}
-                {aiGovernanceProfile.decisioningMode.replaceAll("_", " ")}.
+                {aiGovernanceProfile.decisioningMode.replaceAll("_", " ")},{" "}
+                {aiGovernanceProfile.sampleDocumentationPackets.length} sample documentation
+                packet(s).
               </p>
             </div>
             <Link className="button button-secondary" href="/api/moral-trade/ai-governance/health">
@@ -1678,6 +1705,16 @@ export default async function MoralTradeTechnicalSpecPage() {
                   <li key={template.key}>
                     {template.label}: {template.requiredFields.length} required fields; redacts{" "}
                     {template.redactedFields.slice(0, 2).join(" and ")}
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Sample documentation packets</h3>
+              <ul className="clean-list">
+                {aiGovernanceProfile.sampleDocumentationPackets.map((packet) => (
+                  <li key={packet.key}>
+                    {packet.key.replaceAll("_", " ")}: {packet.reviewerStatus.replaceAll("_", " ")}
                   </li>
                 ))}
               </ul>

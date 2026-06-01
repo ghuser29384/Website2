@@ -1,7 +1,10 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 import performanceProfileJson from "../../../config/moral-trade/performance-profile.json";
 
 export const MORAL_TRADE_PERFORMANCE_VALIDATOR_VERSION =
-  "moral-trade-performance-validator-v0.3";
+  "moral-trade-performance-validator-v0.4";
 
 export type MoralTradePerformanceThreshold = {
   operator: "lte" | "gte" | "eq";
@@ -78,6 +81,7 @@ export interface MoralTradeRouteRecoveryManifestEntry {
   serverRenderable: boolean;
   recoverySurfaces: string[];
   stateMutationOnFallback: boolean;
+  evidenceFile?: string;
 }
 
 export interface MoralTradeRouteRecoveryManifestAudit {
@@ -152,6 +156,10 @@ const REQUIRED_TESTS = [
 
 function hasAll(values: readonly string[], required: readonly string[]) {
   return required.every((entry) => values.includes(entry));
+}
+
+function routeRecoveryEvidenceExists(evidenceFile: string) {
+  return existsSync(path.resolve(process.cwd(), evidenceFile));
 }
 
 function check(
@@ -245,6 +253,7 @@ const SAMPLE_ROUTE_RECOVERY_MANIFEST = [
     path: "/reasoning-center",
     serverRenderable: true,
     recoverySurfaces: [
+      "route_segment_error_boundary",
       "route_specific_viewer_fallback",
       "packet_generation_recovery_notice",
       "global_error_boundary",
@@ -252,6 +261,7 @@ const SAMPLE_ROUTE_RECOVERY_MANIFEST = [
       "safe_navigation",
     ],
     stateMutationOnFallback: false,
+    evidenceFile: "src/app/reasoning-center/error.tsx",
   },
   {
     routeFamilyKey: "reasoning_and_review",
@@ -318,11 +328,19 @@ export function auditMoralTradeRouteRecoveryManifest({
       blockers.push(`route_recovery_mutates_state:${entry.path}`);
     }
 
+    const evidenceFilePresent =
+      !entry.evidenceFile || routeRecoveryEvidenceExists(entry.evidenceFile);
+
+    if (!evidenceFilePresent) {
+      blockers.push(`route_recovery_evidence_missing:${entry.path}:${entry.evidenceFile}`);
+    }
+
     if (
       entry.routeFamilyKey === expectedRoute.routeFamilyKey &&
       (entry.serverRenderable || entry.recoverySurfaces.includes("validator_blockers")) &&
       entry.recoverySurfaces.length >= 2 &&
-      !entry.stateMutationOnFallback
+      !entry.stateMutationOnFallback &&
+      evidenceFilePresent
     ) {
       coveredRouteCount += 1;
     }

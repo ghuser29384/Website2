@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 export const MORAL_TRADE_DOCUMENT_COVERAGE_VALIDATOR_VERSION =
-  "moral-trade-document-coverage-validator-v0.5";
+  "moral-trade-document-coverage-validator-v0.6";
 
 export type MoralTradeDocumentSource = {
   key: string;
@@ -20,6 +20,7 @@ export type MoralTradeDocumentRequirement = {
   recommendation: string;
   sourceDocumentKeys: string[];
   evidenceFiles: string[];
+  requiredEvidencePhrases: string[];
   testFiles: string[];
   routeEvidence: string[];
 };
@@ -167,7 +168,7 @@ const REQUIRED_TESTING_PLAN_LAYER_KEYS = [
 ] as const;
 
 export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfile = {
-  version: "moral-trade-document-coverage-v0.6-2026-05",
+  version: "moral-trade-document-coverage-v0.7-2026-05",
   purpose:
     "Requirement-to-evidence coverage map for the Moral Trade improvement documents: the public validator suite should show which implementation artifacts answer each recommendation without inventing production evidence.",
   sourceDocuments: [
@@ -570,6 +571,11 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
         "src/app/api/moral-trade/data-model/contract/route.ts",
         "src/app/api/moral-trade/schemas/route.ts",
       ],
+      requiredEvidencePhrases: [
+        "MORAL_TRADE_SCHEMA_REGISTRY_VERSION",
+        "validateMoralTradeSchemaRegistry",
+        "profile-json-schema-conformance",
+      ],
       testFiles: [
         "src/lib/moral-trade/protocol.test.ts",
         "src/lib/moral-trade/data-model.test.ts",
@@ -593,6 +599,11 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
         "src/app/offers/examples/[exampleId]/page.tsx",
         "src/app/moral-trade/page.tsx",
         "src/app/reasoning-center/page.tsx",
+      ],
+      requiredEvidencePhrases: [
+        "getOfferReviewWorkflowCards",
+        "no_global_moral_ranking",
+        "reviewer_summary",
       ],
       testFiles: [
         "src/lib/proposal-review.test.ts",
@@ -618,6 +629,12 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
         "supabase/migrations/20260529_moral_trade_provenance_persistence.sql",
         "supabase/migrations/20260529_moral_trade_review_decision_idempotency.sql",
       ],
+      requiredEvidencePhrases: [
+        "MoralTradeProvenanceActivity",
+        "provenance_agent",
+        "traceability_event",
+        "persistence-append-only-policies",
+      ],
       testFiles: [
         "src/lib/moral-trade/provenance.test.ts",
         "src/lib/moral-trade/evidence-persistence.test.ts",
@@ -637,6 +654,11 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
         "src/app/api/moral-trade/copilot/contract/route.ts",
         "src/app/api/moral-trade/copilot/review/route.ts",
         "src/lib/moral-trade/policy-bundle.ts",
+      ],
+      requiredEvidencePhrases: [
+        "MoralTradeCopilotOutput",
+        "no_global_moral_ranking",
+        "validateMoralTradeCopilotOutput",
       ],
       testFiles: [
         "src/lib/moral-trade/copilot.test.ts",
@@ -661,6 +683,11 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
         "src/app/api/moral-trade/match-signal/evaluate/route.ts",
         "src/app/api/moral-trade/disclosure/evaluate/route.ts",
       ],
+      requiredEvidencePhrases: [
+        "redacted_profile_match_preview_only",
+        "evaluateMoralTradeDisclosureGrant",
+        "raw_source_notes_redacted",
+      ],
       testFiles: [
         "src/lib/moral-trade/match-signal.test.ts",
         "src/lib/moral-trade/disclosure.test.ts",
@@ -683,6 +710,12 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
         "src/lib/moral-trade/challenge-appeal.ts",
         "src/lib/moral-trade/protocol.ts",
         "src/app/validation/page.tsx",
+      ],
+      requiredEvidencePhrases: [
+        "evaluateMoralTradeExternalityReview",
+        "affected_party_standing",
+        "challenge_window_required",
+        "deterministic_challenge_appeal_scope_only",
       ],
       testFiles: [
         "src/lib/moral-trade/externality.test.ts",
@@ -711,6 +744,16 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
         "src/lib/moral-trade/ai-governance.ts",
         "src/lib/moral-trade/api-contract.ts",
         "src/lib/moral-trade/email-copy.ts",
+      ],
+      requiredEvidencePhrases: [
+        "validateMoralTradeEvaluationProfile",
+        "validateMoralTradeOperationsProfile",
+        "validateMoralTradeSecurityProfile",
+        "validateMoralTradePerformanceProfile",
+        "validateMoralTradeIncidentResponseProfile",
+        "MORAL_TRADE_TRANSPARENCY_REPORT_VERSION",
+        "validateMoralTradeAiGovernanceProfile",
+        "sampleDocumentationPacketFailures",
       ],
       testFiles: [
         "src/lib/moral-trade/evaluation.test.ts",
@@ -847,6 +890,13 @@ export function validateMoralTradeDocumentCoverageProfile(
     const missingEvidence = requirement.evidenceFiles.filter((filePath) => !fileExists(filePath));
     const missingTests = requirement.testFiles.filter((filePath) => !fileExists(filePath));
     const missingSources = requirement.sourceDocumentKeys.filter((key) => !sourceKeys.includes(key));
+    const evidenceTexts = requirement.evidenceFiles
+      .map((filePath) => readTextIfExists(filePath))
+      .filter((text): text is string => text != null);
+    const missingEvidencePhrases = requirement.requiredEvidencePhrases.filter(
+      (phrase) =>
+        !evidenceTexts.some((text) => text.toLowerCase().includes(phrase.toLowerCase())),
+    );
     const hasRoutes = requirement.routeEvidence.length > 0;
 
     return check(
@@ -855,13 +905,18 @@ export function validateMoralTradeDocumentCoverageProfile(
       missingEvidence.length === 0 &&
         missingTests.length === 0 &&
         missingSources.length === 0 &&
+        missingEvidencePhrases.length === 0 &&
         hasRoutes,
       [
         `evidence=${requirement.evidenceFiles.length - missingEvidence.length}/${requirement.evidenceFiles.length}`,
+        `evidencePhrases=${requirement.requiredEvidencePhrases.length - missingEvidencePhrases.length}/${requirement.requiredEvidencePhrases.length}`,
         `tests=${requirement.testFiles.length - missingTests.length}/${requirement.testFiles.length}`,
         `routes=${requirement.routeEvidence.length}`,
         missingSources.length ? `missingSources=${missingSources.join("|")}` : "sources=linked",
         missingEvidence.length ? `missingEvidence=${missingEvidence.join("|")}` : "",
+        missingEvidencePhrases.length
+          ? `missingEvidencePhrases=${missingEvidencePhrases.join("|")}`
+          : "",
         missingTests.length ? `missingTests=${missingTests.join("|")}` : "",
       ]
         .filter(Boolean)

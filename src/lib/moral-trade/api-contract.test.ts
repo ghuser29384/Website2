@@ -44,6 +44,13 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_review_workflow_evaluate"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_reasoning_packets"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_performance_health"));
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_performance_health" &&
+        /route segment error-boundary evidence/i.test(route.fallback),
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_externality_health"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_ai_governance_health"));
   assert.ok(
@@ -228,7 +235,9 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
         (field) =>
           field.key === "publicContract" &&
           /decision pipeline/i.test(field.description) &&
-          /schema sample validation counts/i.test(field.description),
+          /schema sample validation counts/i.test(field.description) &&
+          /AI-governance sample documentation packet count/i.test(field.description) &&
+          /document-coverage evidence phrase count/i.test(field.description),
       ),
   );
   assert.ok(
@@ -308,7 +317,13 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "security_health_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "incident_response_health_response"));
-  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "performance_health_response"));
+  assert.ok(
+    profile.schemaDefinitions.some(
+      (schema) =>
+        schema.key === "performance_health_response" &&
+        /route segment error-boundary evidence/i.test(schema.purpose),
+    ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "externality_health_response"));
   assert.ok(
     profile.schemaDefinitions
@@ -318,6 +333,24 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
       ),
   );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "ai_governance_health_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "moral_trade_aggregate_health_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "aiGovernanceValidation" &&
+          /redacted sample documentation packets/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "ai_governance_health_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "publicContract" &&
+          /redacted sample documentation packets/i.test(field.description),
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "document_coverage_health_response"));
   assert.ok(
     profile.schemaDefinitions
@@ -325,7 +358,7 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
       ?.fields.some(
         (field) =>
           field.key === "validation" &&
-          /source documents, source artifact hashes/i.test(field.description),
+          /required implementation evidence phrases/i.test(field.description),
       ),
   );
   assert.ok(
@@ -355,6 +388,15 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
           /schema, policy, evidence, privacy, fairness, UX, and resilience/i.test(
             field.description,
           ),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "document_coverage_health_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "publicContract" &&
+          /required implementation evidence phrases/i.test(field.description),
       ),
   );
   assert.ok(

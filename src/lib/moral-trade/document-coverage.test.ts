@@ -56,6 +56,23 @@ test("document coverage profile maps improvement docs to implementation evidence
       (artifact) => artifact.artifactHash?.startsWith("sha256:") && artifact.hashMatches,
     ),
   );
+  assert.ok(
+    validation.checks.some(
+      (entry) =>
+        entry.id === "requirement:core_data_model_public_validator_suite" &&
+        entry.status === "pass" &&
+        entry.evidence.includes("evidencePhrases="),
+    ),
+  );
+  assert.ok(
+    profile.requirements.every((requirement) => requirement.requiredEvidencePhrases.length > 0),
+  );
+  assert.ok(
+    profile.requirements.reduce(
+      (total, requirement) => total + requirement.requiredEvidencePhrases.length,
+      0,
+    ) >= 20,
+  );
   assert.equal(profile.sourceDocuments.length, 2);
   assert.equal(
     profile.canonicalInstruction.path,
@@ -162,6 +179,10 @@ test("document coverage validation fails when source phrases or evidence files w
         ? {
             ...requirement,
             evidenceFiles: [...requirement.evidenceFiles, "src/lib/missing-workflow.ts"],
+            requiredEvidencePhrases: [
+              ...requirement.requiredEvidencePhrases,
+              "this workflow implementation phrase should not exist",
+            ],
           }
         : requirement,
     ),
@@ -207,7 +228,8 @@ test("document coverage validation fails when source phrases or evidence files w
       (entry) =>
         entry.id === "requirement:workflow_cards_factor_codes" &&
         entry.status === "fail" &&
-        entry.evidence.includes("src/lib/missing-workflow.ts"),
+        entry.evidence.includes("src/lib/missing-workflow.ts") &&
+        entry.evidence.includes("this workflow implementation phrase should not exist"),
     ),
   );
 });
@@ -278,9 +300,14 @@ test("document coverage route publishes the public contract without private stat
   );
   assert.ok(
     body.publicContract.requirements.some(
-      (requirement: { key: string; routeEvidence: string[] }) =>
+      (requirement: {
+        key: string;
+        routeEvidence: string[];
+        requiredEvidencePhrases: string[];
+      }) =>
         requirement.key === "evaluation_operations_security_performance" &&
-        requirement.routeEvidence.includes("/api/moral-trade/security/health"),
+        requirement.routeEvidence.includes("/api/moral-trade/security/health") &&
+        requirement.requiredEvidencePhrases.includes("validateMoralTradeSecurityProfile"),
     ),
   );
   assert.ok(

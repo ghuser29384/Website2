@@ -43,6 +43,13 @@ export async function GET(request: Request) {
         redactedFields: template.redactedFields,
         reviewRule: template.reviewRule,
       })),
+      sampleDocumentationPacketCount: profile.sampleDocumentationPackets.length,
+      sampleDocumentationPackets: profile.sampleDocumentationPackets.map((packet) => ({
+        key: packet.key,
+        reviewerStatus: packet.reviewerStatus,
+        publicSummary: packet.publicSummary,
+        redactionNotes: packet.redactionNotes,
+      })),
       permittedAutomation: profile.permittedAutomation.map((entry) => entry.key),
       prohibitedUses: profile.prohibitedUses.map((entry) => entry.key),
       fairnessDocumentation: profile.fairnessDocumentation,

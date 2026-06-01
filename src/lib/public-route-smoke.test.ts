@@ -1843,6 +1843,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const reasoningPacketsRoute = readRepoFile(
     "src/app/api/moral-trade/reasoning/packets/route.ts",
   );
+  const reasoningCenterErrorPage = readRepoFile("src/app/reasoning-center/error.tsx");
   const publicOffersRoute = readRepoFile("src/app/api/offers/route.ts");
   const publicOfferDetailRoute = readRepoFile("src/app/api/offers/[...slug]/route.ts");
   const publicOffersFacetsRoute = readRepoFile("src/app/api/offers/facets/route.ts");
@@ -2043,6 +2044,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(reasoningPacketSource, /buildMoralTradeReasoningPacketRoutePayload/);
   assert.match(reasoningPacketSource, /getMoralTradeReasoningPacketRecoveryContract/);
   assert.match(reasoningPacketSource, /packet_generation_failed/);
+  assert.match(reasoningCenterErrorPage, /Reasoning Center recovery/);
+  assert.match(reasoningCenterErrorPage, /Open packet JSON/);
+  assert.match(reasoningCenterErrorPage, /does not change proposal\s+status/);
   assert.match(apiContractProfile, /recoveryMode/);
   assert.match(apiContractProfile, /packet_generation_failed recovery payload/);
   assert.match(apiContractProfile, /canonicalInstruction/);
@@ -2053,6 +2057,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /Recommended source-stack traceability records/);
   assert.match(apiContractProfile, /testingPlanCoverage/);
   assert.match(apiContractProfile, /schema, policy, evidence, privacy, fairness, UX, and resilience/);
+  assert.match(apiContractProfile, /required implementation evidence phrases/);
   assert.match(moralTradeBuildInstruction, /Core Moral Trade Codex Build Instruction/);
   assert.match(
     moralTradeBuildInstruction,
@@ -2072,6 +2077,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(documentCoverageSource, /REQUIRED_RECOMMENDED_SOURCE_STACK_KEYS/);
   assert.match(documentCoverageSource, /source-stack:/);
   assert.match(documentCoverageSource, /testingPlanCoverage/);
+  assert.match(documentCoverageSource, /requiredEvidencePhrases/);
+  assert.match(documentCoverageSource, /evidencePhrases=/);
   assert.match(documentCoverageSource, /REQUIRED_TESTING_PLAN_LAYER_KEYS/);
   assert.match(documentCoverageSource, /testing-plan:/);
   assert.match(documentCoverageSource, /open_supply_hub/);
@@ -2094,6 +2101,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(documentCoverageHealthRoute, /sourceDocumentArtifacts/);
   assert.match(documentCoverageHealthRoute, /sourceStackReferences/);
   assert.match(documentCoverageHealthRoute, /testingPlanCoverage/);
+  assert.match(documentCoverageHealthRoute, /requiredEvidencePhrases/);
   assert.match(documentCoverageHealthRoute, /expectedHash/);
   assert.match(documentCoverageHealthRoute, /const canonicalInstruction/);
   assert.match(documentCoverageHealthRoute, /artifactHash/);
@@ -2293,6 +2301,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(performanceSource, /validateMoralTradePerformanceProfile/);
   assert.match(performanceSource, /auditMoralTradePerformanceSnapshot/);
   assert.match(performanceSource, /auditMoralTradeRouteRecoveryManifest/);
+  assert.match(performanceSource, /route_segment_error_boundary/);
+  assert.match(performanceSource, /evidenceFile/);
+  assert.match(performanceSource, /route_recovery_evidence_missing/);
   assert.match(performanceSource, /route_specific_viewer_fallback/);
   assert.match(performanceSource, /packet_generation_recovery_notice/);
   assert.match(performanceSource, /packet_generation_failed_contract/);
@@ -2310,6 +2321,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(performanceProfile, /route_error_boundary/);
   assert.match(performanceProfile, /loading_state_inventory/);
   assert.match(performanceProfile, /route_recovery_manifest_audit/);
+  assert.match(performanceProfile, /route segment error boundary/);
   assert.match(performanceProfile, /\/api\/moral-trade\/reasoning\/packets/);
   assert.match(performanceProfile, /validator blockers instead of a public route crash/);
   assert.match(performanceProfile, /instrument_before_optimize/);
@@ -2336,11 +2348,15 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiGovernanceSource, /validateMoralTradeAiGovernanceProfile/);
   assert.match(aiGovernanceSource, /REQUIRED_DOCUMENTATION/);
   assert.match(aiGovernanceSource, /documentation-templates/);
+  assert.match(aiGovernanceSource, /sample-documentation-packets/);
+  assert.match(aiGovernanceSource, /sampleDocumentationPacketFailures/);
   assert.match(aiGovernanceSource, /deterministic-decisioning/);
   assert.match(aiGovernanceProfile, /model_card/);
   assert.match(aiGovernanceProfile, /dataset_datasheet/);
   assert.match(aiGovernanceProfile, /benchmark_slices/);
   assert.match(aiGovernanceProfile, /documentationTemplates/);
+  assert.match(aiGovernanceProfile, /sampleDocumentationPackets/);
+  assert.match(aiGovernanceProfile, /sample_documentation_packet_contract/);
   assert.match(aiGovernanceProfile, /requiredFields/);
   assert.match(aiGovernanceProfile, /publicSummaryFields/);
   assert.match(aiGovernanceProfile, /raw_private_wish_text/);
@@ -2509,6 +2525,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /public validator contract/);
   assert.match(technicalSpecPage, /Document coverage contract/);
   assert.match(technicalSpecPage, /documentCoverageProfile\.testingPlanCoverage/);
+  assert.match(technicalSpecPage, /documentCoverageEvidencePhraseCount/);
+  assert.match(technicalSpecPage, /Requirement phrase gates/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/document-coverage\/health/);
   assert.match(technicalSpecPage, /Decision pipeline/);
   assert.match(technicalSpecPage, /profile\.decisionPipeline/);
@@ -2620,6 +2638,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /performanceProfile\.publicNonClaims/);
   assert.match(technicalSpecPage, /Route recovery manifest/);
   assert.match(technicalSpecPage, /routeRecoveryAudit\.coverageRatio/);
+  assert.match(technicalSpecPage, /routeRecoveryAudit\.entries/);
+  assert.match(technicalSpecPage, /entry\.evidenceFile/);
   assert.match(technicalSpecPage, /Performance non-claim/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/performance\/health/);
   assert.match(technicalSpecPage, /Externality contract/);
@@ -2632,6 +2652,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Undocumented ML cannot rank, match, disclose, or change state/);
   assert.match(technicalSpecPage, /Documentation templates/);
   assert.match(technicalSpecPage, /aiGovernanceProfile\.documentationTemplates/);
+  assert.match(technicalSpecPage, /Sample documentation packets/);
+  assert.match(technicalSpecPage, /aiGovernanceProfile\.sampleDocumentationPackets/);
   assert.match(technicalSpecPage, /Explanation controls/);
   assert.match(technicalSpecPage, /model\s+cards/i);
   assert.match(technicalSpecPage, /dataset datasheets/i);
@@ -2720,6 +2742,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /apiContractImplementationAuditStatus/);
   assert.match(healthRoute, /aiGovernanceValidation/);
   assert.match(healthRoute, /aiGovernanceDocumentationBeforeMl/);
+  assert.match(healthRoute, /aiGovernanceSampleDocumentationPacketCount/);
   assert.match(healthRoute, /aiGovernanceExplanationControls/);
   assert.match(healthRoute, /apiRoutes/);
   assert.match(healthRoute, /apiContractRoute/);
@@ -2735,6 +2758,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /documentCoverageProfile\.sourceStackReferences/);
   assert.match(healthRoute, /documentCoverageTestingPlanCoverage/);
   assert.match(healthRoute, /documentCoverageProfile\.testingPlanCoverage/);
+  assert.match(healthRoute, /documentCoverageRequiredEvidencePhraseCount/);
   assert.match(healthRoute, /documentCoverageCanonicalInstruction/);
   assert.match(healthRoute, /canonicalInstruction\.verificationCommands/);
   assert.match(healthRoute, /documentCoverageValidation\.canonicalInstructionHash/);
@@ -2820,6 +2844,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(performanceHealthRoute, /validateMoralTradePerformanceProfile/);
   assert.match(performanceHealthRoute, /auditMoralTradeRouteRecoveryManifest/);
   assert.match(performanceHealthRoute, /reasoningCenterRecovery/);
+  assert.match(performanceHealthRoute, /reasoningCenterEvidenceFile/);
   assert.match(performanceHealthRoute, /reasoningPacketJsonRecovery/);
   assert.match(performanceHealthRoute, /auditDefaults/);
   assert.match(performanceHealthRoute, /publicNonClaims/);
@@ -2830,6 +2855,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiGovernanceHealthRoute, /validateMoralTradeAiGovernanceProfile/);
   assert.match(aiGovernanceHealthRoute, /requiredDocumentationBeforeMl/);
   assert.match(aiGovernanceHealthRoute, /documentationTemplates/);
+  assert.match(aiGovernanceHealthRoute, /sampleDocumentationPacketCount/);
+  assert.match(aiGovernanceHealthRoute, /sampleDocumentationPackets/);
   assert.match(aiGovernanceHealthRoute, /explanationControls/);
   assert.match(aiGovernanceHealthRoute, /prohibitedUses/);
   assert.match(apiContractRoute, /validateMoralTradeApiContractProfile/);

@@ -173,6 +173,11 @@ export async function GET(request: Request) {
   const documentCoverageProfile = getMoralTradeDocumentCoverageProfile();
   const documentCoverageValidation =
     validateMoralTradeDocumentCoverageProfile(documentCoverageProfile);
+  const documentCoverageRequiredEvidencePhraseCount =
+    documentCoverageProfile.requirements.reduce(
+      (total, requirement) => total + requirement.requiredEvidencePhrases.length,
+      0,
+    );
 
   return buildMoralTradeApiJsonResponse({
     ok:
@@ -442,6 +447,8 @@ export async function GET(request: Request) {
       aiGovernanceDocumentationBeforeMl: aiGovernanceProfile.requiredDocumentationBeforeMl.map(
         (entry) => entry.key,
       ),
+      aiGovernanceSampleDocumentationPacketCount:
+        aiGovernanceProfile.sampleDocumentationPackets.length,
       aiGovernanceProhibitedUses: aiGovernanceProfile.prohibitedUses.map((entry) => entry.key),
       aiGovernanceExplanationControls: aiGovernanceProfile.explanationControls.map((entry) => entry.key),
       aiGovernanceExternalStandards: aiGovernanceProfile.externalStandards.map(
@@ -460,6 +467,7 @@ export async function GET(request: Request) {
       documentCoverageRequirementKeys: documentCoverageProfile.requirements.map(
         (requirement) => requirement.key,
       ),
+      documentCoverageRequiredEvidencePhraseCount,
       documentCoverageCanonicalInstruction: {
         path: documentCoverageProfile.canonicalInstruction.path,
         verificationCommands:
