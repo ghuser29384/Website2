@@ -22,6 +22,14 @@ export async function GET(request: Request) {
 
   const registry = getMoralTradeSchemaRegistry();
   const validation = validateMoralTradeSchemaRegistry(registry);
+  const publicPayloadSampleValidationCount = registry.schemaDocuments.reduce(
+    (total, schema) => total + schema.sampleValidationCount,
+    0,
+  );
+  const publicPayloadSampleValidationFailureCount = registry.schemaDocuments.reduce(
+    (total, schema) => total + schema.sampleValidationFailureCount,
+    0,
+  );
 
   return buildMoralTradeApiJsonResponse({
     ok: validation.status === "pass",
@@ -32,6 +40,8 @@ export async function GET(request: Request) {
     publicContract: {
       schemaDocuments: registry.schemaDocuments,
       schemaCount: registry.schemaDocuments.length,
+      publicPayloadSampleValidationCount,
+      publicPayloadSampleValidationFailureCount,
       registryTests: registry.registryTests,
     },
     schemaDocuments: registry.schemaDocuments,

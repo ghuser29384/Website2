@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.15-2026-05",
+  "version": "moral-trade-api-contract-v0.20-2026-05",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -144,7 +144,7 @@
       "responseSchema": "schema_registry_response",
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
-      "fallback": "Return schema registry validation blockers and public schema documents; never hide the data-model schema behind prose-only contracts."
+      "fallback": "Return schema registry validation blockers, profile/schema parity evidence, profile JSON/schema conformance evidence, public payload sample conformance evidence, and public schema documents; never hide the data-model schema or provenance-persistence schema behind prose-only contracts."
     },
     {
       "key": "moral_trade_copilot_contract",
@@ -560,8 +560,8 @@
         { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Public offers API contract version." },
         { "key": "meta", "type": "object", "required": true, "privacy": "public_contract", "description": "Tab, pagination, counts, sort, query, zero-live defaulting, hidden-zero-facet flag, and available facet counts." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Source route, API route, public listing schema id, supported filters, and non-claims." },
-        { "key": "items", "type": "public_offer_listing_array", "required": true, "privacy": "public_contract", "description": "Public listing payloads with actions, review state, verification method, duration, canonical URL, and non-claims." },
-        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for contract shape, default-tab behavior, listing shape, hidden zero-count facets, privacy, and non-claims." },
+        { "key": "items", "type": "public_offer_listing_array", "required": true, "privacy": "public_contract", "description": "Public listing payloads with actions, review state, verification method, duration, baseline credibility bond badge field, canonical URL, and non-claims." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for contract shape, default-tab behavior, listing shape, public-offer JSON Schema conformance, hidden zero-count facets, privacy, and non-claims." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Public-offers blockers that prevent relying on the collection API." }
       ]
     },
@@ -581,9 +581,9 @@
         { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Public offers API contract version." },
         { "key": "slug", "type": "path_slug", "required": true, "privacy": "public", "description": "Requested public offer slug." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Source route, detail API route, listing schema id, and non-claims." },
-        { "key": "item", "type": "public_offer_listing_or_null", "required": true, "privacy": "public_contract", "description": "Approved public listing fields only; null when the slug is not public." },
+        { "key": "item", "type": "public_offer_listing_or_null", "required": true, "privacy": "public_contract", "description": "Approved public listing fields only, including the nullable baseline credibility bond badge; null when the slug is not public." },
         { "key": "actions", "type": "array", "required": true, "privacy": "public_contract", "description": "Sign-in and consent-gated public action descriptors for save, create-similar, and contact-after-sign-in." },
-        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for detail route shape, listing shape, action gating, privacy, and non-claims." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for detail route shape, listing shape, public-offer JSON Schema conformance, action gating, privacy, and non-claims." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Public-offer detail blockers, including not-found blockers." }
       ]
     },
@@ -711,7 +711,7 @@
         { "key": "apiContractValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "API contract validator result." },
         { "key": "aiGovernanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "AI governance validator result for documentation, fairness, and human-control gates." },
         { "key": "documentCoverageValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Document-coverage validator result mapping the improvement documents to source, implementation, route, and test evidence." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published codes, decision pipeline, route keys, schema keys, transition rules, and metric names." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Published codes, decision pipeline, route keys, schema keys, schema sample validation counts, schema sample failure counts, transition rules, and metric names." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Validator blockers that prevent readiness claims." }
       ]
     },
@@ -782,9 +782,9 @@
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the schema-registry validation run." },
         { "key": "registryVersion", "type": "string", "required": true, "privacy": "public", "description": "Schema registry version." },
         { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable schema-registry purpose." },
-        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for schema coverage, public paths, canonical IDs, strict schema shapes, and test hooks." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_schema", "description": "Schema document manifest, count, and registry-test hooks." },
-        { "key": "schemaDocuments", "type": "schema_document_array", "required": true, "privacy": "public_schema", "description": "Public paths, canonical IDs, titles, top-level required fields, and property counts for every Moral Trade schema document." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for schema coverage, public paths, canonical IDs, strict schema shapes, profile/schema parity, current profile JSON/schema conformance, public payload sample conformance, and test hooks." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_schema", "description": "Schema document manifest, count, aggregate public payload sample validation counts, aggregate public payload sample failure counts, profile/schema parity evidence, profile JSON/schema conformance evidence, public payload sample conformance evidence, and registry-test hooks." },
+        { "key": "schemaDocuments", "type": "schema_document_array", "required": true, "privacy": "public_schema", "description": "Public paths, canonical IDs, titles, top-level required fields, schema property keys, profile top-level fields, property counts, and public sample validation counts for every Moral Trade schema document." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Schema-registry blockers that prevent relying on public JSON Schema coverage." }
       ]
     },

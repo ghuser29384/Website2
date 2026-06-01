@@ -2518,6 +2518,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /\/api\/moral-trade\/data-model\/contract/);
   assert.match(technicalSpecPage, /Schema registry/);
   assert.match(technicalSpecPage, /schemaRegistry\.schemaDocuments/);
+  assert.match(technicalSpecPage, /schemaRegistrySampleCount/);
+  assert.match(technicalSpecPage, /sample validation\(s\)/);
   assert.match(technicalSpecPage, /public offer listing schemas/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/schemas/);
   assert.match(technicalSpecPage, /Policy bundle contract/);
@@ -2664,6 +2666,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /provenanceSampleBundleSummary/);
   assert.match(healthRoute, /schemaRegistryValidation/);
   assert.match(healthRoute, /schemaRegistryDocuments/);
+  assert.match(healthRoute, /schemaRegistrySampleValidationCount/);
+  assert.match(healthRoute, /schemaRegistrySampleValidationFailureCount/);
   assert.match(healthRoute, /schemaRegistryDataModelSchema/);
   assert.match(healthRoute, /copilotValidation/);
   assert.match(healthRoute, /copilotPromptTemplates/);
@@ -2845,11 +2849,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaRegistrySource, /data_model_profile_schema/);
   assert.match(schemaRegistrySource, /public_offer_listing_schema/);
   assert.match(schemaRegistrySource, /schemaPublicPath/);
+  assert.match(schemaRegistrySource, /sampleValidationCount/);
+  assert.match(schemaRegistrySource, /public-schema-sample-conformance/);
   assert.match(dataModelProfileSchema, /Moral Trade Data Model Profile/);
   assert.match(dataModelProfileSchema, /relationshipBoundaries/);
   assert.match(dataModelProfileSchema, /additionalProperties/);
   assert.match(publicOfferListingSchema, /Moral Trade Public Offer Listing/);
   assert.match(publicOfferListingSchema, /offeredAction/);
+  assert.match(publicOfferListingSchema, /baselineBondBadge/);
   assert.match(publicOfferListingSchema, /noEscrow/);
   assert.match(publicOffersSource, /buildPublicOffersCollectionPayload/);
   assert.match(publicOffersSource, /buildPublicOfferDetailPayload/);
@@ -2857,6 +2864,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(publicOffersSource, /defaultedToWorkedExamples/);
   assert.match(publicOffersSource, /hiddenZeroCountFacets/);
   assert.match(publicOffersSource, /public-offer-listing/);
+  assert.match(publicOffersSource, /validateMoralTradeJsonSchemaSubset/);
+  assert.match(publicOffersSource, /listing-json-schema/);
   assert.match(offerFollowSource, /buildOfferFollowPayload/);
   assert.match(offerFollowSource, /offer_carts/);
   assert.match(offerFollowSource, /not public social follows/);
@@ -2874,6 +2883,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(offerSavedSearchMigration, /source_route/);
   assert.match(schemaRegistryRoute, /validateMoralTradeSchemaRegistry/);
   assert.match(schemaRegistryRoute, /schemaDocuments/);
+  assert.match(schemaRegistryRoute, /publicPayloadSampleValidationCount/);
+  assert.match(schemaRegistryRoute, /publicPayloadSampleValidationFailureCount/);
   assert.match(schemaDocumentRoute, /getMoralTradeSchemaDocumentBySlug/);
   assert.match(schemaDocumentRoute, /availableSchemas/);
   assert.match(publicOffersRoute, /buildPublicOffersCollectionPayload/);

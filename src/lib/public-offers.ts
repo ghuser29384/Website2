@@ -1,5 +1,9 @@
 import type { OfferRecord } from "@/lib/app-data";
 import { formatPostedBaselineBondBadge, normalizeBaselineBondStatus } from "@/lib/baseline-bonds";
+import {
+  validateMoralTradeJsonSchemaSubset,
+  type MoralTradeJsonSchemaDocument,
+} from "@/lib/moral-trade/json-schema-subset";
 import { formatMode, type OfferMode } from "@/lib/offers";
 import {
   getActionEvidenceSummary,
@@ -9,11 +13,12 @@ import {
 } from "@/lib/proposal-review";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
+import publicOfferListingSchemaJson from "../../config/moral-trade/public-offer-listing.schema.json";
 
 export const PUBLIC_OFFERS_API_CONTRACT_VERSION =
   "public-offers-api-v0.1-2026-05";
 export const PUBLIC_OFFERS_API_VALIDATOR_VERSION =
-  "public-offers-api-validator-v0.1";
+  "public-offers-api-validator-v0.2";
 
 export type PublicOfferFormat =
   | "pledge-swap"
@@ -173,6 +178,8 @@ const DEFAULT_PAGE_SIZE = 24;
 const MAX_PAGE_SIZE = 100;
 const LISTING_SCHEMA_ID =
   "https://www.moraltrade.org/schemas/moral-trade/public-offer-listing.schema.json";
+const PUBLIC_OFFER_LISTING_SCHEMA =
+  publicOfferListingSchemaJson as MoralTradeJsonSchemaDocument;
 const SUPPORTED_FILTERS = [
   "q",
   "search",
@@ -916,6 +923,10 @@ function listingLeaksPrivateFields(listing: PublicOfferListing) {
   );
 }
 
+function listingSchemaFailures(listing: PublicOfferListing) {
+  return validateMoralTradeJsonSchemaSubset(listing, PUBLIC_OFFER_LISTING_SCHEMA);
+}
+
 function actionsPreservePublicBoundaries(actions: readonly PublicOfferDetailAction[]) {
   return actions.every(
     (action) =>
@@ -938,6 +949,9 @@ export function validatePublicOffersCollectionPayload(
   payload: PublicOffersCollectionPayload,
 ): PublicOffersValidation {
   const allFacetCounts = Object.values(payload.meta.availableFacets).flat();
+  const listingSchemaErrors = payload.items.flatMap((listing) =>
+    listingSchemaFailures(listing).map((failure) => `${listing.slug}: ${failure}`),
+  );
   const checks = [
     validationCheck(
       "contract-shape",
@@ -969,6 +983,14 @@ export function validatePublicOffersCollectionPayload(
           }
         }),
       `${payload.items.length} item(s).`,
+    ),
+    validationCheck(
+      "listing-json-schema",
+      "Listings satisfy the published public-offer JSON Schema",
+      listingSchemaErrors.length === 0,
+      listingSchemaErrors.length
+        ? listingSchemaErrors.slice(0, 6).join(" | ")
+        : `${payload.items.length} item(s) validated against ${LISTING_SCHEMA_ID}.`,
     ),
     validationCheck(
       "facet-zero-counts-hidden",
@@ -1004,6 +1026,9 @@ export function validatePublicOffersCollectionPayload(
 export function validatePublicOfferDetailPayload(
   payload: PublicOfferDetailPayload,
 ): PublicOffersValidation {
+  const listingSchemaErrors = payload.item
+    ? listingSchemaFailures(payload.item).map((failure) => `${payload.item?.slug}: ${failure}`)
+    : [];
   const checks = [
     validationCheck(
       "contract-shape",
@@ -1025,6 +1050,16 @@ export function validatePublicOfferDetailPayload(
       "Detail response reuses the approved public listing fields",
       payload.item ? listingHasRequiredFields(payload.item) : false,
       payload.item ? payload.item.canonicalUrl : "No public item.",
+    ),
+    validationCheck(
+      "listing-json-schema",
+      "Detail item satisfies the published public-offer JSON Schema",
+      Boolean(payload.item) && listingSchemaErrors.length === 0,
+      listingSchemaErrors.length
+        ? listingSchemaErrors.slice(0, 6).join(" | ")
+        : payload.item
+          ? `${payload.item.slug} validated against ${LISTING_SCHEMA_ID}.`
+          : "No public item.",
     ),
     validationCheck(
       "actions-consent-gated",

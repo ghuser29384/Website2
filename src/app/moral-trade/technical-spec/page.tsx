@@ -123,6 +123,14 @@ export default async function MoralTradeTechnicalSpecPage() {
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
   const schemaRegistryValidation = validateMoralTradeSchemaRegistry(schemaRegistry);
+  const schemaRegistrySampleCount = schemaRegistry.schemaDocuments.reduce(
+    (total, schema) => total + schema.sampleValidationCount,
+    0,
+  );
+  const schemaRegistrySampleFailureCount = schemaRegistry.schemaDocuments.reduce(
+    (total, schema) => total + schema.sampleValidationFailureCount,
+    0,
+  );
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
   const copilotRolloutReadiness =
@@ -1744,7 +1752,9 @@ export default async function MoralTradeTechnicalSpecPage() {
                 {schemaRegistryValidation.checks.length} check(s),{" "}
                 {schemaRegistryValidation.blockers.length} blocker(s),{" "}
                 {schemaRegistry.schemaDocuments.length} public schema document(s), including the
-                core data-model and public offer listing schemas.
+                core data-model and public offer listing schemas;{" "}
+                {schemaRegistrySampleCount} public payload sample(s) checked,{" "}
+                {schemaRegistrySampleFailureCount} sample failure(s).
               </p>
             </div>
             <Link className="button button-secondary" href="/api/moral-trade/schemas">
@@ -1757,7 +1767,10 @@ export default async function MoralTradeTechnicalSpecPage() {
               <ul className="clean-list">
                 {schemaRegistry.schemaDocuments.map((schema) => (
                   <li key={schema.key}>
-                    <Link href={schema.publicPath}>{schema.slug}</Link>
+                    <Link href={schema.publicPath}>{schema.slug}</Link>:{" "}
+                    {schema.topLevelRequiredFields.length} required top-level field(s),{" "}
+                    {schema.sampleValidationCount} sample validation(s),{" "}
+                    {schema.sampleValidationFailureCount} sample failure(s)
                   </li>
                 ))}
               </ul>

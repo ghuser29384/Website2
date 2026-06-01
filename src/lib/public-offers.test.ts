@@ -24,6 +24,7 @@ test("public offers collection defaults to worked examples when live inventory i
   const validation = validatePublicOffersCollectionPayload(payload);
 
   assert.equal(validation.status, "pass");
+  assert.ok(validation.checks.some((check) => check.id === "listing-json-schema"));
   assert.equal(payload.meta.defaultTab, "examples");
   assert.equal(payload.meta.tab, "examples");
   assert.equal(payload.meta.defaultedToWorkedExamples, true);
@@ -66,6 +67,35 @@ test("public offers collection filters by query, cause, format, review state, an
   assert.ok(payload.items.some((item) => item.offeredAction.toLowerCase().includes("vegetarian")));
 });
 
+test("public offers collection validation fails when listings drift from the public schema", () => {
+  const payload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("tab=examples&pageSize=1"),
+  });
+  const driftedPayload = {
+    ...payload,
+    items: payload.items.map((item, index) =>
+      index === 0
+        ? ({
+            ...item,
+            debugOnlyField: true,
+          } as typeof item)
+        : item,
+    ),
+  };
+  const validation = validatePublicOffersCollectionPayload(driftedPayload);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("listing-json-schema")));
+  assert.ok(
+    validation.checks.some(
+      (check) =>
+        check.id === "listing-json-schema" &&
+        check.evidence.includes("debugOnlyField: additional property"),
+    ),
+  );
+});
+
 test("public offers live-mode parser maps public formats to internal offer modes", () => {
   assert.equal(
     getPublicOffersLiveModeFromSearchParams(new URLSearchParams("format=pledge-swap")),
@@ -97,6 +127,7 @@ test("public offer detail resolves worked-example slugs and keeps actions consen
 
   assert.equal(slug, "examples/seed-victoria");
   assert.equal(validation.status, "pass");
+  assert.ok(validation.checks.some((check) => check.id === "listing-json-schema"));
   assert.equal(payload.item?.isWorkedExample, true);
   assert.equal(payload.publicContract.publicApiRoute, "/api/offers/:slug");
   assert.ok(payload.actions.some((action) => action.key === "create-similar"));

@@ -15,6 +15,7 @@
     "evidenceSchemas",
     "provenanceModel",
     "provenanceObjectSchemas",
+    "provenancePersistence",
     "qualityMetrics"
   ],
   "properties": {
@@ -169,6 +170,40 @@
         },
         "additionalProperties": false
       }
+    },
+    "provenancePersistence": {
+      "type": "object",
+      "required": ["strategy", "tables", "accessRules"],
+      "properties": {
+        "strategy": { "type": "string", "minLength": 1 },
+        "tables": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["table", "objectSchemaKey", "accessModel", "requiredColumns"],
+            "properties": {
+              "table": { "type": "string", "minLength": 1 },
+              "objectSchemaKey": { "type": "string", "minLength": 1 },
+              "accessModel": { "type": "string", "minLength": 1 },
+              "requiredColumns": {
+                "type": "array",
+                "minItems": 4,
+                "items": { "type": "string", "minLength": 1 },
+                "uniqueItems": true
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "accessRules": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
     },
     "qualityMetrics": {
       "type": "array",

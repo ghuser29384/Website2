@@ -115,6 +115,14 @@ export async function GET(request: Request) {
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
   const schemaRegistryValidation = validateMoralTradeSchemaRegistry(schemaRegistry);
+  const schemaRegistrySampleValidationCount = schemaRegistry.schemaDocuments.reduce(
+    (total, schema) => total + schema.sampleValidationCount,
+    0,
+  );
+  const schemaRegistrySampleValidationFailureCount = schemaRegistry.schemaDocuments.reduce(
+    (total, schema) => total + schema.sampleValidationFailureCount,
+    0,
+  );
   const copilotContract = getMoralTradeCopilotContract();
   const copilotValidation = validateMoralTradeCopilotContract(copilotContract);
   const copilotRolloutReadiness =
@@ -269,6 +277,8 @@ export async function GET(request: Request) {
       schemaRegistryVersion: schemaRegistry.version,
       schemaRegistryDocuments: schemaRegistry.schemaDocuments.map((entry) => entry.key),
       schemaRegistryPublicPaths: schemaRegistry.schemaDocuments.map((entry) => entry.publicPath),
+      schemaRegistrySampleValidationCount,
+      schemaRegistrySampleValidationFailureCount,
       schemaRegistryDataModelSchema:
         schemaRegistry.schemaDocuments.find(
           (entry) => entry.key === "data_model_profile_schema",

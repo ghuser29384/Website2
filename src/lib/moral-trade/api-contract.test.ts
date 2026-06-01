@@ -225,7 +225,10 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
     profile.schemaDefinitions
       .find((schema) => schema.key === "moral_trade_aggregate_health_response")
       ?.fields.some(
-        (field) => field.key === "publicContract" && /decision pipeline/i.test(field.description),
+        (field) =>
+          field.key === "publicContract" &&
+          /decision pipeline/i.test(field.description) &&
+          /schema sample validation counts/i.test(field.description),
       ),
   );
   assert.ok(
