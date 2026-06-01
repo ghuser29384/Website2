@@ -19,6 +19,11 @@ export const MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY =
 export const MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW =
   "verify_identity_then_conditionally_authorize_payment_manual_evidence_fallback";
 
+export type MpgfPublicGoodsContributionMode =
+  | "every_org_fast_route"
+  | "stripe_setup_intent_saved_commitment"
+  | "manual_proof_fallback";
+
 export type MpgfPublicGoodsPledgeIntentPaymentState =
   | "intent_created"
   | "identity_verified"
@@ -63,6 +68,7 @@ export interface MpgfPublicGoodsPledgeIntent {
   userRefHash: string;
   idempotencyKeyHash: string;
   amountCents: number;
+  paymentMode: MpgfPublicGoodsContributionMode;
   visibilityMode: MpgfPublicGoodsVisibilityMode;
   paymentState: MpgfPublicGoodsPledgeIntentPaymentState;
   countingState: MpgfPublicGoodsPledgeIntentCountingState;
@@ -162,6 +168,34 @@ export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgf
     roundId,
     primaryFlow: MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW,
     privacyPolicy: MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY,
+    modeOrder: [
+      {
+        mode: "every_org_fast_route" as const,
+        label: "Fast route",
+        provider: "every_org",
+        verification: "partner_webhook_auto_import_before_counting",
+        custodyMode: "non_custodial_every_org_or_partner_held",
+        partnerDonationIdRequired: true,
+      },
+      {
+        mode: "stripe_setup_intent_saved_commitment" as const,
+        label: "Saved commitment",
+        provider: "stripe",
+        verification: "setup_intent_first_then_payment_intent_after_threshold_review_challenge",
+        custodyMode: "stripe_provider_state_not_platform_custody",
+        rawCardDataStored: false,
+      },
+      {
+        mode: "manual_proof_fallback" as const,
+        label: "Manual proof fallback",
+        provider: "manual_evidence",
+        verification: "reviewer_verified_external_or_fiscal_host_evidence",
+        custodyMode: "external_handoff_no_platform_custody",
+        fallbackOnly: true,
+      },
+    ],
+    defaultContributionMode: "every_org_fast_route" as const,
+    savedCommitmentPolicy: "setup_intent_first_payment_intent_only_after_threshold_review_and_challenge",
     pledgeIntentPath: `/api/mpgf/rounds/${roundId}/pledge-intents`,
     identityVerificationPathTemplate: "/api/mpgf/pledge-intents/:id/verify-identity",
     paymentAuthorizationPathTemplate: "/api/mpgf/pledge-intents/:id/authorize-payment",
@@ -176,6 +210,8 @@ export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgf
     ],
     guarantees: [
       "identity verification precedes provider authorization",
+      "Every.org fast-route donations count only after partner webhook import",
+      "Stripe saved commitments use SetupIntent-first instead of long-lived card holds",
       "payments capture only after threshold, review, and challenge gates",
       "manual evidence is fallback, not the primary path",
       "provider webhooks cannot authorize final payout by themselves",
@@ -190,6 +226,7 @@ export function createMpgfPublicGoodsPledgeIntent({
   campaignId,
   userId,
   amountCents,
+  paymentMode = "stripe_setup_intent_saved_commitment",
   visibilityMode = "private_amount",
   idempotencyKey,
   now = new Date("2026-05-31T12:00:00.000Z"),
@@ -200,6 +237,7 @@ export function createMpgfPublicGoodsPledgeIntent({
   campaignId: string;
   userId: string;
   amountCents: number;
+  paymentMode?: MpgfPublicGoodsContributionMode;
   visibilityMode?: MpgfPublicGoodsVisibilityMode;
   idempotencyKey?: string;
   now?: Date;
@@ -236,6 +274,7 @@ export function createMpgfPublicGoodsPledgeIntent({
     userRefHash,
     idempotencyKeyHash,
     amountCents: normalizedAmountCents,
+    paymentMode,
     visibilityMode,
     paymentState: "intent_created",
     countingState: "preview_only",
@@ -248,7 +287,7 @@ export function createMpgfPublicGoodsPledgeIntent({
     primaryFlow: MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW,
     privacyPolicy: MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY,
     createdAt: now.toISOString(),
-    calcHash: calcHash([roundId, campaign.id, userRefHash, idempotencyKeyHash, normalizedAmountCents, visibilityMode]),
+    calcHash: calcHash([roundId, campaign.id, userRefHash, idempotencyKeyHash, normalizedAmountCents, paymentMode, visibilityMode]),
   };
 }
 

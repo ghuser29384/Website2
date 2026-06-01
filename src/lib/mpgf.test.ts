@@ -157,6 +157,12 @@ import {
   listMpgfPublicGoodsRoundsApi,
 } from "./mpgf/public-goods-api";
 import {
+  MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,
+  MPGF_PUBLIC_GOODS_CG_VQAF_PRIVACY_POLICY,
+  createMpgfPublicGoodsSupportSignal,
+  getMpgfPublicGoodsCgVqafReportApi,
+} from "./mpgf/public-goods-cg-vqaf";
+import {
   MPGF_PUBLIC_GOODS_GOVERNANCE_PRIVACY_POLICY,
   getMpgfPublicGoodsGovernanceApi,
 } from "./mpgf/public-goods-governance";
@@ -632,7 +638,13 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.contributionFlow?.primaryFlow, MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW);
   assert.equal(round.round.contributionFlow?.pledgeIntentPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/pledge-intents`);
   assert.equal(round.round.contributionFlow?.manualEvidenceFallbackPath, "/api/mpgf/evidence/manual");
+  assert.equal(round.round.contributionFlow?.defaultContributionMode, "every_org_fast_route");
+  assert.match(round.round.contributionFlow?.savedCommitmentPolicy ?? "", /setup_intent_first/);
   assert.ok(round.round.contributionFlow?.stateObjects.includes("provider_payment_event"));
+  assert.equal(round.round.cgVqaf?.policy, MPGF_PUBLIC_GOODS_CG_VQAF_POLICY);
+  assert.equal(round.round.cgVqaf?.reportPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/cg-vqaf`);
+  assert.equal(round.round.cgVqaf?.noGlobalMoralRanking, true);
+  assert.equal(round.round.cgVqaf?.ranksCoordinatabilityOnly, true);
   assert.equal(round.round.finalization.policy, MPGF_PUBLIC_GOODS_FINALIZATION_POLICY);
   assert.equal(round.round.finalization.previewPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize-preview`);
   assert.equal(round.round.finalization.proofPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`);
@@ -733,6 +745,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/rounds/route.ts", /listMpgfPublicGoodsRoundsApi/],
     ["src/app/api/mpgf/rounds/[roundId]/route.ts", /getMpgfPublicGoodsRoundApi/],
     ["src/app/api/mpgf/rounds/[roundId]/campaigns/route.ts", /listMpgfPublicGoodsCampaignsApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", /getMpgfPublicGoodsCgVqafReportApi/],
     ["src/app/api/mpgf/campaigns/[campaignId]/route.ts", /getMpgfPublicGoodsCampaignApi/],
     ["src/app/api/mpgf/campaigns/[campaignId]/proof-path/route.ts", /getMpgfPublicGoodsCampaignProofPathApi/],
     ["src/app/api/mpgf/rounds/[roundId]/match-preview/route.ts", /getMpgfPublicGoodsMatchPreviewApi/],
@@ -888,6 +901,14 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.equal(unknownFlow, null);
   assert.equal(contributionFlow.primaryFlow, MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW);
   assert.equal(contributionFlow.privacyPolicy, MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY);
+  assert.equal(contributionFlow.defaultContributionMode, "every_org_fast_route");
+  assert.deepEqual(
+    contributionFlow.modeOrder.map((mode) => mode.mode),
+    ["every_org_fast_route", "stripe_setup_intent_saved_commitment", "manual_proof_fallback"],
+  );
+  assert.match(contributionFlow.savedCommitmentPolicy, /setup_intent_first/);
+  assert.ok(contributionFlow.guarantees.some((guarantee) => /Every\.org fast-route/.test(guarantee)));
+  assert.ok(contributionFlow.guarantees.some((guarantee) => /SetupIntent-first/.test(guarantee)));
   assert.deepEqual(contributionFlow.stateObjects, [
     "pledge_intent",
     "identity_verification",
@@ -895,6 +916,7 @@ test("MPGF contribution intents verify identity before conditional payment autho
     "provider_payment_event",
   ]);
   assert.equal(intent.paymentState, "intent_created");
+  assert.equal(intent.paymentMode, "stripe_setup_intent_saved_commitment");
   assert.equal(intent.countingState, "preview_only");
   assert.match(intent.userRefHash, /^sha256:/);
   assert.match(intent.idempotencyKeyHash, /^sha256:/);
@@ -934,6 +956,67 @@ test("MPGF contribution intents verify identity before conditional payment autho
     "private-idempotency-key-001",
     "provider-private-payment-intent-001",
     "provider-private-event-001",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation without moral ranking", () => {
+  const report = getMpgfPublicGoodsCgVqafReportApi(demoMpgfAssuranceRound.id);
+  const unknownReport = getMpgfPublicGoodsCgVqafReportApi("unknown-round");
+  const supportSignal = createMpgfPublicGoodsSupportSignal({
+    campaignId: "campaign-global-health-basic-needs",
+    userRef: "private-cg-vqaf-user-001",
+    moralCluster: "humanitarian",
+    signalType: "weak_common_ground_support",
+    strengthBps: 6_200,
+  });
+  const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", "utf8");
+  const mechanism = readFileSync("src/lib/mpgf/public-goods-cg-vqaf.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260601_mpgf_cg_vqaf_core.sql", "utf8");
+  const serialized = JSON.stringify({ report, supportSignal });
+
+  assert.ok(report);
+  assert.equal(unknownReport, null);
+  assert.equal(report.policy, MPGF_PUBLIC_GOODS_CG_VQAF_POLICY);
+  assert.equal(report.privacyPolicy, MPGF_PUBLIC_GOODS_CG_VQAF_PRIVACY_POLICY);
+  assert.equal(report.formulaVersion, "cg_vqaf_capital_constrained_qf_v1");
+  assert.equal(report.noGlobalMoralRanking, true);
+  assert.equal(report.ranksCoordinatabilityOnly, true);
+  assert.equal(report.parametersLockedBeforeRoundOpen, true);
+  assert.equal(report.supportSignalsSuppressed, true);
+  assert.ok(report.qfBonusAllocatedCents <= report.qfBonusBudgetCents);
+  assert.ok(report.rows.some((row) => row.commonGroundSignalCount >= 2 && row.moralClusterCount >= 2));
+  assert.ok(report.rows.every((row) => row.bonusCents <= row.bonusCapCents));
+  assert.ok(report.rows.every((row) => /^sha256:/.test(row.calculationHash)));
+  assert.match(report.calcHash, /^sha256:/);
+  assert.equal(supportSignal.privateByDefault, true);
+  assert.equal(supportSignal.countsForCommonGround, true);
+  assert.equal(supportSignal.noGlobalMoralRanking, true);
+  assert.match(supportSignal.userRefHash, /^sha256:/);
+  assert.match(supportSignal.calcHash, /^sha256:/);
+  assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(route, /getMpgfPublicGoodsCgVqafReportApi/);
+  assert.match(mechanism, /solveCapitalConstrainedLambda/);
+  assert.match(mechanism, /bonus_j = min|cg_vqaf_capital_constrained_qf_v1/);
+  assert.match(migration, /mpgf_moral_profiles/);
+  assert.match(migration, /mpgf_support_signals/);
+  assert.match(migration, /mpgf_conditional_pledges/);
+  assert.match(migration, /mpgf_payment_method_tokens/);
+  assert.match(migration, /mpgf_payment_events/);
+  assert.match(migration, /mpgf_sponsor_pool_entries/);
+  assert.match(migration, /mpgf_allocation_results/);
+  assert.match(migration, /mpgf_dissent_notes/);
+  assert.match(migration, /mpgf_milestones/);
+  assert.match(migration, /stripe_setup_intent_saved_commitment/);
+  assert.match(migration, /every_org_fast_route/);
+  assert.match(migration, /no_global_moral_ranking boolean not null default true/);
+
+  for (const forbidden of [
+    "private-cg-vqaf-user-001",
+    "private-cg-humanitarian-alix",
+    "private-cg-pluralist-briar",
+    "private-cg-longtermist-cy",
   ]) {
     assert.equal(serialized.includes(forbidden), false);
   }

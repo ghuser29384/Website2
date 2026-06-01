@@ -14,6 +14,7 @@ import {
   mpgfVerificationWeightFromHumanScoreBps,
 } from "./mechanism";
 import { buildMpgfPublicGoodsAllocationSourceProofMap } from "./public-goods-allocation-results";
+import { MPGF_PUBLIC_GOODS_CG_VQAF_POLICY, getMpgfPublicGoodsCgVqafReportApi } from "./public-goods-cg-vqaf";
 import { getMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
 import { MPGF_PUBLIC_GOODS_FINALIZATION_POLICY } from "./public-goods-finalization";
 import { MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY } from "./public-goods-governance-ballots";
@@ -193,6 +194,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
   const sponsorPoolFlywheel = buildMpgfPublicGoodsSponsorPoolFlywheel();
   const contributionFlow = getMpgfPublicGoodsContributionFlowApi(roundId);
   const proceduralBadges = getMpgfPublicGoodsProceduralBadgesApi(roundId);
+  const cgVqaf = getMpgfPublicGoodsCgVqafReportApi(roundId);
 
   return {
     ok: true,
@@ -225,6 +227,18 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
         flywheelSourceTypes: sponsorPoolFlywheel.sourceTypes,
       },
       contributionFlow,
+      cgVqaf: cgVqaf
+        ? {
+            policy: MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,
+            formulaVersion: cgVqaf.formulaVersion,
+            reportPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/cg-vqaf`,
+            supportSignalsSuppressed: cgVqaf.supportSignalsSuppressed,
+            noGlobalMoralRanking: cgVqaf.noGlobalMoralRanking,
+            ranksCoordinatabilityOnly: cgVqaf.ranksCoordinatabilityOnly,
+            qfBonusBudgetCents: cgVqaf.qfBonusBudgetCents,
+            qfBonusAllocatedCents: cgVqaf.qfBonusAllocatedCents,
+          }
+        : null,
       finalization: {
         policy: MPGF_PUBLIC_GOODS_FINALIZATION_POLICY,
         previewPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize-preview`,
