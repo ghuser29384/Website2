@@ -1,7 +1,7 @@
 import dataModelProfileJson from "../../../config/moral-trade/data-model-profile.json";
 
 export const MORAL_TRADE_DATA_MODEL_VALIDATOR_VERSION =
-  "moral-trade-data-model-validator-v0.2";
+  "moral-trade-data-model-validator-v0.3";
 
 export type MoralTradeDataModelCategory =
   | "identity"
@@ -194,6 +194,12 @@ export function validateMoralTradeDataModelProfile(
       entity.privacyClass === "operational_private",
   );
   const offerEntity = profile.entities.find((entity) => entity.key === "offer");
+  const traceabilityEntity = profile.entities.find(
+    (entity) => entity.key === "traceability_event",
+  );
+  const stateTransitionEntity = profile.entities.find(
+    (entity) => entity.key === "state_transition_event_record",
+  );
   const sourceBoundary = profile.relationshipBoundaries.find(
     (boundary) => boundary.key === "source_note_boundary",
   );
@@ -231,6 +237,20 @@ export function validateMoralTradeDataModelProfile(
           entity.publicExposure,
       ),
       `${profile.entities.filter((entity) => entity.requiredFields.length >= 4).length} entity/entities have four or more required fields.`,
+    ),
+    check(
+      "provenance-audit-questions",
+      "Provenance events answer what, who, and when",
+      Boolean(
+        traceabilityEntity?.requiredFields.includes("audit_question_answers") &&
+          stateTransitionEntity?.requiredFields.includes("audit_question_answers") &&
+          /what happened, who touched it, and when/i.test(traceabilityEntity.publicExposure) &&
+          /what happened, who touched it, and when/i.test(stateTransitionEntity.publicExposure),
+      ),
+      [
+        `traceability=${traceabilityEntity?.requiredFields.join(",") ?? "missing"}`,
+        `state_transition=${stateTransitionEntity?.requiredFields.join(",") ?? "missing"}`,
+      ].join("; "),
     ),
     check(
       "offer-required-fields",

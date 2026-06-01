@@ -5,6 +5,7 @@ import test from "node:test";
 
 import copilotContractSchemaJson from "../../../config/moral-trade/copilot-contract.schema.json";
 import {
+  auditMoralTradeCopilotStrictInputBundle,
   auditMoralTradeCopilotRolloutReadiness,
   buildMoralTradeCopilotOutput,
   getMoralTradeCopilotContract,
@@ -148,6 +149,36 @@ test("copilot contract validation fails when required input sources are missing"
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("strict-input-bundle")));
+});
+
+test("copilot strict input bundle audit rejects broad app context", () => {
+  const audit = auditMoralTradeCopilotStrictInputBundle({
+    draft: completeDraft,
+    evidenceMetadata: [],
+    citations: ["proposal:local-draft"],
+    rawPrivateFeed: "private feed payload",
+    conversationMessages: ["unbounded chat context"],
+  });
+
+  assert.deepEqual(audit.acceptedTopLevelKeys, ["draft", "evidenceMetadata", "citations"]);
+  assert.ok(
+    audit.sourceCoverage.some(
+      (entry) => entry.key === "structured_draft" && entry.status === "present",
+    ),
+  );
+  assert.ok(
+    audit.sourceCoverage.some(
+      (entry) =>
+        entry.key === "policy_registry" && entry.status === "provided_by_system",
+    ),
+  );
+  assert.ok(audit.rejectedTopLevelKeys.includes("rawPrivateFeed"));
+  assert.ok(audit.rejectedTopLevelKeys.includes("conversationMessages"));
+  assert.ok(
+    audit.blockers.some((blocker) =>
+      blocker.includes("strict_input_bundle:top_level_field_not_allowed:rawPrivateFeed"),
+    ),
+  );
 });
 
 test("copilot contract validation fails when prompt templates lose safety boundaries", () => {
@@ -417,6 +448,29 @@ test("copilot evidence metadata rejects raw private fields and contact-like meta
   );
 });
 
+test("copilot output validation rejects unsupported or private citation namespaces", () => {
+  const output = buildMoralTradeCopilotOutput(completeDraft, ["thread:private-context"]);
+
+  output.cited_evidence_table.push({
+    claim: "Invented private evidence.",
+    evidence_type: "evidence_locator",
+    citation: "private-notes:raw-source",
+    status: "submitted",
+    reviewer_note: "This should not pass as a public evidence citation.",
+  });
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(
+    validation.blockers.some((blocker) =>
+      blocker.includes("citations: unsupported or private citation namespace"),
+    ),
+  );
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("private-notes")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("thread:private-context")));
+});
+
 test("copilot review route returns validated non-mutating draft critique", async () => {
   const response = await reviewDraftRoute(
     new Request("http://localhost/api/moral-trade/copilot/review", {
@@ -448,6 +502,19 @@ test("copilot review route returns validated non-mutating draft critique", async
   assert.equal(body.ok, true);
   assert.equal(body.stateMutation, false);
   assert.equal(body.decisioningMode, "deterministic_draft_review_only");
+  assert.deepEqual(body.inputBundleAudit.rejectedTopLevelKeys, []);
+  assert.ok(
+    body.inputBundleAudit.sourceCoverage.some(
+      (entry: { key: string; status: string }) =>
+        entry.key === "structured_draft" && entry.status === "present",
+    ),
+  );
+  assert.ok(
+    body.inputBundleAudit.sourceCoverage.some(
+      (entry: { key: string; status: string }) =>
+        entry.key === "policy_registry" && entry.status === "provided_by_system",
+    ),
+  );
   assert.equal(body.output.status, "matchable");
   assert.equal(body.evidenceMetadataSummary.acceptedCount, 1);
   assert.equal(body.evidenceMetadataSummary.ignoredFieldCount, 1);
@@ -466,6 +533,30 @@ test("copilot review route returns validated non-mutating draft critique", async
   );
   assert.deepEqual(body.output.citations, ["proposal:route-test"]);
   assert.deepEqual(body.blockers, []);
+});
+
+test("copilot review route rejects broad top-level context even when draft is valid", async () => {
+  const response = await reviewDraftRoute(
+    new Request("http://localhost/api/moral-trade/copilot/review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        draft: completeDraft,
+        rawPrivateFeed: "Do not admit this broad private context into the bundle.",
+      }),
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 422);
+  assert.equal(body.ok, false);
+  assert.equal(body.stateMutation, false);
+  assert.ok(body.inputBundleAudit.rejectedTopLevelKeys.includes("rawPrivateFeed"));
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("strict_input_bundle:top_level_field_not_allowed:rawPrivateFeed"),
+    ),
+  );
 });
 
 test("copilot review route fails closed on raw evidence metadata", async () => {

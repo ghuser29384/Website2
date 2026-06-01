@@ -5,6 +5,7 @@ import {
   takeMoralTradeApiRateLimitSlot,
 } from "@/lib/moral-trade/api-rate-limit";
 import {
+  auditMoralTradeCopilotStrictInputBundle,
   buildMoralTradeCopilotOutput,
   getMoralTradeCopilotContract,
   normalizeMoralTradeCopilotEvidenceMetadata,
@@ -165,7 +166,16 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!isRecord(body) || !isRecord(body.draft)) {
+  const requestDraft = isRecord(body)
+    ? (body.draft ?? body.structuredDraft ?? body.structured_draft)
+    : null;
+  const requestEvidenceMetadata = isRecord(body)
+    ? (body.evidenceMetadata ?? body.evidence_metadata)
+    : null;
+
+  if (!isRecord(body) || !isRecord(requestDraft)) {
+    const inputBundleAudit = auditMoralTradeCopilotStrictInputBundle(body, contract);
+
     return jsonResponse(
       {
         ok: false,
@@ -174,6 +184,7 @@ export async function POST(request: Request) {
         decisioningMode: "deterministic_draft_review_only",
         stateMutation: false,
         inputBundleUsed: contract.strictInputBundle,
+        inputBundleAudit,
         evidenceMetadataSummary: EMPTY_EVIDENCE_METADATA_SUMMARY,
         contractValidation,
         fallback:
@@ -184,17 +195,19 @@ export async function POST(request: Request) {
     );
   }
 
+  const inputBundleAudit = auditMoralTradeCopilotStrictInputBundle(body, contract);
   const evidenceMetadataNormalization = normalizeMoralTradeCopilotEvidenceMetadata(
-    body.evidenceMetadata,
+    requestEvidenceMetadata,
   );
   const output = buildMoralTradeCopilotOutput(
-    normalizeDraftInput(body.draft),
+    normalizeDraftInput(requestDraft),
     normalizeCitations(body.citations),
     evidenceMetadataNormalization.evidenceMetadata,
   );
   const outputValidation = validateMoralTradeCopilotOutput(output);
   const blockers = [
     ...contractValidation.blockers,
+    ...inputBundleAudit.blockers,
     ...outputValidation.blockers,
     ...evidenceMetadataNormalization.blockers,
   ];
@@ -207,6 +220,7 @@ export async function POST(request: Request) {
       decisioningMode: "deterministic_draft_review_only",
       stateMutation: false,
       inputBundleUsed: contract.strictInputBundle,
+      inputBundleAudit,
       evidenceMetadataSummary: summarizeMoralTradeCopilotEvidenceMetadata(
         evidenceMetadataNormalization,
       ),

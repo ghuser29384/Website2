@@ -239,6 +239,17 @@ test("agreement review transitions map to append-only provenance rows", () => {
   assert.equal(rows.stateTransitionEvent.subject_kind, "agreement");
   assert.equal(rows.stateTransitionEvent.subject_id, "agreement-123");
   assert.equal(rows.stateTransitionEvent.to_status, "completion_reviewed");
+  assert.equal(
+    rows.stateTransitionEvent.audit_question_answers.whatHappened,
+    "agreement:agreement-123 moved challenge_window->completion_reviewed via challenge_window_opened.",
+  );
+  assert.deepEqual(rows.stateTransitionEvent.audit_question_answers.whoTouchedIt, [
+    "11111111-1111-4111-8111-111111111111",
+  ]);
+  assert.equal(
+    rows.stateTransitionEvent.audit_question_answers.whenRecorded,
+    "2026-05-29T14:00:00.000Z",
+  );
   assert.equal(rows.stateTransitionEvent.event_hash.length, 64);
   assert.equal(reviewDecision.subject_kind, "agreement");
   assert.equal(reviewDecision.subject_id, "agreement-123");

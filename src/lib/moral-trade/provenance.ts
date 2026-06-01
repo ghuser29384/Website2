@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { normalizeEvidenceLocator } from "@/lib/validation";
 
-export const MORAL_TRADE_PROVENANCE_SCHEMA_VERSION = "moral-trade-provenance-v0.2";
+export const MORAL_TRADE_PROVENANCE_SCHEMA_VERSION = "moral-trade-provenance-v0.3";
 
 export type MoralTradeEvidenceClaimType =
   | "receipt"
@@ -20,6 +20,12 @@ export type MoralTradeEvidenceClaimScope =
 
 export type MoralTradeRedactionLevel = "public" | "participant_private" | "reviewer_only";
 export type MoralTradeReviewerConfidence = "low" | "medium" | "high";
+
+export interface MoralTradeAuditQuestionAnswers {
+  whatHappened: string;
+  whoTouchedIt: string[];
+  whenRecorded: string;
+}
 
 export type MoralTradeProvenanceEntityKind =
   | "proposal_record"
@@ -207,6 +213,7 @@ export interface MoralTradeTraceabilityEventInput {
 export interface MoralTradeTraceabilityEvent extends MoralTradeTraceabilityEventInput {
   entityKind: "traceability_event";
   normalizedLocator: string | null;
+  auditQuestionAnswers: MoralTradeAuditQuestionAnswers;
   sha256: string;
 }
 
@@ -378,6 +385,7 @@ export const MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS = [
       "why",
       "agentIds",
       "redactionLevel",
+      "auditQuestionAnswers",
       "sha256",
     ],
   },
@@ -409,6 +417,7 @@ export const MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS = [
       "generatedEntityIds",
       "idempotencyKey",
       "previousEventHash",
+      "auditQuestionAnswers",
       "eventHash",
     ],
   },
@@ -449,6 +458,11 @@ export const MORAL_TRADE_PROVENANCE_VALIDATION_RULES: MoralTradeProvenanceValida
     key: "traceability-events",
     label: "Traceability records link what, where, and why",
     rule: "External payment or charity-routing events must link what happened, where it was recorded, why it matters, and which agents touched it.",
+  },
+  {
+    key: "audit-question-answers",
+    label: "Event records answer audit questions",
+    rule: "Traceability and state-transition events must expose explicit answers for what happened, who touched it, and when it was recorded.",
   },
   {
     key: "external-entity-references",
@@ -585,6 +599,7 @@ export const MORAL_TRADE_PROVENANCE_PERSISTENCE_TABLES: readonly MoralTradeProve
         "why",
         "agent_ids",
         "redaction_level",
+        "audit_question_answers",
         "sha256",
       ],
     },
@@ -600,18 +615,20 @@ export const MORAL_TRADE_PROVENANCE_PERSISTENCE_TABLES: readonly MoralTradeProve
         "from_status",
         "to_status",
         "provenance_activity",
+        "recorded_at",
         "actor_agent_id",
         "idempotency_key",
+        "audit_question_answers",
         "event_hash",
       ],
     },
   ];
 
 export const MORAL_TRADE_PROVENANCE_CONTRACT_VALIDATOR_VERSION =
-  "moral-trade-provenance-contract-validator-v0.1";
+  "moral-trade-provenance-contract-validator-v0.2";
 
 export const MORAL_TRADE_PROVENANCE_PERSISTENCE_SQL_VALIDATOR_VERSION =
-  "moral-trade-provenance-persistence-sql-validator-v0.1";
+  "moral-trade-provenance-persistence-sql-validator-v0.2";
 
 function sortObjectKeys(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -666,6 +683,15 @@ function hasSqlPattern(sql: string, pattern: string) {
   return new RegExp(pattern, "is").test(sql);
 }
 
+function getSqlTableBody(sql: string, escapedTableName: string) {
+  return (
+    new RegExp(
+      `create\\s+table\\s+if\\s+not\\s+exists\\s+public\\.${escapedTableName}\\s*\\(([\\s\\S]*?)\\n\\);`,
+      "i",
+    ).exec(sql)?.[1] ?? ""
+  );
+}
+
 function createPersistenceSqlCheck(
   id: string,
   label: string,
@@ -705,6 +731,28 @@ export function validateMoralTradeProvenancePersistenceSql({
             ),
         )
         .map(({ table }) => table)
+    : [];
+  const missingSchemaColumns = tablePatterns.flatMap(({ escaped, table }) => {
+    const body = getSqlTableBody(schemaSql, escaped);
+    const requiredColumns =
+      MORAL_TRADE_PROVENANCE_PERSISTENCE_TABLES.find((entry) => entry.table === table)
+        ?.requiredColumns ?? [];
+
+    return requiredColumns
+      .filter((column) => !new RegExp(`\\b${escapeRegExp(column)}\\b`, "i").test(body))
+      .map((column) => `${table}.${column}`);
+  });
+  const missingMigrationColumns = migrationSql
+    ? tablePatterns.flatMap(({ escaped, table }) => {
+        const body = getSqlTableBody(migrationSql, escaped);
+        const requiredColumns =
+          MORAL_TRADE_PROVENANCE_PERSISTENCE_TABLES.find((entry) => entry.table === table)
+            ?.requiredColumns ?? [];
+
+        return requiredColumns
+          .filter((column) => !new RegExp(`\\b${escapeRegExp(column)}\\b`, "i").test(body))
+          .map((column) => `${table}.${column}`);
+      })
     : [];
   const missingRls = tablePatterns
     .filter(
@@ -777,6 +825,14 @@ export function validateMoralTradeProvenancePersistenceSql({
         : missingMigrationTables.length
           ? `Missing: ${missingMigrationTables.join(", ")}`
           : `${tableNames.length} migration table(s) created.`,
+    ),
+    createPersistenceSqlCheck(
+      "persistence-required-columns",
+      "Persistence tables expose every contracted column",
+      missingSchemaColumns.length === 0 && missingMigrationColumns.length === 0,
+      [...missingSchemaColumns, ...missingMigrationColumns].length
+        ? [...missingSchemaColumns, ...missingMigrationColumns].join(", ")
+        : `${tableNames.length} table contract(s) include required columns.`,
     ),
     createPersistenceSqlCheck(
       "persistence-rls-enabled",
@@ -888,13 +944,25 @@ export function createMoralTradeEvidenceArtifact(
   };
 }
 
+function buildMoralTradeTraceabilityAuditQuestionAnswers(
+  input: MoralTradeTraceabilityEventInput,
+): MoralTradeAuditQuestionAnswers {
+  return {
+    whatHappened: `${input.action}:${input.businessStep}:${input.disposition}:${input.what.proposalId}`,
+    whoTouchedIt: [...new Set(input.agentIds)].sort(),
+    whenRecorded: input.recordedAt,
+  };
+}
+
 export function createMoralTradeTraceabilityEvent(
   input: MoralTradeTraceabilityEventInput,
 ): MoralTradeTraceabilityEvent {
   const normalizedLocator = input.where.locator ? normalizeEvidenceLocator(input.where.locator) : null;
+  const auditQuestionAnswers = buildMoralTradeTraceabilityAuditQuestionAnswers(input);
   const eventPayload = {
     action: input.action,
     agentIds: [...new Set(input.agentIds)].sort(),
+    auditQuestionAnswers,
     businessStep: input.businessStep,
     disposition: input.disposition,
     eventTime: input.eventTime,
@@ -918,6 +986,7 @@ export function createMoralTradeTraceabilityEvent(
   return {
     ...input,
     agentIds: [...new Set(input.agentIds)].sort(),
+    auditQuestionAnswers,
     entityKind: "traceability_event",
     normalizedLocator,
     what: {
@@ -935,6 +1004,32 @@ export function createMoralTradeTraceabilityEvent(
     },
     sha256: sha256(eventPayload),
   };
+}
+
+function traceabilityEventExpectedHash(event: MoralTradeTraceabilityEvent) {
+  return sha256({
+    action: event.action,
+    agentIds: [...new Set(event.agentIds)].sort(),
+    auditQuestionAnswers: event.auditQuestionAnswers,
+    businessStep: event.businessStep,
+    disposition: event.disposition,
+    eventTime: event.eventTime,
+    recordedAt: event.recordedAt,
+    redactionLevel: event.redactionLevel,
+    what: {
+      ...event.what,
+      artifactIds: [...new Set(event.what.artifactIds ?? [])].sort(),
+      claimIds: [...new Set(event.what.claimIds ?? [])].sort(),
+    },
+    where: {
+      ...event.where,
+      locator: event.normalizedLocator,
+    },
+    why: {
+      ...event.why,
+      reasonCodes: [...new Set(event.why.reasonCodes)].sort(),
+    },
+  });
 }
 
 export function getMoralTradeProvenanceSampleBundle(): MoralTradeProvenanceBundle {
@@ -1084,6 +1179,23 @@ function parseTime(value: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function auditQuestionAnswersAreComplete({
+  answers,
+  expectedAgentIds,
+  expectedRecordedAt,
+}: {
+  answers: MoralTradeAuditQuestionAnswers | undefined;
+  expectedAgentIds: string[];
+  expectedRecordedAt: string;
+}) {
+  return Boolean(
+    answers &&
+      answers.whatHappened.trim().length > 0 &&
+      answers.whenRecorded === expectedRecordedAt &&
+      expectedAgentIds.every((agentId) => answers.whoTouchedIt.includes(agentId)),
+  );
+}
+
 export function validateMoralTradeProvenanceBundle(
   bundle: MoralTradeProvenanceBundle,
   {
@@ -1124,7 +1236,9 @@ export function validateMoralTradeProvenanceBundle(
   });
   const invalidHashes = bundle.artifacts.filter((artifact) => !/^[a-f0-9]{64}$/.test(artifact.sha256));
   const invalidTraceabilityHashes = traceabilityEvents.filter(
-    (event) => !/^[a-f0-9]{64}$/.test(event.sha256),
+    (event) =>
+      !/^[a-f0-9]{64}$/.test(event.sha256) ||
+      event.sha256 !== traceabilityEventExpectedHash(event),
   );
   const invalidReviewDecisionHashes = bundle.reviewDecisions.filter(
     (decision) => !decision.idempotencyKey || !/^[a-f0-9]{64}$/.test(decision.decisionHash),
@@ -1190,6 +1304,11 @@ export function validateMoralTradeProvenanceBundle(
       event.where.locationType === "platform" ||
       Boolean(event.where.provider || event.normalizedLocator || event.where.externalEntityId);
     const hasWhy = event.why.reasonCodes.length > 0 || Boolean(event.why.sourceActivityId);
+    const hasAuditQuestionAnswers = auditQuestionAnswersAreComplete({
+      answers: event.auditQuestionAnswers,
+      expectedAgentIds: event.agentIds,
+      expectedRecordedAt: event.recordedAt,
+    });
 
     return !(
       hasKnownEvidenceLinks &&
@@ -1198,9 +1317,18 @@ export function validateMoralTradeProvenanceBundle(
       hasReviewableTime &&
       hasWhat &&
       hasWhere &&
-      hasWhy
+      hasWhy &&
+      hasAuditQuestionAnswers
     );
   });
+  const traceabilityEventsMissingAuditAnswers = traceabilityEvents.filter(
+    (event) =>
+      !auditQuestionAnswersAreComplete({
+        answers: event.auditQuestionAnswers,
+        expectedAgentIds: event.agentIds,
+        expectedRecordedAt: event.recordedAt,
+      }),
+  );
   const claimUseCounts = new Map<string, number>();
 
   for (const claim of bundle.claims) {
@@ -1263,6 +1391,14 @@ export function validateMoralTradeProvenanceBundle(
       malformedTraceabilityEvents.length
         ? malformedTraceabilityEvents.map((event) => event.id).join(", ")
         : `${traceabilityEvents.length} optional traceability event(s) checked.`,
+    ),
+    check(
+      "audit-question-answers",
+      "Event records answer what happened, who touched it, and when",
+      traceabilityEventsMissingAuditAnswers.length === 0,
+      traceabilityEventsMissingAuditAnswers.length
+        ? traceabilityEventsMissingAuditAnswers.map((event) => event.id).join(", ")
+        : `${traceabilityEvents.length} traceability event(s) expose audit-question answers.`,
     ),
     check(
       "external-entity-references",

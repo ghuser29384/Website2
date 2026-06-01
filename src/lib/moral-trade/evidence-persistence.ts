@@ -291,6 +291,7 @@ export async function persistMoralTradeEvidenceSubmission({
     ...commonSubject,
     action: traceabilityEvent.action,
     agent_ids: traceabilityEvent.agentIds,
+    audit_question_answers: traceabilityEvent.auditQuestionAnswers,
     business_step: traceabilityEvent.businessStep,
     disposition: traceabilityEvent.disposition,
     event_time: traceabilityEvent.eventTime,

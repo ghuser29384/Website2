@@ -232,6 +232,25 @@ export interface MoralTradeCopilotEvidenceMetadataSummary {
   redactionsApplied: string[];
 }
 
+export interface MoralTradeCopilotStrictInputBundleAuditEntry {
+  key: string;
+  origin:
+    | "request"
+    | "system_contract"
+    | "optional_for_draft_review"
+    | "not_supplied";
+  status: "present" | "provided_by_system" | "optional" | "missing";
+}
+
+export interface MoralTradeCopilotStrictInputBundleAudit {
+  requiredSources: string[];
+  acceptedTopLevelKeys: string[];
+  rejectedTopLevelKeys: string[];
+  ignoredTopLevelKeys: string[];
+  sourceCoverage: MoralTradeCopilotStrictInputBundleAuditEntry[];
+  blockers: string[];
+}
+
 const copilotContract = copilotContractJson as MoralTradeCopilotContract;
 
 const REQUIRED_INPUT_BUNDLE = [
@@ -334,6 +353,28 @@ const EVIDENCE_METADATA_ALLOWED_KEYS = [
 ] as const;
 const EVIDENCE_METADATA_FORBIDDEN_KEY_PATTERN =
   /(raw|body|private|contact|exact.*wish|source.*note|artifact.*content|free.*text)/i;
+const COPILOT_REQUEST_ALLOWED_TOP_LEVEL_KEYS = [
+  "draft",
+  "structuredDraft",
+  "structured_draft",
+  "citations",
+  "evidenceMetadata",
+  "evidence_metadata",
+] as const;
+const COPILOT_SYSTEM_PROVIDED_INPUT_SOURCES = [
+  "policy_registry",
+  "prohibited_pattern_registry",
+  "factor_code_dictionary",
+  "verification_method_taxonomy",
+  "redaction_policy",
+  "match_constraint_set",
+  "stated_exclusions",
+] as const;
+const COPILOT_OPTIONAL_DRAFT_REVIEW_INPUT_SOURCES = ["redacted_profile_pair"] as const;
+const COPILOT_FORBIDDEN_TOP_LEVEL_KEY_PATTERN =
+  /(raw|conversation|message|thread|browser|session|cookie|token|secret|private|contact|exact.*wish|source.*note|chain.*thought|hidden.*reasoning|internal.*reasoning|profile.*dump|app.*context)/i;
+const COPILOT_FORBIDDEN_CITATION_PATTERN =
+  /(raw|private|contact|exact.*wish|source.*note|chain.*thought|hidden.*reasoning|internal.*reasoning|scratchpad|message|thread|cookie|token|secret)/i;
 const EVIDENCE_METADATA_STATUS_VALUES = [
   "submitted",
   "pending_review",
@@ -447,6 +488,8 @@ export function validateMoralTradeCopilotReviewRouteImplementation({
       "copilot-review-strict-input-normalization",
       "Copilot review route normalizes only the strict input bundle",
       /normalizeDraftInput/.test(routeSource) &&
+        /auditMoralTradeCopilotStrictInputBundle/.test(routeSource) &&
+        /inputBundleAudit\.blockers/.test(routeSource) &&
         /normalizeMoralTradeCopilotEvidenceMetadata/.test(routeSource) &&
         /normalizeCitations/.test(routeSource) &&
         /MAX_TEXT_FIELD_LENGTH/.test(routeSource) &&
@@ -497,6 +540,50 @@ function containsContactLikeText(value: string) {
   return /@/.test(value) || /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/.test(value);
 }
 
+function isHttpEvidenceLocator(value: string) {
+  try {
+    const url = new URL(value);
+
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function isApprovedCopilotCitation(value: string, evidenceType?: string) {
+  const citation = value.trim();
+
+  if (
+    !citation ||
+    citation.length > 240 ||
+    containsContactLikeText(citation) ||
+    containsHiddenReasoningDisclosure(citation) ||
+    COPILOT_FORBIDDEN_CITATION_PATTERN.test(citation)
+  ) {
+    return false;
+  }
+
+  if (evidenceType === "draft_field") {
+    return /^draft\.[a-z0-9_]+$/i.test(citation);
+  }
+
+  if (evidenceType === "policy_registry") {
+    return /^policy_registry\.[a-z0-9_:-]+$/i.test(citation);
+  }
+
+  if (evidenceType === "artifact_request") {
+    return /^review_instructions\.[a-z0-9_]+$/i.test(citation);
+  }
+
+  if (evidenceType === "evidence_locator") {
+    return /^evidence:[A-Za-z0-9._:-]+$/.test(citation) || isHttpEvidenceLocator(citation);
+  }
+
+  return /^(proposal|evidence|policy|protocol|contract|review):[A-Za-z0-9._:-]+$/.test(
+    citation,
+  );
+}
+
 function isValidIsoDate(value: string) {
   return Boolean(value) && !Number.isNaN(Date.parse(value));
 }
@@ -520,6 +607,86 @@ function getEvidenceMetadataRawValue(
 
 function buildEvidenceMetadataReviewerNote(metadata: MoralTradeCopilotEvidenceMetadata) {
   return `Already-submitted ${metadata.scope.replaceAll("_", " ")} metadata only; raw artifacts and private notes stay outside the copilot bundle.`;
+}
+
+export function auditMoralTradeCopilotStrictInputBundle(
+  value: unknown,
+  contract: MoralTradeCopilotContract = copilotContract,
+): MoralTradeCopilotStrictInputBundleAudit {
+  const allowedRequestKeys = new Set<string>(COPILOT_REQUEST_ALLOWED_TOP_LEVEL_KEYS);
+  const systemProvidedSources = new Set<string>(COPILOT_SYSTEM_PROVIDED_INPUT_SOURCES);
+  const optionalDraftReviewSources = new Set<string>(
+    COPILOT_OPTIONAL_DRAFT_REVIEW_INPUT_SOURCES,
+  );
+  const requestRecord = isRecord(value) ? value : {};
+  const topLevelKeys = Object.keys(requestRecord);
+  const acceptedTopLevelKeys = topLevelKeys.filter((key) => allowedRequestKeys.has(key));
+  const ignoredTopLevelKeys = topLevelKeys.filter((key) => !allowedRequestKeys.has(key));
+  const rejectedTopLevelKeys = ignoredTopLevelKeys.filter((key) =>
+    COPILOT_FORBIDDEN_TOP_LEVEL_KEY_PATTERN.test(key),
+  );
+  const hasStructuredDraft = acceptedTopLevelKeys.some((key) =>
+    ["draft", "structuredDraft", "structured_draft"].includes(key),
+  );
+  const hasEvidenceMetadata = acceptedTopLevelKeys.some((key) =>
+    ["evidenceMetadata", "evidence_metadata"].includes(key),
+  );
+  const blockers = rejectedTopLevelKeys.map(
+    (key) => `strict_input_bundle:top_level_field_not_allowed:${key}`,
+  );
+
+  if (!hasStructuredDraft) {
+    blockers.push("strict_input_bundle:structured_draft_missing");
+  }
+
+  const sourceCoverage = contract.strictInputBundle.map((key) => {
+    if (key === "structured_draft") {
+      return {
+        key,
+        origin: hasStructuredDraft ? "request" : "not_supplied",
+        status: hasStructuredDraft ? "present" : "missing",
+      } satisfies MoralTradeCopilotStrictInputBundleAuditEntry;
+    }
+
+    if (key === "evidence_metadata") {
+      return {
+        key,
+        origin: hasEvidenceMetadata ? "request" : "optional_for_draft_review",
+        status: hasEvidenceMetadata ? "present" : "optional",
+      } satisfies MoralTradeCopilotStrictInputBundleAuditEntry;
+    }
+
+    if (systemProvidedSources.has(key)) {
+      return {
+        key,
+        origin: "system_contract",
+        status: "provided_by_system",
+      } satisfies MoralTradeCopilotStrictInputBundleAuditEntry;
+    }
+
+    if (optionalDraftReviewSources.has(key)) {
+      return {
+        key,
+        origin: "optional_for_draft_review",
+        status: "optional",
+      } satisfies MoralTradeCopilotStrictInputBundleAuditEntry;
+    }
+
+    return {
+      key,
+      origin: "not_supplied",
+      status: "missing",
+    } satisfies MoralTradeCopilotStrictInputBundleAuditEntry;
+  });
+
+  return {
+    requiredSources: [...contract.strictInputBundle],
+    acceptedTopLevelKeys,
+    rejectedTopLevelKeys,
+    ignoredTopLevelKeys,
+    sourceCoverage,
+    blockers,
+  };
 }
 
 export function normalizeMoralTradeCopilotEvidenceMetadata(
@@ -604,7 +771,7 @@ export function normalizeMoralTradeCopilotEvidenceMetadata(
       entryBlockers.push("evidence_type_required");
     }
 
-    if (!citation || containsContactLikeText(citation)) {
+    if (!isApprovedCopilotCitation(citation, "evidence_locator")) {
       entryBlockers.push("redacted_citation_required");
     }
 
@@ -1168,6 +1335,22 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
     )
   ) {
     blockers.push("cited_evidence_table: structured claim evidence rows with citations are required");
+  }
+
+  const invalidEvidenceCitations = output.cited_evidence_table
+    .filter((row) => !isApprovedCopilotCitation(row.citation, row.evidence_type))
+    .map((row) => row.citation);
+  const invalidOutputCitations = output.citations.filter(
+    (citation) => !isApprovedCopilotCitation(citation),
+  );
+
+  if (invalidEvidenceCitations.length || invalidOutputCitations.length) {
+    blockers.push(
+      `citations: unsupported or private citation namespace: ${[
+        ...invalidEvidenceCitations,
+        ...invalidOutputCitations,
+      ].join(", ")}`,
+    );
   }
 
   if (!output.reviewer_summary || output.reviewer_summary.split(/\s+/).filter(Boolean).length > 180) {

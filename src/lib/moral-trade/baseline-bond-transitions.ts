@@ -95,6 +95,7 @@ function buildBaselineBondStateTransitionRow({
   return {
     actor_agent_id: transition.actorAgentId,
     actor_agent_kind: transition.actorAgentKind,
+    audit_question_answers: transition.auditQuestionAnswers,
     event_hash: transition.eventHash,
     from_status: transition.from,
     generated_entity_ids: transition.generatedEntityIds,

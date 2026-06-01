@@ -281,7 +281,10 @@ test("MPGF demo pools distinguish consensus and hybrid goods without changing al
   );
   assert.match(poolsPageSource, /name="kind"/);
   assert.match(poolsPageSource, /name="sort"/);
+  assert.match(poolsPageSource, /name="cluster"/);
   assert.match(poolsPageSource, /name="min_intensity"/);
+  assert.match(poolsPageSource, /Common-ground ordering/);
+  assert.match(poolsPageSource, /Campaign order ranks coordinatability, not moral truth/);
   assert.match(poolsPageSource, /Consensus goods/);
   assert.match(poolsPageSource, /Hybrid goods/);
   assert.match(poolDetailSource, /Good type/);
@@ -2067,6 +2070,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(protocolProfile, /"offer"/);
   assert.match(protocolProfile, /state_transition_event_record/);
   assert.match(protocolProfile, /eventHash/);
+  assert.match(protocolProfile, /auditQuestionAnswers/);
   assert.match(protocolProfile, /privacy_safe_preview/);
   assert.match(protocolProfile, /baseline_challenge_recommended/);
   assert.match(protocolProfile, /match_signal/);
@@ -2087,6 +2091,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(offerWritePathSource, /isMoralTradeOfferCreateProvenanceUniqueViolation/);
   assert.match(offerWritePathSource, /activity_hash/);
   assert.match(offerWritePathSource, /event_hash/);
+  assert.match(offerWritePathSource, /audit_question_answers/);
   assert.match(offerWritePathSource, /moral_trade_provenance_activities/);
   assert.match(offerWritePathSource, /moral_trade_state_transition_events/);
   assert.match(offerWritePathSource, /stateTransitionEvent/);
@@ -2098,6 +2103,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(agreementWritePathSource, /moral_trade_review_decisions/);
   assert.match(agreementWritePathSource, /moral_trade_provenance_activities/);
   assert.match(agreementWritePathSource, /moral_trade_state_transition_events/);
+  assert.match(agreementWritePathSource, /audit_question_answers/);
   assert.match(actionsSource, /persistMoralTradeOfferCreateProtocolProvenance/);
   assert.match(actionsSource, /persistMoralTradeAgreementReviewProtocolProvenance/);
   assert.match(actionsSource, /confirmExistingMoralTradeProtocolPersistenceRow/);
@@ -2123,6 +2129,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(dataModelProfile, /provenance_activity/);
   assert.match(dataModelProfile, /provenance_agent/);
   assert.match(dataModelProfile, /state_transition_event_record/);
+  assert.match(dataModelProfile, /audit_question_answers/);
   assert.match(dataModelProfile, /payment_update/);
   assert.match(dataModelProfile, /agreement_event/);
   assert.match(dataModelProfile, /raw private feeds are not mined/);
@@ -2149,6 +2156,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(provenanceSource, /external-entity-references/);
   assert.match(provenanceSource, /open_supply_hub_id/);
   assert.match(provenanceSource, /traceability-events/);
+  assert.match(provenanceSource, /audit-question-answers/);
   assert.match(provenanceSource, /one-proof-one-claim/);
   assert.match(provenanceSource, /scope-alignment/);
   assert.match(schemaSource, /create table if not exists public\.moral_trade_evidence_artifacts/);
@@ -2158,6 +2166,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /create table if not exists public\.moral_trade_provenance_activities/);
   assert.match(schemaSource, /create table if not exists public\.moral_trade_traceability_events/);
   assert.match(schemaSource, /create table if not exists public\.moral_trade_state_transition_events/);
+  assert.match(schemaSource, /audit_question_answers jsonb not null/);
   assert.match(schemaSource, /moral_trade_evidence_artifacts_select_visible/);
   assert.match(schemaSource, /moral_trade_traceability_events_insert_owner/);
   assert.match(schemaSource, /Provenance tables are append-only by policy/);
@@ -2246,6 +2255,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(documentCoverageHealthRoute, /validation\.canonicalInstructionHash/);
   assert.match(copilotSource, /buildMoralTradeCopilotOutput/);
   assert.match(copilotSource, /normalizeMoralTradeCopilotEvidenceMetadata/);
+  assert.match(copilotSource, /auditMoralTradeCopilotStrictInputBundle/);
+  assert.match(copilotSource, /COPILOT_FORBIDDEN_TOP_LEVEL_KEY_PATTERN/);
+  assert.match(copilotSource, /isApprovedCopilotCitation/);
+  assert.match(copilotSource, /COPILOT_FORBIDDEN_CITATION_PATTERN/);
   assert.match(copilotSource, /MORAL_TRADE_COPILOT_EVIDENCE_METADATA_REDACTIONS/);
   assert.match(copilotSource, /validateMoralTradeCopilotReviewRouteImplementation/);
   assert.match(copilotSource, /validateMoralTradeCopilotContract/);
@@ -2921,6 +2934,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /copilotRolloutReadinessStatuses/);
   assert.match(copilotReviewRoute, /buildMoralTradeCopilotOutput/);
   assert.match(copilotReviewRoute, /normalizeMoralTradeCopilotEvidenceMetadata/);
+  assert.match(copilotReviewRoute, /auditMoralTradeCopilotStrictInputBundle/);
+  assert.match(copilotReviewRoute, /inputBundleAudit/);
   assert.match(copilotReviewRoute, /evidenceMetadataSummary/);
   assert.match(copilotReviewRoute, /validateMoralTradeCopilotOutput/);
   assert.match(copilotReviewRoute, /deterministic_draft_review_only/);

@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-core-v0.1.4-2026-05",
+  "version": "moral-trade-core-v0.1.5-2026-06",
   "purpose": "Public contract for core Moral Trade proposal review, matching explanations, evidence states, and provenance.",
   "requiredProposalFields": [
     { "key": "format", "label": "Trade format" },
@@ -333,12 +333,12 @@
     {
       "key": "traceability_event",
       "label": "Interoperable traceability event",
-      "required": ["id", "eventTime", "recordedAt", "action", "businessStep", "disposition", "what", "where", "why", "agentIds", "redactionLevel", "sha256"]
+      "required": ["id", "eventTime", "recordedAt", "action", "businessStep", "disposition", "what", "where", "why", "agentIds", "redactionLevel", "auditQuestionAnswers", "sha256"]
     },
     {
       "key": "state_transition_event_record",
       "label": "Immutable state transition event record",
-      "required": ["id", "schemaVersion", "subjectId", "subjectKind", "from", "to", "provenanceActivity", "recordedAt", "actorAgentId", "actorAgentKind", "usedEntityIds", "generatedEntityIds", "idempotencyKey", "previousEventHash", "eventHash"]
+      "required": ["id", "schemaVersion", "subjectId", "subjectKind", "from", "to", "provenanceActivity", "recordedAt", "actorAgentId", "actorAgentKind", "usedEntityIds", "generatedEntityIds", "idempotencyKey", "previousEventHash", "auditQuestionAnswers", "eventHash"]
     },
     {
       "key": "provenance_activity",
@@ -400,13 +400,13 @@
         "table": "moral_trade_traceability_events",
         "objectSchemaKey": "traceability_event",
         "accessModel": "owner_insert_public_or_owner_read",
-        "requiredColumns": ["id", "owner_profile_id", "event_time", "recorded_at", "action", "business_step", "disposition", "what", "where_recorded", "why", "agent_ids", "redaction_level", "sha256"]
+        "requiredColumns": ["id", "owner_profile_id", "event_time", "recorded_at", "action", "business_step", "disposition", "what", "where_recorded", "why", "agent_ids", "redaction_level", "audit_question_answers", "sha256"]
       },
       {
         "table": "moral_trade_state_transition_events",
         "objectSchemaKey": "state_transition_event_record",
         "accessModel": "owner_insert_public_or_owner_read",
-        "requiredColumns": ["id", "owner_profile_id", "subject_kind", "subject_id", "from_status", "to_status", "provenance_activity", "actor_agent_id", "idempotency_key", "event_hash"]
+        "requiredColumns": ["id", "owner_profile_id", "subject_kind", "subject_id", "from_status", "to_status", "provenance_activity", "recorded_at", "actor_agent_id", "idempotency_key", "audit_question_answers", "event_hash"]
       }
     ],
     "accessRules": [

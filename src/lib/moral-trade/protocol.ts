@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 
 import protocolProfileJson from "../../../config/moral-trade/protocol-profile.json";
 
-export const MORAL_TRADE_PROTOCOL_VALIDATOR_VERSION = "moral-trade-core-validator-v0.2";
+export const MORAL_TRADE_PROTOCOL_VALIDATOR_VERSION = "moral-trade-core-validator-v0.3";
 export const MORAL_TRADE_TRANSITION_EVENT_SCHEMA_VERSION =
-  "moral-trade-transition-event-v0.1";
+  "moral-trade-transition-event-v0.2";
 
 export type MoralTradeProtocolProfile = {
   version: string;
@@ -97,6 +97,12 @@ export interface MoralTradeStateTransitionEventRecordInput {
   previousEventHash?: string | null;
 }
 
+export interface MoralTradeAuditQuestionAnswers {
+  whatHappened: string;
+  whoTouchedIt: string[];
+  whenRecorded: string;
+}
+
 export interface MoralTradeStateTransitionEventRecord {
   schemaVersion: typeof MORAL_TRADE_TRANSITION_EVENT_SCHEMA_VERSION;
   id: string;
@@ -112,6 +118,7 @@ export interface MoralTradeStateTransitionEventRecord {
   generatedEntityIds: string[];
   idempotencyKey: string;
   previousEventHash: string | null;
+  auditQuestionAnswers: MoralTradeAuditQuestionAnswers;
   eventHash: string;
 }
 
@@ -338,6 +345,7 @@ function transitionEventHashPayload(record: Omit<MoralTradeStateTransitionEventR
   return {
     actorAgentId: record.actorAgentId,
     actorAgentKind: record.actorAgentKind,
+    auditQuestionAnswers: record.auditQuestionAnswers,
     from: record.from,
     generatedEntityIds: record.generatedEntityIds,
     idempotencyKey: record.idempotencyKey,
@@ -389,9 +397,15 @@ export function buildMoralTradeStateTransitionEventRecord(
   const generatedEntityIds = input.generatedEntityIds?.length
     ? input.generatedEntityIds
     : [`${input.subjectId}:${input.to}`];
+  const auditQuestionAnswers = {
+    whatHappened: `${subjectKind}:${input.subjectId} moved ${input.from}->${input.to} via ${provenanceActivity}.`,
+    whoTouchedIt: [input.actorAgentId],
+    whenRecorded: recordedAt,
+  };
   const payload = {
     actorAgentId: input.actorAgentId,
     actorAgentKind,
+    auditQuestionAnswers,
     from: input.from,
     generatedEntityIds,
     idempotencyKey: input.idempotencyKey,
@@ -497,6 +511,20 @@ export function validateMoralTradeStateTransitionEventRecord({
     blockers.push("transition_event_record_previous_hash_invalid");
   }
 
+  const auditQuestionAnswers = record.auditQuestionAnswers;
+  const auditQuestionWho = auditQuestionAnswers?.whoTouchedIt ?? [];
+
+  if (
+    !auditQuestionAnswers ||
+    auditQuestionAnswers.whatHappened.trim().length === 0 ||
+    auditQuestionAnswers.whenRecorded !== record.recordedAt ||
+    !Array.isArray(auditQuestionWho) ||
+    !auditQuestionWho.includes(record.actorAgentId) ||
+    auditQuestionWho.some((agentId) => !tokenIsPrivacySafe(agentId))
+  ) {
+    blockers.push("transition_event_record_audit_questions_invalid");
+  }
+
   if (!isSha256(record.eventHash)) {
     blockers.push("transition_event_record_hash_invalid");
   } else {
@@ -529,6 +557,9 @@ export function summarizeMoralTradeStateTransitionEventRecord(
     `from=${record.from};`,
     `to=${record.to};`,
     `recorded_at=${record.recordedAt};`,
+    `what=${record.auditQuestionAnswers.whatHappened};`,
+    `who=${record.auditQuestionAnswers.whoTouchedIt.join(",")};`,
+    `when=${record.auditQuestionAnswers.whenRecorded};`,
     `hash=${record.eventHash}.`,
   ].join(" ");
 }
@@ -670,6 +701,12 @@ export function validateMoralTradeProtocolProfile(
       .filter((signal) => !knownDecisionSignals.has(signal))
       .map((signal) => `${step.key}:${signal}`),
   );
+  const provenanceRequiredFields = new Map(
+    profile.provenanceObjectSchemas.map((schema) => [schema.key, schema.required]),
+  );
+  const persistenceRequiredColumns = new Map(
+    provenancePersistence.tables.map((table) => [table.table, table.requiredColumns]),
+  );
   const checks = [
     check(
       "required-proposal-fields",
@@ -796,7 +833,13 @@ export function validateMoralTradeProtocolProfile(
         profile.provenanceObjectSchemas.map((schema) => schema.key),
         REQUIRED_PROVENANCE_OBJECT_SCHEMAS,
       ) &&
-        profile.provenanceObjectSchemas.every((schema) => schema.required.length >= 3),
+        profile.provenanceObjectSchemas.every((schema) => schema.required.length >= 3) &&
+        (provenanceRequiredFields.get("traceability_event") ?? []).includes(
+          "auditQuestionAnswers",
+        ) &&
+        (provenanceRequiredFields.get("state_transition_event_record") ?? []).includes(
+          "auditQuestionAnswers",
+        ),
       `${profile.provenanceObjectSchemas.length} object schema(s) published for evidence and review provenance.`,
     ),
     check(
@@ -813,6 +856,12 @@ export function validateMoralTradeProtocolProfile(
             ) &&
             table.requiredColumns.includes("owner_profile_id") &&
             table.requiredColumns.length >= 4,
+        ) &&
+        (persistenceRequiredColumns.get("moral_trade_traceability_events") ?? []).includes(
+          "audit_question_answers",
+        ) &&
+        (persistenceRequiredColumns.get("moral_trade_state_transition_events") ?? []).includes(
+          "audit_question_answers",
         ) &&
         provenancePersistence.accessRules.some((rule) => /No anonymous writes/i.test(rule)) &&
         provenancePersistence.accessRules.some((rule) => /No update or delete policies/i.test(rule)),

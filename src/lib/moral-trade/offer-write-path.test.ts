@@ -150,6 +150,17 @@ test("offer create write path maps accepted transitions to append-only provenanc
   assert.equal(rows.stateTransitionEvent.from_status, "draft");
   assert.equal(rows.stateTransitionEvent.to_status, "submitted");
   assert.equal(rows.stateTransitionEvent.subject_id, "offer-123");
+  assert.equal(
+    rows.stateTransitionEvent.audit_question_answers.whatHappened,
+    "offer:offer-123 moved draft->submitted via draft_created.",
+  );
+  assert.deepEqual(rows.stateTransitionEvent.audit_question_answers.whoTouchedIt, [
+    "00000000-0000-4000-8000-000000000123",
+  ]);
+  assert.equal(
+    rows.stateTransitionEvent.audit_question_answers.whenRecorded,
+    "2026-05-29T12:00:00.000Z",
+  );
   assert.equal(rows.stateTransitionEvent.event_hash.length, 64);
 });
 

@@ -110,6 +110,18 @@ test("evidence submission persists artifact, claim, traceability, activity, and 
   assert.equal(traceabilityEvents[0].business_step, "evidence_uploaded");
   assert.equal(traceabilityEvents[0].disposition, "in_review");
   assert.equal(
+    (traceabilityEvents[0].audit_question_answers as { whatHappened: string }).whatHappened,
+    "OBSERVE:evidence_uploaded:in_review:offer-1",
+  );
+  assert.deepEqual(
+    (traceabilityEvents[0].audit_question_answers as { whoTouchedIt: string[] }).whoTouchedIt,
+    ["11111111-1111-4111-8111-111111111111"],
+  );
+  assert.equal(
+    (traceabilityEvents[0].audit_question_answers as { whenRecorded: string }).whenRecorded,
+    "2026-05-31T12:00:00.000Z",
+  );
+  assert.equal(
     (traceabilityEvents[0].where_recorded as { locator: string }).locator,
     "https://example.org/Baseline?a=1&b=2",
   );
@@ -162,6 +174,10 @@ test("agreement evidence submissions can use an opaque platform locator", async 
   assert.equal(
     (traceabilityEvents[0].where_recorded as { locationType: string }).locationType,
     "platform",
+  );
+  assert.equal(
+    (traceabilityEvents[0].audit_question_answers as { whatHappened: string }).whatHappened,
+    "OBSERVE:evidence_uploaded:in_review:agreement-1",
   );
   assert.equal(activities[0].idempotency_key, "agreement:agreement-1:evidence:evidence-item-1");
 });

@@ -76,8 +76,10 @@ test("data model profile publishes offer fields and privacy boundaries from the 
   assert.ok(reviewDecision.requiredFields.includes("reviewer_id"));
   assert.ok(traceabilityEvent.requiredFields.includes("where_recorded"));
   assert.ok(traceabilityEvent.requiredFields.includes("why"));
+  assert.ok(traceabilityEvent.requiredFields.includes("audit_question_answers"));
   assert.ok(traceabilityEvent.relationships.includes("external_entity_reference"));
   assert.ok(stateTransitionEvent.requiredFields.includes("event_hash"));
+  assert.ok(stateTransitionEvent.requiredFields.includes("audit_question_answers"));
   assert.ok(stateTransitionEvent.relationships.includes("provenance_activity"));
   assert.match(sourceBoundary?.rule ?? "", /manual summaries/);
   assert.match(sourceBoundary?.rule ?? "", /raw private feeds/);
