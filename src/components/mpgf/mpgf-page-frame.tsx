@@ -45,8 +45,8 @@ export function MpgfPageFrame({
             <h1>{title}</h1>
             <p className="hero-text">{description}</p>
             <div className="mpgf-mode-strip" aria-label="Public Goods Fund mode">
-              <span>Manual evidence mode</span>
-              <span>External payment destination</span>
+              <span>Every.org fast route</span>
+              <span>Webhook before counting</span>
               <span>Reviewer verification</span>
               <span>{realMoneyReady ? "Integrated checkout available" : "Integrated checkout planned, not active"}</span>
             </div>
@@ -57,12 +57,12 @@ export function MpgfPageFrame({
             <p className="eyebrow">How participation works</p>
             <dl>
               <div>
-                <dt>1. Pay externally</dt>
-                <dd>Use the approved public payment destination for the pilot.</dd>
+                <dt>1. Choose route</dt>
+                <dd>Use the Every.org fast route, saved commitment path, or fallback evidence flow.</dd>
               </div>
               <div>
-                <dt>2. Submit evidence</dt>
-                <dd>Record the receipt, reference, amount, and payment date.</dd>
+                <dt>2. Wait for import</dt>
+                <dd>Redirects remain pending until provider webhooks or reviewed evidence arrive.</dd>
               </div>
               <div>
                 <dt>3. Review before counting</dt>

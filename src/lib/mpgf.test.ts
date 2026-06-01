@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -162,6 +163,12 @@ import {
   createMpgfPublicGoodsSupportSignal,
   getMpgfPublicGoodsCgVqafReportApi,
 } from "./mpgf/public-goods-cg-vqaf";
+import {
+  MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY,
+  MPGF_PUBLIC_GOODS_EVERY_ORG_PRIVACY_POLICY,
+  buildMpgfEveryOrgDonateLink,
+  recordMpgfEveryOrgPartnerWebhook,
+} from "./mpgf/public-goods-every-org";
 import {
   MPGF_PUBLIC_GOODS_GOVERNANCE_PRIVACY_POLICY,
   getMpgfPublicGoodsGovernanceApi,
@@ -863,6 +870,7 @@ test("MPGF contribution intents verify identity before conditional payment autho
     campaignId: demoMpgfPublicGoodsCampaigns[0]?.id ?? "",
     userId: "demo-contributor-private-user",
     amountCents: 12_500,
+    paymentMode: "stripe_setup_intent_saved_commitment",
     idempotencyKey: "private-idempotency-key-001",
   });
   const verified = verifyMpgfPublicGoodsPledgeIntentIdentity(intent, {
@@ -914,7 +922,11 @@ test("MPGF contribution intents verify identity before conditional payment autho
     "identity_verification",
     "payment_authorization",
     "provider_payment_event",
+    "every_org_partner_webhook_event",
   ]);
+  assert.equal(contributionFlow.everyOrgDonateLinkPath, "/api/mpgf/every-org/donate-link");
+  assert.equal(contributionFlow.everyOrgPartnerWebhookPath, "/api/mpgf/every-org/webhook");
+  assert.equal(contributionFlow.everyOrgPendingReturnPath, "/mpgf/contribute/every-org/pending");
   assert.equal(intent.paymentState, "intent_created");
   assert.equal(intent.paymentMode, "stripe_setup_intent_saved_commitment");
   assert.equal(intent.countingState, "preview_only");
@@ -936,6 +948,7 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(providerEvent.providerEventRefHash, /^sha256:/);
   assert.match(providerEvent.appendOnlyHash, /^sha256:/);
   assert.match(route, /reviewRequiredBeforeCounting: true/);
+  assert.match(route, /everyOrgDonateLinkPath: "\/api\/mpgf\/every-org\/donate-link"/);
   assert.match(verifyRoute, /finalPayoutAuthorized: false/);
   assert.match(authorizeRoute, /providerWebhookPath: "\/api\/mpgf\/provider-events\/webhook"/);
   assert.match(providerWebhookRoute, /Missing MPGF provider event signature/);
@@ -947,7 +960,7 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(migration, /create table if not exists public\.mpgf_provider_payment_events/);
   assert.match(migration, /capture_only_after_threshold_review_and_challenge_window/);
   assert.match(migration, /final_payout_authorized boolean not null default false check \(final_payout_authorized = false\)/);
-  assert.match(contributionPage, /verified conditional authorization/);
+  assert.match(contributionPage, /Every\.org fast route/);
   assert.match(consoleSource, /Contribution intent/);
   assert.match(consoleSource, /Create contribution intent/);
 
@@ -956,6 +969,140 @@ test("MPGF contribution intents verify identity before conditional payment autho
     "private-idempotency-key-001",
     "provider-private-payment-intent-001",
     "provider-private-event-001",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("MPGF Every.org fast route creates Donate Links and imports partner webhooks without custody", () => {
+  const donateLink = buildMpgfEveryOrgDonateLink({
+    campaignId: "campaign-global-health-basic-needs",
+    userRef: "private-every-org-user-001",
+    pledgeIntentId: "pledge-intent-private-every-org-001",
+    amountCents: 12_500,
+    webhookToken: "public-webhook-token-demo",
+  });
+  const unclaimedDonateLink = buildMpgfEveryOrgDonateLink({
+    campaignId: "campaign-animal-welfare-transition",
+    amountCents: 5_000,
+  });
+  const donateUrl = new URL(donateLink.href.split("#")[0] ?? donateLink.href);
+  const encodedMetadata = donateUrl.searchParams.get("partner_metadata") ?? "";
+  const decodedMetadata = JSON.parse(Buffer.from(encodedMetadata, "base64").toString("utf8")) as Record<string, unknown>;
+  const importedWebhook = recordMpgfEveryOrgPartnerWebhook(
+    {
+      chargeId: "every-org-private-charge-001",
+      partnerDonationId: donateLink.partnerDonationId,
+      partnerMetadata: donateLink.partnerMetadata,
+      toNonprofit: {
+        slug: "givewell-top-charities-fund",
+        ein: "000000001",
+        name: "GiveWell Top Charities Fund",
+      },
+      amount: "125.00",
+      netAmount: "121.25",
+      currency: "USD",
+      frequency: "One-time",
+      donationDate: "2026-06-01T12:03:00.000Z",
+      paymentMethod: "card",
+      firstName: "Jane",
+      email: "jane@example.org",
+      privateNote: "private donor note",
+    },
+    {
+      webhookVerified: true,
+      receivedAt: "2026-06-01T12:04:00.000Z",
+    },
+  );
+  const unverifiedWebhook = recordMpgfEveryOrgPartnerWebhook(
+    {
+      chargeId: "every-org-private-charge-002",
+      partnerDonationId: unclaimedDonateLink.partnerDonationId,
+      partnerMetadata: unclaimedDonateLink.partnerMetadata,
+      toNonprofit: {
+        slug: "animalcharityevaluators",
+        name: "Animal Charity Evaluators",
+      },
+      amount: "50.00",
+      currency: "USD",
+    },
+    {
+      webhookVerified: false,
+    },
+  );
+  const serialized = JSON.stringify({ donateLink, unclaimedDonateLink, importedWebhook, unverifiedWebhook });
+  const donateLinkRoute = readFileSync("src/app/api/mpgf/every-org/donate-link/route.ts", "utf8");
+  const webhookRoute = readFileSync("src/app/api/mpgf/every-org/webhook/route.ts", "utf8");
+  const pendingPage = readFileSync("src/app/mpgf/contribute/every-org/pending/page.tsx", "utf8");
+  const pageFrame = readFileSync("src/components/mpgf/mpgf-page-frame.tsx", "utf8");
+  const migration = readFileSync("supabase/migrations/20260601_mpgf_every_org_fast_route.sql", "utf8");
+
+  assert.equal(donateLink.policy, MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY);
+  assert.equal(donateLink.privacyPolicy, MPGF_PUBLIC_GOODS_EVERY_ORG_PRIVACY_POLICY);
+  assert.equal(donateLink.custodyMode, "non_custodial_every_org_or_partner_held");
+  assert.equal(donateLink.redirectState, "pending_webhook_not_counted");
+  assert.equal(donateLink.webhookRequiredBeforeCounting, true);
+  assert.equal(donateLink.reviewRequiredBeforeCounting, true);
+  assert.equal(donateLink.finalPayoutAuthorized, false);
+  assert.equal(donateLink.webhookTokenIncluded, true);
+  assert.match(donateLink.partnerDonationId, /^mpgf_/);
+  assert.match(donateLink.partnerDonationIdHash, /^sha256:/);
+  assert.match(donateLink.calcHash, /^sha256:/);
+  assert.equal(donateUrl.searchParams.get("partner_donation_id"), donateLink.partnerDonationId);
+  assert.equal(donateUrl.searchParams.get("frequency"), "ONCE");
+  assert.equal(donateUrl.searchParams.get("amount"), "125.00");
+  assert.ok(donateUrl.searchParams.get("success_url")?.includes("/mpgf/contribute/every-org/pending"));
+  assert.equal(decodedMetadata.schema, "mpgf_every_org_partner_metadata_v1");
+  assert.equal(decodedMetadata.policy, MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY);
+  assert.equal(decodedMetadata.roundId, demoMpgfAssuranceRound.id);
+  assert.equal(decodedMetadata.campaignId, "campaign-global-health-basic-needs");
+  assert.equal(decodedMetadata.redirectState, "pending_webhook_not_counted");
+  assert.equal(decodedMetadata.noPlatformCustody, true);
+  assert.equal(decodedMetadata.noGlobalMoralRanking, true);
+  assert.match(String(decodedMetadata.contributorRefHash), /^sha256:/);
+  assert.equal(unclaimedDonateLink.partnerMetadata.contributorRefHash, undefined);
+  assert.equal(importedWebhook.provider, "every_org");
+  assert.equal(importedWebhook.status, "recorded");
+  assert.equal(importedWebhook.structureVerified, true);
+  assert.equal(importedWebhook.webhookVerified, true);
+  assert.equal(importedWebhook.autoCreatesContributionEvidence, true);
+  assert.equal(importedWebhook.reviewRequiredBeforeCounting, true);
+  assert.equal(importedWebhook.finalPayoutAuthorized, false);
+  assert.equal(importedWebhook.evidenceRecord.reviewState, "pending_review");
+  assert.equal(importedWebhook.evidenceRecord.countingState, "pending_review_not_counted");
+  assert.equal(importedWebhook.webhookArrivedBeforeSignIn, false);
+  assert.equal(importedWebhook.amountCents, 12_500);
+  assert.equal(importedWebhook.netAmountCents, 12_125);
+  assert.match(importedWebhook.chargeIdHash, /^sha256:/);
+  assert.match(importedWebhook.partnerDonationIdHash ?? "", /^sha256:/);
+  assert.match(importedWebhook.dedupeKey, /^sha256:/);
+  assert.equal(importedWebhook.dedupeBy, "charge_id_hash");
+  assert.match(importedWebhook.payloadHash, /^sha256:/);
+  assert.match(importedWebhook.appendOnlyHash, /^sha256:/);
+  assert.equal(unverifiedWebhook.status, "rejected");
+  assert.equal(unverifiedWebhook.webhookArrivedBeforeSignIn, true);
+  assert.equal(unverifiedWebhook.autoCreatesContributionEvidence, false);
+  assert.match(donateLinkRoute, /MPGF_EVERY_ORG_PUBLIC_WEBHOOK_TOKEN/);
+  assert.match(donateLinkRoute, /pending_webhook_not_counted/);
+  assert.match(webhookRoute, /MPGF_EVERY_ORG_WEBHOOK_SHARED_SECRET/);
+  assert.match(webhookRoute, /recordMpgfEveryOrgPartnerWebhook/);
+  assert.match(webhookRoute, /finalPayoutAuthorized: false/);
+  assert.match(pendingPage, /not counted, matched, or treated as verified from redirect alone/);
+  assert.match(pageFrame, /Every\.org fast route/);
+  assert.match(pageFrame, /Webhook before counting/);
+  assert.match(migration, /create table if not exists public\.mpgf_every_org_partner_events/);
+  assert.match(migration, /charge_id_hash text not null unique/);
+  assert.match(migration, /auto_creates_contribution_evidence boolean not null default false/);
+  assert.match(migration, /final_payout_authorized boolean not null default false check \(final_payout_authorized = false\)/);
+  assert.match(migration, /Raw charge IDs, donor names, donor emails, private notes, and public testimony are not stored/);
+
+  for (const forbidden of [
+    "private-every-org-user-001",
+    "every-org-private-charge-001",
+    "every-org-private-charge-002",
+    "jane@example.org",
+    "Jane",
+    "private donor note",
   ]) {
     assert.equal(serialized.includes(forbidden), false);
   }

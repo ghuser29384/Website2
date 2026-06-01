@@ -19,6 +19,12 @@ export const MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY =
 export const MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW =
   "verify_identity_then_conditionally_authorize_payment_manual_evidence_fallback";
 
+export const MPGF_PUBLIC_GOODS_EVERY_ORG_DONATE_LINK_PATH =
+  "/api/mpgf/every-org/donate-link";
+
+export const MPGF_PUBLIC_GOODS_EVERY_ORG_PARTNER_WEBHOOK_PATH =
+  "/api/mpgf/every-org/webhook";
+
 export type MpgfPublicGoodsContributionMode =
   | "every_org_fast_route"
   | "stripe_setup_intent_saved_commitment"
@@ -200,6 +206,9 @@ export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgf
     identityVerificationPathTemplate: "/api/mpgf/pledge-intents/:id/verify-identity",
     paymentAuthorizationPathTemplate: "/api/mpgf/pledge-intents/:id/authorize-payment",
     providerWebhookPath: "/api/mpgf/provider-events/webhook",
+    everyOrgDonateLinkPath: MPGF_PUBLIC_GOODS_EVERY_ORG_DONATE_LINK_PATH,
+    everyOrgPartnerWebhookPath: MPGF_PUBLIC_GOODS_EVERY_ORG_PARTNER_WEBHOOK_PATH,
+    everyOrgPendingReturnPath: "/mpgf/contribute/every-org/pending",
     manualEvidenceFallbackPath: "/api/mpgf/evidence/manual",
     legacyManualEvidenceFallbackPath: "/api/mpgf/contributions/manual-evidence",
     stateObjects: [
@@ -207,10 +216,11 @@ export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgf
       "identity_verification",
       "payment_authorization",
       "provider_payment_event",
+      "every_org_partner_webhook_event",
     ],
     guarantees: [
       "identity verification precedes provider authorization",
-      "Every.org fast-route donations count only after partner webhook import",
+      "Every.org fast-route redirects show pending state only until partner webhook import and review",
       "Stripe saved commitments use SetupIntent-first instead of long-lived card holds",
       "payments capture only after threshold, review, and challenge gates",
       "manual evidence is fallback, not the primary path",
@@ -226,7 +236,7 @@ export function createMpgfPublicGoodsPledgeIntent({
   campaignId,
   userId,
   amountCents,
-  paymentMode = "stripe_setup_intent_saved_commitment",
+  paymentMode = "every_org_fast_route",
   visibilityMode = "private_amount",
   idempotencyKey,
   now = new Date("2026-05-31T12:00:00.000Z"),

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
-import { createMpgfPublicGoodsPledgeIntent } from "@/lib/mpgf/public-goods-contribution-intents";
+import {
+  type MpgfPublicGoodsContributionMode,
+  createMpgfPublicGoodsPledgeIntent,
+} from "@/lib/mpgf/public-goods-contribution-intents";
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
 import type { MpgfPublicGoodsVisibilityMode } from "@/lib/mpgf/types";
 
@@ -30,6 +33,12 @@ function visibilityMode(value: unknown): MpgfPublicGoodsVisibilityMode {
   return value === "public_supporter" || value === "public_reason" ? value : "private_amount";
 }
 
+function contributionMode(value: unknown): MpgfPublicGoodsContributionMode {
+  return value === "stripe_setup_intent_saved_commitment" || value === "manual_proof_fallback"
+    ? value
+    : "every_org_fast_route";
+}
+
 export async function POST(request: Request, { params }: { params: Promise<{ roundId: string }> }) {
   const viewer = await getViewer();
 
@@ -51,6 +60,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
       campaignId: stringField(record, "campaignId"),
       userId: viewer.authUser.id,
       amountCents: centsField(record),
+      paymentMode: contributionMode(record.paymentMode),
       visibilityMode: visibilityMode(record.visibilityMode),
       idempotencyKey: stringField(record, "idempotencyKey"),
     });
@@ -63,6 +73,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
         nextAction: "verify_identity",
         identityVerificationPath: `/api/mpgf/pledge-intents/${pledgeIntent.id}/verify-identity`,
         paymentAuthorizationPath: `/api/mpgf/pledge-intents/${pledgeIntent.id}/authorize-payment`,
+        everyOrgDonateLinkPath: "/api/mpgf/every-org/donate-link",
         manualEvidenceFallbackPath: pledgeIntent.fallbackRule.manualEvidencePath,
         reviewRequiredBeforeCounting: true,
         finalPayoutAuthorized: false,

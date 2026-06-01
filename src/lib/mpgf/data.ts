@@ -59,7 +59,7 @@ export const MPGF_COPY = {
   support_or_access:
     "For MPGF access or support, contact support@moraltrade.org.",
   plainLanguageSummary:
-    "The Moral Public Goods Fund coordinates support for goods many moral views value. The current public flow starts with manual external-payment evidence, reviewed before it counts.",
+    "The Moral Public Goods Fund coordinates support for goods many moral views value. The upgraded contribution flow starts with an Every.org fast route when available, then keeps manual evidence as a reviewed fallback.",
   moralPublicGoods:
     "Moral public goods are things many people value for moral reasons, such as global health, existential-risk reduction, animal welfare, and durable public-interest knowledge.",
   moralTrade:
@@ -73,11 +73,11 @@ export const MPGF_COPY = {
   allocationDisbursement:
     "Allocation describes an internal demo plan. Disbursement would require separate authorization, evidence, and legal/payment gates.",
   realMoneyContribution:
-    "Real-money MPGF contributions use Stripe Checkout after production readiness, terms, refund, webhook, and compliance gates pass. Stripe records the payment; MPGF records contribution state from verified webhook events.",
+    "Real-money MPGF contributions use partner-held routes or Stripe after production readiness, terms, refund, webhook, and compliance gates pass. Provider systems record payment; MPGF records contribution state from verified webhook or reviewed evidence events.",
   realMoneyTerms:
     "Real-money MPGF contributions are not represented as tax-deductible, escrowed, or guaranteed-effective unless legally approved copy explicitly says so. Allocation and disbursement remain separate MPGF records and payout/compliance gates.",
   manualExternalPaymentEvidence:
-    "Manual evidence mode lets participants record evidence of a payment made through an approved external destination such as Open Collective or a fiscal host. Submitting evidence starts review; it does not move money or count as a verified MPGF contribution until review approves it.",
+    "Manual evidence mode remains the fallback when Every.org, Stripe, or a fiscal-host webhook cannot import a contribution. Submitting evidence starts review; it does not move money or count as a verified MPGF contribution until review approves it.",
 };
 
 export const demoCycle: MpgfCycle = {
