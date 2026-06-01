@@ -91,6 +91,14 @@ import {
   getMoralTradeDocumentCoverageProfile,
   validateMoralTradeDocumentCoverageProfile,
 } from "@/lib/moral-trade/document-coverage";
+import {
+  getMoralTradeTransparencyReportContract,
+  validateMoralTradeTransparencyReportContract,
+} from "@/lib/moral-trade/transparency-report";
+import {
+  getBackgroundPrivateOverlapContract,
+  validateBackgroundPrivateOverlapContract,
+} from "@/lib/background-private-overlap";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -182,6 +190,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const documentCoverageProfile = getMoralTradeDocumentCoverageProfile();
   const documentCoverageValidation =
     validateMoralTradeDocumentCoverageProfile(documentCoverageProfile);
+  const transparencyReportContract = getMoralTradeTransparencyReportContract();
+  const transparencyReportValidation =
+    validateMoralTradeTransparencyReportContract(transparencyReportContract);
+  const privateOverlapContract = getBackgroundPrivateOverlapContract();
+  const privateOverlapValidation =
+    validateBackgroundPrivateOverlapContract(privateOverlapContract);
   const documentCoverageEvidencePhraseCount = documentCoverageProfile.requirements.reduce(
     (total, requirement) => total + requirement.requiredEvidencePhrases.length,
     0,
@@ -189,6 +203,218 @@ export default async function MoralTradeTechnicalSpecPage() {
   const apiRateLimitSurfaces = Array.from(
     new Set(apiContractProfile.routes.map((route) => route.rateLimitSurface)),
   );
+  const healthValidationBlockerCount = [
+    validation,
+    dataModelValidation,
+    policyBundleValidation,
+    provenanceValidation,
+    schemaRegistryValidation,
+    copilotValidation,
+    matchSignalValidation,
+    challengeAppealValidation,
+    disclosureValidation,
+    reviewWorkflowValidation,
+    reasoningPacketValidation,
+    operationsValidation,
+    securityValidation,
+    incidentResponseValidation,
+    evaluationValidation,
+    performanceValidation,
+    externalityValidation,
+    apiContractValidation,
+    aiGovernanceValidation,
+    documentCoverageValidation,
+    transparencyReportValidation,
+    privateOverlapValidation,
+  ].reduce((total, entry) => total + entry.blockers.length, 0);
+  const publicContractReadiness = [
+    {
+      blockers: healthValidationBlockerCount,
+      family: "Top-level readiness",
+      href: "/api/moral-trade/health",
+      label: "Protocol health",
+      status: healthValidationBlockerCount ? "fail" : "pass",
+      summary: `${documentCoverageProfile.canonicalInstruction.routeEvidence.length} canonical public route(s) cross-linked in one health surface.`,
+    },
+    {
+      blockers: documentCoverageValidation.blockers.length,
+      family: "Source traceability",
+      href: "/api/moral-trade/document-coverage/health",
+      label: "Document coverage",
+      status: documentCoverageValidation.status,
+      summary: `${documentCoverageValidation.sourceDocumentCount} source document(s), ${documentCoverageValidation.testingPlanLayerCount} testing layer(s).`,
+    },
+    {
+      blockers: apiContractValidation.blockers.length,
+      family: "API catalog",
+      href: "/api/moral-trade/api-contract",
+      label: "API contract",
+      status: apiContractValidation.status,
+      summary: `${apiContractProfile.routes.length} route(s), ${apiContractProfile.schemaDefinitions.length} schema definition(s).`,
+    },
+    {
+      blockers: dataModelValidation.blockers.length,
+      family: "Core schema",
+      href: "/api/moral-trade/data-model/contract",
+      label: "Data model",
+      status: dataModelValidation.status,
+      summary: `${dataModelProfile.entities.length} entity contract(s), ${dataModelProfile.offerRequiredFields.length} required offer field(s).`,
+    },
+    {
+      blockers: schemaRegistryValidation.blockers.length,
+      family: "Core schema",
+      href: "/api/moral-trade/schemas",
+      label: "Schema registry",
+      status: schemaRegistryValidation.status,
+      summary: `${schemaRegistry.schemaDocuments.length} schema document(s), ${schemaRegistrySampleCount} sample validation(s).`,
+    },
+    {
+      blockers: policyBundleValidation.blockers.length,
+      family: "Policy inputs",
+      href: "/api/moral-trade/policy-bundle/contract",
+      label: "Policy bundle",
+      status: policyBundleValidation.status,
+      summary: `${policyBundleContract.prohibitedPatternRegistry.length} prohibited pattern(s), ${policyBundleContract.verificationLoop.length} verification step(s).`,
+    },
+    {
+      blockers: copilotValidation.blockers.length,
+      family: "Assisted drafting",
+      href: "/api/moral-trade/copilot/contract",
+      label: "Copilot contract",
+      status: copilotValidation.status,
+      summary: `${copilotContract.promptTemplates.length} prompt template(s), ${copilotContract.guardrails.length} guardrail(s).`,
+    },
+    {
+      blockers: reviewWorkflowValidation.blockers.length,
+      family: "Workflow cards",
+      href: "/api/moral-trade/review-workflow/contract",
+      label: "Review workflow",
+      status: reviewWorkflowValidation.status,
+      summary: `${reviewWorkflowContract.detailWorkflowCards.length} card contract(s), ${reviewWorkflowContract.marketplaceFactorPriority.length} marketplace factor(s).`,
+    },
+    {
+      blockers: reasoningPacketValidation.blockers.length,
+      family: "Workflow cards",
+      href: "/api/moral-trade/reasoning/packets",
+      label: "Reasoning packets",
+      status: reasoningPacketValidation.status,
+      summary: `${reasoningPacketContract.packetCount} public packet(s), ${reasoningPacketContract.supportedFilters.length} filter(s).`,
+    },
+    {
+      blockers: provenanceValidation.blockers.length,
+      family: "Evidence",
+      href: "/api/moral-trade/provenance/schema",
+      label: "Provenance schema",
+      status: provenanceValidation.status,
+      summary: `${provenanceContract.persistenceTables.length} append-only table contract(s), ${provenanceContract.validationRules.length} validation rule(s).`,
+    },
+    {
+      blockers: matchSignalValidation.blockers.length,
+      family: "Privacy and matching",
+      href: "/api/moral-trade/match-signal/contract",
+      label: "Match signal",
+      status: matchSignalValidation.status,
+      summary: `${matchSignalContract.approvedFactorCodes.length} approved factor code(s), preview-only stateMutation false.`,
+    },
+    {
+      blockers: disclosureValidation.blockers.length,
+      family: "Privacy and matching",
+      href: "/api/moral-trade/disclosure/contract",
+      label: "Disclosure grants",
+      status: disclosureValidation.status,
+      summary: `${disclosureContract.disclosureFields.length} field boundary(s), ${disclosureContract.searchPrivacyControls.length} search privacy control(s).`,
+    },
+    {
+      blockers: privateOverlapValidation.blockers.length,
+      family: "Privacy and matching",
+      href: "/api/moral-trade/private-overlap/contract",
+      label: "Private overlap guardrail",
+      status: privateOverlapValidation.status,
+      summary: `${privateOverlapContract.releaseState.replaceAll("_", " ")}; live endpoints remain ${privateOverlapContract.liveEndpointEnabled ? "enabled" : "blocked"}.`,
+    },
+    {
+      blockers: challengeAppealValidation.blockers.length,
+      family: "Challenge and remedy",
+      href: "/api/moral-trade/challenge-appeal/contract",
+      label: "Challenge appeal",
+      status: challengeAppealValidation.status,
+      summary: `${challengeAppealContract.appealTriggers.length} appeal trigger(s), ${challengeAppealContract.standingCategories.length} standing category/categories.`,
+    },
+    {
+      blockers: externalityValidation.blockers.length,
+      family: "Challenge and remedy",
+      href: "/api/moral-trade/externality/health",
+      label: "Externality health",
+      status: externalityValidation.status,
+      summary: `${externalityProfile.triggerCodes.length} trigger code(s), ${externalityProfile.reviewStandards.length} review standard(s).`,
+    },
+    {
+      blockers: evaluationValidation.blockers.length,
+      family: "Evaluation",
+      href: "/api/moral-trade/evaluation/health",
+      label: "Evaluation health",
+      status: evaluationValidation.status,
+      summary: `${evaluationProfile.metrics.length} metric(s), ${evaluationProfile.promotionGates.length} promotion gate(s).`,
+    },
+    {
+      blockers: transparencyReportValidation.blockers.length,
+      family: "Evaluation",
+      href: "/api/moral-trade/transparency/report",
+      label: "Transparency report",
+      status: transparencyReportValidation.status,
+      summary: `${transparencyReportContract.metricDefinitions.length} aggregate metric(s), minimum public count ${transparencyReportContract.minimumPublicCount}.`,
+    },
+    {
+      blockers: operationsValidation.blockers.length,
+      family: "Operations",
+      href: "/api/moral-trade/operations/health",
+      label: "Operations health",
+      status: operationsValidation.status,
+      summary: `${operationsProfile.rateLimitSurfaces.length} rate-limit surface(s), ${operationsProfile.retentionControls.length} retention control(s).`,
+    },
+    {
+      blockers: securityValidation.blockers.length,
+      family: "Operations",
+      href: "/api/moral-trade/security/health",
+      label: "Security health",
+      status: securityValidation.status,
+      summary: `${securityProfile.controls.length} control(s), ${securityProfile.scaleGates.length} sensitive-scale gate(s).`,
+    },
+    {
+      blockers: incidentResponseValidation.blockers.length,
+      family: "Operations",
+      href: "/api/moral-trade/incident-response/health",
+      label: "Incident response",
+      status: incidentResponseValidation.status,
+      summary: `${incidentResponseProfile.incidentCategories.length} incident category/categories, ${incidentResponseProfile.readinessGates.length} readiness gate(s).`,
+    },
+    {
+      blockers: performanceValidation.blockers.length,
+      family: "Operations",
+      href: "/api/moral-trade/performance/health",
+      label: "Performance health",
+      status: performanceValidation.status,
+      summary: `${performanceProfile.metricTargets.length} metric target(s), ${performanceProfile.routeFamilies.length} route family/families.`,
+    },
+    {
+      blockers: aiGovernanceValidation.blockers.length,
+      family: "AI governance",
+      href: "/api/moral-trade/ai-governance/health",
+      label: "AI governance",
+      status: aiGovernanceValidation.status,
+      summary: `${aiGovernanceProfile.documentationTemplates.length} documentation template(s), ${aiGovernanceProfile.prohibitedUses.length} prohibited use(s).`,
+    },
+  ] as const;
+  const publicContractPassCount = publicContractReadiness.filter(
+    (entry) => entry.status === "pass",
+  ).length;
+  const publicContractRouteSet = new Set<string>(
+    publicContractReadiness.map((entry) => entry.href),
+  );
+  const unlistedCanonicalRoutes =
+    documentCoverageProfile.canonicalInstruction.routeEvidence.filter(
+      (route) => !publicContractRouteSet.has(route),
+    );
 
   return (
     <div className="page-shell">
@@ -382,6 +608,64 @@ export default async function MoralTradeTechnicalSpecPage() {
               </ul>
             </article>
           </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="public-contract-matrix-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Public readiness matrix</p>
+            <h2 id="public-contract-matrix-heading">
+              Every canonical contract route is visible before readiness is claimed.
+            </h2>
+            <p>
+              The build instruction lists the required public contract routes. This matrix keeps
+              the user-facing spec aligned with that list so transparency, private-overlap
+              guardrails, privacy, operations, and evaluation evidence are not hidden behind
+              scattered JSON links.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Canonical public contracts</p>
+              <h3>
+                {publicContractPassCount}/{publicContractReadiness.length} route checks passing
+              </h3>
+              <p>
+                {unlistedCanonicalRoutes.length
+                  ? `${unlistedCanonicalRoutes.length} canonical route(s) still need a visible row.`
+                  : "All canonical public contract routes have a visible readiness row."}
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/health">
+              Open combined health JSON
+            </Link>
+          </div>
+          <div className="mpgf-table protocol-check-table">
+            <div className="mpgf-table-row mpgf-table-head">
+              <span>Family</span>
+              <span>Route</span>
+              <span>Status</span>
+              <span>Published evidence</span>
+            </div>
+            {publicContractReadiness.map((entry) => (
+              <div className="mpgf-table-row" key={entry.href}>
+                <span>{entry.family}</span>
+                <span>
+                  <Link className="inline-link" href={entry.href}>
+                    {entry.label}
+                  </Link>
+                </span>
+                <span>
+                  {entry.status} ({entry.blockers} blocker(s))
+                </span>
+                <span>{entry.summary}</span>
+              </div>
+            ))}
+          </div>
+          <p className="panel-note">
+            This matrix is repository validation evidence. It does not claim production liquidity,
+            legal or tax treatment, payment custody, zero security risk, or objective moral
+            endorsement.
+          </p>
         </section>
 
         <section className="section section-white" aria-labelledby="contract-heading">
