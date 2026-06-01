@@ -174,6 +174,52 @@ export default async function MpgfGovernancePage() {
           <p>Unmatched sponsor funds: {statusLabel(governance.roundRules.unmatchedSponsorFundsRule)}.</p>
         </article>
 
+        {governance.thresholdCalibration ? (
+          <article className="mpgf-panel">
+            <p className="eyebrow">Next-round threshold calibration</p>
+            <h2>Learn from uptake without retuning this round</h2>
+            <p>
+              Calibration uses aggregate direct support, verified-supporter counts, common-ground
+              signals, and sponsor-budget pressure. It cannot mutate current round thresholds.
+            </p>
+            <dl className="mpgf-summary-grid">
+              <div>
+                <dt>Applies to</dt>
+                <dd>{statusLabel(governance.thresholdCalibration.appliesTo)}</dd>
+              </div>
+              <div>
+                <dt>Current round mutation</dt>
+                <dd>{governance.thresholdCalibration.currentRoundMutationAllowed ? "allowed" : "blocked"}</dd>
+              </div>
+              <div>
+                <dt>Suggested changes</dt>
+                <dd>{governance.thresholdCalibration.suggestedChangeCount}</dd>
+              </div>
+              <div>
+                <dt>Hold for review</dt>
+                <dd>{governance.thresholdCalibration.holdForReviewCount}</dd>
+              </div>
+            </dl>
+            <div className="mpgf-table" aria-label="Next-round threshold calibration">
+              <div className="mpgf-table-row mpgf-table-head">
+                <span>Campaign</span>
+                <span>Next amount</span>
+                <span>Next donors</span>
+              </div>
+              {governance.thresholdCalibration.rows.map((row) => (
+                <div className="mpgf-table-row" key={row.campaignId}>
+                  <span>{row.title}</span>
+                  <span>{formatUsd(row.recommendedNextRoundThresholdAmountCents)}</span>
+                  <span>{row.recommendedNextRoundThresholdSupporters}</span>
+                </div>
+              ))}
+            </div>
+            <Link className="inline-link" href={governance.thresholdCalibration.apiPath}>
+              Open threshold-calibration JSON
+            </Link>
+          </article>
+        ) : null}
+
         <article className="mpgf-panel">
           <p className="eyebrow">Campaign thresholds</p>
           <h2>Published thresholds before contributions</h2>

@@ -4,6 +4,7 @@ import {
   demoMpgfPublicGoodsCampaigns,
 } from "./data";
 import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
+import { getMpgfPublicGoodsThresholdCalibrationReportApi } from "./public-goods-threshold-calibration";
 
 export const MPGF_PUBLIC_GOODS_GOVERNANCE_PRIVACY_POLICY =
   "public_governance_no_private_notes_no_personal_contact";
@@ -93,6 +94,7 @@ export function getMpgfPublicGoodsGovernanceApi() {
   }));
   const perDonorQfCapCents = Number(demoMpgfMatchPool.restrictionsJson.perDonorQfCapCents ?? 0);
   const sponsorPoolFlywheel = buildMpgfPublicGoodsSponsorPoolFlywheel();
+  const thresholdCalibration = getMpgfPublicGoodsThresholdCalibrationReportApi(demoMpgfAssuranceRound.id);
 
   return {
     ok: true,
@@ -149,6 +151,27 @@ export function getMpgfPublicGoodsGovernanceApi() {
       sourceBreakdown: sponsorPoolFlywheel.sourceBreakdown,
       calcHash: sponsorPoolFlywheel.calcHash,
     },
+    thresholdCalibration: thresholdCalibration
+      ? {
+          policy: thresholdCalibration.policy,
+          apiPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/threshold-calibration`,
+          appliesTo: thresholdCalibration.appliesTo,
+          currentRoundMutationAllowed: thresholdCalibration.currentRoundMutationAllowed,
+          suggestedChangeCount: thresholdCalibration.suggestedChangeCount,
+          holdForReviewCount: thresholdCalibration.holdForReviewCount,
+          rows: thresholdCalibration.rows.map((row) => ({
+            campaignId: row.campaignId,
+            title: demoMpgfPublicGoodsCampaigns.find((campaign) => campaign.id === row.campaignId)?.title ?? row.campaignId,
+            currentThresholdAmountCents: row.currentThresholdAmountCents,
+            currentThresholdSupporters: row.currentThresholdSupporters,
+            recommendedNextRoundThresholdAmountCents: row.recommendedNextRoundThresholdAmountCents,
+            recommendedNextRoundThresholdSupporters: row.recommendedNextRoundThresholdSupporters,
+            action: row.action,
+            confidence: row.confidence,
+          })),
+          calcHash: thresholdCalibration.calcHash,
+        }
+      : null,
     fundsFlowSeparation: {
       phaseOneCustodyPolicy: "fiscal_sponsor_or_partner_held_sponsor_pool_not_platform_custody",
       legalRecipientPolicy:

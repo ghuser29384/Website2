@@ -75,6 +75,16 @@ import {
   recordMpgfPublicGoodsAnalyticsEvent,
 } from "./mpgf/public-goods-analytics";
 import { evaluateMpgfPublicGoodsIdentityAdapter } from "./mpgf/public-goods-identity";
+import {
+  MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY,
+  buildMpgfPublicGoodsIdentityIntegrityReport,
+  getMpgfPublicGoodsIdentityIntegrityReportApi,
+} from "./mpgf/public-goods-identity-integrity";
+import {
+  MPGF_PUBLIC_GOODS_THRESHOLD_CALIBRATION_POLICY,
+  buildMpgfPublicGoodsThresholdCalibrationReport,
+  getMpgfPublicGoodsThresholdCalibrationReportApi,
+} from "./mpgf/public-goods-threshold-calibration";
 import { resolveMpgfPublicGoodsPaymentAdapter } from "./mpgf/public-goods-payment-adapter";
 import {
   buildMpgfPublicGoodsReminderEmailRows,
@@ -642,6 +652,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     incidentStatusByCampaignId: { [frozenCampaignId]: "frozen" },
   });
   const allocations = getMpgfPublicGoodsAllocationReportApi(demoMpgfAssuranceRound.id);
+  const identityIntegrity = getMpgfPublicGoodsIdentityIntegrityReportApi(demoMpgfAssuranceRound.id);
+  const thresholdCalibration = getMpgfPublicGoodsThresholdCalibrationReportApi(demoMpgfAssuranceRound.id);
   const ledger = getMpgfPublicGoodsLedgerApi();
 
   assert.equal(rounds.privacyPolicy, MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY);
@@ -666,6 +678,28 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(round.round.cgVqaf?.signalOptions.some((option) => option.value === "weak_common_ground_support"));
   assert.ok(round.round.cgVqaf?.moralClusterOptions.some((option) => option.value === "animal_inclusive"));
   assert.ok(round.round.cgVqaf?.collectiveActionStates.some((state) => state.value === "payout_in_milestones"));
+  assert.equal(round.round.identityIntegrity?.policy, MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY);
+  assert.equal(
+    round.round.identityIntegrity?.reportPath,
+    `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/identity-integrity`,
+  );
+  assert.equal(round.round.identityIntegrity?.qfWeightPolicy, "identity_confidence_only_no_moral_reputation");
+  assert.equal(round.round.identityIntegrity?.noMoralReputationWeighting, true);
+  assert.equal(round.round.identityIntegrity?.identityCanAffectEligibilityOrWeight, true);
+  assert.equal(round.round.identityIntegrity?.commonGroundSignalsExcludedFromAllocationPower, true);
+  assert.equal(round.round.identityIntegrity?.supportSignalStrengthExcludedFromAllocationPower, true);
+  assert.equal(round.round.identityIntegrity?.rawProviderPayloadsExcluded, true);
+  assert.ok(round.round.identityIntegrity?.counters.eligibleDistinctIdentityCount);
+  assert.ok((round.round.identityIntegrity?.counters.duplicateIdentityCount ?? 0) > 0);
+  assert.equal(round.round.thresholdCalibration?.policy, MPGF_PUBLIC_GOODS_THRESHOLD_CALIBRATION_POLICY);
+  assert.equal(
+    round.round.thresholdCalibration?.reportPath,
+    `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/threshold-calibration`,
+  );
+  assert.equal(round.round.thresholdCalibration?.currentRoundMutationAllowed, false);
+  assert.equal(round.round.thresholdCalibration?.parametersLockedBeforeDonationsOpen, true);
+  assert.equal(round.round.thresholdCalibration?.noGlobalMoralRanking, true);
+  assert.equal(round.round.thresholdCalibration?.ranksOperationalCalibrationOnly, true);
   assert.equal(round.round.finalization.policy, MPGF_PUBLIC_GOODS_FINALIZATION_POLICY);
   assert.equal(round.round.finalization.previewPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize-preview`);
   assert.equal(round.round.finalization.proofPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`);
@@ -741,6 +775,14 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(allocationReportRow.regeneratedFromContributionRecords, true);
   assert.equal(allocationReportRow.verifiedDonorCount, allocationReportRow.uniqueCountedIdentityCount);
   assert.ok(allocationReportRow.rawPaymentObjectCount > allocationReportRow.uniqueCountedIdentityCount);
+  assert.ok(identityIntegrity);
+  assert.equal(identityIntegrity.policy, MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY);
+  assert.equal(identityIntegrity.noMoralReputationWeighting, true);
+  assert.equal(getMpgfPublicGoodsIdentityIntegrityReportApi("unknown-round"), null);
+  assert.ok(thresholdCalibration);
+  assert.equal(thresholdCalibration.policy, MPGF_PUBLIC_GOODS_THRESHOLD_CALIBRATION_POLICY);
+  assert.equal(thresholdCalibration.currentRoundMutationAllowed, false);
+  assert.equal(getMpgfPublicGoodsThresholdCalibrationReportApi("unknown-round"), null);
   assert.equal(ledger.ledgerPolicy, "public_aggregate_no_donor_rows_no_receipt_urls");
   assert.equal(ledger.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
   assert.ok(ledger.rows.every((row) => row.releasedTotalCents === 0));
@@ -750,7 +792,18 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(getMpgfPublicGoodsMatchPreviewApi("unknown-round"), null);
   assert.equal(getMpgfPublicGoodsAllocationReportApi("unknown-round"), null);
 
-  const publicApiJson = JSON.stringify({ rounds, round, campaigns, detail, proofPath, preview, allocations, ledger });
+  const publicApiJson = JSON.stringify({
+    rounds,
+    round,
+    campaigns,
+    detail,
+    proofPath,
+    preview,
+    allocations,
+    identityIntegrity,
+    thresholdCalibration,
+    ledger,
+  });
 
   for (const forbidden of [
     "demo-supporter",
@@ -767,6 +820,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/rounds/[roundId]/route.ts", /getMpgfPublicGoodsRoundApi/],
     ["src/app/api/mpgf/rounds/[roundId]/campaigns/route.ts", /listMpgfPublicGoodsCampaignsApi/],
     ["src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", /getMpgfPublicGoodsCgVqafReportApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/identity-integrity/route.ts", /getMpgfPublicGoodsIdentityIntegrityReportApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/threshold-calibration/route.ts", /getMpgfPublicGoodsThresholdCalibrationReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/support-signals/route.ts", /createMpgfPublicGoodsSupportSignal/],
     ["src/app/api/mpgf/campaigns/[campaignId]/route.ts", /getMpgfPublicGoodsCampaignApi/],
     ["src/app/api/mpgf/campaigns/[campaignId]/proof-path/route.ts", /getMpgfPublicGoodsCampaignProofPathApi/],
@@ -821,6 +876,10 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     /Estimated bonus range/,
     /MpgfSupportSignalPanel/,
     /getMpgfPublicGoodsCgVqafReportApi/,
+    /getMpgfPublicGoodsIdentityIntegrityReportApi/,
+    /Identity and sybil integrity/,
+    /Moral reputation never affects allocation power/,
+    /aggregate identity-integrity report/,
     /Threshold status/,
     /Estimated match/,
     /Final match/,
@@ -1971,6 +2030,127 @@ test("MPGF public-goods identity adapter supports external proof scores without 
   );
   assert.match(persistence, /evaluateMpgfPublicGoodsIdentityAdapter/);
   assert.match(persistence, /identityAdapter\.duplicateUserRefs/);
+});
+
+test("MPGF identity integrity report aggregates sybil controls without moral reputation", () => {
+  const report = getMpgfPublicGoodsIdentityIntegrityReportApi(demoMpgfAssuranceRound.id);
+  const unknownReport = getMpgfPublicGoodsIdentityIntegrityReportApi("unknown-round");
+  const directReport = buildMpgfPublicGoodsIdentityIntegrityReport();
+  const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/identity-integrity/route.ts", "utf8");
+  const publicApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
+  const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+
+  assert.ok(report);
+  assert.equal(unknownReport, null);
+  assert.equal(report.policy, MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY);
+  assert.equal(directReport.policy, report.policy);
+  assert.equal(report.privacyPolicy, "aggregate_only_no_raw_identity_evidence_or_contact_data");
+  assert.equal(report.qfWeightPolicy, "identity_confidence_only_no_moral_reputation");
+  assert.equal(report.uniqueHumanityPolicy, "duplicate_identity_review_and_non_moral_human_score_thresholds");
+  assert.equal(report.noGlobalMoralRanking, true);
+  assert.equal(report.noMoralReputationWeighting, true);
+  assert.equal(report.identityCanAffectEligibilityOrWeight, true);
+  assert.equal(report.commonGroundSignalsExcludedFromAllocationPower, true);
+  assert.equal(report.supportSignalStrengthExcludedFromAllocationPower, true);
+  assert.equal(report.rawProviderPayloadsExcluded, true);
+  assert.equal(report.publicIndividualScoresExcluded, true);
+  assert.ok(report.providerModes.some((mode) => mode.provider === "external_proof_of_personhood"));
+  assert.ok(report.providerModes.every((mode) => mode.rawProviderPayloadStored === false));
+  assert.ok(report.providerModes.every((mode) => mode.contactDataStored === false));
+  assert.equal(
+    report.counters.activePledgeCount,
+    demoMpgfAssurancePledges.filter((pledge) => pledge.status === "pledged" || pledge.status === "captured").length,
+  );
+  assert.equal(
+    report.counters.eligibleDistinctIdentityCount,
+    new Set(demoMpgfAssurancePledges.filter((pledge) => pledge.eligibilityState === "eligible").map((pledge) => pledge.userId)).size,
+  );
+  assert.ok(report.counters.duplicateIdentityCount > 0);
+  assert.ok(report.counters.nonCountedPledgeCount >= report.counters.duplicateIdentityCount);
+  assert.ok(report.counters.qfWeightedDirectCents <= report.counters.rawEligibleDirectCents);
+  assert.equal(report.counters.externalProofEligibleCount, report.providerCounts.external_proof_of_personhood);
+  assert.equal(report.counters.repositoryProfileEligibleCount, report.providerCounts.repository_profile);
+  assert.equal(report.counters.demoSelfAttestationEligibleCount, report.providerCounts.demo_self_attestation);
+  assert.equal(report.counters.unlinkedIdentityScoreEligibleCount, report.providerCounts.unlinked_identity_score);
+  const animalRow = report.rows.find((row) => row.campaignId === "campaign-animal-welfare-transition");
+  assert.ok(animalRow);
+  assert.equal(animalRow.duplicateIdentityCount, 1);
+  assert.equal(animalRow.sybilReviewRequired, true);
+  assert.match(animalRow.calculationHash, /^sha256:/);
+  assert.ok(report.rows.every((row) => row.qfWeightedDirectCents <= row.rawEligibleDirectCents));
+  assert.match(report.calcHash, /^sha256:/);
+  assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(route, /getMpgfPublicGoodsIdentityIntegrityReportApi/);
+  assert.match(publicApi, /identityIntegrity/);
+  assert.match(publicApi, /noMoralReputationWeighting/);
+  assert.match(publicApi, /supportSignalStrengthExcludedFromAllocationPower/);
+  assert.match(roundPage, /Identity and sybil integrity/);
+  assert.match(roundPage, /Moral reputation never affects allocation power/);
+  assert.match(roundPage, /aggregate identity-integrity report/);
+
+  const serialized = JSON.stringify(report);
+
+  for (const forbidden of [
+    "demo-supporter",
+    "supporterReason",
+    "redactedReference",
+    "providerPayload",
+    "private@example",
+    "repo-profile:alix",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("MPGF threshold calibration recommends next-round gates without mid-round retuning", () => {
+  const report = getMpgfPublicGoodsThresholdCalibrationReportApi(demoMpgfAssuranceRound.id);
+  const unknownReport = getMpgfPublicGoodsThresholdCalibrationReportApi("unknown-round");
+  const directReport = buildMpgfPublicGoodsThresholdCalibrationReport();
+  const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/threshold-calibration/route.ts", "utf8");
+  const publicApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
+  const governance = getMpgfPublicGoodsGovernanceApi();
+  const governancePage = readFileSync("src/app/mpgf/governance/page.tsx", "utf8");
+
+  assert.ok(report);
+  assert.equal(unknownReport, null);
+  assert.equal(report.policy, MPGF_PUBLIC_GOODS_THRESHOLD_CALIBRATION_POLICY);
+  assert.equal(directReport.policy, report.policy);
+  assert.equal(report.privacyPolicy, "aggregate_only_no_private_support_reasons_or_donor_rows");
+  assert.equal(report.appliesTo, "next_round_only_after_public_postmortem");
+  assert.equal(report.currentRoundMutationAllowed, false);
+  assert.equal(report.parametersLockedBeforeDonationsOpen, true);
+  assert.equal(report.noGlobalMoralRanking, true);
+  assert.equal(report.ranksOperationalCalibrationOnly, true);
+  assert.equal(report.rowCount, demoMpgfPublicGoodsCampaigns.length);
+  assert.equal(report.rows.every((row) => row.recommendedNextRoundThresholdAmountCents > 0), true);
+  assert.equal(report.rows.every((row) => row.recommendedNextRoundThresholdSupporters >= 2), true);
+  assert.equal(report.rows.every((row) => /^sha256:/.test(row.calculationHash)), true);
+  assert.ok(report.rows.some((row) => row.reasonCodes.includes("current_threshold_cleared")));
+  assert.ok(report.rows.some((row) => row.reasonCodes.some((reason) => reason.startsWith("review_status_"))));
+  assert.match(report.calcHash, /^sha256:/);
+  assert.ok(governance.thresholdCalibration);
+  assert.equal(governance.thresholdCalibration.currentRoundMutationAllowed, false);
+  assert.equal(governance.thresholdCalibration.rows.length, demoMpgfPublicGoodsCampaigns.length);
+  assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(route, /getMpgfPublicGoodsThresholdCalibrationReportApi/);
+  assert.match(publicApi, /thresholdCalibration/);
+  assert.match(publicApi, /currentRoundMutationAllowed/);
+  assert.match(governancePage, /Next-round threshold calibration/);
+  assert.match(governancePage, /Learn from uptake without retuning this round/);
+  assert.match(governancePage, /Open threshold-calibration JSON/);
+
+  const serialized = JSON.stringify({ report, governance: governance.thresholdCalibration });
+
+  for (const forbidden of [
+    "demo-supporter",
+    "supporterReason",
+    "private-cg",
+    "redactedReference",
+    "providerPayload",
+    "private@example",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
 });
 
 test("MPGF public-goods payment adapter keeps handoff, fiscal-host, and signed-intent paths no-custody", () => {

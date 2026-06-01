@@ -22,9 +22,17 @@ import {
 import { getMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
 import { MPGF_PUBLIC_GOODS_FINALIZATION_POLICY } from "./public-goods-finalization";
 import { MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY } from "./public-goods-governance-ballots";
+import {
+  MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY,
+  getMpgfPublicGoodsIdentityIntegrityReportApi,
+} from "./public-goods-identity-integrity";
 import { buildMpgfPublicGoodsMilestoneSchedule } from "./public-goods-milestones";
 import { getMpgfPublicGoodsProceduralBadgesApi } from "./public-goods-procedural-badges";
 import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
+import {
+  MPGF_PUBLIC_GOODS_THRESHOLD_CALIBRATION_POLICY,
+  getMpgfPublicGoodsThresholdCalibrationReportApi,
+} from "./public-goods-threshold-calibration";
 import type {
   MpgfPublicGoodsCampaign,
   MpgfPublicGoodsPledge,
@@ -200,6 +208,8 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
   const proceduralBadges = getMpgfPublicGoodsProceduralBadgesApi(roundId);
   const cgVqaf = getMpgfPublicGoodsCgVqafReportApi(roundId);
   const supportSignalContract = getMpgfPublicGoodsSupportSignalContractApi(roundId);
+  const identityIntegrity = getMpgfPublicGoodsIdentityIntegrityReportApi(roundId);
+  const thresholdCalibration = getMpgfPublicGoodsThresholdCalibrationReportApi(roundId);
 
   return {
     ok: true,
@@ -248,6 +258,39 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
             collectiveActionStates: supportSignalContract?.collectiveActionStates ?? [],
             qfBonusBudgetCents: cgVqaf.qfBonusBudgetCents,
             qfBonusAllocatedCents: cgVqaf.qfBonusAllocatedCents,
+          }
+        : null,
+      identityIntegrity: identityIntegrity
+        ? {
+            policy: MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY,
+            reportPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/identity-integrity`,
+            sybilReviewPath: "/api/mpgf/challenges",
+            privacyPolicy: identityIntegrity.privacyPolicy,
+            qfWeightPolicy: identityIntegrity.qfWeightPolicy,
+            uniqueHumanityPolicy: identityIntegrity.uniqueHumanityPolicy,
+            noGlobalMoralRanking: identityIntegrity.noGlobalMoralRanking,
+            noMoralReputationWeighting: identityIntegrity.noMoralReputationWeighting,
+            identityCanAffectEligibilityOrWeight: identityIntegrity.identityCanAffectEligibilityOrWeight,
+            commonGroundSignalsExcludedFromAllocationPower:
+              identityIntegrity.commonGroundSignalsExcludedFromAllocationPower,
+            supportSignalStrengthExcludedFromAllocationPower:
+              identityIntegrity.supportSignalStrengthExcludedFromAllocationPower,
+            rawProviderPayloadsExcluded: identityIntegrity.rawProviderPayloadsExcluded,
+            publicIndividualScoresExcluded: identityIntegrity.publicIndividualScoresExcluded,
+            counters: identityIntegrity.counters,
+          }
+        : null,
+      thresholdCalibration: thresholdCalibration
+        ? {
+            policy: MPGF_PUBLIC_GOODS_THRESHOLD_CALIBRATION_POLICY,
+            reportPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/threshold-calibration`,
+            appliesTo: thresholdCalibration.appliesTo,
+            currentRoundMutationAllowed: thresholdCalibration.currentRoundMutationAllowed,
+            parametersLockedBeforeDonationsOpen: thresholdCalibration.parametersLockedBeforeDonationsOpen,
+            noGlobalMoralRanking: thresholdCalibration.noGlobalMoralRanking,
+            ranksOperationalCalibrationOnly: thresholdCalibration.ranksOperationalCalibrationOnly,
+            suggestedChangeCount: thresholdCalibration.suggestedChangeCount,
+            holdForReviewCount: thresholdCalibration.holdForReviewCount,
           }
         : null,
       finalization: {

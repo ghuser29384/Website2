@@ -8,6 +8,7 @@ import { MpgfSupportSignalPanel } from "@/components/mpgf/mpgf-support-signal-pa
 import { getViewer } from "@/lib/app-data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import { getMpgfPublicGoodsCgVqafReportApi } from "@/lib/mpgf/public-goods-cg-vqaf";
+import { getMpgfPublicGoodsIdentityIntegrityReportApi } from "@/lib/mpgf/public-goods-identity-integrity";
 import {
   getMpgfPublicGoodsAllocationReportApi,
   getMpgfPublicGoodsLedgerApi,
@@ -127,8 +128,9 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
   const allocation = getMpgfPublicGoodsAllocationReportApi(roundId);
   const ledger = getMpgfPublicGoodsLedgerApi();
   const cgVqaf = getMpgfPublicGoodsCgVqafReportApi(roundId);
+  const identityIntegrity = getMpgfPublicGoodsIdentityIntegrityReportApi(roundId);
 
-  if (!roundResult || !campaignResult || !preview || !allocation || !cgVqaf) {
+  if (!roundResult || !campaignResult || !preview || !allocation || !cgVqaf || !identityIntegrity) {
     notFound();
   }
 
@@ -225,6 +227,48 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
             <div>
               <dt>Calculation hash</dt>
               <dd>{round.calcHash}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="mpgf-panel">
+          <p className="eyebrow">Identity and sybil integrity</p>
+          <h2>Moral reputation never affects allocation power</h2>
+          <p>
+            Identity confidence can affect eligibility or QF weight, but cause preference,
+            support-signal strength, and moral reputation do not change donor allocation
+            power. Public reporting stays aggregate-only.
+          </p>
+          <dl className="mpgf-summary-grid">
+            <div>
+              <dt>Distinct counted identities</dt>
+              <dd>{identityIntegrity.counters.eligibleDistinctIdentityCount}</dd>
+            </div>
+            <div>
+              <dt>Duplicate identity flags</dt>
+              <dd>{identityIntegrity.counters.duplicateIdentityCount}</dd>
+            </div>
+            <div>
+              <dt>Pending or below minimum</dt>
+              <dd>
+                {identityIntegrity.counters.pendingReviewCount + identityIntegrity.counters.belowMinimumCount}
+              </dd>
+            </div>
+            <div>
+              <dt>Average eligible human score</dt>
+              <dd>{Math.round(identityIntegrity.counters.averageEligibleHumanScoreBps / 100)}%</dd>
+            </div>
+            <div>
+              <dt>QF weight policy</dt>
+              <dd>{identityIntegrity.qfWeightPolicy.replaceAll("_", " ")}</dd>
+            </div>
+            <div>
+              <dt>Public report</dt>
+              <dd>
+                <Link href={round.identityIntegrity?.reportPath ?? `/api/mpgf/rounds/${round.id}/identity-integrity`}>
+                  aggregate identity-integrity report
+                </Link>
+              </dd>
             </div>
           </dl>
         </article>
