@@ -35,6 +35,92 @@ export type MpgfPublicGoodsMoralCluster =
   | "animal_inclusive"
   | "institutional_pluralist";
 
+export const MPGF_PUBLIC_GOODS_SUPPORT_SIGNAL_OPTIONS = [
+  {
+    value: "strong_support",
+    label: "Strongly support",
+    description: "This campaign is a direct priority for my moral view.",
+    defaultStrengthBps: 9_000,
+  },
+  {
+    value: "weak_common_ground_support",
+    label: "Weak common-ground support",
+    description: "This campaign is not my top priority, but I can endorse it as a shared moral public good.",
+    defaultStrengthBps: 6_000,
+  },
+  {
+    value: "dissent_review_requested",
+    label: "Dissent / want review",
+    description: "This campaign needs externality, threat-baseline, destination, or collusion review before I support it.",
+    defaultStrengthBps: 2_500,
+  },
+] as const satisfies ReadonlyArray<{
+  value: MpgfPublicGoodsSupportSignalType;
+  label: string;
+  description: string;
+  defaultStrengthBps: number;
+}>;
+
+export const MPGF_PUBLIC_GOODS_MORAL_CLUSTER_OPTIONS = [
+  {
+    value: "humanitarian",
+    label: "Humanitarian",
+    description: "Near-term human welfare and basic needs.",
+  },
+  {
+    value: "longtermist",
+    label: "Longtermist",
+    description: "Future generations, existential risk, and durable institutions.",
+  },
+  {
+    value: "animal_inclusive",
+    label: "Animal-inclusive",
+    description: "Nonhuman animals and sentient-being welfare.",
+  },
+  {
+    value: "institutional_pluralist",
+    label: "Institutional pluralist",
+    description: "Fair process, public-interest knowledge, and cross-view legitimacy.",
+  },
+] as const satisfies ReadonlyArray<{
+  value: MpgfPublicGoodsMoralCluster;
+  label: string;
+  description: string;
+}>;
+
+export const MPGF_PUBLIC_GOODS_COLLECTIVE_ACTION_STATES = [
+  {
+    value: "signal_only",
+    label: "Signal only",
+    description: "Private support or dissent signal recorded for aggregate common-ground discovery.",
+  },
+  {
+    value: "pledge_saved",
+    label: "Pledge saved",
+    description: "A fast-route, saved commitment, or fallback proof intent exists for the campaign.",
+  },
+  {
+    value: "pending_verification",
+    label: "Pending verification",
+    description: "Identity, payment, evidence, and review gates are not yet counted.",
+  },
+  {
+    value: "threshold_cleared",
+    label: "Threshold cleared",
+    description: "Amount and verified-supporter gates have cleared under locked round parameters.",
+  },
+  {
+    value: "counted",
+    label: "Counted",
+    description: "The contribution is eligible for base match and capital-constrained QF bonus calculation.",
+  },
+  {
+    value: "payout_in_milestones",
+    label: "Payout in milestones",
+    description: "Reviewer-authorized release proceeds through the published milestone schedule.",
+  },
+] as const;
+
 export interface MpgfPublicGoodsSupportSignal {
   ok: true;
   id: string;
@@ -89,6 +175,18 @@ export interface MpgfPublicGoodsCgVqafReport {
   supportSignalsSuppressed: true;
   rows: MpgfPublicGoodsCgVqafRow[];
   calcHash: string;
+}
+
+export function isMpgfPublicGoodsSupportSignalType(value: unknown): value is MpgfPublicGoodsSupportSignalType {
+  return MPGF_PUBLIC_GOODS_SUPPORT_SIGNAL_OPTIONS.some((option) => option.value === value);
+}
+
+export function isMpgfPublicGoodsMoralCluster(value: unknown): value is MpgfPublicGoodsMoralCluster {
+  return MPGF_PUBLIC_GOODS_MORAL_CLUSTER_OPTIONS.some((option) => option.value === value);
+}
+
+export function defaultMpgfPublicGoodsSupportStrengthBps(signalType: MpgfPublicGoodsSupportSignalType) {
+  return MPGF_PUBLIC_GOODS_SUPPORT_SIGNAL_OPTIONS.find((option) => option.value === signalType)?.defaultStrengthBps ?? 0;
 }
 
 const demoSupportSignals: Array<{
@@ -585,4 +683,27 @@ export function getMpgfPublicGoodsCgVqafReportApi(roundId: string = demoMpgfAssu
   }
 
   return buildMpgfPublicGoodsCgVqafReport();
+}
+
+export function getMpgfPublicGoodsSupportSignalContractApi(roundId: string = demoMpgfAssuranceRound.id) {
+  if (roundId !== demoMpgfAssuranceRound.id) {
+    return null;
+  }
+
+  return {
+    ok: true,
+    roundId,
+    policy: MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,
+    privacyPolicy: MPGF_PUBLIC_GOODS_CG_VQAF_PRIVACY_POLICY,
+    supportSignalPath: `/api/mpgf/rounds/${roundId}/support-signals`,
+    cgVqafReportPath: `/api/mpgf/rounds/${roundId}/cg-vqaf`,
+    privateByDefault: true,
+    publicAggregationOnly: true,
+    rawSupportReasonsExcluded: true,
+    noGlobalMoralRanking: true,
+    ranksCoordinatabilityOnly: true,
+    signalOptions: MPGF_PUBLIC_GOODS_SUPPORT_SIGNAL_OPTIONS,
+    moralClusterOptions: MPGF_PUBLIC_GOODS_MORAL_CLUSTER_OPTIONS,
+    collectiveActionStates: MPGF_PUBLIC_GOODS_COLLECTIVE_ACTION_STATES,
+  };
 }

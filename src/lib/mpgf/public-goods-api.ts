@@ -14,7 +14,11 @@ import {
   mpgfVerificationWeightFromHumanScoreBps,
 } from "./mechanism";
 import { buildMpgfPublicGoodsAllocationSourceProofMap } from "./public-goods-allocation-results";
-import { MPGF_PUBLIC_GOODS_CG_VQAF_POLICY, getMpgfPublicGoodsCgVqafReportApi } from "./public-goods-cg-vqaf";
+import {
+  MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,
+  getMpgfPublicGoodsCgVqafReportApi,
+  getMpgfPublicGoodsSupportSignalContractApi,
+} from "./public-goods-cg-vqaf";
 import { getMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
 import { MPGF_PUBLIC_GOODS_FINALIZATION_POLICY } from "./public-goods-finalization";
 import { MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY } from "./public-goods-governance-ballots";
@@ -195,6 +199,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
   const contributionFlow = getMpgfPublicGoodsContributionFlowApi(roundId);
   const proceduralBadges = getMpgfPublicGoodsProceduralBadgesApi(roundId);
   const cgVqaf = getMpgfPublicGoodsCgVqafReportApi(roundId);
+  const supportSignalContract = getMpgfPublicGoodsSupportSignalContractApi(roundId);
 
   return {
     ok: true,
@@ -232,9 +237,15 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
             policy: MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,
             formulaVersion: cgVqaf.formulaVersion,
             reportPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/cg-vqaf`,
+            supportSignalPath: supportSignalContract?.supportSignalPath ?? `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/support-signals`,
+            supportSignalPrivateByDefault: supportSignalContract?.privateByDefault ?? true,
+            publicAggregationOnly: supportSignalContract?.publicAggregationOnly ?? true,
             supportSignalsSuppressed: cgVqaf.supportSignalsSuppressed,
             noGlobalMoralRanking: cgVqaf.noGlobalMoralRanking,
             ranksCoordinatabilityOnly: cgVqaf.ranksCoordinatabilityOnly,
+            signalOptions: supportSignalContract?.signalOptions ?? [],
+            moralClusterOptions: supportSignalContract?.moralClusterOptions ?? [],
+            collectiveActionStates: supportSignalContract?.collectiveActionStates ?? [],
             qfBonusBudgetCents: cgVqaf.qfBonusBudgetCents,
             qfBonusAllocatedCents: cgVqaf.qfBonusAllocatedCents,
           }

@@ -4,8 +4,10 @@ import { notFound } from "next/navigation";
 
 import { MpgfContributionModal } from "@/components/mpgf/mpgf-contribution-modal";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
+import { MpgfSupportSignalPanel } from "@/components/mpgf/mpgf-support-signal-panel";
 import { getViewer } from "@/lib/app-data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
+import { getMpgfPublicGoodsCgVqafReportApi } from "@/lib/mpgf/public-goods-cg-vqaf";
 import {
   getMpgfPublicGoodsAllocationReportApi,
   getMpgfPublicGoodsLedgerApi,
@@ -46,6 +48,40 @@ function statusLabel(value: string) {
 
 function formatMaybeUsd(cents: number | null | undefined) {
   return typeof cents === "number" ? formatUsd(cents) : "hidden while incident is frozen";
+}
+
+function formatBonusRange(cents: number | null | undefined) {
+  return typeof cents === "number" ? `$0 - ${formatUsd(cents)}` : "hidden while incident is frozen";
+}
+
+function workflowState({
+  directEligibleCents,
+  ledgerReleasedCents,
+  payable,
+  thresholdPassed,
+}: {
+  directEligibleCents: number;
+  ledgerReleasedCents: number;
+  payable: boolean;
+  thresholdPassed: boolean;
+}) {
+  if (ledgerReleasedCents > 0) {
+    return "payout_in_milestones";
+  }
+
+  if (payable) {
+    return "counted";
+  }
+
+  if (thresholdPassed) {
+    return "threshold_cleared";
+  }
+
+  if (directEligibleCents > 0) {
+    return "pending_verification";
+  }
+
+  return "signal_only";
 }
 
 export async function generateMetadata({ params }: MpgfRoundPageProps): Promise<Metadata> {
@@ -90,8 +126,9 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
   const preview = getMpgfPublicGoodsMatchPreviewApi(roundId);
   const allocation = getMpgfPublicGoodsAllocationReportApi(roundId);
   const ledger = getMpgfPublicGoodsLedgerApi();
+  const cgVqaf = getMpgfPublicGoodsCgVqafReportApi(roundId);
 
-  if (!roundResult || !campaignResult || !preview || !allocation) {
+  if (!roundResult || !campaignResult || !preview || !allocation || !cgVqaf) {
     notFound();
   }
 
@@ -231,7 +268,7 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
       <section className="section section-white">
         <div className="section-head section-head-compact">
           <p className="eyebrow">Campaign progress</p>
-          <h2>Direct contributions, threshold status, and estimated match</h2>
+          <h2>Collective-action state, common-ground support, and match preview</h2>
           <p>
             Public rows show aggregate donor counts and counted totals only. Donor identities,
             private reasons, private evidence URLs, and receipt references stay out of this page.
@@ -242,6 +279,13 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
             const previewRow = preview.rows.find((row) => row.campaignId === campaign.campaignId);
             const allocationRow = allocation.rows.find((row) => row.campaignId === campaign.campaignId);
             const ledgerRow = ledger.rows.find((row) => row.campaignId === campaign.campaignId);
+            const cgRow = cgVqaf.rows.find((row) => row.campaignId === campaign.campaignId);
+            const currentWorkflowState = workflowState({
+              directEligibleCents: campaign.directEligibleCents,
+              ledgerReleasedCents: ledgerRow?.releasedTotalCents ?? 0,
+              payable: allocationRow?.status === "payable",
+              thresholdPassed: campaign.thresholdPassed,
+            });
 
             return (
               <article className="mpgf-panel" key={campaign.campaignId}>
@@ -256,6 +300,26 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
                     Review {statusLabel(campaign.reviewStatus)}
                   </span>
                 </div>
+                <dl className="mpgf-headline-metrics" aria-label={`${campaign.title} headline funding metrics`}>
+                  <div>
+                    <dt>Verified direct contributions</dt>
+                    <dd>{formatUsd(campaign.directEligibleCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Verified supporters</dt>
+                    <dd>
+                      {campaign.verifiedDonorCount}/{campaign.thresholdDonors}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Base match if cleared</dt>
+                    <dd>{formatMaybeUsd(previewRow?.estimatedBaseMatchCents ?? campaign.baseMatchCents)}</dd>
+                  </div>
+                  <div>
+                    <dt>Estimated bonus range</dt>
+                    <dd>{formatBonusRange(cgRow?.bonusCapCents ?? previewRow?.estimatedQfBonusCents)}</dd>
+                  </div>
+                </dl>
                 <dl className="mpgf-summary-grid">
                   <div>
                     <dt>Direct contributions</dt>
@@ -288,6 +352,14 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
                     <dd>{formatUsd(ledgerRow?.releasedTotalCents ?? 0)}</dd>
                   </div>
                   <div>
+                    <dt>Common-ground signals</dt>
+                    <dd>{cgRow?.commonGroundSignalCount ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt>Common-ground score</dt>
+                    <dd>{Math.round((cgRow?.commonGroundScoreBps ?? 0) / 100)}%</dd>
+                  </div>
+                  <div>
                     <dt>Latest review reason</dt>
                     <dd>{statusLabel(campaign.reviewSummary.latestReasonCode)}</dd>
                   </div>
@@ -313,6 +385,24 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
                     </div>
                   ))}
                 </div>
+                {round.cgVqaf ? (
+                  <MpgfSupportSignalPanel
+                    campaignId={campaign.campaignId}
+                    campaignTitle={campaign.title}
+                    cgVqafReportPath={round.cgVqaf.reportPath}
+                    commonGroundScoreBps={cgRow?.commonGroundScoreBps ?? 0}
+                    dissentSignalCount={cgRow?.dissentSignalCount ?? 0}
+                    initialState={currentWorkflowState}
+                    moralClusterCount={cgRow?.moralClusterCount ?? 0}
+                    moralClusterOptions={round.cgVqaf.moralClusterOptions}
+                    roundId={round.id}
+                    signalOptions={round.cgVqaf.signalOptions}
+                    stateSteps={round.cgVqaf.collectiveActionStates}
+                    supportSignalPath={round.cgVqaf.supportSignalPath}
+                    viewerPresent={Boolean(viewer)}
+                    weakCommonGroundSignalCount={cgRow?.weakCommonGroundSignalCount ?? 0}
+                  />
+                ) : null}
                 <div className="mpgf-admin-action-grid">
                   <Link className="button button-secondary" href={campaign.campaignPath}>
                     Campaign page

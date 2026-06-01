@@ -162,6 +162,7 @@ import {
   MPGF_PUBLIC_GOODS_CG_VQAF_PRIVACY_POLICY,
   createMpgfPublicGoodsSupportSignal,
   getMpgfPublicGoodsCgVqafReportApi,
+  getMpgfPublicGoodsSupportSignalContractApi,
 } from "./mpgf/public-goods-cg-vqaf";
 import {
   MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY,
@@ -657,8 +658,14 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(round.round.contributionFlow?.stateObjects.includes("provider_payment_event"));
   assert.equal(round.round.cgVqaf?.policy, MPGF_PUBLIC_GOODS_CG_VQAF_POLICY);
   assert.equal(round.round.cgVqaf?.reportPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/cg-vqaf`);
+  assert.equal(round.round.cgVqaf?.supportSignalPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/support-signals`);
+  assert.equal(round.round.cgVqaf?.supportSignalPrivateByDefault, true);
+  assert.equal(round.round.cgVqaf?.publicAggregationOnly, true);
   assert.equal(round.round.cgVqaf?.noGlobalMoralRanking, true);
   assert.equal(round.round.cgVqaf?.ranksCoordinatabilityOnly, true);
+  assert.ok(round.round.cgVqaf?.signalOptions.some((option) => option.value === "weak_common_ground_support"));
+  assert.ok(round.round.cgVqaf?.moralClusterOptions.some((option) => option.value === "animal_inclusive"));
+  assert.ok(round.round.cgVqaf?.collectiveActionStates.some((state) => state.value === "payout_in_milestones"));
   assert.equal(round.round.finalization.policy, MPGF_PUBLIC_GOODS_FINALIZATION_POLICY);
   assert.equal(round.round.finalization.previewPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize-preview`);
   assert.equal(round.round.finalization.proofPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`);
@@ -760,6 +767,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/rounds/[roundId]/route.ts", /getMpgfPublicGoodsRoundApi/],
     ["src/app/api/mpgf/rounds/[roundId]/campaigns/route.ts", /listMpgfPublicGoodsCampaignsApi/],
     ["src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", /getMpgfPublicGoodsCgVqafReportApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/support-signals/route.ts", /createMpgfPublicGoodsSupportSignal/],
     ["src/app/api/mpgf/campaigns/[campaignId]/route.ts", /getMpgfPublicGoodsCampaignApi/],
     ["src/app/api/mpgf/campaigns/[campaignId]/proof-path/route.ts", /getMpgfPublicGoodsCampaignProofPathApi/],
     ["src/app/api/mpgf/rounds/[roundId]/match-preview/route.ts", /getMpgfPublicGoodsMatchPreviewApi/],
@@ -807,6 +815,12 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     /Round closes/,
     /Verified donors/,
     /Direct contributions/,
+    /Verified direct contributions/,
+    /Verified supporters/,
+    /Base match if cleared/,
+    /Estimated bonus range/,
+    /MpgfSupportSignalPanel/,
+    /getMpgfPublicGoodsCgVqafReportApi/,
     /Threshold status/,
     /Estimated match/,
     /Final match/,
@@ -1307,6 +1321,8 @@ test("MPGF Stripe saved commitments use SetupIntent-first before conditional Pay
 test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation without moral ranking", () => {
   const report = getMpgfPublicGoodsCgVqafReportApi(demoMpgfAssuranceRound.id);
   const unknownReport = getMpgfPublicGoodsCgVqafReportApi("unknown-round");
+  const supportSignalContract = getMpgfPublicGoodsSupportSignalContractApi(demoMpgfAssuranceRound.id);
+  const unknownSupportSignalContract = getMpgfPublicGoodsSupportSignalContractApi("unknown-round");
   const supportSignal = createMpgfPublicGoodsSupportSignal({
     campaignId: "campaign-global-health-basic-needs",
     userRef: "private-cg-vqaf-user-001",
@@ -1315,12 +1331,33 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
     strengthBps: 6_200,
   });
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", "utf8");
+  const supportSignalRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/support-signals/route.ts", "utf8");
+  const supportSignalPanel = readFileSync("src/components/mpgf/mpgf-support-signal-panel.tsx", "utf8");
+  const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
   const mechanism = readFileSync("src/lib/mpgf/public-goods-cg-vqaf.ts", "utf8");
   const migration = readFileSync("supabase/migrations/20260601_mpgf_cg_vqaf_core.sql", "utf8");
-  const serialized = JSON.stringify({ report, supportSignal });
+  const serialized = JSON.stringify({ report, supportSignal, supportSignalContract });
 
   assert.ok(report);
   assert.equal(unknownReport, null);
+  assert.ok(supportSignalContract);
+  assert.equal(unknownSupportSignalContract, null);
+  assert.equal(
+    supportSignalContract.supportSignalPath,
+    `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/support-signals`,
+  );
+  assert.equal(supportSignalContract.privateByDefault, true);
+  assert.equal(supportSignalContract.publicAggregationOnly, true);
+  assert.equal(supportSignalContract.noGlobalMoralRanking, true);
+  assert.ok(supportSignalContract.signalOptions.some((option) => option.value === "strong_support"));
+  assert.ok(supportSignalContract.signalOptions.some((option) => option.value === "weak_common_ground_support"));
+  assert.ok(supportSignalContract.signalOptions.some((option) => option.value === "dissent_review_requested"));
+  assert.ok(supportSignalContract.collectiveActionStates.some((state) => state.value === "signal_only"));
+  assert.ok(supportSignalContract.collectiveActionStates.some((state) => state.value === "pledge_saved"));
+  assert.ok(supportSignalContract.collectiveActionStates.some((state) => state.value === "pending_verification"));
+  assert.ok(supportSignalContract.collectiveActionStates.some((state) => state.value === "threshold_cleared"));
+  assert.ok(supportSignalContract.collectiveActionStates.some((state) => state.value === "counted"));
+  assert.ok(supportSignalContract.collectiveActionStates.some((state) => state.value === "payout_in_milestones"));
   assert.equal(report.policy, MPGF_PUBLIC_GOODS_CG_VQAF_POLICY);
   assert.equal(report.privacyPolicy, MPGF_PUBLIC_GOODS_CG_VQAF_PRIVACY_POLICY);
   assert.equal(report.formulaVersion, "cg_vqaf_capital_constrained_qf_v1");
@@ -1340,8 +1377,24 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(supportSignal.calcHash, /^sha256:/);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsCgVqafReportApi/);
+  assert.match(supportSignalRoute, /Sign in to record an MPGF support signal/);
+  assert.match(supportSignalRoute, /private_by_default: true/);
+  assert.match(supportSignalRoute, /publicAggregationOnly: true/);
+  assert.match(supportSignalRoute, /noGlobalMoralRanking: true/);
+  assert.match(supportSignalRoute, /moral_cluster_hash/);
+  assert.match(supportSignalRoute, /mpgf_support_signals/);
+  assert.match(supportSignalRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(mechanism, /Strongly support/);
+  assert.match(mechanism, /Weak common-ground support/);
+  assert.match(mechanism, /Dissent \/ want review/);
+  assert.match(supportSignalPanel, /signalOptions\.map/);
+  assert.match(supportSignalPanel, /Private by default; public output is aggregate only/);
+  assert.match(supportSignalPanel, /signal_only/);
+  assert.match(supportSignalPanel, /Common-ground discovery/);
+  assert.match(roundPage, /commonGroundScoreBps/);
   assert.match(mechanism, /solveCapitalConstrainedLambda/);
   assert.match(mechanism, /bonus_j = min|cg_vqaf_capital_constrained_qf_v1/);
+  assert.match(mechanism, /getMpgfPublicGoodsSupportSignalContractApi/);
   assert.match(migration, /mpgf_moral_profiles/);
   assert.match(migration, /mpgf_support_signals/);
   assert.match(migration, /mpgf_conditional_pledges/);
