@@ -263,6 +263,7 @@ export function HomePage({ isAuthenticated, marketplaceOverview }: HomePageProps
                   requestedThreshold={offer.minCounterpartyImpact}
                   reviewFactorCodes={reviewInstrumentation.factorCodes}
                   reviewNextStep={reviewInstrumentation.nextStep}
+                  reviewStatusReason={reviewInstrumentation.statusReason}
                   reviewState="Worked example. Manual review required before reliance."
                   scoreConfidence={getScoreConfidence(offer)}
                   secondaryAction={

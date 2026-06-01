@@ -6517,6 +6517,17 @@ output {
   line-height: 1.2;
 }
 
+.review-status-reason {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.review-status-reason strong {
+  color: var(--ink);
+}
+
 .review-next-step {
   margin: 0;
   padding: 0.55rem 0.65rem;

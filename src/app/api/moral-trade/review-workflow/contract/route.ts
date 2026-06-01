@@ -36,7 +36,18 @@ export async function GET(request: Request) {
       participantCopyTemplates: contract.participantCopyTemplates,
       invariants: contract.invariants,
       sampleDetailCardKeys: contract.sampleDetailCards.map((card) => card.key),
+      sampleDetailCardStatusReasons: contract.sampleDetailCards.map((card) => ({
+        key: card.key,
+        status: card.status,
+        statusReasonCode: card.statusReasonCode,
+        statusReason: card.statusReason,
+      })),
       sampleMarketplaceFactorCodes: contract.sampleMarketplaceCard.factorCodes,
+      sampleMarketplaceStatusReason: {
+        status: contract.sampleMarketplaceCard.status,
+        statusReasonCode: contract.sampleMarketplaceCard.statusReasonCode,
+        statusReason: contract.sampleMarketplaceCard.statusReason,
+      },
       contractTests: contract.contractTests,
     },
     blockers: validation.blockers,

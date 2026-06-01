@@ -137,6 +137,7 @@ interface MarketplaceListing {
   duration: string;
   reviewFactorCodes: string[];
   reviewNextStep: string;
+  reviewStatusReason: string;
   reviewState: string;
   offerImpact: number;
   requestedImpact: number;
@@ -251,6 +252,7 @@ function workedCaseToListing(offer: (typeof CANONICAL_WORKED_CASE_OFFERS)[number
     requesting: offer.requestAction,
     reviewFactorCodes: reviewInstrumentation.factorCodes,
     reviewNextStep: reviewInstrumentation.nextStep,
+    reviewStatusReason: reviewInstrumentation.statusReason,
     reviewState: "Worked example; manual review required before reliance",
     scoreConfidence: getScoreConfidence(offer),
     source: "example",
@@ -309,6 +311,7 @@ function liveOfferToListing(offer: OfferRecord): MarketplaceListing {
     requesting: offer.request_action,
     reviewFactorCodes: reviewInstrumentation.factorCodes,
     reviewNextStep: reviewInstrumentation.nextStep,
+    reviewStatusReason: reviewInstrumentation.statusReason,
     reviewState: "Live offer; evidence and baseline review required before reliance",
     scoreConfidence: getScoreConfidence(reviewInput),
     source: "live",
@@ -1263,6 +1266,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                             requestedThreshold={listing.requestedImpact}
                             reviewFactorCodes={listing.reviewFactorCodes}
                             reviewNextStep={listing.reviewNextStep}
+                            reviewStatusReason={listing.reviewStatusReason}
                             reviewState={listing.reviewState}
                             scoreConfidence={listing.scoreConfidence}
                             secondaryAction={
@@ -1337,6 +1341,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                               requestedThreshold={listing.requestedImpact}
                               reviewFactorCodes={listing.reviewFactorCodes}
                               reviewNextStep={listing.reviewNextStep}
+                              reviewStatusReason={listing.reviewStatusReason}
                               reviewState={listing.reviewState}
                               scoreConfidence={listing.scoreConfidence}
                               secondaryAction={

@@ -299,7 +299,7 @@ test("protocol draft review fixes public redaction before opening challenge wind
   assert.ok(review.uncertaintyFlags.includes("privacy:contact_email_in_public_draft"));
 });
 
-test("offer review workflow cards expose status, factor codes, next steps, and appeal scope", () => {
+test("offer review workflow cards expose status reasons, factor codes, next steps, and appeal scope", () => {
   const cards = getOfferReviewWorkflowCards({
     mode: "offset",
     verification: "Manual review required",
@@ -329,6 +329,12 @@ test("offer review workflow cards expose status, factor codes, next steps, and a
     ],
   );
   assert.ok(cards.every((card) => card.factorCodes.length > 0));
+  assert.ok(cards.every((card) => card.statusReasonCode === `${card.key}.${card.status}`));
+  assert.ok(
+    cards.every((card) =>
+      card.statusReason.startsWith(`${card.status.replaceAll("_", " ")}:`),
+    ),
+  );
   assert.ok(
     cards.every((card) =>
       /Treat|Attach|What would you do|Ask|This score reflects|If you think/.test(
@@ -337,6 +343,10 @@ test("offer review workflow cards expose status, factor codes, next steps, and a
     ),
   );
   assert.equal(cards.find((card) => card.key === "action_evidence")?.status, "pass");
+  assert.match(
+    cards.find((card) => card.key === "action_evidence")?.statusReason ?? "",
+    /named proof method and clear evidence locator/i,
+  );
   assert.equal(cards.find((card) => card.key === "baseline_confidence")?.status, "pass");
   assert.equal(cards.find((card) => card.key === "externality_review")?.status, "human_review");
   assert.match(
@@ -370,10 +380,18 @@ test("offer review workflow cards use approved needs-evidence and safety copy", 
 
   assert.equal(cards.find((card) => card.key === "current_status")?.status, "blocked");
   assert.match(
+    cards.find((card) => card.key === "current_status")?.statusReason ?? "",
+    /policy block/i,
+  );
+  assert.match(
     cards.find((card) => card.key === "current_status")?.summary ?? "",
     /cannot be published because it resembles a threat/i,
   );
   assert.equal(cards.find((card) => card.key === "action_evidence")?.status, "needs_input");
+  assert.match(
+    cards.find((card) => card.key === "action_evidence")?.statusReason ?? "",
+    /no reviewable proof method or evidence locator/i,
+  );
   assert.match(
     cards.find((card) => card.key === "action_evidence")?.summary ?? "",
     /Status: Needs evidence/i,
@@ -400,6 +418,8 @@ test("offer review card instrumentation exposes prioritized factor codes and nex
 
   assert.equal(instrumentation.status, "human_review");
   assert.equal(instrumentation.label, "Action evidence");
+  assert.equal(instrumentation.statusReasonCode, "action_evidence.human_review");
+  assert.match(instrumentation.statusReason, /proof method is named/i);
   assert.deepEqual(instrumentation.factorCodes.slice(0, 4), [
     "human_review_required",
     "evidence_rule_named",
@@ -426,7 +446,9 @@ test("offer review workflow contract validates public card and marketplace instr
   assert.match(contract.participantCopyTemplates.importanceScoreNote, /not a platform judgment/i);
   assert.match(contract.participantCopyTemplates.appealCopy, /specific claim/i);
   assert.ok(contract.invariants.some((entry) => /Marketplace cards/.test(entry)));
+  assert.ok(contract.invariants.some((entry) => /status-reason code/.test(entry)));
   assert.ok(contract.sampleMarketplaceCard.factorCodes.length <= 5);
+  assert.match(contract.sampleMarketplaceCard.statusReason, /human review/i);
   assert.ok(contract.contractTests.includes("technical_spec_review_workflow_smoke"));
 });
 
@@ -440,6 +462,16 @@ test("review workflow routes publish participant copy templates", async () => {
   assert.match(
     contractBody.publicContract.participantCopyTemplates.baselineHelperText,
     /What would you do if this trade did not happen/i,
+  );
+  assert.match(
+    contractBody.publicContract.sampleDetailCardStatusReasons.find(
+      (card: { key: string }) => card.key === "action_evidence",
+    )?.statusReason ?? "",
+    /proof method/i,
+  );
+  assert.match(
+    contractBody.publicContract.sampleMarketplaceStatusReason.statusReason,
+    /human review/i,
   );
 
   const evaluateResponse = await reviewWorkflowEvaluateRoute(
@@ -464,6 +496,11 @@ test("review workflow routes publish participant copy templates", async () => {
     evaluateBody.workflowCards.find((card: { key: string }) => card.key === "current_status")
       ?.summary ?? "",
     /cannot be published because it resembles a threat/i,
+  );
+  assert.match(
+    evaluateBody.workflowCards.find((card: { key: string }) => card.key === "current_status")
+      ?.statusReason ?? "",
+    /policy block/i,
   );
   assert.match(
     evaluateBody.workflowCards.find((card: { key: string }) => card.key === "action_evidence")

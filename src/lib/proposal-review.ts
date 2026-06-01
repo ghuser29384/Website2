@@ -46,6 +46,8 @@ export interface OfferReviewWorkflowCard {
     | "appeal_scope";
   label: string;
   status: MoralTradeVerificationStepStatus;
+  statusReasonCode: string;
+  statusReason: string;
   factorCodes: string[];
   summary: string;
   nextStep: string;
@@ -56,6 +58,8 @@ export interface OfferReviewCardInstrumentation {
   label: string;
   nextStep: string;
   status: MoralTradeVerificationStepStatus;
+  statusReasonCode: string;
+  statusReason: string;
 }
 
 export interface OfferReviewWorkflowCardContract {
@@ -63,6 +67,7 @@ export interface OfferReviewWorkflowCardContract {
   label: string;
   requiredFactorCodes: string[];
   purpose: string;
+  statusReasonRule: string;
   nextStepRule: string;
 }
 
@@ -199,10 +204,10 @@ export const WORKED_EXAMPLE_LAUNCH_ORDER = [
 ] as const;
 
 export const MORAL_TRADE_REVIEW_WORKFLOW_CONTRACT_VERSION =
-  "moral-trade-review-workflow-v0.1-2026-05";
+  "moral-trade-review-workflow-v0.2-2026-06";
 
 export const MORAL_TRADE_REVIEW_WORKFLOW_VALIDATOR_VERSION =
-  "moral-trade-review-workflow-validator-v0.1";
+  "moral-trade-review-workflow-validator-v0.2";
 
 export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContract[] = [
   {
@@ -210,6 +215,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Status card",
     requiredFactorCodes: ["status_visible", "human_review_required"],
     purpose: "Expose whether a record is live, example-only, blocked, or still under review.",
+    statusReasonRule: "Explain why the visible status is pass, needs-input, human-review, or blocked without implying completion.",
     nextStepRule: "Never imply completion, custody, enforceability, or moral endorsement from a visible status.",
   },
   {
@@ -217,6 +223,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Action evidence",
     requiredFactorCodes: ["evidence_rule_named", "evidence_sufficiency"],
     purpose: "Show whether each factual action claim has a named reviewable proof method.",
+    statusReasonRule: "Explain whether a proof method and locator exist, or which evidence boundary keeps the card out of pass.",
     nextStepRule: "Ask for scoped artifacts before anyone relies on a factual action claim.",
   },
   {
@@ -224,6 +231,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Counterfactual baseline",
     requiredFactorCodes: ["baseline_stated", "baseline_credibility"],
     purpose: "Keep factual proof separate from the no-trade baseline and counterfactual trust problem.",
+    statusReasonRule: "Explain why the no-trade baseline is credible enough, weak, or still review-bound.",
     nextStepRule: "Ask what would happen without the trade and what dated evidence supports that claim.",
   },
   {
@@ -231,6 +239,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Externality review",
     requiredFactorCodes: ["externality_review_required", "human_review_required"],
     purpose: "Name third-party harm, perverse-incentive, and unrepresented-value review before reliance.",
+    statusReasonRule: "Explain which mode or cause trigger requires human review, or why no obvious trigger was detected.",
     nextStepRule: "Route affected-party standing, remedy, and challenge-window questions to human review.",
   },
   {
@@ -238,6 +247,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Participant-relative scores",
     requiredFactorCodes: ["participant_relative_scores", "no_global_moral_ranking"],
     purpose: "Display stated priorities without turning them into an objective platform ranking.",
+    statusReasonRule: "Explain that pass only means scores are bounded as participant-stated context.",
     nextStepRule: "Use scores only as participant-stated context and preserve the no-global-ranking notice.",
   },
   {
@@ -245,6 +255,7 @@ export const OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS: OfferReviewWorkflowCardContra
     label: "Appeal scope",
     requiredFactorCodes: ["appealable_review_scope", "reviewer_summary"],
     purpose: "Limit appeals to the claim, evidence row, baseline concern, disclosure decision, or policy flag under review.",
+    statusReasonRule: "Explain that appeal handling remains human-reviewed and scoped to the reviewed issue.",
     nextStepRule: "Do not reopen unrelated moral disagreements by default.",
   },
 ];
@@ -1539,25 +1550,61 @@ function workflowStatusFromExternality(input: ProposalReviewInput): MoralTradeVe
   return "pass";
 }
 
+function workflowStatusReason(
+  key: OfferReviewWorkflowCard["key"],
+  status: MoralTradeVerificationStepStatus,
+  reason: string,
+) {
+  return {
+    statusReasonCode: `${key}.${status}`,
+    statusReason: `${status.replaceAll("_", " ")}: ${reason}`,
+  };
+}
+
 export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): OfferReviewWorkflowCard[] {
   const currentStatus = input.currentStatus?.trim() || "Manual review required before reliance";
   const actionEvidence = getActionEvidenceSummary(input);
   const evidenceStatus = workflowStatusFromEvidence(input);
   const baselineConfidence = getBaselineConfidence(input);
   const baselineEvidence = getBaselineEvidenceSummary(input);
+  const baselineStatus = workflowStatusFromBaseline(baselineConfidence);
   const externalityReview = getExternalityReviewSummary(input);
+  const externalityStatus = workflowStatusFromExternality(input);
   const scoreConfidence = getScoreConfidence(input);
   const currentStatusWorkflowStatus = workflowStatusFromCurrentStatus(currentStatus);
   const scoreSummary =
     input.offerImpact && input.minCounterpartyImpact
       ? `Participant-stated importance ${input.offerImpact}/10; counterparty minimum ${input.minCounterpartyImpact}/10. Confidence: ${scoreConfidence}.`
       : `Participant-stated scores are review context only. Confidence: ${scoreConfidence}.`;
+  const currentStatusReason =
+    currentStatusWorkflowStatus === "blocked"
+      ? "the visible status names a policy block, rejection, or anti-threat flag."
+      : currentStatusWorkflowStatus === "needs_input"
+        ? "the visible status says required review information is missing or unresolved."
+        : "the visible status is still a review state, not completion, custody, enforceability, or moral endorsement.";
+  const evidenceStatusReason =
+    evidenceStatus === "pass"
+      ? "a named proof method and clear evidence locator are present for reviewer inspection."
+      : evidenceStatus === "human_review"
+        ? "a proof method is named, but the artifact still needs reviewer inspection before reliance."
+        : "no reviewable proof method or evidence locator is attached yet.";
+  const baselineStatusReason =
+    baselineStatus === "pass"
+      ? "the baseline is stated with enough support to enter counterfactual review."
+      : baselineStatus === "needs_input"
+        ? "the baseline is weak and needs dated no-trade evidence."
+        : "the baseline has not been assessed enough to clear counterfactual review.";
+  const externalityStatusReason =
+    externalityStatus === "pass"
+      ? "no offset, payment, or political-adjacent trigger was detected."
+      : "the mode or causes can affect third parties, incentives, or unrepresented values.";
 
   return [
     {
       key: "current_status",
       label: "Status card",
       status: currentStatusWorkflowStatus,
+      ...workflowStatusReason("current_status", currentStatusWorkflowStatus, currentStatusReason),
       factorCodes: ["status_visible", "human_review_required"],
       summary:
         currentStatusWorkflowStatus === "blocked"
@@ -1570,6 +1617,7 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
       key: "action_evidence",
       label: "Action evidence",
       status: evidenceStatus,
+      ...workflowStatusReason("action_evidence", evidenceStatus, evidenceStatusReason),
       factorCodes: ["evidence_rule_named", "evidence_sufficiency"],
       summary:
         evidenceStatus === "needs_input"
@@ -1581,7 +1629,8 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
     {
       key: "baseline_confidence",
       label: "Counterfactual baseline",
-      status: workflowStatusFromBaseline(baselineConfidence),
+      status: baselineStatus,
+      ...workflowStatusReason("baseline_confidence", baselineStatus, baselineStatusReason),
       factorCodes: ["baseline_stated", "baseline_credibility"],
       summary: `${baselineConfidence}: ${baselineEvidence}`,
       nextStep: REVIEW_WORKFLOW_PARTICIPANT_COPY.baselineHelperText,
@@ -1589,7 +1638,8 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
     {
       key: "externality_review",
       label: "Externality review",
-      status: workflowStatusFromExternality(input),
+      status: externalityStatus,
+      ...workflowStatusReason("externality_review", externalityStatus, externalityStatusReason),
       factorCodes: ["externality_review_required", "human_review_required"],
       summary: externalityReview,
       nextStep:
@@ -1599,6 +1649,11 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
       key: "participant_relative_scores",
       label: "Participant-relative scores",
       status: "pass",
+      ...workflowStatusReason(
+        "participant_relative_scores",
+        "pass",
+        "scores are bounded as participant-stated context, not platform ranking.",
+      ),
       factorCodes: ["participant_relative_scores", "no_global_moral_ranking"],
       summary: scoreSummary,
       nextStep: REVIEW_WORKFLOW_PARTICIPANT_COPY.importanceScoreNote,
@@ -1607,6 +1662,11 @@ export function getOfferReviewWorkflowCards(input: OfferReviewWorkflowInput): Of
       key: "appeal_scope",
       label: "Appeal scope",
       status: "human_review",
+      ...workflowStatusReason(
+        "appeal_scope",
+        "human_review",
+        "appeals require reviewer handling and must stay within the reviewed issue.",
+      ),
       factorCodes: ["appealable_review_scope", "reviewer_summary"],
       summary:
         "Appeals should target the specific reviewed claim, evidence row, baseline concern, disclosure decision, or policy flag.",
@@ -1645,6 +1705,8 @@ export function getOfferReviewCardInstrumentation(
     label: nextActionCard.label,
     nextStep: nextActionCard.nextStep,
     status: nextActionCard.status,
+    statusReasonCode: nextActionCard.statusReasonCode,
+    statusReason: nextActionCard.statusReason,
   };
 }
 
@@ -1692,8 +1754,9 @@ export function getOfferReviewWorkflowContract(): OfferReviewWorkflowContract {
     marketplaceFactorPriority: [...MARKETPLACE_REVIEW_FACTOR_PRIORITY],
     participantCopyTemplates: REVIEW_WORKFLOW_PARTICIPANT_COPY,
     invariants: [
-      "Every detail workflow card must expose at least one factor code and one next-step instruction.",
+      "Every detail workflow card must expose at least one factor code, one status-reason code, one status reason, and one next-step instruction.",
       "Marketplace cards must show prioritized factor codes derived from the same workflow contract.",
+      "Marketplace cards must inherit the selected detail card status reason.",
       "Participant-relative scores must preserve no_global_moral_ranking.",
       "Appeals must preserve appealable_review_scope and reviewer_summary factor codes.",
       "Action evidence, baseline confidence, and externality review must remain separate cards.",
@@ -1728,6 +1791,23 @@ export function validateOfferReviewWorkflowContract(
         sampleKeys.length === contractKeys.length &&
         contractKeys.every((key, index) => sampleKeys[index] === key),
       `${contractKeys.join(", ")} -> ${sampleKeys.join(", ")}`,
+    ),
+    workflowContractCheck(
+      "status-reason-coverage",
+      "Every detail and marketplace card exposes a structured status reason",
+      contract.detailWorkflowCards.every((card) => card.statusReasonRule.trim().length > 0) &&
+        contract.sampleDetailCards.every(
+          (card) =>
+            card.statusReasonCode === `${card.key}.${card.status}` &&
+            card.statusReason.startsWith(`${card.status.replaceAll("_", " ")}:`),
+        ) &&
+        contract.sampleMarketplaceCard.statusReasonCode.length > 0 &&
+        contract.sampleMarketplaceCard.statusReason.startsWith(
+          `${contract.sampleMarketplaceCard.status.replaceAll("_", " ")}:`,
+        ),
+      contract.sampleDetailCards
+        .map((card) => `${card.statusReasonCode}=${card.statusReason}`)
+        .join(" | "),
     ),
     workflowContractCheck(
       "factor-code-coverage",

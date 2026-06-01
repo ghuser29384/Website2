@@ -381,6 +381,8 @@ test("public offer and registry pages include seeded examples instead of empty-o
   assert.match(registryPage, /getWishRegistryCompatibilityBand/);
   assert.match(registryPage, /not by moral worth/);
   assert.match(registryPage, /Example preview/);
+  assert.match(registryPage, /You can browse broad previews now/);
+  assert.match(registryPage, /Exact asks, exact wishes, and contact details stay hidden/);
   assert.equal(registryPage.includes("match score"), false);
   assert.match(wishRegistrySource, /getWishRegistryRedactedOverlapTokens/);
   assert.match(wishRegistrySource, /getWishRegistryCompatibilityBand/);
@@ -454,10 +456,12 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.match(offersPage, /getOfferReviewCardInstrumentation/);
   assert.match(offersPage, /reviewFactorCodes/);
   assert.match(offersPage, /reviewNextStep/);
+  assert.match(offersPage, /reviewStatusReason/);
   assert.match(offersPage, /listingMatchesFilters/);
   assert.match(offersPage, /sortListings/);
   assert.match(pagePrimitives, /listing-factor-codes/);
   assert.match(pagePrimitives, /Next step:/);
+  assert.match(pagePrimitives, /Why this status:/);
   assert.match(globalCss, /listing-factor-codes/);
   assert.match(globalCss, /listing-next-step/);
   assert.match(appDataSource, /offerMatchesSearchQuery/);
@@ -510,6 +514,7 @@ test("home page is a focused pilot landing page with pilot metrics and example-f
   assert.match(homeSource, /getOfferReviewCardInstrumentation/);
   assert.match(homeSource, /reviewFactorCodes/);
   assert.match(homeSource, /reviewNextStep/);
+  assert.match(homeSource, /reviewStatusReason/);
   assert.equal(homeSource.includes("opening-sequence"), false);
   assert.equal(homeSource.includes("OfferComposer"), false);
   assert.equal(homeSource.includes("ParetoChart"), false);
@@ -689,6 +694,10 @@ test("background networking and reasoning routes are distinct resilient public r
   assert.match(backgroundPage, /Open RLS contract/);
   assert.match(backgroundPage, /rlsAuditContract\.tableRequirements/);
   assert.match(backgroundPage, /\/api\/moral-trade\/background-rls-audit\/contract/);
+  assert.match(backgroundPage, /Cohort pilot packs/);
+  assert.match(backgroundPage, /Donor circles/);
+  assert.match(backgroundPage, /Reading groups/);
+  assert.match(backgroundPage, /Organization cohorts/);
   assert.match(backgroundPage, /factorCode/);
   assert.match(backgroundPage, /Counts, not hidden inference/);
   assert.match(backgroundPage, /does not infer ideology, psychology, protected traits, or hidden/);
@@ -852,6 +861,11 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(dashboardPage, /hasActiveProfileSourcePermission/);
   assert.match(dashboardPage, /formatBackgroundSourcePermissionFieldLabel/);
   assert.match(dashboardPage, /Contact approvals/);
+  assert.match(dashboardPage, /Discovery alerts are digest-first by default/);
+  assert.match(dashboardPage, /No one is contacted on your behalf/);
+  assert.match(dashboardPage, /Raw source content is not stored for matching/);
+  assert.match(dashboardPage, /You review and approve a summary/);
+  assert.match(dashboardPage, /queued background-networking emails/);
   assert.match(backgroundActions, /validateBackgroundSourcePermission/);
   assert.match(backgroundActions, /allowed_field_keys: permission\.allowedFieldKeys/);
   assert.match(backgroundActions, /retention_expires_at: permission\.retentionExpiresAt/);
@@ -1053,7 +1067,8 @@ test("cohort page exposes founding progress, referral, and one-counterparty invi
   assert.match(cohortPage, /CANONICAL_WORKED_CASE_COUNT/);
   assert.match(signupPage, /Start with one low-risk action/);
   assert.match(signupPage, /Clone a worked example/);
-  assert.match(signupPage, /Create broad wish preview/);
+  assert.match(signupPage, /Create a private wish profile/);
+  assert.match(signupPage, /Choose what, if anything, becomes a broad preview/);
   assert.match(signupPage, /Log public-good action/);
   assert.match(actionsSource, /return_to/);
   assert.match(actionsSource, /Choose one low-risk first action/);
@@ -1610,6 +1625,8 @@ test("primer, anti-threat, and research pages frame the public pilot", () => {
   assert.match(accessibilityPage, /Accessibility statement/);
   assert.match(accessibilityPage, /WCAG 2\.1 AA-oriented QA/);
   assert.match(accessibilityPage, /keyboard and screen-reader QA/);
+  assert.match(accessibilityPage, /Authenticated background networking/);
+  assert.match(accessibilityPage, /opportunity inbox, consent dialogs, source-summary review/);
   assert.match(accessibilityPage, /Report accessibility issue/);
   assert.match(accessibilityPage, /Known limitations/);
   assert.match(accessibilityPage, /buildBreadcrumbJsonLd/);
@@ -3143,10 +3160,13 @@ test("offer detail and worked examples expose instrumented review workflow cards
   assert.match(proposalReviewSource, /baseline_credibility/);
   assert.match(proposalReviewSource, /no_global_moral_ranking/);
   assert.match(proposalReviewSource, /appealable_review_scope/);
+  assert.match(proposalReviewSource, /statusReasonCode/);
+  assert.match(proposalReviewSource, /statusReasonRule/);
   assert.match(proposalReviewSource, /specific reviewed claim/);
   assert.match(offerDetailSource, /Review workflow/);
   assert.match(offerDetailSource, /Why this record can or cannot be relied on yet/);
   assert.match(offerDetailSource, /reviewWorkflowCards\.map/);
+  assert.match(offerDetailSource, /Why this status:/);
   assert.match(offerDetailSource, /review-factor-list/);
   assert.match(offerDetailSource, /Contact after sign-in/);
   assert.match(offerDetailSource, /Save offer/);
@@ -3167,8 +3187,10 @@ test("offer detail and worked examples expose instrumented review workflow cards
   assert.match(workedExampleSource, /getOfferReviewWorkflowCards/);
   assert.match(workedExampleSource, /Worked example; manual review required before reliance/);
   assert.match(workedExampleSource, /reviewWorkflowCards\.map/);
+  assert.match(workedExampleSource, /Why this status:/);
   assert.match(globalCss, /review-workflow-grid/);
   assert.match(globalCss, /review-workflow-card-human_review/);
+  assert.match(globalCss, /review-status-reason/);
   assert.match(globalCss, /review-factor-list/);
   assert.match(globalCss, /review-next-step/);
 });

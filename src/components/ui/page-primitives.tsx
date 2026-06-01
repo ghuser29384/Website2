@@ -407,6 +407,7 @@ interface OfferCardProps {
   requestedThreshold?: number;
   reviewFactorCodes?: readonly string[];
   reviewNextStep?: string;
+  reviewStatusReason?: string;
   reviewState: string;
   scoreConfidence?: string;
   secondaryAction?: ReactNode;
@@ -435,6 +436,7 @@ export function OfferCard({
   requestedThreshold,
   reviewFactorCodes,
   reviewNextStep,
+  reviewStatusReason,
   reviewState,
   scoreConfidence,
   secondaryAction,
@@ -531,6 +533,11 @@ export function OfferCard({
       {reviewNextStep ? (
         <p className="listing-next-step">
           <strong>Next step:</strong> {reviewNextStep}
+        </p>
+      ) : null}
+      {reviewStatusReason ? (
+        <p className="listing-next-step">
+          <strong>Why this status:</strong> {reviewStatusReason}
         </p>
       ) : null}
       <p className="review-state">{reviewState}</p>

@@ -245,6 +245,9 @@ export default async function WorkedExamplePage({ params }: WorkedExamplePagePro
                 </div>
                 <h3>{card.label}</h3>
                 <p className="route-text">{card.summary}</p>
+                <p className="review-status-reason">
+                  <strong>Why this status:</strong> {card.statusReason}
+                </p>
                 <div className="review-factor-list" aria-label={`${card.label} factor codes`}>
                   {card.factorCodes.map((factorCode) => (
                     <span key={factorCode}>{factorCode}</span>
