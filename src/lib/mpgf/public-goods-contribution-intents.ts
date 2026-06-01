@@ -25,6 +25,12 @@ export const MPGF_PUBLIC_GOODS_EVERY_ORG_DONATE_LINK_PATH =
 export const MPGF_PUBLIC_GOODS_EVERY_ORG_PARTNER_WEBHOOK_PATH =
   "/api/mpgf/every-org/webhook";
 
+export const MPGF_PUBLIC_GOODS_STRIPE_SETUP_INTENT_PATH =
+  "/api/mpgf/stripe/setup-intent";
+
+export const MPGF_PUBLIC_GOODS_STRIPE_CONDITIONAL_PAYMENT_INTENT_PATH =
+  "/api/mpgf/stripe/conditional-payment-intents";
+
 export type MpgfPublicGoodsContributionMode =
   | "every_org_fast_route"
   | "stripe_setup_intent_saved_commitment"
@@ -190,6 +196,8 @@ export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgf
         verification: "setup_intent_first_then_payment_intent_after_threshold_review_challenge",
         custodyMode: "stripe_provider_state_not_platform_custody",
         rawCardDataStored: false,
+        setupIntentPath: MPGF_PUBLIC_GOODS_STRIPE_SETUP_INTENT_PATH,
+        conditionalPaymentIntentPath: MPGF_PUBLIC_GOODS_STRIPE_CONDITIONAL_PAYMENT_INTENT_PATH,
       },
       {
         mode: "manual_proof_fallback" as const,
@@ -209,6 +217,8 @@ export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgf
     everyOrgDonateLinkPath: MPGF_PUBLIC_GOODS_EVERY_ORG_DONATE_LINK_PATH,
     everyOrgPartnerWebhookPath: MPGF_PUBLIC_GOODS_EVERY_ORG_PARTNER_WEBHOOK_PATH,
     everyOrgPendingReturnPath: "/mpgf/contribute/every-org/pending",
+    stripeSetupIntentPath: MPGF_PUBLIC_GOODS_STRIPE_SETUP_INTENT_PATH,
+    stripeConditionalPaymentIntentPath: MPGF_PUBLIC_GOODS_STRIPE_CONDITIONAL_PAYMENT_INTENT_PATH,
     manualEvidenceFallbackPath: "/api/mpgf/evidence/manual",
     legacyManualEvidenceFallbackPath: "/api/mpgf/contributions/manual-evidence",
     stateObjects: [
@@ -217,6 +227,8 @@ export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgf
       "payment_authorization",
       "provider_payment_event",
       "every_org_partner_webhook_event",
+      "stripe_setup_intent_saved_commitment",
+      "stripe_conditional_payment_intent_after_gates",
     ],
     guarantees: [
       "identity verification precedes provider authorization",

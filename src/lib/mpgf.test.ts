@@ -170,6 +170,13 @@ import {
   recordMpgfEveryOrgPartnerWebhook,
 } from "./mpgf/public-goods-every-org";
 import {
+  MPGF_PUBLIC_GOODS_STRIPE_SETUP_INTENT_POLICY,
+  MPGF_PUBLIC_GOODS_STRIPE_SETUP_INTENT_PRIVACY_POLICY,
+  buildMpgfStripeConditionalPaymentIntentPlan,
+  createMpgfStripeSavedCommitmentSetup,
+  recordMpgfStripeSavedCommitmentWebhook,
+} from "./mpgf/public-goods-stripe-commitments";
+import {
   MPGF_PUBLIC_GOODS_GOVERNANCE_PRIVACY_POLICY,
   getMpgfPublicGoodsGovernanceApi,
 } from "./mpgf/public-goods-governance";
@@ -923,10 +930,14 @@ test("MPGF contribution intents verify identity before conditional payment autho
     "payment_authorization",
     "provider_payment_event",
     "every_org_partner_webhook_event",
+    "stripe_setup_intent_saved_commitment",
+    "stripe_conditional_payment_intent_after_gates",
   ]);
   assert.equal(contributionFlow.everyOrgDonateLinkPath, "/api/mpgf/every-org/donate-link");
   assert.equal(contributionFlow.everyOrgPartnerWebhookPath, "/api/mpgf/every-org/webhook");
   assert.equal(contributionFlow.everyOrgPendingReturnPath, "/mpgf/contribute/every-org/pending");
+  assert.equal(contributionFlow.stripeSetupIntentPath, "/api/mpgf/stripe/setup-intent");
+  assert.equal(contributionFlow.stripeConditionalPaymentIntentPath, "/api/mpgf/stripe/conditional-payment-intents");
   assert.equal(intent.paymentState, "intent_created");
   assert.equal(intent.paymentMode, "stripe_setup_intent_saved_commitment");
   assert.equal(intent.countingState, "preview_only");
@@ -1103,6 +1114,191 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
     "jane@example.org",
     "Jane",
     "private donor note",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("MPGF Stripe saved commitments use SetupIntent-first before conditional PaymentIntent creation", () => {
+  const setup = createMpgfStripeSavedCommitmentSetup({
+    amountCents: 22_500,
+    campaignId: "campaign-existential-risk-resilience",
+    pledgeIntentId: "pledge-intent-private-stripe-001",
+    providerCustomerRef: "cus_private_001",
+    providerPaymentMethodRef: "pm_private_001",
+    providerSetupIntentRef: "seti_private_001",
+    userRef: "private-stripe-user-001",
+  });
+  const setupWebhook = recordMpgfStripeSavedCommitmentWebhook(
+    {
+      id: "evt_private_setup_001",
+      type: "setup_intent.succeeded",
+      data: {
+        object: {
+          id: "seti_private_001",
+          object: "setup_intent",
+          customer: "cus_private_001",
+          payment_method: "pm_private_001",
+          status: "succeeded",
+          metadata: setup.setupIntentCreateParams.metadata,
+        },
+      },
+    },
+    {
+      signatureVerified: true,
+      receivedAt: "2026-06-01T12:06:00.000Z",
+    },
+  );
+  const blockedPlan = buildMpgfStripeConditionalPaymentIntentPlan({
+    amountCents: setup.amountCents,
+    campaignId: setup.campaignId,
+    conditionalPledgeId: setup.conditionalPledgeId,
+    gateState: {
+      roundParametersLocked: true,
+      thresholdAmountCleared: true,
+      supporterCountCleared: true,
+      reviewApproved: true,
+      challengeWindowClosed: false,
+    },
+    pledgeIntentId: setup.pledgeIntentId,
+    providerCustomerRef: "cus_private_001",
+    providerPaymentMethodRef: "pm_private_001",
+    providerSetupIntentRef: "seti_private_001",
+  });
+  const payablePlan = buildMpgfStripeConditionalPaymentIntentPlan({
+    amountCents: setup.amountCents,
+    campaignId: setup.campaignId,
+    conditionalPledgeId: setup.conditionalPledgeId,
+    gateState: {
+      roundParametersLocked: true,
+      thresholdAmountCleared: true,
+      supporterCountCleared: true,
+      reviewApproved: true,
+      challengeWindowClosed: true,
+    },
+    pledgeIntentId: setup.pledgeIntentId,
+    providerCustomerRef: "cus_private_001",
+    providerPaymentMethodRef: "pm_private_001",
+    providerSetupIntentRef: "seti_private_001",
+  });
+  const paymentWebhook = recordMpgfStripeSavedCommitmentWebhook(
+    {
+      id: "evt_private_payment_001",
+      type: "payment_intent.succeeded",
+      data: {
+        object: {
+          id: "pi_private_001",
+          object: "payment_intent",
+          customer: "cus_private_001",
+          payment_method: "pm_private_001",
+          status: "succeeded",
+          metadata: payablePlan.metadata,
+        },
+      },
+    },
+    {
+      signatureVerified: true,
+      receivedAt: "2026-06-01T12:07:00.000Z",
+    },
+  );
+  const rejectedWebhook = recordMpgfStripeSavedCommitmentWebhook(
+    {
+      id: "evt_private_setup_002",
+      type: "setup_intent.succeeded",
+      data: {
+        object: {
+          id: "seti_private_002",
+          customer: "cus_private_002",
+          payment_method: "pm_private_002",
+          status: "succeeded",
+          metadata: setup.setupIntentCreateParams.metadata,
+        },
+      },
+    },
+    {
+      signatureVerified: false,
+    },
+  );
+  const serialized = JSON.stringify({ setup, setupWebhook, blockedPlan, payablePlan, paymentWebhook, rejectedWebhook });
+  const setupRoute = readFileSync("src/app/api/mpgf/stripe/setup-intent/route.ts", "utf8");
+  const workerRoute = readFileSync("src/app/api/mpgf/stripe/conditional-payment-intents/route.ts", "utf8");
+  const stripeWebhookRoute = readFileSync("src/app/api/mpgf/providers/stripe/webhook/route.ts", "utf8");
+  const realMoney = readFileSync("src/lib/mpgf/real-money.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260601_mpgf_stripe_setup_intent_commitments.sql", "utf8");
+
+  assert.equal(setup.policy, MPGF_PUBLIC_GOODS_STRIPE_SETUP_INTENT_POLICY);
+  assert.equal(setup.privacyPolicy, MPGF_PUBLIC_GOODS_STRIPE_SETUP_INTENT_PRIVACY_POLICY);
+  assert.equal(setup.setupIntentUsage, "off_session");
+  assert.equal(setup.setupIntentCreateParams.usage, "off_session");
+  assert.equal(setup.setupIntentCreateParams.automaticPaymentMethods, true);
+  assert.equal(setup.setupIntentCreateParams.metadata.purpose, "mpgf_public_goods_saved_commitment");
+  assert.equal(setup.setupIntentCreateParams.metadata.finalPayoutAuthorized, "false");
+  assert.equal(setup.createsChargeImmediately, false);
+  assert.equal(setup.longLivedManualCardHold, false);
+  assert.equal(setup.paymentIntentCreatedBeforeGates, false);
+  assert.equal(setup.rawCardDataStored, false);
+  assert.equal(setup.requiresStripeSignatureWebhook, true);
+  assert.equal(setup.futureUseAgreement.explicitConsentRequired, true);
+  assert.equal(setup.futureUseAgreement.chargeTiming, "only_after_threshold_review_and_challenge_gates_clear");
+  assert.equal(setup.finalPayoutAuthorized, false);
+  assert.match(setup.userRefHash, /^sha256:/);
+  assert.match(setup.providerCustomerIdHash ?? "", /^sha256:/);
+  assert.match(setup.providerSetupIntentIdHash ?? "", /^sha256:/);
+  assert.match(setup.providerPaymentMethodIdHash ?? "", /^sha256:/);
+  assert.match(setup.calcHash, /^sha256:/);
+  assert.equal(setupWebhook.status, "recorded");
+  assert.equal(setupWebhook.eventState, "setup_succeeded_token_ready");
+  assert.equal(setupWebhook.signatureVerified, true);
+  assert.equal(setupWebhook.stateChangeAllowed, true);
+  assert.equal(setupWebhook.paymentMethodToken?.rawCardDataStored, false);
+  assert.match(setupWebhook.paymentMethodToken?.providerCustomerIdHash ?? "", /^sha256:/);
+  assert.match(setupWebhook.providerEventIdHash, /^sha256:/);
+  assert.equal(setupWebhook.finalPayoutAuthorized, false);
+  assert.equal(blockedPlan.paymentIntentCreationAllowed, false);
+  assert.deepEqual(blockedPlan.blockedBy, ["challenge_window_open"]);
+  assert.equal(payablePlan.paymentIntentCreationAllowed, true);
+  assert.equal(payablePlan.setupIntentFirst, true);
+  assert.equal(payablePlan.confirmOffSession, true);
+  assert.equal(payablePlan.captureMethod, "automatic");
+  assert.equal(payablePlan.longLivedManualCardHold, false);
+  assert.equal(payablePlan.requiresStripeSignatureWebhookBeforeCounting, true);
+  assert.equal(payablePlan.finalPayoutAuthorized, false);
+  assert.match(payablePlan.idempotencyKeyHash, /^sha256:/);
+  assert.match(payablePlan.calcHash, /^sha256:/);
+  assert.equal(paymentWebhook.status, "recorded");
+  assert.equal(paymentWebhook.eventState, "payment_intent_succeeded_pending_review");
+  assert.equal(paymentWebhook.reviewRequiredBeforeCounting, true);
+  assert.equal(paymentWebhook.finalPayoutAuthorized, false);
+  assert.equal(rejectedWebhook.status, "rejected");
+  assert.equal(rejectedWebhook.stateChangeAllowed, false);
+  assert.match(setupRoute, /setupIntents\.create/);
+  assert.match(setupRoute, /usage: "off_session"/);
+  assert.match(setupRoute, /createsChargeImmediately: false/);
+  assert.match(workerRoute, /MPGF_STRIPE_CONDITIONAL_WORKER_SECRET/);
+  assert.match(workerRoute, /paymentIntents\.create/);
+  assert.match(workerRoute, /off_session: true/);
+  assert.match(workerRoute, /finalPayoutAuthorized: false/);
+  assert.match(stripeWebhookRoute, /Stripe webhook signature/);
+  assert.match(realMoney, /isMpgfStripeSavedCommitmentEvent/);
+  assert.match(realMoney, /recordMpgfStripeSavedCommitmentWebhook/);
+  assert.match(migration, /mpgf_stripe_saved_commitments/);
+  assert.match(migration, /mpgf_stripe_saved_commitment_events/);
+  assert.match(migration, /mpgf_stripe_conditional_payment_intent_runs/);
+  assert.match(migration, /creates_charge_immediately boolean not null default false/);
+  assert.match(migration, /long_lived_manual_card_hold boolean not null default false/);
+  assert.match(migration, /payment_intent_created_before_gates boolean not null default false/);
+  assert.match(migration, /payment_intent_creation_allowed = false/);
+  assert.match(migration, /thresholdAmountCleared/);
+  assert.match(migration, /challengeWindowClosed/);
+
+  for (const forbidden of [
+    "private-stripe-user-001",
+    "cus_private_001",
+    "pm_private_001",
+    "seti_private_001",
+    "pi_private_001",
+    "evt_private_setup_001",
+    "evt_private_payment_001",
   ]) {
     assert.equal(serialized.includes(forbidden), false);
   }

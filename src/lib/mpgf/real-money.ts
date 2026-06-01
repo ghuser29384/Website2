@@ -9,6 +9,10 @@ import { getStripe, getStripeWebhookSecret, hasStripeEnv } from "@/lib/stripe";
 
 import { demoCycle } from "./data";
 import { normalizeMpgfManualEvidenceSecurity } from "./public-goods-evidence-security";
+import {
+  isMpgfStripeSavedCommitmentEvent,
+  recordMpgfStripeSavedCommitmentWebhook,
+} from "./public-goods-stripe-commitments";
 import type {
   MpgfManualEvidenceActionResult,
   MpgfManualEvidenceProvider,
@@ -1192,6 +1196,16 @@ export async function handleMpgfStripeWebhookEvent(input: {
       handled = await recordMpgfSubscriptionCancellation(input.event.data.object as Stripe.Subscription);
     } else if (input.event.type === "charge.refunded") {
       handled = await recordMpgfRefundFromCharge(input.event.data.object as Stripe.Charge);
+    } else if (
+      isMpgfStripeSavedCommitmentEvent(
+        input.event.type,
+        readRecord((input.event.data.object as unknown as Record<string, unknown> | undefined)?.metadata) ?? {},
+      )
+    ) {
+      recordMpgfStripeSavedCommitmentWebhook(input.event as unknown as Record<string, unknown>, {
+        signatureVerified: input.signatureVerified,
+      });
+      handled = true;
     }
 
     await supabase
