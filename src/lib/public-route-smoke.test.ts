@@ -785,6 +785,13 @@ test("background source connector permissions stay field-limited and raw-ingesti
     "src/app/api/background/profile-signals/recompute/route.ts",
   );
   const introPacketsRoute = readRepoFile("src/app/api/background/intro-packets/route.ts");
+  const introRequestsRoute = readRepoFile("src/app/api/background/intro-requests/route.ts");
+  const introRequestAppealRoute = readRepoFile(
+    "src/app/api/background/intro-requests/[id]/appeal/route.ts",
+  );
+  const introRequestContactRoute = readRepoFile(
+    "src/app/api/background/intro-requests/[id]/approve-contact/route.ts",
+  );
   const opportunityBriefsRoute = readRepoFile("src/app/api/background/opportunity-briefs/route.ts");
   const opportunityFeedbackRoute = readRepoFile(
     "src/app/api/background/opportunity-briefs/[id]/feedback/route.ts",
@@ -803,6 +810,7 @@ test("background source connector permissions stay field-limited and raw-ingesti
   );
   const backgroundNotificationsSource = readRepoFile("src/lib/background-notifications.ts");
   const opportunityFeedbackSource = readRepoFile("src/lib/background-opportunity-feedback.ts");
+  const introRequestsSource = readRepoFile("src/lib/background-intro-requests.ts");
   const apiRateLimitSource = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const legacyActions = readRepoFile("src/app/actions.ts");
@@ -812,6 +820,9 @@ test("background source connector permissions stay field-limited and raw-ingesti
   );
   const sourceAssistMigrationSource = readRepoFile(
     "supabase/migrations/20260601_background_source_assisted_profile_signals.sql",
+  );
+  const introRequestMigrationSource = readRepoFile(
+    "supabase/migrations/20260601_background_intro_request_workflow.sql",
   );
 
   assert.ok(BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.length >= 6);
@@ -828,6 +839,7 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(dashboardPage, /stores your note with a retention timer/);
   assert.match(dashboardPage, /hasActiveProfileSourcePermission/);
   assert.match(dashboardPage, /formatBackgroundSourcePermissionFieldLabel/);
+  assert.match(dashboardPage, /Contact approvals/);
   assert.match(backgroundActions, /validateBackgroundSourcePermission/);
   assert.match(backgroundActions, /allowed_field_keys: permission\.allowedFieldKeys/);
   assert.match(backgroundActions, /retention_expires_at: permission\.retentionExpiresAt/);
@@ -865,6 +877,18 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(introPacketsRoute, /background_intro_packet_write/);
   assert.match(introPacketsRoute, /buildMoralTradeApiRateLimitResponse/);
   assert.match(introPacketsRoute, /outreachSent: false/);
+  assert.match(introRequestsRoute, /background_intro_packet_write/);
+  assert.match(introRequestsRoute, /evaluateBackgroundIntroRequestCadence/);
+  assert.match(introRequestsRoute, /intro_request_probe_pressure/);
+  assert.match(introRequestsRoute, /privateDetailsReturned: false/);
+  assert.match(introRequestAppealRoute, /validateBackgroundIntroAppealRequest/);
+  assert.match(introRequestAppealRoute, /intro_request_appeal_requested/);
+  assert.match(introRequestAppealRoute, /outreachSent: false/);
+  assert.match(introRequestContactRoute, /validateBackgroundContactApprovalStepUp/);
+  assert.match(introRequestContactRoute, /isBackgroundIntroContactApprovalAllowed/);
+  assert.match(introRequestContactRoute, /contactDetailsReturned: false/);
+  assert.match(introRequestsSource, /BACKGROUND_INTRO_REQUEST_SIMILAR_WEEKLY_LIMIT/);
+  assert.match(introRequestsSource, /fresh one-hour session token window/);
   assert.match(opportunityBriefsRoute, /background_opportunity_brief_read/);
   assert.match(opportunityBriefsRoute, /serializeOpportunityBriefCard/);
   assert.match(opportunityBriefsRoute, /Exact wishes, private asks, source notes, constraints, and contact details/);
@@ -895,6 +919,9 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(apiContractProfile, /background_source_summary_approve/);
   assert.match(apiContractProfile, /background_profile_signal_recompute/);
   assert.match(apiContractProfile, /background_intro_packet_create/);
+  assert.match(apiContractProfile, /background_intro_request_create/);
+  assert.match(apiContractProfile, /background_intro_request_appeal/);
+  assert.match(apiContractProfile, /background_intro_request_approve_contact/);
   assert.match(apiContractProfile, /background_opportunity_brief_list/);
   assert.match(apiContractProfile, /background_opportunity_list/);
   assert.match(apiContractProfile, /background_opportunity_feedback_create/);
@@ -944,6 +971,8 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(schemaSource, /background_opportunity_briefs_feedback_reason_check/);
   assert.match(schemaSource, /background_profile_signals/);
   assert.match(schemaSource, /background_shadow_runs/);
+  assert.match(schemaSource, /background_intro_packets_appeal_status_check/);
+  assert.match(schemaSource, /contact_approval_requires_fresh_mfa/);
   assert.match(schemaSource, /redaction_report/);
   assert.match(schemaSource, /source_cooldown_hours/);
   assert.match(schemaSource, /last_discovery_sent_at/);
@@ -951,6 +980,8 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(migrationSource, /source_connections_raw_ingestion_disabled_check/);
   assert.match(sourceAssistMigrationSource, /background_profile_signals/);
   assert.match(sourceAssistMigrationSource, /background_shadow_runs/);
+  assert.match(introRequestMigrationSource, /background_intro_packets_appeal_status_check/);
+  assert.match(introRequestMigrationSource, /background_intro_packets_contact_approval_status_check/);
 });
 
 test("global loading and error states expose route-specific recovery instead of generic dead ends", () => {

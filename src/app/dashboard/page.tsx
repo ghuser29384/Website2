@@ -264,6 +264,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     dashboardData?.introPackets.filter((packet) =>
       ["requested", "under_review", "changes_requested"].includes(packet.review_state),
     ).length ?? 0;
+  const introContactApprovalCount =
+    dashboardData?.introPackets.filter(
+      (packet) => packet.contact_approval_status !== "not_requested",
+    ).length ?? 0;
   const activeSourceSummaryCount =
     dashboardData?.sourceSummaries.filter((summary) => summary.status === "active").length ?? 0;
   const activeProfileSignalCount =
@@ -1210,6 +1214,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 </span>
                 <span className="source-pill">Open briefs: {openOpportunityBriefCount}</span>
                 <span className="source-pill">Intro packets: {introPacketReviewCount}</span>
+                <span className="source-pill">Contact approvals: {introContactApprovalCount}</span>
                 <span className="source-pill">Source summaries: {activeSourceSummaryCount}</span>
                 <span className="source-pill">Approved signals: {activeProfileSignalCount}</span>
                 <span className="source-pill">Draft summaries: {unpromotedShadowRunCount}</span>

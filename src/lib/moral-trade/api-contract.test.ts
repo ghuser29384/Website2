@@ -144,6 +144,35 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "background_intro_request_create" &&
+        route.path === "/api/background/intro-requests" &&
+        route.auth === "authenticated" &&
+        route.rateLimitSurface === "background_intro_packet_write" &&
+        /probe checks/i.test(route.fallback) &&
+        /no disclosure/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_intro_request_appeal" &&
+        route.path === "/api/background/intro-requests/:id/appeal" &&
+        /declined or changes-requested/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_intro_request_approve_contact" &&
+        route.path === "/api/background/intro-requests/:id/approve-contact" &&
+        route.privacyClass === "authenticated_private_step_up" &&
+        /fresh MFA step-up/i.test(route.fallback) &&
+        /never returns contact details/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "background_opportunity_brief_list" &&
         route.path === "/api/background/opportunity-briefs" &&
         route.auth === "authenticated" &&
@@ -196,6 +225,10 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_create_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_request_create_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_request_create_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_request_appeal_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_request_contact_approval_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_brief_list_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_feedback_create_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_feedback_create_response"));

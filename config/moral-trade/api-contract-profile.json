@@ -543,6 +543,42 @@
       "fallback": "Require viewer authentication, concrete purpose, and field-bounded requested details before queueing a reviewed introduction packet; rate-limited requests create no packet and send no outreach."
     },
     {
+      "key": "background_intro_request_create",
+      "method": "POST",
+      "path": "/api/background/intro-requests",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_intro_request_create_request",
+      "responseSchema": "background_intro_request_create_response",
+      "rateLimitSurface": "background_intro_packet_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication, owner-scoped opportunity brief access, field-bounded requested details, and repeated-target probe checks before queueing a reviewed introduction request; rate-limited or probe-limited requests create no packet, no disclosure, and no outreach."
+    },
+    {
+      "key": "background_intro_request_appeal",
+      "method": "POST",
+      "path": "/api/background/intro-requests/:id/appeal",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_intro_request_appeal_request",
+      "responseSchema": "background_intro_request_appeal_response",
+      "rateLimitSurface": "background_intro_packet_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require authenticated participant-scoped intro request access and a declined or changes-requested review state before reopening operator review; duplicate open appeals create no state change and no outreach."
+    },
+    {
+      "key": "background_intro_request_approve_contact",
+      "method": "POST",
+      "path": "/api/background/intro-requests/:id/approve-contact",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private_step_up",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_intro_request_contact_approval_response",
+      "rateLimitSurface": "background_intro_packet_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require authenticated participant-scoped intro request access, reviewer-approved intro state, introduced-stage contact intent, and active fresh MFA step-up before recording contact approval; the response never returns contact details."
+    },
+    {
       "key": "background_opportunity_brief_list",
       "method": "GET",
       "path": "/api/background/opportunity-briefs",
@@ -1411,6 +1447,57 @@
       ]
     },
     {
+      "key": "background_intro_request_create_request",
+      "purpose": "Authenticated reviewed-introduction request with field-bounded details, optional opportunity context, and anti-probing controls.",
+      "fields": [
+        { "key": "purpose", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Concrete purpose for reviewer triage." },
+        { "key": "requestedFieldKeys", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Disclosure-lattice field keys only; unsupported fields are ignored and at least one supported field is required." },
+        { "key": "opportunityBriefId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional viewer-owned opportunity brief used to derive safe match context." },
+        { "key": "counterpartyProfileId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional target profile for repeated-target probe checks and reviewer context." },
+        { "key": "proposedTradeShape", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Structured proposal context for operator review, not an outbound message." },
+        { "key": "privacyConstraints", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Participant-stated boundaries for reviewer triage." }
+      ]
+    },
+    {
+      "key": "background_intro_request_create_response",
+      "purpose": "Private no-store result for a reviewed intro request with no autonomous outreach or disclosure.",
+      "fields": [
+        { "key": "introRequestId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned intro request id backed by the reviewed intro packet workflow." },
+        { "key": "slaDueAt", "type": "iso_datetime", "required": true, "privacy": "private_authenticated", "description": "Operator review SLA target." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "reviewed_intro_request_submitted when the request is queued." },
+        { "key": "outreachSent", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." },
+        { "key": "privateDetailsReturned", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." }
+      ]
+    },
+    {
+      "key": "background_intro_request_appeal_request",
+      "purpose": "Authenticated participant appeal of a declined or changes-requested intro review.",
+      "fields": [
+        { "key": "id", "type": "path_uuid", "required": true, "privacy": "private_authenticated", "description": "Participant-visible intro request id from the route path." },
+        { "key": "reason", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Brief participant reason for operator re-review; raw contact details are not required." }
+      ]
+    },
+    {
+      "key": "background_intro_request_appeal_response",
+      "purpose": "Private no-store result for reopening intro request operator review.",
+      "fields": [
+        { "key": "introRequestId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Participant-visible intro request id." },
+        { "key": "appealStatus", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "requested when operator re-review is queued." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "intro_request_appeal_requested when the appeal is recorded." },
+        { "key": "outreachSent", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." }
+      ]
+    },
+    {
+      "key": "background_intro_request_contact_approval_response",
+      "purpose": "Private no-store result for MFA-gated introduced-stage contact approval.",
+      "fields": [
+        { "key": "introRequestId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Participant-visible intro request id." },
+        { "key": "contactApprovalStatus", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "requester_approved, counterparty_approved, or mutual_approved after participant approval is recorded." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "intro_request_contact_approval_recorded when approval is stored." },
+        { "key": "contactDetailsReturned", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; details move through the introduced-stage disclosure workflow, not this response." }
+      ]
+    },
+    {
       "key": "background_opportunity_brief_list_response",
       "purpose": "Authenticated broad-preview opportunity brief inbox with redacted summaries and no exact private details.",
       "fields": [
@@ -1484,6 +1571,10 @@
     {
       "key": "authenticated_private",
       "rule": "Requires viewer authentication and private no-store cache headers."
+    },
+    {
+      "key": "authenticated_private_step_up",
+      "rule": "Requires viewer authentication, private no-store cache headers, and active fresh MFA step-up before sensitive introduced-stage state changes."
     },
     {
       "key": "privacy_thresholded_public_preview",

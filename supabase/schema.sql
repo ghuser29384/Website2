@@ -5460,10 +5460,39 @@ create table if not exists public.background_intro_packets (
   reveal_capsule text not null default '',
   review_state text not null default 'requested' check (review_state in ('draft', 'requested', 'under_review', 'approved', 'changes_requested', 'declined', 'sent')),
   reviewer_notes text not null default '',
+  appeal_status text not null default 'none' check (appeal_status in ('none', 'requested', 'under_review', 'resolved', 'dismissed')),
+  appeal_reason text not null default '',
+  appealed_at timestamptz,
+  appeal_resolved_at timestamptz,
+  appeal_resolution_note text not null default '',
+  requester_contact_approved_at timestamptz,
+  counterparty_contact_approved_at timestamptz,
+  contact_approval_status text not null default 'not_requested' check (
+    contact_approval_status in ('not_requested', 'requester_approved', 'counterparty_approved', 'mutual_approved', 'withdrawn')
+  ),
+  contact_approval_requires_fresh_mfa boolean not null default true,
   sla_due_at timestamptz not null default (timezone('utc', now()) + interval '24 hours'),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
   check (counterparty_profile_id is null or requester_profile_id <> counterparty_profile_id)
+);
+
+alter table public.background_intro_packets add column if not exists appeal_status text not null default 'none';
+alter table public.background_intro_packets add column if not exists appeal_reason text not null default '';
+alter table public.background_intro_packets add column if not exists appealed_at timestamptz;
+alter table public.background_intro_packets add column if not exists appeal_resolved_at timestamptz;
+alter table public.background_intro_packets add column if not exists appeal_resolution_note text not null default '';
+alter table public.background_intro_packets add column if not exists requester_contact_approved_at timestamptz;
+alter table public.background_intro_packets add column if not exists counterparty_contact_approved_at timestamptz;
+alter table public.background_intro_packets add column if not exists contact_approval_status text not null default 'not_requested';
+alter table public.background_intro_packets add column if not exists contact_approval_requires_fresh_mfa boolean not null default true;
+alter table public.background_intro_packets drop constraint if exists background_intro_packets_appeal_status_check;
+alter table public.background_intro_packets add constraint background_intro_packets_appeal_status_check check (
+  appeal_status in ('none', 'requested', 'under_review', 'resolved', 'dismissed')
+);
+alter table public.background_intro_packets drop constraint if exists background_intro_packets_contact_approval_status_check;
+alter table public.background_intro_packets add constraint background_intro_packets_contact_approval_status_check check (
+  contact_approval_status in ('not_requested', 'requester_approved', 'counterparty_approved', 'mutual_approved', 'withdrawn')
 );
 
 create table if not exists public.background_grant_receipts (
@@ -5632,6 +5661,14 @@ on public.background_intro_packets (requester_profile_id, review_state, created_
 create index if not exists background_intro_packets_counterparty_idx
 on public.background_intro_packets (counterparty_profile_id, review_state, created_at desc)
 where counterparty_profile_id is not null;
+
+create index if not exists background_intro_packets_appeal_idx
+on public.background_intro_packets (appeal_status, sla_due_at asc, updated_at desc)
+where appeal_status <> 'none';
+
+create index if not exists background_intro_packets_contact_approval_idx
+on public.background_intro_packets (contact_approval_status, updated_at desc)
+where contact_approval_status <> 'not_requested';
 
 create index if not exists background_source_summaries_profile_status_idx
 on public.background_source_summaries (profile_id, status, retention_expires_at asc);

@@ -6,6 +6,7 @@ import {
   BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS,
   normalizeBackgroundSourcePermissionFields,
 } from "@/lib/background-source-permissions";
+import { normalizeDisclosureFieldKeys } from "@/lib/background-disclosure";
 import type { Database } from "@/lib/supabase/database.types";
 
 type OpportunityBriefInsert =
@@ -184,7 +185,7 @@ export function validateIntroPacketInput({
   requestedFieldKeys: string[];
 }) {
   const errors: string[] = [];
-  const fields = uniqueStrings(requestedFieldKeys).slice(0, 8);
+  const fields = normalizeDisclosureFieldKeys(uniqueStrings(requestedFieldKeys)).slice(0, 8);
 
   if (purpose.trim().length < 12) {
     errors.push("Add a concrete purpose for the reviewed introduction packet.");

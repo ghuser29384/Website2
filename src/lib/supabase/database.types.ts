@@ -2097,6 +2097,20 @@ export interface Database {
             | "declined"
             | "sent";
           reviewer_notes: string;
+          appeal_status: "none" | "requested" | "under_review" | "resolved" | "dismissed";
+          appeal_reason: string;
+          appealed_at: string | null;
+          appeal_resolved_at: string | null;
+          appeal_resolution_note: string;
+          requester_contact_approved_at: string | null;
+          counterparty_contact_approved_at: string | null;
+          contact_approval_status:
+            | "not_requested"
+            | "requester_approved"
+            | "counterparty_approved"
+            | "mutual_approved"
+            | "withdrawn";
+          contact_approval_requires_fresh_mfa: boolean;
           sla_due_at: string;
           created_at: string;
           updated_at: string;
@@ -2121,6 +2135,20 @@ export interface Database {
             | "declined"
             | "sent";
           reviewer_notes?: string;
+          appeal_status?: "none" | "requested" | "under_review" | "resolved" | "dismissed";
+          appeal_reason?: string;
+          appealed_at?: string | null;
+          appeal_resolved_at?: string | null;
+          appeal_resolution_note?: string;
+          requester_contact_approved_at?: string | null;
+          counterparty_contact_approved_at?: string | null;
+          contact_approval_status?:
+            | "not_requested"
+            | "requester_approved"
+            | "counterparty_approved"
+            | "mutual_approved"
+            | "withdrawn";
+          contact_approval_requires_fresh_mfa?: boolean;
           sla_due_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -2143,6 +2171,20 @@ export interface Database {
             | "declined"
             | "sent";
           reviewer_notes?: string;
+          appeal_status?: "none" | "requested" | "under_review" | "resolved" | "dismissed";
+          appeal_reason?: string;
+          appealed_at?: string | null;
+          appeal_resolved_at?: string | null;
+          appeal_resolution_note?: string;
+          requester_contact_approved_at?: string | null;
+          counterparty_contact_approved_at?: string | null;
+          contact_approval_status?:
+            | "not_requested"
+            | "requester_approved"
+            | "counterparty_approved"
+            | "mutual_approved"
+            | "withdrawn";
+          contact_approval_requires_fresh_mfa?: boolean;
           sla_due_at?: string;
           updated_at?: string;
         };

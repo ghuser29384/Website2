@@ -15,7 +15,12 @@ import {
   type BackgroundLocalDraftSyncResult,
   normalizeBackgroundLocalDraftBody,
 } from "@/lib/background-local-drafts";
+import {
+  evaluateBackgroundIntroRequestCadence,
+  getBackgroundIntroRequestWindowStart,
+} from "@/lib/background-intro-requests";
 import { getBackgroundTokens } from "@/lib/background-networking";
+import { recordBackgroundQueryRiskSignal } from "@/lib/background-operations";
 import {
   buildBackgroundOpportunityFeedbackRow,
   getOpportunityBriefStatusForFeedback,
@@ -583,6 +588,54 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
   const matchId = readOptional(formData, "match_id") || null;
   const opportunityBriefId = readOptional(formData, "opportunity_brief_id") || null;
   const counterpartyProfileId = readOptional(formData, "counterparty_profile_id") || null;
+  const supabase = await createClient();
+  let serviceClient: ReturnType<typeof createServiceClient> | null = null;
+
+  try {
+    serviceClient = createServiceClient();
+  } catch {
+    serviceClient = null;
+  }
+
+  if (counterpartyProfileId) {
+    const { data: recentRequests, error: recentRequestsError } = await supabase
+      .from("background_intro_packets")
+      .select("created_at, review_state")
+      .eq("requester_profile_id", viewer.authUser.id)
+      .eq("counterparty_profile_id", counterpartyProfileId)
+      .gte("created_at", getBackgroundIntroRequestWindowStart())
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (recentRequestsError) {
+      redirectWithMessage(returnTo, "error", recentRequestsError.message);
+    }
+
+    const cadence = evaluateBackgroundIntroRequestCadence({
+      recentRequests: recentRequests ?? [],
+    });
+
+    if (serviceClient && cadence.riskLevel !== "none") {
+      await recordBackgroundQueryRiskSignal({
+        metadata: {
+          openRequestCount: cadence.openRequestCount,
+          recentRequestCount: cadence.recentRequestCount,
+          requestedFieldCount: validation.requestedFieldKeys.length,
+        },
+        profileId: viewer.authUser.id,
+        severity: cadence.allowed ? "low" : "medium",
+        signalType: "intro_request_probe_pressure",
+        summary:
+          "An intro-request pattern approached or crossed the repeated-target privacy threshold.",
+        supabase: serviceClient,
+      });
+    }
+
+    if (!cadence.allowed) {
+      redirectWithMessage(returnTo, "error", cadence.blockers.join(" "));
+    }
+  }
+
   const packet = buildIntroPacketRow({
     counterpartyProfileId,
     matchId,
@@ -596,8 +649,6 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
     },
     requesterProfileId: viewer.authUser.id,
   });
-
-  const supabase = await createClient();
   const { data: packetRow, error } = await supabase
     .from("background_intro_packets")
     .insert(packet)
@@ -635,14 +686,6 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
     })
     .select("id")
     .maybeSingle();
-
-  let serviceClient: ReturnType<typeof createServiceClient> | null = null;
-
-  try {
-    serviceClient = createServiceClient();
-  } catch {
-    serviceClient = null;
-  }
 
   if (serviceClient) {
     await serviceClient.from("match_audit_events").insert({
