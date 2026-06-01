@@ -165,6 +165,62 @@ interface EvidenceProvenancePreflightItem {
   status: MoralTradeVerificationStepStatus;
 }
 
+interface CopilotReviewOutput {
+  status: string;
+  completeness: {
+    missing_required_fields: string[];
+    underspecified_fields: string[];
+    policy_conflicts: string[];
+  };
+  match_explanation: {
+    confidence_band: string;
+    factor_codes: string[];
+    redactions_applied: string[];
+  };
+  verification_loop: Array<{
+    blocks_matchable: boolean;
+    detail: string;
+    key: string;
+    label: string;
+    status: string;
+  }>;
+  clarification_questions: Array<{
+    field: string;
+    question: string;
+  }>;
+  next_step_checklist: string[];
+  cited_evidence_table: Array<{
+    citation: string;
+    claim: string;
+    evidence_type: string;
+    reviewer_note: string;
+    status: string;
+  }>;
+  reviewer_summary: string;
+}
+
+interface CopilotReviewResponse {
+  blockers?: string[];
+  checkedAt?: string;
+  decisioningMode?: string;
+  evidenceMetadataSummary?: {
+    acceptedCount: number;
+    blockers: string[];
+    ignoredFieldCount: number;
+    rejectedCount: number;
+  };
+  fallback?: string;
+  ok: boolean;
+  output?: CopilotReviewOutput;
+  stateMutation?: boolean;
+}
+
+type CopilotReviewState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { message: string; status: "error" }
+  | { response: CopilotReviewResponse; status: "ready" };
+
 interface TextareaTemplateSuggestion {
   body: string;
   keywords: readonly string[];
@@ -835,6 +891,7 @@ export function OfferCreateForm({
   const [trustLevel, setTrustLevel] = useState(initialTemplate?.trustLevel ?? "3");
   const [antiThreatCertified, setAntiThreatCertified] = useState(false);
   const [verificationMetadataAcknowledged, setVerificationMetadataAcknowledged] = useState(false);
+  const [copilotReview, setCopilotReview] = useState<CopilotReviewState>({ status: "idle" });
 
   const isOffset = mode === "offset";
   const isPledge = mode === "pledge";
@@ -1344,6 +1401,72 @@ export function OfferCreateForm({
     }
   }
 
+  async function runSchemaBoundCopilotReview() {
+    setCopilotReview({ status: "loading" });
+
+    const evidenceLocator = evidenceUrl.trim();
+    const evidenceMetadata = evidenceLocator
+      ? [
+          {
+            id: "draft-evidence-locator",
+            claim: "Participant supplied a draft evidence locator for reviewer inspection.",
+            evidenceType: "evidence_locator",
+            citation: evidenceLocator.startsWith("http")
+              ? evidenceLocator
+              : "evidence:draft-evidence-locator",
+            status: "submitted",
+            scope: "factual_action",
+            redactionLevel: "public",
+            submittedAt: new Date().toISOString(),
+          },
+        ]
+      : [];
+
+    try {
+      const response = await fetch("/api/moral-trade/copilot/review", {
+        body: JSON.stringify({
+          structured_draft: {
+            format: mode,
+            offeredCause,
+            requestedCause,
+            offeredAction: offerAction,
+            requestedAction: requestAction,
+            baselineStatement,
+            duration: reviewPeriod,
+            exitConditions: exitCondition,
+            verificationMethod: reviewVerificationMethod,
+            publicDescription: notes,
+            evidenceUrl,
+            participantImportance: Number(offerImpact),
+            counterpartyThreshold: Number(minCounterpartyImpact),
+          },
+          citations: ["proposal:draft"],
+          evidence_metadata: evidenceMetadata,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as CopilotReviewResponse | null;
+
+      if (!payload) {
+        setCopilotReview({
+          message: "The copilot review returned an unreadable response. Use the deterministic preview instead.",
+          status: "error",
+        });
+        return;
+      }
+
+      setCopilotReview({ response: payload, status: "ready" });
+    } catch {
+      setCopilotReview({
+        message: "The copilot review could not be reached. The deterministic preview still applies.",
+        status: "error",
+      });
+    }
+  }
+
   return (
     <article className="panel auth-card">
       <div className="section-head auth-head">
@@ -1692,6 +1815,109 @@ export function OfferCreateForm({
             <strong>Reviewer summary</strong>
             <p>{protocolReview.reviewerSummary}</p>
           </div>
+        </div>
+
+        <div className="schema-copilot-panel" aria-live="polite">
+          <div className="schema-copilot-head">
+            <div>
+              <strong>Schema-bound copilot check</strong>
+              <p>
+                Runs the public copilot review contract against this draft. It returns structured
+                critique only and reports <code>stateMutation false</code>.
+              </p>
+            </div>
+            <button
+              className="button button-secondary button-mini"
+              disabled={copilotReview.status === "loading"}
+              type="button"
+              onClick={runSchemaBoundCopilotReview}
+            >
+              {copilotReview.status === "loading" ? "Checking..." : "Check draft"}
+            </button>
+          </div>
+
+          {copilotReview.status === "idle" ? (
+            <p className="panel-note">
+              Use this after editing fields to compare the local preview with the API contract
+              that reviewers and public validators inspect.
+            </p>
+          ) : null}
+
+          {copilotReview.status === "error" ? (
+            <p className="protocol-conflict-note">{copilotReview.message}</p>
+          ) : null}
+
+          {copilotReview.status === "ready" ? (
+            <div className="schema-copilot-result">
+              <div className="schema-copilot-status-row">
+                <span className={copilotReview.response.ok ? "badge badge-success" : "badge badge-warning"}>
+                  {copilotReview.response.ok ? "contract passed" : "contract blockers"}
+                </span>
+                <span>Mode {copilotReview.response.decisioningMode ?? "deterministic_draft_review_only"}</span>
+                <span>stateMutation {String(copilotReview.response.stateMutation ?? false)}</span>
+              </div>
+
+              {copilotReview.response.output ? (
+                <div className="protocol-review-grid">
+                  <div>
+                    <strong>Copilot status</strong>
+                    <p>{copilotReview.response.output.status.replaceAll("_", " ")}</p>
+                    <small>
+                      Confidence band{" "}
+                      {copilotReview.response.output.match_explanation.confidence_band}
+                    </small>
+                  </div>
+                  <div>
+                    <strong>Bounded questions</strong>
+                    {copilotReview.response.output.clarification_questions.length ? (
+                      <ul className="clean-list">
+                        {copilotReview.response.output.clarification_questions.map((item) => (
+                          <li key={`${item.field}:${item.question}`}>
+                            {item.field}: {item.question}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p>No field-tied questions returned.</p>
+                    )}
+                  </div>
+                  <div>
+                    <strong>Reviewer summary</strong>
+                    <p>{copilotReview.response.output.reviewer_summary}</p>
+                  </div>
+                </div>
+              ) : null}
+
+              {copilotReview.response.output ? (
+                <div className="schema-copilot-detail-grid">
+                  <div>
+                    <strong>Copilot next steps</strong>
+                    <ul className="clean-list">
+                      {copilotReview.response.output.next_step_checklist.map((step) => (
+                        <li key={step}>{step}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <strong>Cited metadata</strong>
+                    <ul className="clean-list">
+                      {copilotReview.response.output.cited_evidence_table.map((row) => (
+                        <li key={`${row.citation}:${row.claim}`}>
+                          {row.status}: {row.claim} ({row.citation})
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ) : null}
+
+              {copilotReview.response.blockers?.length ? (
+                <div className="protocol-conflict-note">
+                  <strong>Contract blockers:</strong> {copilotReview.response.blockers.join(", ")}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </section>
 

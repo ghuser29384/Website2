@@ -3314,6 +3314,17 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(offerForm, /Reviewer summary/);
   assert.match(offerForm, /protocolReview\.clarificationQuestions/);
   assert.match(offerForm, /protocolReview\.reviewerSummary/);
+  assert.match(offerForm, /CopilotReviewState/);
+  assert.match(offerForm, /runSchemaBoundCopilotReview/);
+  assert.match(offerForm, /\/api\/moral-trade\/copilot\/review/);
+  assert.match(offerForm, /structured_draft/);
+  assert.match(offerForm, /evidence_metadata/);
+  assert.match(offerForm, /Schema-bound copilot check/);
+  assert.match(offerForm, /stateMutation false/);
+  assert.match(offerForm, /decisioningMode/);
+  assert.match(offerForm, /copilotReview\.response\.output\.clarification_questions/);
+  assert.match(offerForm, /copilotReview\.response\.output\.cited_evidence_table/);
+  assert.match(offerForm, /copilotReview\.response\.output\.reviewer_summary/);
   assert.match(offerNewPage, /getMoralTradeProvenanceContract/);
   assert.match(offerNewPage, /provenanceValidationRules=\{provenanceValidationRules\}/);
   assert.match(offerForm, /completedWizardSteps/);
@@ -3335,6 +3346,8 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(globalCss, /protocol-review-panel/);
   assert.match(globalCss, /protocol-verification-list/);
   assert.match(globalCss, /protocol-provenance-preflight/);
+  assert.match(globalCss, /schema-copilot-panel/);
+  assert.match(globalCss, /schema-copilot-detail-grid/);
   assert.match(globalCss, /protocol-provenance-list/);
   assert.match(globalCss, /protocol-verification-step/);
   assert.match(globalCss, /protocol-workflow-card/);

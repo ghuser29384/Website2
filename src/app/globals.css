@@ -6041,6 +6041,61 @@ output {
   line-height: 1.4;
 }
 
+.schema-copilot-panel {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #f8fbfd;
+}
+
+.schema-copilot-head {
+  display: flex;
+  gap: 1rem;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.schema-copilot-head p,
+.schema-copilot-result p,
+.schema-copilot-result small {
+  margin: 0.28rem 0 0;
+  color: var(--ink-soft);
+}
+
+.schema-copilot-head code {
+  font-size: 0.9em;
+}
+
+.schema-copilot-result {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.schema-copilot-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.schema-copilot-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.schema-copilot-detail-grid > div {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
 .protocol-validator-card {
   display: flex;
   gap: 1rem;
@@ -6793,6 +6848,11 @@ output {
 .badge.badge-secondary {
   background: var(--surface-muted);
   color: var(--ink-soft);
+}
+
+.badge.badge-success {
+  background: var(--success-soft);
+  color: var(--success-ink);
 }
 
 .badge.badge-warning {
@@ -9529,6 +9589,7 @@ strong {
   .protocol-verification-list,
   .offer-wizard-steps,
   .checklist-card-grid,
+  .schema-copilot-detail-grid,
   .review-workflow-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -9653,6 +9714,7 @@ strong {
   .protocol-provenance-list,
   .protocol-contract-grid,
   .protocol-workflow-evidence-grid,
+  .schema-copilot-detail-grid,
   .offer-wizard-steps,
   .field-grid,
   .meter-grid,
@@ -9688,7 +9750,8 @@ strong {
     justify-self: start;
   }
 
-  .protocol-provenance-head {
+  .protocol-provenance-head,
+  .schema-copilot-head {
     display: grid;
   }
 
