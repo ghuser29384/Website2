@@ -375,6 +375,14 @@ const COPILOT_FORBIDDEN_TOP_LEVEL_KEY_PATTERN =
   /(raw|conversation|message|thread|browser|session|cookie|token|secret|private|contact|exact.*wish|source.*note|chain.*thought|hidden.*reasoning|internal.*reasoning|profile.*dump|app.*context)/i;
 const COPILOT_FORBIDDEN_CITATION_PATTERN =
   /(raw|private|contact|exact.*wish|source.*note|chain.*thought|hidden.*reasoning|internal.*reasoning|scratchpad|message|thread|cookie|token|secret)/i;
+const COPILOT_REQUIRED_REVIEWER_SUMMARY_SECTIONS = [
+  "What is being offered",
+  "What is being requested",
+  "Baseline claim",
+  "What evidence would count",
+  "Main policy flags",
+  "What remains unverified",
+] as const;
 const EVIDENCE_METADATA_STATUS_VALUES = [
   "submitted",
   "pending_review",
@@ -1353,8 +1361,19 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
     );
   }
 
-  if (!output.reviewer_summary || output.reviewer_summary.split(/\s+/).filter(Boolean).length > 180) {
+  const reviewerSummaryWordCount = output.reviewer_summary.split(/\s+/).filter(Boolean).length;
+  const missingReviewerSummarySections = COPILOT_REQUIRED_REVIEWER_SUMMARY_SECTIONS.filter(
+    (section) => !new RegExp(`${section}:`, "i").test(output.reviewer_summary),
+  );
+
+  if (!output.reviewer_summary || reviewerSummaryWordCount > 180) {
     blockers.push("reviewer_summary: bounded reviewer summary is missing or over 180 words");
+  }
+
+  if (missingReviewerSummarySections.length) {
+    blockers.push(
+      `reviewer_summary: missing required reviewer sections: ${missingReviewerSummarySections.join(", ")}`,
+    );
   }
 
   if (

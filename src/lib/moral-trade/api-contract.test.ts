@@ -363,6 +363,23 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_evaluate_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_evaluate_response"));
+  const matchSignalSchema = profile.schemaDefinitions.find((schema) => schema.key === "match_signal");
+  assert.ok(matchSignalSchema);
+  assert.ok(
+    matchSignalSchema.fields.some(
+      (field) => field.key === "privacyPolicyId" && /redacted-preview privacy policy id/i.test(field.description),
+    ),
+  );
+  assert.ok(
+    matchSignalSchema.fields.some(
+      (field) => field.key === "disclosureStage" && /disclosure-grant workflow/i.test(field.description),
+    ),
+  );
+  assert.ok(
+    matchSignalSchema.fields.some(
+      (field) => field.key === "humanReviewRequired" && /before disclosure, contact, reliance, or state changes/i.test(field.description),
+    ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_evaluate_request"));
   assert.ok(

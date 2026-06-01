@@ -53,6 +53,7 @@ test("data model profile publishes offer fields and privacy boundaries from the 
     (boundary) => boundary.key === "match_disclosure_boundary",
   );
   const reviewDecision = profile.entities.find((entity) => entity.key === "review_decision");
+  const matchSuggestion = profile.entities.find((entity) => entity.key === "match_suggestion");
   const traceabilityEvent = profile.entities.find((entity) => entity.key === "traceability_event");
   const stateTransitionEvent = profile.entities.find(
     (entity) => entity.key === "state_transition_event_record",
@@ -60,6 +61,7 @@ test("data model profile publishes offer fields and privacy boundaries from the 
 
   assert.ok(offer);
   assert.ok(reviewDecision);
+  assert.ok(matchSuggestion);
   assert.ok(traceabilityEvent);
   assert.ok(stateTransitionEvent);
   assert.ok(offer.requiredFields.includes("cause_areas"));
@@ -74,6 +76,10 @@ test("data model profile publishes offer fields and privacy boundaries from the 
   assert.ok(reviewDecision.requiredFields.includes("outcome"));
   assert.ok(reviewDecision.requiredFields.includes("reason_codes"));
   assert.ok(reviewDecision.requiredFields.includes("reviewer_id"));
+  assert.ok(matchSuggestion.requiredFields.includes("disclosure_stage"));
+  assert.ok(matchSuggestion.requiredFields.includes("privacy_policy_id"));
+  assert.ok(matchSuggestion.requiredFields.includes("human_review_required"));
+  assert.match(matchSuggestion.publicExposure, /privacy policy ids/);
   assert.ok(traceabilityEvent.requiredFields.includes("where_recorded"));
   assert.ok(traceabilityEvent.requiredFields.includes("why"));
   assert.ok(traceabilityEvent.requiredFields.includes("audit_question_answers"));

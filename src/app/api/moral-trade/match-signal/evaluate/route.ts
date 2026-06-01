@@ -200,7 +200,7 @@ export async function POST(request: Request) {
         contractVersion: contract.version,
         decisioningMode: contract.decisioningMode,
         stateMutation: false,
-        inputBundleUsed: ["redacted_profile_pair", "match_signal_contract"],
+        inputBundleUsed: ["redacted_profile_pair", "match_signal_contract", "match_signal_privacy_policy"],
         contractValidation,
         fallback:
           "Invalid JSON falls back to no match preview without changing state or disclosing counterparties.",
@@ -218,7 +218,7 @@ export async function POST(request: Request) {
         contractVersion: contract.version,
         decisioningMode: contract.decisioningMode,
         stateMutation: false,
-        inputBundleUsed: ["redacted_profile_pair", "match_signal_contract"],
+        inputBundleUsed: ["redacted_profile_pair", "match_signal_contract", "match_signal_privacy_policy"],
         contractValidation,
         fallback:
           "Missing request object falls back to no match preview without changing state or disclosing counterparties.",
@@ -239,7 +239,7 @@ export async function POST(request: Request) {
         contractVersion: contract.version,
         decisioningMode: contract.decisioningMode,
         stateMutation: false,
-        inputBundleUsed: ["redacted_profile_pair", "match_signal_contract"],
+        inputBundleUsed: ["redacted_profile_pair", "match_signal_contract", "match_signal_privacy_policy"],
         contractValidation,
         fallback:
           "Incomplete redacted profiles fall back to no match preview without changing state or disclosing counterparties.",
@@ -249,7 +249,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const signal = evaluateMoralTradeRedactedProfileMatch(profilePair);
+  const checkedAt = new Date().toISOString();
+  const signal = evaluateMoralTradeRedactedProfileMatch({
+    ...profilePair,
+    createdAt: checkedAt,
+  });
   const signalValidation = validateMoralTradeMatchSignal(signal);
   const blockers = [
     ...contractValidation.blockers,
@@ -259,11 +263,11 @@ export async function POST(request: Request) {
   return jsonResponse(
     {
       ok: blockers.length === 0,
-      checkedAt: new Date().toISOString(),
+      checkedAt,
       contractVersion: contract.version,
       decisioningMode: contract.decisioningMode,
       stateMutation: false,
-      inputBundleUsed: ["redacted_profile_pair", "match_signal_contract"],
+      inputBundleUsed: ["redacted_profile_pair", "match_signal_contract", "match_signal_privacy_policy"],
       profilePair,
       signal,
       signalValidation,

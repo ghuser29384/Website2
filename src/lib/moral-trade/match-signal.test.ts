@@ -46,8 +46,14 @@ test("redacted profile match signals use factor codes, redactions, and human rev
   });
 
   assert.equal(signal.status, "matchable");
+  assert.match(signal.id, /^match_signal_[a-f0-9]{24}$/);
+  assert.equal(signal.leftProfileId, "profile-left");
+  assert.equal(signal.rightProfileId, "profile-right");
+  assert.equal(signal.privacyPolicyId, "moral-trade-redacted-profile-match-preview-v0.1");
+  assert.equal(signal.disclosureStage, "broad_preview");
   assert.equal(signal.confidenceBand, "high");
   assert.equal(signal.humanReviewRequired, true);
+  assert.ok(Number.isFinite(Date.parse(signal.createdAt)));
   assert.deepEqual(signal.blockers, []);
   assert.equal(signal.counts.sharedCauseAreas, 1);
   assert.ok(signal.factorCodes.includes("cause_area_overlap"));
@@ -171,6 +177,8 @@ test("match signal validation rejects autonomous disclosure and unapproved facto
 
   signal.humanReviewRequired = false;
   signal.redactedFields = [];
+  signal.privacyPolicyId = "private-feed-match-policy";
+  signal.disclosureStage = "private_auto_reveal" as MoralTradeMatchSignal["disclosureStage"];
   signal.factorCodes = [...signal.factorCodes, "raw_private_text_overlap" as MoralTradeMatchSignal["factorCodes"][number]];
   signal.participantExplanation.redactionNotice = "Nothing is hidden.";
 
@@ -178,6 +186,8 @@ test("match signal validation rejects autonomous disclosure and unapproved facto
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("human_review_required")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("privacy_policy_id")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("disclosure_stage")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("redacted_fields")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("factor_codes")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("participant_explanation")));
@@ -209,6 +219,10 @@ test("match signal contract validates the redacted matching boundary", () => {
   assert.equal(contract.decisioningMode, "redacted_profile_match_preview_only");
   assert.equal(contract.stateMutation, false);
   assert.ok(contract.requiredInputFields.includes("privacyStage"));
+  assert.equal(contract.privacyPolicyId, "moral-trade-redacted-profile-match-preview-v0.1");
+  assert.ok(contract.disclosureStages.includes("broad_preview"));
+  assert.equal(contract.sampleSignal.disclosureStage, "broad_preview");
+  assert.equal(contract.sampleSignal.privacyPolicyId, contract.privacyPolicyId);
   assert.ok(contract.approvedFactorCodes.includes("cause_area_complementarity"));
   assert.ok(contract.redactedFields.includes("exact_private_wishes"));
   assert.ok(contract.redactedFields.includes("ideology_or_psychology_inferences"));
@@ -282,6 +296,10 @@ test("match signal routes publish participant explanation copy", async () => {
   const evaluateBody = await evaluateResponse.json();
 
   assert.equal(evaluateResponse.status, 200);
+  assert.equal(evaluateBody.signal.privacyPolicyId, "moral-trade-redacted-profile-match-preview-v0.1");
+  assert.equal(evaluateBody.signal.disclosureStage, "broad_preview");
+  assert.equal(evaluateBody.signal.leftProfileId, "profile-left");
+  assert.equal(evaluateBody.signal.rightProfileId, "profile-right");
   assert.equal(evaluateBody.signal.participantExplanation.headline, "Why you are seeing this match");
   assert.match(evaluateBody.signal.participantExplanation.summary, /Exact wishes and contact details are still hidden/i);
   assert.match(evaluateBody.signal.participantExplanation.humanReviewNotice, /Human review is mandatory/i);

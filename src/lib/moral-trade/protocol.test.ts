@@ -43,7 +43,14 @@ test("core moral trade protocol profile publishes validator-backed contracts", (
     ),
   );
   assert.ok(profile.provenanceObjectSchemas.some((schema) => schema.key === "external_entity_reference"));
-  assert.ok(profile.provenanceObjectSchemas.some((schema) => schema.key === "match_signal"));
+  assert.ok(
+    profile.provenanceObjectSchemas.some(
+      (schema) =>
+        schema.key === "match_signal" &&
+        schema.required.includes("privacyPolicyId") &&
+        schema.required.includes("disclosureStage"),
+    ),
+  );
   assert.ok(profile.provenanceObjectSchemas.some((schema) => schema.key === "traceability_event"));
   assert.ok(
     profile.provenanceObjectSchemas.some(

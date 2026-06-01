@@ -285,7 +285,7 @@ function subscriptionRefillPlanEntries({
 }): MpgfPublicGoodsSponsorPoolRefillPlanEntry[] {
   return subscriptions
     .filter((subscription) => subscription.poolId === pool.id && subscription.status === "active")
-    .map((subscription) => {
+    .map((subscription): MpgfPublicGoodsSponsorPoolRefillPlanEntry => {
       const sourceRefHash = hashSourceRef(`recurring-member-tithe:${subscription.id}`);
       const grossSurplusCents =
         subscription.interval === "annual"

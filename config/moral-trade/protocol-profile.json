@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-core-v0.1.5-2026-06",
+  "version": "moral-trade-core-v0.1.6-2026-06",
   "purpose": "Public contract for core Moral Trade proposal review, matching explanations, evidence states, and provenance.",
   "requiredProposalFields": [
     { "key": "format", "label": "Trade format" },
@@ -328,7 +328,7 @@
     {
       "key": "match_signal",
       "label": "Privacy-safe match signal",
-      "required": ["id", "leftProfileId", "rightProfileId", "status", "factorCodes", "confidenceBand", "redactedFields", "humanReviewRequired", "createdAt"]
+      "required": ["id", "leftProfileId", "rightProfileId", "privacyPolicyId", "status", "factorCodes", "confidenceBand", "redactedFields", "disclosureStage", "humanReviewRequired", "createdAt"]
     },
     {
       "key": "traceability_event",

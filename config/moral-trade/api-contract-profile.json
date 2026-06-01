@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.22-2026-05",
+  "version": "moral-trade-api-contract-v0.24-2026-06",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -967,7 +967,7 @@
         { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Match signal contract version." },
         { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable match-signal purpose." },
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for input boundaries, redactions, approved factor codes, non-mutating preview, human review, and no private inference." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Required input fields, optional input fields, approved factor codes, redacted fields, participant explanation template, invariants, sample signal, and contract tests." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Required input fields, optional input fields, privacy policy id, disclosure stages, approved factor codes, redacted fields, participant explanation template, invariants, sample signal, and contract tests." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Contract blockers that prevent relying on redacted match previews." }
       ]
     },
@@ -1046,6 +1046,27 @@
       ]
     },
     {
+      "key": "match_signal",
+      "purpose": "Field-level schema for a privacy-safe match preview generated from redacted profile pairs without disclosure, contact, reliance, or state mutation.",
+      "fields": [
+        { "key": "id", "type": "stable_hash_id", "required": true, "privacy": "private_response", "description": "Stable match_signal hash id derived from redacted profile ids, factor codes, blockers, disclosure stage, and signal version." },
+        { "key": "signalVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Version of the match-signal contract used to build the preview." },
+        { "key": "leftProfileId", "type": "string", "required": true, "privacy": "private_response", "description": "Left redacted profile id; exact wishes and contact details remain absent." },
+        { "key": "rightProfileId", "type": "string", "required": true, "privacy": "private_response", "description": "Right redacted profile id; exact wishes and contact details remain absent." },
+        { "key": "privacyPolicyId", "type": "string", "required": true, "privacy": "public_contract", "description": "Approved redacted-preview privacy policy id for the match signal." },
+        { "key": "status", "type": "matchable_status", "required": true, "privacy": "private_response", "description": "matchable or not_matchable preview status; it does not authorize disclosure or state changes." },
+        { "key": "confidenceBand", "type": "confidence_band", "required": true, "privacy": "private_response", "description": "low, medium, or high review prompt generated from explicit compatibility factors." },
+        { "key": "factorCodes", "type": "factor_code_array", "required": true, "privacy": "public_contract", "description": "Approved factor codes only: cause overlap or complementarity, trade-mode compatibility, verification compatibility, location, privacy stage, exclusions, and human-review requirement." },
+        { "key": "redactedFields", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Fields kept out of the preview, including exact private wishes, contact details, sensitive constraints, raw profile notes, protected traits, and ideology or psychology inferences." },
+        { "key": "disclosureStage", "type": "disclosure_stage", "required": true, "privacy": "public_contract", "description": "broad_preview, detail_request, or mutual_consent stage label; no stage bypasses the separate disclosure-grant workflow." },
+        { "key": "humanReviewRequired", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always required for matchable previews before disclosure, contact, reliance, or state changes." },
+        { "key": "createdAt", "type": "iso_datetime", "required": true, "privacy": "private_response", "description": "Server timestamp for the ephemeral preview." },
+        { "key": "participantExplanation", "type": "participant_explanation", "required": true, "privacy": "private_response", "description": "Participant-facing factor-code explanation, redaction notice, and human-review notice." },
+        { "key": "counts", "type": "object", "required": true, "privacy": "private_response", "description": "Aggregate compatibility counts only; no raw profile text." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Unresolved compatibility, privacy, location, or stated-exclusion blockers." }
+      ]
+    },
+    {
       "key": "match_signal_evaluate_response",
       "purpose": "Deterministic redacted-profile match signal, validator results, and no-state-change metadata.",
       "fields": [
@@ -1056,7 +1077,7 @@
         { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." },
         { "key": "inputBundleUsed", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Strict local bundle sources used to produce the match signal." },
         { "key": "profilePair", "type": "redacted_profile_pair", "required": false, "privacy": "private_response", "description": "Normalized redacted profiles returned only to the requester for inspection." },
-        { "key": "signal", "type": "match_signal", "required": false, "privacy": "private_response", "description": "Status, confidence band, factor codes, participant explanation copy, redacted fields, human review flag, counts, and blockers." },
+        { "key": "signal", "type": "match_signal", "required": false, "privacy": "private_response", "description": "Stable signal id, left and right profile ids, privacy policy id, status, confidence band, factor codes, disclosure stage, participant explanation copy, redacted fields, human review flag, created timestamp, counts, and blockers." },
         { "key": "signalValidation", "type": "validator_result", "required": false, "privacy": "public_contract", "description": "Validation result for the generated match signal." },
         { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "public_contract", "description": "Validation result for the match-signal contract." },
         { "key": "fallback", "type": "string", "required": false, "privacy": "public_contract", "description": "Safe fallback reason for malformed, missing, or incomplete redacted profile requests." },

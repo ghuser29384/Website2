@@ -182,7 +182,13 @@ test("provenance bundles pass with entity/activity/agent links", () => {
   assert.ok(
     MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.some((schema) => schema.key === "external_entity_reference"),
   );
-  assert.ok(MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.some((schema) => schema.key === "match_signal"));
+  const matchSignalSchema = MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.find(
+    (schema) => schema.key === "match_signal",
+  );
+
+  assert.ok(matchSignalSchema);
+  assert.ok(matchSignalSchema.required.includes("privacyPolicyId"));
+  assert.ok(matchSignalSchema.required.includes("disclosureStage"));
   assert.ok(MORAL_TRADE_PROVENANCE_OBJECT_SCHEMAS.some((schema) => schema.key === "traceability_event"));
 });
 

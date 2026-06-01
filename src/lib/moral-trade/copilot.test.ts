@@ -762,3 +762,19 @@ test("copilot output validation enforces bounded draft-repair packets", () => {
   assert.ok(validation.blockers.some((blocker) => blocker.includes("cited_evidence_table")));
   assert.ok(validation.blockers.some((blocker) => blocker.includes("reviewer_summary")));
 });
+
+test("copilot output validation enforces reviewer-summary sections", () => {
+  const output = buildMoralTradeCopilotOutput(completeDraft, ["proposal:local-draft"]);
+
+  output.reviewer_summary =
+    "What is being offered: a verified pledge. Baseline claim: current intent is documented. Main policy flags: none. What remains unverified: completion evidence.";
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(
+    validation.blockers.some((blocker) =>
+      blocker.includes("missing required reviewer sections: What is being requested, What evidence would count"),
+    ),
+  );
+});

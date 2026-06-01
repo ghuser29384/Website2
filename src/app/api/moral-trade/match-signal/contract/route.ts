@@ -34,6 +34,8 @@ export async function GET(request: Request) {
       stateMutation: contract.stateMutation,
       requiredInputFields: contract.requiredInputFields,
       optionalInputFields: contract.optionalInputFields,
+      privacyPolicyId: contract.privacyPolicyId,
+      disclosureStages: contract.disclosureStages,
       approvedFactorCodes: contract.approvedFactorCodes,
       redactedFields: contract.redactedFields,
       participantExplanationTemplate: contract.participantExplanationTemplate,

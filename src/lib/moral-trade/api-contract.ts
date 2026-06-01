@@ -370,6 +370,9 @@ export function validateMoralTradeApiContractProfile(
   const matchSignalEvaluateResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "match_signal_evaluate_response",
   );
+  const matchSignalSchema = profile.schemaDefinitions.find(
+    (schema) => schema.key === "match_signal",
+  );
   const challengeAppealContractRoute = profile.routes.find(
     (route) => route.key === "moral_trade_challenge_appeal_contract",
   );
@@ -889,6 +892,41 @@ export function validateMoralTradeApiContractProfile(
         Boolean(
           matchSignalEvaluateResponse?.fields.some(
             (field) => field.key === "stateMutation" && /Always false/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          matchSignalSchema?.fields.some(
+            (field) =>
+              field.key === "privacyPolicyId" &&
+              field.required &&
+              /redacted-preview privacy policy id/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          matchSignalSchema?.fields.some(
+            (field) =>
+              field.key === "disclosureStage" &&
+              field.required &&
+              /disclosure-grant workflow/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          matchSignalSchema?.fields.some(
+            (field) =>
+              field.key === "redactedFields" &&
+              field.required &&
+              /exact private wishes/i.test(field.description) &&
+              /contact details/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          matchSignalSchema?.fields.some(
+            (field) =>
+              field.key === "humanReviewRequired" &&
+              field.required &&
+              /before disclosure, contact, reliance, or state changes/i.test(
+                field.description,
+              ),
           ),
         ),
       matchSignalEvaluateRoute

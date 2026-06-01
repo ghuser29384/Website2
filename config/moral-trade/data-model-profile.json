@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-data-model-v0.1.4-2026-06",
+  "version": "moral-trade-data-model-v0.1.5-2026-06",
   "purpose": "Public contract for the core Moral Trade domain entities, required fields, privacy classes, relationship boundaries, and non-claims named by the product audit.",
   "entities": [
     {
@@ -205,9 +205,9 @@
       "label": "Match suggestion",
       "category": "matching",
       "privacyClass": "privacy_thresholded_public_preview",
-      "requiredFields": ["id", "left_profile_id", "right_profile_id", "factor_codes", "confidence_band", "redacted_fields", "disclosure_stage", "human_review_required"],
+      "requiredFields": ["id", "left_profile_id", "right_profile_id", "status", "factor_codes", "confidence_band", "redacted_fields", "disclosure_stage", "privacy_policy_id", "human_review_required", "created_at"],
       "relationships": ["public_profile", "private_wish_profile", "privacy_grant", "notification"],
-      "publicExposure": "Uses broad previews and factor codes; exact wishes, source notes, and contact details stay hidden until consent."
+      "publicExposure": "Uses broad previews, privacy policy ids, disclosure stages, and factor codes; exact wishes, source notes, and contact details stay hidden until consent."
     },
     {
       "key": "notification",

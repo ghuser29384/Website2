@@ -1,8 +1,12 @@
-export const MORAL_TRADE_MATCH_SIGNAL_VERSION = "moral-trade-match-signal-v0.2";
+import { createHash } from "node:crypto";
+
+export const MORAL_TRADE_MATCH_SIGNAL_VERSION = "moral-trade-match-signal-v0.3";
 export const MORAL_TRADE_MATCH_SIGNAL_CONTRACT_VERSION =
-  "moral-trade-match-signal-contract-v0.2-2026-05";
+  "moral-trade-match-signal-contract-v0.3-2026-06";
 export const MORAL_TRADE_MATCH_SIGNAL_CONTRACT_VALIDATOR_VERSION =
-  "moral-trade-match-signal-contract-validator-v0.1";
+  "moral-trade-match-signal-contract-validator-v0.2";
+export const MORAL_TRADE_MATCH_SIGNAL_PRIVACY_POLICY_ID =
+  "moral-trade-redacted-profile-match-preview-v0.1";
 
 export type MoralTradeMatchStatus = "matchable" | "not_matchable";
 export type MoralTradeMatchConfidenceBand = "low" | "medium" | "high";
@@ -43,15 +47,22 @@ export interface MoralTradeRedactedProfile {
 export interface MoralTradeRedactedProfileMatchInput {
   left: MoralTradeRedactedProfile;
   right: MoralTradeRedactedProfile;
+  createdAt?: string;
 }
 
 export interface MoralTradeMatchSignal {
+  id: string;
   signalVersion: string;
+  leftProfileId: string;
+  rightProfileId: string;
+  privacyPolicyId: string;
   status: MoralTradeMatchStatus;
   confidenceBand: MoralTradeMatchConfidenceBand;
   factorCodes: MoralTradeMatchFactorCode[];
   redactedFields: string[];
+  disclosureStage: MoralTradeMatchPrivacyStage;
   humanReviewRequired: boolean;
+  createdAt: string;
   participantExplanation: MoralTradeMatchParticipantExplanation;
   counts: {
     sharedCauseAreas: number;
@@ -86,6 +97,8 @@ export interface MoralTradeMatchSignalContract {
   stateMutation: false;
   requiredInputFields: Array<keyof MoralTradeRedactedProfile>;
   optionalInputFields: Array<keyof MoralTradeRedactedProfile>;
+  privacyPolicyId: string;
+  disclosureStages: MoralTradeMatchPrivacyStage[];
   approvedFactorCodes: MoralTradeMatchFactorCode[];
   redactedFields: string[];
   participantExplanationTemplate: MoralTradeMatchParticipantExplanationTemplate;
@@ -149,6 +162,12 @@ const MATCH_SIGNAL_OPTIONAL_INPUT_FIELDS = [
   "locationRegion",
   "locationCity",
 ] as const satisfies ReadonlyArray<keyof MoralTradeRedactedProfile>;
+
+const MATCH_SIGNAL_DISCLOSURE_STAGES = [
+  "broad_preview",
+  "detail_request",
+  "mutual_consent",
+] as const satisfies readonly MoralTradeMatchPrivacyStage[];
 
 const MATCH_SIGNAL_CONTRACT_TESTS = [
   "match_signal_contract_validator",
@@ -337,6 +356,36 @@ function uniqueFactorCodes(values: MoralTradeMatchFactorCode[]) {
   return [...new Set(values)];
 }
 
+function buildMatchSignalId({
+  blockers,
+  disclosureStage,
+  factorCodes,
+  leftProfileId,
+  rightProfileId,
+}: {
+  blockers: readonly string[];
+  disclosureStage: MoralTradeMatchPrivacyStage;
+  factorCodes: readonly MoralTradeMatchFactorCode[];
+  leftProfileId: string;
+  rightProfileId: string;
+}) {
+  const digest = createHash("sha256")
+    .update(
+      JSON.stringify({
+        disclosureStage,
+        factorCodes: [...factorCodes].sort(),
+        blockers: [...blockers].sort(),
+        leftProfileId,
+        rightProfileId,
+        signalVersion: MORAL_TRADE_MATCH_SIGNAL_VERSION,
+      }),
+    )
+    .digest("hex")
+    .slice(0, 24);
+
+  return `match_signal_${digest}`;
+}
+
 function buildParticipantExplanation({
   blockers,
   factorCodes,
@@ -380,6 +429,7 @@ function buildParticipantExplanation({
 }
 
 export function evaluateMoralTradeRedactedProfileMatch({
+  createdAt = new Date().toISOString(),
   left,
   right,
 }: MoralTradeRedactedProfileMatchInput): MoralTradeMatchSignal {
@@ -417,9 +467,21 @@ export function evaluateMoralTradeRedactedProfileMatch({
     humanReviewRequired ? "human_review_required" : "",
   ].filter(Boolean) as MoralTradeMatchFactorCode[]);
   const redactedFields = [...MORAL_TRADE_MATCH_SIGNAL_REDACTED_FIELDS];
+  const disclosureStage: MoralTradeMatchPrivacyStage = privacyOk ? left.privacyStage : "broad_preview";
+  const id = buildMatchSignalId({
+    blockers,
+    disclosureStage,
+    factorCodes,
+    leftProfileId: left.profileId,
+    rightProfileId: right.profileId,
+  });
 
   return {
+    id,
     signalVersion: MORAL_TRADE_MATCH_SIGNAL_VERSION,
+    leftProfileId: left.profileId,
+    rightProfileId: right.profileId,
+    privacyPolicyId: MORAL_TRADE_MATCH_SIGNAL_PRIVACY_POLICY_ID,
     status,
     confidenceBand: getConfidenceBand({
       blockers,
@@ -432,7 +494,9 @@ export function evaluateMoralTradeRedactedProfileMatch({
     }),
     factorCodes,
     redactedFields,
+    disclosureStage,
     humanReviewRequired,
+    createdAt,
     participantExplanation: buildParticipantExplanation({
       blockers,
       factorCodes,
@@ -452,8 +516,32 @@ export function evaluateMoralTradeRedactedProfileMatch({
 export function validateMoralTradeMatchSignal(signal: MoralTradeMatchSignal) {
   const blockers: string[] = [];
 
+  if (!/^match_signal_[a-f0-9]{24}$/.test(signal.id)) {
+    blockers.push("id: match signals require a stable match_signal hash id");
+  }
+
   if (signal.signalVersion !== MORAL_TRADE_MATCH_SIGNAL_VERSION) {
     blockers.push("signal_version: unrecognized match-signal version");
+  }
+
+  if (!signal.leftProfileId || !signal.rightProfileId) {
+    blockers.push("profile_ids: leftProfileId and rightProfileId are required");
+  }
+
+  if (signal.leftProfileId && signal.leftProfileId === signal.rightProfileId) {
+    blockers.push("profile_ids: a match signal must compare two profile ids");
+  }
+
+  if (signal.privacyPolicyId !== MORAL_TRADE_MATCH_SIGNAL_PRIVACY_POLICY_ID) {
+    blockers.push("privacy_policy_id: match signals must name the approved redacted-preview policy");
+  }
+
+  if (!MATCH_SIGNAL_DISCLOSURE_STAGES.includes(signal.disclosureStage)) {
+    blockers.push("disclosure_stage: match signals must name a supported disclosure stage");
+  }
+
+  if (!Number.isFinite(Date.parse(signal.createdAt))) {
+    blockers.push("created_at: match signals must carry an ISO timestamp");
   }
 
   if (signal.status === "matchable" && !signal.humanReviewRequired) {
@@ -513,6 +601,10 @@ export function validateMoralTradeMatchSignal(signal: MoralTradeMatchSignal) {
     blockers.push("privacy_safe_preview: requires compatible privacy stage and constraints");
   }
 
+  if (signal.factorCodes.includes("privacy_safe_preview") && !signal.disclosureStage) {
+    blockers.push("privacy_safe_preview: requires a named disclosure stage");
+  }
+
   if (
     signal.status === "matchable" &&
     ((!signal.factorCodes.includes("cause_area_overlap") &&
@@ -562,6 +654,8 @@ export function getMoralTradeMatchSignalContract(): MoralTradeMatchSignalContrac
     stateMutation: false,
     requiredInputFields: [...MATCH_SIGNAL_REQUIRED_INPUT_FIELDS],
     optionalInputFields: [...MATCH_SIGNAL_OPTIONAL_INPUT_FIELDS],
+    privacyPolicyId: MORAL_TRADE_MATCH_SIGNAL_PRIVACY_POLICY_ID,
+    disclosureStages: [...MATCH_SIGNAL_DISCLOSURE_STAGES],
     approvedFactorCodes: Array.from(MATCH_SIGNAL_FACTOR_CODES),
     redactedFields: [...MORAL_TRADE_MATCH_SIGNAL_REDACTED_FIELDS],
     participantExplanationTemplate: PARTICIPANT_EXPLANATION_TEMPLATE,
@@ -570,7 +664,7 @@ export function getMoralTradeMatchSignalContract(): MoralTradeMatchSignalContrac
       "Do not infer protected traits, ideology, psychology, hidden preferences, exact private wishes, raw notes, or contact details.",
       "A matchable signal is only a preview and always requires human review before disclosure, contact, reliance, or state changes.",
       "Factor codes must include cause overlap or complementarity, trade-mode compatibility, and verification compatibility before matchable status.",
-      "Privacy-safe preview requires compatible privacy stages and named redacted fields.",
+      "Privacy-safe preview requires compatible privacy stages, an explicit disclosure stage, a privacy policy id, and named redacted fields.",
     ],
     sampleInput: MATCH_SIGNAL_SAMPLE_INPUT,
     sampleSignal,
@@ -604,6 +698,25 @@ export function validateMoralTradeMatchSignalContract(
       approvedFactorCodes.join(", "),
     ),
     matchSignalContractCheck(
+      "signal-field-contract",
+      "Sample signal carries id, profile ids, privacy policy, disclosure stage, and creation time",
+      Boolean(
+        /^match_signal_[a-f0-9]{24}$/.test(contract.sampleSignal.id) &&
+          contract.sampleSignal.leftProfileId &&
+          contract.sampleSignal.rightProfileId &&
+          contract.sampleSignal.privacyPolicyId === MORAL_TRADE_MATCH_SIGNAL_PRIVACY_POLICY_ID &&
+          contract.disclosureStages.includes(contract.sampleSignal.disclosureStage) &&
+          Number.isFinite(Date.parse(contract.sampleSignal.createdAt)),
+      ),
+      [
+        contract.sampleSignal.id,
+        contract.sampleSignal.leftProfileId,
+        contract.sampleSignal.rightProfileId,
+        contract.sampleSignal.privacyPolicyId,
+        contract.sampleSignal.disclosureStage,
+      ].join(", "),
+    ),
+    matchSignalContractCheck(
       "redaction-boundary",
       "Contract preserves exact wish, contact, source-note, and inference redactions",
       hasAll(redactedFields, MORAL_TRADE_MATCH_SIGNAL_REDACTED_FIELDS) &&
@@ -618,7 +731,8 @@ export function validateMoralTradeMatchSignalContract(
       sampleValidation.status === "pass" &&
         contract.sampleSignal.status === "matchable" &&
         contract.sampleSignal.humanReviewRequired &&
-        contract.sampleSignal.factorCodes.includes("privacy_safe_preview"),
+        contract.sampleSignal.factorCodes.includes("privacy_safe_preview") &&
+        contract.sampleSignal.disclosureStage === "broad_preview",
       `${contract.sampleSignal.status}; blockers ${sampleValidation.blockers.length}`,
     ),
     matchSignalContractCheck(
@@ -627,7 +741,8 @@ export function validateMoralTradeMatchSignalContract(
       contract.stateMutation === false &&
         contract.decisioningMode === "redacted_profile_match_preview_only" &&
         contract.invariants.some((invariant) => /human review/i.test(invariant)) &&
-        contract.invariants.some((invariant) => /state changes/i.test(invariant)),
+        contract.invariants.some((invariant) => /state changes/i.test(invariant)) &&
+        contract.invariants.some((invariant) => /privacy policy id/i.test(invariant)),
       `${contract.decisioningMode}; stateMutation ${contract.stateMutation}`,
     ),
     matchSignalContractCheck(

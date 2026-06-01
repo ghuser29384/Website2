@@ -2259,6 +2259,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotSource, /COPILOT_FORBIDDEN_TOP_LEVEL_KEY_PATTERN/);
   assert.match(copilotSource, /isApprovedCopilotCitation/);
   assert.match(copilotSource, /COPILOT_FORBIDDEN_CITATION_PATTERN/);
+  assert.match(copilotSource, /COPILOT_REQUIRED_REVIEWER_SUMMARY_SECTIONS/);
   assert.match(copilotSource, /MORAL_TRADE_COPILOT_EVIDENCE_METADATA_REDACTIONS/);
   assert.match(copilotSource, /validateMoralTradeCopilotReviewRouteImplementation/);
   assert.match(copilotSource, /validateMoralTradeCopilotContract/);
@@ -2269,6 +2270,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotContract, /draft_repair_prompt/);
   assert.match(copilotContract, /matching_prompt/);
   assert.match(copilotContract, /reviewer_summary_prompt/);
+  assert.match(copilotContract, /Summaries stay under 180 words/);
   assert.match(copilotContract, /redacted_profile_pair/);
   assert.match(copilotContract, /verification_loop/);
   assert.match(copilotContract, /challenge_window/);
@@ -2286,6 +2288,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(matchSignalSource, /cause_area_overlap_or_complementarity_required/);
   assert.match(matchSignalSource, /causeAreaComplementarity/);
   assert.match(matchSignalSource, /humanReviewRequired/);
+  assert.match(matchSignalSource, /privacyPolicyId/);
+  assert.match(matchSignalSource, /disclosureStage/);
+  assert.match(matchSignalSource, /MORAL_TRADE_MATCH_SIGNAL_PRIVACY_POLICY_ID/);
   assert.match(matchSignalSource, /participantExplanation/);
   assert.match(matchSignalSource, /Why you are seeing this match/);
   assert.match(matchSignalSource, /Exact wishes and contact details are still hidden/);
@@ -2603,6 +2608,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /small nonzero samples are suppressed/);
   assert.match(apiContractProfile, /match_signal_evaluate_request/);
   assert.match(apiContractProfile, /match_signal_evaluate_response/);
+  assert.match(apiContractProfile, /"key": "match_signal"/);
+  assert.match(apiContractProfile, /privacyPolicyId/);
+  assert.match(apiContractProfile, /disclosureStage/);
   assert.match(apiContractProfile, /redacted_profile_match_preview_only/);
   assert.match(apiContractProfile, /never store submitted redacted profiles/);
   assert.match(apiContractProfile, /rank moral value/);
@@ -2944,6 +2952,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotReviewRoute, /private, no-store/);
   assert.match(matchSignalContractRoute, /validateMoralTradeMatchSignalContract/);
   assert.match(matchSignalContractRoute, /approvedFactorCodes/);
+  assert.match(matchSignalContractRoute, /privacyPolicyId/);
+  assert.match(matchSignalContractRoute, /disclosureStages/);
   assert.match(matchSignalContractRoute, /participantExplanationTemplate/);
   assert.match(matchSignalEvaluateRoute, /evaluateMoralTradeRedactedProfileMatch/);
   assert.match(matchSignalEvaluateRoute, /redacted_profile_pair/);

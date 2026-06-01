@@ -194,6 +194,9 @@ export function validateMoralTradeDataModelProfile(
       entity.privacyClass === "operational_private",
   );
   const offerEntity = profile.entities.find((entity) => entity.key === "offer");
+  const matchSuggestionEntity = profile.entities.find(
+    (entity) => entity.key === "match_suggestion",
+  );
   const traceabilityEntity = profile.entities.find(
     (entity) => entity.key === "traceability_event",
   );
@@ -251,6 +254,23 @@ export function validateMoralTradeDataModelProfile(
         `traceability=${traceabilityEntity?.requiredFields.join(",") ?? "missing"}`,
         `state_transition=${stateTransitionEntity?.requiredFields.join(",") ?? "missing"}`,
       ].join("; "),
+    ),
+    check(
+      "match-suggestion-disclosure-policy",
+      "Match suggestions name disclosure stage, privacy policy, redactions, and human review",
+      Boolean(
+        matchSuggestionEntity &&
+          hasAll(matchSuggestionEntity.requiredFields, [
+            "disclosure_stage",
+            "privacy_policy_id",
+            "redacted_fields",
+            "human_review_required",
+            "created_at",
+          ]) &&
+          /privacy policy ids/i.test(matchSuggestionEntity.publicExposure) &&
+          /hidden until consent/i.test(matchSuggestionEntity.publicExposure),
+      ),
+      matchSuggestionEntity?.requiredFields.join(", ") ?? "missing match_suggestion",
     ),
     check(
       "offer-required-fields",
