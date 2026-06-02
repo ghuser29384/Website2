@@ -6,11 +6,23 @@ import {
   bucketMpgfPublicGoodsAmountCents,
   recordMpgfPublicGoodsAnalyticsEvent,
 } from "@/lib/mpgf/public-goods-analytics";
-import { createMpgfStripeSavedCommitmentSetup } from "@/lib/mpgf/public-goods-stripe-commitments";
+import {
+  createMpgfStripeSavedCommitmentSetup,
+  type MpgfStripeSavedCommitmentSetup,
+} from "@/lib/mpgf/public-goods-stripe-commitments";
+import { hasSupabaseEnv } from "@/lib/supabase/config";
+import type { Database } from "@/lib/supabase/database.types";
+import { createServiceClient } from "@/lib/supabase/server";
 import { getStripe, hasStripeEnv } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
+  from: (table: string) => any;
+};
+type MpgfStripeSavedCommitmentInsert =
+  Database["public"]["Tables"]["mpgf_stripe_saved_commitments"]["Insert"];
 
 function stringField(record: Record<string, unknown>, key: string, fallback = "") {
   const value = record[key];
@@ -28,6 +40,88 @@ function centsField(record: Record<string, unknown>) {
   const dollars = Number(record.amountDollars);
 
   return Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
+}
+
+function booleanField(record: Record<string, unknown>, key: string) {
+  return record[key] === true;
+}
+
+function hasServiceRoleEnv() {
+  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function savedCommitmentIdFor(setup: MpgfStripeSavedCommitmentSetup) {
+  const stableHash = setup.providerSetupIntentIdHash ?? setup.calcHash;
+
+  return `stripe-saved-commitment-${stableHash.slice(7, 19)}`;
+}
+
+function toStripeSavedCommitmentRow(input: {
+  futureUseConsentAt: string;
+  profileId: string;
+  setup: MpgfStripeSavedCommitmentSetup;
+}): MpgfStripeSavedCommitmentInsert {
+  return {
+    id: savedCommitmentIdFor(input.setup),
+    round_id: input.setup.roundId,
+    campaign_id: input.setup.campaignId,
+    conditional_pledge_id: input.setup.conditionalPledgeId,
+    pledge_intent_id: input.setup.pledgeIntentId,
+    profile_id: input.profileId,
+    user_ref_hash: input.setup.userRefHash,
+    amount_cents: input.setup.amountCents,
+    currency: input.setup.currency,
+    provider_customer_id_hash: input.setup.providerCustomerIdHash ?? null,
+    provider_setup_intent_id_hash: input.setup.providerSetupIntentIdHash ?? null,
+    provider_payment_method_id_hash: input.setup.providerPaymentMethodIdHash ?? null,
+    setup_status: input.setup.setupStatus,
+    setup_usage: input.setup.setupIntentUsage,
+    future_use_consent_at: input.futureUseConsentAt,
+    explicit_future_use_consent_required: true,
+    creates_charge_immediately: false,
+    long_lived_manual_card_hold: false,
+    payment_intent_created_before_gates: false,
+    raw_card_data_stored: false,
+    review_required_before_counting: true,
+    final_payout_authorized: false,
+    calc_hash: input.setup.calcHash,
+    updated_at: input.futureUseConsentAt,
+  };
+}
+
+async function persistMpgfStripeSavedCommitmentSetup(input: {
+  futureUseConsentAt: string;
+  profileId: string;
+  setup: MpgfStripeSavedCommitmentSetup;
+}) {
+  if (!hasSupabaseEnv() || !hasServiceRoleEnv()) {
+    return {
+      ok: false,
+      status: "not_configured" as const,
+      warning:
+        "Supabase service-role persistence is required before an MPGF Stripe saved commitment can be confirmed.",
+    };
+  }
+
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const row = toStripeSavedCommitmentRow(input);
+  const write = await supabase
+    .from("mpgf_stripe_saved_commitments")
+    .upsert(row, { onConflict: "provider_setup_intent_id_hash" });
+
+  if (write.error) {
+    return {
+      ok: false,
+      status: "failed" as const,
+      warning: write.error.message,
+    };
+  }
+
+  return {
+    ok: true,
+    status: "persisted" as const,
+    savedCommitmentId: row.id,
+  };
 }
 
 async function recordSetupIntentAnalytics(input: {
@@ -78,6 +172,20 @@ export async function POST(request: Request) {
   try {
     const payload = await request.json().catch(() => ({}));
     const record = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+
+    if (!booleanField(record, "explicitFutureUseConsent")) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Explicit future-use consent is required before saving an MPGF Stripe commitment.",
+          createsChargeImmediately: false,
+          finalPayoutAuthorized: false,
+        },
+        { status: 400, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+      );
+    }
+
     const baseSetup = createMpgfStripeSavedCommitmentSetup({
       amountCents: centsField(record),
       campaignId: stringField(record, "campaignId"),
@@ -102,6 +210,26 @@ export async function POST(request: Request) {
           createsChargeImmediately: false,
           finalPayoutAuthorized: false,
           analytics,
+        },
+        { status: 503, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+      );
+    }
+
+    if (!hasSupabaseEnv() || !hasServiceRoleEnv()) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Supabase service-role persistence is required before creating an MPGF Stripe saved commitment.",
+          setupIntent: baseSetup,
+          clientSecret: null,
+          createsChargeImmediately: false,
+          finalPayoutAuthorized: false,
+          analytics,
+          persistence: {
+            ok: false,
+            status: "not_configured",
+          },
         },
         { status: 503, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
       );
@@ -136,12 +264,35 @@ export async function POST(request: Request) {
       roundId: baseSetup.roundId,
       userRef: viewer.authUser.id,
     });
+    const futureUseConsentAt = new Date().toISOString();
+    const persistence = await persistMpgfStripeSavedCommitmentSetup({
+      futureUseConsentAt,
+      profileId: viewer.authUser.id,
+      setup: setupRecord,
+    });
+
+    if (!persistence.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: persistence.warning,
+          setupIntent: setupRecord,
+          clientSecret: null,
+          createsChargeImmediately: false,
+          finalPayoutAuthorized: false,
+          analytics,
+          persistence,
+        },
+        { status: persistence.status === "not_configured" ? 503 : 500, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+      );
+    }
 
     return NextResponse.json(
       {
         ok: true,
         setupIntent: setupRecord,
         clientSecret: setupIntent.client_secret,
+        futureUseConsentAt,
         createsChargeImmediately: false,
         nextAction: "confirm_setup_intent_client_side",
         stripeWebhookPath: "/api/mpgf/providers/stripe/webhook",
@@ -149,6 +300,7 @@ export async function POST(request: Request) {
         reviewRequiredBeforeCounting: true,
         finalPayoutAuthorized: false,
         analytics,
+        persistence,
       },
       { status: 201, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );

@@ -31,26 +31,8 @@ type MpgfPublicGoodsPaymentProofInsert =
   Database["public"]["Tables"]["mpgf_public_goods_payment_proofs"]["Insert"];
 type MpgfPaymentMethodTokenInsert = Database["public"]["Tables"]["mpgf_payment_method_tokens"]["Insert"];
 type MpgfPaymentEventInsert = Database["public"]["Tables"]["mpgf_payment_events"]["Insert"];
-type MpgfStripeSavedCommitmentEventInsert = {
-  id: string;
-  saved_commitment_id: string | null;
-  conditional_pledge_id: string | null;
-  pledge_intent_id: string | null;
-  provider_event_id_hash: string;
-  provider_object_id_hash: string | null;
-  provider_customer_id_hash: string | null;
-  provider_payment_method_id_hash: string | null;
-  event_type: string;
-  event_state: string;
-  status: "recorded" | "needs_review" | "rejected";
-  signature_verified: boolean;
-  structure_verified: boolean;
-  payload_hash: string;
-  append_only_hash: string;
-  review_required_before_counting: true;
-  final_payout_authorized: false;
-  received_at: string;
-};
+type MpgfStripeSavedCommitmentEventInsert =
+  Database["public"]["Tables"]["mpgf_stripe_saved_commitment_events"]["Insert"];
 
 type GateStatus = MpgfRealMoneyReadiness["requiredGates"][number]["status"];
 

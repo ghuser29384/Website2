@@ -108,6 +108,7 @@ export function MpgfContributionModal({
   const [amountDollars, setAmountDollars] = useState(25);
   const [campaignId, setCampaignId] = useState(campaigns[0]?.campaignId ?? "");
   const [countForMatching, setCountForMatching] = useState(true);
+  const [futureUseConsentAccepted, setFutureUseConsentAccepted] = useState(false);
   const [pending, setPending] = useState(false);
   const [statusMessage, setStatusMessage] = useState(
     "Use the Every.org fast route first; saved commitments and manual proof remain available when needed.",
@@ -229,6 +230,11 @@ export function MpgfContributionModal({
       return;
     }
 
+    if (!futureUseConsentAccepted) {
+      setStatusMessage("Accept future-use consent before saving a Stripe commitment.");
+      return;
+    }
+
     setPending(true);
     setStatusMessage("Saving SetupIntent-first commitment.");
 
@@ -241,6 +247,7 @@ export function MpgfContributionModal({
         body: JSON.stringify({
           amountCents: activeAmountCents,
           campaignId,
+          explicitFutureUseConsent: futureUseConsentAccepted,
           roundId,
         }),
       });
@@ -464,6 +471,20 @@ export function MpgfContributionModal({
               </div>
             </div>
 
+            {mode === "saved_commitment" ? (
+              <label className="checkbox-label">
+                <input
+                  checked={futureUseConsentAccepted}
+                  type="checkbox"
+                  onChange={(event) => setFutureUseConsentAccepted(event.currentTarget.checked)}
+                />
+                <span>
+                  I consent to save this payment method for one future MPGF charge only after
+                  threshold, review, challenge, and parameter-lock gates clear.
+                </span>
+              </label>
+            ) : null}
+
             <div className="mpgf-inline-actions">
               <button
                 className="button button-primary"
@@ -471,7 +492,7 @@ export function MpgfContributionModal({
                   pending ||
                   activeAmountCents < 100 ||
                   !campaignId ||
-                  (mode === "saved_commitment" && !viewerPresent)
+                  (mode === "saved_commitment" && (!viewerPresent || !futureUseConsentAccepted))
                 }
                 type="button"
                 onClick={handlePrimaryAction}

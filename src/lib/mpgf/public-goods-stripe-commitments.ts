@@ -35,6 +35,21 @@ type StripeCommitmentWebhookStatus =
   | "needs_review"
   | "rejected";
 
+const MPGF_STRIPE_SAVED_COMMITMENT_EVENT_TYPES = [
+  "setup_intent.created",
+  "setup_intent.succeeded",
+  "setup_intent.setup_failed",
+  "setup_intent.canceled",
+  "payment_intent.created",
+  "payment_intent.succeeded",
+  "payment_intent.payment_failed",
+  "payment_intent.canceled",
+  "payment_intent.requires_action",
+] as const;
+
+export type MpgfStripeSavedCommitmentEventType =
+  (typeof MPGF_STRIPE_SAVED_COMMITMENT_EVENT_TYPES)[number];
+
 type StripeCommitmentEventState =
   | "setup_succeeded_token_ready"
   | "setup_failed"
@@ -131,7 +146,7 @@ export interface MpgfStripeSavedCommitmentWebhookEvent {
   pledgeIntentId?: string;
   conditionalPledgeId?: string;
   amountCents?: number;
-  eventType: string;
+  eventType: MpgfStripeSavedCommitmentEventType;
   eventState: StripeCommitmentEventState;
   status: StripeCommitmentWebhookStatus;
   signatureVerified: boolean;
@@ -242,7 +257,16 @@ function readMetadata(object: Record<string, unknown>) {
   return objectField(object.metadata) ?? {};
 }
 
-function eventStateFor(eventType: string, objectStatus?: string): StripeCommitmentEventState {
+function isMpgfStripeSavedCommitmentEventType(
+  eventType: string,
+): eventType is MpgfStripeSavedCommitmentEventType {
+  return (MPGF_STRIPE_SAVED_COMMITMENT_EVENT_TYPES as readonly string[]).includes(eventType);
+}
+
+function eventStateFor(
+  eventType: MpgfStripeSavedCommitmentEventType,
+  objectStatus?: string,
+): StripeCommitmentEventState {
   if (eventType === "setup_intent.succeeded" || (eventType.startsWith("setup_intent.") && objectStatus === "succeeded")) {
     return "setup_succeeded_token_ready";
   }
@@ -420,7 +444,14 @@ export function createMpgfStripeSavedCommitmentSetup({
   };
 }
 
-export function isMpgfStripeSavedCommitmentEvent(eventType: string, metadata: Record<string, unknown> = {}) {
+export function isMpgfStripeSavedCommitmentEvent(
+  eventType: string,
+  metadata: Record<string, unknown> = {},
+): eventType is MpgfStripeSavedCommitmentEventType {
+  if (!isMpgfStripeSavedCommitmentEventType(eventType)) {
+    return false;
+  }
+
   return (
     stringField(metadata.purpose) === "mpgf_public_goods_saved_commitment" ||
     eventType.startsWith("setup_intent.") ||
@@ -442,7 +473,7 @@ export function recordMpgfStripeSavedCommitmentWebhook(
   } = {},
 ): MpgfStripeSavedCommitmentWebhookEvent {
   const eventId = stringField(payload.id);
-  const eventType = stringField(payload.type) ?? "unknown";
+  const rawEventType = stringField(payload.type);
   const object = objectField(payload.data)?.object ? objectField(objectField(payload.data)?.object) ?? {} : {};
   const metadata = readMetadata(object);
   const objectId = stringField(object.id);
@@ -454,6 +485,11 @@ export function recordMpgfStripeSavedCommitmentWebhook(
     throw new Error("MPGF Stripe saved commitment webhook requires a Stripe event id.");
   }
 
+  if (!rawEventType || !isMpgfStripeSavedCommitmentEvent(rawEventType, metadata)) {
+    throw new Error("MPGF Stripe saved commitment webhook requires a supported Stripe event type.");
+  }
+
+  const eventType = rawEventType;
   const eventState = eventStateFor(eventType, stringField(object.status));
   const structureVerified = Boolean(
     objectId &&

@@ -136,6 +136,7 @@ export function MpgfConsole({
   const [publicGoodsCaptureMode, setPublicGoodsCaptureMode] =
     useState<MpgfPublicGoodsCaptureMode>("external_handoff");
   const [publicGoodsRecurring, setPublicGoodsRecurring] = useState(false);
+  const [futureUseConsentAccepted, setFutureUseConsentAccepted] = useState(false);
   const [publicGoodsReason, setPublicGoodsReason] = useState("");
   const [manualEvidenceAmount, setManualEvidenceAmount] = useState(25);
   const [manualEvidenceProvider, setManualEvidenceProvider] = useState<MpgfManualEvidenceProvider>("open_collective");
@@ -534,6 +535,11 @@ export function MpgfConsole({
       return;
     }
 
+    if (!futureUseConsentAccepted) {
+      setSavedCommitmentMessage("Accept future-use consent before saving a Stripe SetupIntent commitment.");
+      return;
+    }
+
     setPendingAction("savedCommitment");
 
     try {
@@ -545,6 +551,7 @@ export function MpgfConsole({
         body: JSON.stringify({
           amountCents: Math.max(100, Math.round(publicGoodsPledgeAmount * 100)),
           campaignId: selectedPublicGoodsCampaign.id,
+          explicitFutureUseConsent: futureUseConsentAccepted,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -862,6 +869,17 @@ export function MpgfConsole({
                 />
                 <span>Also create an optional monthly sponsor-pool refill pledge</span>
               </label>
+              <label className="checkbox-label">
+                <input
+                  checked={futureUseConsentAccepted}
+                  type="checkbox"
+                  onChange={(event) => setFutureUseConsentAccepted(event.currentTarget.checked)}
+                />
+                <span>
+                  I consent to save this payment method for one future MPGF charge only after
+                  threshold, review, challenge, and parameter-lock gates clear.
+                </span>
+              </label>
             </div>
             <dl className="mpgf-summary-grid">
               <div>
@@ -891,7 +909,12 @@ export function MpgfConsole({
             <div className="mpgf-inline-actions">
               <button
                 className="button button-primary"
-                disabled={!viewerPresent || pendingAction === "savedCommitment" || publicGoodsPledgeAmount < 1}
+                disabled={
+                  !viewerPresent ||
+                  pendingAction === "savedCommitment" ||
+                  publicGoodsPledgeAmount < 1 ||
+                  !futureUseConsentAccepted
+                }
                 type="button"
                 onClick={startSavedCommitment}
               >
