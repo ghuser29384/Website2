@@ -69,6 +69,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
         loadedContributionRecordCount: result.loadedContributionRecordCount,
         eligibleContributionRecordCount: result.eligibleContributionRecordCount,
         rawPaymentObjectCount: result.rawPaymentObjectCount,
+        allocationContextSource: result.allocationContextSource,
+        loadedCampaignCount: result.loadedCampaignCount,
         lockedParameterDigest: result.rows[0]?.locked_parameter_digest ?? null,
         baseMatchAllocatedCents: result.allocation.baseMatchAllocatedCents,
         qfBonusAllocatedCents: result.allocation.qfBonusAllocatedCents,

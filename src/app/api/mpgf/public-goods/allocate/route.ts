@@ -22,20 +22,22 @@ function isAuthorized(request: Request) {
   return authorization === `Bearer ${secret}` || url.searchParams.get("secret") === secret;
 }
 
-async function readDryRun(request: Request) {
+async function readAllocationRequest(request: Request) {
   const url = new URL(request.url);
+  const payload = request.headers.get("content-type")?.includes("application/json")
+    ? await request.json().catch(() => null)
+    : null;
+  const body = payload && typeof payload === "object" ? payload as Record<string, unknown> : null;
+  const bodyRoundId = typeof body?.roundId === "string" && body.roundId.trim() ? body.roundId.trim() : undefined;
+  const queryRoundId = url.searchParams.get("roundId")?.trim();
 
-  if (url.searchParams.get("dryRun") === "1" || url.searchParams.get("dryRun") === "true") {
-    return true;
-  }
-
-  if (!request.headers.get("content-type")?.includes("application/json")) {
-    return false;
-  }
-
-  const payload = await request.json().catch(() => null);
-
-  return Boolean(payload && typeof payload === "object" && (payload as Record<string, unknown>).dryRun === true);
+  return {
+    dryRun:
+      url.searchParams.get("dryRun") === "1" ||
+      url.searchParams.get("dryRun") === "true" ||
+      body?.dryRun === true,
+    roundId: queryRoundId || bodyRoundId,
+  };
 }
 
 export async function POST(request: Request) {
@@ -51,8 +53,10 @@ export async function POST(request: Request) {
   }
 
   try {
+    const allocationRequest = await readAllocationRequest(request);
     const result = await persistMpgfPublicGoodsAllocationResults({
-      dryRun: await readDryRun(request),
+      dryRun: allocationRequest.dryRun,
+      ...(allocationRequest.roundId ? { roundId: allocationRequest.roundId } : {}),
     });
 
     return NextResponse.json({
@@ -69,6 +73,8 @@ export async function POST(request: Request) {
       loadedContributionRecordCount: result.loadedContributionRecordCount,
       eligibleContributionRecordCount: result.eligibleContributionRecordCount,
       rawPaymentObjectCount: result.rawPaymentObjectCount,
+      allocationContextSource: result.allocationContextSource,
+      loadedCampaignCount: result.loadedCampaignCount,
       baseMatchAllocatedCents: result.allocation.baseMatchAllocatedCents,
       qfBonusAllocatedCents: result.allocation.qfBonusAllocatedCents,
       totalPayoutCents: result.allocation.totalPayoutCents,

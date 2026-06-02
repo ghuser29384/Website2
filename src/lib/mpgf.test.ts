@@ -67,6 +67,7 @@ import {
 } from "./mpgf/data";
 import type { MpgfPublicGoodsPledge } from "./mpgf/types";
 import {
+  buildMpgfPublicGoodsAllocationContextFromRows,
   buildMpgfPublicGoodsPledgesFromContributionRows,
   buildMpgfPublicGoodsAllocationResultRows,
   buildMpgfPublicGoodsAllocationSourceProofMap,
@@ -786,6 +787,58 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
       },
     ],
   });
+  const dbRoundContext = buildMpgfPublicGoodsAllocationContextFromRows({
+    roundRow: {
+      id: "mpgf-assurance-round-db-2026-06",
+      name: "June 2026 persisted assurance round",
+      starts_at: "2026-06-01T00:00:00.000Z",
+      ends_at: "2026-06-30T23:59:59.000Z",
+      match_pool_id: "mpgf-match-pool-db-2026-06",
+      qf_enabled: true,
+      qf_cap_multiple: 1.25,
+      supporter_gate: "verified_human",
+    },
+    campaignRows: [
+      {
+        id: "campaign-db-common-ground-health",
+        slug: "db-common-ground-health",
+        pool_alternative_id: null,
+        title: "Persisted common-ground health campaign",
+        destination_type: "external_charity",
+        destination_ref: "Persisted external destination",
+        cause_tags: ["global health", "common ground"],
+        public_summary: "A persisted campaign loaded for allocation finalization.",
+        threshold_amount_cents: 5_000,
+        threshold_supporters: 1,
+        deadline_at: "2026-06-30T23:59:59.000Z",
+        verification_method: "Provider webhook plus reviewer acceptance.",
+        baseline_rule: "No threat baseline.",
+        exit_rule: "Void if threshold fails.",
+        review_status: "approved",
+        challenge_window_ends_at: "2026-06-02T00:00:00.000Z",
+      },
+    ],
+    matchPoolRow: {
+      id: "mpgf-match-pool-db-2026-06",
+      funder_type: "sponsor",
+      budget_cents: 12_000,
+      base_match_ratio: 1,
+      qf_bonus_cents: 2_000,
+      visible_commitment: "Persisted sponsor pool for the June round.",
+      restrictions_json: { perDonorQfCapCents: 10_000 },
+    },
+  });
+  const dbContextPledges = persistedPledges.map((pledge) => ({
+    ...pledge,
+    campaignId: "campaign-db-common-ground-health",
+  }));
+  const dbContextAllocation = allocateMpgfAssuranceRound({
+    campaigns: dbRoundContext.campaigns,
+    pledges: dbContextPledges,
+    round: dbRoundContext.round,
+    matchPool: dbRoundContext.matchPool,
+    now: new Date("2026-06-03T00:00:00.000Z"),
+  });
   const allocation = allocateMpgfAssuranceRound();
   const rows = buildMpgfPublicGoodsAllocationResultRows({
     allocation,
@@ -818,6 +871,15 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.equal(setupOnlyPledges[0]?.captureMode, "stored_payment_method");
   assert.equal(setupOnlyPledges[0]?.eligibilityState, "pending_review");
   assert.equal(setupOnlyPledges[0]?.paymentIntentRef, undefined);
+  assert.equal(dbRoundContext.source, "database_round_context");
+  assert.equal(dbRoundContext.round.id, "mpgf-assurance-round-db-2026-06");
+  assert.equal(dbRoundContext.matchPool.id, "mpgf-match-pool-db-2026-06");
+  assert.equal(dbRoundContext.campaignCount, 1);
+  assert.equal(dbContextAllocation.roundId, dbRoundContext.round.id);
+  assert.equal(dbContextAllocation.matchPoolId, dbRoundContext.matchPool.id);
+  assert.equal(dbContextAllocation.lines[0]?.campaignId, "campaign-db-common-ground-health");
+  assert.equal(dbContextAllocation.lines[0]?.status, "payable");
+  assert.ok(dbContextAllocation.baseMatchAllocatedCents <= dbRoundContext.matchPool.budgetCents);
   assert.equal(rows.length, allocation.lines.length);
   assert.ok(globalHealth);
   assert.ok(resilience);
@@ -848,6 +910,9 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.match(allocationResultsSource, /mpgf_conditional_pledges/);
   assert.match(allocationResultsSource, /mpgf_payment_events/);
   assert.match(allocationResultsSource, /mpgf_provider_payment_events/);
+  assert.match(allocationResultsSource, /mpgf_public_goods_rounds/);
+  assert.match(allocationResultsSource, /mpgf_public_goods_campaigns/);
+  assert.match(allocationResultsSource, /mpgf_public_goods_match_pools/);
   assert.match(allocationResultsSource, /counted_after_review/);
   assert.match(allocationResultsSource, /locked_parameter_digest/);
   assert.match(allocationResultsSource, /allocation_calculation_hash/);
@@ -857,12 +922,15 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.match(formulaProofMigration, /parameters_locked_before_round_open/);
   assert.match(route, /MPGF_ALLOCATION_SECRET/);
   assert.match(route, /persistMpgfPublicGoodsAllocationResults/);
+  assert.match(route, /roundId/);
   assert.match(route, /formulaVersion/);
   assert.match(route, /contributionSource/);
+  assert.match(route, /allocationContextSource/);
   assert.match(route, /allocationCalculationHash/);
   assert.match(route, /eligibleContributionRecordCount/);
   assert.match(closeRoute, /roundId/);
   assert.match(closeRoute, /contributionSource/);
+  assert.match(closeRoute, /allocationContextSource/);
   assert.match(closeRoute, /lockedParameterDigest/);
   assert.match(route, /proofPageRequired/);
   assert.match(route, /qfBonusCapCents/);

@@ -4,9 +4,20 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
 
-import { demoMpgfAssurancePledges, demoMpgfAssuranceRound } from "./data";
+import {
+  demoMpgfAssurancePledges,
+  demoMpgfAssuranceRound,
+  demoMpgfMatchPool,
+  demoMpgfPublicGoodsCampaigns,
+} from "./data";
 import { allocateMpgfAssuranceRound } from "./mechanism";
-import type { MpgfPublicGoodsPledge, MpgfPublicGoodsRoundAllocation } from "./types";
+import type {
+  MpgfPublicGoodsCampaign,
+  MpgfPublicGoodsMatchPool,
+  MpgfPublicGoodsPledge,
+  MpgfPublicGoodsRound,
+  MpgfPublicGoodsRoundAllocation,
+} from "./types";
 
 type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
   from: (table: string) => any;
@@ -80,8 +91,53 @@ type MpgfProviderPaymentEventRow = Pick<
   | "created_at"
 >;
 
+type MpgfPublicGoodsRoundRow = {
+  id: string;
+  name: string;
+  starts_at: string;
+  ends_at: string;
+  match_pool_id: string;
+  qf_enabled: boolean;
+  qf_cap_multiple: number;
+  supporter_gate: unknown;
+};
+
+type MpgfPublicGoodsCampaignRow = {
+  id: string;
+  slug: string;
+  pool_alternative_id: string | null;
+  title: string;
+  destination_type: unknown;
+  destination_ref: string;
+  cause_tags: unknown;
+  public_summary: string;
+  threshold_amount_cents: number;
+  threshold_supporters: number;
+  deadline_at: string;
+  verification_method: string;
+  baseline_rule: string;
+  exit_rule: string;
+  review_status: unknown;
+  challenge_window_ends_at: string | null;
+};
+
+type MpgfPublicGoodsMatchPoolRow = {
+  id: string;
+  funder_type: unknown;
+  budget_cents: number;
+  base_match_ratio: number;
+  qf_bonus_cents: number;
+  visible_commitment: string;
+  restrictions_json: unknown;
+};
+
 export type MpgfPublicGoodsAllocationContributionSource =
   | "database_conditional_pledges"
+  | "demo_fixture"
+  | "explicit_input";
+
+export type MpgfPublicGoodsAllocationContextSource =
+  | "database_round_context"
   | "demo_fixture"
   | "explicit_input";
 
@@ -91,6 +147,15 @@ export interface MpgfPublicGoodsAllocationContributionLoadResult {
   rawConditionalPledgeCount: number;
   rawPaymentObjectCount: number;
   eligibleContributionRecordCount: number;
+  warnings: string[];
+}
+
+export interface MpgfPublicGoodsAllocationContextLoadResult {
+  source: MpgfPublicGoodsAllocationContextSource;
+  round: MpgfPublicGoodsRound;
+  campaigns: MpgfPublicGoodsCampaign[];
+  matchPool: MpgfPublicGoodsMatchPool;
+  campaignCount: number;
   warnings: string[];
 }
 
@@ -140,6 +205,8 @@ export interface PersistMpgfPublicGoodsAllocationResultsResult {
   loadedContributionRecordCount: number;
   eligibleContributionRecordCount: number;
   rawPaymentObjectCount: number;
+  allocationContextSource: MpgfPublicGoodsAllocationContextSource;
+  loadedCampaignCount: number;
   warnings: string[];
 }
 
@@ -151,12 +218,134 @@ function hashPublicSource(value: unknown) {
   return `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
 }
 
+function readString(row: Record<string, unknown>, key: string, fallback = "") {
+  const value = row[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function readNumber(row: Record<string, unknown>, key: string, fallback = 0) {
+  const value = Number(row[key]);
+
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function readBoolean(row: Record<string, unknown>, key: string, fallback = false) {
+  const value = row[key];
+
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function readRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function normalizeEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T) {
+  return typeof value === "string" && allowed.includes(value as T) ? value as T : fallback;
+}
+
+function clampNonNegativeInteger(value: number) {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
 function isActiveContributionRecord(pledge: MpgfPublicGoodsPledge) {
   return pledge.status === "pledged" || pledge.status === "captured";
 }
 
 function isEligibleCountedContributionRecord(pledge: MpgfPublicGoodsPledge) {
   return isActiveContributionRecord(pledge) && pledge.eligibilityState === "eligible" && pledge.amountCents > 0;
+}
+
+function mapPublicGoodsRoundRow(row: MpgfPublicGoodsRoundRow): MpgfPublicGoodsRound {
+  const record = row as unknown as Record<string, unknown>;
+
+  return {
+    id: readString(record, "id", demoMpgfAssuranceRound.id),
+    name: readString(record, "name", "Public-goods assurance round"),
+    startsAt: readString(record, "starts_at", demoMpgfAssuranceRound.startsAt),
+    endsAt: readString(record, "ends_at", demoMpgfAssuranceRound.endsAt),
+    matchPoolId: readString(record, "match_pool_id", demoMpgfMatchPool.id),
+    qfEnabled: readBoolean(record, "qf_enabled", true),
+    qfCapMultiple: Math.max(0, readNumber(record, "qf_cap_multiple", 1.5)),
+    supporterGate: normalizeEnum(
+      row.supporter_gate,
+      ["demo_self_attestation", "verified_human", "repository_existing_verification"] as const,
+      "demo_self_attestation",
+    ),
+  };
+}
+
+function mapPublicGoodsCampaignRow(row: MpgfPublicGoodsCampaignRow): MpgfPublicGoodsCampaign {
+  const record = row as unknown as Record<string, unknown>;
+  const challengeWindowEndsAt = readString(record, "challenge_window_ends_at");
+
+  return {
+    id: readString(record, "id", "campaign-unknown"),
+    slug: readString(record, "slug", "campaign-unknown"),
+    ...(row.pool_alternative_id ? { poolAlternativeId: row.pool_alternative_id } : {}),
+    title: readString(record, "title", "Public-goods assurance campaign"),
+    destinationType: normalizeEnum(
+      row.destination_type,
+      ["external_charity", "fiscal_host", "internal_demo_pool", "signed_sponsor_route"] as const,
+      "external_charity",
+    ),
+    destinationRef: readString(record, "destination_ref"),
+    causeTags: Array.isArray(row.cause_tags) ? row.cause_tags.map(String) : [],
+    publicSummary: readString(record, "public_summary"),
+    thresholdAmountCents: Math.max(1, clampNonNegativeInteger(readNumber(record, "threshold_amount_cents"))),
+    thresholdSupporters: Math.max(1, clampNonNegativeInteger(readNumber(record, "threshold_supporters"))),
+    deadlineAt: readString(record, "deadline_at", demoMpgfAssuranceRound.endsAt),
+    verificationMethod: readString(record, "verification_method"),
+    baselineRule: readString(record, "baseline_rule"),
+    exitRule: readString(record, "exit_rule"),
+    reviewStatus: normalizeEnum(
+      row.review_status,
+      ["draft", "submitted", "needs_evidence", "challenge_window", "approved", "blocked", "finalized"] as const,
+      "submitted",
+    ),
+    ...(challengeWindowEndsAt ? { challengeWindowEndsAt } : {}),
+  };
+}
+
+function mapPublicGoodsMatchPoolRow(row: MpgfPublicGoodsMatchPoolRow): MpgfPublicGoodsMatchPool {
+  const record = row as unknown as Record<string, unknown>;
+
+  return {
+    id: readString(record, "id", demoMpgfMatchPool.id),
+    funderType: normalizeEnum(
+      row.funder_type,
+      ["demo_common_ground_pool", "sponsor", "subscription_pool", "institution"] as const,
+      "demo_common_ground_pool",
+    ),
+    budgetCents: clampNonNegativeInteger(readNumber(record, "budget_cents")),
+    baseMatchRatio: Math.max(0, readNumber(record, "base_match_ratio", 1)),
+    qfBonusCents: clampNonNegativeInteger(readNumber(record, "qf_bonus_cents")),
+    visibleCommitment: readString(record, "visible_commitment", "A visible sponsor commitment backs threshold-cleared campaigns."),
+    restrictionsJson: readRecord(row.restrictions_json),
+  };
+}
+
+export function buildMpgfPublicGoodsAllocationContextFromRows({
+  roundRow,
+  campaignRows,
+  matchPoolRow,
+}: {
+  roundRow: MpgfPublicGoodsRoundRow;
+  campaignRows: MpgfPublicGoodsCampaignRow[];
+  matchPoolRow: MpgfPublicGoodsMatchPoolRow;
+}): MpgfPublicGoodsAllocationContextLoadResult {
+  const round = mapPublicGoodsRoundRow(roundRow);
+  const campaigns = campaignRows.map(mapPublicGoodsCampaignRow);
+  const matchPool = mapPublicGoodsMatchPoolRow(matchPoolRow);
+
+  return {
+    source: "database_round_context",
+    round,
+    campaigns,
+    matchPool,
+    campaignCount: campaigns.length,
+    warnings: [],
+  };
 }
 
 function groupBy<T, K extends string>(rows: T[], keyForRow: (row: T) => K | null | undefined) {
@@ -457,6 +646,99 @@ async function selectSupabaseRows<T>(
   return (result.data ?? []) as T[];
 }
 
+async function selectSupabaseSingleRow<T>(
+  supabase: SupabaseServiceAny,
+  table: string,
+  select: string,
+  filterQuery: (query: any) => any,
+) {
+  const result = await filterQuery(supabase.from(table).select(select)).maybeSingle();
+
+  if (result.error) {
+    throw new Error(`Could not load MPGF public-goods allocation context from ${table}: ${result.error.message}`);
+  }
+
+  return result.data as T | null;
+}
+
+function demoAllocationContext(warnings: string[] = []): MpgfPublicGoodsAllocationContextLoadResult {
+  return {
+    source: "demo_fixture",
+    round: demoMpgfAssuranceRound,
+    campaigns: demoMpgfPublicGoodsCampaigns,
+    matchPool: demoMpgfMatchPool,
+    campaignCount: demoMpgfPublicGoodsCampaigns.length,
+    warnings,
+  };
+}
+
+export async function loadMpgfPublicGoodsAllocationContext({
+  roundId = demoMpgfAssuranceRound.id,
+}: {
+  roundId?: string;
+} = {}): Promise<MpgfPublicGoodsAllocationContextLoadResult> {
+  if (!hasSupabaseEnv() || !hasServiceRoleEnv()) {
+    return demoAllocationContext([
+      "Supabase service-role round context loading is not configured; using demo MPGF round, campaign, and match-pool parameters.",
+    ]);
+  }
+
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const roundRow = await selectSupabaseSingleRow<MpgfPublicGoodsRoundRow>(
+    supabase,
+    "mpgf_public_goods_rounds",
+    "id, name, starts_at, ends_at, match_pool_id, qf_enabled, qf_cap_multiple, supporter_gate",
+    (query) => query.eq("id", roundId),
+  );
+
+  if (!roundRow) {
+    throw new Error(`MPGF public-goods round ${roundId} was not found for allocation finalization.`);
+  }
+
+  const campaignRows = await selectSupabaseRows<MpgfPublicGoodsCampaignRow>(
+    supabase,
+    "mpgf_public_goods_campaigns",
+    [
+      "id",
+      "slug",
+      "pool_alternative_id",
+      "title",
+      "destination_type",
+      "destination_ref",
+      "cause_tags",
+      "public_summary",
+      "threshold_amount_cents",
+      "threshold_supporters",
+      "deadline_at",
+      "verification_method",
+      "baseline_rule",
+      "exit_rule",
+      "review_status",
+      "challenge_window_ends_at",
+    ].join(","),
+    (query) => query.eq("round_id", roundId),
+  );
+  const matchPoolRow = await selectSupabaseSingleRow<MpgfPublicGoodsMatchPoolRow>(
+    supabase,
+    "mpgf_public_goods_match_pools",
+    "id, funder_type, budget_cents, base_match_ratio, qf_bonus_cents, visible_commitment, restrictions_json",
+    (query) => query.eq("id", roundRow.match_pool_id),
+  );
+
+  if (!matchPoolRow) {
+    throw new Error(`MPGF public-goods match pool ${roundRow.match_pool_id} was not found for allocation finalization.`);
+  }
+
+  const context = buildMpgfPublicGoodsAllocationContextFromRows({ roundRow, campaignRows, matchPoolRow });
+
+  return {
+    ...context,
+    warnings: campaignRows.length === 0
+      ? [`MPGF public-goods round ${roundId} has no persisted campaigns; allocation output will have no campaign rows.`]
+      : [],
+  };
+}
+
 export async function loadMpgfPublicGoodsAllocationContributionRecords({
   roundId = demoMpgfAssuranceRound.id,
 }: {
@@ -731,17 +1013,42 @@ export function buildMpgfPublicGoodsAllocationResultRows({
 
 export async function persistMpgfPublicGoodsAllocationResults({
   allocation,
+  campaigns,
+  matchPool,
   pledges,
+  round,
   dryRun = false,
   finalizedAt = new Date().toISOString(),
   roundId = demoMpgfAssuranceRound.id,
 }: {
   allocation?: MpgfPublicGoodsRoundAllocation;
+  campaigns?: MpgfPublicGoodsCampaign[];
+  matchPool?: MpgfPublicGoodsMatchPool;
   pledges?: MpgfPublicGoodsPledge[];
+  round?: MpgfPublicGoodsRound;
   dryRun?: boolean;
   finalizedAt?: string;
   roundId?: string;
 } = {}): Promise<PersistMpgfPublicGoodsAllocationResultsResult> {
+  const contextLoad = allocation
+    ? {
+        source: "explicit_input" as const,
+        round: round ?? demoMpgfAssuranceRound,
+        campaigns: campaigns ?? [],
+        matchPool: matchPool ?? demoMpgfMatchPool,
+        campaignCount: campaigns?.length ?? allocation.lines.length,
+        warnings: [],
+      }
+    : round && campaigns && matchPool
+      ? {
+          source: "explicit_input" as const,
+          round,
+          campaigns,
+          matchPool,
+          campaignCount: campaigns.length,
+          warnings: [],
+        }
+      : await loadMpgfPublicGoodsAllocationContext({ roundId });
   const contributionLoad = pledges
     ? {
         source: "explicit_input" as const,
@@ -753,7 +1060,13 @@ export async function persistMpgfPublicGoodsAllocationResults({
       }
     : await loadMpgfPublicGoodsAllocationContributionRecords({ roundId });
   const sourcePledges = contributionLoad.pledges;
-  const sourceAllocation = allocation ?? allocateMpgfAssuranceRound({ pledges: sourcePledges });
+  const sourceAllocation = allocation ?? allocateMpgfAssuranceRound({
+    campaigns: contextLoad.campaigns,
+    pledges: sourcePledges,
+    round: contextLoad.round,
+    matchPool: contextLoad.matchPool,
+  });
+  const warnings = [...contextLoad.warnings, ...contributionLoad.warnings];
   const rows = buildMpgfPublicGoodsAllocationResultRows({
     allocation: sourceAllocation,
     pledges: sourcePledges,
@@ -771,7 +1084,9 @@ export async function persistMpgfPublicGoodsAllocationResults({
       loadedContributionRecordCount: contributionLoad.rawConditionalPledgeCount,
       eligibleContributionRecordCount: contributionLoad.eligibleContributionRecordCount,
       rawPaymentObjectCount: contributionLoad.rawPaymentObjectCount,
-      warnings: contributionLoad.warnings,
+      allocationContextSource: contextLoad.source,
+      loadedCampaignCount: contextLoad.campaignCount,
+      warnings,
     };
   }
 
@@ -786,8 +1101,10 @@ export async function persistMpgfPublicGoodsAllocationResults({
       loadedContributionRecordCount: contributionLoad.rawConditionalPledgeCount,
       eligibleContributionRecordCount: contributionLoad.eligibleContributionRecordCount,
       rawPaymentObjectCount: contributionLoad.rawPaymentObjectCount,
+      allocationContextSource: contextLoad.source,
+      loadedCampaignCount: contextLoad.campaignCount,
       warnings: [
-        ...contributionLoad.warnings,
+        ...warnings,
         "Supabase service-role configuration is required to persist MPGF public-goods allocation results.",
       ],
     };
@@ -813,6 +1130,8 @@ export async function persistMpgfPublicGoodsAllocationResults({
     loadedContributionRecordCount: contributionLoad.rawConditionalPledgeCount,
     eligibleContributionRecordCount: contributionLoad.eligibleContributionRecordCount,
     rawPaymentObjectCount: contributionLoad.rawPaymentObjectCount,
-    warnings: contributionLoad.warnings,
+    allocationContextSource: contextLoad.source,
+    loadedCampaignCount: contextLoad.campaignCount,
+    warnings,
   };
 }
