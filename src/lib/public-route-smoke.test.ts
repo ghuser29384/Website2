@@ -679,6 +679,8 @@ test("background networking and reasoning routes are distinct resilient public r
   assert.match(backgroundPage, /Match signal contract/);
   assert.match(backgroundPage, /Suggestions explain public compatibility without revealing private wishes/);
   assert.match(backgroundPage, /matchSignalContract\.sampleSignal/);
+  assert.match(backgroundPage, /participantExplanation\.headline/);
+  assert.match(backgroundPage, /participantExplanation\.redactionNotice/);
   assert.match(backgroundPage, /matchSignalContract\.redactedFields/);
   assert.match(backgroundPage, /AI shadow mode/);
   assert.match(backgroundPage, /Open shadow contract/);

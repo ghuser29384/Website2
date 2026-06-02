@@ -268,7 +268,7 @@ export default async function BackgroundNetworkingPage({
 
           <div className="protocol-review-grid">
             <article className="panel data-card">
-              <h3>Why this sample appears</h3>
+              <h3>{matchSignalContract.sampleSignal.participantExplanation.headline}</h3>
               <p className="route-text">
                 {matchSignalContract.sampleSignal.participantExplanation.summary}
               </p>
@@ -277,6 +277,9 @@ export default async function BackgroundNetworkingPage({
                   <span key={factorCode}>{factorCode}</span>
                 ))}
               </div>
+              <p className="panel-note">
+                {matchSignalContract.sampleSignal.participantExplanation.redactionNotice}
+              </p>
             </article>
 
             <article className="panel data-card">
