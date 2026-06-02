@@ -248,6 +248,9 @@ const SENSITIVE_FUNNEL_METADATA_KEY_PATTERN =
   /(wish|ask|constraint|contact|email|phone|address|private|raw|message|note|source|evidence|receipt|counterparty|prompt|text)/i;
 const SENSITIVE_FUNNEL_VALUE_PATTERN =
   /\b(exact\s+private\s+wish|private\s+wish|source\s+note|raw\s+note|contact\s+details|sensitive\s+constraint|private\s+feed|counterparty)\b/i;
+const SAFE_QUERY_LENGTH_BUCKETS = new Set(["0", "1-19", "20-99", "100+"]);
+
+type SearchParamReader = Pick<URLSearchParams, "get" | "has" | "keys">;
 
 function normalizeFunnelMetadataKey(key: string) {
   return key.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 48);
@@ -302,12 +305,49 @@ function getSearchParamKeys(value: unknown) {
   }
 
   try {
-    return Array.from(new Set(Array.from(new URLSearchParams(raw).keys()).map(normalizeFunnelMetadataKey)))
+    return Array.from(
+      new Set(
+        Array.from(new URLSearchParams(raw).keys())
+          .map(normalizeFunnelMetadataKey)
+          .filter((key) => key && !SENSITIVE_FUNNEL_METADATA_KEY_PATTERN.test(key)),
+      ),
+    )
       .filter(Boolean)
       .slice(0, 12);
   } catch {
     return [];
   }
+}
+
+export function buildPrivacySafeSearchMetadata(
+  value: SearchParamReader | string | null | undefined,
+) {
+  if (!value) {
+    return {};
+  }
+
+  const params =
+    typeof value === "string" ? new URLSearchParams(value.replace(/^\?/, "")) : value;
+  const searchParamKeys = Array.from(
+    new Set(
+      Array.from(params.keys())
+        .map(normalizeFunnelMetadataKey)
+        .filter((key) => key && !SENSITIVE_FUNNEL_METADATA_KEY_PATTERN.test(key)),
+    ),
+  ).slice(0, 12);
+  const metadata: Record<string, unknown> = {};
+
+  if (searchParamKeys.length) {
+    metadata.searchParamKeys = searchParamKeys;
+  }
+
+  if (params.has("search") || params.has("q")) {
+    const query = params.get("search") ?? params.get("q") ?? "";
+    metadata.queryPresent = cleanFunnelScalarText(query, 10_000).length > 0;
+    metadata.queryLengthBucket = getTextLengthBucket(query);
+  }
+
+  return metadata;
 }
 
 export function sanitizeFunnelEventPath(value: unknown, maxLength = 1_000) {
@@ -366,10 +406,41 @@ export function sanitizeFunnelEventMetadata(value: unknown) {
       continue;
     }
 
+    if (key === "queryPresent") {
+      safeMetadata.queryPresent =
+        rawValue === true || rawValue === "true" || rawValue === "1";
+      continue;
+    }
+
+    if (key === "queryLengthBucket") {
+      const bucket = cleanFunnelScalarText(rawValue, 20);
+      if (SAFE_QUERY_LENGTH_BUCKETS.has(bucket)) {
+        safeMetadata.queryLengthBucket = bucket;
+      }
+      continue;
+    }
+
     if (key === "search") {
       const searchParamKeys = getSearchParamKeys(rawValue);
       if (searchParamKeys.length) {
         safeMetadata.searchParamKeys = searchParamKeys;
+      }
+      continue;
+    }
+
+    if (key === "searchParamKeys") {
+      if (Array.isArray(rawValue)) {
+        const searchParamKeys = Array.from(
+          new Set(
+            rawValue
+              .map((entry) => normalizeFunnelMetadataKey(String(entry)))
+              .filter((entry) => entry && !SENSITIVE_FUNNEL_METADATA_KEY_PATTERN.test(entry)),
+          ),
+        ).slice(0, 12);
+
+        if (searchParamKeys.length) {
+          safeMetadata.searchParamKeys = searchParamKeys;
+        }
       }
       continue;
     }

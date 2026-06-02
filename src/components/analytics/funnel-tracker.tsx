@@ -6,6 +6,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 import {
   ANALYTICS_OPT_OUT_COOKIE_NAME,
+  buildPrivacySafeSearchMetadata,
+  sanitizeFunnelEventPath,
   type FunnelEventType,
 } from "@/lib/growth";
 
@@ -52,7 +54,7 @@ function postFunnelEvent(eventType: FunnelEventType, metadata: Record<string, un
   const body = JSON.stringify({
     eventType,
     metadata,
-    path: `${window.location.pathname}${window.location.search}`,
+    path: window.location.pathname,
     referrer: document.referrer,
   });
 
@@ -114,9 +116,7 @@ export function FunnelTracker() {
   });
 
   useEffect(() => {
-    postFunnelEvent("page_view", {
-      search: searchParams.toString(),
-    });
+    postFunnelEvent("page_view", buildPrivacySafeSearchMetadata(searchParams));
 
     if (pathname.startsWith("/offers/examples/")) {
       postFunnelEvent("worked_example_opened", {
@@ -125,15 +125,11 @@ export function FunnelTracker() {
     }
 
     if (pathname === "/login") {
-      postFunnelEvent("sign_in_started", {
-        search: searchParams.toString(),
-      });
+      postFunnelEvent("sign_in_started", buildPrivacySafeSearchMetadata(searchParams));
     }
 
     if ((pathname === "/offers" || pathname === "/wish-registry") && searchParams.get("search")) {
-      postFunnelEvent("registry_search_executed", {
-        query: searchParams.get("search"),
-      });
+      postFunnelEvent("registry_search_executed", buildPrivacySafeSearchMetadata(searchParams));
     }
 
     if (pathname.startsWith("/cohort/")) {
@@ -156,7 +152,7 @@ export function FunnelTracker() {
       }
 
       postFunnelEvent(inferredEvent, {
-        href: target.href,
+        href: sanitizeFunnelEventPath(target.href),
         label: target.textContent?.replace(/\s+/g, " ").trim() ?? "",
       });
     }

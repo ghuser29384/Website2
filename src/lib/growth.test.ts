@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ANALYTICS_OPT_OUT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
+  buildPrivacySafeSearchMetadata,
   buildPrivacySafeFunnelEventRecord,
   isAnalyticsOptedOut,
   isFunnelEventType,
@@ -19,9 +20,10 @@ test("funnel event metadata redacts raw private search and contact-like fields",
     exampleId: "seed-victoria",
     href: "https://www.moraltrade.org/offers?search=private+wish#section",
     label: "Open person@example.com",
+    private_wish: "should not keep sensitive parameter names",
     privateWishText: "I privately want a counterparty to do X.",
     query: "exact private wish phrase",
-    search: "search=exact+private+wish&mode=offset",
+    search: "search=exact+private+wish&mode=offset&private_wish=secret",
     sourceNote: "private notes from a source",
   });
   const serialized = JSON.stringify(metadata);
@@ -34,9 +36,30 @@ test("funnel event metadata redacts raw private search and contact-like fields",
   assert.equal(metadata.queryLengthBucket, "20-99");
   assert.deepEqual(metadata.searchParamKeys, ["search", "mode"]);
   assert.equal(serialized.includes("exact private wish"), false);
+  assert.equal(serialized.includes("private_wish"), false);
+  assert.equal(serialized.includes("secret"), false);
   assert.equal(serialized.includes("person@example.com"), false);
   assert.equal(serialized.includes("counterparty to do X"), false);
   assert.equal(serialized.includes("private notes"), false);
+});
+
+test("privacy-safe search metadata exposes only parameter keys and query buckets", () => {
+  const metadata = buildPrivacySafeSearchMetadata(
+    "search=exact+private+wish+about+a+counterparty&mode=offset&private_wish=secret",
+  );
+  const sanitized = sanitizeFunnelEventMetadata(metadata);
+  const serialized = JSON.stringify(sanitized);
+
+  assert.deepEqual(metadata, {
+    queryLengthBucket: "20-99",
+    queryPresent: true,
+    searchParamKeys: ["search", "mode"],
+  });
+  assert.deepEqual(sanitized, metadata);
+  assert.equal(serialized.includes("exact private wish"), false);
+  assert.equal(serialized.includes("counterparty"), false);
+  assert.equal(serialized.includes("private_wish"), false);
+  assert.equal(serialized.includes("secret"), false);
 });
 
 test("server funnel event records sanitize metadata, paths, and attribution referrers", () => {

@@ -1195,6 +1195,7 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(growthSource, /PARTNER_COHORTS/);
   assert.match(growthSource, /sanitizeFunnelEventMetadata/);
   assert.match(growthSource, /sanitizeFunnelEventPath/);
+  assert.match(growthSource, /buildPrivacySafeSearchMetadata/);
   assert.match(growthSource, /buildPrivacySafeFunnelEventRecord/);
   assert.match(growthSource, /ANALYTICS_OPT_OUT_COOKIE_NAME/);
   assert.match(growthSource, /isAnalyticsOptedOut/);
@@ -1223,6 +1224,11 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(actionsSource, /isAnalyticsOptedOut/);
   assert.match(funnelTracker, /useReportWebVitals/);
   assert.match(funnelTracker, /ANALYTICS_OPT_OUT_COOKIE_NAME/);
+  assert.match(funnelTracker, /buildPrivacySafeSearchMetadata/);
+  assert.match(funnelTracker, /path: window\.location\.pathname/);
+  assert.doesNotMatch(funnelTracker, /window\.location\.search/);
+  assert.doesNotMatch(funnelTracker, /searchParams\.toString\(\)/);
+  assert.doesNotMatch(funnelTracker, /query:\s*searchParams\.get\("search"\)/);
   assert.match(funnelTracker, /performance_metric_recorded/);
   assert.match(funnelTracker, /metricValueBucket/);
   assert.match(funnelTracker, /CLS/);
