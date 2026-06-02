@@ -163,7 +163,7 @@
     {
       "code": "no_global_moral_ranking",
       "label": "No global moral ranking",
-      "rule": "Never decide whether a proposal is objectively morally correct."
+      "rule": "Never decide, rank, score, or compare whether a proposal is objectively morally correct."
     },
     {
       "code": "no_autonomous_outreach",

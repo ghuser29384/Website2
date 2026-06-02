@@ -413,6 +413,13 @@ const INCOMPLETE_RECORD_CERTAINTY_PATTERN =
   /\b(guaranteed|definitive(?:ly)?|certain(?:ly)?|conclusive(?:ly)?|unquestionably|no uncertainty|proven beyond doubt|fully verified|safe to rely on without review|can be relied on without review)\b/i;
 const PROHIBITED_RELIANCE_CLAIM_PATTERN =
   /\b(escrow-backed|escrow protected|legally enforceable|tax deductible|tax treatment guaranteed|investment advice|custody service|custody-backed|platform moral endorsement|morally endorsed by the platform|completion guaranteed)\b/i;
+const GLOBAL_MORAL_RANKING_SAFE_NEGATION_PATTERN =
+  /\b(do not|don't|never|must not|cannot|should not|no global moral ranking|participant[- ]relative|participant's own stated priorities|not a platform judgment|not platform judgment)\b/i;
+const GLOBAL_MORAL_RANKING_PATTERNS = [
+  /\b(objectively|universally|globally)\b[^.\n]{0,120}\b(morally correct|morally right|morally wrong|morally best|moral(?:ly)? superior|best moral|moral value|rank(?:ed|ing)?|score)\b/i,
+  /\b(rank|ranking|score|scoring|rate|rating)\b[^.\n]{0,120}\b(proposal|trade|offer|participant|cause|moral value|morality)\b[^.\n]{0,120}\b(globally|objectively|universally|by the platform|platform-wide)\b/i,
+  /\b(platform|moral trade)\b[^.\n]{0,120}\b(decides?|determines?|certifies?|endorses?)\b[^.\n]{0,120}\b(morally correct|moral(?:ly)? superior|best moral|objective moral)\b/i,
+] as const;
 const AUTONOMOUS_OUTREACH_SAFE_NEGATION_PATTERN =
   /\b(do not|don't|never|must not|cannot|should not|no autonomous outreach|only after explicit consent)\b/i;
 const AUTONOMOUS_OUTREACH_PATTERNS = [
@@ -452,6 +459,18 @@ function containsIncompleteRecordCertaintyClaim(value: string) {
 
 function containsProhibitedRelianceClaim(value: string) {
   return PROHIBITED_RELIANCE_CLAIM_PATTERN.test(value);
+}
+
+function containsGlobalMoralRankingClaim(value: string) {
+  return value.split(/[.!?\n]+/).some((sentence) => {
+    const trimmed = sentence.trim();
+
+    return (
+      Boolean(trimmed) &&
+      !GLOBAL_MORAL_RANKING_SAFE_NEGATION_PATTERN.test(trimmed) &&
+      GLOBAL_MORAL_RANKING_PATTERNS.some((pattern) => pattern.test(trimmed))
+    );
+  });
 }
 
 function containsAutonomousOutreachClaim(value: string) {
@@ -1405,6 +1424,22 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
   ) {
     blockers.push(
       "no_escrow_legal_tax_claims: copilot outputs cannot imply escrow, custody, legal enforceability, tax treatment, investment advice, guarantees, or objective moral endorsement",
+    );
+  }
+
+  if (
+    containsGlobalMoralRankingClaim(output.reviewer_summary) ||
+    output.verification_loop.some((step) => containsGlobalMoralRankingClaim(step.detail)) ||
+    output.cited_evidence_table.some((row) =>
+      containsGlobalMoralRankingClaim(`${row.claim} ${row.reviewer_note}`),
+    ) ||
+    output.next_step_checklist.some((step) => containsGlobalMoralRankingClaim(step)) ||
+    output.review_instructions.artifacts_to_request.some(containsGlobalMoralRankingClaim) ||
+    output.review_instructions.review_scope.some(containsGlobalMoralRankingClaim) ||
+    output.review_instructions.appeal_triggers.some(containsGlobalMoralRankingClaim)
+  ) {
+    blockers.push(
+      "no_global_moral_ranking: copilot outputs cannot rank or score proposals as objectively morally correct",
     );
   }
 

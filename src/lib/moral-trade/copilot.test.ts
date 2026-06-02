@@ -710,6 +710,19 @@ test("copilot output validation rejects escrow, legal, tax, custody, or endorsem
   );
 });
 
+test("copilot output validation rejects global moral ranking claims", () => {
+  const output = buildMoralTradeCopilotOutput(completeDraft);
+
+  output.reviewer_summary += " The platform decides this offer is objectively morally correct.";
+  output.next_step_checklist[0] =
+    "Score this proposal globally as the morally best trade before reviewer approval.";
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("no_global_moral_ranking")));
+});
+
 test("copilot output validation rejects autonomous outreach or private disclosure instructions", () => {
   const output = buildMoralTradeCopilotOutput(completeDraft);
 
