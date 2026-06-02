@@ -168,7 +168,7 @@
       "responseSchema": "copilot_review_response",
       "rateLimitSurface": "copilot_draft_review",
       "cacheControl": "private_no_store",
-      "fallback": "Return request, evidence-metadata, or output validation blockers and deterministic manual-review fallback metadata; never store the submitted draft, raw evidence artifacts, contact counterparties, or change proposal state."
+      "fallback": "Return request, evidence-metadata, strict-input-bundle, or output validation blockers and deterministic manual-review fallback metadata; invalid strict bundles emit no copilot output packet, and the route never stores submitted drafts, retains raw evidence artifacts, contacts counterparties, or changes proposal state."
     },
     {
       "key": "moral_trade_match_signal_contract",
@@ -951,7 +951,7 @@
         { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; the route cannot publish, match, disclose, or change proposal state." },
         { "key": "inputBundleUsed", "type": "string_array", "required": true, "privacy": "public_contract", "description": "Strict local bundle sources used to produce the review output." },
         { "key": "evidenceMetadataSummary", "type": "object", "required": true, "privacy": "private_response", "description": "Accepted, rejected, and ignored-field counts for already-submitted evidence metadata plus redactions applied; raw artifacts and private notes are never returned." },
-        { "key": "output", "type": "moral_trade_copilot_output", "required": false, "privacy": "private_response", "description": "Approved status, completeness, trust assessment, match explanation, fixed verification loop, checklist, evidence table, review instructions, and reviewer summary when the request contains a structured draft." },
+        { "key": "output", "type": "moral_trade_copilot_output", "required": false, "privacy": "private_response", "description": "Approved status, completeness, trust assessment, match explanation, fixed verification loop, checklist, evidence table, review instructions, and reviewer summary only when the strict input bundle and evidence metadata pass pre-output validation." },
         { "key": "outputValidation", "type": "validator_result", "required": false, "privacy": "public_contract", "description": "Validation result for the generated output packet when one is produced." },
         { "key": "contractValidation", "type": "validator_result", "required": false, "privacy": "public_contract", "description": "Validation result for the copilot contract itself." },
         { "key": "fallback", "type": "string", "required": false, "privacy": "public_contract", "description": "Safe fallback reason for malformed or missing request bodies." },

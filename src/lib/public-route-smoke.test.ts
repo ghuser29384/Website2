@@ -3055,12 +3055,15 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(copilotReviewRoute, /normalizeMoralTradeCopilotEvidenceMetadata/);
   assert.match(copilotReviewRoute, /auditMoralTradeCopilotStrictInputBundle/);
   assert.match(copilotReviewRoute, /inputBundleAudit/);
+  assert.match(copilotReviewRoute, /preOutputBlockers/);
+  assert.match(copilotReviewRoute, /without emitting an output packet/);
   assert.match(copilotReviewRoute, /evidenceMetadataSummary/);
   assert.match(copilotReviewRoute, /validateMoralTradeCopilotOutput/);
   assert.match(copilotReviewRoute, /deterministic_draft_review_only/);
   assert.match(copilotReviewRoute, /stateMutation/);
   assert.equal(copilotReviewRoute.includes("stateMutation: true"), false);
   assert.match(copilotReviewRoute, /private, no-store/);
+  assert.match(apiContractProfile, /invalid strict bundles emit no copilot output packet/);
   assert.match(matchSignalContractRoute, /validateMoralTradeMatchSignalContract/);
   assert.match(matchSignalContractRoute, /approvedFactorCodes/);
   assert.match(matchSignalContractRoute, /privacyPolicyId/);

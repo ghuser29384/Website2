@@ -621,6 +621,9 @@ test("copilot review route rejects broad top-level context even when draft is va
       blocker.includes("strict_input_bundle:top_level_field_not_allowed:rawPrivateFeed"),
     ),
   );
+  assert.equal("output" in body, false);
+  assert.equal("outputValidation" in body, false);
+  assert.match(body.fallback, /without emitting an output packet/i);
 });
 
 test("copilot review route fails closed on raw evidence metadata", async () => {
@@ -657,6 +660,9 @@ test("copilot review route fails closed on raw evidence metadata", async () => {
       blocker.includes("evidence_metadata:0:raw_or_private_fields_not_allowed"),
     ),
   );
+  assert.equal("output" in body, false);
+  assert.equal("outputValidation" in body, false);
+  assert.match(body.fallback, /without emitting an output packet/i);
 });
 
 test("copilot review route fails closed on malformed or missing draft input", async () => {

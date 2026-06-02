@@ -199,6 +199,34 @@ export async function POST(request: Request) {
   const evidenceMetadataNormalization = normalizeMoralTradeCopilotEvidenceMetadata(
     requestEvidenceMetadata,
   );
+  const preOutputBlockers = [
+    ...contractValidation.blockers,
+    ...inputBundleAudit.blockers,
+    ...evidenceMetadataNormalization.blockers,
+  ];
+
+  if (preOutputBlockers.length) {
+    return jsonResponse(
+      {
+        ok: false,
+        checkedAt: new Date().toISOString(),
+        contractVersion: contract.version,
+        decisioningMode: "deterministic_draft_review_only",
+        stateMutation: false,
+        inputBundleUsed: contract.strictInputBundle,
+        inputBundleAudit,
+        evidenceMetadataSummary: summarizeMoralTradeCopilotEvidenceMetadata(
+          evidenceMetadataNormalization,
+        ),
+        contractValidation,
+        fallback:
+          "Invalid strict copilot input bundles fall back to manual or deterministic review without emitting an output packet or changing proposal state.",
+        blockers: preOutputBlockers,
+      },
+      422,
+    );
+  }
+
   const output = buildMoralTradeCopilotOutput(
     normalizeDraftInput(requestDraft),
     normalizeCitations(body.citations),

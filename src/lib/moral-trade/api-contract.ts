@@ -953,7 +953,8 @@ export function validateMoralTradeApiContractProfile(
           route.method === "POST" &&
           route.cacheControl === "private_no_store" &&
           route.rateLimitSurface === "copilot_draft_review" &&
-          /never store|without changing proposal state|change proposal state/i.test(route.fallback),
+          /never store|without changing proposal state|change proposal state/i.test(route.fallback) &&
+          /strict-input-bundle|no copilot output packet/i.test(route.fallback),
       ) &&
         Boolean(
           copilotReviewRequest?.fields.some(
@@ -969,6 +970,14 @@ export function validateMoralTradeApiContractProfile(
               field.key === "evidenceMetadataSummary" &&
               field.required &&
               /raw artifacts|private notes/i.test(field.description),
+          ),
+        ) &&
+        Boolean(
+          copilotReviewResponse?.fields.some(
+            (field) =>
+              field.key === "output" &&
+              !field.required &&
+              /strict input bundle|pre-output validation/i.test(field.description),
           ),
         ),
       draftReviewRoutes.map((route) => `${route.key}:${route.cacheControl}`).join(", "),

@@ -643,6 +643,15 @@ export function validateMoralTradeCopilotReviewRouteImplementation({
       "Review route should normalize structured draft, citations, and redacted evidence metadata only.",
     ),
     check(
+      "copilot-review-invalid-bundle-no-output",
+      "Copilot review route emits no output for invalid strict bundles",
+      /preOutputBlockers/.test(routeSource) &&
+        /without emitting an output packet/.test(routeSource) &&
+        /inputBundleAudit\.blockers/.test(routeSource) &&
+        /evidenceMetadataNormalization\.blockers/.test(routeSource),
+      "Invalid strict input bundles should return blockers and fallback metadata before producing output.",
+    ),
+    check(
       "copilot-review-output-validation",
       "Copilot review route validates output before success",
       /validateMoralTradeCopilotOutput/.test(routeSource) &&
