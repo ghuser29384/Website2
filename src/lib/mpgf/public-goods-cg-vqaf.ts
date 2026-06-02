@@ -238,6 +238,19 @@ export function defaultMpgfPublicGoodsSupportStrengthBps(signalType: MpgfPublicG
   return MPGF_PUBLIC_GOODS_SUPPORT_SIGNAL_OPTIONS.find((option) => option.value === signalType)?.defaultStrengthBps ?? 0;
 }
 
+export interface MpgfPublicGoodsStoredSupportSignal {
+  id: string;
+  roundId: string;
+  campaignId: string;
+  userRefHash: string;
+  moralClusterHash: string;
+  signalType: string;
+  strengthBps: number;
+  countsForCommonGround: boolean;
+  calcHash: string;
+  createdAt: string;
+}
+
 const demoSupportSignals: Array<{
   campaignId: string;
   userRef: string;
@@ -319,6 +332,17 @@ const demoSupportSignals: Array<{
 
 function hashValue(value: unknown) {
   return `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
+}
+
+export function hashMpgfPublicGoodsMoralCluster(moralCluster: MpgfPublicGoodsMoralCluster) {
+  return hashValue(["mpgf-cg-vqaf-moral-cluster", moralCluster]);
+}
+
+export function moralClusterFromMpgfPublicGoodsHash(hash: string): MpgfPublicGoodsMoralCluster | null {
+  return (
+    MPGF_PUBLIC_GOODS_MORAL_CLUSTER_OPTIONS.find((option) => hashMpgfPublicGoodsMoralCluster(option.value) === hash)
+      ?.value ?? null
+  );
 }
 
 function clampBps(value: number) {
@@ -494,6 +518,40 @@ export function createMpgfPublicGoodsSupportSignal({
     strengthBps,
     createdAt,
   });
+}
+
+export function supportSignalFromMpgfPublicGoodsStorageRow(
+  row: MpgfPublicGoodsStoredSupportSignal,
+): MpgfPublicGoodsSupportSignal | null {
+  const moralCluster = moralClusterFromMpgfPublicGoodsHash(row.moralClusterHash);
+
+  if (!moralCluster || !isMpgfPublicGoodsSupportSignalType(row.signalType)) {
+    return null;
+  }
+
+  return {
+    ok: true,
+    id: row.id,
+    roundId: row.roundId,
+    campaignId: row.campaignId,
+    userRefHash: row.userRefHash,
+    moralCluster,
+    signalType: row.signalType,
+    strengthBps: clampBps(row.strengthBps),
+    privateByDefault: true,
+    countsForCommonGround: row.countsForCommonGround,
+    noGlobalMoralRanking: true,
+    createdAt: row.createdAt,
+    calcHash: row.calcHash || hashValue([
+      row.roundId,
+      row.campaignId,
+      row.userRefHash,
+      row.moralClusterHash,
+      row.signalType,
+      row.strengthBps,
+      row.createdAt,
+    ]),
+  };
 }
 
 function defaultSupportSignals(round = demoMpgfAssuranceRound) {

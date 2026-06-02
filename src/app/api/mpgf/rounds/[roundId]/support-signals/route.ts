@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import { NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
@@ -9,6 +7,7 @@ import {
   createMpgfPublicGoodsSupportSignal,
   defaultMpgfPublicGoodsSupportStrengthBps,
   getMpgfPublicGoodsSupportSignalContractApi,
+  hashMpgfPublicGoodsMoralCluster,
   isMpgfPublicGoodsMoralCluster,
   isMpgfPublicGoodsSupportSignalType,
   type MpgfPublicGoodsSupportSignal,
@@ -37,10 +36,6 @@ function stringField(record: Record<string, unknown>, key: string, fallback = ""
   const value = record[key];
 
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
-}
-
-function hashScopedValue(scope: string, value: string) {
-  return `sha256:${createHash("sha256").update(JSON.stringify([scope, value])).digest("hex")}`;
 }
 
 function summarizeDbError(error: DbErrorLike) {
@@ -110,7 +105,7 @@ async function persistSupportSignal(signal: MpgfPublicGoodsSupportSignal, profil
     campaign_id: signal.campaignId,
     profile_id: profileId,
     user_ref_hash: signal.userRefHash,
-    moral_cluster_hash: hashScopedValue("mpgf-cg-vqaf-moral-cluster", signal.moralCluster),
+    moral_cluster_hash: hashMpgfPublicGoodsMoralCluster(signal.moralCluster),
     signal_type: signal.signalType,
     strength_bps: signal.strengthBps,
     private_by_default: true,

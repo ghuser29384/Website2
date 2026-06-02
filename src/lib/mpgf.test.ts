@@ -185,6 +185,8 @@ import {
   getMpgfPublicGoodsCommonGroundDiscoveryApi,
   getMpgfPublicGoodsCgVqafReportApi,
   getMpgfPublicGoodsSupportSignalContractApi,
+  hashMpgfPublicGoodsMoralCluster,
+  supportSignalFromMpgfPublicGoodsStorageRow,
 } from "./mpgf/public-goods-cg-vqaf";
 import {
   MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY,
@@ -1765,12 +1767,45 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
     signalType: "dissent_review_requested",
     strengthBps: 2_500,
   });
+  const storedCommonGroundSignal = createMpgfPublicGoodsSupportSignal({
+    campaignId: "campaign-animal-welfare-transition",
+    userRef: "private-cg-vqaf-stored-user-001",
+    moralCluster: "animal_inclusive",
+    signalType: "weak_common_ground_support",
+    strengthBps: 7_800,
+  });
+  const storedCommonGroundMoralClusterHash = hashMpgfPublicGoodsMoralCluster("animal_inclusive");
+  const persistedSupportSignal = supportSignalFromMpgfPublicGoodsStorageRow({
+    id: storedCommonGroundSignal.id,
+    roundId: storedCommonGroundSignal.roundId,
+    campaignId: storedCommonGroundSignal.campaignId,
+    userRefHash: storedCommonGroundSignal.userRefHash,
+    moralClusterHash: storedCommonGroundMoralClusterHash,
+    signalType: storedCommonGroundSignal.signalType,
+    strengthBps: storedCommonGroundSignal.strengthBps,
+    countsForCommonGround: storedCommonGroundSignal.countsForCommonGround,
+    calcHash: storedCommonGroundSignal.calcHash,
+    createdAt: storedCommonGroundSignal.createdAt,
+  });
+
+  if (!persistedSupportSignal) {
+    throw new Error("Expected stored MPGF support signal row to hydrate from its moral-cluster hash.");
+  }
+
+  const persistedDiscovery = buildMpgfPublicGoodsCommonGroundDiscovery({
+    moralCluster: "animal_inclusive",
+    supportSignals: [persistedSupportSignal],
+  });
+  const persistedAnimalDiscoveryRow = persistedDiscovery.rows.find(
+    (row) => row.campaignId === "campaign-animal-welfare-transition",
+  );
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", "utf8");
   const discoveryRoute = readFileSync(
     "src/app/api/mpgf/rounds/[roundId]/common-ground-discovery/route.ts",
     "utf8",
   );
   const supportSignalRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/support-signals/route.ts", "utf8");
+  const supportSignalPersistence = readFileSync("src/lib/mpgf/public-goods-support-signal-persistence.ts", "utf8");
   const supportSignalPanel = readFileSync("src/components/mpgf/mpgf-support-signal-panel.tsx", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
   const poolsPage = readFileSync("src/app/mpgf/pools/page.tsx", "utf8");
@@ -1844,9 +1879,21 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.equal(dissentSignal.privateByDefault, true);
   assert.equal(dissentSignal.countsForCommonGround, false);
   assert.equal(dissentSignal.noGlobalMoralRanking, true);
+  assert.match(storedCommonGroundMoralClusterHash, /^sha256:/);
+  assert.equal(persistedSupportSignal.moralCluster, "animal_inclusive");
+  assert.equal(persistedSupportSignal.countsForCommonGround, true);
+  assert.ok(persistedAnimalDiscoveryRow);
+  assert.equal(persistedAnimalDiscoveryRow.selectedClusterSupportBps, 7_800);
+  assert.equal(persistedAnimalDiscoveryRow.reasonCodes.includes("selected_cluster_affinity"), true);
+  assert.equal(persistedDiscovery.supportSignalsSuppressed, true);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsCgVqafReportApi/);
+  assert.match(route, /loadMpgfPublicGoodsSupportSignalsForRound/);
+  assert.match(route, /supportSignalSource/);
   assert.match(discoveryRoute, /getMpgfPublicGoodsCommonGroundDiscoveryApi/);
+  assert.match(discoveryRoute, /buildMpgfPublicGoodsCommonGroundDiscovery/);
+  assert.match(discoveryRoute, /loadMpgfPublicGoodsSupportSignalsForRound/);
+  assert.match(discoveryRoute, /supportSignalSource/);
   assert.match(discoveryRoute, /isMpgfPublicGoodsMoralCluster/);
   assert.match(discoveryRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(supportSignalRoute, /Sign in to record an MPGF support signal/);
@@ -1861,6 +1908,7 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.equal(analyticsEventJsonBlock.includes("moralCluster"), false);
   assert.match(supportSignalRoute, /noGlobalMoralRanking: true/);
   assert.match(supportSignalRoute, /moral_cluster_hash/);
+  assert.match(supportSignalRoute, /hashMpgfPublicGoodsMoralCluster/);
   assert.match(supportSignalRoute, /mpgf_support_signals/);
   assert.match(supportSignalRoute, /MpgfSupportSignalInsert/);
   assert.match(supportSignalRoute, /mpgf_dissent_notes/);
@@ -1871,9 +1919,15 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(supportSignalRoute, /pauses_unreleased_milestones: true/);
   assert.doesNotMatch(supportSignalRoute, /SupabaseAny/);
   assert.match(supportSignalRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(supportSignalPersistence, /createServiceClient/);
+  assert.match(supportSignalPersistence, /mpgf_support_signals/);
+  assert.match(supportSignalPersistence, /supportSignalFromMpgfPublicGoodsStorageRow/);
+  assert.match(supportSignalPersistence, /persistedSupportSignalCount/);
   assert.match(mechanism, /Strongly support/);
   assert.match(mechanism, /Weak common-ground support/);
   assert.match(mechanism, /Dissent \/ want review/);
+  assert.match(mechanism, /hashMpgfPublicGoodsMoralCluster/);
+  assert.match(mechanism, /supportSignalFromMpgfPublicGoodsStorageRow/);
   assert.match(supportSignalPanel, /signalOptions\.map/);
   assert.match(supportSignalPanel, /Private by default; public output is aggregate only/);
   assert.match(supportSignalPanel, /signal_only/);
