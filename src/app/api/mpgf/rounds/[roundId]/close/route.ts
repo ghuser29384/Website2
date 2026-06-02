@@ -48,6 +48,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
     const { roundId } = await params;
     const result = await persistMpgfPublicGoodsAllocationResults({
       dryRun: dryRunFrom(request, payload),
+      roundId,
     });
 
     if (result.allocation.roundId !== roundId) {
@@ -61,6 +62,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
         roundId,
         finalizedAllocationRows: result.rows.length,
         persistedCount: result.persistedCount,
+        contributionSource: result.contributionSource,
+        loadedContributionRecordCount: result.loadedContributionRecordCount,
+        eligibleContributionRecordCount: result.eligibleContributionRecordCount,
+        rawPaymentObjectCount: result.rawPaymentObjectCount,
         baseMatchAllocatedCents: result.allocation.baseMatchAllocatedCents,
         qfBonusAllocatedCents: result.allocation.qfBonusAllocatedCents,
         totalPayoutCents: result.allocation.totalPayoutCents,

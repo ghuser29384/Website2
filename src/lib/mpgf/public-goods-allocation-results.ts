@@ -1,15 +1,98 @@
 import { createHash } from "node:crypto";
 
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
 
-import { demoMpgfAssurancePledges } from "./data";
+import { demoMpgfAssurancePledges, demoMpgfAssuranceRound } from "./data";
 import { allocateMpgfAssuranceRound } from "./mechanism";
 import type { MpgfPublicGoodsPledge, MpgfPublicGoodsRoundAllocation } from "./types";
 
 type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
   from: (table: string) => any;
 };
+
+type MpgfConditionalPledgeRow = Pick<
+  Database["public"]["Tables"]["mpgf_conditional_pledges"]["Row"],
+  | "id"
+  | "round_id"
+  | "campaign_id"
+  | "profile_id"
+  | "amount_cents"
+  | "counted_cap_cents"
+  | "visibility"
+  | "payment_mode"
+  | "status"
+  | "created_at"
+>;
+
+type MpgfPledgeIntentRow = Pick<
+  Database["public"]["Tables"]["mpgf_pledge_intents"]["Row"],
+  | "id"
+  | "round_id"
+  | "campaign_id"
+  | "profile_id"
+  | "user_ref_hash"
+  | "amount_cents"
+  | "visibility_pref"
+  | "payment_state"
+  | "counting_state"
+  | "created_at"
+>;
+
+type MpgfIdentityVerificationRow = Pick<
+  Database["public"]["Tables"]["mpgf_identity_verifications"]["Row"],
+  | "id"
+  | "pledge_intent_id"
+  | "status"
+  | "human_score_bps"
+  | "counts_for_matching"
+  | "verified_at"
+  | "created_at"
+>;
+
+type MpgfPaymentEventRow = Pick<
+  Database["public"]["Tables"]["mpgf_payment_events"]["Row"],
+  | "id"
+  | "conditional_pledge_id"
+  | "provider"
+  | "provider_event_id_hash"
+  | "provider_status"
+  | "amount_cents"
+  | "signature_verified"
+  | "verified_at"
+  | "append_only_hash"
+  | "created_at"
+>;
+
+type MpgfProviderPaymentEventRow = Pick<
+  Database["public"]["Tables"]["mpgf_provider_payment_events"]["Row"],
+  | "id"
+  | "pledge_intent_id"
+  | "provider"
+  | "provider_event_ref_hash"
+  | "event_type"
+  | "amount_cents"
+  | "status"
+  | "signature_verified"
+  | "append_only_hash"
+  | "received_at"
+  | "created_at"
+>;
+
+export type MpgfPublicGoodsAllocationContributionSource =
+  | "database_conditional_pledges"
+  | "demo_fixture"
+  | "explicit_input";
+
+export interface MpgfPublicGoodsAllocationContributionLoadResult {
+  source: MpgfPublicGoodsAllocationContributionSource;
+  pledges: MpgfPublicGoodsPledge[];
+  rawConditionalPledgeCount: number;
+  rawPaymentObjectCount: number;
+  eligibleContributionRecordCount: number;
+  warnings: string[];
+}
 
 export interface MpgfPublicGoodsAllocationResultRow {
   round_id: string;
@@ -47,6 +130,10 @@ export interface PersistMpgfPublicGoodsAllocationResultsResult {
   allocation: MpgfPublicGoodsRoundAllocation;
   rows: MpgfPublicGoodsAllocationResultRow[];
   persistedCount: number;
+  contributionSource: MpgfPublicGoodsAllocationContributionSource;
+  loadedContributionRecordCount: number;
+  eligibleContributionRecordCount: number;
+  rawPaymentObjectCount: number;
   warnings: string[];
 }
 
@@ -64,6 +151,218 @@ function isActiveContributionRecord(pledge: MpgfPublicGoodsPledge) {
 
 function isEligibleCountedContributionRecord(pledge: MpgfPublicGoodsPledge) {
   return isActiveContributionRecord(pledge) && pledge.eligibilityState === "eligible" && pledge.amountCents > 0;
+}
+
+function groupBy<T, K extends string>(rows: T[], keyForRow: (row: T) => K | null | undefined) {
+  const grouped = new Map<K, T[]>();
+
+  for (const row of rows) {
+    const key = keyForRow(row);
+
+    if (!key) {
+      continue;
+    }
+
+    grouped.set(key, [...(grouped.get(key) ?? []), row]);
+  }
+
+  return grouped;
+}
+
+function newestFirst<T extends { created_at: string; id: string }>(rows: T[]) {
+  return [...rows].sort((left, right) => right.created_at.localeCompare(left.created_at) || left.id.localeCompare(right.id));
+}
+
+function bestIdentityVerification(rows: MpgfIdentityVerificationRow[]) {
+  return newestFirst(rows).sort((left, right) => {
+    const leftVerified = left.status === "verified" && left.counts_for_matching ? 1 : 0;
+    const rightVerified = right.status === "verified" && right.counts_for_matching ? 1 : 0;
+
+    return rightVerified - leftVerified;
+  })[0];
+}
+
+function isCountableSharedPaymentEvent(event: MpgfPaymentEventRow) {
+  const status = event.provider_status.toLowerCase();
+  const countableStatuses = new Set([
+    "recorded",
+    "capture_succeeded",
+    "external_handoff_verified",
+    "payment_intent_succeeded_pending_review",
+  ]);
+
+  return (
+    event.signature_verified &&
+    event.amount_cents > 0 &&
+    countableStatuses.has(status) &&
+    (event.verified_at !== null || status === "payment_intent_succeeded_pending_review")
+  );
+}
+
+function isCountableProviderPaymentEvent(event: MpgfProviderPaymentEventRow) {
+  return (
+    event.signature_verified &&
+    event.amount_cents > 0 &&
+    event.status === "recorded" &&
+    event.event_type === "capture_succeeded"
+  );
+}
+
+function paymentIntentRefFrom(
+  sharedPaymentEvents: MpgfPaymentEventRow[],
+  providerPaymentEvents: MpgfProviderPaymentEventRow[],
+) {
+  const shared = newestFirst(sharedPaymentEvents)[0];
+
+  if (shared) {
+    return `payment-event:${shared.provider_event_id_hash || shared.append_only_hash}`;
+  }
+
+  const provider = [...providerPaymentEvents].sort(
+    (left, right) => right.received_at.localeCompare(left.received_at) || left.id.localeCompare(right.id),
+  )[0];
+
+  if (provider) {
+    return `payment-event:${provider.provider_event_ref_hash || provider.append_only_hash}`;
+  }
+
+  return undefined;
+}
+
+function captureModeForPaymentMode(
+  paymentMode: MpgfConditionalPledgeRow["payment_mode"],
+): MpgfPublicGoodsPledge["captureMode"] {
+  if (paymentMode === "stripe_setup_intent_saved_commitment") {
+    return "stored_payment_method";
+  }
+
+  if (paymentMode === "manual_proof_fallback") {
+    return "signed_intent";
+  }
+
+  return "external_handoff";
+}
+
+function statusForContribution(input: {
+  conditionalPledge: MpgfConditionalPledgeRow;
+  pledgeIntent?: MpgfPledgeIntentRow;
+  hasCountablePayment: boolean;
+}): MpgfPublicGoodsPledge["status"] {
+  if (input.conditionalPledge.status === "voided" || input.pledgeIntent?.payment_state === "voided") {
+    return "voided";
+  }
+
+  if (input.conditionalPledge.status === "expired" || input.pledgeIntent?.payment_state === "expired") {
+    return "expired";
+  }
+
+  if (input.hasCountablePayment || input.pledgeIntent?.payment_state === "captured") {
+    return "captured";
+  }
+
+  return "pledged";
+}
+
+function eligibilityStateForContribution(input: {
+  conditionalPledge: MpgfConditionalPledgeRow;
+  pledgeIntent?: MpgfPledgeIntentRow;
+  identityVerification?: MpgfIdentityVerificationRow;
+  hasCountablePayment: boolean;
+}) {
+  const countedAfterReview =
+    input.conditionalPledge.status === "counted" ||
+    input.pledgeIntent?.counting_state === "counted_after_review";
+  const identity = input.identityVerification;
+
+  if (input.pledgeIntent?.counting_state === "excluded" || identity?.status === "blocked") {
+    return "blocked" satisfies MpgfPublicGoodsPledge["eligibilityState"];
+  }
+
+  if (identity?.status === "duplicate_identity") {
+    return "duplicate_identity" satisfies MpgfPublicGoodsPledge["eligibilityState"];
+  }
+
+  if (input.conditionalPledge.amount_cents <= 0 || input.conditionalPledge.counted_cap_cents <= 0) {
+    return "below_minimum" satisfies MpgfPublicGoodsPledge["eligibilityState"];
+  }
+
+  if (identity?.status !== "verified" || !identity.counts_for_matching) {
+    return "pending_review" satisfies MpgfPublicGoodsPledge["eligibilityState"];
+  }
+
+  if (!input.hasCountablePayment || !countedAfterReview) {
+    return "pending_review" satisfies MpgfPublicGoodsPledge["eligibilityState"];
+  }
+
+  return "eligible" satisfies MpgfPublicGoodsPledge["eligibilityState"];
+}
+
+export function buildMpgfPublicGoodsPledgesFromContributionRows({
+  conditionalPledges,
+  pledgeIntents,
+  identityVerifications,
+  paymentEvents,
+  providerPaymentEvents,
+}: {
+  conditionalPledges: MpgfConditionalPledgeRow[];
+  pledgeIntents: MpgfPledgeIntentRow[];
+  identityVerifications: MpgfIdentityVerificationRow[];
+  paymentEvents: MpgfPaymentEventRow[];
+  providerPaymentEvents: MpgfProviderPaymentEventRow[];
+}): MpgfPublicGoodsPledge[] {
+  const intentById = new Map(pledgeIntents.map((intent) => [intent.id, intent]));
+  const identityByIntentId = groupBy(identityVerifications, (identity) => identity.pledge_intent_id);
+  const sharedPaymentsByPledgeId = groupBy(paymentEvents.filter(isCountableSharedPaymentEvent), (event) => event.conditional_pledge_id);
+  const providerPaymentsByIntentId = groupBy(
+    providerPaymentEvents.filter(isCountableProviderPaymentEvent),
+    (event) => event.pledge_intent_id,
+  );
+
+  return [...conditionalPledges]
+    .sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id))
+    .map((conditionalPledge) => {
+      const pledgeIntent = intentById.get(conditionalPledge.id);
+      const identityVerification = bestIdentityVerification(
+        pledgeIntent ? identityByIntentId.get(pledgeIntent.id) ?? [] : [],
+      );
+      const sharedPaymentEvents = sharedPaymentsByPledgeId.get(conditionalPledge.id) ?? [];
+      const providerPaymentEventsForIntent = pledgeIntent ? providerPaymentsByIntentId.get(pledgeIntent.id) ?? [] : [];
+      const hasCountablePayment = sharedPaymentEvents.length > 0 || providerPaymentEventsForIntent.length > 0;
+      const maxPaymentAmountCents = Math.max(
+        0,
+        ...sharedPaymentEvents.map((event) => event.amount_cents),
+        ...providerPaymentEventsForIntent.map((event) => event.amount_cents),
+      );
+      const amountCents = Math.max(
+        0,
+        Math.min(
+          conditionalPledge.amount_cents,
+          conditionalPledge.counted_cap_cents,
+          maxPaymentAmountCents > 0 ? maxPaymentAmountCents : conditionalPledge.amount_cents,
+        ),
+      );
+      const paymentIntentRef = paymentIntentRefFrom(sharedPaymentEvents, providerPaymentEventsForIntent);
+
+      return {
+        id: conditionalPledge.id,
+        campaignId: conditionalPledge.campaign_id,
+        userId: pledgeIntent?.user_ref_hash ?? conditionalPledge.profile_id ?? hashPublicSource(["mpgf-anonymous-pledge", conditionalPledge.id]),
+        amountCents,
+        visibilityMode: conditionalPledge.visibility,
+        isRecurring: false,
+        captureMode: captureModeForPaymentMode(conditionalPledge.payment_mode),
+        ...(paymentIntentRef ? { paymentIntentRef } : {}),
+        eligibilityState: eligibilityStateForContribution({
+          conditionalPledge,
+          pledgeIntent,
+          identityVerification,
+          hasCountablePayment,
+        }),
+        humanScoreBps: identityVerification?.human_score_bps ?? 0,
+        status: statusForContribution({ conditionalPledge, pledgeIntent, hasCountablePayment }),
+        createdAt: conditionalPledge.created_at,
+      };
+    });
 }
 
 function normalizedAllocationSourceRecords(campaignId: string, pledges: MpgfPublicGoodsPledge[]) {
@@ -109,6 +408,153 @@ export function buildMpgfPublicGoodsAllocationSourceProofMap({
       return [line.campaignId, sourceProof] as const;
     }),
   );
+}
+
+async function selectSupabaseRows<T>(
+  supabase: SupabaseServiceAny,
+  table: string,
+  select: string,
+  filterQuery: (query: any) => any,
+) {
+  const result = await filterQuery(supabase.from(table).select(select));
+
+  if (result.error) {
+    throw new Error(`Could not load MPGF public-goods contribution records from ${table}: ${result.error.message}`);
+  }
+
+  return (result.data ?? []) as T[];
+}
+
+export async function loadMpgfPublicGoodsAllocationContributionRecords({
+  roundId = demoMpgfAssuranceRound.id,
+}: {
+  roundId?: string;
+} = {}): Promise<MpgfPublicGoodsAllocationContributionLoadResult> {
+  if (!hasSupabaseEnv() || !hasServiceRoleEnv()) {
+    return {
+      source: "demo_fixture",
+      pledges: demoMpgfAssurancePledges,
+      rawConditionalPledgeCount: demoMpgfAssurancePledges.length,
+      rawPaymentObjectCount: demoMpgfAssurancePledges.length,
+      eligibleContributionRecordCount: demoMpgfAssurancePledges.filter(isEligibleCountedContributionRecord).length,
+      warnings: [
+        "Supabase service-role contribution loading is not configured; using demo MPGF contribution fixture for local allocation output.",
+      ],
+    };
+  }
+
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const conditionalPledges = await selectSupabaseRows<MpgfConditionalPledgeRow>(
+    supabase,
+    "mpgf_conditional_pledges",
+    [
+      "id",
+      "round_id",
+      "campaign_id",
+      "profile_id",
+      "amount_cents",
+      "counted_cap_cents",
+      "visibility",
+      "payment_mode",
+      "status",
+      "created_at",
+    ].join(","),
+    (query) => query.eq("round_id", roundId),
+  );
+  const conditionalPledgeIds = conditionalPledges.map((pledge) => pledge.id);
+
+  if (conditionalPledgeIds.length === 0) {
+    return {
+      source: "database_conditional_pledges",
+      pledges: [],
+      rawConditionalPledgeCount: 0,
+      rawPaymentObjectCount: 0,
+      eligibleContributionRecordCount: 0,
+      warnings: [],
+    };
+  }
+
+  const pledgeIntents = await selectSupabaseRows<MpgfPledgeIntentRow>(
+    supabase,
+    "mpgf_pledge_intents",
+    [
+      "id",
+      "round_id",
+      "campaign_id",
+      "profile_id",
+      "user_ref_hash",
+      "amount_cents",
+      "visibility_pref",
+      "payment_state",
+      "counting_state",
+      "created_at",
+    ].join(","),
+    (query) => query.in("id", conditionalPledgeIds),
+  );
+  const pledgeIntentIds = pledgeIntents.map((intent) => intent.id);
+  const identityVerifications =
+    pledgeIntentIds.length > 0
+      ? await selectSupabaseRows<MpgfIdentityVerificationRow>(
+          supabase,
+          "mpgf_identity_verifications",
+          ["id", "pledge_intent_id", "status", "human_score_bps", "counts_for_matching", "verified_at", "created_at"].join(","),
+          (query) => query.in("pledge_intent_id", pledgeIntentIds),
+        )
+      : [];
+  const paymentEvents = await selectSupabaseRows<MpgfPaymentEventRow>(
+    supabase,
+    "mpgf_payment_events",
+    [
+      "id",
+      "conditional_pledge_id",
+      "provider",
+      "provider_event_id_hash",
+      "provider_status",
+      "amount_cents",
+      "signature_verified",
+      "verified_at",
+      "append_only_hash",
+      "created_at",
+    ].join(","),
+    (query) => query.in("conditional_pledge_id", conditionalPledgeIds),
+  );
+  const providerPaymentEvents =
+    pledgeIntentIds.length > 0
+      ? await selectSupabaseRows<MpgfProviderPaymentEventRow>(
+          supabase,
+          "mpgf_provider_payment_events",
+          [
+            "id",
+            "pledge_intent_id",
+            "provider",
+            "provider_event_ref_hash",
+            "event_type",
+            "amount_cents",
+            "status",
+            "signature_verified",
+            "append_only_hash",
+            "received_at",
+            "created_at",
+          ].join(","),
+          (query) => query.in("pledge_intent_id", pledgeIntentIds),
+        )
+      : [];
+  const pledges = buildMpgfPublicGoodsPledgesFromContributionRows({
+    conditionalPledges,
+    pledgeIntents,
+    identityVerifications,
+    paymentEvents,
+    providerPaymentEvents,
+  });
+
+  return {
+    source: "database_conditional_pledges",
+    pledges,
+    rawConditionalPledgeCount: conditionalPledges.length,
+    rawPaymentObjectCount: paymentEvents.length + providerPaymentEvents.length,
+    eligibleContributionRecordCount: pledges.filter(isEligibleCountedContributionRecord).length,
+    warnings: [],
+  };
 }
 
 function assertAllocationRowsAreSafe(input: {
@@ -221,26 +667,48 @@ export function buildMpgfPublicGoodsAllocationResultRows({
 }
 
 export async function persistMpgfPublicGoodsAllocationResults({
-  allocation = allocateMpgfAssuranceRound(),
-  pledges = demoMpgfAssurancePledges,
+  allocation,
+  pledges,
   dryRun = false,
   finalizedAt = new Date().toISOString(),
+  roundId = demoMpgfAssuranceRound.id,
 }: {
   allocation?: MpgfPublicGoodsRoundAllocation;
   pledges?: MpgfPublicGoodsPledge[];
   dryRun?: boolean;
   finalizedAt?: string;
+  roundId?: string;
 } = {}): Promise<PersistMpgfPublicGoodsAllocationResultsResult> {
-  const rows = buildMpgfPublicGoodsAllocationResultRows({ allocation, pledges, finalizedAt });
+  const contributionLoad = pledges
+    ? {
+        source: "explicit_input" as const,
+        pledges,
+        rawConditionalPledgeCount: pledges.length,
+        rawPaymentObjectCount: pledges.filter(isActiveContributionRecord).length,
+        eligibleContributionRecordCount: pledges.filter(isEligibleCountedContributionRecord).length,
+        warnings: [],
+      }
+    : await loadMpgfPublicGoodsAllocationContributionRecords({ roundId });
+  const sourcePledges = contributionLoad.pledges;
+  const sourceAllocation = allocation ?? allocateMpgfAssuranceRound({ pledges: sourcePledges });
+  const rows = buildMpgfPublicGoodsAllocationResultRows({
+    allocation: sourceAllocation,
+    pledges: sourcePledges,
+    finalizedAt,
+  });
 
   if (dryRun) {
     return {
       ok: true,
       status: "dry_run",
-      allocation,
+      allocation: sourceAllocation,
       rows,
       persistedCount: 0,
-      warnings: [],
+      contributionSource: contributionLoad.source,
+      loadedContributionRecordCount: contributionLoad.rawConditionalPledgeCount,
+      eligibleContributionRecordCount: contributionLoad.eligibleContributionRecordCount,
+      rawPaymentObjectCount: contributionLoad.rawPaymentObjectCount,
+      warnings: contributionLoad.warnings,
     };
   }
 
@@ -248,10 +716,17 @@ export async function persistMpgfPublicGoodsAllocationResults({
     return {
       ok: false,
       status: "not_configured",
-      allocation,
+      allocation: sourceAllocation,
       rows,
       persistedCount: 0,
-      warnings: ["Supabase service-role configuration is required to persist MPGF public-goods allocation results."],
+      contributionSource: contributionLoad.source,
+      loadedContributionRecordCount: contributionLoad.rawConditionalPledgeCount,
+      eligibleContributionRecordCount: contributionLoad.eligibleContributionRecordCount,
+      rawPaymentObjectCount: contributionLoad.rawPaymentObjectCount,
+      warnings: [
+        ...contributionLoad.warnings,
+        "Supabase service-role configuration is required to persist MPGF public-goods allocation results.",
+      ],
     };
   }
 
@@ -268,9 +743,13 @@ export async function persistMpgfPublicGoodsAllocationResults({
   return {
     ok: true,
     status: "persisted",
-    allocation,
+    allocation: sourceAllocation,
     rows,
     persistedCount: (result.data ?? []).length,
-    warnings: [],
+    contributionSource: contributionLoad.source,
+    loadedContributionRecordCount: contributionLoad.rawConditionalPledgeCount,
+    eligibleContributionRecordCount: contributionLoad.eligibleContributionRecordCount,
+    rawPaymentObjectCount: contributionLoad.rawPaymentObjectCount,
+    warnings: contributionLoad.warnings,
   };
 }

@@ -67,6 +67,7 @@ import {
 } from "./mpgf/data";
 import type { MpgfPublicGoodsPledge } from "./mpgf/types";
 import {
+  buildMpgfPublicGoodsPledgesFromContributionRows,
   buildMpgfPublicGoodsAllocationResultRows,
   buildMpgfPublicGoodsAllocationSourceProofMap,
   persistMpgfPublicGoodsAllocationResults,
@@ -688,6 +689,103 @@ test("MPGF assurance output preserves the no-custody external-handoff posture", 
 });
 
 test("MPGF public-goods allocation finalization builds persistable no-payout-leak rows", async () => {
+  const now = "2026-05-30T12:00:00.000Z";
+  const countedPledgeRows = {
+    conditionalPledges: [
+      {
+        id: "conditional-pledge-db-global-health-001",
+        round_id: demoMpgfAssuranceRound.id,
+        campaign_id: "campaign-global-health-basic-needs",
+        profile_id: "profile-global-health-001",
+        amount_cents: 10_000,
+        counted_cap_cents: 10_000,
+        visibility: "private_amount" as const,
+        payment_mode: "every_org_fast_route" as const,
+        status: "counted" as const,
+        created_at: now,
+      },
+    ],
+    pledgeIntents: [
+      {
+        id: "conditional-pledge-db-global-health-001",
+        round_id: demoMpgfAssuranceRound.id,
+        campaign_id: "campaign-global-health-basic-needs",
+        profile_id: "profile-global-health-001",
+        user_ref_hash: `sha256:${"1".repeat(64)}`,
+        amount_cents: 10_000,
+        visibility_pref: "private_amount" as const,
+        payment_state: "provider_event_received" as const,
+        counting_state: "counted_after_review" as const,
+        created_at: now,
+      },
+    ],
+    identityVerifications: [
+      {
+        id: "identity-global-health-001",
+        pledge_intent_id: "conditional-pledge-db-global-health-001",
+        status: "verified" as const,
+        human_score_bps: 9_200,
+        counts_for_matching: true,
+        verified_at: now,
+        created_at: now,
+      },
+    ],
+    paymentEvents: [
+      {
+        id: "payment-event-global-health-001",
+        conditional_pledge_id: "conditional-pledge-db-global-health-001",
+        provider: "every_org" as const,
+        provider_event_id_hash: `sha256:${"2".repeat(64)}`,
+        provider_status: "recorded",
+        amount_cents: 10_000,
+        signature_verified: true,
+        verified_at: now,
+        append_only_hash: `sha256:${"3".repeat(64)}`,
+        created_at: now,
+      },
+    ],
+    providerPaymentEvents: [],
+  };
+  const persistedPledges = buildMpgfPublicGoodsPledgesFromContributionRows(countedPledgeRows);
+  const paymentOnlyPledges = buildMpgfPublicGoodsPledgesFromContributionRows({
+    ...countedPledgeRows,
+    conditionalPledges: [{ ...countedPledgeRows.conditionalPledges[0], status: "pending_verification" as const }],
+    pledgeIntents: [{ ...countedPledgeRows.pledgeIntents[0], counting_state: "not_counted" as const }],
+  });
+  const setupOnlyPledges = buildMpgfPublicGoodsPledgesFromContributionRows({
+    ...countedPledgeRows,
+    conditionalPledges: [
+      {
+        ...countedPledgeRows.conditionalPledges[0],
+        id: "conditional-pledge-db-global-health-setup-only",
+        payment_mode: "stripe_setup_intent_saved_commitment" as const,
+      },
+    ],
+    pledgeIntents: [
+      {
+        ...countedPledgeRows.pledgeIntents[0],
+        id: "conditional-pledge-db-global-health-setup-only",
+        user_ref_hash: `sha256:${"4".repeat(64)}`,
+      },
+    ],
+    identityVerifications: [
+      {
+        ...countedPledgeRows.identityVerifications[0],
+        id: "identity-global-health-setup-only",
+        pledge_intent_id: "conditional-pledge-db-global-health-setup-only",
+      },
+    ],
+    paymentEvents: [
+      {
+        ...countedPledgeRows.paymentEvents[0],
+        id: "payment-event-global-health-setup-only",
+        conditional_pledge_id: "conditional-pledge-db-global-health-setup-only",
+        provider: "stripe" as const,
+        provider_status: "setup_succeeded_token_ready",
+        provider_event_id_hash: `sha256:${"5".repeat(64)}`,
+      },
+    ],
+  });
   const allocation = allocateMpgfAssuranceRound();
   const rows = buildMpgfPublicGoodsAllocationResultRows({
     allocation,
@@ -703,7 +801,19 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
     finalizedAt: "2026-05-30T12:00:00.000Z",
   });
   const route = readFileSync("src/app/api/mpgf/public-goods/allocate/route.ts", "utf8");
+  const closeRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/close/route.ts", "utf8");
+  const allocationResultsSource = readFileSync("src/lib/mpgf/public-goods-allocation-results.ts", "utf8");
 
+  assert.equal(persistedPledges.length, 1);
+  assert.equal(persistedPledges[0]?.eligibilityState, "eligible");
+  assert.equal(persistedPledges[0]?.captureMode, "external_handoff");
+  assert.equal(persistedPledges[0]?.status, "captured");
+  assert.equal(persistedPledges[0]?.amountCents, 10_000);
+  assert.match(persistedPledges[0]?.paymentIntentRef ?? "", /^payment-event:sha256:/);
+  assert.equal(paymentOnlyPledges[0]?.eligibilityState, "pending_review");
+  assert.equal(setupOnlyPledges[0]?.captureMode, "stored_payment_method");
+  assert.equal(setupOnlyPledges[0]?.eligibilityState, "pending_review");
+  assert.equal(setupOnlyPledges[0]?.paymentIntentRef, undefined);
   assert.equal(rows.length, allocation.lines.length);
   assert.ok(globalHealth);
   assert.ok(resilience);
@@ -725,8 +835,16 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.equal(resilience.total_payout_cents, 0);
   assert.equal(dryRun.status, "dry_run");
   assert.equal(dryRun.persistedCount, 0);
+  assert.match(allocationResultsSource, /mpgf_conditional_pledges/);
+  assert.match(allocationResultsSource, /mpgf_payment_events/);
+  assert.match(allocationResultsSource, /mpgf_provider_payment_events/);
+  assert.match(allocationResultsSource, /counted_after_review/);
   assert.match(route, /MPGF_ALLOCATION_SECRET/);
   assert.match(route, /persistMpgfPublicGoodsAllocationResults/);
+  assert.match(route, /contributionSource/);
+  assert.match(route, /eligibleContributionRecordCount/);
+  assert.match(closeRoute, /roundId/);
+  assert.match(closeRoute, /contributionSource/);
   assert.match(route, /proofPageRequired/);
   assert.match(route, /qfBonusCapCents/);
 });
