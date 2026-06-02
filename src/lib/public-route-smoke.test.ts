@@ -2340,6 +2340,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(documentCoverageSource, /expectedSha256/);
   assert.match(documentCoverageSource, /source-artifact:/);
   assert.match(documentCoverageSource, /hash-checked/);
+  assert.match(documentCoverageSource, /payment-custody/);
+  assert.match(documentCoverageSource, /authenticated workflows/);
   assert.match(documentCoverageSource, /instruction:canonical-build/);
   assert.match(documentCoverageSource, /sha256/);
   assert.match(documentCoverageHealthRoute, /canonicalInstruction/);

@@ -140,6 +140,14 @@ test("document coverage profile maps improvement docs to implementation evidence
   assert.ok(
     profile.nonClaims.some((nonClaim) => /not fabricated/i.test(nonClaim)),
   );
+  assert.ok(
+    profile.nonClaims.some((nonClaim) => /legal, tax, payment-custody/i.test(nonClaim)),
+  );
+  assert.ok(
+    profile.nonClaims.some((nonClaim) =>
+      /authenticated workflows and production behavior/i.test(nonClaim),
+    ),
+  );
 });
 
 test("document coverage validation fails when source phrases or evidence files weaken", () => {

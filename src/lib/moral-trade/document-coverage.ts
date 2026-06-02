@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 export const MORAL_TRADE_DOCUMENT_COVERAGE_VALIDATOR_VERSION =
-  "moral-trade-document-coverage-validator-v0.8";
+  "moral-trade-document-coverage-validator-v0.9";
 
 export type MoralTradeDocumentSource = {
   key: string;
@@ -203,7 +203,7 @@ const REQUIRED_TESTING_PLAN_LAYER_KEYS = [
 ] as const;
 
 export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfile = {
-  version: "moral-trade-document-coverage-v0.7-2026-05",
+  version: "moral-trade-document-coverage-v0.8-2026-06",
   purpose:
     "Requirement-to-evidence coverage map for the Moral Trade improvement documents: the public validator suite should show which implementation artifacts answer each recommendation without inventing production evidence.",
   sourceDocuments: [
@@ -221,6 +221,7 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
         "schema-bound drafting, critique, and verification copilot",
         "Never rank moral value globally",
         "Evaluation metrics",
+        "Open questions and limitations",
       ],
     },
     {
@@ -819,6 +820,8 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
     "This coverage profile proves repository artifacts and validator coverage, not live production liquidity or successful real-world trades.",
     "The attached PDF and Markdown source are verified as present and hash-checked; the Markdown source is the phrase-checked requirements artifact used by this validator.",
     "MPGF production evidence files remain separately governed and are not fabricated by this Moral Trade document-coverage profile.",
+    "This profile does not prove legal, tax, payment-custody, escrow, investment, or charity-routing readiness.",
+    "Authenticated workflows and production behavior still require current route-contract, security, rate-limit, retention, and private-workflow verification before deployment.",
   ],
 };
 
@@ -1075,7 +1078,15 @@ export function validateMoralTradeDocumentCoverageProfile(
       "Coverage publishes non-claims",
       profile.nonClaims.some((nonClaim) => /not live production liquidity/i.test(nonClaim)) &&
         profile.nonClaims.some((nonClaim) => /hash-checked/i.test(nonClaim)) &&
-        profile.nonClaims.some((nonClaim) => /not fabricated/i.test(nonClaim)),
+        profile.nonClaims.some((nonClaim) => /not fabricated/i.test(nonClaim)) &&
+        profile.nonClaims.some((nonClaim) =>
+          /legal|tax|payment-custody|escrow|investment/i.test(nonClaim),
+        ) &&
+        profile.nonClaims.some((nonClaim) =>
+          /authenticated workflows|current route-contract|private-workflow verification/i.test(
+            nonClaim,
+          ),
+        ),
       profile.nonClaims.join(" | "),
     ),
   ];

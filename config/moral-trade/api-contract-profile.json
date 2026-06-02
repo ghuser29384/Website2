@@ -168,7 +168,7 @@
       "responseSchema": "copilot_review_response",
       "rateLimitSurface": "copilot_draft_review",
       "cacheControl": "private_no_store",
-      "fallback": "Return request, evidence-metadata, strict-input-bundle, or output validation blockers and deterministic manual-review fallback metadata; invalid strict bundles emit no copilot output packet, and the route never stores submitted drafts, retains raw evidence artifacts, contacts counterparties, or changes proposal state."
+      "fallback": "Return request, evidence-metadata, strict-input-bundle, or output validation blockers and deterministic manual-review fallback metadata; invalid strict bundles emit no copilot output packet, and the route never stores submitted drafts or raw evidence artifacts, contacts counterparties, or changes proposal state."
     },
     {
       "key": "moral_trade_match_signal_contract",
