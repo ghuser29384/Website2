@@ -338,6 +338,7 @@ const REQUIRED_GUARDRAILS = [
   "no_autonomous_outreach",
   "no_private_feed_ingestion",
   "separate_trust_axes",
+  "insufficient_evidence_artifact_requests",
   "anti_threat_escalation",
   "no_false_certainty",
   "no_escrow_legal_tax_claims",
@@ -469,6 +470,10 @@ const INVENTED_CLAIM_PATTERNS = [
   /\b(assume|presume|treat as true|state as fact)\b[^.\n]{0,120}\b(prior behavior|counterpart(?:y|ies)|receipt|evidence|artifact|attestation|completion|donation history)\b[^.\n]{0,120}\b(without evidence|without citation|without support|even if missing|not supplied)\b/i,
   /\b(create|add|cite)\b[^.\n]{0,120}\b(fake|placeholder|synthetic|invented|fabricated)\b[^.\n]{0,120}\b(evidence|citation|receipt|artifact|counterpart(?:y|ies))\b/i,
 ] as const;
+const EXACT_ARTIFACT_REQUEST_PATTERN =
+  /\b(receipt|public log|witness attestation|payment record|audit link|audit trail|provider record|baseline artifact|baseline record|prior-intent note|past behavior record|dated no-trade baseline statement|scoped evidence artifact)\b/i;
+const INSUFFICIENT_EVIDENCE_NOTICE_PATTERN =
+  /\b(evidence|artifact|receipt|attestation|payment record|audit trail|audit link|public log)\b[^.\n]{0,120}\b(needed|required|missing|insufficient|not specific enough|still needed|request)\b/i;
 const GLOBAL_MORAL_RANKING_SAFE_NEGATION_PATTERN =
   /\b(do not|don't|never|must not|cannot|should not|no global moral ranking|participant[- ]relative|participant's own stated priorities|not a platform judgment|not platform judgment)\b/i;
 const GLOBAL_MORAL_RANKING_PATTERNS = [
@@ -527,6 +532,14 @@ function containsInventedClaimInstruction(value: string) {
       INVENTED_CLAIM_PATTERNS.some((pattern) => pattern.test(trimmed))
     );
   });
+}
+
+function namesExactArtifactRequest(value: string) {
+  return EXACT_ARTIFACT_REQUEST_PATTERN.test(value);
+}
+
+function statesInsufficientEvidence(value: string) {
+  return INSUFFICIENT_EVIDENCE_NOTICE_PATTERN.test(value);
 }
 
 function containsGlobalMoralRankingClaim(value: string) {
@@ -1540,6 +1553,25 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
     blockers.push(
       `matchable_verification_loop: blocking steps must pass before matchable status: ${blockingVerificationFailures.join(", ")}`,
     );
+  }
+
+  const evidenceSufficiencyStep = output.verification_loop.find(
+    (step) => step.key === "evidence_sufficiency",
+  );
+
+  if (evidenceSufficiencyStep?.status === "needs_input") {
+    const artifactRequests = output.review_instructions.artifacts_to_request;
+    const namesExactArtifacts = artifactRequests.some(namesExactArtifactRequest);
+    const statesEvidenceInsufficient =
+      statesInsufficientEvidence(evidenceSufficiencyStep.detail) ||
+      output.next_step_checklist.some(statesInsufficientEvidence) ||
+      statesInsufficientEvidence(output.reviewer_summary);
+
+    if (!namesExactArtifacts || !statesEvidenceInsufficient) {
+      blockers.push(
+        "insufficient_evidence_artifact_requests: evidence_sufficiency needs_input requires an explicit insufficiency notice and exact artifact requests",
+      );
+    }
   }
 
   if (output.clarification_questions.length > 5) {

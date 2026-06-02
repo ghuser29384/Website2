@@ -58,6 +58,7 @@
         "Normalize into schema fields before judging readiness.",
         "Generate at most five field-tied clarification questions.",
         "Score only factual evidence, baseline credibility, and externality-review need.",
+        "If evidence is insufficient, say so and request exact missing artifacts.",
         "Return blocked for anti-threat or prohibited-content patterns."
       ],
       "safetyCodes": [
@@ -185,6 +186,11 @@
       "code": "separate_trust_axes",
       "label": "Separate trust axes",
       "rule": "Keep factual proof, counterfactual baseline confidence, and externality review separate."
+    },
+    {
+      "code": "insufficient_evidence_artifact_requests",
+      "label": "Insufficient evidence requests exact artifacts",
+      "rule": "When evidence_sufficiency needs input, say evidence is insufficient and request exact missing artifacts such as receipts, logs, attestations, payment records, audit links, or baseline records."
     },
     {
       "code": "anti_threat_escalation",

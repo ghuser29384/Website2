@@ -81,6 +81,11 @@ test("copilot contract requires strict bundle, approved output, guardrails, and 
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "observable_claims_only"));
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_false_certainty"));
   assert.ok(
+    contract.guardrails.some(
+      (guardrail) => guardrail.code === "insufficient_evidence_artifact_requests",
+    ),
+  );
+  assert.ok(
     contract.guardrails.some((guardrail) => guardrail.code === "no_escrow_legal_tax_claims"),
   );
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_autonomous_outreach"));
@@ -415,6 +420,32 @@ test("copilot output validation rejects verification-loop contract flag drift", 
   assert.ok(
     validation.blockers.some((blocker) =>
       blocker.includes("verification_loop_contract_mismatch: privacy_redaction"),
+    ),
+  );
+});
+
+test("copilot output validation requires exact artifact requests when evidence is insufficient", () => {
+  const output = buildMoralTradeCopilotOutput(completeDraft, ["proposal:local-draft"]);
+
+  output.status = "needs_evidence";
+  output.verification_loop = output.verification_loop.map((step) =>
+    step.key === "evidence_sufficiency"
+      ? {
+          ...step,
+          status: "needs_input",
+          detail: "Evidence is not specific enough for reliance.",
+        }
+      : step,
+  );
+  output.review_instructions.artifacts_to_request = [];
+  output.next_step_checklist[0] = "Ask for more information later.";
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(
+    validation.blockers.some((blocker) =>
+      blocker.includes("insufficient_evidence_artifact_requests"),
     ),
   );
 });
