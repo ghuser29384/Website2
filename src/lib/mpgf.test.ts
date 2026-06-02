@@ -3037,6 +3037,44 @@ test("MPGF threshold calibration recommends next-round gates without mid-round r
   const report = getMpgfPublicGoodsThresholdCalibrationReportApi(demoMpgfAssuranceRound.id);
   const unknownReport = getMpgfPublicGoodsThresholdCalibrationReportApi("unknown-round");
   const directReport = buildMpgfPublicGoodsThresholdCalibrationReport();
+  const persistedCampaign = {
+    ...demoMpgfPublicGoodsCampaigns[0]!,
+    id: "persisted-threshold-calibration-campaign",
+    slug: "persisted-threshold-calibration-campaign",
+    title: "Persisted threshold calibration campaign",
+    thresholdAmountCents: 10_000,
+    thresholdSupporters: 2,
+  };
+  const persistedRound = {
+    ...demoMpgfAssuranceRound,
+    id: "persisted-threshold-calibration-round",
+    matchPoolId: demoMpgfMatchPool.id,
+  };
+  const persistedIdentity = createMpgfPublicGoodsIdentityAttestation({
+    userId: "persisted-threshold-supporter",
+    provider: "external_proof_of_personhood",
+    humanScoreBps: 9_100,
+    expiresAt: "2026-12-31T00:00:00.000Z",
+    redactedReference: "external_proof_of_personhood:redacted:persisted-threshold",
+  });
+  const persistedReport = buildMpgfPublicGoodsThresholdCalibrationReport({
+    campaigns: [persistedCampaign],
+    pledges: [
+      createMpgfPublicGoodsPledge({
+        campaign: persistedCampaign,
+        userId: persistedIdentity.userId,
+        amountCents: 11_000,
+        identityAttestation: persistedIdentity,
+      }),
+      createMpgfPublicGoodsPledge({
+        campaign: persistedCampaign,
+        userId: "persisted-threshold-pending-review",
+        amountCents: 4_000,
+      }),
+    ],
+    round: persistedRound,
+    matchPool: demoMpgfMatchPool,
+  });
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/threshold-calibration/route.ts", "utf8");
   const publicApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
   const governance = getMpgfPublicGoodsGovernanceApi();
@@ -3052,6 +3090,12 @@ test("MPGF threshold calibration recommends next-round gates without mid-round r
   assert.equal(report.parametersLockedBeforeDonationsOpen, true);
   assert.equal(report.noGlobalMoralRanking, true);
   assert.equal(report.ranksOperationalCalibrationOnly, true);
+  assert.equal(persistedReport.roundId, persistedRound.id);
+  assert.equal(persistedReport.currentRoundMutationAllowed, false);
+  assert.equal(persistedReport.parametersLockedBeforeDonationsOpen, true);
+  assert.equal(persistedReport.rowCount, 1);
+  assert.equal(persistedReport.rows[0]?.campaignId, persistedCampaign.id);
+  assert.equal(persistedReport.rows[0]?.currentVerifiedSupporters, 1);
   assert.equal(report.rowCount, demoMpgfPublicGoodsCampaigns.length);
   assert.equal(report.rows.every((row) => row.recommendedNextRoundThresholdAmountCents > 0), true);
   assert.equal(report.rows.every((row) => row.recommendedNextRoundThresholdSupporters >= 2), true);
@@ -3064,6 +3108,12 @@ test("MPGF threshold calibration recommends next-round gates without mid-round r
   assert.equal(governance.thresholdCalibration.rows.length, demoMpgfPublicGoodsCampaigns.length);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsThresholdCalibrationReportApi/);
+  assert.match(route, /buildMpgfPublicGoodsThresholdCalibrationReport/);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(route, /contextLoad\.source === "database_round_context"/);
+  assert.match(route, /allocationContextSource/);
+  assert.match(route, /contributionSource/);
   assert.match(publicApi, /thresholdCalibration/);
   assert.match(publicApi, /currentRoundMutationAllowed/);
   assert.match(governancePage, /Next-round threshold calibration/);
@@ -3088,6 +3138,51 @@ test("MPGF public postmortem publishes aggregate outcomes and next-round paramet
   const report = getMpgfPublicGoodsPostmortemReportApi(demoMpgfAssuranceRound.id);
   const unknownReport = getMpgfPublicGoodsPostmortemReportApi("unknown-round");
   const directReport = buildMpgfPublicGoodsPostmortemReport();
+  const persistedCampaign = {
+    ...demoMpgfPublicGoodsCampaigns[0]!,
+    id: "persisted-postmortem-campaign",
+    slug: "persisted-postmortem-campaign",
+    title: "Persisted postmortem campaign",
+    thresholdAmountCents: 10_000,
+    thresholdSupporters: 1,
+  };
+  const persistedRound = {
+    ...demoMpgfAssuranceRound,
+    id: "persisted-postmortem-round",
+    matchPoolId: demoMpgfMatchPool.id,
+  };
+  const persistedIdentity = createMpgfPublicGoodsIdentityAttestation({
+    userId: "persisted-postmortem-supporter",
+    provider: "external_proof_of_personhood",
+    humanScoreBps: 9_000,
+    expiresAt: "2026-12-31T00:00:00.000Z",
+    redactedReference: "external_proof_of_personhood:redacted:persisted-postmortem",
+  });
+  const persistedPledges = [
+    createMpgfPublicGoodsPledge({
+      campaign: persistedCampaign,
+      userId: persistedIdentity.userId,
+      amountCents: 12_000,
+      identityAttestation: persistedIdentity,
+    }),
+  ] satisfies MpgfPublicGoodsPledge[];
+  const persistedThresholdCalibration = buildMpgfPublicGoodsThresholdCalibrationReport({
+    campaigns: [persistedCampaign],
+    pledges: persistedPledges,
+    round: persistedRound,
+    matchPool: demoMpgfMatchPool,
+  });
+  const persistedPostmortem = buildMpgfPublicGoodsPostmortemReport({
+    round: persistedRound,
+    kpiSnapshot: buildMpgfPublicGoodsKpiSnapshot({
+      campaigns: [persistedCampaign],
+      pledges: persistedPledges,
+      round: persistedRound,
+      matchPool: demoMpgfMatchPool,
+      dataSource: "database",
+    }),
+    thresholdCalibration: persistedThresholdCalibration,
+  });
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/postmortem/route.ts", "utf8");
   const publicApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
   const governance = getMpgfPublicGoodsGovernanceApi();
@@ -3103,6 +3198,15 @@ test("MPGF public postmortem publishes aggregate outcomes and next-round paramet
   assert.equal(report.parameterResetPolicy, "next_round_only_after_public_postmortem_and_before_donations_open");
   assert.equal(report.noGlobalMoralRanking, true);
   assert.equal(report.noDonorMoralReputationWeighting, true);
+  assert.equal(persistedPostmortem.roundId, persistedRound.id);
+  assert.equal(persistedPostmortem.currentRoundMutationAllowed, false);
+  assert.equal(persistedPostmortem.noGlobalMoralRanking, true);
+  assert.equal(persistedPostmortem.noDonorMoralReputationWeighting, true);
+  assert.equal(persistedPostmortem.nextRoundParameterReset.rows.length, 1);
+  assert.equal(
+    persistedPostmortem.nextRoundParameterReset.thresholdCalibrationPath,
+    `/api/mpgf/rounds/${persistedRound.id}/threshold-calibration`,
+  );
   assert.ok(report.requiredPublicArtifacts.some((artifact) => artifact.key === "allocation_report"));
   assert.ok(report.requiredPublicArtifacts.some((artifact) => artifact.key === "funding_kpis"));
   assert.ok(report.requiredPublicArtifacts.some((artifact) => artifact.key === "threshold_calibration"));
@@ -3118,6 +3222,14 @@ test("MPGF public postmortem publishes aggregate outcomes and next-round paramet
   assert.equal(governance.postmortem.requiredPublicArtifacts.length, report.requiredPublicArtifacts.length);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsPostmortemReportApi/);
+  assert.match(route, /buildMpgfPublicGoodsPostmortemReport/);
+  assert.match(route, /buildMpgfPublicGoodsKpiSnapshot/);
+  assert.match(route, /buildMpgfPublicGoodsThresholdCalibrationReport/);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(route, /contextLoad\.source === "database_round_context"/);
+  assert.match(route, /allocationContextSource/);
+  assert.match(route, /contributionSource/);
   assert.match(publicApi, /postmortem/);
   assert.match(publicApi, /parameterResetPolicy/);
   assert.match(governancePage, /Public postmortem/);
