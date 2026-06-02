@@ -1142,6 +1142,7 @@ test("MPGF contribution intents verify identity before conditional payment autho
   const verifyRoute = readFileSync("src/app/api/mpgf/pledge-intents/[intentId]/verify-identity/route.ts", "utf8");
   const authorizeRoute = readFileSync("src/app/api/mpgf/pledge-intents/[intentId]/authorize-payment/route.ts", "utf8");
   const providerWebhookRoute = readFileSync("src/app/api/mpgf/provider-events/webhook/route.ts", "utf8");
+  const contributionPersistence = readFileSync("src/lib/mpgf/public-goods-contribution-persistence.ts", "utf8");
   const manualAliasRoute = readFileSync("src/app/api/mpgf/evidence/manual/route.ts", "utf8");
   const migration = readFileSync("supabase/migrations/20260531_mpgf_contribution_intents.sql", "utf8");
   const schemaSql = readFileSync("supabase/schema.sql", "utf8");
@@ -1205,9 +1206,18 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(providerEvent.appendOnlyHash, /^sha256:/);
   assert.match(route, /reviewRequiredBeforeCounting: true/);
   assert.match(route, /everyOrgDonateLinkPath: "\/api\/mpgf\/every-org\/donate-link"/);
+  assert.match(verifyRoute, /loadMpgfPledgeIntentForProfile/);
+  assert.match(verifyRoute, /persistMpgfIdentityVerificationState/);
+  assert.match(verifyRoute, /pledgeIntentSource/);
   assert.match(verifyRoute, /finalPayoutAuthorized: false/);
+  assert.match(authorizeRoute, /loadMpgfPledgeIntentForProfile/);
+  assert.match(authorizeRoute, /persistMpgfPaymentAuthorizationState/);
   assert.match(authorizeRoute, /providerWebhookPath: "\/api\/mpgf\/provider-events\/webhook"/);
   assert.match(providerWebhookRoute, /Missing MPGF provider event signature/);
+  assert.match(providerWebhookRoute, /signatureMatches/);
+  assert.match(providerWebhookRoute, /request\.text\(\)/);
+  assert.match(providerWebhookRoute, /loadMpgfPaymentAuthorization/);
+  assert.match(providerWebhookRoute, /persistMpgfProviderPaymentEventState/);
   assert.match(providerWebhookRoute, /finalPayoutAuthorized: false/);
   assert.match(manualAliasRoute, /contributions\/manual-evidence\/route/);
   assert.match(route, /mpgf_pledge_intents/);
@@ -1217,6 +1227,11 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(route, /capture_policy: pledgeIntent\.capturePolicy/);
   assert.match(route, /status: "pledge_saved"/);
   assert.match(route, /persistence/);
+  assert.match(contributionPersistence, /mpgf_identity_verifications/);
+  assert.match(contributionPersistence, /mpgf_payment_authorizations/);
+  assert.match(contributionPersistence, /mpgf_provider_payment_events/);
+  assert.match(contributionPersistence, /payload_hash: hashRawPayload/);
+  assert.match(contributionPersistence, /counting_state: input\.providerPaymentEvent\.status === "recorded" \? "eligible_pending_thresholds" : "not_counted"/);
   assert.match(migration, /create table if not exists public\.mpgf_pledge_intents/);
   assert.match(migration, /create table if not exists public\.mpgf_identity_verifications/);
   assert.match(migration, /create table if not exists public\.mpgf_payment_authorizations/);
