@@ -16,6 +16,7 @@ import {
   getMpgfCampaignAssuranceStatus,
   getMpgfPublicGoodsFeatureFlagStatus,
 } from "./mechanism";
+import { loadMpgfPublicGoodsAllocationContributionRecords } from "./public-goods-allocation-results";
 import type {
   MpgfPublicGoodsAllocationLine,
   MpgfPublicGoodsCampaign,
@@ -44,6 +45,49 @@ export interface MpgfPublicGoodsKpiAnalyticsEvent {
   event_type: string;
   campaign_id?: string | null;
   event_json?: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export type MpgfPublicGoodsContributionVerificationSource =
+  | "provider_webhook"
+  | "manual_evidence"
+  | "signed_intent_review"
+  | "legacy_payment_proof";
+
+export interface MpgfPublicGoodsContributionKpiRecord {
+  id: string;
+  pledgeId?: string;
+  campaignId: string;
+  amountVerifiedCents: number;
+  pledgedAt?: string;
+  countedAt?: string;
+  autoVerified: boolean;
+  verificationSource: MpgfPublicGoodsContributionVerificationSource;
+  reviewRequiredBeforeCounting: true;
+}
+
+export interface MpgfPublicGoodsPaymentEventKpiRow {
+  id: string;
+  conditional_pledge_id: string | null;
+  provider: string;
+  provider_status: string;
+  amount_cents: number;
+  signature_verified: boolean;
+  verified_at: string | null;
+  append_only_hash: string;
+  created_at: string;
+}
+
+export interface MpgfPublicGoodsProviderPaymentEventKpiRow {
+  id: string;
+  pledge_intent_id: string;
+  provider: string;
+  event_type: string;
+  amount_cents: number;
+  status: string;
+  signature_verified: boolean;
+  append_only_hash: string;
+  received_at: string;
   created_at: string;
 }
 
@@ -223,6 +267,12 @@ function readString(row: Record<string, unknown>, key: string, fallback = "") {
   const value = row[key];
 
   return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function readNullableString(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function readNumber(row: Record<string, unknown>, key: string, fallback = 0) {
@@ -461,6 +511,170 @@ function isAutoVerifiedProof(proof: MpgfPublicGoodsPaymentProof) {
   );
 }
 
+function groupBy<T, K extends string>(rows: T[], keyForRow: (row: T) => K | null | undefined) {
+  const grouped = new Map<K, T[]>();
+
+  for (const row of rows) {
+    const key = keyForRow(row);
+
+    if (!key) {
+      continue;
+    }
+
+    grouped.set(key, [...(grouped.get(key) ?? []), row]);
+  }
+
+  return grouped;
+}
+
+function isCountableSharedPaymentEventForKpi(event: MpgfPublicGoodsPaymentEventKpiRow) {
+  const status = event.provider_status.toLowerCase();
+  const countableStatuses = new Set([
+    "recorded",
+    "capture_succeeded",
+    "external_handoff_verified",
+    "payment_intent_succeeded_pending_review",
+  ]);
+
+  return (
+    event.signature_verified &&
+    event.amount_cents > 0 &&
+    countableStatuses.has(status) &&
+    (event.verified_at !== null || status === "payment_intent_succeeded_pending_review")
+  );
+}
+
+function isCountableProviderPaymentEventForKpi(event: MpgfPublicGoodsProviderPaymentEventKpiRow) {
+  return (
+    event.signature_verified &&
+    event.amount_cents > 0 &&
+    event.status === "recorded" &&
+    event.event_type === "capture_succeeded"
+  );
+}
+
+function isProviderWebhookSource(provider: string) {
+  return provider !== "manual_evidence";
+}
+
+function contributionVerificationSourceForEvent(input: {
+  pledge: MpgfPublicGoodsPledge;
+  sharedPaymentEvent?: MpgfPublicGoodsPaymentEventKpiRow;
+  providerPaymentEvent?: MpgfPublicGoodsProviderPaymentEventKpiRow;
+}): MpgfPublicGoodsContributionVerificationSource {
+  if (input.pledge.captureMode === "signed_intent") {
+    return "signed_intent_review";
+  }
+
+  const provider = input.sharedPaymentEvent?.provider ?? input.providerPaymentEvent?.provider;
+
+  return provider === "manual_evidence" ? "manual_evidence" : "provider_webhook";
+}
+
+function firstCountedPaymentEventForPledge(input: {
+  pledge: MpgfPublicGoodsPledge;
+  sharedPaymentEvents: MpgfPublicGoodsPaymentEventKpiRow[];
+  providerPaymentEvents: MpgfPublicGoodsProviderPaymentEventKpiRow[];
+}) {
+  const sharedCandidates = input.sharedPaymentEvents.map((event) => ({
+    id: event.id,
+    amountCents: event.amount_cents,
+    provider: event.provider,
+    countedAt: event.verified_at ?? event.created_at,
+    sharedPaymentEvent: event,
+    providerPaymentEvent: undefined,
+  }));
+  const providerCandidates = input.providerPaymentEvents.map((event) => ({
+    id: event.id,
+    amountCents: event.amount_cents,
+    provider: event.provider,
+    countedAt: event.received_at || event.created_at,
+    sharedPaymentEvent: undefined,
+    providerPaymentEvent: event,
+  }));
+
+  return [...sharedCandidates, ...providerCandidates]
+    .filter((event) => event.amountCents > 0)
+    .sort((left, right) => left.countedAt.localeCompare(right.countedAt) || left.id.localeCompare(right.id))[0];
+}
+
+function buildMpgfPublicGoodsContributionKpiRecordsFromPaymentProofs({
+  paymentProofs,
+  pledges,
+}: {
+  paymentProofs: MpgfPublicGoodsPaymentProof[];
+  pledges: MpgfPublicGoodsPledge[];
+}) {
+  const pledgesById = new Map(pledges.map((pledge) => [pledge.id, pledge]));
+
+  return paymentProofs
+    .filter((proof) => proof.status === "verified" && proof.amountVerifiedCents > 0)
+    .map((proof) => {
+      const pledge = proof.pledgeId ? pledgesById.get(proof.pledgeId) : undefined;
+
+      return {
+        id: `legacy-payment-proof:${proof.id}`,
+        ...(proof.pledgeId ? { pledgeId: proof.pledgeId } : {}),
+        campaignId: proof.campaignId,
+        amountVerifiedCents: clampNonNegativeInteger(proof.amountVerifiedCents),
+        ...(pledge?.createdAt ? { pledgedAt: pledge.createdAt } : {}),
+        ...(proof.verifiedAt ? { countedAt: proof.verifiedAt } : {}),
+        autoVerified: isAutoVerifiedProof(proof),
+        verificationSource: "legacy_payment_proof" as const,
+        reviewRequiredBeforeCounting: true as const,
+      };
+    });
+}
+
+export function buildMpgfPublicGoodsContributionKpiRecordsFromPersistedContributionRows({
+  pledges,
+  paymentEvents = [],
+  providerPaymentEvents = [],
+}: {
+  pledges: MpgfPublicGoodsPledge[];
+  paymentEvents?: MpgfPublicGoodsPaymentEventKpiRow[];
+  providerPaymentEvents?: MpgfPublicGoodsProviderPaymentEventKpiRow[];
+}): MpgfPublicGoodsContributionKpiRecord[] {
+  const sharedPaymentsByPledgeId = groupBy(
+    paymentEvents.filter(isCountableSharedPaymentEventForKpi),
+    (event) => event.conditional_pledge_id,
+  );
+  const providerPaymentsByPledgeId = groupBy(
+    providerPaymentEvents.filter(isCountableProviderPaymentEventForKpi),
+    (event) => event.pledge_intent_id,
+  );
+
+  return pledges
+    .filter(isEligiblePledge)
+    .map((pledge) => {
+      const sharedPaymentEvents = sharedPaymentsByPledgeId.get(pledge.id) ?? [];
+      const providerPaymentEventsForPledge = providerPaymentsByPledgeId.get(pledge.id) ?? [];
+      const countedEvent = firstCountedPaymentEventForPledge({
+        pledge,
+        sharedPaymentEvents,
+        providerPaymentEvents: providerPaymentEventsForPledge,
+      });
+      const verificationSource = contributionVerificationSourceForEvent({
+        pledge,
+        sharedPaymentEvent: countedEvent?.sharedPaymentEvent,
+        providerPaymentEvent: countedEvent?.providerPaymentEvent,
+      });
+      const provider = countedEvent?.provider;
+
+      return {
+        id: `persisted-contribution:${pledge.id}`,
+        pledgeId: pledge.id,
+        campaignId: pledge.campaignId,
+        amountVerifiedCents: clampNonNegativeInteger(pledge.amountCents),
+        pledgedAt: pledge.createdAt,
+        ...(countedEvent?.countedAt ? { countedAt: countedEvent.countedAt } : {}),
+        autoVerified: Boolean(provider && isProviderWebhookSource(provider)) && verificationSource !== "signed_intent_review",
+        verificationSource,
+        reviewRequiredBeforeCounting: true,
+      };
+    });
+}
+
 function countFundedCampaignsWithVerifiedProofs(lines: MpgfPublicGoodsAllocationLine[], paymentProofs: MpgfPublicGoodsPaymentProof[]) {
   const fundedCampaignIds = new Set(lines.filter((line) => line.status === "payable" && line.totalPayoutCents > 0).map((line) => line.campaignId));
   const proofCampaignIds = new Set(
@@ -477,6 +691,7 @@ export function buildMpgfPublicGoodsKpiSnapshot({
   pledges = demoMpgfAssurancePledges,
   reviewCases = demoMpgfPublicGoodsReviewCases,
   paymentProofs = demoMpgfPublicGoodsPaymentProofs,
+  contributionKpiRecords,
   subscriptions = demoMpgfPublicGoodsSubscriptions,
   analyticsEvents = [],
   round = demoMpgfAssuranceRound,
@@ -490,6 +705,7 @@ export function buildMpgfPublicGoodsKpiSnapshot({
   pledges?: MpgfPublicGoodsPledge[];
   reviewCases?: MpgfPublicGoodsReviewCase[];
   paymentProofs?: MpgfPublicGoodsPaymentProof[];
+  contributionKpiRecords?: MpgfPublicGoodsContributionKpiRecord[];
   subscriptions?: MpgfPublicGoodsSubscription[];
   analyticsEvents?: MpgfPublicGoodsKpiAnalyticsEvent[];
   round?: MpgfPublicGoodsRound;
@@ -575,21 +791,26 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       proof.amountVerifiedCents > 0 &&
       (proof.reconciliationSource === "external_receipt" || proof.reconciliationSource === "fiscal_host_webhook"),
   ).length;
-  const verifiedProofs = paymentProofs.filter((proof) => proof.status === "verified" && proof.amountVerifiedCents > 0);
-  const autoVerifiedProofs = verifiedProofs.filter(isAutoVerifiedProof);
-  const manualVerifiedProofs = verifiedProofs.filter((proof) => !isAutoVerifiedProof(proof));
   const pledgesById = new Map(pledges.map((pledge) => [pledge.id, pledge]));
-  const hoursFromPledgeToCounted = verifiedProofs
-    .map((proof) => {
-      const pledge = proof.pledgeId ? pledgesById.get(proof.pledgeId) : undefined;
-      const pledgedAtMs = parseDateMs(pledge?.createdAt);
-      const verifiedAtMs = parseDateMs(proof.verifiedAt);
+  const fundingContributionRecords =
+    contributionKpiRecords ??
+    buildMpgfPublicGoodsContributionKpiRecordsFromPaymentProofs({
+      paymentProofs,
+      pledges,
+    });
+  const autoVerifiedContributionRecords = fundingContributionRecords.filter((record) => record.autoVerified);
+  const manualVerifiedContributionRecords = fundingContributionRecords.filter((record) => !record.autoVerified);
+  const hoursFromPledgeToCounted = fundingContributionRecords
+    .map((record) => {
+      const pledgedAt = record.pledgedAt ?? (record.pledgeId ? pledgesById.get(record.pledgeId)?.createdAt : undefined);
+      const pledgedAtMs = parseDateMs(pledgedAt);
+      const countedAtMs = parseDateMs(record.countedAt);
 
-      if (pledgedAtMs == null || verifiedAtMs == null || verifiedAtMs < pledgedAtMs) {
+      if (pledgedAtMs == null || countedAtMs == null || countedAtMs < pledgedAtMs) {
         return null;
       }
 
-      return roundHours((verifiedAtMs - pledgedAtMs) / (60 * 60 * 1000));
+      return roundHours((countedAtMs - pledgedAtMs) / (60 * 60 * 1000));
     })
     .filter((value): value is number => value != null);
   const fundedCampaignCount = payableLines.filter((line) => line.totalPayoutCents > 0).length;
@@ -678,15 +899,18 @@ export function buildMpgfPublicGoodsKpiSnapshot({
       likelyNetNewFundingShareBps: rateBps(likelyNetNewFundingEventCount, netNewFundingEvents.length),
     },
     funding: {
-      verifiedDollarsRoutedCents: sumVerifiedProofs(paymentProofs),
+      verifiedDollarsRoutedCents: fundingContributionRecords.reduce(
+        (sum, record) => sum + clampNonNegativeInteger(record.amountVerifiedCents),
+        0,
+      ),
       verifiedSupporterCountPerWinningCampaign: payableLines.length
         ? Math.round(payableLines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0) / payableLines.length)
         : null,
       thresholdClearRateBps: rateBps(thresholdClearedCampaignCount, campaigns.length),
       sponsorLeverageRatioBps: rateBps(matchAllocatedCents, payableDirectEligibleCents),
-      autoVerifiedContributionShareBps: rateBps(autoVerifiedProofs.length, verifiedProofs.length),
-      autoVerifiedContributionCount: autoVerifiedProofs.length,
-      manualVerifiedContributionCount: manualVerifiedProofs.length,
+      autoVerifiedContributionShareBps: rateBps(autoVerifiedContributionRecords.length, fundingContributionRecords.length),
+      autoVerifiedContributionCount: autoVerifiedContributionRecords.length,
+      manualVerifiedContributionCount: manualVerifiedContributionRecords.length,
       medianHoursFromPledgeToCounted: median(hoursFromPledgeToCounted),
       sponsorPoolRefillRateBps: rateBps(recurringMonthlyRunRateCents, sponsorPoolCents),
       sponsorPoolMonthlyRefillCents: recurringMonthlyRunRateCents,
@@ -747,14 +971,23 @@ export function buildMpgfPublicGoodsKpiSnapshot({
   };
 }
 
-async function selectRows(supabase: SupabaseServiceAny, table: string, columns: string) {
-  const result = await supabase.from(table).select(columns);
+async function selectRowsWithFilter(
+  supabase: SupabaseServiceAny,
+  table: string,
+  columns: string,
+  filterQuery: (query: any) => any = (query) => query,
+) {
+  const result = await filterQuery(supabase.from(table).select(columns));
 
   if (result.error) {
     throw new Error(`Could not load MPGF public-goods KPI data from ${table}: ${result.error.message}`);
   }
 
   return ((result.data ?? []) as unknown[]).filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"));
+}
+
+async function selectRows(supabase: SupabaseServiceAny, table: string, columns: string) {
+  return selectRowsWithFilter(supabase, table, columns);
 }
 
 function mapCampaignRow(row: Record<string, unknown>): MpgfPublicGoodsCampaign {
@@ -829,6 +1062,35 @@ function mapPaymentProofRow(row: Record<string, unknown>): MpgfPublicGoodsPaymen
     ),
     verifiedAt: readString(row, "verified_at") || undefined,
     createdAt: readString(row, "created_at", new Date("2026-05-29T12:00:00.000Z").toISOString()),
+  };
+}
+
+function mapPaymentEventKpiRow(row: Record<string, unknown>): MpgfPublicGoodsPaymentEventKpiRow {
+  return {
+    id: readString(row, "id", "payment-event-unknown"),
+    conditional_pledge_id: readNullableString(row, "conditional_pledge_id"),
+    provider: readString(row, "provider", "manual_evidence"),
+    provider_status: readString(row, "provider_status", "unknown"),
+    amount_cents: clampNonNegativeInteger(readNumber(row, "amount_cents")),
+    signature_verified: readBoolean(row, "signature_verified"),
+    verified_at: readNullableString(row, "verified_at"),
+    append_only_hash: readString(row, "append_only_hash", "sha256:missing"),
+    created_at: readString(row, "created_at", new Date("2026-05-29T12:00:00.000Z").toISOString()),
+  };
+}
+
+function mapProviderPaymentEventKpiRow(row: Record<string, unknown>): MpgfPublicGoodsProviderPaymentEventKpiRow {
+  return {
+    id: readString(row, "id", "provider-payment-event-unknown"),
+    pledge_intent_id: readString(row, "pledge_intent_id", "pledge-intent-unknown"),
+    provider: readString(row, "provider", "manual_evidence"),
+    event_type: readString(row, "event_type", "unknown"),
+    amount_cents: clampNonNegativeInteger(readNumber(row, "amount_cents")),
+    status: readString(row, "status", "needs_review"),
+    signature_verified: readBoolean(row, "signature_verified"),
+    append_only_hash: readString(row, "append_only_hash", "sha256:missing"),
+    received_at: readString(row, "received_at", new Date("2026-05-29T12:00:00.000Z").toISOString()),
+    created_at: readString(row, "created_at", new Date("2026-05-29T12:00:00.000Z").toISOString()),
   };
 }
 
@@ -947,14 +1209,60 @@ export async function loadMpgfPublicGoodsKpiSnapshot({
     ]);
 
   const campaigns = campaignRows.length > 0 ? campaignRows.map(mapCampaignRow) : demoMpgfPublicGoodsCampaigns;
-  const pledges = pledgeRows.map(mapPledgeRow);
   const reviewCases = reviewRows.map(mapReviewCaseRow);
-  const paymentProofs = proofRows.map(mapPaymentProofRow);
+  const legacyPledges = pledgeRows.map(mapPledgeRow);
+  const legacyPaymentProofs = proofRows.map(mapPaymentProofRow);
   const subscriptions = subscriptionRows.map(mapSubscriptionRow);
   const rounds = roundRows.map(mapRoundRow);
   const matchPools = matchPoolRows.map(mapMatchPoolRow);
   const round = rounds[0] ?? demoMpgfAssuranceRound;
   const matchPool = matchPools.find((candidate) => candidate.id === round.matchPoolId) ?? matchPools[0] ?? demoMpgfMatchPool;
+  const contributionWarnings: string[] = [];
+  const contributionLoad = await loadMpgfPublicGoodsAllocationContributionRecords({ roundId: round.id }).catch((error) => {
+    contributionWarnings.push(
+      error instanceof Error
+        ? `Could not load persisted conditional contribution records for KPI snapshot: ${error.message}`
+        : "Could not load persisted conditional contribution records for KPI snapshot.",
+    );
+
+    return null;
+  });
+  const usePersistedContributions = Boolean(contributionLoad && contributionLoad.rawConditionalPledgeCount > 0);
+  const pledges = usePersistedContributions ? contributionLoad?.pledges ?? [] : legacyPledges;
+  const persistedPledgeIds = pledges.map((pledge) => pledge.id).filter((id) => id.trim());
+  const [paymentEventRows, providerPaymentEventRows] =
+    usePersistedContributions && persistedPledgeIds.length > 0
+      ? await Promise.all([
+          selectRowsWithFilter(
+            supabase,
+            "mpgf_payment_events",
+            "id, conditional_pledge_id, provider, provider_status, amount_cents, signature_verified, verified_at, append_only_hash, created_at",
+            (query) => query.in("conditional_pledge_id", persistedPledgeIds),
+          ),
+          selectRowsWithFilter(
+            supabase,
+            "mpgf_provider_payment_events",
+            "id, pledge_intent_id, provider, event_type, amount_cents, status, signature_verified, append_only_hash, received_at, created_at",
+            (query) => query.in("pledge_intent_id", persistedPledgeIds),
+          ),
+        ]).catch((error) => {
+          contributionWarnings.push(
+            error instanceof Error
+              ? `Could not load persisted provider event records for KPI snapshot: ${error.message}`
+              : "Could not load persisted provider event records for KPI snapshot.",
+          );
+
+          return [[], []] as [Record<string, unknown>[], Record<string, unknown>[]];
+        })
+      : [[], []];
+  const contributionKpiRecords = usePersistedContributions
+    ? buildMpgfPublicGoodsContributionKpiRecordsFromPersistedContributionRows({
+        pledges,
+        paymentEvents: paymentEventRows.map(mapPaymentEventKpiRow),
+        providerPaymentEvents: providerPaymentEventRows.map(mapProviderPaymentEventKpiRow),
+      })
+    : undefined;
+  const paymentProofs = legacyPaymentProofs;
   const campaignStartAtById = Object.fromEntries(
     campaignRows.map((row) => [readString(row, "id"), readString(row, "created_at") || undefined]),
   );
@@ -973,6 +1281,7 @@ export async function loadMpgfPublicGoodsKpiSnapshot({
       pledges,
       reviewCases,
       paymentProofs,
+      contributionKpiRecords,
       subscriptions,
       analyticsEvents,
       round,
@@ -981,6 +1290,10 @@ export async function loadMpgfPublicGoodsKpiSnapshot({
       generatedAt,
       dataSource: campaignRows.length > 0 ? "database" : "demo_fixture",
     }),
-    warnings: campaignRows.length > 0 ? [] : ["No database campaigns found; KPI snapshot fell back to demo fixtures."],
+    warnings: [
+      ...(campaignRows.length > 0 ? [] : ["No database campaigns found; KPI snapshot fell back to demo fixtures."]),
+      ...(contributionLoad?.warnings ?? []),
+      ...contributionWarnings,
+    ],
   };
 }

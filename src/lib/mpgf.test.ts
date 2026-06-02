@@ -102,6 +102,7 @@ import {
   summarizeMpgfPublicGoodsProof,
 } from "./mpgf/public-goods-proof";
 import {
+  buildMpgfPublicGoodsContributionKpiRecordsFromPersistedContributionRows,
   buildMpgfPublicGoodsKpiSnapshot,
   loadMpgfPublicGoodsKpiSnapshot,
 } from "./mpgf/public-goods-kpis";
@@ -3905,6 +3906,8 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
     assert.match(kpis, /medianHoursFromPledgeToCounted/);
     assert.match(kpis, /sponsorPoolRefillRateBps/);
     assert.match(kpis, /donorRetentionIntoNextRoundBps/);
+    assert.match(kpis, /loadMpgfPublicGoodsAllocationContributionRecords/);
+    assert.match(kpis, /buildMpgfPublicGoodsContributionKpiRecordsFromPersistedContributionRows/);
     assert.match(kpis, /mpgf_manual_evidence_vs_webhook_auto_import_v1/);
     assert.match(kpis, /mpgf_static_ordering_vs_common_ground_personalization_v1/);
     assert.match(kpis, /mpgf_donate_now_vs_unlock_round_framing_v1/);
@@ -3917,6 +3920,225 @@ test("MPGF public-goods KPI snapshot gathers rollout data without private fields
       process.env.MPGF_PUBLIC_GOODS_COHORT = previousCohort;
     }
   }
+});
+
+test("MPGF public-goods KPI records use counted persisted contribution rows", () => {
+  const rows = {
+    conditionalPledges: [
+      {
+        id: "kpi-counted-webhook-pledge",
+        round_id: demoMpgfAssuranceRound.id,
+        campaign_id: "campaign-global-health-basic-needs",
+        profile_id: "profile-kpi-webhook",
+        amount_cents: 10_000,
+        counted_cap_cents: 10_000,
+        visibility: "private_amount" as const,
+        payment_mode: "every_org_fast_route" as const,
+        status: "counted" as const,
+        created_at: "2026-06-01T09:00:00.000Z",
+      },
+      {
+        id: "kpi-payment-only-pledge",
+        round_id: demoMpgfAssuranceRound.id,
+        campaign_id: "campaign-global-health-basic-needs",
+        profile_id: "profile-kpi-payment-only",
+        amount_cents: 8_000,
+        counted_cap_cents: 8_000,
+        visibility: "private_amount" as const,
+        payment_mode: "every_org_fast_route" as const,
+        status: "pending_verification" as const,
+        created_at: "2026-06-01T10:00:00.000Z",
+      },
+      {
+        id: "kpi-setup-only-pledge",
+        round_id: demoMpgfAssuranceRound.id,
+        campaign_id: "campaign-global-health-basic-needs",
+        profile_id: "profile-kpi-setup-only",
+        amount_cents: 9_000,
+        counted_cap_cents: 9_000,
+        visibility: "private_amount" as const,
+        payment_mode: "stripe_setup_intent_saved_commitment" as const,
+        status: "counted" as const,
+        created_at: "2026-06-01T11:00:00.000Z",
+      },
+      {
+        id: "kpi-counted-manual-pledge",
+        round_id: demoMpgfAssuranceRound.id,
+        campaign_id: "campaign-animal-welfare-transition",
+        profile_id: "profile-kpi-manual",
+        amount_cents: 7_000,
+        counted_cap_cents: 7_000,
+        visibility: "private_amount" as const,
+        payment_mode: "manual_proof_fallback" as const,
+        status: "counted" as const,
+        created_at: "2026-06-01T12:00:00.000Z",
+      },
+    ],
+    pledgeIntents: [
+      {
+        id: "kpi-counted-webhook-pledge",
+        round_id: demoMpgfAssuranceRound.id,
+        campaign_id: "campaign-global-health-basic-needs",
+        profile_id: "profile-kpi-webhook",
+        user_ref_hash: `sha256:${"a".repeat(64)}`,
+        amount_cents: 10_000,
+        visibility_pref: "private_amount" as const,
+        payment_state: "provider_event_received" as const,
+        counting_state: "counted_after_review" as const,
+        created_at: "2026-06-01T09:00:00.000Z",
+      },
+      {
+        id: "kpi-payment-only-pledge",
+        round_id: demoMpgfAssuranceRound.id,
+        campaign_id: "campaign-global-health-basic-needs",
+        profile_id: "profile-kpi-payment-only",
+        user_ref_hash: `sha256:${"b".repeat(64)}`,
+        amount_cents: 8_000,
+        visibility_pref: "private_amount" as const,
+        payment_state: "provider_event_received" as const,
+        counting_state: "not_counted" as const,
+        created_at: "2026-06-01T10:00:00.000Z",
+      },
+      {
+        id: "kpi-setup-only-pledge",
+        round_id: demoMpgfAssuranceRound.id,
+        campaign_id: "campaign-global-health-basic-needs",
+        profile_id: "profile-kpi-setup-only",
+        user_ref_hash: `sha256:${"c".repeat(64)}`,
+        amount_cents: 9_000,
+        visibility_pref: "private_amount" as const,
+        payment_state: "provider_event_received" as const,
+        counting_state: "counted_after_review" as const,
+        created_at: "2026-06-01T11:00:00.000Z",
+      },
+      {
+        id: "kpi-counted-manual-pledge",
+        round_id: demoMpgfAssuranceRound.id,
+        campaign_id: "campaign-animal-welfare-transition",
+        profile_id: "profile-kpi-manual",
+        user_ref_hash: `sha256:${"d".repeat(64)}`,
+        amount_cents: 7_000,
+        visibility_pref: "private_amount" as const,
+        payment_state: "provider_event_received" as const,
+        counting_state: "counted_after_review" as const,
+        created_at: "2026-06-01T12:00:00.000Z",
+      },
+    ],
+    identityVerifications: [
+      {
+        id: "kpi-identity-webhook",
+        pledge_intent_id: "kpi-counted-webhook-pledge",
+        status: "verified" as const,
+        human_score_bps: 9_000,
+        counts_for_matching: true,
+        verified_at: "2026-06-01T09:05:00.000Z",
+        created_at: "2026-06-01T09:05:00.000Z",
+      },
+      {
+        id: "kpi-identity-payment-only",
+        pledge_intent_id: "kpi-payment-only-pledge",
+        status: "verified" as const,
+        human_score_bps: 9_000,
+        counts_for_matching: true,
+        verified_at: "2026-06-01T10:05:00.000Z",
+        created_at: "2026-06-01T10:05:00.000Z",
+      },
+      {
+        id: "kpi-identity-setup-only",
+        pledge_intent_id: "kpi-setup-only-pledge",
+        status: "verified" as const,
+        human_score_bps: 9_000,
+        counts_for_matching: true,
+        verified_at: "2026-06-01T11:05:00.000Z",
+        created_at: "2026-06-01T11:05:00.000Z",
+      },
+      {
+        id: "kpi-identity-manual",
+        pledge_intent_id: "kpi-counted-manual-pledge",
+        status: "verified" as const,
+        human_score_bps: 9_000,
+        counts_for_matching: true,
+        verified_at: "2026-06-01T12:05:00.000Z",
+        created_at: "2026-06-01T12:05:00.000Z",
+      },
+    ],
+    paymentEvents: [
+      {
+        id: "kpi-payment-webhook-event",
+        conditional_pledge_id: "kpi-counted-webhook-pledge",
+        provider: "every_org" as const,
+        provider_event_id_hash: `sha256:${"e".repeat(64)}`,
+        provider_status: "recorded",
+        amount_cents: 10_000,
+        signature_verified: true,
+        verified_at: "2026-06-02T09:00:00.000Z",
+        append_only_hash: `sha256:${"f".repeat(64)}`,
+        created_at: "2026-06-02T09:00:00.000Z",
+      },
+      {
+        id: "kpi-payment-only-event",
+        conditional_pledge_id: "kpi-payment-only-pledge",
+        provider: "every_org" as const,
+        provider_event_id_hash: `sha256:${"1".repeat(64)}`,
+        provider_status: "recorded",
+        amount_cents: 8_000,
+        signature_verified: true,
+        verified_at: "2026-06-01T13:00:00.000Z",
+        append_only_hash: `sha256:${"2".repeat(64)}`,
+        created_at: "2026-06-01T13:00:00.000Z",
+      },
+      {
+        id: "kpi-setup-only-event",
+        conditional_pledge_id: "kpi-setup-only-pledge",
+        provider: "stripe" as const,
+        provider_event_id_hash: `sha256:${"3".repeat(64)}`,
+        provider_status: "setup_succeeded_token_ready",
+        amount_cents: 9_000,
+        signature_verified: true,
+        verified_at: "2026-06-01T14:00:00.000Z",
+        append_only_hash: `sha256:${"4".repeat(64)}`,
+        created_at: "2026-06-01T14:00:00.000Z",
+      },
+      {
+        id: "kpi-manual-proof-event",
+        conditional_pledge_id: "kpi-counted-manual-pledge",
+        provider: "manual_evidence" as const,
+        provider_event_id_hash: `sha256:${"5".repeat(64)}`,
+        provider_status: "external_handoff_verified",
+        amount_cents: 7_000,
+        signature_verified: true,
+        verified_at: "2026-06-01T18:00:00.000Z",
+        append_only_hash: `sha256:${"6".repeat(64)}`,
+        created_at: "2026-06-01T18:00:00.000Z",
+      },
+    ],
+    providerPaymentEvents: [],
+  };
+  const pledges = buildMpgfPublicGoodsPledgesFromContributionRows(rows);
+  const records = buildMpgfPublicGoodsContributionKpiRecordsFromPersistedContributionRows({
+    pledges,
+    paymentEvents: rows.paymentEvents,
+    providerPaymentEvents: rows.providerPaymentEvents,
+  });
+  const snapshot = buildMpgfPublicGoodsKpiSnapshot({
+    generatedAt: "2026-06-15T12:00:00.000Z",
+    pledges,
+    paymentProofs: [],
+    contributionKpiRecords: records,
+  });
+
+  assert.deepEqual(
+    records.map((record) => record.pledgeId).sort(),
+    ["kpi-counted-manual-pledge", "kpi-counted-webhook-pledge"],
+  );
+  assert.equal(records.every((record) => record.reviewRequiredBeforeCounting), true);
+  assert.equal(records.filter((record) => record.autoVerified).length, 1);
+  assert.equal(snapshot.funding.verifiedDollarsRoutedCents, 17_000);
+  assert.equal(snapshot.funding.autoVerifiedContributionShareBps, 5000);
+  assert.equal(snapshot.funding.autoVerifiedContributionCount, 1);
+  assert.equal(snapshot.funding.manualVerifiedContributionCount, 1);
+  assert.equal(snapshot.funding.medianHoursFromPledgeToCounted, 15);
+  assert.equal(snapshot.safety.eligibleDirectCents, 17_000);
 });
 
 test("MPGF public-goods operations dashboard alerts on payment, replay, and dispute freezes", () => {
