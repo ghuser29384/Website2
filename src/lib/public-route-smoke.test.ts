@@ -2329,6 +2329,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(documentCoverageSource, /open_supply_hub/);
   assert.match(documentCoverageSource, /nist_ai_rmf_xai/);
   assert.match(documentCoverageSource, /human_ai_interaction/);
+  assert.match(documentCoverageSource, /lime_shap_diagnostics/);
+  assert.match(documentCoverageSource, /diagnostic-only/);
   assert.match(documentCoverageSource, /schema_tests/);
   assert.match(documentCoverageSource, /policy_tests/);
   assert.match(documentCoverageSource, /evidence_tests/);

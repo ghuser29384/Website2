@@ -1,7 +1,7 @@
 import aiGovernanceProfileJson from "../../../config/moral-trade/ai-governance-profile.json";
 
 export const MORAL_TRADE_AI_GOVERNANCE_VALIDATOR_VERSION =
-  "moral-trade-ai-governance-validator-v0.2";
+  "moral-trade-ai-governance-validator-v0.3";
 
 type GovernanceEntry = {
   key: string;
@@ -125,6 +125,7 @@ const REQUIRED_EXPLANATION_CONTROLS = [
   "uncertainty_and_redaction_notice",
   "appealable_review_scope",
   "reversible_interaction",
+  "local_explanation_methods_gated",
 ] as const;
 
 const REQUIRED_EXTERNAL_STANDARDS = [
@@ -133,6 +134,7 @@ const REQUIRED_EXTERNAL_STANDARDS = [
   "model_cards",
   "datasheets_for_datasets",
   "fairness_tradeoff_literature",
+  "lime_shap_diagnostics",
 ] as const;
 
 const REQUIRED_HUMAN_CONTROLLED_DECISIONS = [
@@ -350,7 +352,9 @@ export function validateMoralTradeAiGovernanceProfile(
       "NIST XAI and HCI explanation controls are explicit",
       hasAll(explanationControlKeys, REQUIRED_EXPLANATION_CONTROLS) &&
         profile.explanationControls.every((entry) =>
-          /factor|source|action|uncertain|redact|appeal|reversible|correct/i.test(entry.rule),
+          /factor|source|action|uncertain|redact|appeal|reversible|correct|LIME|SHAP|diagnostic/i.test(
+            entry.rule,
+          ),
         ),
       explanationControlKeys.join(", "),
     ),

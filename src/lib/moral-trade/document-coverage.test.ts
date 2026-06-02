@@ -50,6 +50,14 @@ test("document coverage profile maps improvement docs to implementation evidence
         source.routeEvidence.includes("/api/moral-trade/ai-governance/health"),
     ),
   );
+  assert.ok(
+    profile.sourceStackReferences.some(
+      (source) =>
+        source.key === "lime_shap_diagnostics" &&
+        /diagnostic-only/i.test(source.guidance) &&
+        source.evidenceFiles.includes("config/moral-trade/ai-governance-profile.json"),
+    ),
+  );
   assert.equal(validation.sourceDocumentArtifacts.length, 2);
   assert.ok(
     validation.sourceDocumentArtifacts.every(
@@ -334,6 +342,12 @@ test("document coverage route publishes the public contract without private stat
       (source: { key: string; evidenceFiles: string[] }) =>
         source.key === "human_ai_interaction" &&
         source.evidenceFiles.includes("src/lib/moral-trade/copilot.ts"),
+    ),
+  );
+  assert.ok(
+    body.publicContract.sourceStackReferences.some(
+      (source: { key: string; guidance: string }) =>
+        source.key === "lime_shap_diagnostics" && /governed ML ranking/i.test(source.guidance),
     ),
   );
   assert.ok(

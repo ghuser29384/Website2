@@ -49,8 +49,17 @@ test("AI governance profile requires documented, human-controlled, non-ranking a
   assert.ok(profile.fairnessDocumentation.metrics.includes("subgroup_surfacing_parity"));
   assert.ok(profile.explanationControls.some((entry) => entry.key === "factor_codes_source_of_truth"));
   assert.ok(profile.explanationControls.some((entry) => entry.key === "uncertainty_and_redaction_notice"));
+  assert.ok(
+    profile.explanationControls.some(
+      (entry) =>
+        entry.key === "local_explanation_methods_gated" &&
+        /LIME, SHAP/.test(entry.rule) &&
+        /reviewer-only diagnostics/i.test(entry.rule),
+    ),
+  );
   assert.ok(profile.externalStandards.some((entry) => entry.key === "nist_ai_rmf"));
   assert.ok(profile.externalStandards.some((entry) => entry.key === "datasheets_for_datasets"));
+  assert.ok(profile.externalStandards.some((entry) => entry.key === "lime_shap_diagnostics"));
   assert.ok(profile.humanControlledDecisions.includes("matching_disclosure"));
 });
 

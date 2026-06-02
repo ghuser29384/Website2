@@ -190,6 +190,7 @@ const REQUIRED_RECOMMENDED_SOURCE_STACK_KEYS = [
   "nist_ai_rmf_xai",
   "fairness_and_ml_docs",
   "human_ai_interaction",
+  "lime_shap_diagnostics",
 ] as const;
 
 const REQUIRED_TESTING_PLAN_LAYER_KEYS = [
@@ -443,6 +444,22 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
       ],
       routeEvidence: [
         "/api/moral-trade/copilot/contract",
+        "/api/moral-trade/evaluation/health",
+      ],
+    },
+    {
+      key: "lime_shap_diagnostics",
+      priority: "medium",
+      source: "LIME and SHAP explanation methods",
+      guidance:
+        "Local feature-attribution explanations are diagnostic-only and inactive unless Moral Trade later introduces governed ML ranking or risk scoring.",
+      evidenceFiles: [
+        "config/moral-trade/ai-governance-profile.json",
+        "src/lib/moral-trade/ai-governance.ts",
+        "src/lib/moral-trade/evaluation.ts",
+      ],
+      routeEvidence: [
+        "/api/moral-trade/ai-governance/health",
         "/api/moral-trade/evaluation/health",
       ],
     },

@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-ai-governance-v0.2-2026-05",
+  "version": "moral-trade-ai-governance-v0.3-2026-06",
   "purpose": "Public governance contract for keeping Moral Trade decisioning deterministic, schema-bound, documented, and human-controlled before any ML-assisted ranking or scoring is introduced.",
   "decisioningMode": "deterministic_rules_with_schema_bound_copilot",
   "mlEnabledForMatching": false,
@@ -437,6 +437,11 @@
       "key": "reversible_interaction",
       "label": "Reversible interaction",
       "rule": "Explanations must support correction, resubmission, or human override before state changes; users can correct fields without automatic disclosure or reliance."
+    },
+    {
+      "key": "local_explanation_methods_gated",
+      "label": "Local explanation methods are gated",
+      "rule": "LIME, SHAP, or similar local feature-attribution explanations are inactive unless actual ML ranking or risk scoring is introduced with model governance, fairness audits, and reviewer-only diagnostics."
     }
   ],
   "externalStandards": [
@@ -464,6 +469,11 @@
       "key": "fairness_tradeoff_literature",
       "label": "Fairness trade-off literature",
       "use": "Avoid pretending one fairness metric is universally correct; publish trade-offs and review decisions."
+    },
+    {
+      "key": "lime_shap_diagnostics",
+      "label": "LIME and SHAP diagnostics",
+      "use": "Use only as governed internal diagnostics if model-based ranking or risk scoring is introduced; do not present feature attribution as deterministic Moral Trade reasoning."
     }
   ],
   "humanControlledDecisions": [
