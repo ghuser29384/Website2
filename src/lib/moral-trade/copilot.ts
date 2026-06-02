@@ -290,6 +290,7 @@ const REQUIRED_GUARDRAILS = [
   "no_private_feed_ingestion",
   "separate_trust_axes",
   "anti_threat_escalation",
+  "no_false_certainty",
   "verification_loop_matchability_gate",
 ] as const;
 
@@ -407,6 +408,8 @@ const EVIDENCE_METADATA_REDACTION_LEVELS = [
 ] as const;
 const HIDDEN_REASONING_DISCLOSURE_PATTERN =
   /\b(chain[- ]of[- ]thought|hidden reasoning|internal reasoning|private reasoning|step[- ]by[- ]step reasoning|scratchpad|let me think|my reasoning is)\b/i;
+const INCOMPLETE_RECORD_CERTAINTY_PATTERN =
+  /\b(guaranteed|definitive(?:ly)?|certain(?:ly)?|conclusive(?:ly)?|unquestionably|no uncertainty|proven beyond doubt|fully verified|safe to rely on without review|can be relied on without review)\b/i;
 
 export const MORAL_TRADE_COPILOT_EVIDENCE_METADATA_REDACTIONS = [
   "raw_artifact_body",
@@ -431,6 +434,10 @@ function hasAll(values: readonly string[], required: readonly string[]) {
 
 function containsHiddenReasoningDisclosure(value: string) {
   return HIDDEN_REASONING_DISCLOSURE_PATTERN.test(value);
+}
+
+function containsIncompleteRecordCertaintyClaim(value: string) {
+  return INCOMPLETE_RECORD_CERTAINTY_PATTERN.test(value);
 }
 
 function check(
@@ -1300,6 +1307,12 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
         verificationContractByKey.get(step.key)?.blocksMatchable && step.status !== "pass",
     )
     .map((step) => `${step.key}:${step.status}`);
+  const incompleteRecord =
+    output.status !== "matchable" ||
+    output.completeness.missing_required_fields.length > 0 ||
+    output.completeness.underspecified_fields.length > 0 ||
+    output.completeness.policy_conflicts.length > 0 ||
+    blockingVerificationFailures.length > 0;
 
   if (output.status === "matchable" && blockingVerificationFailures.length) {
     blockers.push(
@@ -1333,6 +1346,23 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
   ) {
     blockers.push(
       "no_chain_of_thought: outputs must expose summaries, citations, uncertainty flags, and next steps instead of hidden reasoning transcripts",
+    );
+  }
+
+  if (
+    incompleteRecord &&
+    (containsIncompleteRecordCertaintyClaim(output.reviewer_summary) ||
+      output.verification_loop.some((step) => containsIncompleteRecordCertaintyClaim(step.detail)) ||
+      output.cited_evidence_table.some((row) =>
+        containsIncompleteRecordCertaintyClaim(`${row.claim} ${row.reviewer_note}`),
+      ) ||
+      output.next_step_checklist.some((step) => containsIncompleteRecordCertaintyClaim(step)) ||
+      output.review_instructions.artifacts_to_request.some(containsIncompleteRecordCertaintyClaim) ||
+      output.review_instructions.review_scope.some(containsIncompleteRecordCertaintyClaim) ||
+      output.review_instructions.appeal_triggers.some(containsIncompleteRecordCertaintyClaim))
+  ) {
+    blockers.push(
+      "no_false_certainty: incomplete outputs must preserve uncertainty instead of claiming definitive reliance",
     );
   }
 

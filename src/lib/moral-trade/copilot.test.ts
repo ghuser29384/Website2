@@ -78,6 +78,7 @@ test("copilot contract requires strict bundle, approved output, guardrails, and 
   assert.ok(contract.approvedOutputSections.includes("cited_evidence_table"));
   assert.ok(contract.approvedOutputSections.includes("reviewer_summary"));
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_chain_of_thought"));
+  assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_false_certainty"));
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_autonomous_outreach"));
   assert.ok(
     contract.guardrails.some(
@@ -671,6 +672,23 @@ test("copilot output validation rejects hidden reasoning transcript markers", ()
 
   assert.equal(validation.status, "fail");
   assert.ok(validation.blockers.some((blocker) => blocker.includes("no_chain_of_thought")));
+});
+
+test("copilot output validation rejects certainty claims while the record is incomplete", () => {
+  const output = buildMoralTradeCopilotOutput({
+    ...completeDraft,
+    requestedAction: "",
+  });
+
+  output.reviewer_summary += " This is guaranteed safe to rely on without review.";
+  output.next_step_checklist[0] = "This record is definitively complete.";
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(output.status, "needs_clarification");
+  assert.ok(output.completeness.missing_required_fields.includes("Requested action"));
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("no_false_certainty")));
 });
 
 test("copilot output carries baseline challenge recommendations as structured flags", () => {
