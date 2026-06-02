@@ -66,15 +66,15 @@ test("approved source draft signals become active profile signal rows", () => {
 test("source-assisted lane forbids raw ingestion and continuous sync", () => {
   const validation = validateBackgroundSourceAssistLane({
     allowedFieldKeys: ["cause_priorities", "not_allowed"],
-    consentNote: "Use this public source only for broad matching context.",
+    consentNote: "Use this export only for broad matching context.",
     continuousSyncRequested: true,
     rawIngestionAllowed: true,
     retentionDays: 90,
-    sourceKind: "public_url",
+    sourceKind: "email_export",
   });
 
   assert.equal(validation.rawIngestionAllowed, false);
-  assert.equal(validation.sourceKind, "public_url");
+  assert.equal(validation.sourceKind, "email_export");
   assert.deepEqual(validation.allowedFieldKeys, ["cause_priorities"]);
   assert.ok(validation.errors.some((error) => /raw source ingestion/i.test(error)));
   assert.ok(validation.errors.some((error) => /continuous/i.test(error)));

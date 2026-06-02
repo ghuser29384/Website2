@@ -20,9 +20,11 @@ const PROVIDER_ALIASES: Record<string, SourceConnectionInsert["provider"]> = {
   chat_export: "chat_history",
   email_export: "email",
   linkedin_export: "social",
+  manual_note: "manual",
   manual_paste: "manual",
   public_url: "blog",
   substack_post: "blog",
+  url: "blog",
   webpage: "blog",
 };
 
@@ -80,11 +82,7 @@ function normalizeAccessStatus(value: unknown): SourceConnectionInsert["access_s
     return "needs_review";
   }
 
-  if (normalized === "expired") {
-    return "revoked";
-  }
-
-  if (["connected", "revoked", "needs_review", "not_connected"].includes(normalized)) {
+  if (["connected", "expired", "revoked", "needs_review", "not_connected"].includes(normalized)) {
     return normalized as SourceConnectionInsert["access_status"];
   }
 

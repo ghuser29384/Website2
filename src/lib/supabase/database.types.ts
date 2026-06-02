@@ -1425,6 +1425,8 @@ export interface Database {
           provider: string;
           attempt_count: number;
           last_error: string;
+          source_kind: string | null;
+          source_id: string | null;
           created_at: string;
           sent_at: string | null;
         };
@@ -1438,6 +1440,8 @@ export interface Database {
           provider?: string;
           attempt_count?: number;
           last_error?: string;
+          source_kind?: string | null;
+          source_id?: string | null;
           created_at?: string;
           sent_at?: string | null;
         };
@@ -1449,6 +1453,8 @@ export interface Database {
           provider?: string;
           attempt_count?: number;
           last_error?: string;
+          source_kind?: string | null;
+          source_id?: string | null;
           sent_at?: string | null;
         };
         Relationships: [];
@@ -1956,8 +1962,10 @@ export interface Database {
           seen_at: string | null;
           feedback_reason:
             | "not_relevant"
+            | "already_connected"
             | "bad_timing"
             | "too_vague"
+            | "privacy_concern"
             | "safety_concern"
             | "maybe_later"
             | "interested"
@@ -1993,8 +2001,10 @@ export interface Database {
           seen_at?: string | null;
           feedback_reason?:
             | "not_relevant"
+            | "already_connected"
             | "bad_timing"
             | "too_vague"
+            | "privacy_concern"
             | "safety_concern"
             | "maybe_later"
             | "interested"
@@ -2028,8 +2038,10 @@ export interface Database {
           seen_at?: string | null;
           feedback_reason?:
             | "not_relevant"
+            | "already_connected"
             | "bad_timing"
             | "too_vague"
+            | "privacy_concern"
             | "safety_concern"
             | "maybe_later"
             | "interested"
@@ -2047,8 +2059,10 @@ export interface Database {
           outcome: "dismissed" | "maybe_later" | "interested";
           reason_code:
             | "not_relevant"
+            | "already_connected"
             | "bad_timing"
             | "too_vague"
+            | "privacy_concern"
             | "safety_concern"
             | "maybe_later"
             | "interested";
@@ -2063,8 +2077,10 @@ export interface Database {
           outcome: "dismissed" | "maybe_later" | "interested";
           reason_code:
             | "not_relevant"
+            | "already_connected"
             | "bad_timing"
             | "too_vague"
+            | "privacy_concern"
             | "safety_concern"
             | "maybe_later"
             | "interested";
@@ -2076,8 +2092,10 @@ export interface Database {
           outcome?: "dismissed" | "maybe_later" | "interested";
           reason_code?:
             | "not_relevant"
+            | "already_connected"
             | "bad_timing"
             | "too_vague"
+            | "privacy_concern"
             | "safety_concern"
             | "maybe_later"
             | "interested";
@@ -3146,7 +3164,7 @@ export interface Database {
             | "other";
           label: string;
           url: string;
-          access_status: "not_connected" | "connected" | "revoked" | "needs_review";
+          access_status: "not_connected" | "connected" | "expired" | "revoked" | "needs_review";
           access_scope: string;
           consent_notes: string;
           import_mode: "manual_review" | "manual_paste" | "rss_pull" | "forwarded_note";
@@ -3177,7 +3195,7 @@ export interface Database {
             | "other";
           label: string;
           url?: string;
-          access_status?: "not_connected" | "connected" | "revoked" | "needs_review";
+          access_status?: "not_connected" | "connected" | "expired" | "revoked" | "needs_review";
           access_scope?: string;
           consent_notes?: string;
           import_mode?: "manual_review" | "manual_paste" | "rss_pull" | "forwarded_note";
@@ -3206,7 +3224,7 @@ export interface Database {
             | "other";
           label?: string;
           url?: string;
-          access_status?: "not_connected" | "connected" | "revoked" | "needs_review";
+          access_status?: "not_connected" | "connected" | "expired" | "revoked" | "needs_review";
           access_scope?: string;
           consent_notes?: string;
           import_mode?: "manual_review" | "manual_paste" | "rss_pull" | "forwarded_note";

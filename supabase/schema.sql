@@ -879,12 +879,16 @@ create table if not exists public.email_outbox (
   provider text not null default 'manual',
   attempt_count integer not null default 0 check (attempt_count >= 0),
   last_error text not null default '',
+  source_kind text,
+  source_id text,
   created_at timestamptz not null default timezone('utc', now()),
   sent_at timestamptz
 );
 
 alter table public.email_outbox add column if not exists attempt_count integer not null default 0;
 alter table public.email_outbox add column if not exists last_error text not null default '';
+alter table public.email_outbox add column if not exists source_kind text;
+alter table public.email_outbox add column if not exists source_id text;
 
 create table if not exists public.saved_searches (
   id uuid primary key default gen_random_uuid(),
@@ -1249,7 +1253,7 @@ create table if not exists public.source_connections (
   provider text not null default 'manual' check (provider in ('manual', 'social', 'blog', 'email', 'calendar', 'chat_history', 'search_profile', 'other')),
   label text not null,
   url text not null default '',
-  access_status text not null default 'not_connected' check (access_status in ('not_connected', 'connected', 'revoked', 'needs_review')),
+  access_status text not null default 'not_connected' check (access_status in ('not_connected', 'connected', 'expired', 'revoked', 'needs_review')),
   access_scope text not null default '',
   consent_notes text not null default '',
   import_mode text not null default 'manual_review' check (import_mode in ('manual_review', 'manual_paste', 'rss_pull', 'forwarded_note')),
@@ -1731,6 +1735,10 @@ alter table public.source_connections add column if not exists ai_shadow_mode_al
 alter table public.source_connections add column if not exists raw_ingestion_allowed boolean not null default false;
 alter table public.source_connections add column if not exists sensitive_ciphertexts jsonb not null default '{}'::jsonb;
 alter table public.source_connections add column if not exists sensitive_encryption_version text not null default '';
+alter table public.source_connections drop constraint if exists source_connections_access_status_check;
+alter table public.source_connections
+add constraint source_connections_access_status_check
+check (access_status in ('not_connected', 'connected', 'expired', 'revoked', 'needs_review'));
 
 do $$
 begin
@@ -1909,6 +1917,7 @@ create index if not exists moral_trade_provenance_activities_owner_subject_idx o
 create index if not exists moral_trade_traceability_events_owner_subject_idx on public.moral_trade_traceability_events (owner_profile_id, subject_kind, subject_id, recorded_at desc);
 create index if not exists moral_trade_state_transition_events_owner_subject_idx on public.moral_trade_state_transition_events (owner_profile_id, subject_kind, subject_id, recorded_at desc);
 create index if not exists email_outbox_status_created_idx on public.email_outbox (status, created_at asc);
+create unique index if not exists email_outbox_source_dedupe_idx on public.email_outbox (source_kind, source_id);
 create index if not exists saved_searches_profile_status_idx on public.saved_searches (profile_id, status, updated_at desc);
 create index if not exists saved_searches_scan_idx on public.saved_searches (status, cadence, last_scanned_at asc nulls first);
 create index if not exists offers_text_search_idx on public.offers using gin (
@@ -5413,7 +5422,7 @@ create table if not exists public.background_opportunity_briefs (
   seen_at timestamptz,
   feedback_reason text constraint background_opportunity_briefs_feedback_reason_check check (
     feedback_reason is null
-    or feedback_reason in ('not_relevant', 'bad_timing', 'too_vague', 'safety_concern', 'maybe_later', 'interested')
+    or feedback_reason in ('not_relevant', 'already_connected', 'bad_timing', 'too_vague', 'privacy_concern', 'safety_concern', 'maybe_later', 'interested')
   ),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
@@ -5445,7 +5454,7 @@ alter table public.background_opportunity_briefs
 add constraint background_opportunity_briefs_feedback_reason_check
 check (
   feedback_reason is null
-  or feedback_reason in ('not_relevant', 'bad_timing', 'too_vague', 'safety_concern', 'maybe_later', 'interested')
+  or feedback_reason in ('not_relevant', 'already_connected', 'bad_timing', 'too_vague', 'privacy_concern', 'safety_concern', 'maybe_later', 'interested')
 );
 
 create table if not exists public.background_match_feedback (
@@ -5454,7 +5463,7 @@ create table if not exists public.background_match_feedback (
   opportunity_brief_id uuid not null references public.background_opportunity_briefs (id) on delete cascade,
   match_id uuid references public.match_suggestions (id) on delete set null,
   outcome text not null check (outcome in ('dismissed', 'maybe_later', 'interested')),
-  reason_code text not null check (reason_code in ('not_relevant', 'bad_timing', 'too_vague', 'safety_concern', 'maybe_later', 'interested')),
+  reason_code text not null check (reason_code in ('not_relevant', 'already_connected', 'bad_timing', 'too_vague', 'privacy_concern', 'safety_concern', 'maybe_later', 'interested')),
   constraint background_match_feedback_reason_outcome_check check (
     (outcome = 'interested' and reason_code = 'interested')
     or (outcome = 'maybe_later' and reason_code = 'maybe_later')
@@ -5472,7 +5481,7 @@ alter table public.background_match_feedback add constraint background_match_fee
 );
 alter table public.background_match_feedback drop constraint if exists background_match_feedback_reason_code_check;
 alter table public.background_match_feedback add constraint background_match_feedback_reason_code_check check (
-  reason_code in ('not_relevant', 'bad_timing', 'too_vague', 'safety_concern', 'maybe_later', 'interested')
+  reason_code in ('not_relevant', 'already_connected', 'bad_timing', 'too_vague', 'privacy_concern', 'safety_concern', 'maybe_later', 'interested')
 );
 alter table public.background_match_feedback add constraint background_match_feedback_reason_outcome_check check (
   (outcome = 'interested' and reason_code = 'interested')

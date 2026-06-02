@@ -2,8 +2,10 @@ import type { Database } from "@/lib/supabase/database.types";
 
 export const BACKGROUND_OPPORTUNITY_FEEDBACK_REASONS = [
   "not_relevant",
+  "already_connected",
   "bad_timing",
   "too_vague",
+  "privacy_concern",
   "safety_concern",
   "maybe_later",
   "interested",

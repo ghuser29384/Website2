@@ -201,6 +201,9 @@ export async function POST(request: Request) {
     purpose,
     requestedFieldKeys: validation.requestedFieldKeys,
     requesterAnswers: {
+      firstQuestion: stringField(
+        body.firstQuestion ?? body.first_question ?? body.anonymousQuestion ?? body.anonymous_question,
+      ),
       privacyConstraints: isRecord(body.privacyConstraints ?? body.privacy_constraints)
         ? (body.privacyConstraints ?? body.privacy_constraints)
         : {},

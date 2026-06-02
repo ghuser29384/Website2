@@ -10,8 +10,13 @@ export const BACKGROUND_SOURCE_ASSIST_MODEL_NAME = "deterministic-redaction-v1";
 export const BACKGROUND_SOURCE_ASSIST_ALLOWED_USE =
   "review_first_source_summary_no_raw_persistence";
 export const BACKGROUND_SOURCE_ASSIST_ALLOWED_SOURCE_KINDS = [
+  "url",
   "public_url",
+  "manual_note",
   "manual_paste",
+  "email_export",
+  "calendar_export",
+  "chat_export",
   "linkedin_export",
   "substack_post",
   "other",

@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import test from "node:test";
 
 import {
+  evaluateBackgroundPrivateOverlapPilotGate,
   getBackgroundPrivateOverlapContract,
   validateBackgroundPrivateOverlapContract,
 } from "@/lib/background-private-overlap";
@@ -83,4 +84,26 @@ test("private-overlap live route handlers are not shipped", () => {
   for (const routePath of liveRoutePaths) {
     assert.equal(existsSync(routePath), false, `${routePath} must remain unimplemented`);
   }
+});
+
+test("private-overlap pilot gate is curated-tag-only and non-production by default", () => {
+  const gate = evaluateBackgroundPrivateOverlapPilotGate({
+    adminFeatureFlagEnabled: true,
+    cryptographicReviewApproved: true,
+    dpiaApproved: true,
+    environment: "production",
+    externalReviewApproved: true,
+    namespace: "capability_tags",
+    requestedTags: ["grantmaking", "exact wish: contact alice@example.org"],
+    threatModelApproved: true,
+  });
+
+  assert.equal(gate.allowed, false);
+  assert.equal(gate.liveEndpointEnabled, false);
+  assert.equal(gate.rawInputsAccepted, false);
+  assert.equal(gate.stateMutation, false);
+  assert.equal(gate.curatedTagsOnly, true);
+  assert.equal(gate.namespace, "capability_tags");
+  assert.ok(gate.blockers.includes("production_disabled_until_external_review"));
+  assert.ok(gate.blockers.includes("free_text_or_raw_private_tag_rejected"));
 });

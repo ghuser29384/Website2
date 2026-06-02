@@ -65,6 +65,27 @@ export interface BackgroundPrivateOverlapValidation {
   validatorVersion: typeof BACKGROUND_PRIVATE_OVERLAP_VALIDATOR_VERSION;
 }
 
+export interface BackgroundPrivateOverlapPilotGateInput {
+  adminFeatureFlagEnabled?: boolean;
+  cryptographicReviewApproved?: boolean;
+  dpiaApproved?: boolean;
+  environment?: "development" | "preview" | "production" | "test";
+  externalReviewApproved?: boolean;
+  namespace?: string;
+  requestedTags?: string[];
+  threatModelApproved?: boolean;
+}
+
+export interface BackgroundPrivateOverlapPilotGate {
+  blockers: string[];
+  curatedTagsOnly: true;
+  liveEndpointEnabled: false;
+  allowed: false;
+  namespace: BackgroundPrivateOverlapNamespace | null;
+  rawInputsAccepted: false;
+  stateMutation: false;
+}
+
 const REQUIRED_REVIEWS = [
   "DPIA and documented privacy-design review",
   "formal cryptographic design review",
@@ -101,6 +122,84 @@ function check(
     id,
     label,
     status: passed ? "pass" : "fail",
+  };
+}
+
+function isBackgroundPrivateOverlapNamespace(value?: string | null): value is BackgroundPrivateOverlapNamespace {
+  if (!value) {
+    return false;
+  }
+
+  return [
+    "capability_tags",
+    "constraint_flags",
+    "verification_preferences",
+    "coarse_availability",
+  ].includes(value);
+}
+
+function hasUnsafePrivateOverlapTag(value: string) {
+  return /(?:\s|@|https?:\/\/|free_text|exact|wish|ask|contact|phone|email|location|source_text|raw)/i.test(value);
+}
+
+export function evaluateBackgroundPrivateOverlapPilotGate({
+  adminFeatureFlagEnabled = false,
+  cryptographicReviewApproved = false,
+  dpiaApproved = false,
+  environment = "development",
+  externalReviewApproved = false,
+  namespace,
+  requestedTags = [],
+  threatModelApproved = false,
+}: BackgroundPrivateOverlapPilotGateInput): BackgroundPrivateOverlapPilotGate {
+  const blockers: string[] = [];
+  const normalizedNamespace = isBackgroundPrivateOverlapNamespace(namespace) ? namespace : null;
+  const cleanTags = requestedTags.map((tag) => tag.trim()).filter(Boolean);
+
+  if (!adminFeatureFlagEnabled) {
+    blockers.push("admin_feature_flag_disabled");
+  }
+
+  if (environment === "production") {
+    blockers.push("production_disabled_until_external_review");
+  }
+
+  if (!dpiaApproved) {
+    blockers.push("dpia_required");
+  }
+
+  if (!cryptographicReviewApproved) {
+    blockers.push("cryptographic_review_required");
+  }
+
+  if (!threatModelApproved) {
+    blockers.push("threat_model_required");
+  }
+
+  if (!externalReviewApproved) {
+    blockers.push("external_security_privacy_review_required");
+  }
+
+  if (!normalizedNamespace) {
+    blockers.push("curated_namespace_required");
+  }
+
+  if (!cleanTags.length) {
+    blockers.push("curated_tags_required");
+  }
+
+  if (cleanTags.some(hasUnsafePrivateOverlapTag)) {
+    blockers.push("free_text_or_raw_private_tag_rejected");
+  }
+
+  return {
+    blockers,
+    curatedTagsOnly: true,
+    liveEndpointEnabled: false,
+    allowed: false,
+    namespace: normalizedNamespace,
+    rawInputsAccepted: false,
+    stateMutation: false,
   };
 }
 

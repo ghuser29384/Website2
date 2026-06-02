@@ -85,7 +85,12 @@ export async function POST(request: Request) {
     opportunityBriefId: stringField(body.opportunityBriefId) || null,
     purpose,
     requestedFieldKeys,
-    requesterAnswers: isRecord(body.requesterAnswers) ? body.requesterAnswers : {},
+    requesterAnswers: {
+      ...(isRecord(body.requesterAnswers) ? body.requesterAnswers : {}),
+      firstQuestion: stringField(
+        body.firstQuestion ?? body.first_question ?? body.anonymousQuestion ?? body.anonymous_question,
+      ),
+    },
     requesterProfileId: user.id,
   });
   const { data, error } = await supabase

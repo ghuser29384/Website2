@@ -62,7 +62,7 @@ test("source connector permissions forbid raw ingestion and revoke AI shadow mod
 
   assert.equal(result.rawIngestionAllowed, false);
   assert.ok(result.errors.some((error) => error.includes("Raw connector ingestion")));
-  assert.ok(result.errors.some((error) => error.includes("revoked source")));
+  assert.ok(result.errors.some((error) => error.includes("revoked or expired source")));
 });
 
 test("source permissions are active only while scoped, unexpired, and not revoked", () => {
@@ -83,6 +83,17 @@ test("source permissions are active only while scoped, unexpired, and not revoke
     hasActiveBackgroundSourcePermission(
       {
         access_status: "revoked",
+        allowed_field_keys: ["cause_priorities"],
+        retention_expires_at: "2026-06-01T00:00:00.000Z",
+      },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    hasActiveBackgroundSourcePermission(
+      {
+        access_status: "expired",
         allowed_field_keys: ["cause_priorities"],
         retention_expires_at: "2026-06-01T00:00:00.000Z",
       },

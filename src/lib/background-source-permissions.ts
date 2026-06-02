@@ -244,8 +244,8 @@ export function validateBackgroundSourcePermission({
     }
   }
 
-  if (aiShadowModeAllowed && accessStatus === "revoked") {
-    errors.push("AI shadow-mode evaluation cannot stay enabled for a revoked source.");
+  if (aiShadowModeAllowed && (accessStatus === "revoked" || accessStatus === "expired")) {
+    errors.push("AI shadow-mode evaluation cannot stay enabled for a revoked or expired source.");
   }
 
   return {

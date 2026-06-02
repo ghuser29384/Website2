@@ -33,6 +33,7 @@ import {
   buildProfileInterviewAnswerRow,
   buildSourceSummaryRows,
   getBackgroundSourceRetentionExpiresAt,
+  getOpportunityBriefDeliveryStateForFeedback,
   validateIntroPacketInput,
 } from "@/lib/background-opportunity-briefs";
 import {
@@ -140,6 +141,39 @@ function enforceBackgroundActionRateLimit({
 
 function normalizeSourceConnectionProvider(value: string): SourceConnectionInsert["provider"] {
   if (
+    value === "url" ||
+    value === "public_url" ||
+    value === "substack_post"
+  ) {
+    return "blog";
+  }
+
+  if (
+    value === "manual_note" ||
+    value === "manual_paste"
+  ) {
+    return "manual";
+  }
+
+  if (
+    value === "email_export"
+  ) {
+    return "email";
+  }
+
+  if (
+    value === "calendar_export"
+  ) {
+    return "calendar";
+  }
+
+  if (
+    value === "chat_export"
+  ) {
+    return "chat_history";
+  }
+
+  if (
     value === "social" ||
     value === "blog" ||
     value === "email" ||
@@ -171,7 +205,12 @@ function normalizeSourceSyncFrequency(value: string): SourceConnectionInsert["sy
 }
 
 function normalizeSourceAccessStatus(value: string): SourceConnectionInsert["access_status"] {
-  if (value === "connected" || value === "revoked" || value === "needs_review") {
+  if (
+    value === "connected" ||
+    value === "expired" ||
+    value === "revoked" ||
+    value === "needs_review"
+  ) {
     return value;
   }
 
@@ -288,13 +327,21 @@ export async function updateOpportunityBriefStatusAction(formData: FormData) {
       : feedbackOutcome && feedbackReason
         ? getOpportunityBriefStatusForFeedback(feedbackOutcome)
         : status;
+  const briefUpdate: Database["public"]["Tables"]["background_opportunity_briefs"]["Update"] = {
+    feedback_reason: feedbackReason,
+    seen_at: new Date().toISOString(),
+    status: nextStatus,
+  };
+
+  if (feedbackOutcome) {
+    briefUpdate.delivery_state = getOpportunityBriefDeliveryStateForFeedback(feedbackOutcome);
+  } else if (status === "opened") {
+    briefUpdate.delivery_state = "opened";
+  }
+
   const { error } = await supabase
     .from("background_opportunity_briefs")
-    .update({
-      feedback_reason: feedbackReason,
-      seen_at: new Date().toISOString(),
-      status: nextStatus,
-    })
+    .update(briefUpdate)
     .eq("id", briefId)
     .eq("profile_id", viewer.authUser.id);
 

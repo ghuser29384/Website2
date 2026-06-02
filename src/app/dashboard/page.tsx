@@ -1293,8 +1293,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           <span>Reason</span>
                           <select name="feedback_reason" defaultValue="not_relevant">
                             <option value="not_relevant">Not relevant</option>
+                            <option value="already_connected">Already connected</option>
                             <option value="bad_timing">Bad timing</option>
                             <option value="too_vague">Too vague</option>
+                            <option value="privacy_concern">Privacy concern</option>
                             <option value="safety_concern">Safety concern</option>
                           </select>
                         </label>
@@ -1327,9 +1329,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <input name="opportunity_brief_id" type="hidden" value={brief.id} />
                         <input name="status" type="hidden" value="dismissed" />
                         <input name="feedback_outcome" type="hidden" value="dismissed" />
-                        <input name="feedback_reason" type="hidden" value="safety_concern" />
+                        <input name="feedback_reason" type="hidden" value="privacy_concern" />
                         <button className="button button-secondary button-mini" type="submit">
-                          Report concern
+                          Report privacy concern
                         </button>
                       </form>
                       <form action={updateOpportunityBriefStatusAction}>
@@ -1385,6 +1387,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         <textarea
                           name="boundaries"
                           placeholder="Disclosure, timing, or safety constraints for reviewer triage."
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Anonymous first question</span>
+                        <input
+                          name="first_question"
+                          placeholder="A question an operator may relay before contact details are shared."
                         />
                       </label>
                       <label className="field">
@@ -1680,6 +1689,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       <option value="not_connected">Not connected</option>
                       <option value="needs_review">Needs review</option>
                       <option value="connected">Connected</option>
+                      <option value="expired">Expired</option>
                       <option value="revoked">Revoked</option>
                     </select>
                   </label>

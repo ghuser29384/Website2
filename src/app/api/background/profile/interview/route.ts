@@ -4,7 +4,10 @@ import {
   prepareRecordSensitiveTextFields,
 } from "@/lib/background-field-encryption";
 import { buildProfileInterviewAnswerRow } from "@/lib/background-opportunity-briefs";
-import { buildBackgroundRefinementItems } from "@/lib/background-refinement";
+import {
+  buildBackgroundRefinementItems,
+  buildGuidedWishProfileDraft,
+} from "@/lib/background-refinement";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -54,7 +57,9 @@ export async function GET() {
 
   const { data: profile, error } = await supabase
     .from("wish_profiles")
-    .select("causes, capabilities, verification_preferences, constraints, brokerage_preference")
+    .select(
+      "causes, capabilities, verification_preferences, constraints, brokerage_preference, public_preview, uncertainty_notes, manual_source_review_enabled",
+    )
     .eq("profile_id", user.id)
     .maybeSingle();
 
@@ -63,6 +68,19 @@ export async function GET() {
   }
 
   return privateJson({
+    guidedWishProfileDraft: buildGuidedWishProfileDraft({
+      broadPreview: profile?.public_preview ?? "",
+      capabilities: profile?.capabilities ?? "",
+      constraints: profile?.constraints ?? "",
+      exactAsk: profile?.brokerage_preference ?? "",
+      passiveModeEnabled: profile?.manual_source_review_enabled ?? false,
+      uncertainty: {
+        uncertaintyNotes: profile?.uncertainty_notes ?? "",
+      },
+      verificationPreferences: profile?.verification_preferences
+        ? [profile.verification_preferences]
+        : [],
+    }),
     items: buildBackgroundRefinementItems({
       causeAreas: profile?.causes ?? [],
       exclusions: profile?.constraints ? [profile.constraints] : [],
