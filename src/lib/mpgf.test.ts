@@ -170,6 +170,8 @@ import {
   MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
   MPGF_PUBLIC_GOODS_API_HEADERS,
   MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
+  buildMpgfPublicGoodsAllocationReportApi,
+  buildMpgfPublicGoodsMatchPreviewApi,
   getMpgfPublicGoodsAllocationReportApi,
   getMpgfPublicGoodsCampaignApi,
   getMpgfPublicGoodsCampaignProofPathApi,
@@ -990,6 +992,50 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   const thresholdCalibration = getMpgfPublicGoodsThresholdCalibrationReportApi(demoMpgfAssuranceRound.id);
   const postmortem = getMpgfPublicGoodsPostmortemReportApi(demoMpgfAssuranceRound.id);
   const ledger = getMpgfPublicGoodsLedgerApi();
+  const persistedCampaign = {
+    ...demoMpgfPublicGoodsCampaigns[0]!,
+    id: "persisted-public-api-campaign",
+    slug: "persisted-public-api-campaign",
+    title: "Persisted public API campaign",
+    thresholdAmountCents: 10_000,
+    thresholdSupporters: 1,
+  };
+  const persistedRound = {
+    ...demoMpgfAssuranceRound,
+    id: "persisted-public-api-round",
+    matchPoolId: demoMpgfMatchPool.id,
+  };
+  const persistedIdentity = createMpgfPublicGoodsIdentityAttestation({
+    userId: "persisted-public-api-supporter",
+    provider: "external_proof_of_personhood",
+    humanScoreBps: 9_200,
+    expiresAt: "2026-12-31T00:00:00.000Z",
+    redactedReference: "external_proof_of_personhood:redacted:persisted-public-api",
+  });
+  const persistedPledges = [
+    createMpgfPublicGoodsPledge({
+      campaign: persistedCampaign,
+      userId: persistedIdentity.userId,
+      amountCents: 12_500,
+      identityAttestation: persistedIdentity,
+    }),
+  ] satisfies MpgfPublicGoodsPledge[];
+  const persistedAllocation = allocateMpgfAssuranceRound({
+    campaigns: [persistedCampaign],
+    pledges: persistedPledges,
+    round: persistedRound,
+    matchPool: demoMpgfMatchPool,
+  });
+  const persistedPreview = buildMpgfPublicGoodsMatchPreviewApi({
+    allocation: persistedAllocation,
+    campaigns: [persistedCampaign],
+    roundId: persistedRound.id,
+  });
+  const persistedAllocationReport = buildMpgfPublicGoodsAllocationReportApi({
+    allocation: persistedAllocation,
+    pledges: persistedPledges,
+    roundId: persistedRound.id,
+  });
 
   assert.equal(rounds.privacyPolicy, MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY);
   assert.equal(rounds.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
@@ -1113,6 +1159,11 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(preview.qfLambda > 0);
   assert.match(preview.calcHash, /^sha256:/);
   assert.ok(preview.rows.every((row) => typeof row.verifiedDonorCount === "number"));
+  assert.equal(persistedPreview.roundId, persistedRound.id);
+  assert.equal(persistedPreview.rows.length, 1);
+  assert.equal(persistedPreview.rows[0]?.campaignId, persistedCampaign.id);
+  assert.equal(persistedPreview.rows[0]?.verifiedDonorCount, 1);
+  assert.equal(persistedPreview.rows[0]?.estimatedMatchCents != null, true);
   assert.ok(frozenPreview);
   const frozenPreviewRow = frozenPreview.rows.find((row) => row.campaignId === frozenCampaignId);
   assert.ok(frozenPreviewRow);
@@ -1144,6 +1195,12 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(allocationReportRow.regeneratedFromContributionRecords, true);
   assert.equal(allocationReportRow.verifiedDonorCount, allocationReportRow.uniqueCountedIdentityCount);
   assert.ok(allocationReportRow.rawPaymentObjectCount > allocationReportRow.uniqueCountedIdentityCount);
+  assert.equal(persistedAllocationReport.roundId, persistedRound.id);
+  assert.equal(persistedAllocationReport.rows.length, 1);
+  assert.equal(persistedAllocationReport.rows[0]?.campaignId, persistedCampaign.id);
+  assert.equal(persistedAllocationReport.rows[0]?.verifiedDonorCount, 1);
+  assert.equal(persistedAllocationReport.rows[0]?.regeneratedFromContributionRecords, true);
+  assert.match(persistedAllocationReport.rows[0]?.sourceContributionDigest ?? "", /^sha256:/);
   assert.ok(identityIntegrity);
   assert.equal(identityIntegrity.policy, MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY);
   assert.equal(identityIntegrity.noMoralReputationWeighting, true);
@@ -1233,6 +1290,24 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     }
     assert.doesNotMatch(source, /token voting/i);
   }
+
+  const matchPreviewRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/match-preview/route.ts", "utf8");
+  const allocationsRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/allocations/route.ts", "utf8");
+
+  assert.match(matchPreviewRoute, /buildMpgfPublicGoodsMatchPreviewApi/);
+  assert.match(matchPreviewRoute, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(matchPreviewRoute, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(matchPreviewRoute, /contextLoad\.source === "database_round_context"/);
+  assert.match(matchPreviewRoute, /allocationContextSource/);
+  assert.match(matchPreviewRoute, /contributionSource/);
+  assert.match(matchPreviewRoute, /Could not load persisted MPGF match preview state/);
+  assert.match(allocationsRoute, /buildMpgfPublicGoodsAllocationReportApi/);
+  assert.match(allocationsRoute, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(allocationsRoute, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(allocationsRoute, /contextLoad\.source === "database_round_context"/);
+  assert.match(allocationsRoute, /allocationContextSource/);
+  assert.match(allocationsRoute, /contributionSource/);
+  assert.match(allocationsRoute, /Could not load persisted MPGF allocation report state/);
 
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
   const campaignPage = readFileSync("src/app/mpgf/campaigns/[campaignId]/page.tsx", "utf8");
