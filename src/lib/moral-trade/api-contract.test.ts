@@ -575,6 +575,7 @@ test("api contract implementation audit proves route metadata is backed by execu
   assert.equal(audit.routeCount, profile.routes.length);
   assert.deepEqual(audit.missingRateLimitSurfaces, []);
   assert.deepEqual(audit.missingCacheControls, []);
+  assert.deepEqual(audit.missingRouteFiles, []);
   assert.deepEqual(audit.orphanedRateLimitSurfaces, []);
   assert.ok(audit.implementedRateLimitSurfaces.includes("public_contract_read"));
   assert.ok(audit.implementedRateLimitSurfaces.includes("offer_collection_read"));
@@ -588,9 +589,58 @@ test("api contract implementation audit proves route metadata is backed by execu
     audit.routeFindings.every(
       (finding) =>
         finding.status === "pass" &&
+        finding.routeFilePresent &&
+        finding.resolvedRouteFile !== null &&
         finding.rateLimitLimit !== null &&
         finding.cacheControlHeader !== null,
     ),
+  );
+
+  const routeFinding = (routeKey: string) => {
+    const finding = audit.routeFindings.find((entry) => entry.routeKey === routeKey);
+    assert.ok(finding);
+    return finding;
+  };
+
+  assert.equal(
+    routeFinding("public_offer_detail").resolvedRouteFile,
+    "src/app/api/offers/[...slug]/route.ts",
+  );
+  assert.equal(
+    routeFinding("public_offer_follow").resolvedRouteFile,
+    "src/app/api/offers/[offerId]/follow/route.ts",
+  );
+  assert.equal(
+    routeFinding("background_source_connection_revoke").resolvedRouteFile,
+    "src/app/api/background/source-connections/[id]/route.ts",
+  );
+});
+
+test("api contract implementation audit fails when a cataloged route lacks a Next route file", () => {
+  const profile = getMoralTradeApiContractProfile();
+  const weakenedProfile: MoralTradeApiContractProfile = {
+    ...profile,
+    routes: profile.routes.map((route) =>
+      route.key === "moral_trade_health"
+        ? { ...route, path: "/api/moral-trade/missing-route" }
+        : route,
+    ),
+  };
+  const audit = auditMoralTradeApiImplementationContract(weakenedProfile);
+  const finding = audit.routeFindings.find((entry) => entry.routeKey === "moral_trade_health");
+
+  assert.equal(audit.status, "fail");
+  assert.deepEqual(audit.missingRouteFiles, [
+    "moral_trade_health:/api/moral-trade/missing-route",
+  ]);
+  assert.ok(
+    audit.blockers.includes("missing_route_file:moral_trade_health:/api/moral-trade/missing-route"),
+  );
+  assert.equal(finding?.status, "fail");
+  assert.equal(finding?.routeFilePresent, false);
+  assert.equal(finding?.resolvedRouteFile, null);
+  assert.ok(
+    finding?.candidateRouteFiles.includes("src/app/api/moral-trade/missing-route/route.ts"),
   );
 });
 

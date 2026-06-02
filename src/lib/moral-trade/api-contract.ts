@@ -1,3 +1,6 @@
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
 import apiContractProfileJson from "../../../config/moral-trade/api-contract-profile.json";
 
 import {
@@ -8,11 +11,11 @@ import {
 export const MORAL_TRADE_API_CONTRACT_VALIDATOR_VERSION =
   "moral-trade-api-contract-validator-v0.3";
 export const MORAL_TRADE_API_IMPLEMENTATION_AUDIT_VERSION =
-  "moral-trade-api-implementation-audit-v0.1";
+  "moral-trade-api-implementation-audit-v0.2";
 
 export type MoralTradeApiRouteContract = {
   key: string;
-  method: "GET" | "POST";
+  method: "DELETE" | "GET" | "POST";
   path: string;
   auth: "public" | "optional" | "authenticated" | "internal";
   privacyClass: string;
@@ -62,6 +65,10 @@ export interface MoralTradeApiContractValidation {
 
 export interface MoralTradeApiImplementationRouteFinding {
   routeKey: string;
+  routePath: string;
+  routeFilePresent: boolean;
+  candidateRouteFiles: string[];
+  resolvedRouteFile: string | null;
   rateLimitSurface: string;
   rateLimitLimit: number | null;
   rateLimitWindowMs: number | null;
@@ -80,6 +87,7 @@ export interface MoralTradeApiImplementationAudit {
   implementedCacheControls: string[];
   missingRateLimitSurfaces: string[];
   missingCacheControls: string[];
+  missingRouteFiles: string[];
   orphanedRateLimitSurfaces: string[];
   routeFindings: MoralTradeApiImplementationRouteFinding[];
   blockers: string[];
@@ -175,6 +183,99 @@ function check(
   };
 }
 
+const NEXT_APP_ROOT = "src/app";
+const NEXT_ROUTE_FILE_NAME = "route.ts";
+
+function absoluteWorkspacePath(relativePath: string) {
+  return join(process.cwd(), relativePath);
+}
+
+function fileExists(relativePath: string) {
+  return existsSync(absoluteWorkspacePath(relativePath));
+}
+
+function listChildRouteDirectories(relativeDirectory: string) {
+  try {
+    return readdirSync(absoluteWorkspacePath(relativeDirectory), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+function isDynamicRouteDirectory(directoryName: string) {
+  return /^\[(?:\.\.\.)?[^/\]]+\]$/.test(directoryName);
+}
+
+function routePathSegments(routePath: string) {
+  return routePath
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .filter(Boolean);
+}
+
+function contractSegmentToRouteDirectory(segment: string) {
+  return segment.startsWith(":") ? `[${segment.slice(1)}]` : segment;
+}
+
+function fallbackRouteFileForContractPath(routePath: string) {
+  return `${NEXT_APP_ROOT}/${routePathSegments(routePath)
+    .map(contractSegmentToRouteDirectory)
+    .join("/")}/${NEXT_ROUTE_FILE_NAME}`;
+}
+
+function resolveNextRouteFile(routePath: string) {
+  const segments = routePathSegments(routePath);
+  let candidateDirectories = [NEXT_APP_ROOT];
+
+  for (const segment of segments) {
+    const nextDirectories: string[] = [];
+
+    for (const directory of candidateDirectories) {
+      if (segment.startsWith(":")) {
+        const paramName = segment.slice(1);
+        const childDirectories = listChildRouteDirectories(directory).filter(isDynamicRouteDirectory);
+        const preferredNames = new Set([`[${paramName}]`, `[...${paramName}]`]);
+        const orderedChildDirectories = [
+          ...childDirectories.filter((childDirectory) => preferredNames.has(childDirectory)),
+          ...childDirectories.filter((childDirectory) => !preferredNames.has(childDirectory)),
+        ];
+
+        for (const childDirectory of orderedChildDirectories) {
+          nextDirectories.push(`${directory}/${childDirectory}`);
+        }
+      } else {
+        const staticDirectory = `${directory}/${segment}`;
+
+        if (fileExists(staticDirectory)) {
+          nextDirectories.push(staticDirectory);
+        }
+      }
+    }
+
+    candidateDirectories = Array.from(new Set(nextDirectories));
+
+    if (!candidateDirectories.length) {
+      break;
+    }
+  }
+
+  const candidateRouteFiles = Array.from(
+    new Set([
+      ...candidateDirectories.map((directory) => `${directory}/${NEXT_ROUTE_FILE_NAME}`),
+      fallbackRouteFileForContractPath(routePath),
+    ]),
+  ).sort();
+  const resolvedRouteFile = candidateRouteFiles.find(fileExists) ?? null;
+
+  return {
+    candidateRouteFiles,
+    resolvedRouteFile,
+  };
+}
+
 export function getMoralTradeApiContractProfile() {
   return apiContractProfile;
 }
@@ -210,20 +311,32 @@ export function auditMoralTradeApiImplementationContract(
   const routeFindings = profile.routes.map((route) => {
     const rateLimit = implementedRateLimits[route.rateLimitSurface];
     const cacheControlHeader = implementedCacheControls[route.cacheControl] ?? null;
+    const routeFileResolution = resolveNextRouteFile(route.path);
+    const routeFilePresent = Boolean(routeFileResolution.resolvedRouteFile);
 
     return {
       routeKey: route.key,
+      routePath: route.path,
+      routeFilePresent,
+      candidateRouteFiles: routeFileResolution.candidateRouteFiles,
+      resolvedRouteFile: routeFileResolution.resolvedRouteFile,
       rateLimitSurface: route.rateLimitSurface,
       rateLimitLimit: rateLimit?.limit ?? null,
       rateLimitWindowMs: rateLimit?.windowMs ?? null,
       cacheControl: route.cacheControl,
       cacheControlHeader,
-      status: rateLimit && cacheControlHeader ? ("pass" as const) : ("fail" as const),
+      status:
+        rateLimit && cacheControlHeader && routeFilePresent ? ("pass" as const) : ("fail" as const),
     };
   });
+  const missingRouteFiles = routeFindings
+    .filter((finding) => !finding.routeFilePresent)
+    .map((finding) => `${finding.routeKey}:${finding.routePath}`)
+    .sort();
   const blockers = [
     ...missingRateLimitSurfaces.map((surface) => `missing_rate_limit_surface:${surface}`),
     ...missingCacheControls.map((cacheControl) => `missing_cache_control:${cacheControl}`),
+    ...missingRouteFiles.map((route) => `missing_route_file:${route}`),
     ...orphanedRateLimitSurfaces.map((surface) => `orphaned_rate_limit_surface:${surface}`),
   ];
 
@@ -237,6 +350,7 @@ export function auditMoralTradeApiImplementationContract(
     implementedCacheControls: implementedCacheControlKeys,
     missingRateLimitSurfaces,
     missingCacheControls,
+    missingRouteFiles,
     orphanedRateLimitSurfaces,
     routeFindings,
     blockers,
