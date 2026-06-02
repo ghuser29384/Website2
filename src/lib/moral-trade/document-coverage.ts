@@ -657,6 +657,7 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
       ],
       requiredEvidencePhrases: [
         "getOfferReviewWorkflowCards",
+        "policyEnforcedWorkflow",
         "no_global_moral_ranking",
         "reviewer_summary",
       ],

@@ -1183,12 +1183,35 @@ export default async function MoralTradeTechnicalSpecPage() {
                 {reviewWorkflowValidation.blockers.length} blocker(s),{" "}
                 {reviewWorkflowContract.detailWorkflowCards.length} card contract(s).
               </p>
+              <p>
+                {reviewWorkflowContract.policyEnforcedWorkflow.length} policy-enforced workflow
+                step(s), {reviewWorkflowContract.reviewStateOutcomes.length} review-state
+                outcome(s).
+              </p>
             </div>
             <Link className="button button-secondary" href="/api/moral-trade/review-workflow/contract">
               Open review workflow JSON
             </Link>
           </div>
           <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Workflow path</h3>
+              <ol className="clean-list">
+                {reviewWorkflowContract.policyEnforcedWorkflow.slice(0, 8).map((step) => (
+                  <li key={step.key}>
+                    {step.label} - {step.enforcement.replaceAll("_", " ")}
+                  </li>
+                ))}
+              </ol>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Review outcomes</h3>
+              <ul className="clean-list">
+                {reviewWorkflowContract.reviewStateOutcomes.map((outcome) => (
+                  <li key={outcome}>{outcome.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
             <article className="panel protocol-contract-card">
               <h3>Marketplace priority</h3>
               <ul className="clean-list">

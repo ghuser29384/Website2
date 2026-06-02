@@ -439,6 +439,22 @@ test("offer review workflow contract validates public card and marketplace instr
   assert.ok(contract.detailWorkflowCards.some((card) => card.key === "action_evidence"));
   assert.ok(contract.detailWorkflowCards.some((card) => card.key === "baseline_confidence"));
   assert.ok(contract.detailWorkflowCards.some((card) => card.key === "externality_review"));
+  assert.deepEqual(
+    contract.policyEnforcedWorkflow.map((step) => step.key).slice(0, 5),
+    [
+      "user_draft",
+      "schema_normalizer",
+      "completeness_check",
+      "anti_threat_policy_engine",
+      "baseline_credibility_assessment",
+    ],
+  );
+  assert.equal(
+    contract.policyEnforcedWorkflow[contract.policyEnforcedWorkflow.length - 1]?.key,
+    "audit_log_provenance_record",
+  );
+  assert.ok(contract.reviewStateOutcomes.includes("disputed_unresolved"));
+  assert.ok(contract.reviewStateOutcomes.includes("completion_reviewed"));
   assert.ok(contract.marketplaceFactorPriority.includes("no_global_moral_ranking"));
   assert.match(contract.participantCopyTemplates.baselineHelperText, /current intention/i);
   assert.match(contract.participantCopyTemplates.needsEvidenceStatusCopy, /Status: Needs evidence/i);
@@ -452,6 +468,23 @@ test("offer review workflow contract validates public card and marketplace instr
   assert.ok(contract.contractTests.includes("technical_spec_review_workflow_smoke"));
 });
 
+test("offer review workflow contract rejects weakened policy-enforced path coverage", () => {
+  const contract = getOfferReviewWorkflowContract();
+  const validation = validateOfferReviewWorkflowContract({
+    ...contract,
+    policyEnforcedWorkflow: contract.policyEnforcedWorkflow.filter(
+      (step) => step.key !== "audit_log_provenance_record",
+    ),
+    reviewStateOutcomes: contract.reviewStateOutcomes.filter(
+      (outcome) => outcome !== "disputed_unresolved",
+    ),
+  });
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("policy-enforced-workflow-path")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("review-state-outcome-coverage")));
+});
+
 test("review workflow routes publish participant copy templates", async () => {
   const contractResponse = await reviewWorkflowContractRoute(
     new Request("http://localhost/api/moral-trade/review-workflow/contract"),
@@ -459,6 +492,13 @@ test("review workflow routes publish participant copy templates", async () => {
   const contractBody = await contractResponse.json();
 
   assert.equal(contractResponse.status, 200);
+  assert.equal(
+    contractBody.publicContract.policyEnforcedWorkflow[
+      contractBody.publicContract.policyEnforcedWorkflow.length - 1
+    ]?.key,
+    "audit_log_provenance_record",
+  );
+  assert.ok(contractBody.publicContract.reviewStateOutcomes.includes("completion_reviewed"));
   assert.match(
     contractBody.publicContract.participantCopyTemplates.baselineHelperText,
     /What would you do if this trade did not happen/i,

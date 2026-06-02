@@ -79,11 +79,20 @@ export interface OfferReviewWorkflowCopyTemplates {
   appealCopy: string;
 }
 
+export interface OfferReviewWorkflowPathStep {
+  key: string;
+  label: string;
+  contractSurface: string;
+  enforcement: "structured_input" | "deterministic_policy" | "human_review" | "provenance";
+}
+
 export interface OfferReviewWorkflowContract {
   version: string;
   purpose: string;
   statuses: MoralTradeVerificationStepStatus[];
   detailWorkflowCards: OfferReviewWorkflowCardContract[];
+  policyEnforcedWorkflow: OfferReviewWorkflowPathStep[];
+  reviewStateOutcomes: string[];
   marketplaceFactorPriority: string[];
   participantCopyTemplates: OfferReviewWorkflowCopyTemplates;
   invariants: string[];
@@ -272,6 +281,103 @@ export const REVIEW_WORKFLOW_PARTICIPANT_COPY: OfferReviewWorkflowCopyTemplates 
   appealCopy:
     "If you think this review decision is wrong, appeal the specific claim that was reviewed. Appeals do not reopen unrelated moral disagreements by default.",
 };
+
+export const OFFER_REVIEW_POLICY_ENFORCED_WORKFLOW: OfferReviewWorkflowPathStep[] = [
+  {
+    key: "user_draft",
+    label: "User draft",
+    contractSurface: "structured_review_input",
+    enforcement: "structured_input",
+  },
+  {
+    key: "schema_normalizer",
+    label: "Schema normalizer",
+    contractSurface: "normalizeReviewInput",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "completeness_check",
+    label: "Completeness check",
+    contractSurface: "current_status_card",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "anti_threat_policy_engine",
+    label: "Anti-threat / prohibited-content engine",
+    contractSurface: "current_status_blocked_reason_codes",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "baseline_credibility_assessment",
+    label: "Baseline credibility assessment",
+    contractSurface: "baseline_confidence_card",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "evidence_checklist_generator",
+    label: "Evidence checklist generator",
+    contractSurface: "action_evidence_card",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "privacy_redaction_engine",
+    label: "Privacy / redaction engine",
+    contractSurface: "disclosure_contract",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "rule_based_match_engine",
+    label: "Rule-based match engine",
+    contractSurface: "match_signal_contract",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "match_card_factor_codes",
+    label: "Match card with factor codes and confidence band",
+    contractSurface: "marketplace_factor_priority",
+    enforcement: "deterministic_policy",
+  },
+  {
+    key: "human_review",
+    label: "Human review",
+    contractSurface: "human_review_required",
+    enforcement: "human_review",
+  },
+  {
+    key: "agreement_room",
+    label: "Agreement room",
+    contractSurface: "agreement_review_workflow",
+    enforcement: "human_review",
+  },
+  {
+    key: "evidence_submission",
+    label: "Evidence submission",
+    contractSurface: "provenance_evidence_artifact",
+    enforcement: "provenance",
+  },
+  {
+    key: "reviewer_decision",
+    label: "Reviewer decision",
+    contractSurface: "review_decision",
+    enforcement: "human_review",
+  },
+  {
+    key: "audit_log_provenance_record",
+    label: "Audit log / provenance record",
+    contractSurface: "state_transition_event_record",
+    enforcement: "provenance",
+  },
+];
+
+export const OFFER_REVIEW_STATE_OUTCOMES = [
+  "needs_clarification",
+  "blocked",
+  "needs_evidence",
+  "challenge_window",
+  "disputed_unresolved",
+  "matchable",
+  "completion_reviewed",
+] as const;
 
 const WORKED_EXAMPLE_ORDER_MAP = new Map<string, number>(
   WORKED_EXAMPLE_LAUNCH_ORDER.map((id, index) => [id, index]),
@@ -1751,6 +1857,8 @@ export function getOfferReviewWorkflowContract(): OfferReviewWorkflowContract {
       "Public contract for the review workflow cards shown on offer detail pages, worked examples, marketplace cards, and homepage preview cards.",
     statuses: ["pass", "needs_input", "human_review", "blocked"],
     detailWorkflowCards: OFFER_REVIEW_WORKFLOW_CARD_CONTRACTS,
+    policyEnforcedWorkflow: OFFER_REVIEW_POLICY_ENFORCED_WORKFLOW,
+    reviewStateOutcomes: [...OFFER_REVIEW_STATE_OUTCOMES],
     marketplaceFactorPriority: [...MARKETPLACE_REVIEW_FACTOR_PRIORITY],
     participantCopyTemplates: REVIEW_WORKFLOW_PARTICIPANT_COPY,
     invariants: [
@@ -1777,6 +1885,7 @@ export function validateOfferReviewWorkflowContract(
 ): OfferReviewWorkflowContractValidation {
   const contractKeys = contract.detailWorkflowCards.map((card) => card.key);
   const sampleKeys = contract.sampleDetailCards.map((card) => card.key);
+  const workflowStepKeys = contract.policyEnforcedWorkflow.map((step) => step.key);
   const contractFactorCodes = new Set(
     contract.detailWorkflowCards.flatMap((card) => card.requiredFactorCodes),
   );
@@ -1856,6 +1965,46 @@ export function validateOfferReviewWorkflowContract(
         /appeal the specific claim/i.test(contract.participantCopyTemplates.appealCopy) &&
         /unrelated moral disagreements/i.test(contract.participantCopyTemplates.appealCopy),
       Object.values(contract.participantCopyTemplates).join(" | "),
+    ),
+    workflowContractCheck(
+      "policy-enforced-workflow-path",
+      "Source-document workflow diagram is represented as ordered contract steps",
+      [
+        "user_draft",
+        "schema_normalizer",
+        "completeness_check",
+        "anti_threat_policy_engine",
+        "baseline_credibility_assessment",
+        "evidence_checklist_generator",
+        "privacy_redaction_engine",
+        "rule_based_match_engine",
+        "match_card_factor_codes",
+        "human_review",
+        "agreement_room",
+        "evidence_submission",
+        "reviewer_decision",
+        "audit_log_provenance_record",
+      ].every((key, index) => workflowStepKeys[index] === key) &&
+        contract.policyEnforcedWorkflow.every(
+          (step) => step.label && step.contractSurface && step.enforcement,
+        ) &&
+        contract.policyEnforcedWorkflow[contract.policyEnforcedWorkflow.length - 1]?.enforcement ===
+          "provenance",
+      workflowStepKeys.join(" -> "),
+    ),
+    workflowContractCheck(
+      "review-state-outcome-coverage",
+      "Workflow outcomes cover clarification, block, evidence, challenge, dispute, matchable, and reviewed completion states",
+      [
+        "needs_clarification",
+        "blocked",
+        "needs_evidence",
+        "challenge_window",
+        "disputed_unresolved",
+        "matchable",
+        "completion_reviewed",
+      ].every((outcome) => contract.reviewStateOutcomes.includes(outcome)),
+      contract.reviewStateOutcomes.join(", "),
     ),
     workflowContractCheck(
       "contract-tests",

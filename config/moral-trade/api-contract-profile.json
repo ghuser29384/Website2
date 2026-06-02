@@ -1162,13 +1162,13 @@
     },
     {
       "key": "review_workflow_contract_response",
-      "purpose": "Public review-card contract for detail workflow cards, marketplace factor-code cards, participant copy templates, next-step rules, and non-ranking invariants.",
+      "purpose": "Public review-card contract for policy-enforced workflow steps, detail workflow cards, marketplace factor-code cards, participant copy templates, next-step rules, and non-ranking invariants.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the review workflow contract validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the contract validation run." },
         { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Review workflow contract version." },
-        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for card key coverage, factor-code coverage, marketplace priority, non-ranking, appeal scope, and trust-dimension separation." },
-        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Statuses, detail workflow cards, marketplace factor priority, participant copy templates, invariants, sample keys, and contract tests." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for policy-enforced workflow path coverage, review-state outcome coverage, card key coverage, factor-code coverage, marketplace priority, non-ranking, appeal scope, and trust-dimension separation." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public", "description": "Statuses, policy-enforced workflow steps, review-state outcomes, detail workflow cards, marketplace factor priority, participant copy templates, invariants, sample keys, and contract tests." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Review workflow blockers that prevent relying on card instrumentation." }
       ]
     },

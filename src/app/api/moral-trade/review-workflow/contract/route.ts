@@ -32,6 +32,8 @@ export async function GET(request: Request) {
     publicContract: {
       statuses: contract.statuses,
       detailWorkflowCards: contract.detailWorkflowCards,
+      policyEnforcedWorkflow: contract.policyEnforcedWorkflow,
+      reviewStateOutcomes: contract.reviewStateOutcomes,
       marketplaceFactorPriority: contract.marketplaceFactorPriority,
       participantCopyTemplates: contract.participantCopyTemplates,
       invariants: contract.invariants,
