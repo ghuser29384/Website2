@@ -170,11 +170,7 @@ function campaignForId(campaignId: string, campaigns: MpgfPublicGoodsCampaign[])
   return campaigns.find((campaign) => campaign.id === campaignId || campaign.slug === campaignId) ?? null;
 }
 
-export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgfAssuranceRound.id) {
-  if (roundId !== demoMpgfAssuranceRound.id) {
-    return null;
-  }
-
+export function buildMpgfPublicGoodsContributionFlowApi(roundId: string) {
   return {
     ok: true,
     roundId,
@@ -240,6 +236,14 @@ export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgf
       "provider webhooks cannot authorize final payout by themselves",
     ],
   };
+}
+
+export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgfAssuranceRound.id) {
+  if (roundId !== demoMpgfAssuranceRound.id) {
+    return null;
+  }
+
+  return buildMpgfPublicGoodsContributionFlowApi(roundId);
 }
 
 export function createMpgfPublicGoodsPledgeIntent({

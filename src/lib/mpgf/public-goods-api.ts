@@ -17,32 +17,35 @@ import { buildMpgfPublicGoodsAllocationSourceProofMap } from "./public-goods-all
 import {
   MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,
   MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY,
-  getMpgfPublicGoodsCgVqafReportApi,
-  getMpgfPublicGoodsCommonGroundDiscoveryApi,
-  getMpgfPublicGoodsSupportSignalContractApi,
+  buildMpgfPublicGoodsCgVqafReport,
+  buildMpgfPublicGoodsCommonGroundDiscovery,
+  buildMpgfPublicGoodsSupportSignalContractApi,
 } from "./public-goods-cg-vqaf";
-import { getMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
+import { buildMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
 import { MPGF_PUBLIC_GOODS_FINALIZATION_POLICY } from "./public-goods-finalization";
 import { MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY } from "./public-goods-governance-ballots";
 import {
   MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY,
-  getMpgfPublicGoodsIdentityIntegrityReportApi,
+  buildMpgfPublicGoodsIdentityIntegrityReport,
 } from "./public-goods-identity-integrity";
+import { buildMpgfPublicGoodsKpiSnapshot } from "./public-goods-kpis";
 import { buildMpgfPublicGoodsMilestoneSchedule } from "./public-goods-milestones";
 import {
   MPGF_PUBLIC_GOODS_POSTMORTEM_POLICY,
-  getMpgfPublicGoodsPostmortemReportApi,
+  buildMpgfPublicGoodsPostmortemReport,
 } from "./public-goods-postmortem";
-import { getMpgfPublicGoodsProceduralBadgesApi } from "./public-goods-procedural-badges";
+import { buildMpgfPublicGoodsProceduralBadgeLedger } from "./public-goods-procedural-badges";
 import { buildMpgfPublicGoodsSponsorPoolFlywheel } from "./public-goods-sponsor-flywheel";
 import {
   MPGF_PUBLIC_GOODS_THRESHOLD_CALIBRATION_POLICY,
-  getMpgfPublicGoodsThresholdCalibrationReportApi,
+  buildMpgfPublicGoodsThresholdCalibrationReport,
 } from "./public-goods-threshold-calibration";
 import type {
   MpgfPublicGoodsCampaign,
+  MpgfPublicGoodsMatchPool,
   MpgfPublicGoodsPledge,
   MpgfPublicGoodsReviewCase,
+  MpgfPublicGoodsRound,
   MpgfPublicGoodsRoundAllocation,
 } from "./types";
 
@@ -213,47 +216,112 @@ export function listMpgfPublicGoodsRoundsApi() {
   };
 }
 
-export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRound.id) {
-  if (roundId !== demoMpgfAssuranceRound.id) {
-    return null;
-  }
-
-  const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
-  const sponsorPoolFlywheel = buildMpgfPublicGoodsSponsorPoolFlywheel();
-  const contributionFlow = getMpgfPublicGoodsContributionFlowApi(roundId);
-  const proceduralBadges = getMpgfPublicGoodsProceduralBadgesApi(roundId);
-  const cgVqaf = getMpgfPublicGoodsCgVqafReportApi(roundId);
-  const supportSignalContract = getMpgfPublicGoodsSupportSignalContractApi(roundId);
-  const commonGroundDiscovery = getMpgfPublicGoodsCommonGroundDiscoveryApi(roundId);
-  const identityIntegrity = getMpgfPublicGoodsIdentityIntegrityReportApi(roundId);
-  const thresholdCalibration = getMpgfPublicGoodsThresholdCalibrationReportApi(roundId);
-  const postmortem = getMpgfPublicGoodsPostmortemReportApi(roundId);
+export function buildMpgfPublicGoodsRoundApi({
+  round,
+  campaigns,
+  matchPool,
+  allocation,
+  pledges = demoMpgfAssurancePledges,
+  reviewCases = demoMpgfPublicGoodsReviewCases,
+  dataSource = "demo_fixture",
+}: {
+  round: MpgfPublicGoodsRound;
+  campaigns: MpgfPublicGoodsCampaign[];
+  matchPool: MpgfPublicGoodsMatchPool;
+  allocation: MpgfPublicGoodsRoundAllocation;
+  pledges?: MpgfPublicGoodsPledge[];
+  reviewCases?: MpgfPublicGoodsReviewCase[];
+  dataSource?: "demo_fixture" | "database";
+}) {
+  const usesPersistedState = dataSource === "database";
+  const supportSignals = usesPersistedState ? [] : undefined;
+  const paymentProofs = usesPersistedState ? [] : undefined;
+  const subscriptions = usesPersistedState ? [] : undefined;
+  const sponsorPoolFlywheel = buildMpgfPublicGoodsSponsorPoolFlywheel({
+    pool: matchPool,
+    round,
+    subscriptions,
+    includeDemoSeedEntries: !usesPersistedState,
+  });
+  const contributionFlow = buildMpgfPublicGoodsContributionFlowApi(round.id);
+  const proceduralBadges = buildMpgfPublicGoodsProceduralBadgeLedger({
+    round,
+    pledges,
+    reviewCases,
+    paymentProofs,
+    subscriptions,
+  });
+  const cgVqaf = buildMpgfPublicGoodsCgVqafReport({
+    campaigns,
+    pledges,
+    round,
+    matchPool,
+    supportSignals,
+  });
+  const supportSignalContract = buildMpgfPublicGoodsSupportSignalContractApi(round.id);
+  const commonGroundDiscovery = buildMpgfPublicGoodsCommonGroundDiscovery({
+    campaigns,
+    pledges,
+    round,
+    matchPool,
+    supportSignals,
+  });
+  const identityIntegrity = buildMpgfPublicGoodsIdentityIntegrityReport({
+    campaigns,
+    pledges,
+    round,
+    matchPool,
+    attestations: usesPersistedState ? [] : undefined,
+  });
+  const thresholdCalibration = buildMpgfPublicGoodsThresholdCalibrationReport({
+    campaigns,
+    pledges,
+    round,
+    matchPool,
+  });
+  const kpiSnapshot = buildMpgfPublicGoodsKpiSnapshot({
+    campaigns,
+    pledges,
+    reviewCases,
+    paymentProofs,
+    subscriptions,
+    round,
+    matchPool,
+    allocation,
+    generatedAt: "2026-06-15T12:00:00.000Z",
+    dataSource,
+  });
+  const postmortem = buildMpgfPublicGoodsPostmortemReport({
+    round,
+    kpiSnapshot,
+    thresholdCalibration,
+  });
 
   return {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
     cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     round: {
-      id: demoMpgfAssuranceRound.id,
-      name: demoMpgfAssuranceRound.name,
-      startsAt: demoMpgfAssuranceRound.startsAt,
-      closesAt: demoMpgfAssuranceRound.endsAt,
+      id: round.id,
+      name: round.name,
+      startsAt: round.startsAt,
+      closesAt: round.endsAt,
       status: "open",
-      countdownSeconds: secondsUntil(demoMpgfAssuranceRound.endsAt),
-      qfEnabled: demoMpgfAssuranceRound.qfEnabled,
-      qfCapMultiple: demoMpgfAssuranceRound.qfCapMultiple,
-      supporterGate: demoMpgfAssuranceRound.supporterGate,
+      countdownSeconds: secondsUntil(round.endsAt),
+      qfEnabled: round.qfEnabled,
+      qfCapMultiple: round.qfCapMultiple,
+      supporterGate: round.supporterGate,
       sponsorPool: {
-        id: demoMpgfMatchPool.id,
-        visibleCommitment: demoMpgfMatchPool.visibleCommitment,
-        budgetCents: demoMpgfMatchPool.budgetCents,
+        id: matchPool.id,
+        visibleCommitment: matchPool.visibleCommitment,
+        budgetCents: matchPool.budgetCents,
         baseMatchBudgetCents: allocation.baseMatchBudgetCents,
         qfBonusBudgetCents: allocation.qfBonusBudgetCents,
         formulaVersion: allocation.formulaVersion,
         qfAllocationPolicy: allocation.qfAllocationPolicy,
         qfLambda: allocation.qfLambda,
-        perDonorQfCapCents: demoMpgfMatchPool.restrictionsJson.perDonorQfCapCents,
-        verificationWeightPolicy: demoMpgfMatchPool.restrictionsJson.verificationWeightPolicy,
+        perDonorQfCapCents: matchPool.restrictionsJson.perDonorQfCapCents,
+        verificationWeightPolicy: matchPool.restrictionsJson.verificationWeightPolicy,
         flywheelPolicy: sponsorPoolFlywheel.flywheelPolicy,
         flywheelPath: `/api/mpgf/sponsor-pools/${sponsorPoolFlywheel.poolId}`,
         depositPath: `/api/mpgf/sponsor-pools/${sponsorPoolFlywheel.poolId}/deposits`,
@@ -271,13 +339,13 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
         ? {
             policy: MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,
             formulaVersion: cgVqaf.formulaVersion,
-            reportPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/cg-vqaf`,
+            reportPath: `/api/mpgf/rounds/${round.id}/cg-vqaf`,
             commonGroundDiscoveryPolicy: MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY,
             commonGroundDiscoveryPath:
               supportSignalContract?.commonGroundDiscoveryPath ??
-              `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/common-ground-discovery`,
+              `/api/mpgf/rounds/${round.id}/common-ground-discovery`,
             commonGroundOrderingExperimentKey: commonGroundDiscovery?.orderingExperimentKey ?? null,
-            supportSignalPath: supportSignalContract?.supportSignalPath ?? `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/support-signals`,
+            supportSignalPath: supportSignalContract?.supportSignalPath ?? `/api/mpgf/rounds/${round.id}/support-signals`,
             supportSignalPrivateByDefault: supportSignalContract?.privateByDefault ?? true,
             publicAggregationOnly: supportSignalContract?.publicAggregationOnly ?? true,
             supportSignalsSuppressed: cgVqaf.supportSignalsSuppressed,
@@ -294,7 +362,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
       identityIntegrity: identityIntegrity
         ? {
             policy: MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY,
-            reportPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/identity-integrity`,
+            reportPath: `/api/mpgf/rounds/${round.id}/identity-integrity`,
             sybilReviewPath: "/api/mpgf/challenges",
             privacyPolicy: identityIntegrity.privacyPolicy,
             qfWeightPolicy: identityIntegrity.qfWeightPolicy,
@@ -314,7 +382,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
       thresholdCalibration: thresholdCalibration
         ? {
             policy: MPGF_PUBLIC_GOODS_THRESHOLD_CALIBRATION_POLICY,
-            reportPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/threshold-calibration`,
+            reportPath: `/api/mpgf/rounds/${round.id}/threshold-calibration`,
             appliesTo: thresholdCalibration.appliesTo,
             currentRoundMutationAllowed: thresholdCalibration.currentRoundMutationAllowed,
             parametersLockedBeforeDonationsOpen: thresholdCalibration.parametersLockedBeforeDonationsOpen,
@@ -327,7 +395,7 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
       postmortem: postmortem
         ? {
             policy: MPGF_PUBLIC_GOODS_POSTMORTEM_POLICY,
-            reportPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/postmortem`,
+            reportPath: `/api/mpgf/rounds/${round.id}/postmortem`,
             publicPostmortemTemplatePublished: postmortem.publicPostmortemTemplatePublished,
             currentRoundMutationAllowed: postmortem.currentRoundMutationAllowed,
             parameterResetPolicy: postmortem.parameterResetPolicy,
@@ -340,16 +408,16 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
         : null,
       finalization: {
         policy: MPGF_PUBLIC_GOODS_FINALIZATION_POLICY,
-        previewPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize-preview`,
-        finalizePath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/finalize`,
-        releasePath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/release`,
+        previewPath: `/api/mpgf/rounds/${round.id}/finalize-preview`,
+        finalizePath: `/api/mpgf/rounds/${round.id}/finalize`,
+        releasePath: `/api/mpgf/rounds/${round.id}/release`,
         antiCollusionFactorUnit: "basis_points",
-        proofPath: `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/proof`,
+        proofPath: `/api/mpgf/rounds/${round.id}/proof`,
       },
       proceduralBadges: proceduralBadges
         ? {
             policy: proceduralBadges.policy,
-            path: `/api/mpgf/procedural-badges?roundId=${demoMpgfAssuranceRound.id}`,
+            path: `/api/mpgf/procedural-badges?roundId=${round.id}`,
             counters: proceduralBadges.counters,
             hiddenSignals: proceduralBadges.hiddenSignals,
           }
@@ -361,11 +429,27 @@ export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRo
         challengePath: "/api/mpgf/challenges",
         noGlobalMoralRanking: true,
       },
-      campaignCount: demoMpgfPublicGoodsCampaigns.length,
+      campaignCount: campaigns.length,
       verifiedDonorCount: allocation.lines.reduce((sum, line) => sum + line.verifiedSupporterCount, 0),
       calcHash: publicCalcHash(allocation.lines.map((line) => [line.campaignId, line.qfScore, line.totalPayoutCents])),
     },
   };
+}
+
+export function getMpgfPublicGoodsRoundApi(roundId: string = demoMpgfAssuranceRound.id) {
+  if (roundId !== demoMpgfAssuranceRound.id) {
+    return null;
+  }
+
+  return buildMpgfPublicGoodsRoundApi({
+    round: demoMpgfAssuranceRound,
+    campaigns: demoMpgfPublicGoodsCampaigns,
+    matchPool: demoMpgfMatchPool,
+    allocation: allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") }),
+    pledges: demoMpgfAssurancePledges,
+    reviewCases: demoMpgfPublicGoodsReviewCases,
+    dataSource: "demo_fixture",
+  });
 }
 
 export function listMpgfPublicGoodsCampaignsApi(

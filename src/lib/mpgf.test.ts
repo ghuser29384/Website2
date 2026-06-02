@@ -173,6 +173,7 @@ import {
   buildMpgfPublicGoodsAllocationReportApi,
   buildMpgfPublicGoodsCampaignsApi,
   buildMpgfPublicGoodsMatchPreviewApi,
+  buildMpgfPublicGoodsRoundApi,
   getMpgfPublicGoodsAllocationReportApi,
   getMpgfPublicGoodsCampaignApi,
   getMpgfPublicGoodsCampaignProofPathApi,
@@ -1043,6 +1044,14 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     pledges: persistedPledges,
     allocation: persistedAllocation,
   });
+  const persistedRoundDetail = buildMpgfPublicGoodsRoundApi({
+    round: persistedRound,
+    campaigns: [persistedCampaign],
+    matchPool: demoMpgfMatchPool,
+    allocation: persistedAllocation,
+    pledges: persistedPledges,
+    dataSource: "database",
+  });
 
   assert.equal(rounds.privacyPolicy, MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY);
   assert.equal(rounds.cacheControl, MPGF_PUBLIC_GOODS_API_CACHE_CONTROL);
@@ -1135,6 +1144,29 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.sponsorPool.refillNoSponsorCampaignSteering, true);
   assert.ok(round.round.sponsorPool.flywheelSourceTypes.includes("donation_offset_surplus"));
   assert.ok(round.round.sponsorPool.flywheelSourceTypes.includes("trade_surplus_tithe"));
+  assert.equal(persistedRoundDetail.round.id, persistedRound.id);
+  assert.equal(persistedRoundDetail.round.campaignCount, 1);
+  assert.equal(persistedRoundDetail.round.verifiedDonorCount, 1);
+  assert.equal(persistedRoundDetail.round.sponsorPool.id, demoMpgfMatchPool.id);
+  assert.equal(persistedRoundDetail.round.sponsorPool.flywheelAvailableForRoundCents, 0);
+  assert.equal(persistedRoundDetail.round.sponsorPool.refillAvailableForNextRoundCents, 0);
+  assert.equal(persistedRoundDetail.round.contributionFlow?.pledgeIntentPath, `/api/mpgf/rounds/${persistedRound.id}/pledge-intents`);
+  assert.equal(persistedRoundDetail.round.cgVqaf?.reportPath, `/api/mpgf/rounds/${persistedRound.id}/cg-vqaf`);
+  assert.equal(
+    persistedRoundDetail.round.cgVqaf?.commonGroundDiscoveryPath,
+    `/api/mpgf/rounds/${persistedRound.id}/common-ground-discovery`,
+  );
+  assert.equal(persistedRoundDetail.round.cgVqaf?.noGlobalMoralRanking, true);
+  assert.equal(
+    persistedRoundDetail.round.identityIntegrity?.reportPath,
+    `/api/mpgf/rounds/${persistedRound.id}/identity-integrity`,
+  );
+  assert.equal(
+    persistedRoundDetail.round.thresholdCalibration?.reportPath,
+    `/api/mpgf/rounds/${persistedRound.id}/threshold-calibration`,
+  );
+  assert.equal(persistedRoundDetail.round.postmortem?.reportPath, `/api/mpgf/rounds/${persistedRound.id}/postmortem`);
+  assert.equal(persistedRoundDetail.round.finalization.proofPath, `/api/mpgf/rounds/${persistedRound.id}/proof`);
   assert.ok(campaigns);
   assert.equal(campaigns.campaigns.length, demoMpgfPublicGoodsCampaigns.length);
   assert.ok(campaigns.campaigns.every((campaign) => campaign.milestoneSchedule.length === 3));
@@ -1307,7 +1339,15 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   const matchPreviewRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/match-preview/route.ts", "utf8");
   const allocationsRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/allocations/route.ts", "utf8");
   const roundCampaignsRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/campaigns/route.ts", "utf8");
+  const roundRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/route.ts", "utf8");
 
+  assert.match(roundRoute, /buildMpgfPublicGoodsRoundApi/);
+  assert.match(roundRoute, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(roundRoute, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(roundRoute, /contextLoad\.source === "database_round_context"/);
+  assert.match(roundRoute, /allocationContextSource/);
+  assert.match(roundRoute, /contributionSource/);
+  assert.match(roundRoute, /Could not load persisted MPGF round state/);
   assert.match(roundCampaignsRoute, /buildMpgfPublicGoodsCampaignsApi/);
   assert.match(roundCampaignsRoute, /loadMpgfPublicGoodsAllocationContext/);
   assert.match(roundCampaignsRoute, /loadMpgfPublicGoodsAllocationContributionRecords/);

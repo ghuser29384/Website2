@@ -424,19 +424,22 @@ export function buildMpgfPublicGoodsSponsorPoolFlywheel({
   round = demoMpgfAssuranceRound,
   subscriptions = demoMpgfPublicGoodsSubscriptions,
   extraEntries = [],
+  includeDemoSeedEntries = true,
 }: {
   pool?: MpgfPublicGoodsMatchPool;
   round?: MpgfPublicGoodsRound;
   subscriptions?: MpgfPublicGoodsSubscription[];
   extraEntries?: MpgfPublicGoodsSponsorPoolLedgerEntry[];
+  includeDemoSeedEntries?: boolean;
 } = {}): MpgfPublicGoodsSponsorPoolFlywheel {
   const refillAutomation = buildMpgfPublicGoodsSponsorPoolRefillAutomationPlan({
     pool,
     round,
     subscriptions,
+    surplusSources: includeDemoSeedEntries ? undefined : [],
   });
   const entries = [
-    ...demoLedgerEntries({ pool, round }),
+    ...(includeDemoSeedEntries ? demoLedgerEntries({ pool, round }) : []),
     ...subscriptionLedgerEntries({ pool, round, subscriptions }),
     ...extraEntries.filter((entry) => entry.poolId === pool.id && entry.roundId === round.id),
   ].sort((left, right) => left.receivedAt.localeCompare(right.receivedAt) || left.id.localeCompare(right.id));
