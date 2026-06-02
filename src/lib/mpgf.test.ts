@@ -1613,6 +1613,7 @@ test("MPGF Stripe saved commitments use SetupIntent-first before conditional Pay
   assert.equal(setupWebhook.eventState, "setup_succeeded_token_ready");
   assert.equal(setupWebhook.signatureVerified, true);
   assert.equal(setupWebhook.stateChangeAllowed, true);
+  assert.equal(setupWebhook.amountCents, 22_500);
   assert.equal(setupWebhook.paymentMethodToken?.rawCardDataStored, false);
   assert.match(setupWebhook.paymentMethodToken?.providerCustomerIdHash ?? "", /^sha256:/);
   assert.match(setupWebhook.providerEventIdHash, /^sha256:/);
@@ -1630,6 +1631,7 @@ test("MPGF Stripe saved commitments use SetupIntent-first before conditional Pay
   assert.match(payablePlan.calcHash, /^sha256:/);
   assert.equal(paymentWebhook.status, "recorded");
   assert.equal(paymentWebhook.eventState, "payment_intent_succeeded_pending_review");
+  assert.equal(paymentWebhook.amountCents, 22_500);
   assert.equal(paymentWebhook.reviewRequiredBeforeCounting, true);
   assert.equal(paymentWebhook.finalPayoutAuthorized, false);
   assert.equal(rejectedWebhook.status, "rejected");
@@ -1648,6 +1650,12 @@ test("MPGF Stripe saved commitments use SetupIntent-first before conditional Pay
   assert.match(stripeWebhookRoute, /Stripe webhook signature/);
   assert.match(realMoney, /isMpgfStripeSavedCommitmentEvent/);
   assert.match(realMoney, /recordMpgfStripeSavedCommitmentWebhook/);
+  assert.match(realMoney, /persistMpgfStripeSavedCommitmentWebhookEvent/);
+  assert.match(realMoney, /mpgf_stripe_saved_commitment_events/);
+  assert.match(realMoney, /mpgf_payment_method_tokens/);
+  assert.match(realMoney, /mpgf_payment_events/);
+  assert.match(realMoney, /onConflict: "provider_event_id_hash"/);
+  assert.match(realMoney, /final_payout_authorized: false/);
   assert.match(migration, /mpgf_stripe_saved_commitments/);
   assert.match(migration, /mpgf_stripe_saved_commitment_events/);
   assert.match(migration, /mpgf_stripe_conditional_payment_intent_runs/);

@@ -12,6 +12,7 @@ import { demoCycle } from "./data";
 import { normalizeMpgfManualEvidenceSecurity } from "./public-goods-evidence-security";
 import {
   isMpgfStripeSavedCommitmentEvent,
+  type MpgfStripeSavedCommitmentWebhookEvent,
   recordMpgfStripeSavedCommitmentWebhook,
 } from "./public-goods-stripe-commitments";
 import type {
@@ -28,6 +29,28 @@ type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
 };
 type MpgfPublicGoodsPaymentProofInsert =
   Database["public"]["Tables"]["mpgf_public_goods_payment_proofs"]["Insert"];
+type MpgfPaymentMethodTokenInsert = Database["public"]["Tables"]["mpgf_payment_method_tokens"]["Insert"];
+type MpgfPaymentEventInsert = Database["public"]["Tables"]["mpgf_payment_events"]["Insert"];
+type MpgfStripeSavedCommitmentEventInsert = {
+  id: string;
+  saved_commitment_id: string | null;
+  conditional_pledge_id: string | null;
+  pledge_intent_id: string | null;
+  provider_event_id_hash: string;
+  provider_object_id_hash: string | null;
+  provider_customer_id_hash: string | null;
+  provider_payment_method_id_hash: string | null;
+  event_type: string;
+  event_state: string;
+  status: "recorded" | "needs_review" | "rejected";
+  signature_verified: boolean;
+  structure_verified: boolean;
+  payload_hash: string;
+  append_only_hash: string;
+  review_required_before_counting: true;
+  final_payout_authorized: false;
+  received_at: string;
+};
 
 type GateStatus = MpgfRealMoneyReadiness["requiredGates"][number]["status"];
 
@@ -1137,6 +1160,110 @@ export function hashStripeWebhookBody(rawBody: string) {
   return createHash("sha256").update(rawBody).digest("hex");
 }
 
+function toStripeSavedCommitmentEventRow(
+  event: MpgfStripeSavedCommitmentWebhookEvent,
+): MpgfStripeSavedCommitmentEventInsert {
+  return {
+    id: event.id,
+    saved_commitment_id: null,
+    conditional_pledge_id: event.conditionalPledgeId ?? null,
+    pledge_intent_id: event.pledgeIntentId ?? null,
+    provider_event_id_hash: event.providerEventIdHash,
+    provider_object_id_hash: event.providerObjectIdHash ?? null,
+    provider_customer_id_hash: event.providerCustomerIdHash ?? null,
+    provider_payment_method_id_hash: event.providerPaymentMethodIdHash ?? null,
+    event_type: event.eventType,
+    event_state: event.eventState,
+    status: event.status,
+    signature_verified: event.signatureVerified,
+    structure_verified: event.structureVerified,
+    payload_hash: event.payloadHash,
+    append_only_hash: event.appendOnlyHash,
+    review_required_before_counting: true,
+    final_payout_authorized: false,
+    received_at: event.receivedAt,
+  };
+}
+
+function toPaymentMethodTokenRow(
+  event: MpgfStripeSavedCommitmentWebhookEvent,
+): MpgfPaymentMethodTokenInsert | null {
+  if (!event.paymentMethodToken || !event.stateChangeAllowed) {
+    return null;
+  }
+
+  return {
+    id: event.paymentMethodToken.id,
+    profile_id: null,
+    provider: "stripe",
+    provider_customer_id_hash: event.paymentMethodToken.providerCustomerIdHash,
+    provider_payment_method_id_hash: event.paymentMethodToken.providerPaymentMethodIdHash,
+    setup_status: event.paymentMethodToken.setupStatus,
+    future_use_consent_at: event.receivedAt,
+    raw_card_data_stored: false,
+    updated_at: event.receivedAt,
+  };
+}
+
+function toStripePaymentEventRow(event: MpgfStripeSavedCommitmentWebhookEvent): MpgfPaymentEventInsert | null {
+  if (!event.stateChangeAllowed) {
+    return null;
+  }
+
+  return {
+    id: `mpgf-stripe-payment-event-${event.providerEventIdHash.slice(7, 19)}`,
+    conditional_pledge_id: event.conditionalPledgeId ?? null,
+    provider: "stripe",
+    provider_event_id_hash: event.providerEventIdHash,
+    provider_status: event.eventState,
+    amount_cents: event.amountCents ?? 0,
+    signature_verified: event.signatureVerified,
+    payload_hash: event.payloadHash,
+    verified_at: event.status === "recorded" ? event.receivedAt : null,
+    final_payout_authorized: false,
+    append_only_hash: event.appendOnlyHash,
+    created_at: event.receivedAt,
+  };
+}
+
+async function persistMpgfStripeSavedCommitmentWebhookEvent(
+  supabase: SupabaseServiceAny,
+  event: MpgfStripeSavedCommitmentWebhookEvent,
+) {
+  const eventRow = toStripeSavedCommitmentEventRow(event);
+  const eventWrite = await supabase
+    .from("mpgf_stripe_saved_commitment_events")
+    .upsert(eventRow, { onConflict: "provider_event_id_hash" });
+
+  if (eventWrite.error) {
+    throw new Error(eventWrite.error.message);
+  }
+
+  const tokenRow = toPaymentMethodTokenRow(event);
+
+  if (tokenRow) {
+    const tokenWrite = await supabase
+      .from("mpgf_payment_method_tokens")
+      .upsert(tokenRow, { onConflict: "id" });
+
+    if (tokenWrite.error) {
+      throw new Error(tokenWrite.error.message);
+    }
+  }
+
+  const paymentEventRow = toStripePaymentEventRow(event);
+
+  if (paymentEventRow) {
+    const paymentEventWrite = await supabase
+      .from("mpgf_payment_events")
+      .upsert(paymentEventRow, { onConflict: "provider_event_id_hash" });
+
+    if (paymentEventWrite.error) {
+      throw new Error(paymentEventWrite.error.message);
+    }
+  }
+}
+
 export async function handleMpgfStripeWebhookEvent(input: {
   event: Stripe.Event;
   rawBodyHash: string;
@@ -1205,9 +1332,10 @@ export async function handleMpgfStripeWebhookEvent(input: {
         readRecord((input.event.data.object as unknown as Record<string, unknown> | undefined)?.metadata) ?? {},
       )
     ) {
-      recordMpgfStripeSavedCommitmentWebhook(input.event as unknown as Record<string, unknown>, {
+      const savedCommitmentEvent = recordMpgfStripeSavedCommitmentWebhook(input.event as unknown as Record<string, unknown>, {
         signatureVerified: input.signatureVerified,
       });
+      await persistMpgfStripeSavedCommitmentWebhookEvent(supabase, savedCommitmentEvent);
       handled = true;
     }
 

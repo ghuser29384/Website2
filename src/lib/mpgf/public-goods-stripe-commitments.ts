@@ -130,6 +130,7 @@ export interface MpgfStripeSavedCommitmentWebhookEvent {
   campaignId?: string;
   pledgeIntentId?: string;
   conditionalPledgeId?: string;
+  amountCents?: number;
   eventType: string;
   eventState: StripeCommitmentEventState;
   status: StripeCommitmentWebhookStatus;
@@ -447,6 +448,7 @@ export function recordMpgfStripeSavedCommitmentWebhook(
   const objectId = stringField(object.id);
   const customerId = stringField(object.customer);
   const paymentMethodId = stringField(object.payment_method);
+  const amountCents = Number(stringField(metadata.amountCents) ?? object.amount);
 
   if (!eventId) {
     throw new Error("MPGF Stripe saved commitment webhook requires a Stripe event id.");
@@ -501,6 +503,7 @@ export function recordMpgfStripeSavedCommitmentWebhook(
     campaignId: stringField(metadata.campaignId),
     pledgeIntentId: stringField(metadata.pledgeIntentId),
     conditionalPledgeId: stringField(metadata.conditionalPledgeId),
+    amountCents: Number.isInteger(amountCents) && amountCents >= 0 ? amountCents : undefined,
     eventType,
     eventState,
     status,
