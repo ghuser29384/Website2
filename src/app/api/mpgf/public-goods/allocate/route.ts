@@ -75,6 +75,8 @@ export async function POST(request: Request) {
       rawPaymentObjectCount: result.rawPaymentObjectCount,
       allocationContextSource: result.allocationContextSource,
       loadedCampaignCount: result.loadedCampaignCount,
+      sponsorPoolTargetCents: result.sponsorPoolTargetCents,
+      sponsorPoolAvailableCents: result.sponsorPoolAvailableCents,
       baseMatchAllocatedCents: result.allocation.baseMatchAllocatedCents,
       qfBonusAllocatedCents: result.allocation.qfBonusAllocatedCents,
       totalPayoutCents: result.allocation.totalPayoutCents,

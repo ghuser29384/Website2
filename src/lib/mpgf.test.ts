@@ -827,6 +827,30 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
       visible_commitment: "Persisted sponsor pool for the June round.",
       restrictions_json: { perDonorQfCapCents: 10_000 },
     },
+    sponsorPoolDepositRows: [
+      {
+        id: "sponsor-deposit-db-available",
+        sponsor_pool_id: "mpgf-match-pool-db-2026-06",
+        round_id: "mpgf-assurance-round-db-2026-06",
+        scheduled_for_round_id: null,
+        source_type: "direct_sponsor_deposit",
+        amount_cents: 8_000,
+        status: "available",
+        counts_toward_matching: true,
+        received_at: "2026-06-01T00:00:00.000Z",
+      },
+      {
+        id: "sponsor-deposit-db-pending",
+        sponsor_pool_id: "mpgf-match-pool-db-2026-06",
+        round_id: "mpgf-assurance-round-db-2026-06",
+        scheduled_for_round_id: null,
+        source_type: "trade_surplus_tithe",
+        amount_cents: 20_000,
+        status: "pending_review",
+        counts_toward_matching: false,
+        received_at: "2026-06-01T00:00:00.000Z",
+      },
+    ],
   });
   const dbContextPledges = persistedPledges.map((pledge) => ({
     ...pledge,
@@ -874,7 +898,12 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.equal(dbRoundContext.source, "database_round_context");
   assert.equal(dbRoundContext.round.id, "mpgf-assurance-round-db-2026-06");
   assert.equal(dbRoundContext.matchPool.id, "mpgf-match-pool-db-2026-06");
+  assert.equal(dbRoundContext.sponsorPoolTargetCents, 12_000);
+  assert.equal(dbRoundContext.sponsorPoolAvailableCents, 8_000);
+  assert.equal(dbRoundContext.matchPool.budgetCents, 8_000);
+  assert.equal(dbRoundContext.matchPool.qfBonusCents, 2_000);
   assert.equal(dbRoundContext.campaignCount, 1);
+  assert.ok(dbRoundContext.warnings.some((warning) => warning.includes("allocation is capped")));
   assert.equal(dbContextAllocation.roundId, dbRoundContext.round.id);
   assert.equal(dbContextAllocation.matchPoolId, dbRoundContext.matchPool.id);
   assert.equal(dbContextAllocation.lines[0]?.campaignId, "campaign-db-common-ground-health");
@@ -913,6 +942,8 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.match(allocationResultsSource, /mpgf_public_goods_rounds/);
   assert.match(allocationResultsSource, /mpgf_public_goods_campaigns/);
   assert.match(allocationResultsSource, /mpgf_public_goods_match_pools/);
+  assert.match(allocationResultsSource, /mpgf_public_goods_sponsor_pool_deposits/);
+  assert.match(allocationResultsSource, /counts_toward_matching/);
   assert.match(allocationResultsSource, /counted_after_review/);
   assert.match(allocationResultsSource, /locked_parameter_digest/);
   assert.match(allocationResultsSource, /allocation_calculation_hash/);
@@ -926,11 +957,13 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.match(route, /formulaVersion/);
   assert.match(route, /contributionSource/);
   assert.match(route, /allocationContextSource/);
+  assert.match(route, /sponsorPoolAvailableCents/);
   assert.match(route, /allocationCalculationHash/);
   assert.match(route, /eligibleContributionRecordCount/);
   assert.match(closeRoute, /roundId/);
   assert.match(closeRoute, /contributionSource/);
   assert.match(closeRoute, /allocationContextSource/);
+  assert.match(closeRoute, /sponsorPoolAvailableCents/);
   assert.match(closeRoute, /lockedParameterDigest/);
   assert.match(route, /proofPageRequired/);
   assert.match(route, /qfBonusCapCents/);

@@ -131,6 +131,18 @@ type MpgfPublicGoodsMatchPoolRow = {
   restrictions_json: unknown;
 };
 
+type MpgfSponsorPoolDepositRow = {
+  id: string;
+  sponsor_pool_id: string;
+  round_id: string | null;
+  scheduled_for_round_id: string | null;
+  source_type: unknown;
+  amount_cents: number;
+  status: unknown;
+  counts_toward_matching: boolean;
+  received_at: string;
+};
+
 export type MpgfPublicGoodsAllocationContributionSource =
   | "database_conditional_pledges"
   | "demo_fixture"
@@ -156,6 +168,8 @@ export interface MpgfPublicGoodsAllocationContextLoadResult {
   campaigns: MpgfPublicGoodsCampaign[];
   matchPool: MpgfPublicGoodsMatchPool;
   campaignCount: number;
+  sponsorPoolTargetCents: number;
+  sponsorPoolAvailableCents: number;
   warnings: string[];
 }
 
@@ -207,6 +221,8 @@ export interface PersistMpgfPublicGoodsAllocationResultsResult {
   rawPaymentObjectCount: number;
   allocationContextSource: MpgfPublicGoodsAllocationContextSource;
   loadedCampaignCount: number;
+  sponsorPoolTargetCents: number;
+  sponsorPoolAvailableCents: number;
   warnings: string[];
 }
 
@@ -325,26 +341,97 @@ function mapPublicGoodsMatchPoolRow(row: MpgfPublicGoodsMatchPoolRow): MpgfPubli
   };
 }
 
+function availableSponsorPoolCentsForRound({
+  depositRows,
+  matchPool,
+  round,
+}: {
+  depositRows: MpgfSponsorPoolDepositRow[];
+  matchPool: MpgfPublicGoodsMatchPool;
+  round: MpgfPublicGoodsRound;
+}) {
+  return depositRows
+    .filter(
+      (row) =>
+        row.sponsor_pool_id === matchPool.id &&
+        row.status === "available" &&
+        row.counts_toward_matching &&
+        (row.round_id === round.id || row.scheduled_for_round_id === round.id),
+    )
+    .reduce((sum, row) => sum + clampNonNegativeInteger(Number(row.amount_cents)), 0);
+}
+
+function constrainMatchPoolToSponsorAvailability({
+  matchPool,
+  round,
+  sponsorPoolDepositRows,
+}: {
+  matchPool: MpgfPublicGoodsMatchPool;
+  round: MpgfPublicGoodsRound;
+  sponsorPoolDepositRows?: MpgfSponsorPoolDepositRow[];
+}) {
+  if (!sponsorPoolDepositRows) {
+    return {
+      matchPool,
+      sponsorPoolTargetCents: matchPool.budgetCents,
+      sponsorPoolAvailableCents: matchPool.budgetCents,
+      warnings: [],
+    };
+  }
+
+  const sponsorPoolAvailableCents = availableSponsorPoolCentsForRound({
+    depositRows: sponsorPoolDepositRows,
+    matchPool,
+    round,
+  });
+  const budgetCents = Math.min(matchPool.budgetCents, sponsorPoolAvailableCents);
+  const constrainedMatchPool = {
+    ...matchPool,
+    budgetCents,
+    qfBonusCents: Math.min(matchPool.qfBonusCents, budgetCents),
+  };
+
+  return {
+    matchPool: constrainedMatchPool,
+    sponsorPoolTargetCents: matchPool.budgetCents,
+    sponsorPoolAvailableCents,
+    warnings: sponsorPoolAvailableCents < matchPool.budgetCents
+      ? [
+          `MPGF sponsor-pool availability (${sponsorPoolAvailableCents} cents) is below the target match pool (${matchPool.budgetCents} cents); allocation is capped to reviewed available sponsor funds.`,
+        ]
+      : [],
+  };
+}
+
 export function buildMpgfPublicGoodsAllocationContextFromRows({
   roundRow,
   campaignRows,
   matchPoolRow,
+  sponsorPoolDepositRows,
 }: {
   roundRow: MpgfPublicGoodsRoundRow;
   campaignRows: MpgfPublicGoodsCampaignRow[];
   matchPoolRow: MpgfPublicGoodsMatchPoolRow;
+  sponsorPoolDepositRows?: MpgfSponsorPoolDepositRow[];
 }): MpgfPublicGoodsAllocationContextLoadResult {
   const round = mapPublicGoodsRoundRow(roundRow);
   const campaigns = campaignRows.map(mapPublicGoodsCampaignRow);
-  const matchPool = mapPublicGoodsMatchPoolRow(matchPoolRow);
+  const matchPoolTarget = mapPublicGoodsMatchPoolRow(matchPoolRow);
+  const sponsorConstraint = constrainMatchPoolToSponsorAvailability({
+    matchPool: matchPoolTarget,
+    round,
+    sponsorPoolDepositRows,
+  });
 
   return {
     source: "database_round_context",
     round,
     campaigns,
-    matchPool,
+    matchPool: sponsorConstraint.matchPool,
     campaignCount: campaigns.length,
-    warnings: [],
+    sponsorPoolTargetCents: sponsorConstraint.sponsorPoolTargetCents,
+    sponsorPoolAvailableCents: sponsorConstraint.sponsorPoolAvailableCents,
+    warnings: sponsorConstraint.warnings,
   };
 }
 
@@ -668,6 +755,8 @@ function demoAllocationContext(warnings: string[] = []): MpgfPublicGoodsAllocati
     campaigns: demoMpgfPublicGoodsCampaigns,
     matchPool: demoMpgfMatchPool,
     campaignCount: demoMpgfPublicGoodsCampaigns.length,
+    sponsorPoolTargetCents: demoMpgfMatchPool.budgetCents,
+    sponsorPoolAvailableCents: demoMpgfMatchPool.budgetCents,
     warnings,
   };
 }
@@ -729,13 +818,38 @@ export async function loadMpgfPublicGoodsAllocationContext({
     throw new Error(`MPGF public-goods match pool ${roundRow.match_pool_id} was not found for allocation finalization.`);
   }
 
-  const context = buildMpgfPublicGoodsAllocationContextFromRows({ roundRow, campaignRows, matchPoolRow });
+  const sponsorPoolDepositRows = await selectSupabaseRows<MpgfSponsorPoolDepositRow>(
+    supabase,
+    "mpgf_public_goods_sponsor_pool_deposits",
+    [
+      "id",
+      "sponsor_pool_id",
+      "round_id",
+      "scheduled_for_round_id",
+      "source_type",
+      "amount_cents",
+      "status",
+      "counts_toward_matching",
+      "received_at",
+    ].join(","),
+    (query) => query.eq("sponsor_pool_id", roundRow.match_pool_id),
+  );
+  const context = buildMpgfPublicGoodsAllocationContextFromRows({
+    roundRow,
+    campaignRows,
+    matchPoolRow,
+    sponsorPoolDepositRows,
+  });
+  const warnings = [
+    ...context.warnings,
+    ...(campaignRows.length === 0
+      ? [`MPGF public-goods round ${roundId} has no persisted campaigns; allocation output will have no campaign rows.`]
+      : []),
+  ];
 
   return {
     ...context,
-    warnings: campaignRows.length === 0
-      ? [`MPGF public-goods round ${roundId} has no persisted campaigns; allocation output will have no campaign rows.`]
-      : [],
+    warnings,
   };
 }
 
@@ -1037,6 +1151,8 @@ export async function persistMpgfPublicGoodsAllocationResults({
         campaigns: campaigns ?? [],
         matchPool: matchPool ?? demoMpgfMatchPool,
         campaignCount: campaigns?.length ?? allocation.lines.length,
+        sponsorPoolTargetCents: matchPool?.budgetCents ?? allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
+        sponsorPoolAvailableCents: matchPool?.budgetCents ?? allocation.baseMatchBudgetCents + allocation.qfBonusBudgetCents,
         warnings: [],
       }
     : round && campaigns && matchPool
@@ -1046,6 +1162,8 @@ export async function persistMpgfPublicGoodsAllocationResults({
           campaigns,
           matchPool,
           campaignCount: campaigns.length,
+          sponsorPoolTargetCents: matchPool.budgetCents,
+          sponsorPoolAvailableCents: matchPool.budgetCents,
           warnings: [],
         }
       : await loadMpgfPublicGoodsAllocationContext({ roundId });
@@ -1086,6 +1204,8 @@ export async function persistMpgfPublicGoodsAllocationResults({
       rawPaymentObjectCount: contributionLoad.rawPaymentObjectCount,
       allocationContextSource: contextLoad.source,
       loadedCampaignCount: contextLoad.campaignCount,
+      sponsorPoolTargetCents: contextLoad.sponsorPoolTargetCents,
+      sponsorPoolAvailableCents: contextLoad.sponsorPoolAvailableCents,
       warnings,
     };
   }
@@ -1103,6 +1223,8 @@ export async function persistMpgfPublicGoodsAllocationResults({
       rawPaymentObjectCount: contributionLoad.rawPaymentObjectCount,
       allocationContextSource: contextLoad.source,
       loadedCampaignCount: contextLoad.campaignCount,
+      sponsorPoolTargetCents: contextLoad.sponsorPoolTargetCents,
+      sponsorPoolAvailableCents: contextLoad.sponsorPoolAvailableCents,
       warnings: [
         ...warnings,
         "Supabase service-role configuration is required to persist MPGF public-goods allocation results.",
@@ -1132,6 +1254,8 @@ export async function persistMpgfPublicGoodsAllocationResults({
     rawPaymentObjectCount: contributionLoad.rawPaymentObjectCount,
     allocationContextSource: contextLoad.source,
     loadedCampaignCount: contextLoad.campaignCount,
+    sponsorPoolTargetCents: contextLoad.sponsorPoolTargetCents,
+    sponsorPoolAvailableCents: contextLoad.sponsorPoolAvailableCents,
     warnings,
   };
 }
