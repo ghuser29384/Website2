@@ -223,6 +223,7 @@ export function getMpgfPublicGoodsContributionFlowApi(roundId: string = demoMpgf
     legacyManualEvidenceFallbackPath: "/api/mpgf/contributions/manual-evidence",
     stateObjects: [
       "pledge_intent",
+      "conditional_pledge",
       "identity_verification",
       "payment_authorization",
       "provider_payment_event",

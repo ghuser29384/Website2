@@ -1170,6 +1170,7 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.ok(contributionFlow.guarantees.some((guarantee) => /SetupIntent-first/.test(guarantee)));
   assert.deepEqual(contributionFlow.stateObjects, [
     "pledge_intent",
+    "conditional_pledge",
     "identity_verification",
     "payment_authorization",
     "provider_payment_event",
@@ -1209,6 +1210,13 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(providerWebhookRoute, /Missing MPGF provider event signature/);
   assert.match(providerWebhookRoute, /finalPayoutAuthorized: false/);
   assert.match(manualAliasRoute, /contributions\/manual-evidence\/route/);
+  assert.match(route, /mpgf_pledge_intents/);
+  assert.match(route, /mpgf_conditional_pledges/);
+  assert.match(route, /conditionalPledgeId: pledgeIntent\.id/);
+  assert.match(route, /counted_cap_cents/);
+  assert.match(route, /capture_policy: pledgeIntent\.capturePolicy/);
+  assert.match(route, /status: "pledge_saved"/);
+  assert.match(route, /persistence/);
   assert.match(migration, /create table if not exists public\.mpgf_pledge_intents/);
   assert.match(migration, /create table if not exists public\.mpgf_identity_verifications/);
   assert.match(migration, /create table if not exists public\.mpgf_payment_authorizations/);
@@ -1219,10 +1227,12 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(schemaSql, /create table if not exists public\.mpgf_identity_verifications/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_payment_authorizations/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_provider_payment_events/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_conditional_pledges/);
   assert.match(schemaSql, /constraint mpgf_payment_authorizations_provider_or_manual/);
   assert.match(schemaSql, /create policy "mpgf_provider_payment_events_service_only"/);
   assert.match(schemaSql, /comment on table public\.mpgf_provider_payment_events/);
   assert.match(databaseTypes, /mpgf_pledge_intents: \{/);
+  assert.match(databaseTypes, /mpgf_conditional_pledges: \{/);
   assert.match(databaseTypes, /mpgf_identity_verifications: \{/);
   assert.match(databaseTypes, /mpgf_payment_authorizations: \{/);
   assert.match(databaseTypes, /mpgf_provider_payment_events: \{/);
