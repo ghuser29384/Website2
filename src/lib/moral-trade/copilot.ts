@@ -281,6 +281,54 @@ const REQUIRED_OUTPUT_SECTIONS = [
   "reviewer_summary",
   "citations",
 ] as const;
+const COPILOT_COMPLETENESS_KEYS = [
+  "missing_required_fields",
+  "underspecified_fields",
+  "policy_conflicts",
+] as const;
+const COPILOT_TRADE_STRUCTURE_KEYS = [
+  "format",
+  "offered_action",
+  "requested_action",
+  "duration",
+  "exit_conditions",
+  "verification_method",
+] as const;
+const COPILOT_TRUST_ASSESSMENT_KEYS = [
+  "factual_trust",
+  "counterfactual_baseline",
+  "externality_review",
+  "party_relative_benefit",
+  "privacy_redaction",
+] as const;
+const COPILOT_TRUST_RATING_KEYS = ["rating", "reasons"] as const;
+const COPILOT_EXTERNALITY_REVIEW_KEYS = ["required", "flags"] as const;
+const COPILOT_PRIVACY_REDACTION_KEYS = ["rating", "flags", "reasons"] as const;
+const COPILOT_MATCH_EXPLANATION_KEYS = [
+  "factor_codes",
+  "confidence_band",
+  "redactions_applied",
+] as const;
+const COPILOT_VERIFICATION_STEP_KEYS = [
+  "key",
+  "label",
+  "status",
+  "detail",
+  "blocks_matchable",
+] as const;
+const COPILOT_CLARIFICATION_QUESTION_KEYS = ["field", "question"] as const;
+const COPILOT_EVIDENCE_ROW_KEYS = [
+  "claim",
+  "evidence_type",
+  "citation",
+  "status",
+  "reviewer_note",
+] as const;
+const COPILOT_REVIEW_INSTRUCTION_KEYS = [
+  "artifacts_to_request",
+  "review_scope",
+  "appeal_triggers",
+] as const;
 
 const REQUIRED_GUARDRAILS = [
   "approved_json_only",
@@ -590,6 +638,40 @@ function cleanBounded(value: unknown, maxLength: number) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getUnknownKeys(value: unknown, allowedKeys: readonly string[]) {
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  return Object.keys(value).filter((key) => !allowedKeys.includes(key));
+}
+
+function pushUnknownKeyBlocker(
+  blockers: string[],
+  scope: string,
+  value: unknown,
+  allowedKeys: readonly string[],
+) {
+  const unknownKeys = getUnknownKeys(value, allowedKeys);
+
+  if (unknownKeys.length) {
+    blockers.push(
+      `approved_json_only:${scope}: unsupported fields ${unknownKeys.sort().join(",")}`,
+    );
+  }
+}
+
+function pushUnknownKeyBlockersForRows(
+  blockers: string[],
+  scope: string,
+  values: readonly unknown[],
+  allowedKeys: readonly string[],
+) {
+  values.forEach((value, index) => {
+    pushUnknownKeyBlocker(blockers, `${scope}:${index}`, value, allowedKeys);
+  });
 }
 
 function normalizeEvidenceMetadataToken(value: unknown) {
@@ -1293,6 +1375,81 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
   const blockers: string[] = [];
   const verificationContractByKey = new Map(
     copilotContract.verificationLoop.map((step) => [step.key, step]),
+  );
+
+  pushUnknownKeyBlocker(blockers, "output", output, REQUIRED_OUTPUT_SECTIONS);
+  pushUnknownKeyBlocker(blockers, "completeness", output.completeness, COPILOT_COMPLETENESS_KEYS);
+  pushUnknownKeyBlocker(
+    blockers,
+    "trade_structure",
+    output.trade_structure,
+    COPILOT_TRADE_STRUCTURE_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment",
+    output.trust_assessment,
+    COPILOT_TRUST_ASSESSMENT_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment.factual_trust",
+    output.trust_assessment.factual_trust,
+    COPILOT_TRUST_RATING_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment.counterfactual_baseline",
+    output.trust_assessment.counterfactual_baseline,
+    COPILOT_TRUST_RATING_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment.externality_review",
+    output.trust_assessment.externality_review,
+    COPILOT_EXTERNALITY_REVIEW_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment.party_relative_benefit",
+    output.trust_assessment.party_relative_benefit,
+    COPILOT_TRUST_RATING_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "trust_assessment.privacy_redaction",
+    output.trust_assessment.privacy_redaction,
+    COPILOT_PRIVACY_REDACTION_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "match_explanation",
+    output.match_explanation,
+    COPILOT_MATCH_EXPLANATION_KEYS,
+  );
+  pushUnknownKeyBlockersForRows(
+    blockers,
+    "verification_loop",
+    output.verification_loop,
+    COPILOT_VERIFICATION_STEP_KEYS,
+  );
+  pushUnknownKeyBlockersForRows(
+    blockers,
+    "clarification_questions",
+    output.clarification_questions,
+    COPILOT_CLARIFICATION_QUESTION_KEYS,
+  );
+  pushUnknownKeyBlockersForRows(
+    blockers,
+    "cited_evidence_table",
+    output.cited_evidence_table,
+    COPILOT_EVIDENCE_ROW_KEYS,
+  );
+  pushUnknownKeyBlocker(
+    blockers,
+    "review_instructions",
+    output.review_instructions,
+    COPILOT_REVIEW_INSTRUCTION_KEYS,
   );
 
   if (!copilotContract.statusValues.includes(output.status)) {

@@ -373,6 +373,34 @@ test("copilot output validation makes blocking verification steps hard matchabil
   );
 });
 
+test("copilot output validation rejects fields outside the approved JSON schema", () => {
+  const output = buildMoralTradeCopilotOutput(completeDraft, ["proposal:local-draft"]) as ReturnType<
+    typeof buildMoralTradeCopilotOutput
+  > &
+    Record<string, unknown>;
+
+  output.private_contact_details = "participant@example.org";
+  (output.trade_structure as Record<string, unknown>).raw_private_wish_text =
+    "exact private wish text";
+  (output.verification_loop[0] as Record<string, unknown>).hidden_reasoning =
+    "unapproved chain-of-thought field";
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("approved_json_only:output")));
+  assert.ok(
+    validation.blockers.some((blocker) =>
+      blocker.includes("approved_json_only:trade_structure"),
+    ),
+  );
+  assert.ok(
+    validation.blockers.some((blocker) =>
+      blocker.includes("approved_json_only:verification_loop:0"),
+    ),
+  );
+});
+
 test("copilot output validation rejects verification-loop contract flag drift", () => {
   const output = buildMoralTradeCopilotOutput(completeDraft, ["proposal:local-draft"]);
 
