@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/app-data";
 import { recordMpgfPublicGoodsAnalyticsEvent } from "@/lib/mpgf/public-goods-analytics";
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
+import { loadMpgfPublicGoodsAllocationContext } from "@/lib/mpgf/public-goods-allocation-results";
 import {
+  buildMpgfPublicGoodsSupportSignalContractApi,
   createMpgfPublicGoodsSupportSignal,
   defaultMpgfPublicGoodsSupportStrengthBps,
   getMpgfPublicGoodsSupportSignalContractApi,
@@ -52,6 +54,34 @@ function isUniqueViolationError(error: DbErrorLike) {
 
 function hasServiceRoleEnv() {
   return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+async function loadSupportSignalRoundState(roundId: string) {
+  const demoContract = getMpgfPublicGoodsSupportSignalContractApi(roundId);
+
+  if (demoContract) {
+    return {
+      contract: demoContract,
+      round: undefined,
+      campaigns: undefined,
+      source: "demo_fixture" as const,
+      warnings: [],
+    };
+  }
+
+  const contextLoad = await loadMpgfPublicGoodsAllocationContext({ roundId });
+
+  if (contextLoad.source === "demo_fixture") {
+    return null;
+  }
+
+  return {
+    contract: buildMpgfPublicGoodsSupportSignalContractApi(roundId),
+    round: contextLoad.round,
+    campaigns: contextLoad.campaigns,
+    source: contextLoad.source,
+    warnings: contextLoad.warnings,
+  };
 }
 
 function strengthBpsField(
@@ -234,16 +264,24 @@ async function recordSupportSignalAnalytics(signal: MpgfPublicGoodsSupportSignal
 
 export async function GET(_request: Request, { params }: { params: Promise<{ roundId: string }> }) {
   const { roundId } = await params;
-  const contract = getMpgfPublicGoodsSupportSignalContractApi(roundId);
+  const roundState = await loadSupportSignalRoundState(roundId);
 
-  if (!contract) {
+  if (!roundState) {
     return NextResponse.json(
       { ok: false, error: "MPGF support-signal contract not found." },
       { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );
   }
 
-  return NextResponse.json(contract, { headers: MPGF_PUBLIC_GOODS_API_HEADERS });
+  return NextResponse.json(
+    {
+      ...roundState.contract,
+      roundSource: roundState.source,
+      loadedCampaignCount: roundState.campaigns?.length ?? null,
+      warnings: roundState.warnings,
+    },
+    { headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+  );
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ roundId: string }> }) {
@@ -255,9 +293,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
 
   try {
     const { roundId } = await params;
-    const contract = getMpgfPublicGoodsSupportSignalContractApi(roundId);
+    const roundState = await loadSupportSignalRoundState(roundId);
 
-    if (!contract) {
+    if (!roundState) {
       return NextResponse.json(
         { ok: false, error: "MPGF support-signal contract not found." },
         { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
@@ -283,6 +321,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
     }
 
     const supportSignal = createMpgfPublicGoodsSupportSignal({
+      ...(roundState.round ? { round: roundState.round } : {}),
+      ...(roundState.campaigns ? { campaigns: roundState.campaigns } : {}),
       campaignId: stringField(record, "campaignId"),
       userRef: viewer.authUser.id,
       moralCluster,
@@ -306,13 +346,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
         dissentNote,
         analytics,
         currentState: "signal_only",
-        nextStates: contract.collectiveActionStates,
-        privacyPolicy: contract.privacyPolicy,
+        nextStates: roundState.contract.collectiveActionStates,
+        privacyPolicy: roundState.contract.privacyPolicy,
         privateByDefault: true,
         publicAggregationOnly: true,
         rawSupportReasonsExcluded: true,
         noGlobalMoralRanking: true,
-        cgVqafReportPath: contract.cgVqafReportPath,
+        cgVqafReportPath: roundState.contract.cgVqafReportPath,
+        roundSource: roundState.source,
         pledgeIntentPath: `/api/mpgf/rounds/${roundId}/pledge-intents`,
       },
       { status: 202, headers: MPGF_PUBLIC_GOODS_API_HEADERS },

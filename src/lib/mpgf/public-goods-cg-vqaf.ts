@@ -486,6 +486,7 @@ function normalizeSignal({
 
 export function createMpgfPublicGoodsSupportSignal({
   round = demoMpgfAssuranceRound,
+  campaigns = demoMpgfPublicGoodsCampaigns,
   campaignId,
   userRef,
   moralCluster,
@@ -494,6 +495,7 @@ export function createMpgfPublicGoodsSupportSignal({
   createdAt = "2026-05-31T12:00:00.000Z",
 }: {
   round?: MpgfPublicGoodsRound;
+  campaigns?: MpgfPublicGoodsCampaign[];
   campaignId: string;
   userRef: string;
   moralCluster: MpgfPublicGoodsMoralCluster;
@@ -505,13 +507,15 @@ export function createMpgfPublicGoodsSupportSignal({
     throw new Error("MPGF CG-VQAF support signals require a private user reference.");
   }
 
-  if (!demoMpgfPublicGoodsCampaigns.some((campaign) => campaign.id === campaignId || campaign.slug === campaignId)) {
+  const campaign = campaigns.find((candidate) => candidate.id === campaignId || candidate.slug === campaignId);
+
+  if (!campaign) {
     throw new Error("MPGF CG-VQAF support signal targets an unknown campaign.");
   }
 
   return normalizeSignal({
     round,
-    campaignId,
+    campaignId: campaign.id,
     userRef,
     moralCluster,
     signalType,
@@ -997,11 +1001,7 @@ export function getMpgfPublicGoodsCommonGroundDiscoveryApi(
   return buildMpgfPublicGoodsCommonGroundDiscovery({ moralCluster });
 }
 
-export function getMpgfPublicGoodsSupportSignalContractApi(roundId: string = demoMpgfAssuranceRound.id) {
-  if (roundId !== demoMpgfAssuranceRound.id) {
-    return null;
-  }
-
+export function buildMpgfPublicGoodsSupportSignalContractApi(roundId: string) {
   return {
     ok: true,
     roundId,
@@ -1019,4 +1019,12 @@ export function getMpgfPublicGoodsSupportSignalContractApi(roundId: string = dem
     moralClusterOptions: MPGF_PUBLIC_GOODS_MORAL_CLUSTER_OPTIONS,
     collectiveActionStates: MPGF_PUBLIC_GOODS_COLLECTIVE_ACTION_STATES,
   };
+}
+
+export function getMpgfPublicGoodsSupportSignalContractApi(roundId: string = demoMpgfAssuranceRound.id) {
+  if (roundId !== demoMpgfAssuranceRound.id) {
+    return null;
+  }
+
+  return buildMpgfPublicGoodsSupportSignalContractApi(roundId);
 }

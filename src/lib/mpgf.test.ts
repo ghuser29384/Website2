@@ -184,6 +184,7 @@ import {
   MPGF_PUBLIC_GOODS_CG_VQAF_PRIVACY_POLICY,
   MPGF_PUBLIC_GOODS_COMMON_GROUND_DISCOVERY_POLICY,
   buildMpgfPublicGoodsCommonGroundDiscovery,
+  buildMpgfPublicGoodsSupportSignalContractApi,
   createMpgfPublicGoodsSupportSignal,
   getMpgfPublicGoodsCommonGroundDiscoveryApi,
   getMpgfPublicGoodsCgVqafReportApi,
@@ -2035,6 +2036,31 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
     throw new Error("Expected stored MPGF support signal row to hydrate from its moral-cluster hash.");
   }
 
+  const persistedCampaignTemplate = demoMpgfPublicGoodsCampaigns[0];
+
+  if (!persistedCampaignTemplate) {
+    throw new Error("Expected MPGF public-goods campaign fixture.");
+  }
+
+  const persistedRound = {
+    ...demoMpgfAssuranceRound,
+    id: "persisted-cg-vqaf-round-001",
+  };
+  const persistedRoundCampaign = {
+    ...persistedCampaignTemplate,
+    id: "persisted-cg-vqaf-campaign-001",
+    slug: "persisted-cg-vqaf-campaign",
+  };
+  const persistedRoundSupportSignal = createMpgfPublicGoodsSupportSignal({
+    round: persistedRound,
+    campaigns: [persistedRoundCampaign],
+    campaignId: "persisted-cg-vqaf-campaign",
+    userRef: "private-persisted-cg-vqaf-user-001",
+    moralCluster: "institutional_pluralist",
+    signalType: "weak_common_ground_support",
+    strengthBps: 6_600,
+  });
+  const persistedRoundContract = buildMpgfPublicGoodsSupportSignalContractApi(persistedRound.id);
   const persistedDiscovery = buildMpgfPublicGoodsCommonGroundDiscovery({
     moralCluster: "animal_inclusive",
     supportSignals: [persistedSupportSignal],
@@ -2125,6 +2151,11 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(storedCommonGroundMoralClusterHash, /^sha256:/);
   assert.equal(persistedSupportSignal.moralCluster, "animal_inclusive");
   assert.equal(persistedSupportSignal.countsForCommonGround, true);
+  assert.equal(persistedRoundSupportSignal.roundId, persistedRound.id);
+  assert.equal(persistedRoundSupportSignal.campaignId, persistedRoundCampaign.id);
+  assert.equal(persistedRoundSupportSignal.privateByDefault, true);
+  assert.equal(persistedRoundContract.supportSignalPath, `/api/mpgf/rounds/${persistedRound.id}/support-signals`);
+  assert.equal(persistedRoundContract.noGlobalMoralRanking, true);
   assert.ok(persistedAnimalDiscoveryRow);
   assert.equal(persistedAnimalDiscoveryRow.selectedClusterSupportBps, 7_800);
   assert.equal(persistedAnimalDiscoveryRow.reasonCodes.includes("selected_cluster_affinity"), true);
@@ -2135,10 +2166,21 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(route, /supportSignalSource/);
   assert.match(discoveryRoute, /getMpgfPublicGoodsCommonGroundDiscoveryApi/);
   assert.match(discoveryRoute, /buildMpgfPublicGoodsCommonGroundDiscovery/);
+  assert.match(discoveryRoute, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(discoveryRoute, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(discoveryRoute, /contextLoad\.source === "database_round_context"/);
+  assert.match(discoveryRoute, /allocationContextSource/);
+  assert.match(discoveryRoute, /contributionSource/);
+  assert.match(discoveryRoute, /loadedCampaignCount/);
   assert.match(discoveryRoute, /loadMpgfPublicGoodsSupportSignalsForRound/);
   assert.match(discoveryRoute, /supportSignalSource/);
   assert.match(discoveryRoute, /isMpgfPublicGoodsMoralCluster/);
   assert.match(discoveryRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(supportSignalRoute, /loadSupportSignalRoundState/);
+  assert.match(supportSignalRoute, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(supportSignalRoute, /buildMpgfPublicGoodsSupportSignalContractApi/);
+  assert.match(supportSignalRoute, /campaigns: roundState\.campaigns/);
+  assert.match(supportSignalRoute, /roundSource/);
   assert.match(supportSignalRoute, /Sign in to record an MPGF support signal/);
   assert.match(supportSignalRoute, /private_by_default: true/);
   assert.match(supportSignalRoute, /publicAggregationOnly: true/);

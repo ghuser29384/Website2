@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
 import {
+  loadMpgfPublicGoodsAllocationContext,
+  loadMpgfPublicGoodsAllocationContributionRecords,
+} from "@/lib/mpgf/public-goods-allocation-results";
+import {
   buildMpgfPublicGoodsCommonGroundDiscovery,
   getMpgfPublicGoodsCommonGroundDiscoveryApi,
   isMpgfPublicGoodsMoralCluster,
@@ -22,29 +26,55 @@ export async function GET(request: Request, { params }: { params: Promise<{ roun
   const moralCluster = moralClusterFromRequest(request);
   const fallbackResult = getMpgfPublicGoodsCommonGroundDiscoveryApi(roundId, moralCluster);
 
-  if (!fallbackResult) {
-    return NextResponse.json(
-      { ok: false, error: "MPGF common-ground discovery report not found." },
-      { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
-    );
-  }
-
   try {
-    const supportSignalState = await loadMpgfPublicGoodsSupportSignalsForRound(roundId);
-    const result = supportSignalState.supportSignals
+    const contextLoad = await loadMpgfPublicGoodsAllocationContext({ roundId });
+
+    if (contextLoad.source === "demo_fixture" && !fallbackResult) {
+      return NextResponse.json(
+        { ok: false, error: "MPGF common-ground discovery report not found." },
+        { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+      );
+    }
+
+    const [supportSignalState, contributionLoad] = await Promise.all([
+      loadMpgfPublicGoodsSupportSignalsForRound(roundId),
+      loadMpgfPublicGoodsAllocationContributionRecords({ roundId }),
+    ]);
+    const result = contextLoad.source === "database_round_context"
       ? buildMpgfPublicGoodsCommonGroundDiscovery({
           moralCluster,
-          supportSignals: supportSignalState.supportSignals,
+          campaigns: contextLoad.campaigns,
+          pledges: contributionLoad.pledges,
+          round: contextLoad.round,
+          matchPool: contextLoad.matchPool,
+          supportSignals: supportSignalState.supportSignals ?? [],
         })
-      : fallbackResult;
+      : supportSignalState.supportSignals
+        ? buildMpgfPublicGoodsCommonGroundDiscovery({
+            moralCluster,
+            supportSignals: supportSignalState.supportSignals,
+          })
+        : fallbackResult;
+
+    if (!result) {
+      return NextResponse.json(
+        { ok: false, error: "MPGF common-ground discovery report not found." },
+        { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+      );
+    }
 
     return NextResponse.json(
       {
         ...result,
+        allocationContextSource: contextLoad.source,
+        loadedCampaignCount: contextLoad.campaignCount,
+        contributionSource: contributionLoad.source,
+        loadedContributionRecordCount: contributionLoad.rawConditionalPledgeCount,
+        eligibleContributionRecordCount: contributionLoad.eligibleContributionRecordCount,
         supportSignalSource: supportSignalState.source,
         persistedSupportSignalCount: supportSignalState.persistedSupportSignalCount,
         skippedSupportSignalCount: supportSignalState.skippedSupportSignalCount,
-        warnings: supportSignalState.warnings,
+        warnings: [...contextLoad.warnings, ...contributionLoad.warnings, ...supportSignalState.warnings],
       },
       { headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );
