@@ -1588,6 +1588,8 @@ test("MPGF Stripe saved commitments use SetupIntent-first before conditional Pay
   const stripeWebhookRoute = readFileSync("src/app/api/mpgf/providers/stripe/webhook/route.ts", "utf8");
   const realMoney = readFileSync("src/lib/mpgf/real-money.ts", "utf8");
   const migration = readFileSync("supabase/migrations/20260601_mpgf_stripe_setup_intent_commitments.sql", "utf8");
+  const schemaSql = readFileSync("supabase/schema.sql", "utf8");
+  const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
 
   assert.equal(setup.policy, MPGF_PUBLIC_GOODS_STRIPE_SETUP_INTENT_POLICY);
   assert.equal(setup.privacyPolicy, MPGF_PUBLIC_GOODS_STRIPE_SETUP_INTENT_PRIVACY_POLICY);
@@ -1665,6 +1667,18 @@ test("MPGF Stripe saved commitments use SetupIntent-first before conditional Pay
   assert.match(migration, /payment_intent_creation_allowed = false/);
   assert.match(migration, /thresholdAmountCleared/);
   assert.match(migration, /challengeWindowClosed/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_stripe_saved_commitments/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_stripe_saved_commitment_events/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_stripe_conditional_payment_intent_runs/);
+  assert.match(schemaSql, /mpgf_stripe_payment_intent_run_requires_clear_gates/);
+  assert.match(schemaSql, /create policy "mpgf_stripe_saved_commitment_events_service_only"/);
+  assert.match(schemaSql, /grant all on[\s\S]*public\.mpgf_stripe_saved_commitment_events[\s\S]*to service_role/);
+  assert.match(schemaSql, /comment on table public\.mpgf_stripe_conditional_payment_intent_runs/);
+  assert.match(databaseTypes, /mpgf_stripe_saved_commitments: \{/);
+  assert.match(databaseTypes, /mpgf_stripe_saved_commitment_events: \{/);
+  assert.match(databaseTypes, /mpgf_stripe_conditional_payment_intent_runs: \{/);
+  assert.match(databaseTypes, /creates_charge_immediately: false/);
+  assert.match(databaseTypes, /requires_stripe_signature_webhook_before_counting: true/);
 
   for (const forbidden of [
     "private-stripe-user-001",

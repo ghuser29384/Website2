@@ -4454,6 +4454,186 @@ export interface Database {
         };
         Relationships: [];
       };
+      mpgf_stripe_saved_commitments: {
+        Row: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          conditional_pledge_id: string | null;
+          pledge_intent_id: string | null;
+          profile_id: string | null;
+          user_ref_hash: string;
+          amount_cents: number;
+          currency: "usd";
+          provider_customer_id_hash: string | null;
+          provider_setup_intent_id_hash: string | null;
+          provider_payment_method_id_hash: string | null;
+          setup_status: "setup_intent_created" | "setup_succeeded" | "setup_failed" | "revoked";
+          setup_usage: "off_session";
+          future_use_consent_at: string | null;
+          explicit_future_use_consent_required: true;
+          creates_charge_immediately: false;
+          long_lived_manual_card_hold: false;
+          payment_intent_created_before_gates: false;
+          raw_card_data_stored: false;
+          review_required_before_counting: true;
+          final_payout_authorized: false;
+          calc_hash: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          conditional_pledge_id?: string | null;
+          pledge_intent_id?: string | null;
+          profile_id?: string | null;
+          user_ref_hash: string;
+          amount_cents: number;
+          currency?: "usd";
+          provider_customer_id_hash?: string | null;
+          provider_setup_intent_id_hash?: string | null;
+          provider_payment_method_id_hash?: string | null;
+          setup_status?: "setup_intent_created" | "setup_succeeded" | "setup_failed" | "revoked";
+          setup_usage?: "off_session";
+          future_use_consent_at?: string | null;
+          explicit_future_use_consent_required?: true;
+          creates_charge_immediately?: false;
+          long_lived_manual_card_hold?: false;
+          payment_intent_created_before_gates?: false;
+          raw_card_data_stored?: false;
+          review_required_before_counting?: true;
+          final_payout_authorized?: false;
+          calc_hash: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          setup_status?: "setup_intent_created" | "setup_succeeded" | "setup_failed" | "revoked";
+          future_use_consent_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      mpgf_stripe_saved_commitment_events: {
+        Row: {
+          id: string;
+          saved_commitment_id: string | null;
+          conditional_pledge_id: string | null;
+          pledge_intent_id: string | null;
+          provider_event_id_hash: string;
+          provider_object_id_hash: string | null;
+          provider_customer_id_hash: string | null;
+          provider_payment_method_id_hash: string | null;
+          event_type:
+            | "setup_intent.created"
+            | "setup_intent.succeeded"
+            | "setup_intent.setup_failed"
+            | "setup_intent.canceled"
+            | "payment_intent.created"
+            | "payment_intent.succeeded"
+            | "payment_intent.payment_failed"
+            | "payment_intent.canceled"
+            | "payment_intent.requires_action";
+          event_state: string;
+          status: "recorded" | "needs_review" | "rejected";
+          signature_verified: boolean;
+          structure_verified: boolean;
+          payload_hash: string;
+          append_only_hash: string;
+          review_required_before_counting: true;
+          final_payout_authorized: false;
+          received_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          saved_commitment_id?: string | null;
+          conditional_pledge_id?: string | null;
+          pledge_intent_id?: string | null;
+          provider_event_id_hash: string;
+          provider_object_id_hash?: string | null;
+          provider_customer_id_hash?: string | null;
+          provider_payment_method_id_hash?: string | null;
+          event_type:
+            | "setup_intent.created"
+            | "setup_intent.succeeded"
+            | "setup_intent.setup_failed"
+            | "setup_intent.canceled"
+            | "payment_intent.created"
+            | "payment_intent.succeeded"
+            | "payment_intent.payment_failed"
+            | "payment_intent.canceled"
+            | "payment_intent.requires_action";
+          event_state: string;
+          status: "recorded" | "needs_review" | "rejected";
+          signature_verified?: boolean;
+          structure_verified?: boolean;
+          payload_hash: string;
+          append_only_hash: string;
+          review_required_before_counting?: true;
+          final_payout_authorized?: false;
+          received_at?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      mpgf_stripe_conditional_payment_intent_runs: {
+        Row: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          conditional_pledge_id: string | null;
+          pledge_intent_id: string | null;
+          provider_customer_id_hash: string;
+          provider_payment_method_id_hash: string;
+          provider_setup_intent_id_hash: string;
+          amount_cents: number;
+          currency: "usd";
+          gate_state: Json;
+          blocked_by: string[];
+          payment_intent_creation_allowed: boolean;
+          setup_intent_first: true;
+          confirm_off_session: true;
+          capture_method: "automatic";
+          long_lived_manual_card_hold: false;
+          requires_stripe_signature_webhook_before_counting: true;
+          review_required_before_counting: true;
+          final_payout_authorized: false;
+          idempotency_key_hash: string;
+          calc_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          round_id: string;
+          campaign_id: string;
+          conditional_pledge_id?: string | null;
+          pledge_intent_id?: string | null;
+          provider_customer_id_hash: string;
+          provider_payment_method_id_hash: string;
+          provider_setup_intent_id_hash: string;
+          amount_cents: number;
+          currency?: "usd";
+          gate_state: Json;
+          blocked_by?: string[];
+          payment_intent_creation_allowed: boolean;
+          setup_intent_first?: true;
+          confirm_off_session?: true;
+          capture_method?: "automatic";
+          long_lived_manual_card_hold?: false;
+          requires_stripe_signature_webhook_before_counting?: true;
+          review_required_before_counting?: true;
+          final_payout_authorized?: false;
+          idempotency_key_hash: string;
+          calc_hash: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       mpgf_sponsor_pool_entries: {
         Row: {
           id: string;
