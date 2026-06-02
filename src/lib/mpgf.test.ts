@@ -2170,6 +2170,8 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(route, /loadedCampaignCount/);
   assert.match(route, /loadMpgfPublicGoodsSupportSignalsForRound/);
   assert.match(route, /supportSignalSource/);
+  assert.match(route, /if \(fallbackResult\)/);
+  assert.match(route, /Could not load persisted MPGF CG-VQAF state/);
   assert.match(discoveryRoute, /getMpgfPublicGoodsCommonGroundDiscoveryApi/);
   assert.match(discoveryRoute, /buildMpgfPublicGoodsCommonGroundDiscovery/);
   assert.match(discoveryRoute, /loadMpgfPublicGoodsAllocationContext/);
@@ -2181,6 +2183,8 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(discoveryRoute, /loadMpgfPublicGoodsSupportSignalsForRound/);
   assert.match(discoveryRoute, /supportSignalSource/);
   assert.match(discoveryRoute, /isMpgfPublicGoodsMoralCluster/);
+  assert.match(discoveryRoute, /if \(fallbackResult\)/);
+  assert.match(discoveryRoute, /Could not load persisted MPGF common-ground discovery state/);
   assert.match(discoveryRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(supportSignalRoute, /loadSupportSignalRoundState/);
   assert.match(supportSignalRoute, /loadMpgfPublicGoodsAllocationContext/);

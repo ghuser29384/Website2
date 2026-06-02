@@ -79,6 +79,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ roun
       { headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );
   } catch (error) {
+    if (fallbackResult) {
+      return NextResponse.json(
+        {
+          ...fallbackResult,
+          allocationContextSource: "demo_fixture",
+          contributionSource: "demo_fixture",
+          supportSignalSource: "demo_fixture",
+          warnings: [
+            error instanceof Error
+              ? `Could not load persisted MPGF common-ground discovery state: ${error.message}`
+              : "Could not load persisted MPGF common-ground discovery state.",
+          ],
+        },
+        { headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+      );
+    }
+
     return NextResponse.json(
       {
         ok: false,

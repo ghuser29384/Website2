@@ -67,6 +67,23 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rou
       { headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );
   } catch (error) {
+    if (fallbackResult) {
+      return NextResponse.json(
+        {
+          ...fallbackResult,
+          allocationContextSource: "demo_fixture",
+          contributionSource: "demo_fixture",
+          supportSignalSource: "demo_fixture",
+          warnings: [
+            error instanceof Error
+              ? `Could not load persisted MPGF CG-VQAF state: ${error.message}`
+              : "Could not load persisted MPGF CG-VQAF state.",
+          ],
+        },
+        { headers: MPGF_PUBLIC_GOODS_API_HEADERS },
+      );
+    }
+
     return NextResponse.json(
       {
         ok: false,
