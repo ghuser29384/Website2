@@ -2162,6 +2162,12 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.equal(persistedDiscovery.supportSignalsSuppressed, true);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsCgVqafReportApi/);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(route, /contextLoad\.source === "database_round_context"/);
+  assert.match(route, /allocationContextSource/);
+  assert.match(route, /contributionSource/);
+  assert.match(route, /loadedCampaignCount/);
   assert.match(route, /loadMpgfPublicGoodsSupportSignalsForRound/);
   assert.match(route, /supportSignalSource/);
   assert.match(discoveryRoute, /getMpgfPublicGoodsCommonGroundDiscoveryApi/);
