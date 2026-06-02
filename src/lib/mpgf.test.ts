@@ -1342,6 +1342,10 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
 
   assert.match(mpgfHubPage, new RegExp(`/mpgf/rounds/\\$\\{demoMpgfAssuranceRound\\.id\\}`));
   assert.match(mpgfHubPage, /Start conditional contribution/);
+  assert.match(mpgfHubPage, /collective-action metrics/);
+  assert.match(mpgfHubPage, /Verified direct contributions/);
+  assert.match(mpgfHubPage, /Guaranteed base match/);
+  assert.match(mpgfHubPage, /Estimated bonus range/);
   assert.match(mpgfHubPage, /Verify identity, authorize conditionally, then wait for review/);
 });
 

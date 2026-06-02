@@ -219,15 +219,20 @@ export default async function MpgfPage() {
           {demoMpgfPublicGoodsCampaigns.map((campaign) => {
             const status = getMpgfCampaignAssuranceStatus(campaign);
             const line = assuranceAllocation.lines.find((candidate) => candidate.campaignId === campaign.id);
+            const estimatedBonusCapCents = line?.qfBonusCapCents ?? 0;
+            const estimatedBonusRange =
+              estimatedBonusCapCents > 0
+                ? `${formatUsd(line?.qfBonusCents ?? 0)}-${formatUsd(estimatedBonusCapCents)}`
+                : formatUsd(0);
 
             return (
               <article className="mpgf-panel" key={campaign.id}>
                 <p className="eyebrow">{status.status.replaceAll("_", " ")}</p>
                 <h2>{campaign.title}</h2>
                 <p>{campaign.publicSummary}</p>
-                <dl className="mpgf-summary-grid">
+                <dl className="mpgf-summary-grid" aria-label={`${campaign.title} collective-action metrics`}>
                   <div>
-                    <dt>Eligible pledges</dt>
+                    <dt>Verified direct contributions</dt>
                     <dd>{formatUsd(status.directEligibleCents)}</dd>
                   </div>
                   <div>
@@ -237,12 +242,12 @@ export default async function MpgfPage() {
                     </dd>
                   </div>
                   <div>
-                    <dt>Base match</dt>
+                    <dt>Guaranteed base match</dt>
                     <dd>{formatUsd(line?.baseMatchCents ?? 0)}</dd>
                   </div>
                   <div>
-                    <dt>QF bonus</dt>
-                    <dd>{formatUsd(line?.qfBonusCents ?? 0)}</dd>
+                    <dt>Estimated bonus range</dt>
+                    <dd>{estimatedBonusRange}</dd>
                   </div>
                 </dl>
                 <div className="mpgf-allocation-row">
