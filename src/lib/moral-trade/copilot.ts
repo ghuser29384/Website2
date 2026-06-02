@@ -413,6 +413,13 @@ const INCOMPLETE_RECORD_CERTAINTY_PATTERN =
   /\b(guaranteed|definitive(?:ly)?|certain(?:ly)?|conclusive(?:ly)?|unquestionably|no uncertainty|proven beyond doubt|fully verified|safe to rely on without review|can be relied on without review)\b/i;
 const PROHIBITED_RELIANCE_CLAIM_PATTERN =
   /\b(escrow-backed|escrow protected|legally enforceable|tax deductible|tax treatment guaranteed|investment advice|custody service|custody-backed|platform moral endorsement|morally endorsed by the platform|completion guaranteed)\b/i;
+const AUTONOMOUS_OUTREACH_SAFE_NEGATION_PATTERN =
+  /\b(do not|don't|never|must not|cannot|should not|no autonomous outreach|only after explicit consent)\b/i;
+const AUTONOMOUS_OUTREACH_PATTERNS = [
+  /\b(automatically|autonomously|without explicit consent|without consent|before consent|prior to consent|before approval)\b[^.\n]{0,120}\b(contact|email|message|notify|introduce|disclose|reveal|send)\b/i,
+  /\b(contact|email|message|notify|introduce|disclose|reveal|send)\b[^.\n]{0,120}\b(counterpart(?:y|ies)|matched part(?:y|ies)|other participant|participants?|private wish(?:es)?|private contact|contact details|email address|phone number)\b[^.\n]{0,120}\b(without explicit consent|without consent|before consent|prior to consent|before approval|automatically|autonomously|now|immediately)\b/i,
+  /\b(send|disclose|reveal|share)\b[^.\n]{0,120}\b(private wish(?:es)?|contact details|email address|phone number)\b/i,
+] as const;
 
 export const MORAL_TRADE_COPILOT_EVIDENCE_METADATA_REDACTIONS = [
   "raw_artifact_body",
@@ -445,6 +452,18 @@ function containsIncompleteRecordCertaintyClaim(value: string) {
 
 function containsProhibitedRelianceClaim(value: string) {
   return PROHIBITED_RELIANCE_CLAIM_PATTERN.test(value);
+}
+
+function containsAutonomousOutreachClaim(value: string) {
+  return value.split(/[.!?\n]+/).some((sentence) => {
+    const trimmed = sentence.trim();
+
+    return (
+      Boolean(trimmed) &&
+      !AUTONOMOUS_OUTREACH_SAFE_NEGATION_PATTERN.test(trimmed) &&
+      AUTONOMOUS_OUTREACH_PATTERNS.some((pattern) => pattern.test(trimmed))
+    );
+  });
 }
 
 function check(
@@ -1386,6 +1405,22 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
   ) {
     blockers.push(
       "no_escrow_legal_tax_claims: copilot outputs cannot imply escrow, custody, legal enforceability, tax treatment, investment advice, guarantees, or objective moral endorsement",
+    );
+  }
+
+  if (
+    containsAutonomousOutreachClaim(output.reviewer_summary) ||
+    output.verification_loop.some((step) => containsAutonomousOutreachClaim(step.detail)) ||
+    output.cited_evidence_table.some((row) =>
+      containsAutonomousOutreachClaim(`${row.claim} ${row.reviewer_note}`),
+    ) ||
+    output.next_step_checklist.some((step) => containsAutonomousOutreachClaim(step)) ||
+    output.review_instructions.artifacts_to_request.some(containsAutonomousOutreachClaim) ||
+    output.review_instructions.review_scope.some(containsAutonomousOutreachClaim) ||
+    output.review_instructions.appeal_triggers.some(containsAutonomousOutreachClaim)
+  ) {
+    blockers.push(
+      "no_autonomous_outreach: copilot outputs cannot instruct contact, introduction, or private disclosure before explicit consent",
     );
   }
 

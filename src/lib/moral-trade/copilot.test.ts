@@ -710,6 +710,20 @@ test("copilot output validation rejects escrow, legal, tax, custody, or endorsem
   );
 });
 
+test("copilot output validation rejects autonomous outreach or private disclosure instructions", () => {
+  const output = buildMoralTradeCopilotOutput(completeDraft);
+
+  output.next_step_checklist[0] =
+    "Automatically email the matched counterparty now with the participant's contact details.";
+  output.review_instructions.review_scope[0] =
+    "Reveal the other participant's email address before consent.";
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("no_autonomous_outreach")));
+});
+
 test("copilot output carries baseline challenge recommendations as structured flags", () => {
   const output = buildMoralTradeCopilotOutput({
     ...completeDraft,

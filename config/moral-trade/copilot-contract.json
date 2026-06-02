@@ -168,7 +168,7 @@
     {
       "code": "no_autonomous_outreach",
       "label": "No autonomous outreach",
-      "rule": "Never reveal, contact, or introduce counterparties without explicit consent in the input bundle."
+      "rule": "Never reveal, contact, introduce counterparties, or instruct disclosure of private contact details without explicit consent in the input bundle."
     },
     {
       "code": "no_private_feed_ingestion",
