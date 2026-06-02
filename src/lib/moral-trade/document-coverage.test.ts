@@ -99,6 +99,7 @@ test("document coverage profile maps improvement docs to implementation evidence
   );
   assert.ok(profile.canonicalInstruction.verificationCommands.includes("npm run lint"));
   assert.ok(profile.canonicalInstruction.verificationCommands.includes("git diff --check"));
+  assert.ok(profile.canonicalInstruction.verificationCommands.includes("npm run build"));
   assert.ok(
     profile.canonicalInstruction.routeEvidence.includes(
       "/api/moral-trade/document-coverage/health",
@@ -311,6 +312,9 @@ test("document coverage route publishes the public contract without private stat
   assert.ok(body.publicContract.canonicalInstruction.artifactHash.startsWith("sha256:"));
   assert.ok(
     body.publicContract.canonicalInstruction.verificationCommands.includes("npm run lint"),
+  );
+  assert.ok(
+    body.publicContract.canonicalInstruction.verificationCommands.includes("npm run build"),
   );
   assert.ok(
     body.publicContract.canonicalInstruction.routeEvidence.includes(

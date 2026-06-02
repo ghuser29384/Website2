@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 export const MORAL_TRADE_DOCUMENT_COVERAGE_VALIDATOR_VERSION =
-  "moral-trade-document-coverage-validator-v0.7";
+  "moral-trade-document-coverage-validator-v0.8";
 
 export type MoralTradeDocumentSource = {
   key: string;
@@ -252,6 +252,7 @@ export const moralTradeDocumentCoverageProfile: MoralTradeDocumentCoverageProfil
       "node --import tsx --test src/lib/moral-trade/*.test.ts src/lib/background-ai-shadow.test.ts src/lib/background-networking.test.ts src/lib/background-notification-policy.test.ts src/lib/background-notifications.test.ts src/lib/background-privacy-controls.test.ts src/lib/background-explanations.test.ts src/lib/background-opportunity-briefs.test.ts src/lib/background-private-overlap.test.ts src/lib/wish-registry.test.ts src/lib/public-route-smoke.test.ts",
       "npm run lint",
       "git diff --check",
+      "npm run build",
     ],
     routeEvidence: [
       "/api/moral-trade/health",
