@@ -138,13 +138,22 @@ function incidentStateForCampaign(campaign: MpgfPublicGoodsCampaign, options: Mp
   return campaign.reviewStatus === "blocked" ? ("frozen" as const) : ("clear" as const);
 }
 
-function publicCampaignProgress(campaign: MpgfPublicGoodsCampaign, options: MpgfPublicGoodsPublicApiOptions = {}) {
-  const pledges = campaignPledges(campaign.id);
-  const assurance = getMpgfCampaignAssuranceStatus(campaign, demoMpgfAssurancePledges, new Date("2026-05-31T12:00:00.000Z"));
-  const allocation = allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
+function publicCampaignProgress(
+  campaign: MpgfPublicGoodsCampaign,
+  options: MpgfPublicGoodsPublicApiOptions = {},
+  input: {
+    allocation?: MpgfPublicGoodsRoundAllocation;
+    pledges?: MpgfPublicGoodsPledge[];
+    reviewCases?: MpgfPublicGoodsReviewCase[];
+  } = {},
+) {
+  const sourcePledges = input.pledges ?? demoMpgfAssurancePledges;
+  const pledges = campaignPledges(campaign.id, sourcePledges);
+  const assurance = getMpgfCampaignAssuranceStatus(campaign, sourcePledges, new Date("2026-05-31T12:00:00.000Z"));
+  const allocation = input.allocation ?? allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") });
   const line = allocation.lines.find((candidate) => candidate.campaignId === campaign.id);
   const approvedMatchCents = (line?.baseMatchCents ?? 0) + (line?.qfBonusCents ?? 0);
-  const reviewSummary = latestReviewSummary(campaign.id);
+  const reviewSummary = latestReviewSummary(campaign.id, input.reviewCases ?? demoMpgfPublicGoodsReviewCases);
   const incidentState = incidentStateForCampaign(campaign, options);
   const matchPreviewHiddenByIncidentFreeze = incidentState === "frozen";
 
@@ -367,12 +376,50 @@ export function listMpgfPublicGoodsCampaignsApi(
     return null;
   }
 
+  return buildMpgfPublicGoodsCampaignsApi({
+    roundId,
+    campaigns: demoMpgfPublicGoodsCampaigns,
+    pledges: demoMpgfAssurancePledges,
+    allocation: allocateMpgfAssuranceRound({ now: new Date("2026-05-31T12:00:00.000Z") }),
+    options,
+  });
+}
+
+export function buildMpgfPublicGoodsCampaignsApi({
+  roundId,
+  campaigns,
+  pledges = demoMpgfAssurancePledges,
+  allocation,
+  options = {},
+  reviewCases = demoMpgfPublicGoodsReviewCases,
+}: {
+  roundId: string;
+  campaigns: MpgfPublicGoodsCampaign[];
+  pledges?: MpgfPublicGoodsPledge[];
+  allocation?: MpgfPublicGoodsRoundAllocation;
+  options?: MpgfPublicGoodsPublicApiOptions;
+  reviewCases?: MpgfPublicGoodsReviewCase[];
+}) {
+  const sourceAllocation =
+    allocation ??
+    allocateMpgfAssuranceRound({
+      campaigns,
+      pledges,
+      now: new Date("2026-05-31T12:00:00.000Z"),
+    });
+
   return {
     ok: true,
     privacyPolicy: MPGF_PUBLIC_GOODS_API_PRIVACY_POLICY,
     cacheControl: MPGF_PUBLIC_GOODS_API_CACHE_CONTROL,
     roundId,
-    campaigns: demoMpgfPublicGoodsCampaigns.map((campaign) => publicCampaignProgress(campaign, options)),
+    campaigns: campaigns.map((campaign) =>
+      publicCampaignProgress(campaign, options, {
+        allocation: sourceAllocation,
+        pledges,
+        reviewCases,
+      })
+    ),
   };
 }
 
