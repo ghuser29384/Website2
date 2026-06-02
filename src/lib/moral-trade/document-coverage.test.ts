@@ -56,6 +56,20 @@ test("document coverage profile maps improvement docs to implementation evidence
       (artifact) => artifact.artifactHash?.startsWith("sha256:") && artifact.hashMatches,
     ),
   );
+  assert.ok(validation.routeEvidenceArtifacts.length >= 20);
+  assert.ok(
+    validation.routeEvidenceArtifacts.every(
+      (artifact) => artifact.present && artifact.resolvedFile?.startsWith("src/app/"),
+    ),
+  );
+  assert.ok(
+    validation.routeEvidenceArtifacts.some(
+      (artifact) =>
+        artifact.route === "/api/moral-trade/document-coverage/health" &&
+        artifact.resolvedFile ===
+          "src/app/api/moral-trade/document-coverage/health/route.ts",
+    ),
+  );
   assert.ok(
     validation.checks.some(
       (entry) =>
@@ -183,6 +197,10 @@ test("document coverage validation fails when source phrases or evidence files w
               ...requirement.requiredEvidencePhrases,
               "this workflow implementation phrase should not exist",
             ],
+            routeEvidence: [
+              ...requirement.routeEvidence,
+              "/api/moral-trade/missing-workflow",
+            ],
           }
         : requirement,
     ),
@@ -232,6 +250,14 @@ test("document coverage validation fails when source phrases or evidence files w
         entry.evidence.includes("this workflow implementation phrase should not exist"),
     ),
   );
+  assert.ok(
+    validation.checks.some(
+      (entry) =>
+        entry.id === "route-evidence:/api/moral-trade/missing-workflow" &&
+        entry.status === "fail" &&
+        entry.evidence.includes("src/app/api/moral-trade/missing-workflow/route.ts"),
+    ),
+  );
 });
 
 test("document coverage route publishes the public contract without private state", async () => {
@@ -244,6 +270,13 @@ test("document coverage route publishes the public contract without private stat
   assert.equal(body.ok, true);
   assert.equal(body.validation.status, "pass");
   assert.equal(body.sourceDocumentArtifacts.length, 2);
+  assert.ok(body.validation.routeEvidenceArtifacts.length >= 20);
+  assert.ok(
+    body.validation.routeEvidenceArtifacts.every(
+      (artifact: { present: boolean; resolvedFile: string | null }) =>
+        artifact.present && artifact.resolvedFile?.startsWith("src/app/"),
+    ),
+  );
   assert.ok(
     body.sourceDocumentArtifacts.every(
       (artifact: { artifactHash: string; hashMatches: boolean }) =>

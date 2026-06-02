@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 export const MORAL_TRADE_DOCUMENT_COVERAGE_VALIDATOR_VERSION =
-  "moral-trade-document-coverage-validator-v0.6";
+  "moral-trade-document-coverage-validator-v0.7";
 
 export type MoralTradeDocumentSource = {
   key: string;
@@ -77,6 +77,13 @@ export type MoralTradeSourceDocumentArtifact = {
   hashMatches: boolean;
 };
 
+export type MoralTradeRouteEvidenceArtifact = {
+  route: string;
+  candidateFiles: string[];
+  present: boolean;
+  resolvedFile: string | null;
+};
+
 export type MoralTradeDocumentCoverageValidation = {
   status: "pass" | "fail";
   validatorName: "moral-trade-document-coverage";
@@ -87,6 +94,7 @@ export type MoralTradeDocumentCoverageValidation = {
   testingPlanLayerCount: number;
   requirementCount: number;
   sourceDocumentArtifacts: MoralTradeSourceDocumentArtifact[];
+  routeEvidenceArtifacts: MoralTradeRouteEvidenceArtifact[];
   canonicalInstructionHash: string | null;
   checks: MoralTradeDocumentCoverageCheck[];
   blockers: string[];
@@ -98,6 +106,33 @@ function rootPath(filePath: string) {
 
 function fileExists(filePath: string) {
   return existsSync(rootPath(filePath));
+}
+
+function appRouteCandidateFiles(route: string) {
+  if (!route.startsWith("/")) {
+    return [];
+  }
+
+  const segments = route.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+
+  if (segments[0] === "api") {
+    return [`src/app/${segments.join("/")}/route.ts`];
+  }
+
+  if (segments.length === 0) {
+    return ["src/app/page.tsx"];
+  }
+
+  return [`src/app/${segments.join("/")}/page.tsx`];
+}
+
+function collectRouteEvidence(profile: MoralTradeDocumentCoverageProfile) {
+  return [
+    ...profile.canonicalInstruction.routeEvidence,
+    ...profile.sourceStackReferences.flatMap((source) => source.routeEvidence),
+    ...profile.testingPlanCoverage.flatMap((layer) => layer.routeEvidence),
+    ...profile.requirements.flatMap((requirement) => requirement.routeEvidence),
+  ];
 }
 
 function readTextIfExists(filePath: string) {
@@ -797,6 +832,7 @@ export function validateMoralTradeDocumentCoverageProfile(
   const sourceStackKeys = profile.sourceStackReferences.map((source) => source.key);
   const testingPlanLayerKeys = profile.testingPlanCoverage.map((layer) => layer.key);
   const requirementKeys = profile.requirements.map((requirement) => requirement.key);
+  const routeEvidence = [...new Set(collectRouteEvidence(profile))].sort();
   const duplicateSourceStackKeys = sourceStackKeys.filter(
     (key, index) => sourceStackKeys.indexOf(key) !== index,
   );
@@ -844,6 +880,27 @@ export function validateMoralTradeDocumentCoverageProfile(
       artifact.present
         ? `hash=${artifact.artifactHash}; expected=${artifact.expectedHash}`
         : `${artifact.path} missing`,
+      ),
+    );
+  const routeEvidenceArtifacts = routeEvidence.map((route) => {
+    const candidateFiles = appRouteCandidateFiles(route);
+    const resolvedFile = candidateFiles.find(fileExists) ?? null;
+
+    return {
+      route,
+      candidateFiles,
+      present: resolvedFile != null,
+      resolvedFile,
+    } satisfies MoralTradeRouteEvidenceArtifact;
+  });
+  const routeEvidenceChecks = routeEvidenceArtifacts.map((artifact) =>
+    check(
+      `route-evidence:${artifact.route}`,
+      `${artifact.route} resolves to a Next.js route artifact`,
+      artifact.present,
+      artifact.resolvedFile
+        ? `${artifact.route} -> ${artifact.resolvedFile}`
+        : `Missing route artifact; checked ${artifact.candidateFiles.join("|") || "none"}`,
     ),
   );
   const sourceStackChecks = profile.sourceStackReferences.map((source) => {
@@ -1024,6 +1081,7 @@ export function validateMoralTradeDocumentCoverageProfile(
   const checks = [
     ...sourceChecks,
     ...sourceArtifactChecks,
+    ...routeEvidenceChecks,
     ...instructionChecks,
     ...sourceStackChecks,
     ...testingPlanChecks,
@@ -1044,6 +1102,7 @@ export function validateMoralTradeDocumentCoverageProfile(
     testingPlanLayerCount: profile.testingPlanCoverage.length,
     requirementCount: profile.requirements.length,
     sourceDocumentArtifacts,
+    routeEvidenceArtifacts,
     canonicalInstructionHash,
     checks,
     blockers,
