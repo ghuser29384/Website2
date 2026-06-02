@@ -55,6 +55,7 @@ import {
   getBaselineConfidence,
   getBaselineEvidenceSummary,
   getExternalityReviewSummary,
+  getOfferReviewWorkflowContract,
   getOfferReviewWorkflowCards,
   getScoreConfidence,
 } from "@/lib/proposal-review";
@@ -329,6 +330,8 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const baselineEvidence = getBaselineEvidenceSummary(reviewInput);
   const externalityReview = getExternalityReviewSummary(reviewInput);
   const scoreConfidence = getScoreConfidence(reviewInput);
+  const reviewWorkflowContract = getOfferReviewWorkflowContract();
+  const participantReviewCopy = reviewWorkflowContract.participantCopyTemplates;
   const reviewWorkflowCards = getOfferReviewWorkflowCards({
     ...reviewInput,
     currentStatus: offer.status,
@@ -576,6 +579,37 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
                 </p>
               </article>
             ))}
+          </div>
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Participant action guide</p>
+            <h3>What the review system will ask for next</h3>
+            <p>
+              These prompts are pulled from the public review-workflow contract, so the page shows
+              the same baseline, evidence, safety, score, and appeal instructions that validators
+              check.
+            </p>
+          </div>
+          <div className="protocol-contract-grid" aria-label="Participant review action copy">
+            <article className="panel protocol-contract-card">
+              <p className="detail-kicker">Baseline helper</p>
+              <p>{participantReviewCopy.baselineHelperText}</p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <p className="detail-kicker">Needs evidence status</p>
+              <p>{participantReviewCopy.needsEvidenceStatusCopy}</p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <p className="detail-kicker">Safety boundary</p>
+              <p>{participantReviewCopy.safetyWarningCopy}</p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <p className="detail-kicker">Participant importance</p>
+              <p>{participantReviewCopy.importanceScoreNote}</p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <p className="detail-kicker">Appeal scope</p>
+              <p>{participantReviewCopy.appealCopy}</p>
+            </article>
           </div>
         </section>
 
