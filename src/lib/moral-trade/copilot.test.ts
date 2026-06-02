@@ -706,6 +706,43 @@ test("copilot output blocks threat-like drafts without making them matchable", (
   assert.equal(validateMoralTradeCopilotOutput(output).status, "pass");
 });
 
+test("copilot output validation requires exact policy reasons for blocked anti-threat outputs", () => {
+  const output = buildMoralTradeCopilotOutput({
+    ...completeDraft,
+    offeredAction: "Pay me or I will start harassing this organization.",
+    publicDescription: "Pay me or I will start harassing this organization.",
+  });
+
+  output.completeness.policy_conflicts = [];
+  output.cited_evidence_table = output.cited_evidence_table.filter(
+    (row) => row.evidence_type !== "policy_registry",
+  );
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("anti_threat_escalation")));
+});
+
+test("copilot output validation rejects anti-threat blocks without blocked status", () => {
+  const output = buildMoralTradeCopilotOutput({
+    ...completeDraft,
+    offeredAction: "Pay me or I will start harassing this organization.",
+    publicDescription: "Pay me or I will start harassing this organization.",
+  });
+
+  output.status = "needs_human_review";
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(
+    validation.blockers.some((blocker) =>
+      blocker.includes("anti-threat blocks must return blocked status"),
+    ),
+  );
+});
+
 test("copilot output blocks public contact details through the privacy-redaction gate", () => {
   const output = buildMoralTradeCopilotOutput({
     ...completeDraft,

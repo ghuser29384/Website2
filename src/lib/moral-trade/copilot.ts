@@ -474,6 +474,7 @@ const EXACT_ARTIFACT_REQUEST_PATTERN =
   /\b(receipt|public log|witness attestation|payment record|audit link|audit trail|provider record|baseline artifact|baseline record|prior-intent note|past behavior record|dated no-trade baseline statement|scoped evidence artifact)\b/i;
 const INSUFFICIENT_EVIDENCE_NOTICE_PATTERN =
   /\b(evidence|artifact|receipt|attestation|payment record|audit trail|audit link|public log)\b[^.\n]{0,120}\b(needed|required|missing|insufficient|not specific enough|still needed|request)\b/i;
+const BLOCKED_POLICY_REASON_CODE_PATTERN = /^(anti_threat|prohibited)_[a-z0-9_:-]+$/;
 const GLOBAL_MORAL_RANKING_SAFE_NEGATION_PATTERN =
   /\b(do not|don't|never|must not|cannot|should not|no global moral ranking|participant[- ]relative|participant's own stated priorities|not a platform judgment|not platform judgment)\b/i;
 const GLOBAL_MORAL_RANKING_PATTERNS = [
@@ -540,6 +541,10 @@ function namesExactArtifactRequest(value: string) {
 
 function statesInsufficientEvidence(value: string) {
   return INSUFFICIENT_EVIDENCE_NOTICE_PATTERN.test(value);
+}
+
+function isBlockedPolicyReasonCode(value: string) {
+  return BLOCKED_POLICY_REASON_CODE_PATTERN.test(value);
 }
 
 function containsGlobalMoralRankingClaim(value: string) {
@@ -1553,6 +1558,40 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
     blockers.push(
       `matchable_verification_loop: blocking steps must pass before matchable status: ${blockingVerificationFailures.join(", ")}`,
     );
+  }
+
+  const antiThreatStep = output.verification_loop.find((step) => step.key === "anti_threat");
+
+  if (antiThreatStep?.status === "blocked" && output.status !== "blocked") {
+    blockers.push("anti_threat_escalation: anti-threat blocks must return blocked status");
+  }
+
+  if (output.status === "blocked") {
+    const policyReasonCodes = output.completeness.policy_conflicts.filter(
+      isBlockedPolicyReasonCode,
+    );
+    const policyReasonEvidence = [
+      antiThreatStep?.detail ?? "",
+      output.reviewer_summary,
+      ...output.cited_evidence_table.flatMap((row) => [
+        row.claim,
+        row.citation,
+        row.reviewer_note,
+      ]),
+    ].join(" ");
+    const exactPolicyReasonNamed = policyReasonCodes.some((code) =>
+      policyReasonEvidence.includes(code),
+    );
+
+    if (
+      policyReasonCodes.length === 0 ||
+      antiThreatStep?.status !== "blocked" ||
+      !exactPolicyReasonNamed
+    ) {
+      blockers.push(
+        "anti_threat_escalation: blocked outputs must include exact anti-threat or prohibited-content policy reason codes",
+      );
+    }
   }
 
   const evidenceSufficiencyStep = output.verification_loop.find(
