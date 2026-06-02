@@ -332,6 +332,7 @@ const COPILOT_REVIEW_INSTRUCTION_KEYS = [
 
 const REQUIRED_GUARDRAILS = [
   "approved_json_only",
+  "observable_claims_only",
   "no_chain_of_thought",
   "no_global_moral_ranking",
   "no_autonomous_outreach",
@@ -461,6 +462,13 @@ const INCOMPLETE_RECORD_CERTAINTY_PATTERN =
   /\b(guaranteed|definitive(?:ly)?|certain(?:ly)?|conclusive(?:ly)?|unquestionably|no uncertainty|proven beyond doubt|fully verified|safe to rely on without review|can be relied on without review)\b/i;
 const PROHIBITED_RELIANCE_CLAIM_PATTERN =
   /\b(escrow-backed|escrow protected|legally enforceable|tax deductible|tax treatment guaranteed|investment advice|custody service|custody-backed|platform moral endorsement|morally endorsed by the platform|completion guaranteed)\b/i;
+const OBSERVABLE_CLAIMS_SAFE_NEGATION_PATTERN =
+  /\b(do not|don't|never|must not|cannot|should not|without inventing|not invented|no invented|observable claims only)\b/i;
+const INVENTED_CLAIM_PATTERNS = [
+  /\b(invent|fabricate|make up|hallucinate)\b[^.\n]{0,120}\b(fact|counterpart(?:y|ies)|prior behavior|evidence|citation|receipt|artifact|attestation)\b/i,
+  /\b(assume|presume|treat as true|state as fact)\b[^.\n]{0,120}\b(prior behavior|counterpart(?:y|ies)|receipt|evidence|artifact|attestation|completion|donation history)\b[^.\n]{0,120}\b(without evidence|without citation|without support|even if missing|not supplied)\b/i,
+  /\b(create|add|cite)\b[^.\n]{0,120}\b(fake|placeholder|synthetic|invented|fabricated)\b[^.\n]{0,120}\b(evidence|citation|receipt|artifact|counterpart(?:y|ies))\b/i,
+] as const;
 const GLOBAL_MORAL_RANKING_SAFE_NEGATION_PATTERN =
   /\b(do not|don't|never|must not|cannot|should not|no global moral ranking|participant[- ]relative|participant's own stated priorities|not a platform judgment|not platform judgment)\b/i;
 const GLOBAL_MORAL_RANKING_PATTERNS = [
@@ -507,6 +515,18 @@ function containsIncompleteRecordCertaintyClaim(value: string) {
 
 function containsProhibitedRelianceClaim(value: string) {
   return PROHIBITED_RELIANCE_CLAIM_PATTERN.test(value);
+}
+
+function containsInventedClaimInstruction(value: string) {
+  return value.split(/[.!?\n]+/).some((sentence) => {
+    const trimmed = sentence.trim();
+
+    return (
+      Boolean(trimmed) &&
+      !OBSERVABLE_CLAIMS_SAFE_NEGATION_PATTERN.test(trimmed) &&
+      INVENTED_CLAIM_PATTERNS.some((pattern) => pattern.test(trimmed))
+    );
+  });
 }
 
 function containsGlobalMoralRankingClaim(value: string) {
@@ -1581,6 +1601,22 @@ export function validateMoralTradeCopilotOutput(output: MoralTradeCopilotOutput)
   ) {
     blockers.push(
       "no_escrow_legal_tax_claims: copilot outputs cannot imply escrow, custody, legal enforceability, tax treatment, investment advice, guarantees, or objective moral endorsement",
+    );
+  }
+
+  if (
+    containsInventedClaimInstruction(output.reviewer_summary) ||
+    output.verification_loop.some((step) => containsInventedClaimInstruction(step.detail)) ||
+    output.cited_evidence_table.some((row) =>
+      containsInventedClaimInstruction(`${row.claim} ${row.reviewer_note}`),
+    ) ||
+    output.next_step_checklist.some((step) => containsInventedClaimInstruction(step)) ||
+    output.review_instructions.artifacts_to_request.some(containsInventedClaimInstruction) ||
+    output.review_instructions.review_scope.some(containsInventedClaimInstruction) ||
+    output.review_instructions.appeal_triggers.some(containsInventedClaimInstruction)
+  ) {
+    blockers.push(
+      "observable_claims_only: copilot outputs cannot invent facts, counterparties, prior behavior, evidence, or citations",
     );
   }
 

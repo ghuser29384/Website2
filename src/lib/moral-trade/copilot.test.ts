@@ -78,6 +78,7 @@ test("copilot contract requires strict bundle, approved output, guardrails, and 
   assert.ok(contract.approvedOutputSections.includes("cited_evidence_table"));
   assert.ok(contract.approvedOutputSections.includes("reviewer_summary"));
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_chain_of_thought"));
+  assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "observable_claims_only"));
   assert.ok(contract.guardrails.some((guardrail) => guardrail.code === "no_false_certainty"));
   assert.ok(
     contract.guardrails.some((guardrail) => guardrail.code === "no_escrow_legal_tax_claims"),
@@ -736,6 +737,20 @@ test("copilot output validation rejects escrow, legal, tax, custody, or endorsem
   assert.ok(
     validation.blockers.some((blocker) => blocker.includes("no_escrow_legal_tax_claims")),
   );
+});
+
+test("copilot output validation rejects invented facts, counterparties, or evidence", () => {
+  const output = buildMoralTradeCopilotOutput(completeDraft);
+
+  output.reviewer_summary +=
+    " Assume prior behavior without evidence and state as fact that the participant completed the donation.";
+  output.next_step_checklist[0] =
+    "Create a fake receipt citation for the counterparty if the artifact is missing.";
+
+  const validation = validateMoralTradeCopilotOutput(output);
+
+  assert.equal(validation.status, "fail");
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("observable_claims_only")));
 });
 
 test("copilot output validation rejects global moral ranking claims", () => {

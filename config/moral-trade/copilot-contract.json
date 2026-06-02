@@ -37,6 +37,7 @@
         "Use participant-relative language and never rank global moral value.",
         "Do not contact, reveal, or introduce counterparties without explicit consent.",
         "Separate factual proof, counterfactual baseline confidence, and externality review.",
+        "Do not invent facts, counterparties, prior behavior, evidence, or citations.",
         "Output approved JSON fields, uncertainty flags, cited evidence rows, and reviewer-facing summaries rather than chain-of-thought."
       ],
       "safetyCodes": [
@@ -154,6 +155,11 @@
       "code": "approved_json_only",
       "label": "Approved JSON only",
       "rule": "Emit only the approved output schema plus a short reviewer-facing summary when explicitly requested."
+    },
+    {
+      "code": "observable_claims_only",
+      "label": "Observable claims only",
+      "rule": "Use only supplied structured draft, citations, policy registry, and redacted evidence metadata; never invent facts, counterparties, prior behavior, evidence, or citations."
     },
     {
       "code": "no_chain_of_thought",
