@@ -145,7 +145,7 @@ export default async function HowItWorksPage() {
             </Link>
             <Link className="panel data-card" href="/donate">
               <h3>Donate through a route</h3>
-              <p className="route-text">Use Every.org first, then optionally record the gift here.</p>
+              <p className="route-text">Use Every.org first; MPGF evidence can import by webhook or reviewed fallback.</p>
               <span className="inline-link">Open donation routes</span>
             </Link>
           </div>

@@ -189,6 +189,7 @@ import {
 import {
   MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY,
   MPGF_PUBLIC_GOODS_EVERY_ORG_PRIVACY_POLICY,
+  type MpgfEveryOrgPartnerWebhookPayload,
   buildMpgfEveryOrgDonateLink,
   recordMpgfEveryOrgPartnerWebhook,
 } from "./mpgf/public-goods-every-org";
@@ -1317,7 +1318,28 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
       webhookVerified: false,
     },
   );
-  const serialized = JSON.stringify({ donateLink, unclaimedDonateLink, importedWebhook, unverifiedWebhook });
+  const fixtureRecordedPayload = JSON.parse(
+    readFileSync("tests/fixtures/mpgf/every-org/partner-webhook-recorded.json", "utf8"),
+  ) as MpgfEveryOrgPartnerWebhookPayload;
+  const fixtureNeedsReviewPayload = JSON.parse(
+    readFileSync("tests/fixtures/mpgf/every-org/partner-webhook-needs-review.json", "utf8"),
+  ) as MpgfEveryOrgPartnerWebhookPayload;
+  const fixtureRecordedWebhook = recordMpgfEveryOrgPartnerWebhook(fixtureRecordedPayload, {
+    webhookVerified: true,
+    receivedAt: "2026-06-01T12:07:00.000Z",
+  });
+  const fixtureNeedsReviewWebhook = recordMpgfEveryOrgPartnerWebhook(fixtureNeedsReviewPayload, {
+    webhookVerified: true,
+    receivedAt: "2026-06-01T12:08:00.000Z",
+  });
+  const serialized = JSON.stringify({
+    donateLink,
+    fixtureNeedsReviewWebhook,
+    fixtureRecordedWebhook,
+    importedWebhook,
+    unclaimedDonateLink,
+    unverifiedWebhook,
+  });
   const donateLinkRoute = readFileSync("src/app/api/mpgf/every-org/donate-link/route.ts", "utf8");
   const webhookRoute = readFileSync("src/app/api/mpgf/every-org/webhook/route.ts", "utf8");
   const pendingPage = readFileSync("src/app/mpgf/contribute/every-org/pending/page.tsx", "utf8");
@@ -1328,6 +1350,10 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
   const proofSource = readFileSync("src/lib/mpgf/public-goods-proof.ts", "utf8");
   const kpiSource = readFileSync("src/lib/mpgf/public-goods-kpis.ts", "utf8");
+  const donatePageSource = readFileSync("src/app/donate/page.tsx", "utf8");
+  const howItWorksSource = readFileSync("src/app/how-it-works/page.tsx", "utf8");
+  const siteSearchSource = readFileSync("src/lib/site-search.ts", "utf8");
+  const visitorPathsSource = readFileSync("src/lib/visitor-paths.ts", "utf8");
 
   assert.equal(donateLink.policy, MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY);
   assert.equal(donateLink.privacyPolicy, MPGF_PUBLIC_GOODS_EVERY_ORG_PRIVACY_POLICY);
@@ -1374,6 +1400,18 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.equal(unverifiedWebhook.status, "rejected");
   assert.equal(unverifiedWebhook.webhookArrivedBeforeSignIn, true);
   assert.equal(unverifiedWebhook.autoCreatesContributionEvidence, false);
+  assert.equal(fixtureRecordedWebhook.status, "recorded");
+  assert.equal(fixtureRecordedWebhook.campaignId, "campaign-global-health-basic-needs");
+  assert.equal(fixtureRecordedWebhook.pledgeIntentId, "fixture-pledge-intent-001");
+  assert.equal(fixtureRecordedWebhook.webhookArrivedBeforeSignIn, false);
+  assert.equal(fixtureRecordedWebhook.autoCreatesContributionEvidence, true);
+  assert.equal(fixtureRecordedWebhook.evidenceRecord.reviewState, "pending_review");
+  assert.match(fixtureRecordedWebhook.chargeIdHash, /^sha256:/);
+  assert.match(fixtureRecordedWebhook.partnerDonationIdHash ?? "", /^sha256:/);
+  assert.equal(fixtureNeedsReviewWebhook.status, "needs_review");
+  assert.equal(fixtureNeedsReviewWebhook.campaignId, undefined);
+  assert.equal(fixtureNeedsReviewWebhook.webhookArrivedBeforeSignIn, true);
+  assert.equal(fixtureNeedsReviewWebhook.autoCreatesContributionEvidence, false);
   assert.match(donateLinkRoute, /getViewer/);
   assert.match(donateLinkRoute, /recordMpgfPublicGoodsAnalyticsEvent/);
   assert.match(donateLinkRoute, /contribution_route_selected/);
@@ -1421,11 +1459,21 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.match(schemaSql, /comment on table public\.mpgf_every_org_partner_events/);
   assert.match(proofSource, /every_org_partner_webhook/);
   assert.match(kpiSource, /every_org_partner_webhook/);
+  assert.match(donatePageSource, /MPGF webhook\s+import or reviewed fallback/);
+  assert.match(howItWorksSource, /import by webhook or reviewed fallback/);
+  assert.match(siteSearchSource, /webhook import or reviewed fallback/);
+  assert.match(visitorPathsSource, /webhook import or reviewed fallback/);
+  assert.doesNotMatch(`${donatePageSource}\n${howItWorksSource}\n${siteSearchSource}\n${visitorPathsSource}`, /optionally record the gift/);
 
   for (const forbidden of [
     "private-every-org-user-001",
     "every-org-private-charge-001",
     "every-org-private-charge-002",
+    "fixture-every-org-charge-recorded-001",
+    "fixture-every-org-charge-review-001",
+    "fixture-donor@example.org",
+    "Fixture",
+    "fixture private note must not appear in normalized event output",
     "jane@example.org",
     "Jane",
     "private donor note",

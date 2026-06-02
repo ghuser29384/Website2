@@ -1,0 +1,31 @@
+{
+  "chargeId": "fixture-every-org-charge-recorded-001",
+  "partnerDonationId": "mpgf_campaign-global-health-basic-needs_fixture001",
+  "partnerMetadata": {
+    "schema": "mpgf_every_org_partner_metadata_v1",
+    "policy": "every_org_fast_route_partner_webhook_auto_import_no_platform_custody",
+    "roundId": "mpgf-assurance-round-demo-2026-05",
+    "campaignId": "campaign-global-health-basic-needs",
+    "pledgeIntentId": "fixture-pledge-intent-001",
+    "conditionalPledgeId": "fixture-pledge-intent-001",
+    "contributorRefHash": "sha256:1010101010101010101010101010101010101010101010101010101010101010",
+    "generatedAt": "2026-06-01T12:00:00.000Z",
+    "redirectState": "pending_webhook_not_counted",
+    "noPlatformCustody": true,
+    "noGlobalMoralRanking": true
+  },
+  "toNonprofit": {
+    "slug": "givewell-top-charities-fund",
+    "ein": "000000001",
+    "name": "GiveWell Top Charities Fund"
+  },
+  "amount": "125.00",
+  "netAmount": "121.25",
+  "currency": "USD",
+  "frequency": "One-time",
+  "donationDate": "2026-06-01T12:03:00.000Z",
+  "paymentMethod": "card",
+  "firstName": "Fixture",
+  "email": "fixture-donor@example.org",
+  "privateNote": "fixture private note must not appear in normalized event output"
+}

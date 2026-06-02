@@ -39,7 +39,7 @@ export const VISITOR_PATHS = [
     title: "Donate through a route",
     homeTitle: "Donate through a vetted route",
     description:
-      "Choose a cause, complete payment on Every.org, and optionally record the gift here.",
+      "Choose a cause, pay on Every.org, and use webhook import or reviewed fallback when MPGF needs evidence.",
     href: "/donate",
     icon: "fund",
     actionLabel: "Open donation routes",

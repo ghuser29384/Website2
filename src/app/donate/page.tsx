@@ -17,14 +17,14 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "Donate",
   description:
-    "Donate through vetted Every.org routes from Moral Trade in three steps: choose a cause, complete payment on Every.org, and optionally record the gift afterward.",
+    "Donate through vetted Every.org routes from Moral Trade in three steps: choose a cause, pay on Every.org, and use MPGF webhook import or reviewed fallback where evidence is needed.",
   alternates: {
     canonical: "/donate",
   },
   openGraph: {
     title: "Donate through Every.org",
     description:
-      "Choose a vetted route, complete payment on Every.org, and optionally record the gift for Moral Trade workflows.",
+      "Choose a vetted route, pay on Every.org, and use MPGF webhook import or reviewed fallback where evidence is needed.",
     url: getAbsoluteUrl("/donate"),
     type: "website",
   },
@@ -67,8 +67,8 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
             <p className="eyebrow">Donate</p>
             <h1>Donate through a vetted route in three steps.</h1>
             <p className="hero-text">
-              Choose a cause, complete payment securely on Every.org, and optionally return to
-              record the gift for Moral Trade workflows.
+              Choose a cause, complete payment securely on Every.org, and use MPGF webhook
+              import or reviewed fallback where a funding workflow needs evidence.
             </p>
             <p className="hero-followup">
               The payment happens off-site. Moral Trade does not hold donations, provide escrow,

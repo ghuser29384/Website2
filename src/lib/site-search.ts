@@ -265,9 +265,9 @@ export const SITE_SEARCH_ITEMS: SiteSearchItem[] = [
   {
     href: "/donate",
     label: "Donation routes",
-    summary: "Choose a cause, complete payment on Every.org, and optionally record the gift afterward.",
+    summary: "Choose a cause, pay on Every.org, and use MPGF webhook import or reviewed fallback where evidence is needed.",
     kind: "fund",
-    keywords: ["donate", "donation", "every.org", "gift", "route", "record gift", "reconciliation"],
+    keywords: ["donate", "donation", "every.org", "gift", "route", "webhook import", "reconciliation"],
   },
   {
     href: "/priority-correction-fund",

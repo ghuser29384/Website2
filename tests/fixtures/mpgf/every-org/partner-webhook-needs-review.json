@@ -1,0 +1,21 @@
+{
+  "chargeId": "fixture-every-org-charge-review-001",
+  "partnerDonationId": "mpgf_unknown_campaign_fixture002",
+  "partnerMetadata": {
+    "schema": "mpgf_every_org_partner_metadata_v1",
+    "policy": "every_org_fast_route_partner_webhook_auto_import_no_platform_custody",
+    "roundId": "mpgf-assurance-round-demo-2026-05",
+    "campaignId": "unknown-campaign",
+    "generatedAt": "2026-06-01T12:00:00.000Z",
+    "redirectState": "pending_webhook_not_counted",
+    "noPlatformCustody": true,
+    "noGlobalMoralRanking": true
+  },
+  "toNonprofit": {
+    "slug": "unmapped-public-good"
+  },
+  "amount": "25.00",
+  "currency": "USD",
+  "frequency": "One-time",
+  "donationDate": "2026-06-01T12:06:00.000Z"
+}
