@@ -191,6 +191,11 @@
       "rule": "When a record has missing fields, policy conflicts, uncertainty flags, or non-pass blocking verification steps, preserve uncertainty instead of claiming definitive reliance."
     },
     {
+      "code": "no_escrow_legal_tax_claims",
+      "label": "No escrow, legal, tax, custody, or endorsement claims",
+      "rule": "Copilot outputs must not imply escrow, custody, legal enforceability, tax treatment, investment advice, guarantees, or objective moral endorsement."
+    },
+    {
       "code": "verification_loop_matchability_gate",
       "label": "Verification loop gates matchability",
       "rule": "A copilot output with status matchable is invalid unless every verification step marked blocksMatchable has status pass."
