@@ -2896,6 +2896,61 @@ test("MPGF identity integrity report aggregates sybil controls without moral rep
   const report = getMpgfPublicGoodsIdentityIntegrityReportApi(demoMpgfAssuranceRound.id);
   const unknownReport = getMpgfPublicGoodsIdentityIntegrityReportApi("unknown-round");
   const directReport = buildMpgfPublicGoodsIdentityIntegrityReport();
+  const persistedCampaign = {
+    ...demoMpgfPublicGoodsCampaigns[0]!,
+    id: "persisted-identity-integrity-campaign",
+    slug: "persisted-identity-integrity-campaign",
+    title: "Persisted identity integrity campaign",
+  };
+  const persistedRound = {
+    ...demoMpgfAssuranceRound,
+    id: "persisted-identity-integrity-round",
+    matchPoolId: demoMpgfMatchPool.id,
+  };
+  const eligibleIdentity = createMpgfPublicGoodsIdentityAttestation({
+    userId: "persisted-identity-eligible",
+    provider: "external_proof_of_personhood",
+    humanScoreBps: 9_200,
+    expiresAt: "2026-12-31T00:00:00.000Z",
+    redactedReference: "external_proof_of_personhood:redacted:persisted-eligible",
+  });
+  const duplicateIdentity = createMpgfPublicGoodsIdentityAttestation({
+    userId: "persisted-identity-duplicate",
+    provider: "repository_profile",
+    humanScoreBps: 8_000,
+    expiresAt: "2026-12-31T00:00:00.000Z",
+    redactedReference: "repository_profile:redacted:persisted-duplicate",
+  });
+  const persistedPledges = [
+    {
+      ...createMpgfPublicGoodsPledge({
+        campaign: persistedCampaign,
+        userId: eligibleIdentity.userId,
+        amountCents: 10_000,
+        identityAttestation: eligibleIdentity,
+      }),
+      status: "captured" as const,
+    },
+    createMpgfPublicGoodsPledge({
+      campaign: persistedCampaign,
+      userId: duplicateIdentity.userId,
+      amountCents: 8_000,
+      identityAttestation: duplicateIdentity,
+      duplicateUserRefs: [duplicateIdentity.userId],
+    }),
+    createMpgfPublicGoodsPledge({
+      campaign: persistedCampaign,
+      userId: "persisted-identity-pending-review",
+      amountCents: 7_500,
+    }),
+  ] satisfies MpgfPublicGoodsPledge[];
+  const persistedReport = buildMpgfPublicGoodsIdentityIntegrityReport({
+    campaigns: [persistedCampaign],
+    pledges: persistedPledges,
+    round: persistedRound,
+    matchPool: demoMpgfMatchPool,
+    attestations: [],
+  });
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/identity-integrity/route.ts", "utf8");
   const publicApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
   const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
@@ -2914,6 +2969,14 @@ test("MPGF identity integrity report aggregates sybil controls without moral rep
   assert.equal(report.supportSignalStrengthExcludedFromAllocationPower, true);
   assert.equal(report.rawProviderPayloadsExcluded, true);
   assert.equal(report.publicIndividualScoresExcluded, true);
+  assert.equal(persistedReport.roundId, persistedRound.id);
+  assert.equal(persistedReport.counters.eligiblePledgeCount, 1);
+  assert.equal(persistedReport.counters.eligibleDistinctIdentityCount, 1);
+  assert.equal(persistedReport.counters.duplicateIdentityCount, 1);
+  assert.equal(persistedReport.counters.pendingReviewCount, 1);
+  assert.equal(persistedReport.providerCounts.unlinked_identity_score, 1);
+  assert.equal(persistedReport.noMoralReputationWeighting, true);
+  assert.equal(persistedReport.supportSignalStrengthExcludedFromAllocationPower, true);
   assert.ok(report.providerModes.some((mode) => mode.provider === "external_proof_of_personhood"));
   assert.ok(report.providerModes.every((mode) => mode.rawProviderPayloadStored === false));
   assert.ok(report.providerModes.every((mode) => mode.contactDataStored === false));
@@ -2941,6 +3004,14 @@ test("MPGF identity integrity report aggregates sybil controls without moral rep
   assert.match(report.calcHash, /^sha256:/);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsIdentityIntegrityReportApi/);
+  assert.match(route, /buildMpgfPublicGoodsIdentityIntegrityReport/);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(route, /contextLoad\.source === "database_round_context"/);
+  assert.match(route, /attestations: \[\]/);
+  assert.match(route, /allocationContextSource/);
+  assert.match(route, /contributionSource/);
+  assert.match(route, /identityAttestationSource/);
   assert.match(publicApi, /identityIntegrity/);
   assert.match(publicApi, /noMoralReputationWeighting/);
   assert.match(publicApi, /supportSignalStrengthExcludedFromAllocationPower/);
