@@ -60,6 +60,9 @@ export async function POST(request: Request) {
       status: result.status,
       roundId: result.allocation.roundId,
       matchPoolId: result.allocation.matchPoolId,
+      formulaVersion: result.allocation.formulaVersion,
+      qfAllocationPolicy: result.allocation.qfAllocationPolicy,
+      qfLambda: result.allocation.qfLambda,
       rowCount: result.rows.length,
       persistedCount: result.persistedCount,
       contributionSource: result.contributionSource,
@@ -73,6 +76,7 @@ export async function POST(request: Request) {
       warnings: result.warnings,
       rows: result.rows.map((row) => ({
         campaignId: row.campaign_id,
+        formulaVersion: row.formula_version,
         status: row.status,
         directEligibleCents: row.direct_eligible_cents,
         verifiedSupporterCount: row.verified_supporter_count,
@@ -82,6 +86,9 @@ export async function POST(request: Request) {
         totalPayoutCents: row.total_payout_cents,
         proofRequired: row.proof_required,
         custodyMode: row.custody_mode,
+        lockedParameterDigest: row.locked_parameter_digest,
+        allocationCalculationHash: row.allocation_calculation_hash,
+        parametersLockedBeforeRoundOpen: row.parameters_locked_before_round_open,
       })),
     }, { status: result.status === "not_configured" ? 503 : 200 });
   } catch (error) {

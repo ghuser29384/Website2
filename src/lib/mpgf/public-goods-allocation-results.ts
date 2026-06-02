@@ -97,6 +97,9 @@ export interface MpgfPublicGoodsAllocationContributionLoadResult {
 export interface MpgfPublicGoodsAllocationResultRow {
   round_id: string;
   campaign_id: string;
+  formula_version: MpgfPublicGoodsRoundAllocation["formulaVersion"];
+  qf_allocation_policy: MpgfPublicGoodsRoundAllocation["qfAllocationPolicy"];
+  qf_lambda: number;
   direct_eligible_cents: number;
   verified_supporter_count: number;
   base_match_cents: number;
@@ -112,6 +115,9 @@ export interface MpgfPublicGoodsAllocationResultRow {
   raw_payment_object_count: number;
   unique_counted_identity_count: number;
   regenerated_from_contribution_records: true;
+  locked_parameter_digest: string;
+  allocation_calculation_hash: string;
+  parameters_locked_before_round_open: true;
   finalized_at: string;
 }
 
@@ -382,6 +388,32 @@ function normalizedAllocationSourceRecords(campaignId: string, pledges: MpgfPubl
     }));
 }
 
+function normalizedAllocationParameterProof(allocation: MpgfPublicGoodsRoundAllocation) {
+  return {
+    roundId: allocation.roundId,
+    matchPoolId: allocation.matchPoolId,
+    formulaVersion: allocation.formulaVersion,
+    qfAllocationPolicy: allocation.qfAllocationPolicy,
+    qfLambda: allocation.qfLambda,
+    baseMatchBudgetCents: allocation.baseMatchBudgetCents,
+    qfBonusBudgetCents: allocation.qfBonusBudgetCents,
+    proofPageRequired: allocation.proofPageRequired,
+    parametersLockedBeforeRoundOpen: true,
+  };
+}
+
+function allocationRowCalculationHash(input: {
+  allocation: MpgfPublicGoodsRoundAllocation;
+  line: MpgfPublicGoodsRoundAllocation["lines"][number];
+  sourceProof: MpgfPublicGoodsAllocationSourceProof;
+}) {
+  return hashPublicSource({
+    parameterProof: normalizedAllocationParameterProof(input.allocation),
+    sourceProof: input.sourceProof,
+    line: input.line,
+  });
+}
+
 export function buildMpgfPublicGoodsAllocationSourceProofMap({
   allocation = allocateMpgfAssuranceRound(),
   pledges = demoMpgfAssurancePledges,
@@ -580,6 +612,30 @@ function assertAllocationRowsAreSafe(input: {
       throw new Error(`MPGF public-goods allocation row ${row.campaign_id} must include a source digest.`);
     }
 
+    if (!row.locked_parameter_digest.startsWith("sha256:")) {
+      throw new Error(`MPGF public-goods allocation row ${row.campaign_id} must include a locked parameter digest.`);
+    }
+
+    if (!row.allocation_calculation_hash.startsWith("sha256:")) {
+      throw new Error(`MPGF public-goods allocation row ${row.campaign_id} must include a calculation hash.`);
+    }
+
+    if (row.formula_version !== input.allocation.formulaVersion) {
+      throw new Error(`MPGF public-goods allocation row ${row.campaign_id} has the wrong formula version.`);
+    }
+
+    if (row.qf_allocation_policy !== input.allocation.qfAllocationPolicy) {
+      throw new Error(`MPGF public-goods allocation row ${row.campaign_id} has the wrong QF policy.`);
+    }
+
+    if (row.qf_lambda !== input.allocation.qfLambda) {
+      throw new Error(`MPGF public-goods allocation row ${row.campaign_id} has the wrong QF lambda.`);
+    }
+
+    if (!row.parameters_locked_before_round_open) {
+      throw new Error(`MPGF public-goods allocation row ${row.campaign_id} must preserve locked parameters.`);
+    }
+
     if (!row.regenerated_from_contribution_records) {
       throw new Error(`MPGF public-goods allocation row ${row.campaign_id} must regenerate from contribution records.`);
     }
@@ -632,6 +688,7 @@ export function buildMpgfPublicGoodsAllocationResultRows({
   finalizedAt?: string;
 } = {}) {
   const sourceProofByCampaignId = buildMpgfPublicGoodsAllocationSourceProofMap({ allocation, pledges });
+  const lockedParameterDigest = hashPublicSource(normalizedAllocationParameterProof(allocation));
   const rows = allocation.lines.map((line) => {
     const sourceProof = sourceProofByCampaignId.get(line.campaignId);
 
@@ -642,6 +699,9 @@ export function buildMpgfPublicGoodsAllocationResultRows({
     return {
       round_id: allocation.roundId,
       campaign_id: line.campaignId,
+      formula_version: allocation.formulaVersion,
+      qf_allocation_policy: allocation.qfAllocationPolicy,
+      qf_lambda: allocation.qfLambda,
       direct_eligible_cents: line.directEligibleCents,
       verified_supporter_count: line.verifiedSupporterCount,
       base_match_cents: line.baseMatchCents,
@@ -657,6 +717,9 @@ export function buildMpgfPublicGoodsAllocationResultRows({
       raw_payment_object_count: sourceProof.rawPaymentObjectCount,
       unique_counted_identity_count: sourceProof.uniqueCountedIdentityCount,
       regenerated_from_contribution_records: sourceProof.regeneratedFromContributionRecords,
+      locked_parameter_digest: lockedParameterDigest,
+      allocation_calculation_hash: allocationRowCalculationHash({ allocation, line, sourceProof }),
+      parameters_locked_before_round_open: true,
       finalized_at: finalizedAt,
     };
   }) satisfies MpgfPublicGoodsAllocationResultRow[];

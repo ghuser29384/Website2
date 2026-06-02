@@ -803,6 +803,10 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   const route = readFileSync("src/app/api/mpgf/public-goods/allocate/route.ts", "utf8");
   const closeRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/close/route.ts", "utf8");
   const allocationResultsSource = readFileSync("src/lib/mpgf/public-goods-allocation-results.ts", "utf8");
+  const formulaProofMigration = readFileSync(
+    "supabase/migrations/20260602_mpgf_public_goods_allocation_formula_proof.sql",
+    "utf8",
+  );
 
   assert.equal(persistedPledges.length, 1);
   assert.equal(persistedPledges[0]?.eligibilityState, "eligible");
@@ -819,9 +823,15 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.ok(resilience);
   assert.ok(animalWelfare);
   assert.equal(globalHealth.status, "payable");
+  assert.equal(globalHealth.formula_version, allocation.formulaVersion);
+  assert.equal(globalHealth.qf_allocation_policy, allocation.qfAllocationPolicy);
+  assert.equal(globalHealth.qf_lambda, allocation.qfLambda);
   assert.ok(globalHealth.total_payout_cents > 0);
   assert.ok(globalHealth.qf_bonus_cents <= globalHealth.qf_bonus_cap_cents);
   assert.match(globalHealth.source_contribution_digest, /^sha256:/);
+  assert.match(globalHealth.locked_parameter_digest, /^sha256:/);
+  assert.match(globalHealth.allocation_calculation_hash, /^sha256:/);
+  assert.equal(globalHealth.parameters_locked_before_round_open, true);
   assert.equal(globalHealth.regenerated_from_contribution_records, true);
   assert.equal(globalHealth.verified_supporter_count, globalHealth.unique_counted_identity_count);
   assert.equal(globalHealth.source_contribution_digest, sourceProofByCampaignId.get(globalHealth.campaign_id)?.sourceContributionDigest);
@@ -839,12 +849,21 @@ test("MPGF public-goods allocation finalization builds persistable no-payout-lea
   assert.match(allocationResultsSource, /mpgf_payment_events/);
   assert.match(allocationResultsSource, /mpgf_provider_payment_events/);
   assert.match(allocationResultsSource, /counted_after_review/);
+  assert.match(allocationResultsSource, /locked_parameter_digest/);
+  assert.match(allocationResultsSource, /allocation_calculation_hash/);
+  assert.match(formulaProofMigration, /formula_version/);
+  assert.match(formulaProofMigration, /qf_allocation_policy/);
+  assert.match(formulaProofMigration, /allocation_calculation_hash/);
+  assert.match(formulaProofMigration, /parameters_locked_before_round_open/);
   assert.match(route, /MPGF_ALLOCATION_SECRET/);
   assert.match(route, /persistMpgfPublicGoodsAllocationResults/);
+  assert.match(route, /formulaVersion/);
   assert.match(route, /contributionSource/);
+  assert.match(route, /allocationCalculationHash/);
   assert.match(route, /eligibleContributionRecordCount/);
   assert.match(closeRoute, /roundId/);
   assert.match(closeRoute, /contributionSource/);
+  assert.match(closeRoute, /lockedParameterDigest/);
   assert.match(route, /proofPageRequired/);
   assert.match(route, /qfBonusCapCents/);
 });

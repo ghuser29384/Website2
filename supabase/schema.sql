@@ -6501,6 +6501,13 @@ create table if not exists public.mpgf_public_goods_allocation_results (
   id uuid primary key default gen_random_uuid(),
   round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
   campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  formula_version text not null default 'cg_vqaf_capital_constrained_qf_v1' check (
+    formula_version = 'cg_vqaf_capital_constrained_qf_v1'
+  ),
+  qf_allocation_policy text not null default 'capital_constrained_lambda_bisection_with_per_campaign_cap' check (
+    qf_allocation_policy = 'capital_constrained_lambda_bisection_with_per_campaign_cap'
+  ),
+  qf_lambda numeric not null default 0 check (qf_lambda >= 0),
   direct_eligible_cents bigint not null check (direct_eligible_cents >= 0),
   verified_supporter_count integer not null check (verified_supporter_count >= 0),
   base_match_cents bigint not null check (base_match_cents >= 0),
@@ -6517,7 +6524,25 @@ create table if not exists public.mpgf_public_goods_allocation_results (
   custody_mode text not null check (
     custody_mode in ('no_custody_external_handoff', 'provider_or_fiscal_host_required')
   ),
+  source_contribution_digest text not null default 'sha256:pending-source-proof' check (
+    source_contribution_digest ~ '^sha256:[0-9a-f]{64}$' or source_contribution_digest = 'sha256:pending-source-proof'
+  ),
+  eligible_contribution_record_count integer not null default 0 check (eligible_contribution_record_count >= 0),
+  raw_payment_object_count integer not null default 0 check (raw_payment_object_count >= 0),
+  unique_counted_identity_count integer not null default 0 check (
+    unique_counted_identity_count >= 0 and unique_counted_identity_count <= eligible_contribution_record_count
+  ),
+  regenerated_from_contribution_records boolean not null default false,
+  locked_parameter_digest text not null default 'sha256:pending-parameter-proof' check (
+    locked_parameter_digest ~ '^sha256:[0-9a-f]{64}$' or locked_parameter_digest = 'sha256:pending-parameter-proof'
+  ),
+  allocation_calculation_hash text not null default 'sha256:pending-calculation-proof' check (
+    allocation_calculation_hash ~ '^sha256:[0-9a-f]{64}$' or allocation_calculation_hash = 'sha256:pending-calculation-proof'
+  ),
+  parameters_locked_before_round_open boolean not null default true check (parameters_locked_before_round_open = true),
   finalized_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_public_goods_allocation_eligible_rows_within_raw_rows
+    check (eligible_contribution_record_count <= raw_payment_object_count),
   unique (round_id, campaign_id)
 );
 
