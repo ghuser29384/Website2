@@ -12,14 +12,14 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 export const metadata: Metadata = {
   title: "Confirm Donation",
   description:
-    "Optionally record an Every.org donation after completing payment off-site, so it can be reflected in a Moral Trade workflow.",
+    "Return from Every.org to a webhook-first MPGF reconciliation state, with reviewed fallback only when provider metadata cannot match the gift.",
   alternates: {
     canonical: "/donate/confirm",
   },
   openGraph: {
-    title: "Confirm an Every.org donation",
+    title: "Every.org return state",
     description:
-      "Return from Every.org and optionally record a gift for Moral Trade workflows without implying custody or escrow.",
+      "MPGF-linked Every.org gifts stay pending for webhook import; reviewed fallback is available when provider metadata cannot match evidence.",
     url: getAbsoluteUrl("/donate/confirm"),
     type: "website",
   },
@@ -66,15 +66,16 @@ export default async function DonationConfirmPage({ searchParams }: DonationConf
         <div className="hero-grid">
           <section className="hero-copy">
             <p className="eyebrow">Donation confirmation</p>
-            <h1>Back from Every.org?</h1>
+            <h1>Every.org return state</h1>
             <p className="hero-text">
-              If you completed a gift to {targetTitle}, you can optionally record it so Moral
-              Trade workflows can reference the external evidence. This is bookkeeping, not
-              custody, escrow, tax advice, or a payment guarantee.
+              If you completed a gift to {targetTitle}, MPGF-linked routes stay pending until
+              webhook import and review. Use the reviewed fallback only when provider metadata
+              cannot match the gift. This is bookkeeping, not custody, escrow, tax advice, or a
+              payment guarantee.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={signedLogHref}>
-                Record this gift
+                Open reviewed fallback
               </Link>
               <Link className="button button-secondary" href="/donate">
                 Done for now
@@ -102,8 +103,8 @@ export default async function DonationConfirmPage({ searchParams }: DonationConf
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Evidence note</strong>
-                  <p>You provide receipt or payment evidence only when a workflow needs review.</p>
+                  <strong>Webhook or fallback</strong>
+                  <p>Webhook import is preferred; fallback evidence is only for unmatched review.</p>
                 </div>
               </div>
             </div>
@@ -114,17 +115,19 @@ export default async function DonationConfirmPage({ searchParams }: DonationConf
       <main id="main-content" tabIndex={-1}>
         <section className="section section-white">
           <div className="section-head">
-            <p className="eyebrow">Optional step</p>
-            <h2>Recording is only for Moral Trade workflows</h2>
+            <p className="eyebrow">Reviewed fallback</p>
+            <h2>Manual recording is not the default path</h2>
             <p>
-              If you simply wanted to donate, you can stop here. Return only when the gift should
-              appear in a donation offset, public-goods contribution, or reviewable pilot history.
+              If you simply wanted to donate, you can stop here. Use reviewed fallback when a
+              donation offset, public-goods contribution, or reviewable pilot history cannot be
+              matched from provider metadata.
             </p>
           </div>
           <div className="panel data-card data-card-wide">
             <ul className="compact-list">
               <li>Every.org remains the payment processor and donation record source.</li>
-              <li>Moral Trade can store a participant-submitted evidence note for review.</li>
+              <li>MPGF partner webhooks are preferred where partner metadata is available.</li>
+              <li>Moral Trade can store fallback evidence only for review.</li>
               <li>No one should rely on the gift until evidence and scope are checked.</li>
             </ul>
           </div>

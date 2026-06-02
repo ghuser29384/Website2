@@ -84,9 +84,9 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
             </div>
             <ul className="hero-signals" aria-label="Donation trust notes">
               <li>Payment on Every.org</li>
-              <li>Optional record afterward</li>
+              <li>Webhook import when available</li>
               <li>No custody or escrow</li>
-              <li>Manual evidence review</li>
+              <li>Reviewed fallback only</li>
             </ul>
           </section>
 
@@ -110,8 +110,8 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
               <div className="flow-step">
                 <span className="flow-number">03</span>
                 <div>
-                  <strong>Return only if useful</strong>
-                  <p>Record the gift here when it should count toward a Moral Trade workflow.</p>
+                  <strong>Import or fallback</strong>
+                  <p>Webhook import handles MPGF-linked gifts; use reviewed fallback only when provider metadata cannot match the gift.</p>
                 </div>
               </div>
             </div>
@@ -122,8 +122,8 @@ export default async function DonatePage({ searchParams }: DonatePageProps) {
       <main id="main-content" tabIndex={-1}>
         {returnedTarget ? (
           <div className="status-banner status-banner-success">
-            Ready to confirm a donation route for {returnedTarget}. Use the matching record link
-            below only if this gift should count toward a Moral Trade workflow.
+            Ready to reconcile a donation route for {returnedTarget}. Use reviewed fallback only
+            if webhook import cannot match this gift to a Moral Trade workflow.
           </div>
         ) : null}
 

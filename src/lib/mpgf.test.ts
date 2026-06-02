@@ -1351,6 +1351,7 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   const proofSource = readFileSync("src/lib/mpgf/public-goods-proof.ts", "utf8");
   const kpiSource = readFileSync("src/lib/mpgf/public-goods-kpis.ts", "utf8");
   const donatePageSource = readFileSync("src/app/donate/page.tsx", "utf8");
+  const donateConfirmPageSource = readFileSync("src/app/donate/confirm/page.tsx", "utf8");
   const howItWorksSource = readFileSync("src/app/how-it-works/page.tsx", "utf8");
   const siteSearchSource = readFileSync("src/lib/site-search.ts", "utf8");
   const visitorPathsSource = readFileSync("src/lib/visitor-paths.ts", "utf8");
@@ -1460,10 +1461,16 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.match(proofSource, /every_org_partner_webhook/);
   assert.match(kpiSource, /every_org_partner_webhook/);
   assert.match(donatePageSource, /MPGF webhook\s+import or reviewed fallback/);
+  assert.match(donatePageSource, /Webhook import when available/);
+  assert.match(donateConfirmPageSource, /webhook-first MPGF reconciliation state/);
+  assert.match(donateConfirmPageSource, /Manual recording is not the default path/);
   assert.match(howItWorksSource, /import by webhook or reviewed fallback/);
   assert.match(siteSearchSource, /webhook import or reviewed fallback/);
   assert.match(visitorPathsSource, /webhook import or reviewed fallback/);
-  assert.doesNotMatch(`${donatePageSource}\n${howItWorksSource}\n${siteSearchSource}\n${visitorPathsSource}`, /optionally record the gift/);
+  assert.doesNotMatch(
+    `${donatePageSource}\n${donateConfirmPageSource}\n${howItWorksSource}\n${siteSearchSource}\n${visitorPathsSource}`,
+    /optionally record|Optional record/,
+  );
 
   for (const forbidden of [
     "private-every-org-user-001",
