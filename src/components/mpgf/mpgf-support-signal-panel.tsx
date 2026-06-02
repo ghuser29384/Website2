@@ -5,6 +5,12 @@ import { useMemo, useState } from "react";
 
 type SupportSignalType = "strong_support" | "weak_common_ground_support" | "dissent_review_requested";
 type MoralCluster = "humanitarian" | "longtermist" | "animal_inclusive" | "institutional_pluralist";
+type DissentReasonCode =
+  | "externality_review"
+  | "threat_baseline_review"
+  | "destination_review"
+  | "collusion_review"
+  | "other_reviewable_claim";
 
 interface SupportSignalOption {
   value: SupportSignalType;
@@ -46,6 +52,9 @@ interface SupportSignalResponse {
   ok?: boolean;
   currentState?: string;
   error?: string;
+  dissentNote?: {
+    status?: string;
+  };
   persistence?: {
     status?: string;
   };
@@ -96,6 +105,9 @@ export function MpgfSupportSignalPanel({
   const [selectedSignal, setSelectedSignal] = useState<SupportSignalType>(
     signalOptions[1]?.value ?? "weak_common_ground_support",
   );
+  const [dissentReasonCode, setDissentReasonCode] =
+    useState<DissentReasonCode>("other_reviewable_claim");
+  const [publicSummary, setPublicSummary] = useState("");
   const [pending, setPending] = useState(false);
   const [currentState, setCurrentState] = useState(initialState);
   const [statusMessage, setStatusMessage] = useState(
@@ -130,7 +142,9 @@ export function MpgfSupportSignalPanel({
         },
         body: JSON.stringify({
           campaignId,
+          dissentReasonCode,
           moralCluster: selectedCluster,
+          publicSummary,
           signalType,
           strengthBps: option?.defaultStrengthBps,
         }),
@@ -143,7 +157,9 @@ export function MpgfSupportSignalPanel({
 
       setCurrentState(initialState === "signal_only" ? result.currentState ?? "signal_only" : initialState);
       setStatusMessage(
-        `${option?.label ?? "Support signal"} ${persistenceLabel(result.persistence?.status)} for ${campaignTitle}.`,
+        `${option?.label ?? "Support signal"} ${persistenceLabel(result.persistence?.status)} for ${campaignTitle}.${
+          result.dissentNote?.status === "opened" ? " Dissent note opened." : ""
+        }`,
       );
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Could not record MPGF support signal.");
@@ -212,6 +228,33 @@ export function MpgfSupportSignalPanel({
           </button>
         ))}
       </div>
+
+      {selectedSignal === "dissent_review_requested" ? (
+        <div className="mpgf-form-grid">
+          <label>
+            Review reason
+            <select
+              value={dissentReasonCode}
+              onChange={(event) => setDissentReasonCode(event.currentTarget.value as DissentReasonCode)}
+            >
+              <option value="externality_review">Externality review</option>
+              <option value="threat_baseline_review">Threat-baseline review</option>
+              <option value="destination_review">Destination review</option>
+              <option value="collusion_review">Collusion review</option>
+              <option value="other_reviewable_claim">Other reviewable claim</option>
+            </select>
+          </label>
+          <label>
+            Public summary
+            <textarea
+              maxLength={240}
+              placeholder="Short public dissent summary."
+              value={publicSummary}
+              onChange={(event) => setPublicSummary(event.currentTarget.value)}
+            />
+          </label>
+        </div>
+      ) : null}
 
       <div className="mpgf-state-rail" aria-label={`Round workflow for ${campaignTitle}`}>
         {stateSteps.map((step) => (

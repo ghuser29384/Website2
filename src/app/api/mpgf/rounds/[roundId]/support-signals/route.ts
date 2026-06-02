@@ -15,12 +15,17 @@ import {
 } from "@/lib/mpgf/public-goods-cg-vqaf";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type MpgfSupportSignalInsert = Database["public"]["Tables"]["mpgf_support_signals"]["Insert"];
+type MpgfDissentNoteInsert = Database["public"]["Tables"]["mpgf_dissent_notes"]["Insert"];
+type MpgfDissentReasonCode = MpgfDissentNoteInsert["reason_code"];
+type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
+  from: (table: string) => any;
+};
 
 interface DbErrorLike {
   code?: string | null;
@@ -50,6 +55,10 @@ function isUniqueViolationError(error: DbErrorLike) {
   return error.code === "23505";
 }
 
+function hasServiceRoleEnv() {
+  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 function strengthBpsField(
   record: Record<string, unknown>,
   signalType: MpgfPublicGoodsSupportSignal["signalType"],
@@ -61,6 +70,29 @@ function strengthBpsField(
   }
 
   return defaultMpgfPublicGoodsSupportStrengthBps(signalType);
+}
+
+function dissentReasonCodeField(record: Record<string, unknown>): MpgfDissentReasonCode {
+  const value = stringField(record, "dissentReasonCode");
+
+  if (
+    value === "externality_review" ||
+    value === "threat_baseline_review" ||
+    value === "destination_review" ||
+    value === "collusion_review"
+  ) {
+    return value;
+  }
+
+  return "other_reviewable_claim";
+}
+
+function publicSummaryField(record: Record<string, unknown>, campaignId: string) {
+  const value = stringField(record, "publicSummary")
+    .replace(/\s+/g, " ")
+    .slice(0, 240);
+
+  return value || `Participant requested MPGF dissent review for ${campaignId}.`;
 }
 
 async function persistSupportSignal(signal: MpgfPublicGoodsSupportSignal, profileId: string) {
@@ -128,6 +160,54 @@ async function persistSupportSignal(signal: MpgfPublicGoodsSupportSignal, profil
   }
 
   throw new Error(`Could not persist MPGF support signal: ${summarizeDbError(inserted.error)}`);
+}
+
+async function persistDissentNote(input: {
+  profileId: string;
+  record: Record<string, unknown>;
+  signal: MpgfPublicGoodsSupportSignal;
+}) {
+  if (input.signal.signalType !== "dissent_review_requested") {
+    return {
+      status: "not_applicable" as const,
+    };
+  }
+
+  if (!hasSupabaseEnv() || !hasServiceRoleEnv()) {
+    return {
+      status: "not_configured" as const,
+      message: "Supabase service-role persistence is required before an MPGF dissent note can be opened.",
+    };
+  }
+
+  const row: MpgfDissentNoteInsert = {
+    id: `mpgf-dissent-note-${input.signal.calcHash.slice(7, 19)}`,
+    campaign_id: input.signal.campaignId,
+    filed_by_profile_id: input.profileId,
+    filer_ref_hash: input.signal.userRefHash,
+    reason_code: dissentReasonCodeField(input.record),
+    public_summary: publicSummaryField(input.record, input.signal.campaignId),
+    status: "opened",
+    pauses_unreleased_milestones: true,
+    created_at: input.signal.createdAt,
+  };
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const write = await supabase
+    .from("mpgf_dissent_notes")
+    .upsert(row, { onConflict: "id" })
+    .select("id, created_at")
+    .single();
+
+  if (write.error) {
+    throw new Error(`Could not persist MPGF dissent note: ${summarizeDbError(write.error)}`);
+  }
+
+  return {
+    status: "opened" as const,
+    id: String(write.data.id),
+    createdAt: String(write.data.created_at),
+    reasonCode: row.reason_code,
+  };
 }
 
 async function recordSupportSignalAnalytics(signal: MpgfPublicGoodsSupportSignal, userId: string) {
@@ -216,6 +296,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
       createdAt: new Date().toISOString(),
     });
     const persistence = await persistSupportSignal(supportSignal, viewer.authUser.id);
+    const dissentNote = await persistDissentNote({
+      profileId: viewer.authUser.id,
+      record,
+      signal: supportSignal,
+    });
     const analytics = await recordSupportSignalAnalytics(supportSignal, viewer.authUser.id);
 
     return NextResponse.json(
@@ -223,6 +308,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
         ok: true,
         supportSignal,
         persistence,
+        dissentNote,
         analytics,
         currentState: "signal_only",
         nextStates: contract.collectiveActionStates,

@@ -1726,6 +1726,13 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
     signalType: "weak_common_ground_support",
     strengthBps: 6_200,
   });
+  const dissentSignal = createMpgfPublicGoodsSupportSignal({
+    campaignId: "campaign-animal-welfare-transition",
+    userRef: "private-cg-vqaf-dissent-user-001",
+    moralCluster: "institutional_pluralist",
+    signalType: "dissent_review_requested",
+    strengthBps: 2_500,
+  });
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", "utf8");
   const discoveryRoute = readFileSync(
     "src/app/api/mpgf/rounds/[roundId]/common-ground-discovery/route.ts",
@@ -1802,6 +1809,9 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.equal(supportSignal.noGlobalMoralRanking, true);
   assert.match(supportSignal.userRefHash, /^sha256:/);
   assert.match(supportSignal.calcHash, /^sha256:/);
+  assert.equal(dissentSignal.privateByDefault, true);
+  assert.equal(dissentSignal.countsForCommonGround, false);
+  assert.equal(dissentSignal.noGlobalMoralRanking, true);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsCgVqafReportApi/);
   assert.match(discoveryRoute, /getMpgfPublicGoodsCommonGroundDiscoveryApi/);
@@ -1821,6 +1831,12 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(supportSignalRoute, /moral_cluster_hash/);
   assert.match(supportSignalRoute, /mpgf_support_signals/);
   assert.match(supportSignalRoute, /MpgfSupportSignalInsert/);
+  assert.match(supportSignalRoute, /mpgf_dissent_notes/);
+  assert.match(supportSignalRoute, /MpgfDissentNoteInsert/);
+  assert.match(supportSignalRoute, /persistDissentNote/);
+  assert.match(supportSignalRoute, /dissentReasonCode/);
+  assert.match(supportSignalRoute, /public_summary/);
+  assert.match(supportSignalRoute, /pauses_unreleased_milestones: true/);
   assert.doesNotMatch(supportSignalRoute, /SupabaseAny/);
   assert.match(supportSignalRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(mechanism, /Strongly support/);
@@ -1830,6 +1846,9 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
   assert.match(supportSignalPanel, /Private by default; public output is aggregate only/);
   assert.match(supportSignalPanel, /signal_only/);
   assert.match(supportSignalPanel, /Common-ground discovery/);
+  assert.match(supportSignalPanel, /dissentReasonCode/);
+  assert.match(supportSignalPanel, /Public summary/);
+  assert.match(supportSignalPanel, /Dissent note opened/);
   assert.match(roundPage, /commonGroundScoreBps/);
   assert.match(poolsPage, /buildMpgfPublicGoodsCommonGroundDiscovery/);
   assert.match(poolsPage, /name="cluster"/);
