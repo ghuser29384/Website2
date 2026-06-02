@@ -11,6 +11,7 @@ import {
   validateBackgroundSourceSummaryRetentionScope,
 } from "@/lib/background-source-permissions";
 import { buildSourceSummaryRows } from "@/lib/background-opportunity-briefs";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
@@ -271,6 +272,7 @@ export async function POST(
   return privateJson({
     profileSignalsCreated: signalRows.length,
     rawTextPersisted: false,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_source_summary_enabled"),
     sourceSummaryId: summaryRow.id,
     stateMutation: "approved_source_summary_promoted",
   });

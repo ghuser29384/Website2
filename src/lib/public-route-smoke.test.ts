@@ -7,6 +7,10 @@ import {
   BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS,
   BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS,
 } from "@/lib/background-source-permissions";
+import {
+  getBackgroundNetworkingRolloutPlan,
+  validateBackgroundNetworkingRolloutPlan,
+} from "@/lib/background-rollout";
 import { PARTNER_COHORTS } from "@/lib/growth";
 import {
   MEASUREMENT_EVENT_SPECS,
@@ -782,6 +786,7 @@ test("background networking and reasoning routes are distinct resilient public r
 
 test("background source connector permissions stay field-limited and raw-ingestion disabled", () => {
   const dashboardPage = readRepoFile("src/app/dashboard/page.tsx");
+  const backgroundNetworkingPage = readRepoFile("src/app/background-networking/page.tsx");
   const aiShadowContractRoute = readRepoFile(
     "src/app/api/moral-trade/ai-shadow/contract/route.ts",
   );
@@ -832,6 +837,7 @@ test("background source connector permissions stay field-limited and raw-ingesti
   const backgroundSourceAssistSource = readRepoFile("src/lib/background-source-assist.ts");
   const backgroundAiShadowSource = readRepoFile("src/lib/background-ai-shadow.ts");
   const backgroundCapabilityGateSource = readRepoFile("src/lib/background-capability-gates.ts");
+  const backgroundRolloutSource = readRepoFile("src/lib/background-rollout.ts");
   const backgroundPrivateOverlapSource = readRepoFile("src/lib/background-private-overlap.ts");
   const backgroundRlsAuditSource = readRepoFile("src/lib/background-rls-audit.ts");
   const backgroundNotificationPolicySource = readRepoFile(
@@ -849,6 +855,8 @@ test("background source connector permissions stay field-limited and raw-ingesti
   const legacyActions = readRepoFile("src/app/actions.ts");
   const schemaSource = readRepoFile("supabase/schema.sql");
   const vercelConfig = readRepoFile("vercel.json");
+  const envExample = readRepoFile(".env.example");
+  const bg14RolloutDoc = readRepoFile("docs/moral-trade/background-networking-bg14-rollout.md");
   const migrationSource = readRepoFile(
     "supabase/migrations/20260531_background_source_connection_permissions.sql",
   );
@@ -861,11 +869,34 @@ test("background source connector permissions stay field-limited and raw-ingesti
   const bg13MigrationSource = readRepoFile(
     "supabase/migrations/20260601_background_networking_bg13_operational_lanes.sql",
   );
+  const bg14RolloutPlan = getBackgroundNetworkingRolloutPlan({});
+  const bg14RolloutValidation = validateBackgroundNetworkingRolloutPlan(bg14RolloutPlan);
 
   assert.ok(BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS.length >= 6);
   assert.deepEqual(BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS, [30, 90, 180, 365]);
+  assert.equal(bg14RolloutValidation.status, "pass");
+  assert.ok(bg14RolloutPlan.flags.every((flag) => flag.defaultEnabled === false));
+  assert.ok(bg14RolloutPlan.flags.every((flag) => flag.enabled === false));
+  assert.match(backgroundRolloutSource, /background_source_summary_enabled/);
+  assert.match(backgroundRolloutSource, /background_wish_interview_enabled/);
+  assert.match(backgroundRolloutSource, /background_opportunity_briefs_enabled/);
+  assert.match(backgroundRolloutSource, /No autonomous outreach/);
+  assert.match(backgroundRolloutSource, /No raw private-feed ingestion/);
+  assert.match(backgroundRolloutSource, /Operator review is required before introduced-stage contact disclosure/);
+  assert.match(envExample, /BACKGROUND_SOURCE_SUMMARY_ENABLED=false/);
+  assert.match(envExample, /BACKGROUND_WISH_INTERVIEW_ENABLED=false/);
+  assert.match(envExample, /BACKGROUND_OPPORTUNITY_BRIEFS_ENABLED=false/);
+  assert.match(bg14RolloutDoc, /BACKGROUND_NETWORKING_ROLLOUT_STAGE/);
+  assert.match(bg14RolloutDoc, /zero unresolved privacy incidents/);
+  assert.match(bg14RolloutDoc, /Rollback is per lane/);
   assert.match(dashboardPage, /saveBackgroundSourceConnectionAction/);
   assert.match(dashboardPage, /revokeBackgroundSourceConnectionAction/);
+  assert.match(dashboardPage, /Bg14 rollout controls/);
+  assert.match(dashboardPage, /backgroundRolloutPlan\.flags\.map/);
+  assert.match(dashboardPage, /flag\.envKey/);
+  assert.match(backgroundNetworkingPage, /Bg14 rollout/);
+  assert.match(backgroundNetworkingPage, /backgroundRolloutValidation/);
+  assert.match(backgroundNetworkingPage, /backgroundRolloutPlan\.flags/);
   assert.equal(dashboardPage.includes("saveSourceConnectionAction"), false);
   assert.match(dashboardPage, /BACKGROUND_SOURCE_PERMISSION_FIELD_OPTIONS/);
   assert.match(dashboardPage, /name="allowed_field_keys"/);
@@ -914,44 +945,58 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(sourceSummariesRoute, /validateBackgroundSourceSummaryRetentionScope/);
   assert.match(sourceSummariesRoute, /\.eq\("profile_id", user\.id\)/);
   assert.match(sourceSummariesRoute, /rawIngestionAllowed: false/);
+  assert.match(sourceSummariesRoute, /serializeBackgroundNetworkingRolloutSurface/);
+  assert.match(sourceSummariesRoute, /background_source_summary_enabled/);
   assert.match(sourceConnectionsRoute, /validateBackgroundSourcePermission/);
   assert.match(sourceConnectionsRoute, /raw_ingestion_allowed: false/);
   assert.match(sourceConnectionsRoute, /source_connection_recorded/);
+  assert.match(sourceConnectionsRoute, /background_source_summary_enabled/);
   assert.match(sourceConnectionRevokeRoute, /source_connection_revoked/);
   assert.match(sourceConnectionRevokeRoute, /background_profile_signals/);
   assert.match(sourceConnectionDraftRoute, /buildReviewedSourceDraftSummary/);
   assert.match(sourceConnectionDraftRoute, /rawTextPersisted: false/);
+  assert.match(sourceConnectionDraftRoute, /background_source_summary_enabled/);
   assert.match(sourceConnectionDraftRoute, /background_shadow_runs/);
   assert.match(sourceSummaryApproveRoute, /buildBackgroundProfileSignalRows/);
   assert.match(sourceSummaryApproveRoute, /approved_source_summary_promoted/);
+  assert.match(sourceSummaryApproveRoute, /background_source_summary_enabled/);
   assert.match(profileInterviewRoute, /buildGuidedWishProfileDraft/);
   assert.match(profileInterviewRoute, /guidedWishProfileDraft/);
+  assert.match(profileInterviewRoute, /shadow_first_user_approved_only/);
+  assert.match(profileInterviewRoute, /background_wish_interview_enabled/);
   assert.match(profileSignalRecomputeRoute, /profile_signals_recomputed/);
   assert.match(profileSignalRecomputeRoute, /background_profile_signals/);
+  assert.match(profileSignalRecomputeRoute, /background_source_summary_enabled/);
   assert.match(introPacketsRoute, /takeMoralTradeApiRateLimitSlot/);
   assert.match(introPacketsRoute, /background_intro_packet_write/);
   assert.match(introPacketsRoute, /buildMoralTradeApiRateLimitResponse/);
   assert.match(introPacketsRoute, /anonymous_question/);
   assert.match(introPacketsRoute, /outreachSent: false/);
+  assert.match(introPacketsRoute, /background_opportunity_briefs_enabled/);
   assert.match(introRequestsRoute, /background_intro_packet_write/);
   assert.match(introRequestsRoute, /evaluateBackgroundIntroRequestCadence/);
   assert.match(introRequestsRoute, /intro_request_probe_pressure/);
   assert.match(introRequestsRoute, /anonymous_question/);
   assert.match(introRequestsRoute, /privateDetailsReturned: false/);
+  assert.match(introRequestsRoute, /background_opportunity_briefs_enabled/);
   assert.match(introRequestAppealRoute, /validateBackgroundIntroAppealRequest/);
   assert.match(introRequestAppealRoute, /intro_request_appeal_requested/);
   assert.match(introRequestAppealRoute, /outreachSent: false/);
+  assert.match(introRequestAppealRoute, /background_opportunity_briefs_enabled/);
   assert.match(introRequestContactRoute, /validateBackgroundContactApprovalStepUp/);
   assert.match(introRequestContactRoute, /isBackgroundIntroContactApprovalAllowed/);
   assert.match(introRequestContactRoute, /contactDetailsReturned: false/);
+  assert.match(introRequestContactRoute, /background_opportunity_briefs_enabled/);
   assert.match(introRequestsSource, /BACKGROUND_INTRO_REQUEST_SIMILAR_WEEKLY_LIMIT/);
   assert.match(introRequestsSource, /fresh one-hour session token window/);
   assert.match(opportunityBriefsRoute, /background_opportunity_brief_read/);
   assert.match(opportunityBriefsRoute, /serializeOpportunityBriefCard/);
   assert.match(opportunityBriefsRoute, /Exact wishes, private asks, source notes, constraints, and contact details/);
+  assert.match(opportunityBriefsRoute, /background_opportunity_briefs_enabled/);
   assert.match(opportunityFeedbackRoute, /background_opportunity_feedback_write/);
   assert.match(opportunityFeedbackRoute, /isBackgroundOpportunityFeedbackPairAllowed/);
   assert.match(opportunityFeedbackRoute, /outreachSent: false/);
+  assert.match(opportunityFeedbackRoute, /background_opportunity_briefs_enabled/);
   assert.match(opportunitiesAliasRoute, /opportunity-briefs\/route/);
   assert.match(opportunityFeedbackAliasRoute, /opportunity-briefs\/\[id\]\/feedback\/route/);
   assert.match(opportunityFeedbackSource, /BACKGROUND_OPPORTUNITY_FEEDBACK_REASONS/);
@@ -1021,6 +1066,8 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(backgroundCapabilityGateSource, /raw_private_feed_training/);
   assert.match(capabilityGateRoute, /getBackgroundCapabilityGateContract/);
   assert.match(capabilityGateRoute, /validateBackgroundCapabilityGateContract/);
+  assert.match(capabilityGateRoute, /getBackgroundNetworkingRolloutPlan/);
+  assert.match(capabilityGateRoute, /bg14Rollout/);
   assert.match(capabilityGateRoute, /expansionReady/);
   assert.match(backgroundPrivateOverlapSource, /design_review_only/);
   assert.match(backgroundPrivateOverlapSource, /formal cryptographic design review/);

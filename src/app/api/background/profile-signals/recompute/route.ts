@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
@@ -179,6 +180,7 @@ export async function POST(request: Request) {
   return privateJson({
     expired: expiredIds.length,
     revoked: revokedIds.length,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_source_summary_enabled"),
     stale: staleIds.length,
     stateMutation: "profile_signals_recomputed",
   });

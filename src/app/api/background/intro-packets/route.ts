@@ -4,6 +4,7 @@ import {
   buildIntroPacketRow,
   validateIntroPacketInput,
 } from "@/lib/background-opportunity-briefs";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
@@ -129,7 +130,8 @@ export async function POST(request: Request) {
 
   return privateJson({
     introPacketId: data.id,
-    stateMutation: "reviewed_intro_packet_requested",
     outreachSent: false,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
+    stateMutation: "reviewed_intro_packet_requested",
   });
 }

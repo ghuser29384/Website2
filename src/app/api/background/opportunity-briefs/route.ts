@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { serializeOpportunityBriefCard } from "@/lib/background-opportunity-briefs";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
@@ -60,5 +61,6 @@ export async function GET(request: Request) {
     briefs: (data ?? []).map((brief) => serializeOpportunityBriefCard(brief)),
     privacyNotice:
       "Opportunity briefs are broad-preview records. Exact wishes, private asks, source notes, constraints, and contact details remain outside this API response.",
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
   });
 }

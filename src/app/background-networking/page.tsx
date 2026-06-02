@@ -23,6 +23,10 @@ import {
   validateBackgroundCapabilityGateContract,
 } from "@/lib/background-capability-gates";
 import {
+  getBackgroundNetworkingRolloutPlan,
+  validateBackgroundNetworkingRolloutPlan,
+} from "@/lib/background-rollout";
+import {
   getBackgroundRlsAuditContract,
   validateBackgroundRlsAuditContract,
 } from "@/lib/background-rls-audit";
@@ -83,6 +87,9 @@ export default async function BackgroundNetworkingPage({
   const capabilityGateContract = getBackgroundCapabilityGateContract();
   const capabilityGateValidation =
     validateBackgroundCapabilityGateContract(capabilityGateContract);
+  const backgroundRolloutPlan = getBackgroundNetworkingRolloutPlan();
+  const backgroundRolloutValidation =
+    validateBackgroundNetworkingRolloutPlan(backgroundRolloutPlan);
   const rlsAuditContract = getBackgroundRlsAuditContract();
   const rlsAuditValidation = validateBackgroundRlsAuditContract(rlsAuditContract);
 
@@ -371,6 +378,29 @@ export default async function BackgroundNetworkingPage({
               >
                 Private overlap contract
               </Link>
+            </div>
+          </div>
+
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Bg14 rollout</p>
+              <div className="protocol-workflow-card-head">
+                <h3>{backgroundRolloutPlan.stage.replaceAll("_", " ")}</h3>
+                <StatusBadge
+                  tone={backgroundRolloutValidation.status === "pass" ? "default" : "warning"}
+                >
+                  {backgroundRolloutValidation.status}
+                </StatusBadge>
+              </div>
+              <p>{backgroundRolloutPlan.deploymentNote.summary}</p>
+              <p className="panel-note">Rollback: {backgroundRolloutPlan.rollbackPlan.summary}</p>
+            </div>
+            <div className="tag-row">
+              {backgroundRolloutPlan.flags.map((flag) => (
+                <span className="source-pill" key={flag.key}>
+                  {flag.key}: {flag.enabled ? "enabled" : "off"}
+                </span>
+              ))}
             </div>
           </div>
 

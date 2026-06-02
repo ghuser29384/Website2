@@ -6,6 +6,7 @@ import {
   summarizeBackgroundIntroContactApprovalStatus,
   validateBackgroundContactApprovalStepUp,
 } from "@/lib/background-intro-requests";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
@@ -138,6 +139,7 @@ export async function POST(
     contactApprovalStatus,
     contactDetailsReturned: false,
     introRequestId: introRequest.id,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
     stateMutation: "intro_request_contact_approval_recorded",
   });
 }

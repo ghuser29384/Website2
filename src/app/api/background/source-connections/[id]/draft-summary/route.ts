@@ -5,6 +5,7 @@ import {
   buildReviewedSourceDraftSummary,
 } from "@/lib/background-source-assist";
 import { hasActiveBackgroundSourcePermission } from "@/lib/background-source-permissions";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
@@ -144,6 +145,7 @@ export async function POST(
     extractedSignals: draft.extractedSignals,
     rawTextPersisted: false,
     redactionReport: draft.redactionReport,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_source_summary_enabled"),
     shadowRunId: shadowRun.id,
     stateMutation: "source_summary_shadow_drafted",
   });

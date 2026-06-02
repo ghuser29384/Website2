@@ -5,6 +5,7 @@ import {
 } from "@/lib/background-field-encryption";
 import { getBackgroundTokens } from "@/lib/background-networking";
 import { buildSourceSummaryRows } from "@/lib/background-opportunity-briefs";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   resolveBackgroundSourceSummaryFieldScope,
   validateBackgroundSourceSummaryRetentionScope,
@@ -251,8 +252,9 @@ export async function POST(request: Request) {
 
   return privateJson({
     consentReceiptId: receiptRow.id,
+    rawIngestionAllowed: false,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_source_summary_enabled"),
     sourceSummaryId: summaryRow.id,
     stateMutation: "reviewed_source_summary_saved",
-    rawIngestionAllowed: false,
   });
 }

@@ -9,6 +9,7 @@ import {
   getBackgroundIntroRequestWindowStart,
 } from "@/lib/background-intro-requests";
 import { recordBackgroundQueryRiskSignal } from "@/lib/background-operations";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
@@ -252,6 +253,7 @@ export async function POST(request: Request) {
     introRequestId: data.id,
     outreachSent: false,
     privateDetailsReturned: false,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
     slaDueAt: data.sla_due_at,
     stateMutation: "reviewed_intro_request_submitted",
   });

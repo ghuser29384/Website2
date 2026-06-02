@@ -8,6 +8,7 @@ import {
   normalizeBackgroundOpportunityFeedbackReason,
 } from "@/lib/background-opportunity-feedback";
 import { getOpportunityBriefDeliveryStateForFeedback } from "@/lib/background-opportunity-briefs";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
@@ -141,7 +142,8 @@ export async function POST(
 
   return privateJson({
     ok: true,
-    stateMutation: "opportunity_feedback_recorded",
     outreachSent: false,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
+    stateMutation: "opportunity_feedback_recorded",
   });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { prepareRecordSensitiveTextFields } from "@/lib/background-field-encryption";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import { validateBackgroundSourcePermission } from "@/lib/background-source-permissions";
 import {
   buildMoralTradeApiRateLimitResponse,
@@ -235,6 +236,7 @@ export async function POST(request: Request) {
     accessStatus: data.access_status,
     id: data.id,
     rawIngestionAllowed: false,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_source_summary_enabled"),
     retentionExpiresAt: data.retention_expires_at,
     stateMutation: "source_connection_recorded",
   });

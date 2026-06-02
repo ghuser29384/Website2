@@ -7,6 +7,10 @@ import {
   getBackgroundCapabilityGateContract,
   validateBackgroundCapabilityGateContract,
 } from "@/lib/background-capability-gates";
+import {
+  getBackgroundNetworkingRolloutPlan,
+  validateBackgroundNetworkingRolloutPlan,
+} from "@/lib/background-rollout";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +26,11 @@ export async function GET(request: Request) {
 
   const contract = getBackgroundCapabilityGateContract();
   const validation = validateBackgroundCapabilityGateContract(contract);
+  const rolloutPlan = getBackgroundNetworkingRolloutPlan();
+  const rolloutValidation = validateBackgroundNetworkingRolloutPlan(rolloutPlan);
 
   return buildMoralTradeApiJsonResponse({
-    ok: validation.status === "pass",
+    ok: validation.status === "pass" && rolloutValidation.status === "pass",
     checkedAt: new Date().toISOString(),
     contractVersion: contract.version,
     purpose: contract.purpose,
@@ -48,6 +54,23 @@ export async function GET(request: Request) {
       contractTests: contract.contractTests,
       expansionReady: validation.expansionReady,
     },
-    blockers: validation.blockers,
+    bg14Rollout: {
+      version: rolloutPlan.version,
+      stage: rolloutPlan.stage,
+      flags: rolloutPlan.flags.map((flag) => ({
+        key: flag.key,
+        label: flag.label,
+        enabled: flag.enabled,
+        defaultEnabled: flag.defaultEnabled,
+        gatedSurfaces: flag.gatedSurfaces,
+        purpose: flag.purpose,
+        rollbackAction: flag.rollbackAction,
+      })),
+      deploymentNote: rolloutPlan.deploymentNote,
+      rollbackPlan: rolloutPlan.rollbackPlan,
+      hardInvariants: rolloutPlan.hardInvariants,
+      validation: rolloutValidation,
+    },
+    blockers: [...validation.blockers, ...rolloutValidation.blockers],
   });
 }

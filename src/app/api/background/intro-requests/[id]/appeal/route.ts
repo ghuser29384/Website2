@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { validateBackgroundIntroAppealRequest } from "@/lib/background-intro-requests";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
   takeMoralTradeApiRateLimitSlot,
@@ -133,6 +134,7 @@ export async function POST(
     appealStatus: "requested",
     introRequestId: introRequest.id,
     outreachSent: false,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
     stateMutation: "intro_request_appeal_requested",
   });
 }

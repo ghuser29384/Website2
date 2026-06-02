@@ -83,6 +83,10 @@ import {
   formatBackgroundSourcePermissionFieldLabel,
 } from "@/lib/background-source-permissions";
 import { formatOpportunityBriefNextStep } from "@/lib/background-opportunity-briefs";
+import {
+  getBackgroundNetworkingRolloutPlan,
+  validateBackgroundNetworkingRolloutPlan,
+} from "@/lib/background-rollout";
 import { formatBackgroundIntentClaimType } from "@/lib/background-intent-claims";
 import { summarizeBackgroundAiShadowReadiness } from "@/lib/background-ai-shadow";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
@@ -176,6 +180,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const supabaseReady = hasSupabaseEnv();
   const stripeReady = hasStripeEnv();
   const backgroundFieldEncryptionReady = hasBackgroundFieldEncryptionKey();
+  const backgroundRolloutPlan = getBackgroundNetworkingRolloutPlan();
+  const backgroundRolloutValidation =
+    validateBackgroundNetworkingRolloutPlan(backgroundRolloutPlan);
   const viewer = supabaseReady ? await requireViewer("/dashboard") : null;
   const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
   const accountSecuritySummary = viewer ? await loadBackgroundAccountSecuritySummary() : null;
@@ -1241,6 +1248,26 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 Search broad registry
               </a>
             </div>
+          </div>
+
+          <div className="panel data-card data-card-wide">
+            <p className="detail-kicker">Bg14 rollout controls</p>
+            <h3>Flagged source summaries, wish interview, and opportunity briefs</h3>
+            <p className="route-text">{backgroundRolloutPlan.deploymentNote.summary}</p>
+            <div className="tag-row">
+              <span className="source-pill">
+                Stage: {backgroundRolloutPlan.deploymentNote.currentStageLabel}
+              </span>
+              <span className="source-pill">
+                Validation: {backgroundRolloutValidation.status}
+              </span>
+              {backgroundRolloutPlan.flags.map((flag) => (
+                <span className="source-pill" key={flag.key}>
+                  {flag.envKey}: {flag.enabled ? "enabled" : "off"}
+                </span>
+              ))}
+            </div>
+            <p className="route-text">Rollback: {backgroundRolloutPlan.rollbackPlan.summary}</p>
           </div>
 
           <div className="panel data-card data-card-wide">

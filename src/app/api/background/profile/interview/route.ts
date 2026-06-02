@@ -8,6 +8,7 @@ import {
   buildBackgroundRefinementItems,
   buildGuidedWishProfileDraft,
 } from "@/lib/background-refinement";
+import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -68,6 +69,7 @@ export async function GET() {
   }
 
   return privateJson({
+    assistantMode: "shadow_first_user_approved_only",
     guidedWishProfileDraft: buildGuidedWishProfileDraft({
       broadPreview: profile?.public_preview ?? "",
       capabilities: profile?.capabilities ?? "",
@@ -94,6 +96,7 @@ export async function GET() {
     }),
     privacyNotice:
       "Refinement questions are generated from missing explicit fields. Answers stay private until separately approved for preview or matching signals.",
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_wish_interview_enabled"),
   });
 }
 
@@ -165,6 +168,7 @@ export async function POST(request: Request) {
 
   return privateJson({
     id: data.id,
+    rollout: serializeBackgroundNetworkingRolloutSurface("background_wish_interview_enabled"),
     stateMutation: "profile_interview_answer_saved",
     updatedAt: data.updated_at,
   });
