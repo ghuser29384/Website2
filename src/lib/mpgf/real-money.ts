@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type Stripe from "stripe";
 
 import { getViewer } from "@/lib/app-data";
+import type { Database } from "@/lib/supabase/database.types";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getStripe, getStripeWebhookSecret, hasStripeEnv } from "@/lib/stripe";
@@ -25,6 +26,8 @@ import type {
 type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
   from: (table: string) => any;
 };
+type MpgfPublicGoodsPaymentProofInsert =
+  Database["public"]["Tables"]["mpgf_public_goods_payment_proofs"]["Insert"];
 
 type GateStatus = MpgfRealMoneyReadiness["requiredGates"][number]["status"];
 
@@ -414,7 +417,7 @@ type MpgfPublicGoodsRefundReconciliationPlan =
         status: "voided" | "pledged";
         eligibilityState: "blocked" | "pending_review";
       };
-      paymentProofRow: Record<string, unknown>;
+      paymentProofRow: MpgfPublicGoodsPaymentProofInsert;
     }
   | {
       action: "create_post_close_reconciliation_task";

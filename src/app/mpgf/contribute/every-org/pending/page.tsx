@@ -30,6 +30,29 @@ function readParam(searchParams: Record<string, string | string[] | undefined>, 
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+const everyOrgReviewStates = [
+  {
+    label: "Redirect returned",
+    state: "pending_webhook_not_counted",
+    detail: "Moral Trade records only that the donor came back from Every.org.",
+  },
+  {
+    label: "Partner webhook imported",
+    state: "provider_event_received",
+    detail: "A signed partner webhook is deduped by hashed charge id and stored as provider evidence.",
+  },
+  {
+    label: "Contribution evidence created",
+    state: "pending_review",
+    detail: "Webhook evidence creates a payment-proof record that remains under MPGF review.",
+  },
+  {
+    label: "Counted for matching",
+    state: "counted_after_review",
+    detail: "Only approved evidence can affect verified supporters, thresholds, base match, or QF bonus.",
+  },
+];
+
 export default async function MpgfEveryOrgPendingPage({ searchParams }: MpgfEveryOrgPendingPageProps) {
   const [viewer, realMoneyReadiness, resolvedSearchParams] = await Promise.all([
     getViewer(),
@@ -62,6 +85,20 @@ export default async function MpgfEveryOrgPendingPage({ searchParams }: MpgfEver
           If the webhook cannot be matched automatically, the manual evidence fallback remains
           available without authorizing payout or changing allocation state.
         </p>
+        <div className="mpgf-table" aria-label="Every.org review-state progression">
+          <div className="mpgf-table-row mpgf-table-head">
+            <span>Step</span>
+            <span>State</span>
+            <span>Counting boundary</span>
+          </div>
+          {everyOrgReviewStates.map((row) => (
+            <div className="mpgf-table-row" key={row.state}>
+              <span>{row.label}</span>
+              <code>{row.state}</code>
+              <span>{row.detail}</span>
+            </div>
+          ))}
+        </div>
       </section>
     </MpgfPageFrame>
   );

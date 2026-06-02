@@ -454,7 +454,11 @@ function sumVerifiedProofs(paymentProofs: MpgfPublicGoodsPaymentProof[]) {
 }
 
 function isAutoVerifiedProof(proof: MpgfPublicGoodsPaymentProof) {
-  return proof.reconciliationSource === "fiscal_host_webhook" || proof.reconciliationSource === "sponsor_signed_intent";
+  return (
+    proof.reconciliationSource === "fiscal_host_webhook" ||
+    proof.reconciliationSource === "sponsor_signed_intent" ||
+    proof.reconciliationSource === "every_org_partner_webhook"
+  );
 }
 
 function countFundedCampaignsWithVerifiedProofs(lines: MpgfPublicGoodsAllocationLine[], paymentProofs: MpgfPublicGoodsPaymentProof[]) {
@@ -820,7 +824,7 @@ function mapPaymentProofRow(row: Record<string, unknown>): MpgfPublicGoodsPaymen
     reasonCode: normalizeEnum<MpgfPublicGoodsReviewReasonCode>(row.reason_code, reasonCodes, "needs_destination_evidence"),
     reconciliationSource: normalizeEnum(
       row.reconciliation_source,
-      ["external_receipt", "fiscal_host_webhook", "sponsor_signed_intent"] as const,
+      ["external_receipt", "fiscal_host_webhook", "sponsor_signed_intent", "every_org_partner_webhook"] as const,
       "external_receipt",
     ),
     verifiedAt: readString(row, "verified_at") || undefined,

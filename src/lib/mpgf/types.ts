@@ -564,7 +564,11 @@ export interface MpgfPublicGoodsPaymentProof {
   amountVerifiedCents: number;
   status: "pending_review" | "verified" | "rejected" | "superseded";
   reasonCode: MpgfPublicGoodsReviewReasonCode;
-  reconciliationSource: "external_receipt" | "fiscal_host_webhook" | "sponsor_signed_intent";
+  reconciliationSource:
+    | "external_receipt"
+    | "fiscal_host_webhook"
+    | "sponsor_signed_intent"
+    | "every_org_partner_webhook";
   verifiedAt?: string;
   createdAt: string;
 }

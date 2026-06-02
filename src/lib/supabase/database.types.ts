@@ -3973,6 +3973,231 @@ export interface Database {
         };
         Relationships: [];
       };
+      mpgf_identity_verifications: {
+        Row: {
+          id: string;
+          pledge_intent_id: string;
+          provider: "demo_self_attestation" | "repository_profile" | "external_proof_of_personhood";
+          status: "verified" | "pending_review" | "duplicate_identity" | "blocked";
+          human_score_bps: number;
+          redacted_reference: string;
+          duplicate_proof_hash: string | null;
+          counts_for_matching: boolean;
+          verified_at: string | null;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          pledge_intent_id: string;
+          provider: "demo_self_attestation" | "repository_profile" | "external_proof_of_personhood";
+          status: "verified" | "pending_review" | "duplicate_identity" | "blocked";
+          human_score_bps: number;
+          redacted_reference: string;
+          duplicate_proof_hash?: string | null;
+          counts_for_matching?: boolean;
+          verified_at?: string | null;
+          expires_at: string;
+          created_at?: string;
+        };
+        Update: {
+          status?: "verified" | "pending_review" | "duplicate_identity" | "blocked";
+          counts_for_matching?: boolean;
+          verified_at?: string | null;
+        };
+        Relationships: [];
+      };
+      mpgf_payment_authorizations: {
+        Row: {
+          id: string;
+          pledge_intent_id: string;
+          provider: "stripe" | "fiscal_host" | "external_provider" | "manual_evidence";
+          provider_ref_hash: string | null;
+          amount_cents: number;
+          currency: "usd";
+          status:
+            | "requires_identity"
+            | "authorized"
+            | "manual_fallback_required"
+            | "provider_event_received"
+            | "captured"
+            | "failed"
+            | "voided"
+            | "expired";
+          capture_policy: "capture_only_after_threshold_review_and_challenge_window";
+          manual_evidence_path: string | null;
+          authorized_at: string | null;
+          captured_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          pledge_intent_id: string;
+          provider: "stripe" | "fiscal_host" | "external_provider" | "manual_evidence";
+          provider_ref_hash?: string | null;
+          amount_cents: number;
+          currency?: "usd";
+          status:
+            | "requires_identity"
+            | "authorized"
+            | "manual_fallback_required"
+            | "provider_event_received"
+            | "captured"
+            | "failed"
+            | "voided"
+            | "expired";
+          capture_policy?: "capture_only_after_threshold_review_and_challenge_window";
+          manual_evidence_path?: string | null;
+          authorized_at?: string | null;
+          captured_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          status?:
+            | "requires_identity"
+            | "authorized"
+            | "manual_fallback_required"
+            | "provider_event_received"
+            | "captured"
+            | "failed"
+            | "voided"
+            | "expired";
+          authorized_at?: string | null;
+          captured_at?: string | null;
+        };
+        Relationships: [];
+      };
+      mpgf_provider_payment_events: {
+        Row: {
+          id: string;
+          payment_authorization_id: string;
+          pledge_intent_id: string;
+          provider: "stripe" | "fiscal_host" | "external_provider" | "manual_evidence";
+          provider_event_ref_hash: string;
+          event_type:
+            | "authorization_created"
+            | "authorization_failed"
+            | "capture_succeeded"
+            | "capture_failed"
+            | "refund_succeeded"
+            | "payment_expired";
+          amount_cents: number;
+          status: "recorded" | "needs_review" | "rejected";
+          signature_verified: boolean;
+          payload_hash: string | null;
+          final_payout_authorized: false;
+          append_only_hash: string;
+          received_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          payment_authorization_id: string;
+          pledge_intent_id: string;
+          provider: "stripe" | "fiscal_host" | "external_provider" | "manual_evidence";
+          provider_event_ref_hash: string;
+          event_type:
+            | "authorization_created"
+            | "authorization_failed"
+            | "capture_succeeded"
+            | "capture_failed"
+            | "refund_succeeded"
+            | "payment_expired";
+          amount_cents: number;
+          status: "recorded" | "needs_review" | "rejected";
+          signature_verified?: boolean;
+          payload_hash?: string | null;
+          final_payout_authorized?: false;
+          append_only_hash: string;
+          received_at?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      mpgf_public_goods_payment_proofs: {
+        Row: {
+          id: string;
+          pledge_id: string | null;
+          campaign_id: string;
+          external_receipt_ref: string | null;
+          charity_receipt_ref: string | null;
+          amount_verified_cents: number;
+          status: "pending_review" | "verified" | "rejected" | "superseded";
+          reason_code:
+            | "destination_verified"
+            | "needs_destination_evidence"
+            | "needs_identity_evidence"
+            | "blocked_threat_baseline"
+            | "blocked_destination_risk"
+            | "challenge_opened"
+            | "challenge_resolved"
+            | "external_handoff_verified"
+            | "external_handoff_failed"
+            | "duplicate_identity_blocked"
+            | "appeal_requested"
+            | "appeal_denied"
+            | "appeal_upheld";
+          reconciliation_source:
+            | "external_receipt"
+            | "fiscal_host_webhook"
+            | "sponsor_signed_intent"
+            | "every_org_partner_webhook";
+          source_event_ref: string | null;
+          verified_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          pledge_id?: string | null;
+          campaign_id: string;
+          external_receipt_ref?: string | null;
+          charity_receipt_ref?: string | null;
+          amount_verified_cents?: number;
+          status?: "pending_review" | "verified" | "rejected" | "superseded";
+          reason_code?:
+            | "destination_verified"
+            | "needs_destination_evidence"
+            | "needs_identity_evidence"
+            | "blocked_threat_baseline"
+            | "blocked_destination_risk"
+            | "challenge_opened"
+            | "challenge_resolved"
+            | "external_handoff_verified"
+            | "external_handoff_failed"
+            | "duplicate_identity_blocked"
+            | "appeal_requested"
+            | "appeal_denied"
+            | "appeal_upheld";
+          reconciliation_source?:
+            | "external_receipt"
+            | "fiscal_host_webhook"
+            | "sponsor_signed_intent"
+            | "every_org_partner_webhook";
+          source_event_ref?: string | null;
+          verified_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          status?: "pending_review" | "verified" | "rejected" | "superseded";
+          reason_code?:
+            | "destination_verified"
+            | "needs_destination_evidence"
+            | "needs_identity_evidence"
+            | "blocked_threat_baseline"
+            | "blocked_destination_risk"
+            | "challenge_opened"
+            | "challenge_resolved"
+            | "external_handoff_verified"
+            | "external_handoff_failed"
+            | "duplicate_identity_blocked"
+            | "appeal_requested"
+            | "appeal_denied"
+            | "appeal_upheld";
+          verified_at?: string | null;
+        };
+        Relationships: [];
+      };
       mpgf_moral_profiles: {
         Row: {
           profile_id: string;

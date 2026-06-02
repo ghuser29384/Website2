@@ -226,7 +226,9 @@ export async function reconcileMpgfPublicGoodsPaymentProof(
             : "pending_review",
         reasonCode: normalizeReasonCode(row.reason_code),
         reconciliationSource:
-          row.reconciliation_source === "fiscal_host_webhook" || row.reconciliation_source === "sponsor_signed_intent"
+          row.reconciliation_source === "fiscal_host_webhook" ||
+          row.reconciliation_source === "sponsor_signed_intent" ||
+          row.reconciliation_source === "every_org_partner_webhook"
             ? row.reconciliation_source
             : "external_receipt",
         verifiedAt: typeof row.verified_at === "string" ? row.verified_at : undefined,

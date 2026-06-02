@@ -6540,7 +6540,12 @@ create table if not exists public.mpgf_public_goods_payment_proofs (
     )
   ),
   reconciliation_source text not null default 'external_receipt' check (
-    reconciliation_source in ('external_receipt', 'fiscal_host_webhook', 'sponsor_signed_intent')
+    reconciliation_source in (
+      'external_receipt',
+      'fiscal_host_webhook',
+      'sponsor_signed_intent',
+      'every_org_partner_webhook'
+    )
   ),
   source_event_ref text,
   verified_at timestamptz,
@@ -6674,6 +6679,81 @@ create table if not exists public.mpgf_pledge_intents (
   ),
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.mpgf_identity_verifications (
+  id text primary key,
+  pledge_intent_id text not null references public.mpgf_pledge_intents (id) on delete cascade,
+  provider text not null check (
+    provider in ('demo_self_attestation', 'repository_profile', 'external_proof_of_personhood')
+  ),
+  status text not null check (status in ('verified', 'pending_review', 'duplicate_identity', 'blocked')),
+  human_score_bps integer not null check (human_score_bps between 0 and 10000),
+  redacted_reference text not null,
+  duplicate_proof_hash text check (duplicate_proof_hash is null or duplicate_proof_hash ~ '^sha256:[0-9a-f]{64}$'),
+  counts_for_matching boolean not null default false,
+  verified_at timestamptz,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (pledge_intent_id, provider)
+);
+
+create table if not exists public.mpgf_payment_authorizations (
+  id text primary key,
+  pledge_intent_id text not null references public.mpgf_pledge_intents (id) on delete cascade,
+  provider text not null check (provider in ('stripe', 'fiscal_host', 'external_provider', 'manual_evidence')),
+  provider_ref_hash text check (provider_ref_hash is null or provider_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  amount_cents bigint not null check (amount_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  status text not null check (
+    status in (
+      'requires_identity',
+      'authorized',
+      'manual_fallback_required',
+      'provider_event_received',
+      'captured',
+      'failed',
+      'voided',
+      'expired'
+    )
+  ),
+  capture_policy text not null default 'capture_only_after_threshold_review_and_challenge_window' check (
+    capture_policy = 'capture_only_after_threshold_review_and_challenge_window'
+  ),
+  manual_evidence_path text,
+  authorized_at timestamptz,
+  captured_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_payment_authorizations_provider_or_manual check (
+    (provider = 'manual_evidence' and manual_evidence_path = '/api/mpgf/evidence/manual')
+    or (provider <> 'manual_evidence' and provider_ref_hash is not null)
+  )
+);
+
+create table if not exists public.mpgf_provider_payment_events (
+  id text primary key,
+  payment_authorization_id text not null references public.mpgf_payment_authorizations (id) on delete cascade,
+  pledge_intent_id text not null references public.mpgf_pledge_intents (id) on delete cascade,
+  provider text not null check (provider in ('stripe', 'fiscal_host', 'external_provider', 'manual_evidence')),
+  provider_event_ref_hash text not null unique check (provider_event_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  event_type text not null check (
+    event_type in (
+      'authorization_created',
+      'authorization_failed',
+      'capture_succeeded',
+      'capture_failed',
+      'refund_succeeded',
+      'payment_expired'
+    )
+  ),
+  amount_cents bigint not null check (amount_cents >= 0),
+  status text not null check (status in ('recorded', 'needs_review', 'rejected')),
+  signature_verified boolean not null default false,
+  payload_hash text check (payload_hash is null or payload_hash ~ '^sha256:[0-9a-f]{64}$'),
+  final_payout_authorized boolean not null default false check (final_payout_authorized = false),
+  append_only_hash text not null check (append_only_hash ~ '^sha256:[0-9a-f]{64}$'),
+  received_at timestamptz not null default timezone('utc', now()),
+  created_at timestamptz not null default timezone('utc', now())
 );
 
 create table if not exists public.mpgf_moral_profiles (
@@ -6846,7 +6926,7 @@ create table if not exists public.mpgf_milestones (
   created_at timestamptz not null default timezone('utc', now())
 );
 
-create index if not exists mpgf_public_goods_payment_proofs_source_event_idx
+create unique index if not exists mpgf_public_goods_payment_proofs_source_event_idx
 on public.mpgf_public_goods_payment_proofs (reconciliation_source, source_event_ref)
 where source_event_ref is not null;
 
@@ -6855,6 +6935,15 @@ on public.mpgf_pledge_intents (round_id, campaign_id, payment_state, counting_st
 
 create index if not exists mpgf_pledge_intents_profile_idx
 on public.mpgf_pledge_intents (profile_id, created_at desc);
+
+create index if not exists mpgf_identity_verifications_intent_idx
+on public.mpgf_identity_verifications (pledge_intent_id, status);
+
+create index if not exists mpgf_payment_authorizations_intent_idx
+on public.mpgf_payment_authorizations (pledge_intent_id, status);
+
+create index if not exists mpgf_provider_payment_events_intent_idx
+on public.mpgf_provider_payment_events (pledge_intent_id, received_at desc);
 
 create index if not exists mpgf_support_signals_round_campaign_idx
 on public.mpgf_support_signals (round_id, campaign_id, signal_type, created_at desc);
@@ -6882,6 +6971,9 @@ alter table public.mpgf_public_goods_subscriptions enable row level security;
 alter table public.mpgf_public_goods_experiment_assignments enable row level security;
 alter table public.mpgf_public_goods_analytics_events enable row level security;
 alter table public.mpgf_pledge_intents enable row level security;
+alter table public.mpgf_identity_verifications enable row level security;
+alter table public.mpgf_payment_authorizations enable row level security;
+alter table public.mpgf_provider_payment_events enable row level security;
 alter table public.mpgf_moral_profiles enable row level security;
 alter table public.mpgf_support_signals enable row level security;
 alter table public.mpgf_conditional_pledges enable row level security;
@@ -6927,6 +7019,42 @@ on public.mpgf_pledge_intents
 for insert
 to authenticated
 with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_identity_verifications_select_own" on public.mpgf_identity_verifications;
+create policy "mpgf_identity_verifications_select_own"
+on public.mpgf_identity_verifications
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.mpgf_pledge_intents
+    where mpgf_pledge_intents.id = mpgf_identity_verifications.pledge_intent_id
+      and mpgf_pledge_intents.profile_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "mpgf_payment_authorizations_select_own" on public.mpgf_payment_authorizations;
+create policy "mpgf_payment_authorizations_select_own"
+on public.mpgf_payment_authorizations
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.mpgf_pledge_intents
+    where mpgf_pledge_intents.id = mpgf_payment_authorizations.pledge_intent_id
+      and mpgf_pledge_intents.profile_id = (select auth.uid())
+  )
+);
+
+drop policy if exists "mpgf_provider_payment_events_service_only" on public.mpgf_provider_payment_events;
+create policy "mpgf_provider_payment_events_service_only"
+on public.mpgf_provider_payment_events
+for all
+to service_role
+using (true)
+with check (true);
 
 drop policy if exists "mpgf_moral_profiles_select_own" on public.mpgf_moral_profiles;
 create policy "mpgf_moral_profiles_select_own"
@@ -7033,6 +7161,11 @@ to authenticated;
 
 grant select, insert, update on public.mpgf_pledge_intents to authenticated;
 
+grant select on
+  public.mpgf_identity_verifications,
+  public.mpgf_payment_authorizations
+to authenticated;
+
 grant select on public.mpgf_payment_method_tokens to authenticated;
 
 grant all on
@@ -7048,6 +7181,9 @@ grant all on
   public.mpgf_public_goods_experiment_assignments,
   public.mpgf_public_goods_analytics_events,
   public.mpgf_pledge_intents,
+  public.mpgf_identity_verifications,
+  public.mpgf_payment_authorizations,
+  public.mpgf_provider_payment_events,
   public.mpgf_moral_profiles,
   public.mpgf_support_signals,
   public.mpgf_conditional_pledges,
@@ -7063,6 +7199,15 @@ to service_role;
 comment on table public.mpgf_pledge_intents is
   'First-class MPGF pledge_intent records for the production flow: verify identity, authorize conditionally, fall back to manual evidence only when provider integration is unavailable.';
 
+comment on table public.mpgf_identity_verifications is
+  'First-class MPGF identity_verification records; public and participant surfaces store redacted references and duplicate-proof hashes, not raw identity evidence.';
+
+comment on table public.mpgf_payment_authorizations is
+  'First-class MPGF payment_authorization records. Provider authorizations are conditional and capture only after threshold, review, and challenge gates.';
+
+comment on table public.mpgf_provider_payment_events is
+  'Append-only MPGF provider_payment_event records. Webhooks provide evidence but cannot authorize final payout by themselves.';
+
 comment on table public.mpgf_support_signals is
   'Private-by-default Common-Ground Verified Quadratic Assurance Funding support signals. Public outputs aggregate signal counts and moral-cluster breadth only; they do not create a global moral ranking.';
 
@@ -7071,6 +7216,9 @@ comment on table public.mpgf_conditional_pledges is
 
 comment on table public.mpgf_every_org_partner_events is
   'Append-only MPGF Every.org partner webhook imports. Dedupe by hashed chargeId, map partner metadata to round/campaign/pledge when present, auto-create reviewable contribution evidence, and never authorize final payout by webhook alone.';
+
+comment on column public.mpgf_public_goods_payment_proofs.reconciliation_source is
+  'Evidence source for MPGF contribution verification. Every.org partner webhooks create pending review evidence without exposing raw donor or charge references.';
 
 comment on column public.mpgf_every_org_partner_events.charge_id_hash is
   'Hashed Every.org chargeId used as the idempotency key. Raw charge IDs, donor names, donor emails, private notes, and public testimony are not stored in this table.';

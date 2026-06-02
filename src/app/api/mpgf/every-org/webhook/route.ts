@@ -15,6 +15,9 @@ export const runtime = "nodejs";
 
 type MpgfEveryOrgPartnerEventInsert =
   Database["public"]["Tables"]["mpgf_every_org_partner_events"]["Insert"];
+type MpgfPublicGoodsPaymentProofInsert =
+  Database["public"]["Tables"]["mpgf_public_goods_payment_proofs"]["Insert"];
+type MpgfPaymentEventInsert = Database["public"]["Tables"]["mpgf_payment_events"]["Insert"];
 
 interface DbErrorLike {
   code?: string | null;
@@ -89,13 +92,73 @@ function toPartnerEventRow(
   };
 }
 
+function toPaymentEventRow(partnerWebhookEvent: MpgfEveryOrgPartnerWebhookEvent): MpgfPaymentEventInsert {
+  return {
+    id: `mpgf-payment-event-${partnerWebhookEvent.chargeIdHash.slice(7, 19)}`,
+    conditional_pledge_id: partnerWebhookEvent.conditionalPledgeId ?? null,
+    provider: "every_org",
+    provider_event_id_hash: partnerWebhookEvent.chargeIdHash,
+    provider_status: partnerWebhookEvent.status,
+    amount_cents: partnerWebhookEvent.amountCents,
+    signature_verified: partnerWebhookEvent.webhookVerified,
+    payload_hash: partnerWebhookEvent.payloadHash,
+    verified_at: partnerWebhookEvent.status === "recorded" ? safeTimestamp(partnerWebhookEvent.receivedAt) : null,
+    final_payout_authorized: false,
+    append_only_hash: partnerWebhookEvent.appendOnlyHash,
+    created_at: safeTimestamp(partnerWebhookEvent.receivedAt) ?? new Date().toISOString(),
+  };
+}
+
+function toContributionEvidenceRow(
+  partnerWebhookEvent: MpgfEveryOrgPartnerWebhookEvent,
+): MpgfPublicGoodsPaymentProofInsert | null {
+  if (!partnerWebhookEvent.autoCreatesContributionEvidence || !partnerWebhookEvent.campaignId) {
+    return null;
+  }
+
+  return {
+    campaign_id: partnerWebhookEvent.campaignId,
+    external_receipt_ref: partnerWebhookEvent.chargeIdHash,
+    charity_receipt_ref: partnerWebhookEvent.partnerDonationIdHash ?? partnerWebhookEvent.nonprofitRefHash ?? null,
+    amount_verified_cents: partnerWebhookEvent.amountCents,
+    status: "pending_review",
+    reason_code: "external_handoff_verified",
+    reconciliation_source: "every_org_partner_webhook",
+    source_event_ref: partnerWebhookEvent.dedupeKey,
+    verified_at: null,
+    created_at: safeTimestamp(partnerWebhookEvent.receivedAt) ?? new Date().toISOString(),
+  };
+}
+
+function resultFromDbError(error: DbErrorLike, base: Record<string, unknown>) {
+  if (error.code === "23505") {
+    return { ...base, status: "already_recorded" as const };
+  }
+
+  if (error.code === "42P01" || error.code === "42703" || error.code === "23514") {
+    return {
+      ...base,
+      status: "schema_missing" as const,
+      migration: "20260601_mpgf_every_org_evidence_records.sql",
+      error:
+        "MPGF Every.org evidence tables or reconciliation-source constraints are missing. Run the Every.org evidence-record migration before accepting partner webhooks.",
+    };
+  }
+
+  return {
+    ...base,
+    status: "failed" as const,
+    error: error.message ?? "Could not persist Every.org partner webhook evidence.",
+  };
+}
+
 async function persistPartnerWebhookEvent(partnerWebhookEvent: MpgfEveryOrgPartnerWebhookEvent) {
-  const row = toPartnerEventRow(partnerWebhookEvent);
+  const partnerEventRow = toPartnerEventRow(partnerWebhookEvent);
+  const paymentEventRow = toPaymentEventRow(partnerWebhookEvent);
+  const evidenceRow = toContributionEvidenceRow(partnerWebhookEvent);
   const base = {
-    table: "mpgf_every_org_partner_events",
-    id: row.id,
     dedupeBy: "charge_id_hash",
-    dedupeKey: row.charge_id_hash,
+    dedupeKey: partnerEventRow.charge_id_hash,
   };
 
   if (!hasSupabaseEnv() || !hasServiceRoleEnv()) {
@@ -108,32 +171,61 @@ async function persistPartnerWebhookEvent(partnerWebhookEvent: MpgfEveryOrgPartn
   }
 
   const supabase = createServiceClient();
-  const { error } = await supabase.from("mpgf_every_org_partner_events").insert(row);
+  const partnerEventWrite = await supabase.from("mpgf_every_org_partner_events").insert(partnerEventRow);
+  const partnerEvent = partnerEventWrite.error
+    ? resultFromDbError(partnerEventWrite.error as DbErrorLike, {
+        table: "mpgf_every_org_partner_events",
+        id: partnerEventRow.id,
+      })
+    : { table: "mpgf_every_org_partner_events", id: partnerEventRow.id, status: "inserted" as const };
+  const paymentEventWrite = await supabase.from("mpgf_payment_events").insert(paymentEventRow);
+  const paymentEvent = paymentEventWrite.error
+    ? resultFromDbError(paymentEventWrite.error as DbErrorLike, {
+        table: "mpgf_payment_events",
+        id: paymentEventRow.id,
+      })
+    : { table: "mpgf_payment_events", id: paymentEventRow.id, status: "inserted" as const };
+  const contributionEvidence = evidenceRow
+    ? await supabase.from("mpgf_public_goods_payment_proofs").insert(evidenceRow)
+    : null;
+  const contributionEvidenceStatus = !evidenceRow
+    ? {
+        table: "mpgf_public_goods_payment_proofs",
+        status: "not_created" as const,
+        reason: "webhook_not_recorded_or_campaign_unmapped",
+      }
+    : contributionEvidence?.error
+      ? resultFromDbError(contributionEvidence.error as DbErrorLike, {
+          table: "mpgf_public_goods_payment_proofs",
+          sourceEventRef: evidenceRow.source_event_ref,
+        })
+      : {
+          table: "mpgf_public_goods_payment_proofs",
+          sourceEventRef: evidenceRow.source_event_ref,
+          status: "inserted" as const,
+        };
+  const writes = [partnerEvent, paymentEvent, contributionEvidenceStatus];
+  const failed = writes.find((write) => write.status === "failed" || write.status === "schema_missing");
 
-  if (!error) {
-    return { ...base, status: "inserted" as const };
-  }
-
-  const dbError = error as DbErrorLike;
-
-  if (dbError.code === "23505") {
-    return { ...base, status: "already_recorded" as const };
-  }
-
-  if (dbError.code === "42P01") {
+  if (failed) {
     return {
       ...base,
-      status: "schema_missing" as const,
-      migration: "20260601_mpgf_every_org_fast_route.sql",
-      error:
-        "MPGF Every.org partner-event table is missing. Run the Every.org fast-route migration before accepting partner webhooks.",
+      status: failed.status,
+      partnerEvent,
+      paymentEvent,
+      contributionEvidence: contributionEvidenceStatus,
+      error: "Could not persist all Every.org partner webhook evidence records.",
     };
   }
 
   return {
     ...base,
-    status: "failed" as const,
-    error: dbError.message ?? "Could not persist Every.org partner webhook event.",
+    status: writes.every((write) => write.status === "already_recorded" || write.status === "not_created")
+      ? "already_recorded" as const
+      : "inserted" as const,
+    partnerEvent,
+    paymentEvent,
+    contributionEvidence: contributionEvidenceStatus,
   };
 }
 

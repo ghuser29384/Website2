@@ -1143,6 +1143,8 @@ test("MPGF contribution intents verify identity before conditional payment autho
   const providerWebhookRoute = readFileSync("src/app/api/mpgf/provider-events/webhook/route.ts", "utf8");
   const manualAliasRoute = readFileSync("src/app/api/mpgf/evidence/manual/route.ts", "utf8");
   const migration = readFileSync("supabase/migrations/20260531_mpgf_contribution_intents.sql", "utf8");
+  const schemaSql = readFileSync("supabase/schema.sql", "utf8");
+  const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
   const contributionPage = readFileSync("src/app/mpgf/contribute/page.tsx", "utf8");
   const consoleSource = readFileSync("src/components/mpgf/mpgf-console.tsx", "utf8");
   const contributionModal = readFileSync("src/components/mpgf/mpgf-contribution-modal.tsx", "utf8");
@@ -1212,6 +1214,17 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(migration, /create table if not exists public\.mpgf_provider_payment_events/);
   assert.match(migration, /capture_only_after_threshold_review_and_challenge_window/);
   assert.match(migration, /final_payout_authorized boolean not null default false check \(final_payout_authorized = false\)/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_pledge_intents/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_identity_verifications/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_payment_authorizations/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_provider_payment_events/);
+  assert.match(schemaSql, /constraint mpgf_payment_authorizations_provider_or_manual/);
+  assert.match(schemaSql, /create policy "mpgf_provider_payment_events_service_only"/);
+  assert.match(schemaSql, /comment on table public\.mpgf_provider_payment_events/);
+  assert.match(databaseTypes, /mpgf_pledge_intents: \{/);
+  assert.match(databaseTypes, /mpgf_identity_verifications: \{/);
+  assert.match(databaseTypes, /mpgf_payment_authorizations: \{/);
+  assert.match(databaseTypes, /mpgf_provider_payment_events: \{/);
   assert.match(contributionPage, /Every\.org fast route/);
   assert.ok(fastRouteIndex >= 0);
   assert.ok(savedCommitmentIndex > fastRouteIndex);
@@ -1310,8 +1323,11 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   const pendingPage = readFileSync("src/app/mpgf/contribute/every-org/pending/page.tsx", "utf8");
   const pageFrame = readFileSync("src/components/mpgf/mpgf-page-frame.tsx", "utf8");
   const migration = readFileSync("supabase/migrations/20260601_mpgf_every_org_fast_route.sql", "utf8");
+  const evidenceMigration = readFileSync("supabase/migrations/20260601_mpgf_every_org_evidence_records.sql", "utf8");
   const schemaSql = readFileSync("supabase/schema.sql", "utf8");
   const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
+  const proofSource = readFileSync("src/lib/mpgf/public-goods-proof.ts", "utf8");
+  const kpiSource = readFileSync("src/lib/mpgf/public-goods-kpis.ts", "utf8");
 
   assert.equal(donateLink.policy, MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY);
   assert.equal(donateLink.privacyPolicy, MPGF_PUBLIC_GOODS_EVERY_ORG_PRIVACY_POLICY);
@@ -1369,10 +1385,21 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.match(webhookRoute, /recordMpgfEveryOrgPartnerWebhook/);
   assert.match(webhookRoute, /createServiceClient/);
   assert.match(webhookRoute, /MpgfEveryOrgPartnerEventInsert/);
+  assert.match(webhookRoute, /MpgfPublicGoodsPaymentProofInsert/);
+  assert.match(webhookRoute, /MpgfPaymentEventInsert/);
   assert.match(webhookRoute, /mpgf_every_org_partner_events/);
+  assert.match(webhookRoute, /mpgf_public_goods_payment_proofs/);
+  assert.match(webhookRoute, /mpgf_payment_events/);
+  assert.match(webhookRoute, /every_org_partner_webhook/);
+  assert.match(webhookRoute, /external_handoff_verified/);
   assert.match(webhookRoute, /persistence/);
   assert.match(webhookRoute, /finalPayoutAuthorized: false/);
   assert.match(pendingPage, /not counted, matched, or treated as verified from redirect alone/);
+  assert.match(pendingPage, /Every\.org review-state progression/);
+  assert.match(pendingPage, /pending_webhook_not_counted/);
+  assert.match(pendingPage, /provider_event_received/);
+  assert.match(pendingPage, /pending_review/);
+  assert.match(pendingPage, /counted_after_review/);
   assert.match(pageFrame, /Every\.org fast route/);
   assert.match(pageFrame, /Webhook before counting/);
   assert.match(migration, /create table if not exists public\.mpgf_every_org_partner_events/);
@@ -1381,12 +1408,19 @@ test("MPGF Every.org fast route creates Donate Links and imports partner webhook
   assert.match(migration, /final_payout_authorized boolean not null default false check \(final_payout_authorized = false\)/);
   assert.match(migration, /Raw charge IDs, donor names, donor emails, private notes, and public testimony are not stored/);
   assert.match(databaseTypes, /mpgf_every_org_partner_events: \{/);
+  assert.match(databaseTypes, /mpgf_public_goods_payment_proofs: \{/);
   assert.match(databaseTypes, /charge_id_hash: string/);
+  assert.match(databaseTypes, /every_org_partner_webhook/);
+  assert.match(evidenceMigration, /every_org_partner_webhook/);
+  assert.match(evidenceMigration, /create unique index if not exists mpgf_public_goods_payment_proofs_source_event_idx/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_pledge_intents/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_every_org_partner_events/);
+  assert.match(schemaSql, /every_org_partner_webhook/);
   assert.match(schemaSql, /create policy "mpgf_every_org_partner_events_service_only"/);
   assert.match(schemaSql, /grant all on[\s\S]*public\.mpgf_every_org_partner_events[\s\S]*to service_role/);
   assert.match(schemaSql, /comment on table public\.mpgf_every_org_partner_events/);
+  assert.match(proofSource, /every_org_partner_webhook/);
+  assert.match(kpiSource, /every_org_partner_webhook/);
 
   for (const forbidden of [
     "private-every-org-user-001",

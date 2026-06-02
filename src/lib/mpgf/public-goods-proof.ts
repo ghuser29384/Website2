@@ -63,7 +63,11 @@ function normalizeProofStatus(value: unknown): MpgfPublicGoodsPaymentProof["stat
 }
 
 function normalizeReconciliationSource(value: unknown): MpgfPublicGoodsPaymentProof["reconciliationSource"] {
-  if (value === "fiscal_host_webhook" || value === "sponsor_signed_intent") {
+  if (
+    value === "fiscal_host_webhook" ||
+    value === "sponsor_signed_intent" ||
+    value === "every_org_partner_webhook"
+  ) {
     return value;
   }
 
