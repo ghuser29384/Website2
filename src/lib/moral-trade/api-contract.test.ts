@@ -449,6 +449,17 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.schemaDefinitions
       .find((schema) => schema.key === "copilot_review_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "citations" &&
+          /unsupported, private, contact-like, raw-note, source-note, thread, token, or hidden-reasoning labels fail closed/i.test(
+            field.description,
+          ),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "copilot_review_request")
       ?.fields.some((field) => field.key === "evidenceMetadata"),
   );
   assert.ok(

@@ -976,6 +976,15 @@ export function validateMoralTradeApiContractProfile(
         Boolean(
           copilotReviewRequest?.fields.some(
             (field) =>
+              field.key === "citations" &&
+              /unsupported, private, contact-like, raw-note, source-note, thread, token, or hidden-reasoning labels fail closed/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          copilotReviewRequest?.fields.some(
+            (field) =>
               field.key === "evidenceMetadata" &&
               field.privacy === "private_request" &&
               /raw artifact|private notes|contact details/i.test(field.description),

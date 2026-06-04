@@ -640,6 +640,8 @@ export function validateMoralTradeCopilotReviewRouteImplementation({
         /unsupportedDraftInputBlockers/.test(routeSource) &&
         /normalizeMoralTradeCopilotEvidenceMetadata/.test(routeSource) &&
         /normalizeCitations/.test(routeSource) &&
+        /getUnsupportedCitationBlockers/.test(routeSource) &&
+        /unsupportedCitationBlockers/.test(routeSource) &&
         /MAX_TEXT_FIELD_LENGTH/.test(routeSource) &&
         /contract\.strictInputBundle/.test(routeSource),
       "Review route should normalize structured draft, citations, and redacted evidence metadata only.",

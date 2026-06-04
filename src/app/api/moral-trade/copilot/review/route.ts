@@ -43,6 +43,10 @@ const ALLOWED_DRAFT_FIELDS = new Set<string>([
   ...STRING_DRAFT_FIELDS,
   ...NUMBER_DRAFT_FIELDS,
 ]);
+const FORBIDDEN_CITATION_PATTERN =
+  /(raw|private|contact|exact.*wish|source.*note|chain.*thought|hidden.*reasoning|internal.*reasoning|scratchpad|message|thread|cookie|token|secret)/i;
+const APPROVED_CITATION_PATTERN =
+  /^(proposal|evidence|policy|protocol|contract|review):[A-Za-z0-9._:-]+$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -107,6 +111,27 @@ function normalizeCitations(value: unknown) {
     .map((entry) => entry.trim())
     .filter(Boolean)
     .slice(0, MAX_CITATIONS);
+}
+
+function containsContactLikeText(value: string) {
+  return /@/.test(value) || /\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/.test(value);
+}
+
+function isApprovedCitation(value: string) {
+  return (
+    value.length <= 240 &&
+    !containsContactLikeText(value) &&
+    !FORBIDDEN_CITATION_PATTERN.test(value) &&
+    APPROVED_CITATION_PATTERN.test(value)
+  );
+}
+
+function getUnsupportedCitationBlockers(citations: string[]) {
+  return citations.flatMap((citation, index) =>
+    isApprovedCitation(citation)
+      ? []
+      : [`citations.${index}: unsupported or private citation label`],
+  );
 }
 
 function jsonResponse(
@@ -217,10 +242,13 @@ export async function POST(request: Request) {
     requestEvidenceMetadata,
   );
   const unsupportedDraftInputBlockers = getUnsupportedDraftInputKeys(requestDraft);
+  const citations = normalizeCitations(body.citations);
+  const unsupportedCitationBlockers = getUnsupportedCitationBlockers(citations);
   const preOutputBlockers = [
     ...contractValidation.blockers,
     ...inputBundleAudit.blockers,
     ...unsupportedDraftInputBlockers,
+    ...unsupportedCitationBlockers,
     ...evidenceMetadataNormalization.blockers,
   ];
 
@@ -248,7 +276,7 @@ export async function POST(request: Request) {
 
   const output = buildMoralTradeCopilotOutput(
     normalizeDraftInput(requestDraft),
-    normalizeCitations(body.citations),
+    citations,
     evidenceMetadataNormalization.evidenceMetadata,
   );
   const outputValidation = validateMoralTradeCopilotOutput(output);
@@ -256,6 +284,7 @@ export async function POST(request: Request) {
     ...contractValidation.blockers,
     ...inputBundleAudit.blockers,
     ...unsupportedDraftInputBlockers,
+    ...unsupportedCitationBlockers,
     ...outputValidation.blockers,
     ...evidenceMetadataNormalization.blockers,
   ];

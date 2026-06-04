@@ -670,6 +670,45 @@ test("copilot review route fails closed on unsupported private draft fields", as
   assert.match(body.fallback, /without emitting an output packet/i);
 });
 
+test("copilot review route fails closed on private citation labels before output", async () => {
+  const response = await reviewDraftRoute(
+    new Request("http://localhost/api/moral-trade/copilot/review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        draft: completeDraft,
+        citations: [
+          "proposal:route-test",
+          "thread:private-context",
+          "review:victoria@example.org",
+        ],
+      }),
+    }),
+  );
+  const body = await response.json();
+  const serializedBody = JSON.stringify(body);
+
+  assert.equal(response.status, 422);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.stateMutation, false);
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("citations.1: unsupported or private citation label"),
+    ),
+  );
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("citations.2: unsupported or private citation label"),
+    ),
+  );
+  assert.equal("output" in body, false);
+  assert.equal("outputValidation" in body, false);
+  assert.doesNotMatch(serializedBody, /thread:private-context/);
+  assert.doesNotMatch(serializedBody, /victoria@example\.org/);
+  assert.match(body.fallback, /without emitting an output packet/i);
+});
+
 test("copilot review route fails closed on raw evidence metadata", async () => {
   const response = await reviewDraftRoute(
     new Request("http://localhost/api/moral-trade/copilot/review", {
