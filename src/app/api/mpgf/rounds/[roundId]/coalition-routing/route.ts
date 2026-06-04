@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { allocateMpgfAssuranceRound } from "@/lib/mpgf/mechanism";
-import {
-  MPGF_PUBLIC_GOODS_API_HEADERS,
-  buildMpgfPublicGoodsRoundApi,
-  getMpgfPublicGoodsRoundApi,
-} from "@/lib/mpgf/public-goods-api";
 import {
   loadMpgfPublicGoodsAllocationContext,
   loadMpgfPublicGoodsAllocationContributionRecords,
 } from "@/lib/mpgf/public-goods-allocation-results";
+import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
+import {
+  buildMpgfPublicGoodsCoalitionRoutingReport,
+  getMpgfPublicGoodsCoalitionRoutingReportApi,
+} from "@/lib/mpgf/public-goods-coalition-routing";
 import { loadMpgfPublicGoodsSupportSignalsForRound } from "@/lib/mpgf/public-goods-support-signal-persistence";
 
 export const dynamic = "force-dynamic";
@@ -17,48 +16,37 @@ export const runtime = "nodejs";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ roundId: string }> }) {
   const { roundId } = await params;
-  const fallbackResult = getMpgfPublicGoodsRoundApi(roundId);
+  const fallbackResult = getMpgfPublicGoodsCoalitionRoutingReportApi(roundId);
 
   try {
     const contextLoad = await loadMpgfPublicGoodsAllocationContext({ roundId });
 
     if (contextLoad.source === "demo_fixture" && !fallbackResult) {
       return NextResponse.json(
-        { ok: false, error: "MPGF public-goods round not found." },
+        { ok: false, error: "MPGF coalition-routing report not found." },
         { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
       );
     }
 
-    const contributionLoad = await loadMpgfPublicGoodsAllocationContributionRecords({ roundId });
-    const supportSignalState = contextLoad.source === "database_round_context"
-      ? await loadMpgfPublicGoodsSupportSignalsForRound(roundId)
-      : {
-          source: "demo_fixture" as const,
-          supportSignals: null,
-          persistedSupportSignalCount: 0,
-          skippedSupportSignalCount: 0,
-          warnings: [],
-        };
+    const [supportSignalState, contributionLoad] = await Promise.all([
+      loadMpgfPublicGoodsSupportSignalsForRound(roundId),
+      loadMpgfPublicGoodsAllocationContributionRecords({ roundId }),
+    ]);
     const result = contextLoad.source === "database_round_context"
-      ? buildMpgfPublicGoodsRoundApi({
-          round: contextLoad.round,
+      ? buildMpgfPublicGoodsCoalitionRoutingReport({
           campaigns: contextLoad.campaigns,
-          matchPool: contextLoad.matchPool,
-          allocation: allocateMpgfAssuranceRound({
-            campaigns: contextLoad.campaigns,
-            pledges: contributionLoad.pledges,
-            round: contextLoad.round,
-            matchPool: contextLoad.matchPool,
-          }),
           pledges: contributionLoad.pledges,
+          round: contextLoad.round,
+          matchPool: contextLoad.matchPool,
           supportSignals: supportSignalState.supportSignals ?? [],
-          dataSource: "database",
         })
-      : fallbackResult;
+      : supportSignalState.supportSignals
+        ? buildMpgfPublicGoodsCoalitionRoutingReport({ supportSignals: supportSignalState.supportSignals })
+        : fallbackResult;
 
     if (!result) {
       return NextResponse.json(
-        { ok: false, error: "MPGF public-goods round not found." },
+        { ok: false, error: "MPGF coalition-routing report not found." },
         { status: 404, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
       );
     }
@@ -67,8 +55,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rou
       {
         ...result,
         allocationContextSource: contextLoad.source,
-        contributionSource: contributionLoad.source,
         loadedCampaignCount: contextLoad.campaignCount,
+        contributionSource: contributionLoad.source,
         loadedContributionRecordCount: contributionLoad.rawConditionalPledgeCount,
         eligibleContributionRecordCount: contributionLoad.eligibleContributionRecordCount,
         supportSignalSource: supportSignalState.source,
@@ -88,8 +76,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rou
           supportSignalSource: "demo_fixture",
           warnings: [
             error instanceof Error
-              ? `Could not load persisted MPGF round state: ${error.message}`
-              : "Could not load persisted MPGF round state.",
+              ? `Could not load persisted MPGF coalition-routing state: ${error.message}`
+              : "Could not load persisted MPGF coalition-routing state.",
           ],
         },
         { headers: MPGF_PUBLIC_GOODS_API_HEADERS },
@@ -99,7 +87,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ rou
     return NextResponse.json(
       {
         ok: false,
-        error: error instanceof Error ? error.message : "Could not load MPGF public-goods round.",
+        error: error instanceof Error ? error.message : "Could not load MPGF coalition-routing report.",
       },
       { status: 500, headers: MPGF_PUBLIC_GOODS_API_HEADERS },
     );

@@ -8,6 +8,7 @@ import { MpgfSupportSignalPanel } from "@/components/mpgf/mpgf-support-signal-pa
 import { getViewer } from "@/lib/app-data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import { getMpgfPublicGoodsCgVqafReportApi } from "@/lib/mpgf/public-goods-cg-vqaf";
+import { getMpgfPublicGoodsCoalitionRoutingReportApi } from "@/lib/mpgf/public-goods-coalition-routing";
 import { getMpgfPublicGoodsIdentityIntegrityReportApi } from "@/lib/mpgf/public-goods-identity-integrity";
 import {
   getMpgfPublicGoodsAllocationReportApi,
@@ -128,9 +129,10 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
   const allocation = getMpgfPublicGoodsAllocationReportApi(roundId);
   const ledger = getMpgfPublicGoodsLedgerApi();
   const cgVqaf = getMpgfPublicGoodsCgVqafReportApi(roundId);
+  const coalitionRouting = getMpgfPublicGoodsCoalitionRoutingReportApi(roundId);
   const identityIntegrity = getMpgfPublicGoodsIdentityIntegrityReportApi(roundId);
 
-  if (!roundResult || !campaignResult || !preview || !allocation || !cgVqaf || !identityIntegrity) {
+  if (!roundResult || !campaignResult || !preview || !allocation || !cgVqaf || !coalitionRouting || !identityIntegrity) {
     notFound();
   }
 
@@ -318,6 +320,51 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
                 <Link href={round.identityIntegrity?.reportPath ?? `/api/mpgf/rounds/${round.id}/identity-integrity`}>
                   aggregate identity-integrity report
                 </Link>
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="mpgf-panel">
+          <p className="eyebrow">Coalition-routed common-ground budget</p>
+          <h2>Weak support becomes threshold feasibility before ECM clearing</h2>
+          <p>
+            The round estimates aggregate weak-support budget, cluster breadth, and hard review gates
+            before any routed dollars can enter batch clearing or bonus allocation.
+          </p>
+          <dl className="mpgf-summary-grid">
+            <div>
+              <dt>Coalition candidates</dt>
+              <dd>{coalitionRouting.candidateCount}</dd>
+            </div>
+            <div>
+              <dt>Threshold feasible</dt>
+              <dd>{coalitionRouting.feasibleCandidateCount}</dd>
+            </div>
+            <div>
+              <dt>ECM batch candidates</dt>
+              <dd>{coalitionRouting.ecmBatchCandidateCount}</dd>
+            </div>
+            <div>
+              <dt>Weak-support budget</dt>
+              <dd>{formatUsd(coalitionRouting.weakSupportBudgetCents)}</dd>
+            </div>
+            <div>
+              <dt>Routed weak support</dt>
+              <dd>{formatUsd(coalitionRouting.routedWeakSupportBudgetCents)}</dd>
+            </div>
+            <div>
+              <dt>Minimum cluster breadth</dt>
+              <dd>{coalitionRouting.thresholdClusterMin}</dd>
+            </div>
+            <div>
+              <dt>Failure fallback candidates</dt>
+              <dd>{coalitionRouting.failureBonusOrCarryForwardCandidateCount}</dd>
+            </div>
+            <div>
+              <dt>Public report</dt>
+              <dd>
+                <Link href={round.coalitionRouting.reportPath}>coalition-routing report</Link>
               </dd>
             </div>
           </dl>

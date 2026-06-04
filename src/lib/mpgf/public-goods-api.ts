@@ -20,7 +20,12 @@ import {
   buildMpgfPublicGoodsCgVqafReport,
   buildMpgfPublicGoodsCommonGroundDiscovery,
   buildMpgfPublicGoodsSupportSignalContractApi,
+  type MpgfPublicGoodsSupportSignal,
 } from "./public-goods-cg-vqaf";
+import {
+  MPGF_PUBLIC_GOODS_COALITION_ROUTING_POLICY,
+  buildMpgfPublicGoodsCoalitionRoutingReport,
+} from "./public-goods-coalition-routing";
 import { buildMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
 import { MPGF_PUBLIC_GOODS_FINALIZATION_POLICY } from "./public-goods-finalization";
 import { MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY } from "./public-goods-governance-ballots";
@@ -223,6 +228,7 @@ export function buildMpgfPublicGoodsRoundApi({
   allocation,
   pledges = demoMpgfAssurancePledges,
   reviewCases = demoMpgfPublicGoodsReviewCases,
+  supportSignals,
   dataSource = "demo_fixture",
 }: {
   round: MpgfPublicGoodsRound;
@@ -231,10 +237,11 @@ export function buildMpgfPublicGoodsRoundApi({
   allocation: MpgfPublicGoodsRoundAllocation;
   pledges?: MpgfPublicGoodsPledge[];
   reviewCases?: MpgfPublicGoodsReviewCase[];
+  supportSignals?: MpgfPublicGoodsSupportSignal[];
   dataSource?: "demo_fixture" | "database";
 }) {
   const usesPersistedState = dataSource === "database";
-  const supportSignals = usesPersistedState ? [] : undefined;
+  const sourceSupportSignals = supportSignals ?? (usesPersistedState ? [] : undefined);
   const paymentProofs = usesPersistedState ? [] : undefined;
   const subscriptions = usesPersistedState ? [] : undefined;
   const sponsorPoolFlywheel = buildMpgfPublicGoodsSponsorPoolFlywheel({
@@ -256,7 +263,7 @@ export function buildMpgfPublicGoodsRoundApi({
     pledges,
     round,
     matchPool,
-    supportSignals,
+    supportSignals: sourceSupportSignals,
   });
   const supportSignalContract = buildMpgfPublicGoodsSupportSignalContractApi(round.id);
   const commonGroundDiscovery = buildMpgfPublicGoodsCommonGroundDiscovery({
@@ -264,7 +271,14 @@ export function buildMpgfPublicGoodsRoundApi({
     pledges,
     round,
     matchPool,
-    supportSignals,
+    supportSignals: sourceSupportSignals,
+  });
+  const coalitionRouting = buildMpgfPublicGoodsCoalitionRoutingReport({
+    campaigns,
+    pledges,
+    round,
+    matchPool,
+    supportSignals: sourceSupportSignals,
   });
   const identityIntegrity = buildMpgfPublicGoodsIdentityIntegrityReport({
     campaigns,
@@ -379,6 +393,21 @@ export function buildMpgfPublicGoodsRoundApi({
             counters: identityIntegrity.counters,
           }
         : null,
+      coalitionRouting: {
+        policy: MPGF_PUBLIC_GOODS_COALITION_ROUTING_POLICY,
+        reportPath: `/api/mpgf/rounds/${round.id}/coalition-routing`,
+        weakSupportBudgetPolicy: coalitionRouting.weakSupportBudgetPolicy,
+        failureHandlingPolicy: coalitionRouting.failureHandlingPolicy,
+        thresholdClusterMin: coalitionRouting.thresholdClusterMin,
+        candidateCount: coalitionRouting.candidateCount,
+        feasibleCandidateCount: coalitionRouting.feasibleCandidateCount,
+        ecmBatchCandidateCount: coalitionRouting.ecmBatchCandidateCount,
+        weakSupportBudgetCents: coalitionRouting.weakSupportBudgetCents,
+        routedWeakSupportBudgetCents: coalitionRouting.routedWeakSupportBudgetCents,
+        noGlobalMoralRanking: coalitionRouting.noGlobalMoralRanking,
+        moralReputationAffectsAllocationPower: coalitionRouting.moralReputationAffectsAllocationPower,
+        publicAggregationOnly: coalitionRouting.publicAggregationOnly,
+      },
       thresholdCalibration: thresholdCalibration
         ? {
             policy: MPGF_PUBLIC_GOODS_THRESHOLD_CALIBRATION_POLICY,

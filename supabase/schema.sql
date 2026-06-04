@@ -6819,6 +6819,98 @@ create table if not exists public.mpgf_support_signals (
   unique (round_id, campaign_id, user_ref_hash)
 );
 
+create table if not exists public.mpgf_user_budgets (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  total_budget_cents bigint not null check (total_budget_cents > 0),
+  currency text not null default 'usd' check (currency = 'usd'),
+  payment_profile_ref_hash text check (
+    payment_profile_ref_hash is null or payment_profile_ref_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  fallback_rule jsonb not null default jsonb_build_object(
+    'onProjectFailure', 'release_hold',
+    'onAuthorizationExpiry', 'reauthorize_near_capture',
+    'carryForwardAllowed', true
+  ),
+  status text not null default 'draft' check (
+    status in (
+      'draft',
+      'active',
+      'authorization_pending',
+      'authorized',
+      'partially_routed',
+      'settled',
+      'released',
+      'voided',
+      'expired'
+    )
+  ),
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, user_ref_hash)
+);
+
+create table if not exists public.mpgf_support_stances (
+  id text primary key,
+  budget_id text references public.mpgf_user_budgets (id) on delete cascade,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  bucket_id text,
+  profile_id uuid references public.profiles (id) on delete set null,
+  user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  stance text not null check (stance in ('strong', 'weak', 'dissent', 'abstain')),
+  max_alloc_amount_cents bigint check (max_alloc_amount_cents is null or max_alloc_amount_cents >= 0),
+  max_alloc_pct_bps integer check (max_alloc_pct_bps is null or max_alloc_pct_bps between 0 and 10000),
+  acceptable_counter_buckets text[] not null default '{}',
+  private_by_default boolean not null default true check (private_by_default = true),
+  counts_for_common_ground boolean not null default true,
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  constraint mpgf_support_stances_project_or_bucket check (
+    (campaign_id is not null and bucket_id is null) or (campaign_id is null and bucket_id is not null)
+  ),
+  unique (round_id, user_ref_hash, campaign_id, bucket_id)
+);
+
+create table if not exists public.mpgf_coalition_candidates (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  hard_gate_status text not null check (
+    hard_gate_status in ('passed', 'pending_review', 'challenge_open', 'blocked')
+  ),
+  candidate_status text not null check (
+    candidate_status in (
+      'threshold_feasible',
+      'amount_gap',
+      'supporter_gap',
+      'cluster_gap',
+      'hard_gate_pending',
+      'hard_gate_blocked'
+    )
+  ),
+  direct_eligible_cents bigint not null default 0 check (direct_eligible_cents >= 0),
+  eligible_weak_budget_cents bigint not null default 0 check (eligible_weak_budget_cents >= 0),
+  routed_weak_budget_cents bigint not null default 0 check (
+    routed_weak_budget_cents >= 0 and routed_weak_budget_cents <= eligible_weak_budget_cents
+  ),
+  threshold_amount_cents bigint not null check (threshold_amount_cents > 0),
+  threshold_supporters integer not null check (threshold_supporters > 0),
+  threshold_cluster_min integer not null default 2 check (threshold_cluster_min > 0),
+  active_supporter_count integer not null default 0 check (active_supporter_count >= 0),
+  active_cluster_count integer not null default 0 check (active_cluster_count >= 0),
+  threshold_feasible_flag boolean not null default false,
+  ecm_batch_clearing_eligible boolean not null default false,
+  failure_bonus_or_carry_forward_eligible boolean not null default false,
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  calculation_hash text not null check (calculation_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, campaign_id)
+);
+
 create table if not exists public.mpgf_conditional_pledges (
   id text primary key,
   round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
@@ -7082,6 +7174,15 @@ on public.mpgf_provider_payment_events (pledge_intent_id, received_at desc);
 create index if not exists mpgf_support_signals_round_campaign_idx
 on public.mpgf_support_signals (round_id, campaign_id, signal_type, created_at desc);
 
+create index if not exists mpgf_user_budgets_round_status_idx
+on public.mpgf_user_budgets (round_id, status);
+
+create index if not exists mpgf_support_stances_round_campaign_idx
+on public.mpgf_support_stances (round_id, campaign_id, stance);
+
+create index if not exists mpgf_coalition_candidates_round_status_idx
+on public.mpgf_coalition_candidates (round_id, candidate_status, threshold_feasible_flag);
+
 create index if not exists mpgf_conditional_pledges_round_campaign_idx
 on public.mpgf_conditional_pledges (round_id, campaign_id, status, payment_mode);
 
@@ -7119,6 +7220,9 @@ alter table public.mpgf_payment_authorizations enable row level security;
 alter table public.mpgf_provider_payment_events enable row level security;
 alter table public.mpgf_moral_profiles enable row level security;
 alter table public.mpgf_support_signals enable row level security;
+alter table public.mpgf_user_budgets enable row level security;
+alter table public.mpgf_support_stances enable row level security;
+alter table public.mpgf_coalition_candidates enable row level security;
 alter table public.mpgf_conditional_pledges enable row level security;
 alter table public.mpgf_every_org_partner_events enable row level security;
 alter table public.mpgf_payment_method_tokens enable row level security;
@@ -7231,6 +7335,43 @@ for insert
 to authenticated
 with check (profile_id = (select auth.uid()));
 
+drop policy if exists "mpgf_user_budgets_select_own" on public.mpgf_user_budgets;
+create policy "mpgf_user_budgets_select_own"
+on public.mpgf_user_budgets
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_user_budgets_write_own" on public.mpgf_user_budgets;
+create policy "mpgf_user_budgets_write_own"
+on public.mpgf_user_budgets
+for all
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_support_stances_select_own" on public.mpgf_support_stances;
+create policy "mpgf_support_stances_select_own"
+on public.mpgf_support_stances
+for select
+to authenticated
+using (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_support_stances_write_own" on public.mpgf_support_stances;
+create policy "mpgf_support_stances_write_own"
+on public.mpgf_support_stances
+for all
+to authenticated
+using (profile_id = (select auth.uid()))
+with check (profile_id = (select auth.uid()));
+
+drop policy if exists "mpgf_coalition_candidates_public_select" on public.mpgf_coalition_candidates;
+create policy "mpgf_coalition_candidates_public_select"
+on public.mpgf_coalition_candidates
+for select
+to anon, authenticated
+using (true);
+
 drop policy if exists "mpgf_conditional_pledges_select_own" on public.mpgf_conditional_pledges;
 create policy "mpgf_conditional_pledges_select_own"
 on public.mpgf_conditional_pledges
@@ -7325,6 +7466,7 @@ grant select on
   public.mpgf_public_goods_allocation_results,
   public.mpgf_public_goods_review_cases,
   public.mpgf_sponsor_pool_entries,
+  public.mpgf_coalition_candidates,
   public.mpgf_allocation_results,
   public.mpgf_dissent_notes,
   public.mpgf_milestones
@@ -7333,6 +7475,11 @@ to anon, authenticated;
 grant select, insert on
   public.mpgf_support_signals,
   public.mpgf_conditional_pledges
+to authenticated;
+
+grant select, insert, update on
+  public.mpgf_user_budgets,
+  public.mpgf_support_stances
 to authenticated;
 
 grant select, insert, update on public.mpgf_pledge_intents to authenticated;
@@ -7364,6 +7511,9 @@ grant all on
   public.mpgf_provider_payment_events,
   public.mpgf_moral_profiles,
   public.mpgf_support_signals,
+  public.mpgf_user_budgets,
+  public.mpgf_support_stances,
+  public.mpgf_coalition_candidates,
   public.mpgf_conditional_pledges,
   public.mpgf_every_org_partner_events,
   public.mpgf_payment_method_tokens,
@@ -7391,6 +7541,15 @@ comment on table public.mpgf_provider_payment_events is
 
 comment on table public.mpgf_support_signals is
   'Private-by-default Common-Ground Verified Quadratic Assurance Funding support signals. Public outputs aggregate signal counts and moral-cluster breadth only; they do not create a global moral ranking.';
+
+comment on table public.mpgf_user_budgets is
+  'Per-round MPGF Common Ground Budget records. Budget records authorize routing under user fallback rules; public outputs remain aggregate-only.';
+
+comment on table public.mpgf_support_stances is
+  'Private-by-default strong, weak, dissent, or abstain stances over projects or buckets. Stances feed coalition feasibility and never create global moral rankings.';
+
+comment on table public.mpgf_coalition_candidates is
+  'Aggregate coalition-feasibility candidates for Coalition-Routed Escrowed Conditional Matching. Rows publish threshold feasibility, cluster breadth, and routed weak-support totals only.';
 
 comment on table public.mpgf_conditional_pledges is
   'CG-VQAF conditional pledge records for fast Every.org routes, Stripe SetupIntent saved commitments, and manual proof fallback.';

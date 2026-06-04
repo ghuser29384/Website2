@@ -197,6 +197,13 @@ import {
   supportSignalFromMpgfPublicGoodsStorageRow,
 } from "./mpgf/public-goods-cg-vqaf";
 import {
+  MPGF_PUBLIC_GOODS_COALITION_ROUTING_FAILURE_POLICY,
+  MPGF_PUBLIC_GOODS_COALITION_ROUTING_POLICY,
+  MPGF_PUBLIC_GOODS_COALITION_ROUTING_PRIVACY_POLICY,
+  buildMpgfPublicGoodsCoalitionRoutingReport,
+  getMpgfPublicGoodsCoalitionRoutingReportApi,
+} from "./mpgf/public-goods-coalition-routing";
+import {
   MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY,
   MPGF_PUBLIC_GOODS_EVERY_ORG_PRIVACY_POLICY,
   type MpgfEveryOrgPartnerWebhookPayload,
@@ -1085,6 +1092,15 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(round.round.cgVqaf?.signalOptions.some((option) => option.value === "weak_common_ground_support"));
   assert.ok(round.round.cgVqaf?.moralClusterOptions.some((option) => option.value === "animal_inclusive"));
   assert.ok(round.round.cgVqaf?.collectiveActionStates.some((state) => state.value === "payout_in_milestones"));
+  assert.equal(round.round.coalitionRouting.policy, MPGF_PUBLIC_GOODS_COALITION_ROUTING_POLICY);
+  assert.equal(
+    round.round.coalitionRouting.reportPath,
+    `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/coalition-routing`,
+  );
+  assert.equal(round.round.coalitionRouting.noGlobalMoralRanking, true);
+  assert.equal(round.round.coalitionRouting.moralReputationAffectsAllocationPower, false);
+  assert.equal(round.round.coalitionRouting.publicAggregationOnly, true);
+  assert.ok(round.round.coalitionRouting.weakSupportBudgetCents > 0);
   assert.equal(round.round.identityIntegrity?.policy, MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY);
   assert.equal(
     round.round.identityIntegrity?.reportPath,
@@ -1157,6 +1173,13 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     `/api/mpgf/rounds/${persistedRound.id}/common-ground-discovery`,
   );
   assert.equal(persistedRoundDetail.round.cgVqaf?.noGlobalMoralRanking, true);
+  assert.equal(
+    persistedRoundDetail.round.coalitionRouting.reportPath,
+    `/api/mpgf/rounds/${persistedRound.id}/coalition-routing`,
+  );
+  assert.equal(persistedRoundDetail.round.coalitionRouting.candidateCount, 1);
+  assert.equal(persistedRoundDetail.round.coalitionRouting.weakSupportBudgetCents, 0);
+  assert.equal(persistedRoundDetail.round.coalitionRouting.publicAggregationOnly, true);
   assert.equal(
     persistedRoundDetail.round.identityIntegrity?.reportPath,
     `/api/mpgf/rounds/${persistedRound.id}/identity-integrity`,
@@ -1296,6 +1319,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/rounds/[roundId]/route.ts", /getMpgfPublicGoodsRoundApi/],
     ["src/app/api/mpgf/rounds/[roundId]/campaigns/route.ts", /listMpgfPublicGoodsCampaignsApi/],
     ["src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", /getMpgfPublicGoodsCgVqafReportApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/coalition-routing/route.ts", /getMpgfPublicGoodsCoalitionRoutingReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/identity-integrity/route.ts", /getMpgfPublicGoodsIdentityIntegrityReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/threshold-calibration/route.ts", /getMpgfPublicGoodsThresholdCalibrationReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/postmortem/route.ts", /getMpgfPublicGoodsPostmortemReportApi/],
@@ -1340,14 +1364,26 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   const allocationsRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/allocations/route.ts", "utf8");
   const roundCampaignsRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/campaigns/route.ts", "utf8");
   const roundRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/route.ts", "utf8");
+  const coalitionRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/coalition-routing/route.ts", "utf8");
 
   assert.match(roundRoute, /buildMpgfPublicGoodsRoundApi/);
   assert.match(roundRoute, /loadMpgfPublicGoodsAllocationContext/);
   assert.match(roundRoute, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(roundRoute, /loadMpgfPublicGoodsSupportSignalsForRound/);
   assert.match(roundRoute, /contextLoad\.source === "database_round_context"/);
   assert.match(roundRoute, /allocationContextSource/);
   assert.match(roundRoute, /contributionSource/);
+  assert.match(roundRoute, /supportSignalSource/);
   assert.match(roundRoute, /Could not load persisted MPGF round state/);
+  assert.match(coalitionRoute, /buildMpgfPublicGoodsCoalitionRoutingReport/);
+  assert.match(coalitionRoute, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(coalitionRoute, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(coalitionRoute, /loadMpgfPublicGoodsSupportSignalsForRound/);
+  assert.match(coalitionRoute, /contextLoad\.source === "database_round_context"/);
+  assert.match(coalitionRoute, /allocationContextSource/);
+  assert.match(coalitionRoute, /contributionSource/);
+  assert.match(coalitionRoute, /supportSignalSource/);
+  assert.match(coalitionRoute, /Could not load persisted MPGF coalition-routing state/);
   assert.match(roundCampaignsRoute, /buildMpgfPublicGoodsCampaignsApi/);
   assert.match(roundCampaignsRoute, /loadMpgfPublicGoodsAllocationContext/);
   assert.match(roundCampaignsRoute, /loadMpgfPublicGoodsAllocationContributionRecords/);
@@ -2426,6 +2462,175 @@ test("MPGF CG-VQAF publishes common-ground and capital-constrained allocation wi
     "private-cg-humanitarian-alix",
     "private-cg-pluralist-briar",
     "private-cg-longtermist-cy",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false);
+  }
+});
+
+test("MPGF coalition routing converts weak common-ground support into threshold-feasible ECM candidates", () => {
+  const report = getMpgfPublicGoodsCoalitionRoutingReportApi(demoMpgfAssuranceRound.id);
+  const unknownReport = getMpgfPublicGoodsCoalitionRoutingReportApi("unknown-round");
+  const directReport = buildMpgfPublicGoodsCoalitionRoutingReport();
+  const campaignTemplate = demoMpgfPublicGoodsCampaigns[0];
+
+  if (!campaignTemplate) {
+    throw new Error("Expected MPGF public-goods campaign fixture.");
+  }
+
+  const persistedCampaign = {
+    ...campaignTemplate,
+    id: "persisted-coalition-routing-campaign",
+    slug: "persisted-coalition-routing-campaign",
+    title: "Persisted coalition-routing campaign",
+    thresholdAmountCents: 10_000,
+    thresholdSupporters: 2,
+    reviewStatus: "approved" as const,
+  };
+  const persistedRound = {
+    ...demoMpgfAssuranceRound,
+    id: "persisted-coalition-routing-round",
+    matchPoolId: demoMpgfMatchPool.id,
+  };
+  const persistedIdentity = createMpgfPublicGoodsIdentityAttestation({
+    userId: "persisted-coalition-routing-supporter",
+    provider: "external_proof_of_personhood",
+    humanScoreBps: 9_000,
+    expiresAt: "2026-12-31T00:00:00.000Z",
+    redactedReference: "external_proof_of_personhood:redacted:persisted-coalition-routing",
+  });
+  const persistedPledges = [
+    createMpgfPublicGoodsPledge({
+      campaign: persistedCampaign,
+      userId: persistedIdentity.userId,
+      amountCents: 5_000,
+      identityAttestation: persistedIdentity,
+    }),
+  ] satisfies MpgfPublicGoodsPledge[];
+  const persistedSupportSignals = [
+    createMpgfPublicGoodsSupportSignal({
+      round: persistedRound,
+      campaigns: [persistedCampaign],
+      campaignId: persistedCampaign.id,
+      userRef: "private-persisted-coalition-strong",
+      moralCluster: "humanitarian",
+      signalType: "strong_support",
+      strengthBps: 9_000,
+    }),
+    createMpgfPublicGoodsSupportSignal({
+      round: persistedRound,
+      campaigns: [persistedCampaign],
+      campaignId: persistedCampaign.id,
+      userRef: "private-persisted-coalition-weak-a",
+      moralCluster: "longtermist",
+      signalType: "weak_common_ground_support",
+      strengthBps: 6_500,
+    }),
+    createMpgfPublicGoodsSupportSignal({
+      round: persistedRound,
+      campaigns: [persistedCampaign],
+      campaignId: persistedCampaign.id,
+      userRef: "private-persisted-coalition-weak-b",
+      moralCluster: "institutional_pluralist",
+      signalType: "weak_common_ground_support",
+      strengthBps: 6_000,
+    }),
+  ];
+  const persistedReport = buildMpgfPublicGoodsCoalitionRoutingReport({
+    campaigns: [persistedCampaign],
+    pledges: persistedPledges,
+    round: persistedRound,
+    matchPool: demoMpgfMatchPool,
+    supportSignals: persistedSupportSignals,
+  });
+  const persistedRow = persistedReport.rows[0];
+  const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/coalition-routing/route.ts", "utf8");
+  const roundRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/route.ts", "utf8");
+  const publicApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
+  const supportSignalContract = buildMpgfPublicGoodsSupportSignalContractApi(persistedRound.id);
+  const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const schemaSql = readFileSync("supabase/schema.sql", "utf8");
+  const migration = readFileSync("supabase/migrations/20260604_mpgf_coalition_routing.sql", "utf8");
+  const serialized = JSON.stringify({ report, persistedReport, supportSignalContract });
+
+  assert.ok(report);
+  assert.equal(unknownReport, null);
+  assert.equal(report.policy, MPGF_PUBLIC_GOODS_COALITION_ROUTING_POLICY);
+  assert.equal(directReport.policy, report.policy);
+  assert.equal(report.privacyPolicy, MPGF_PUBLIC_GOODS_COALITION_ROUTING_PRIVACY_POLICY);
+  assert.equal(report.failureHandlingPolicy, MPGF_PUBLIC_GOODS_COALITION_ROUTING_FAILURE_POLICY);
+  assert.deepEqual(report.stageOrder, [
+    "hard_gating",
+    "coalition_feasibility",
+    "ecm_batch_clearing",
+    "base_match_then_capped_diversity_bonus",
+    "failure_fallback_or_carry_forward",
+  ]);
+  assert.equal(report.noGlobalMoralRanking, true);
+  assert.equal(report.moralReputationAffectsAllocationPower, false);
+  assert.equal(report.publicAggregationOnly, true);
+  assert.ok(report.weakSupportBudgetCents > 0);
+  assert.equal(report.rows.every((row) => row.noGlobalMoralRanking), true);
+  assert.equal(report.rows.every((row) => /^sha256:/.test(row.calculationHash)), true);
+  assert.match(report.calcHash, /^sha256:/);
+  assert.ok(persistedRow);
+  assert.equal(persistedReport.roundId, persistedRound.id);
+  assert.equal(persistedReport.candidateCount, 1);
+  assert.equal(persistedReport.feasibleCandidateCount, 1);
+  assert.equal(persistedReport.ecmBatchCandidateCount, 1);
+  assert.equal(persistedRow.campaignId, persistedCampaign.id);
+  assert.equal(persistedRow.hardGateStatus, "passed");
+  assert.equal(persistedRow.candidateStatus, "threshold_feasible");
+  assert.equal(persistedRow.thresholdFeasibleFlag, true);
+  assert.equal(persistedRow.ecmBatchClearingEligible, true);
+  assert.equal(persistedRow.activeClusterCount, 3);
+  assert.equal(persistedRow.weakCommonGroundSignalCount, 2);
+  assert.equal(persistedRow.routedWeakBudgetCents, 5_000);
+  assert.equal(supportSignalContract.coalitionRoutingPath, `/api/mpgf/rounds/${persistedRound.id}/coalition-routing`);
+  assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
+  assert.match(route, /getMpgfPublicGoodsCoalitionRoutingReportApi/);
+  assert.match(route, /buildMpgfPublicGoodsCoalitionRoutingReport/);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContributionRecords/);
+  assert.match(route, /loadMpgfPublicGoodsSupportSignalsForRound/);
+  assert.match(route, /contextLoad\.source === "database_round_context"/);
+  assert.match(route, /allocationContextSource/);
+  assert.match(route, /contributionSource/);
+  assert.match(route, /supportSignalSource/);
+  assert.match(route, /Could not load persisted MPGF coalition-routing state/);
+  assert.match(roundRoute, /supportSignalSource/);
+  assert.match(publicApi, /coalitionRouting/);
+  assert.match(publicApi, /routedWeakSupportBudgetCents/);
+  assert.match(roundPage, /Coalition-routed common-ground budget/);
+  assert.match(roundPage, /coalition-routing report/);
+
+  for (const table of [
+    "mpgf_user_budgets",
+    "mpgf_support_stances",
+    "mpgf_coalition_candidates",
+  ]) {
+    assert.match(migration, new RegExp(`create table if not exists public\\.${table}`));
+    assert.match(schemaSql, new RegExp(`create table if not exists public\\.${table}`));
+    assert.match(migration, new RegExp(`comment on table public\\.${table}`));
+    assert.match(schemaSql, new RegExp(`comment on table public\\.${table}`));
+  }
+
+  assert.match(migration, /stance in \('strong', 'weak', 'dissent', 'abstain'\)/);
+  assert.match(migration, /threshold_feasible_flag boolean not null default false/);
+  assert.match(migration, /failure_bonus_or_carry_forward_eligible boolean not null default false/);
+  assert.match(migration, /mpgf_user_budgets_write_own/);
+  assert.match(migration, /mpgf_support_stances_write_own/);
+  assert.match(schemaSql, /mpgf_coalition_candidates_public_select/);
+  assert.match(schemaSql, /mpgf_user_budgets_write_own/);
+  assert.match(schemaSql, /mpgf_support_stances_write_own/);
+  assert.match(schemaSql, /grant select on[\s\S]*public\.mpgf_coalition_candidates[\s\S]*to anon, authenticated/);
+
+  for (const forbidden of [
+    "private-persisted-coalition-strong",
+    "private-persisted-coalition-weak-a",
+    "private-persisted-coalition-weak-b",
+    "redactedReference",
+    "supporterReason",
+    "moralReputationScore",
   ]) {
     assert.equal(serialized.includes(forbidden), false);
   }

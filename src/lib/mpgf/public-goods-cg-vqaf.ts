@@ -1010,6 +1010,7 @@ export function buildMpgfPublicGoodsSupportSignalContractApi(roundId: string) {
     supportSignalPath: `/api/mpgf/rounds/${roundId}/support-signals`,
     cgVqafReportPath: `/api/mpgf/rounds/${roundId}/cg-vqaf`,
     commonGroundDiscoveryPath: `/api/mpgf/rounds/${roundId}/common-ground-discovery`,
+    coalitionRoutingPath: `/api/mpgf/rounds/${roundId}/coalition-routing`,
     privateByDefault: true,
     publicAggregationOnly: true,
     rawSupportReasonsExcluded: true,
