@@ -147,6 +147,73 @@ test("intro packet validation rejects unsupported disclosure field keys", () => 
   );
 });
 
+test("intro packet validation rejects unsupported requester answer keys", () => {
+  const invalid = validateIntroPacketInput({
+    purpose: "Decide whether a first bounded conversation is worth reviewing.",
+    requestedFieldKeys: ["exact_wish"],
+    requesterAnswers: {
+      contactDetails: "victoria@example.org",
+      firstQuestion: "Can we review a bounded intro?",
+      privacyConstraints: {
+        contactDetails: "private@example.org",
+        reviewBoundaries: "Broad previews only.",
+      },
+      proposedTradeShape: {
+        format: "pledge_swap",
+        rawPrivateNotes: "Exact private wish text",
+      },
+      protectedTraits: ["religion"],
+      rawPrivateNotes: "Exact private wish text",
+    },
+  });
+  const renderedErrors = invalid.errors.join(" ");
+
+  assert.deepEqual(invalid.requesterAnswers, {
+    firstQuestion: "Can we review a bounded intro?",
+    privacyConstraints: { reviewBoundaries: "Broad previews only." },
+    proposedTradeShape: { format: "pledge_swap" },
+  });
+  assert.match(renderedErrors, /privacyConstraints\.contactDetails/);
+  assert.match(renderedErrors, /proposedTradeShape\.rawPrivateNotes/);
+  assert.match(renderedErrors, /contactDetails, protectedTraits, rawPrivateNotes/);
+  assert.equal(renderedErrors.includes("victoria@example.org"), false);
+  assert.equal(renderedErrors.includes("Exact private wish text"), false);
+});
+
+test("intro packet rows store only approved structured requester answers", () => {
+  const packet = buildIntroPacketRow({
+    counterpartyProfileId: "counterparty-4",
+    matchId: "match-4",
+    opportunityBriefId: "brief-4",
+    purpose: "Decide whether a first bounded conversation is worth reviewing.",
+    requestedFieldKeys: ["exact_wish"],
+    requesterAnswers: {
+      firstQuestion: "Would a reviewed pledge swap intro be useful?",
+      privacyConstraints: {
+        allowedUse: ["reviewer triage"],
+        reviewBoundaries: "Broad previews only.",
+      },
+      proposedTradeShape: {
+        format: "pledge_swap",
+        verificationMethod: "Reviewed receipt.",
+      },
+    },
+    requesterProfileId: "profile-4",
+  });
+
+  assert.deepEqual(packet.requester_answers, {
+    firstQuestion: "Would a reviewed pledge swap intro be useful?",
+    privacyConstraints: {
+      allowedUse: ["reviewer triage"],
+      reviewBoundaries: "Broad previews only.",
+    },
+    proposedTradeShape: {
+      format: "pledge_swap",
+      verificationMethod: "Reviewed receipt.",
+    },
+  });
+});
+
 test("source summaries are scoped, expiring, and raw-ingestion disabled", () => {
   const { receipt, sourceSummary, validationErrors } = buildSourceSummaryRows({
     allowedFieldKeys: ["cause_priorities", "raw_free_text", "capability_tags"],

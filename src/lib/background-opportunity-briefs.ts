@@ -52,8 +52,39 @@ export const BACKGROUND_INTRO_PACKET_DEFAULT_QUESTIONS = [
   "What constraint would make the introduction unsafe or unproductive?",
 ] as const;
 
+const BACKGROUND_INTRO_REQUESTER_ANSWER_KEYS = [
+  "firstQuestion",
+  "privacyConstraints",
+  "proposedTradeShape",
+] as const;
+
+const BACKGROUND_INTRO_PRIVACY_CONSTRAINT_KEYS = [
+  "allowedUse",
+  "consentStage",
+  "contactPreference",
+  "redactionNotes",
+  "reviewBoundaries",
+  "safeIntroductionConditions",
+  "visibility",
+] as const;
+
+const BACKGROUND_INTRO_TRADE_SHAPE_KEYS = [
+  "counterpartyRole",
+  "duration",
+  "exitConditions",
+  "format",
+  "offeredCause",
+  "participantRole",
+  "publicDescription",
+  "requestedCause",
+  "verificationMethod",
+] as const;
+
 const MAX_TEXT_LENGTH = 900;
 const SOURCE_RETENTION_DAY_SET = new Set<number>(BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS);
+const INTRO_REQUESTER_ANSWER_KEY_SET = new Set<string>(BACKGROUND_INTRO_REQUESTER_ANSWER_KEYS);
+const PRIVACY_CONSTRAINT_KEY_SET = new Set<string>(BACKGROUND_INTRO_PRIVACY_CONSTRAINT_KEYS);
+const TRADE_SHAPE_KEY_SET = new Set<string>(BACKGROUND_INTRO_TRADE_SHAPE_KEYS);
 
 function compactText(value: string, maxLength = MAX_TEXT_LENGTH) {
   const compact = value.replace(/\s+/g, " ").trim();
@@ -67,6 +98,76 @@ function compactText(value: string, maxLength = MAX_TEXT_LENGTH) {
 
 function uniqueStrings(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeRequesterAnswerValue(value: unknown) {
+  if (typeof value === "string") {
+    return compactText(value, 700);
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (Array.isArray(value) && value.every((entry) => typeof entry === "string")) {
+    return uniqueStrings(value).slice(0, 12).map((entry) => compactText(entry, 220));
+  }
+
+  return null;
+}
+
+function normalizeRequesterAnswerObject({
+  allowedKeys,
+  errors,
+  namespace,
+  value,
+}: {
+  allowedKeys: Set<string>;
+  errors: string[];
+  namespace: string;
+  value: unknown;
+}) {
+  const normalized: Record<string, unknown> = {};
+  const unsupportedKeys: string[] = [];
+
+  if (value == null) {
+    return normalized;
+  }
+
+  if (!isRecord(value)) {
+    errors.push(`${namespace} must be a structured object with approved reviewer-answer keys.`);
+    return normalized;
+  }
+
+  for (const [key, entry] of Object.entries(value)) {
+    if (!allowedKeys.has(key)) {
+      unsupportedKeys.push(`${namespace}.${key}`);
+      continue;
+    }
+
+    const normalizedValue = normalizeRequesterAnswerValue(entry);
+
+    if (normalizedValue === null) {
+      errors.push(`${namespace}.${key} must be a string, number, boolean, or string list.`);
+      continue;
+    }
+
+    normalized[key] = normalizedValue;
+  }
+
+  if (unsupportedKeys.length) {
+    errors.push(`Unsupported requester answer keys are not allowed: ${unsupportedKeys.join(", ")}.`);
+  }
+
+  return normalized;
 }
 
 export function normalizeOpportunityBriefDeliveryState(value?: string | null) {
@@ -229,9 +330,11 @@ export function serializeOpportunityBriefCard(row: {
 
 export function validateIntroPacketInput({
   purpose,
+  requesterAnswers,
   requestedFieldKeys,
 }: {
   purpose: string;
+  requesterAnswers?: Record<string, unknown>;
   requestedFieldKeys: string[];
 }) {
   const errors: string[] = [];
@@ -239,6 +342,7 @@ export function validateIntroPacketInput({
   const fields = normalizeDisclosureFieldKeys(requestedFields).slice(0, 8);
   const supportedFields = new Set<string>(fields);
   const unsupportedFields = requestedFields.filter((field) => !supportedFields.has(field));
+  const answerValidation = validateIntroRequesterAnswers(requesterAnswers);
 
   if (purpose.trim().length < 12) {
     errors.push("Add a concrete purpose for the reviewed introduction packet.");
@@ -254,7 +358,55 @@ export function validateIntroPacketInput({
     errors.push("Choose at least one field the reviewer should consider.");
   }
 
-  return { errors, requestedFieldKeys: fields };
+  errors.push(...answerValidation.errors);
+
+  return {
+    errors,
+    requestedFieldKeys: fields,
+    requesterAnswers: answerValidation.requesterAnswers,
+  };
+}
+
+export function validateIntroRequesterAnswers(requesterAnswers?: Record<string, unknown>) {
+  const errors: string[] = [];
+  const normalized: Record<string, unknown> = {};
+  const unsupportedKeys: string[] = [];
+
+  if (!requesterAnswers) {
+    return { errors, requesterAnswers: normalized };
+  }
+
+  for (const [key, value] of Object.entries(requesterAnswers)) {
+    if (!INTRO_REQUESTER_ANSWER_KEY_SET.has(key)) {
+      unsupportedKeys.push(key);
+      continue;
+    }
+
+    if (key === "firstQuestion") {
+      const normalizedValue = normalizeRequesterAnswerValue(value);
+
+      if (normalizedValue === null || Array.isArray(normalizedValue)) {
+        errors.push("firstQuestion must be a bounded string, number, or boolean.");
+        continue;
+      }
+
+      normalized.firstQuestion = normalizedValue;
+      continue;
+    }
+
+    normalized[key] = normalizeRequesterAnswerObject({
+      allowedKeys: key === "privacyConstraints" ? PRIVACY_CONSTRAINT_KEY_SET : TRADE_SHAPE_KEY_SET,
+      errors,
+      namespace: key,
+      value,
+    });
+  }
+
+  if (unsupportedKeys.length) {
+    errors.push(`Unsupported requester answer keys are not allowed: ${unsupportedKeys.join(", ")}.`);
+  }
+
+  return { errors, requesterAnswers: normalized };
 }
 
 export function buildIntroPacketRow({
@@ -274,7 +426,7 @@ export function buildIntroPacketRow({
   requesterAnswers?: Record<string, unknown>;
   requesterProfileId: string;
 }): IntroPacketInsert {
-  const validation = validateIntroPacketInput({ purpose, requestedFieldKeys });
+  const validation = validateIntroPacketInput({ purpose, requesterAnswers, requestedFieldKeys });
 
   if (validation.errors.length) {
     throw new Error(validation.errors.join(" "));
@@ -287,7 +439,7 @@ export function buildIntroPacketRow({
     opportunity_brief_id: opportunityBriefId ?? null,
     purpose: compactText(purpose, 700),
     requested_field_keys: validation.requestedFieldKeys,
-    requester_answers: requesterAnswers ?? {},
+    requester_answers: validation.requesterAnswers,
     requester_profile_id: requesterProfileId,
     reveal_capsule:
       "Reviewer should prepare only field-bound details after both sides consent; no contact details are sent automatically.",

@@ -1598,7 +1598,7 @@
         { "key": "counterpartyProfileId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional counterparty profile id for reviewer context; it does not reveal identity or contact details by itself." },
         { "key": "matchId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional match suggestion id for audit context." },
         { "key": "opportunityBriefId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional opportunity brief id updated only for the authenticated requester." },
-        { "key": "requesterAnswers", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Structured answers to reviewer questions; raw private notes and contact details remain gated by the intro review process." }
+        { "key": "requesterAnswers", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Structured answers to reviewer questions; only approved firstQuestion, privacyConstraints, and proposedTradeShape keys are accepted, and unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed before packet creation." }
       ]
     },
     {
@@ -1618,8 +1618,8 @@
         { "key": "requestedFieldKeys", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Disclosure-lattice field keys only; unsupported, private, protected-trait, raw-note, contact-detail, or extra field keys fail closed before a reviewed-introduction packet is created, and at least one supported field is required." },
         { "key": "opportunityBriefId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional viewer-owned opportunity brief used to derive safe match context." },
         { "key": "counterpartyProfileId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional target profile for repeated-target probe checks and reviewer context." },
-        { "key": "proposedTradeShape", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Structured proposal context for operator review, not an outbound message." },
-        { "key": "privacyConstraints", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Participant-stated boundaries for reviewer triage." }
+        { "key": "proposedTradeShape", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Structured proposal context for operator review, not an outbound message; unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed before packet creation." },
+        { "key": "privacyConstraints", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Participant-stated boundaries for reviewer triage; unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed before packet creation." }
       ]
     },
     {

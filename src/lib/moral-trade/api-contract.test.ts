@@ -289,6 +289,20 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_create_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_create_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_request"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_intro_packet_create_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "requesterAnswers" &&
+          /approved firstQuestion, privacyConstraints, and proposedTradeShape keys/i.test(
+            field.description,
+          ) &&
+          /unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed/i.test(
+            field.description,
+          ),
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_request_create_request"));
   assert.ok(
@@ -298,6 +312,28 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
         (field) =>
           field.key === "requestedFieldKeys" &&
           /unsupported, private, protected-trait, raw-note, contact-detail, or extra field keys fail closed/i.test(
+            field.description,
+          ),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_intro_request_create_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "proposedTradeShape" &&
+          /unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed/i.test(
+            field.description,
+          ),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_intro_request_create_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "privacyConstraints" &&
+          /unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed/i.test(
             field.description,
           ),
       ),

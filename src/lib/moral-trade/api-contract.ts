@@ -9,7 +9,7 @@ import {
 } from "./api-rate-limit";
 
 export const MORAL_TRADE_API_CONTRACT_VALIDATOR_VERSION =
-  "moral-trade-api-contract-validator-v0.3";
+  "moral-trade-api-contract-validator-v0.4";
 export const MORAL_TRADE_API_IMPLEMENTATION_AUDIT_VERSION =
   "moral-trade-api-implementation-audit-v0.2";
 
@@ -518,6 +518,9 @@ export function validateMoralTradeApiContractProfile(
   );
   const backgroundIntroRequestCreateRequest = profile.schemaDefinitions.find(
     (schema) => schema.key === "background_intro_request_create_request",
+  );
+  const backgroundIntroPacketCreateRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "background_intro_packet_create_request",
   );
   const incidentResponseHealthRoute = profile.routes.find(
     (route) => route.key === "moral_trade_incident_response_health",
@@ -1169,6 +1172,48 @@ export function validateMoralTradeApiContractProfile(
       backgroundIntroRequestCreateRequest
         ? `${backgroundIntroRequestCreateRequest.key}:requestedFieldKeys`
         : "missing",
+    ),
+    check(
+      "background-intro-requester-answer-boundary",
+      "Background intro requester answers fail closed on unsupported private fields",
+      Boolean(
+        backgroundIntroPacketCreateRequest?.fields.some(
+          (field) =>
+            field.key === "requesterAnswers" &&
+            /approved firstQuestion, privacyConstraints, and proposedTradeShape keys/i.test(
+              field.description,
+            ) &&
+            /unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed/i.test(
+              field.description,
+            ),
+        ),
+      ) &&
+        Boolean(
+          backgroundIntroRequestCreateRequest?.fields.some(
+            (field) =>
+              field.key === "proposedTradeShape" &&
+              /unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          backgroundIntroRequestCreateRequest?.fields.some(
+            (field) =>
+              field.key === "privacyConstraints" &&
+              /unsupported, private, protected-trait, raw-note, contact-detail, or extra requester-answer keys fail closed/i.test(
+                field.description,
+              ),
+          ),
+        ),
+      [
+        backgroundIntroPacketCreateRequest
+          ? `${backgroundIntroPacketCreateRequest.key}:requesterAnswers`
+          : "missing-packet",
+        backgroundIntroRequestCreateRequest
+          ? `${backgroundIntroRequestCreateRequest.key}:proposedTradeShape/privacyConstraints`
+          : "missing-request",
+      ].join(", "),
     ),
     check(
       "incident-response-health-route",

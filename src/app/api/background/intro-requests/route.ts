@@ -154,7 +154,18 @@ export async function POST(request: Request) {
     body.requestedFields,
     body.requested_fields,
   );
-  const validation = validateIntroPacketInput({ purpose, requestedFieldKeys });
+  const requesterAnswers = {
+    firstQuestion: stringField(
+      body.firstQuestion ?? body.first_question ?? body.anonymousQuestion ?? body.anonymous_question,
+    ),
+    privacyConstraints: isRecord(body.privacyConstraints ?? body.privacy_constraints)
+      ? (body.privacyConstraints ?? body.privacy_constraints)
+      : {},
+    proposedTradeShape: isRecord(body.proposedTradeShape ?? body.proposed_trade_shape)
+      ? (body.proposedTradeShape ?? body.proposed_trade_shape)
+      : {},
+  };
+  const validation = validateIntroPacketInput({ purpose, requesterAnswers, requestedFieldKeys });
 
   if (validation.errors.length) {
     return privateJson({ error: validation.errors.join(" ") }, 400);
@@ -201,17 +212,7 @@ export async function POST(request: Request) {
     opportunityBriefId: opportunityBriefId || null,
     purpose,
     requestedFieldKeys: validation.requestedFieldKeys,
-    requesterAnswers: {
-      firstQuestion: stringField(
-        body.firstQuestion ?? body.first_question ?? body.anonymousQuestion ?? body.anonymous_question,
-      ),
-      privacyConstraints: isRecord(body.privacyConstraints ?? body.privacy_constraints)
-        ? (body.privacyConstraints ?? body.privacy_constraints)
-        : {},
-      proposedTradeShape: isRecord(body.proposedTradeShape ?? body.proposed_trade_shape)
-        ? (body.proposedTradeShape ?? body.proposed_trade_shape)
-        : {},
-    },
+    requesterAnswers: validation.requesterAnswers,
     requesterProfileId: user.id,
   });
   const { data, error } = await supabase

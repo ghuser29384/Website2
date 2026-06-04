@@ -74,7 +74,13 @@ export async function POST(request: Request) {
 
   const purpose = stringField(body.purpose);
   const requestedFieldKeys = stringList(body.requestedFieldKeys);
-  const validation = validateIntroPacketInput({ purpose, requestedFieldKeys });
+  const requesterAnswers = {
+    ...(isRecord(body.requesterAnswers) ? body.requesterAnswers : {}),
+    firstQuestion: stringField(
+      body.firstQuestion ?? body.first_question ?? body.anonymousQuestion ?? body.anonymous_question,
+    ),
+  };
+  const validation = validateIntroPacketInput({ purpose, requesterAnswers, requestedFieldKeys });
 
   if (validation.errors.length) {
     return privateJson({ error: validation.errors.join(" ") }, 400);
@@ -85,13 +91,8 @@ export async function POST(request: Request) {
     matchId: stringField(body.matchId) || null,
     opportunityBriefId: stringField(body.opportunityBriefId) || null,
     purpose,
-    requestedFieldKeys,
-    requesterAnswers: {
-      ...(isRecord(body.requesterAnswers) ? body.requesterAnswers : {}),
-      firstQuestion: stringField(
-        body.firstQuestion ?? body.first_question ?? body.anonymousQuestion ?? body.anonymous_question,
-      ),
-    },
+    requestedFieldKeys: validation.requestedFieldKeys,
+    requesterAnswers: validation.requesterAnswers,
     requesterProfileId: user.id,
   });
   const { data, error } = await supabase
