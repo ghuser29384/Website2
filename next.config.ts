@@ -59,6 +59,10 @@ const nextConfig: NextConfig = {
         headers: privateNoStoreHeaders,
       },
       {
+        source: "/api/background/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
         source: "/api/jobs/:path*",
         headers: privateNoStoreHeaders,
       },

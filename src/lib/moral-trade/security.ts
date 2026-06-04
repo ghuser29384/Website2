@@ -226,10 +226,11 @@ export function validateMoralTradeSecurityImplementation({
         /source:\s*"\/mpgf\/admin\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/mpgf\/account\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/api\/profile\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/api\/background\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/api\/jobs\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/api\/saved-searches"/.test(nextConfigSource) &&
         /source:\s*"\/api\/wish-registry\/search"/.test(nextConfigSource),
-      "dashboard, admin, agreement, saved-offer, MPGF account/admin, profile API, job API, saved-search, and wish-registry search routes should be private no-store.",
+      "dashboard, admin, agreement, saved-offer, MPGF account/admin, profile API, background API, job API, saved-search, and wish-registry search routes should be private no-store.",
     ),
     check(
       "supabase-session-refresh-source",

@@ -35,6 +35,11 @@ test("security profile publishes headers, sessions, provider boundaries, non-cla
     profile.controls.find((control) => control.key === "background_field_encryption_keyring")?.status,
     "implemented",
   );
+  assert.ok(
+    profile.controls
+      .find((control) => control.key === "private_no_store_cache")
+      ?.publicClaim.includes("background-networking helpers"),
+  );
   assert.ok(profile.publicNonClaims.some((entry) => /MFA|2FA/i.test(entry)));
   assert.equal(
     profile.controls.find((control) => control.key === "two_factor_admin_gate")?.status,
@@ -76,6 +81,14 @@ test("security implementation source keeps headers, cache, and sessions aligned"
 
   assert.equal(validation.status, "pass");
   assert.equal(validation.blockers.length, 0);
+  assert.ok(
+    validation.checks.some(
+      (check) =>
+        check.id === "private-no-store-source" &&
+        check.status === "pass" &&
+        /background API/.test(check.evidence),
+    ),
+  );
   assert.ok(
     validation.checks.some(
       (check) => check.id === "supabase-session-refresh-source" && check.status === "pass",
