@@ -461,7 +461,6 @@ test("copilot evidence metadata accepts only redacted already-submitted evidence
       scope: "factual_action",
       redactionLevel: "reviewer_only",
       submittedAt: "2026-05-20T12:00:00.000Z",
-      displayOnly: "ignored safe display field",
     },
   ]);
   const summary = summarizeMoralTradeCopilotEvidenceMetadata(normalization);
@@ -473,7 +472,7 @@ test("copilot evidence metadata accepts only redacted already-submitted evidence
 
   assert.deepEqual(normalization.blockers, []);
   assert.equal(summary.acceptedCount, 1);
-  assert.equal(summary.ignoredFieldCount, 1);
+  assert.equal(summary.ignoredFieldCount, 0);
   assert.ok(summary.redactionsApplied.includes("raw_artifact_body"));
   assert.ok(
     output.cited_evidence_table.some(
@@ -484,6 +483,30 @@ test("copilot evidence metadata accepts only redacted already-submitted evidence
     ),
   );
   assert.equal(validateMoralTradeCopilotOutput(output).status, "pass");
+});
+
+test("copilot evidence metadata rejects unsupported extra fields", () => {
+  const normalization = normalizeMoralTradeCopilotEvidenceMetadata([
+    {
+      id: "receipt-meta-1",
+      claim: "Donation receipt confirms the offered pledge amount.",
+      evidenceType: "receipt",
+      citation: "evidence:receipt-meta-1",
+      status: "pending_review",
+      scope: "factual_action",
+      redactionLevel: "reviewer_only",
+      displayOnly: "extra display field outside the strict metadata bundle",
+    },
+  ]);
+
+  assert.equal(normalization.acceptedCount, 0);
+  assert.equal(normalization.rejectedCount, 1);
+  assert.equal(normalization.ignoredFieldCount, 1);
+  assert.ok(
+    normalization.blockers.some((blocker) =>
+      blocker.includes("unsupported_metadata_fields_not_allowed:displayOnly"),
+    ),
+  );
 });
 
 test("copilot evidence metadata rejects raw private fields and contact-like metadata", () => {
@@ -553,7 +576,6 @@ test("copilot review route returns validated non-mutating draft critique", async
             scope: "factual_action",
             redactionLevel: "reviewer_only",
             submittedAt: "2026-05-20T12:00:00.000Z",
-            displayOnly: "ignored safe display field",
           },
         ],
       }),
@@ -581,7 +603,7 @@ test("copilot review route returns validated non-mutating draft critique", async
   );
   assert.equal(body.output.status, "matchable");
   assert.equal(body.evidenceMetadataSummary.acceptedCount, 1);
-  assert.equal(body.evidenceMetadataSummary.ignoredFieldCount, 1);
+  assert.equal(body.evidenceMetadataSummary.ignoredFieldCount, 0);
   assert.equal(body.output.verification_loop.length, 8);
   assert.equal(
     body.output.verification_loop.find((step: { key: string }) => step.key === "schema_completeness")
@@ -706,6 +728,49 @@ test("copilot review route fails closed on private citation labels before output
   assert.equal("outputValidation" in body, false);
   assert.doesNotMatch(serializedBody, /thread:private-context/);
   assert.doesNotMatch(serializedBody, /victoria@example\.org/);
+  assert.match(body.fallback, /without emitting an output packet/i);
+});
+
+test("copilot review route fails closed on unsupported evidence metadata fields", async () => {
+  const response = await reviewDraftRoute(
+    new Request("http://localhost/api/moral-trade/copilot/review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        draft: completeDraft,
+        evidenceMetadata: [
+          {
+            id: "receipt-meta-1",
+            claim: "Donation receipt confirms the offered pledge amount.",
+            evidenceType: "receipt",
+            citation: "evidence:receipt-meta-1",
+            status: "pending_review",
+            scope: "factual_action",
+            redactionLevel: "reviewer_only",
+            displayOnly: "extra display field outside the strict metadata bundle",
+          },
+        ],
+      }),
+    }),
+  );
+  const body = await response.json();
+  const serializedBody = JSON.stringify(body);
+
+  assert.equal(response.status, 422);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.evidenceMetadataSummary.acceptedCount, 0);
+  assert.equal(body.evidenceMetadataSummary.rejectedCount, 1);
+  assert.equal(body.evidenceMetadataSummary.ignoredFieldCount, 1);
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("evidence_metadata:0:unsupported_metadata_fields_not_allowed:displayOnly"),
+    ),
+  );
+  assert.equal("output" in body, false);
+  assert.equal("outputValidation" in body, false);
+  assert.doesNotMatch(serializedBody, /extra display field/);
   assert.match(body.fallback, /without emitting an output packet/i);
 });
 

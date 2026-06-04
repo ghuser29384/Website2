@@ -927,7 +927,13 @@ export function normalizeMoralTradeCopilotEvidenceMetadata(
     const forbiddenKeys = unknownKeys.filter((key) =>
       EVIDENCE_METADATA_FORBIDDEN_KEY_PATTERN.test(key),
     );
-    ignoredFieldCount += unknownKeys.length;
+
+    if (unknownKeys.length) {
+      ignoredFieldCount += unknownKeys.length;
+      entryBlockers.push(
+        `unsupported_metadata_fields_not_allowed:${unknownKeys.sort().join(",")}`,
+      );
+    }
 
     if (forbiddenKeys.length) {
       entryBlockers.push(

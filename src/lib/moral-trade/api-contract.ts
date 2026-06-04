@@ -990,7 +990,9 @@ export function validateMoralTradeApiContractProfile(
             (field) =>
               field.key === "evidenceMetadata" &&
               field.privacy === "private_request" &&
-              /raw artifact|private notes|contact details/i.test(field.description),
+              /unsupported extra fields|raw artifact content|private notes|contact details|fail closed/i.test(
+                field.description,
+              ),
           ),
         ) &&
         Boolean(
@@ -998,7 +1000,9 @@ export function validateMoralTradeApiContractProfile(
             (field) =>
               field.key === "evidenceMetadataSummary" &&
               field.required &&
-              /raw artifacts|private notes/i.test(field.description),
+              /unsupported-field counts|raw artifacts|unsupported extra fields|private notes/i.test(
+                field.description,
+              ),
           ),
         ) &&
         Boolean(

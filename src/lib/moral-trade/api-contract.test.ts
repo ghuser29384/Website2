@@ -471,12 +471,23 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.schemaDefinitions
       .find((schema) => schema.key === "copilot_review_request")
-      ?.fields.some((field) => field.key === "evidenceMetadata"),
+      ?.fields.some(
+        (field) =>
+          field.key === "evidenceMetadata" &&
+          /unsupported extra fields/i.test(field.description) &&
+          /fail closed/i.test(field.description),
+      ),
   );
   assert.ok(
     profile.schemaDefinitions
       .find((schema) => schema.key === "copilot_review_response")
-      ?.fields.some((field) => field.key === "evidenceMetadataSummary" && field.required),
+      ?.fields.some(
+        (field) =>
+          field.key === "evidenceMetadataSummary" &&
+          field.required &&
+          /unsupported-field counts/i.test(field.description) &&
+          /unsupported extra fields/i.test(field.description),
+      ),
   );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_evaluate_request"));
