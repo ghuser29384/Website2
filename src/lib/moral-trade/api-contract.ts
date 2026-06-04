@@ -531,6 +531,9 @@ export function validateMoralTradeApiContractProfile(
   const reviewWorkflowEvaluateRoute = profile.routes.find(
     (route) => route.key === "moral_trade_review_workflow_evaluate",
   );
+  const reviewWorkflowEvaluateRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "review_workflow_evaluate_request",
+  );
   const reasoningPacketsRoute = profile.routes.find(
     (route) => route.key === "moral_trade_reasoning_packets",
   );
@@ -995,6 +998,15 @@ export function validateMoralTradeApiContractProfile(
         reviewWorkflowEvaluateRoute.rateLimitSurface === "review_workflow_evaluate" &&
         /without changing proposal state|never store|state/i.test(
           reviewWorkflowEvaluateRoute.fallback,
+        ) &&
+        Boolean(
+          reviewWorkflowEvaluateRequest?.fields.some(
+            (field) =>
+              field.key === "reviewInput" &&
+              /unsupported, private, protected-trait, raw-note, contact-detail, or extra wrapper keys fail closed/i.test(
+                field.description,
+              ),
+          ),
         ),
       reviewWorkflowEvaluateRoute
         ? `${reviewWorkflowEvaluateRoute.key}:${reviewWorkflowEvaluateRoute.cacheControl}:${reviewWorkflowEvaluateRoute.rateLimitSurface}`

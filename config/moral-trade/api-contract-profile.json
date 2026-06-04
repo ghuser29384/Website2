@@ -1262,7 +1262,7 @@
       "key": "review_workflow_evaluate_request",
       "purpose": "Ephemeral structured review workflow evaluation request for deterministic workflow cards without live state mutation.",
       "fields": [
-        { "key": "reviewInput", "type": "structured_review_input", "required": true, "privacy": "private_request", "description": "Known offer review fields only; unknown fields are ignored and the body is not stored." }
+        { "key": "reviewInput", "type": "structured_review_input", "required": true, "privacy": "private_request", "description": "Known offer review fields only; unsupported, private, protected-trait, raw-note, contact-detail, or extra wrapper keys fail closed before workflow cards are generated, and the body is not stored." }
       ]
     },
     {

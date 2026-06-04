@@ -37,6 +37,12 @@ const NUMBER_REVIEW_FIELDS = [
   "minCounterpartyImpact",
 ] as const satisfies ReadonlyArray<keyof OfferReviewWorkflowInput>;
 
+const REQUEST_WRAPPER_KEYS = new Set(["reviewInput"]);
+const ALLOWED_REVIEW_INPUT_KEYS = new Set<string>([
+  ...STRING_REVIEW_FIELDS,
+  ...NUMBER_REVIEW_FIELDS,
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -77,6 +83,26 @@ function normalizeReviewInput(record: Record<string, unknown>): OfferReviewWorkf
   }
 
   return normalized;
+}
+
+function getUnsupportedReviewInputKeys(body: Record<string, unknown>) {
+  const blockers: string[] = [];
+
+  for (const key of Object.keys(body)) {
+    if (!REQUEST_WRAPPER_KEYS.has(key)) {
+      blockers.push(`request.${key}: unsupported review-workflow input key`);
+    }
+  }
+
+  if (isRecord(body.reviewInput)) {
+    for (const key of Object.keys(body.reviewInput)) {
+      if (!ALLOWED_REVIEW_INPUT_KEYS.has(key)) {
+        blockers.push(`reviewInput.${key}: unsupported structured review input field`);
+      }
+    }
+  }
+
+  return blockers;
 }
 
 function jsonResponse(
@@ -157,6 +183,26 @@ export async function POST(request: Request) {
         fallback:
           "Missing structured reviewInput falls back to manual review without changing proposal state.",
         blockers: ["reviewInput: structured review input object is required"],
+      },
+      400,
+    );
+  }
+
+  const unsupportedInputBlockers = getUnsupportedReviewInputKeys(body);
+
+  if (unsupportedInputBlockers.length) {
+    return jsonResponse(
+      {
+        ok: false,
+        checkedAt: new Date().toISOString(),
+        contractVersion: contract.version,
+        decisioningMode: "deterministic_review_workflow_only",
+        stateMutation: false,
+        inputBundleUsed: ["structured_review_input", "review_workflow_contract"],
+        contractValidation,
+        fallback:
+          "Unsupported review-workflow fields fall back to manual review without changing proposal state; submit only documented structured review fields.",
+        blockers: unsupportedInputBlockers,
       },
       400,
     );

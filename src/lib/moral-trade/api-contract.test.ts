@@ -492,6 +492,17 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_evaluate_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_evaluate_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_request"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "review_workflow_evaluate_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "reviewInput" &&
+          /unsupported, private, protected-trait, raw-note, contact-detail, or extra wrapper keys fail closed/i.test(
+            field.description,
+          ),
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "review_workflow_evaluate_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "reasoning_packets_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "reasoning_packets_response"));

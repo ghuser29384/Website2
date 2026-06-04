@@ -548,3 +548,54 @@ test("review workflow routes publish participant copy templates", async () => {
     /Status: Needs evidence/i,
   );
 });
+
+test("review workflow evaluate rejects unsupported private fields before producing cards", async () => {
+  const response = await reviewWorkflowEvaluateRoute(
+    new Request("http://localhost/api/moral-trade/review-workflow/evaluate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        reviewInput: {
+          mode: "offset",
+          verification: "Third-party receipt",
+          contactDetails: "victoria@example.org",
+          rawPrivateNotes: "Exact private wish: do not expose this note.",
+          protectedTraits: ["religion"],
+        },
+        unapprovedContext: "private feed transcript",
+      }),
+    }),
+  );
+  const body = await response.json();
+  const serializedBody = JSON.stringify(body);
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.stateMutation, false);
+  assert.ok(!("workflowCards" in body));
+  assert.ok(!("marketplaceCard" in body));
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("request.unapprovedContext: unsupported review-workflow input key"),
+    ),
+  );
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("reviewInput.contactDetails: unsupported structured review input field"),
+    ),
+  );
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("reviewInput.rawPrivateNotes: unsupported structured review input field"),
+    ),
+  );
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("reviewInput.protectedTraits: unsupported structured review input field"),
+    ),
+  );
+  assert.doesNotMatch(serializedBody, /victoria@example\.org/);
+  assert.doesNotMatch(serializedBody, /Exact private wish/);
+  assert.doesNotMatch(serializedBody, /private feed transcript/);
+});
