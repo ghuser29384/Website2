@@ -634,8 +634,10 @@ export function validateMoralTradeCopilotReviewRouteImplementation({
       "copilot-review-strict-input-normalization",
       "Copilot review route normalizes only the strict input bundle",
       /normalizeDraftInput/.test(routeSource) &&
+        /getUnsupportedDraftInputKeys/.test(routeSource) &&
         /auditMoralTradeCopilotStrictInputBundle/.test(routeSource) &&
         /inputBundleAudit\.blockers/.test(routeSource) &&
+        /unsupportedDraftInputBlockers/.test(routeSource) &&
         /normalizeMoralTradeCopilotEvidenceMetadata/.test(routeSource) &&
         /normalizeCitations/.test(routeSource) &&
         /MAX_TEXT_FIELD_LENGTH/.test(routeSource) &&

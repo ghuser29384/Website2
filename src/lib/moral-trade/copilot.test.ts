@@ -626,6 +626,50 @@ test("copilot review route rejects broad top-level context even when draft is va
   assert.match(body.fallback, /without emitting an output packet/i);
 });
 
+test("copilot review route fails closed on unsupported private draft fields", async () => {
+  const response = await reviewDraftRoute(
+    new Request("http://localhost/api/moral-trade/copilot/review", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        draft: {
+          ...completeDraft,
+          contactDetails: "victoria@example.org",
+          rawPrivateNotes: "Exact private wish text should not enter the bundle.",
+          protectedTraits: ["religion"],
+        },
+      }),
+    }),
+  );
+  const body = await response.json();
+  const serializedBody = JSON.stringify(body);
+
+  assert.equal(response.status, 422);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.stateMutation, false);
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("draft.contactDetails: unsupported structured draft field"),
+    ),
+  );
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("draft.rawPrivateNotes: unsupported structured draft field"),
+    ),
+  );
+  assert.ok(
+    body.blockers.some((blocker: string) =>
+      blocker.includes("draft.protectedTraits: unsupported structured draft field"),
+    ),
+  );
+  assert.equal("output" in body, false);
+  assert.equal("outputValidation" in body, false);
+  assert.doesNotMatch(serializedBody, /victoria@example\.org/);
+  assert.doesNotMatch(serializedBody, /Exact private wish text/);
+  assert.match(body.fallback, /without emitting an output packet/i);
+});
+
 test("copilot review route fails closed on raw evidence metadata", async () => {
   const response = await reviewDraftRoute(
     new Request("http://localhost/api/moral-trade/copilot/review", {

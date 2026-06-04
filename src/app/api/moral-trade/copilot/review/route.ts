@@ -39,6 +39,11 @@ const NUMBER_DRAFT_FIELDS = [
   "counterpartyThreshold",
 ] as const satisfies ReadonlyArray<keyof MoralTradeProtocolDraftInput>;
 
+const ALLOWED_DRAFT_FIELDS = new Set<string>([
+  ...STRING_DRAFT_FIELDS,
+  ...NUMBER_DRAFT_FIELDS,
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -78,6 +83,18 @@ function normalizeDraftInput(draft: Record<string, unknown>): MoralTradeProtocol
   }
 
   return normalized;
+}
+
+function getUnsupportedDraftInputKeys(draft: Record<string, unknown>) {
+  const blockers: string[] = [];
+
+  for (const key of Object.keys(draft)) {
+    if (!ALLOWED_DRAFT_FIELDS.has(key)) {
+      blockers.push(`draft.${key}: unsupported structured draft field`);
+    }
+  }
+
+  return blockers;
 }
 
 function normalizeCitations(value: unknown) {
@@ -199,9 +216,11 @@ export async function POST(request: Request) {
   const evidenceMetadataNormalization = normalizeMoralTradeCopilotEvidenceMetadata(
     requestEvidenceMetadata,
   );
+  const unsupportedDraftInputBlockers = getUnsupportedDraftInputKeys(requestDraft);
   const preOutputBlockers = [
     ...contractValidation.blockers,
     ...inputBundleAudit.blockers,
+    ...unsupportedDraftInputBlockers,
     ...evidenceMetadataNormalization.blockers,
   ];
 
@@ -236,6 +255,7 @@ export async function POST(request: Request) {
   const blockers = [
     ...contractValidation.blockers,
     ...inputBundleAudit.blockers,
+    ...unsupportedDraftInputBlockers,
     ...outputValidation.blockers,
     ...evidenceMetadataNormalization.blockers,
   ];

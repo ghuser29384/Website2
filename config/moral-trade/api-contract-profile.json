@@ -995,7 +995,7 @@
       "key": "copilot_review_request",
       "purpose": "Ephemeral schema-bound draft review request for deterministic copilot critique without live state mutation.",
       "fields": [
-        { "key": "draft", "type": "structured_draft", "required": true, "privacy": "private_request", "description": "Known Moral Trade draft fields only; unknown fields are ignored and the body is not stored." },
+        { "key": "draft", "type": "structured_draft", "required": true, "privacy": "private_request", "description": "Known Moral Trade draft fields only; unsupported, private, protected-trait, raw-note, contact-detail, broad-context, or extra draft fields fail closed before a copilot output packet is generated, and the body is not stored." },
         { "key": "citations", "type": "string_array", "required": false, "privacy": "private_request", "description": "Optional local evidence labels or source pointers returned only to the requester." },
         { "key": "evidenceMetadata", "type": "evidence_metadata_array", "required": false, "privacy": "private_request", "description": "Optional already-submitted evidence metadata only: id, claim label, evidence type, citation label, status, scope, redaction level, and submitted timestamp; raw artifact content, private notes, exact wishes, and contact details are rejected or ignored." }
       ]

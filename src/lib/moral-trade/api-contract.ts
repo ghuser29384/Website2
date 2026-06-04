@@ -967,6 +967,15 @@ export function validateMoralTradeApiContractProfile(
         Boolean(
           copilotReviewRequest?.fields.some(
             (field) =>
+              field.key === "draft" &&
+              /unsupported, private, protected-trait, raw-note, contact-detail, broad-context, or extra draft fields fail closed/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          copilotReviewRequest?.fields.some(
+            (field) =>
               field.key === "evidenceMetadata" &&
               field.privacy === "private_request" &&
               /raw artifact|private notes|contact details/i.test(field.description),
