@@ -235,10 +235,19 @@ export function validateIntroPacketInput({
   requestedFieldKeys: string[];
 }) {
   const errors: string[] = [];
-  const fields = normalizeDisclosureFieldKeys(uniqueStrings(requestedFieldKeys)).slice(0, 8);
+  const requestedFields = uniqueStrings(requestedFieldKeys);
+  const fields = normalizeDisclosureFieldKeys(requestedFields).slice(0, 8);
+  const supportedFields = new Set<string>(fields);
+  const unsupportedFields = requestedFields.filter((field) => !supportedFields.has(field));
 
   if (purpose.trim().length < 12) {
     errors.push("Add a concrete purpose for the reviewed introduction packet.");
+  }
+
+  if (unsupportedFields.length) {
+    errors.push(
+      `Unsupported disclosure field keys are not allowed: ${unsupportedFields.join(", ")}.`,
+    );
   }
 
   if (!fields.length) {

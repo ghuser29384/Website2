@@ -516,6 +516,9 @@ export function validateMoralTradeApiContractProfile(
   const disclosureEvaluateResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "disclosure_evaluate_response",
   );
+  const backgroundIntroRequestCreateRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "background_intro_request_create_request",
+  );
   const incidentResponseHealthRoute = profile.routes.find(
     (route) => route.key === "moral_trade_incident_response_health",
   );
@@ -1145,6 +1148,22 @@ export function validateMoralTradeApiContractProfile(
         ),
       disclosureEvaluateRoute
         ? `${disclosureEvaluateRoute.key}:${disclosureEvaluateRoute.cacheControl}:${disclosureEvaluateRoute.rateLimitSurface}`
+        : "missing",
+    ),
+    check(
+      "background-intro-request-field-boundary",
+      "Background intro requests fail closed on unsupported disclosure fields",
+      Boolean(
+        backgroundIntroRequestCreateRequest?.fields.some(
+          (field) =>
+            field.key === "requestedFieldKeys" &&
+            /unsupported, private, protected-trait, raw-note, contact-detail, or extra field keys fail closed/i.test(
+              field.description,
+            ),
+        ),
+      ),
+      backgroundIntroRequestCreateRequest
+        ? `${backgroundIntroRequestCreateRequest.key}:requestedFieldKeys`
         : "missing",
     ),
     check(

@@ -291,6 +291,17 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_packet_create_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_request_create_request"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_intro_request_create_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "requestedFieldKeys" &&
+          /unsupported, private, protected-trait, raw-note, contact-detail, or extra field keys fail closed/i.test(
+            field.description,
+          ),
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_request_create_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_request_appeal_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_intro_request_contact_approval_response"));

@@ -126,6 +126,27 @@ test("intro packets require purpose and bounded requested fields", () => {
   assert.ok((packet.mutual_questions ?? []).some((question) => /no trade/i.test(question)));
 });
 
+test("intro packet validation rejects unsupported disclosure field keys", () => {
+  const invalid = validateIntroPacketInput({
+    purpose: "Decide whether a first bounded conversation is worth reviewing.",
+    requestedFieldKeys: [
+      "exact_wish",
+      "contactDetails",
+      "rawPrivateNotes",
+      "protectedTraits",
+    ],
+  });
+
+  assert.deepEqual(invalid.requestedFieldKeys, ["exact_wish"]);
+  assert.ok(
+    invalid.errors.some((error) =>
+      error.includes(
+        "Unsupported disclosure field keys are not allowed: contactDetails, rawPrivateNotes, protectedTraits.",
+      ),
+    ),
+  );
+});
+
 test("source summaries are scoped, expiring, and raw-ingestion disabled", () => {
   const { receipt, sourceSummary, validationErrors } = buildSourceSummaryRows({
     allowedFieldKeys: ["cause_priorities", "raw_free_text", "capability_tags"],

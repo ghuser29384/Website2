@@ -1615,7 +1615,7 @@
       "purpose": "Authenticated reviewed-introduction request with field-bounded details, optional opportunity context, and anti-probing controls.",
       "fields": [
         { "key": "purpose", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Concrete purpose for reviewer triage." },
-        { "key": "requestedFieldKeys", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Disclosure-lattice field keys only; unsupported fields are ignored and at least one supported field is required." },
+        { "key": "requestedFieldKeys", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Disclosure-lattice field keys only; unsupported, private, protected-trait, raw-note, contact-detail, or extra field keys fail closed before a reviewed-introduction packet is created, and at least one supported field is required." },
         { "key": "opportunityBriefId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional viewer-owned opportunity brief used to derive safe match context." },
         { "key": "counterpartyProfileId", "type": "uuid_or_null", "required": false, "privacy": "private_authenticated", "description": "Optional target profile for repeated-target probe checks and reviewer context." },
         { "key": "proposedTradeShape", "type": "object", "required": false, "privacy": "private_authenticated", "description": "Structured proposal context for operator review, not an outbound message." },
