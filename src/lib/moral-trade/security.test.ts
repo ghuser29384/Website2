@@ -38,7 +38,7 @@ test("security profile publishes headers, sessions, provider boundaries, non-cla
   assert.ok(
     profile.controls
       .find((control) => control.key === "private_no_store_cache")
-      ?.publicClaim.includes("background-networking helpers"),
+      ?.publicClaim.includes("password-update"),
   );
   assert.ok(profile.publicNonClaims.some((entry) => /MFA|2FA/i.test(entry)));
   assert.equal(
@@ -86,7 +86,8 @@ test("security implementation source keeps headers, cache, and sessions aligned"
       (check) =>
         check.id === "private-no-store-source" &&
         check.status === "pass" &&
-        /background API/.test(check.evidence),
+        /background-networking/.test(check.evidence) &&
+        /password-update/.test(check.evidence),
     ),
   );
   assert.ok(

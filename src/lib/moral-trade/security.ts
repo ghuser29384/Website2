@@ -223,6 +223,9 @@ export function validateMoralTradeSecurityImplementation({
         /source:\s*"\/admin\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/agreements\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/saved-offers\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/background-networking\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/onboarding\/:path\*"/.test(nextConfigSource) &&
+        /source:\s*"\/password-update\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/mpgf\/admin\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/mpgf\/account\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/api\/profile\/:path\*"/.test(nextConfigSource) &&
@@ -230,7 +233,7 @@ export function validateMoralTradeSecurityImplementation({
         /source:\s*"\/api\/jobs\/:path\*"/.test(nextConfigSource) &&
         /source:\s*"\/api\/saved-searches"/.test(nextConfigSource) &&
         /source:\s*"\/api\/wish-registry\/search"/.test(nextConfigSource),
-      "dashboard, admin, agreement, saved-offer, MPGF account/admin, profile API, background API, job API, saved-search, and wish-registry search routes should be private no-store.",
+      "dashboard, admin, agreement, saved-offer, background-networking, onboarding, password-update, MPGF account/admin, profile API, background API, job API, saved-search, and wish-registry search routes should be private no-store.",
     ),
     check(
       "supabase-session-refresh-source",

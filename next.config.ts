@@ -47,6 +47,18 @@ const nextConfig: NextConfig = {
         headers: privateNoStoreHeaders,
       },
       {
+        source: "/background-networking/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/onboarding/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
+        source: "/password-update/:path*",
+        headers: privateNoStoreHeaders,
+      },
+      {
         source: "/mpgf/admin/:path*",
         headers: privateNoStoreHeaders,
       },

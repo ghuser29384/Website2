@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-security-v0.4-2026-06",
+  "version": "moral-trade-security-v0.5-2026-06",
   "purpose": "Public security posture contract for Moral Trade headers, session boundaries, provider encryption assumptions, secret/key management, abuse throttling, and scale gates.",
   "controls": [
     {
@@ -13,8 +13,8 @@
       "key": "private_no_store_cache",
       "label": "Private no-store cache policy",
       "status": "implemented",
-      "evidence": "next.config.ts and background privacy controls mark dashboard, admin, agreement rooms, saved offers, MPGF account/admin, profile/background/job APIs, saved-search writes, and wish-registry search private no-store.",
-      "publicClaim": "Authenticated and sensitive routes, including private match rooms, background-networking helpers, and saved-user surfaces, should not be cached as public pages."
+      "evidence": "next.config.ts and background privacy controls mark dashboard, admin, agreement rooms, saved offers, background networking, onboarding, password-update, MPGF account/admin, profile/background/job APIs, saved-search writes, and wish-registry search private no-store.",
+      "publicClaim": "Authenticated and sensitive routes, including private match rooms, background-networking helpers, onboarding, password-update, and saved-user surfaces, should not be cached as public pages."
     },
     {
       "key": "supabase_auth_cookies",
