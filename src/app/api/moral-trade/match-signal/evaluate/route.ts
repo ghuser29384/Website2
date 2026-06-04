@@ -38,6 +38,8 @@ const PRIVACY_STAGES = new Set<MoralTradeMatchPrivacyStage>([
   "detail_request",
   "mutual_consent",
 ]);
+const REQUEST_WRAPPER_KEYS = new Set(["profilePair"]);
+const PROFILE_PAIR_KEYS = new Set(["left", "right"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -113,6 +115,52 @@ function getProfilePair(body: Record<string, unknown>) {
     left: normalizeRedactedProfile(candidate.left),
     right: normalizeRedactedProfile(candidate.right),
   };
+}
+
+function getUnsupportedProfilePairKeys({
+  body,
+  contract,
+}: {
+  body: Record<string, unknown>;
+  contract: ReturnType<typeof getMoralTradeMatchSignalContract>;
+}) {
+  const candidate = isRecord(body.profilePair) ? body.profilePair : body;
+  const requestAllowedKeys = isRecord(body.profilePair)
+    ? REQUEST_WRAPPER_KEYS
+    : PROFILE_PAIR_KEYS;
+  const allowedProfileKeys = new Set<string>([
+    ...contract.requiredInputFields,
+    ...contract.optionalInputFields,
+  ]);
+  const blockers: string[] = [];
+
+  for (const key of Object.keys(body)) {
+    if (!requestAllowedKeys.has(key)) {
+      blockers.push(`request.${key}: unsupported match-signal input key`);
+    }
+  }
+
+  for (const key of Object.keys(candidate)) {
+    if (!PROFILE_PAIR_KEYS.has(key)) {
+      blockers.push(`profilePair.${key}: unsupported profile-pair key`);
+    }
+  }
+
+  for (const side of ["left", "right"] as const) {
+    const profile = candidate[side];
+
+    if (!isRecord(profile)) {
+      continue;
+    }
+
+    for (const key of Object.keys(profile)) {
+      if (!allowedProfileKeys.has(key)) {
+        blockers.push(`${side}.${key}: unsupported redacted profile field`);
+      }
+    }
+  }
+
+  return blockers;
 }
 
 function getInputBlockers(input: ReturnType<typeof getProfilePair>) {
@@ -228,8 +276,9 @@ export async function POST(request: Request) {
     );
   }
 
+  const strictInputBlockers = getUnsupportedProfilePairKeys({ body, contract });
   const profilePair = getProfilePair(body);
-  const inputBlockers = getInputBlockers(profilePair);
+  const inputBlockers = [...strictInputBlockers, ...getInputBlockers(profilePair)];
 
   if (!profilePair || inputBlockers.length) {
     return jsonResponse(
@@ -242,7 +291,7 @@ export async function POST(request: Request) {
         inputBundleUsed: ["redacted_profile_pair", "match_signal_contract", "match_signal_privacy_policy"],
         contractValidation,
         fallback:
-          "Incomplete redacted profiles fall back to no match preview without changing state or disclosing counterparties.",
+          "Unsupported or incomplete redacted profiles fall back to no match preview without changing state or disclosing counterparties.",
         blockers: inputBlockers,
       },
       400,

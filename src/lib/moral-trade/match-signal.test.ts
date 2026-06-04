@@ -304,3 +304,47 @@ test("match signal routes publish participant explanation copy", async () => {
   assert.match(evaluateBody.signal.participantExplanation.summary, /Exact wishes and contact details are still hidden/i);
   assert.match(evaluateBody.signal.participantExplanation.humanReviewNotice, /Human review is mandatory/i);
 });
+
+test("match signal evaluate route rejects unsupported private profile fields before generating a signal", async () => {
+  const evaluateResponse = await evaluateRoute(
+    new Request("http://localhost/api/moral-trade/match-signal/evaluate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        profilePair: {
+          left: {
+            ...leftProfile,
+            contactDetails: "private@example.org",
+            rawPrivateNotes: "Exact private wish text",
+            protectedTraits: ["religion"],
+          },
+          right: rightProfile,
+        },
+      }),
+    }),
+  );
+  const evaluateBody = await evaluateResponse.json();
+  const serialized = JSON.stringify(evaluateBody);
+
+  assert.equal(evaluateResponse.status, 400);
+  assert.equal(evaluateBody.ok, false);
+  assert.equal(evaluateBody.stateMutation, false);
+  assert.equal(evaluateBody.signal, undefined);
+  assert.ok(
+    evaluateBody.blockers.some((blocker: string) =>
+      blocker.includes("left.contactDetails: unsupported redacted profile field"),
+    ),
+  );
+  assert.ok(
+    evaluateBody.blockers.some((blocker: string) =>
+      blocker.includes("left.rawPrivateNotes: unsupported redacted profile field"),
+    ),
+  );
+  assert.ok(
+    evaluateBody.blockers.some((blocker: string) =>
+      blocker.includes("left.protectedTraits: unsupported redacted profile field"),
+    ),
+  );
+  assert.doesNotMatch(serialized, /private@example\.org/);
+  assert.doesNotMatch(serialized, /Exact private wish text/);
+});

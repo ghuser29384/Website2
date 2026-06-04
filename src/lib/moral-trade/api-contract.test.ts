@@ -448,6 +448,17 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_evaluate_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "match_signal_evaluate_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "match_signal_evaluate_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "profilePair" &&
+          /unsupported, private, protected-trait, raw-note, or contact-detail keys fail closed/i.test(
+            field.description,
+          ),
+      ),
+  );
   const matchSignalSchema = profile.schemaDefinitions.find((schema) => schema.key === "match_signal");
   assert.ok(matchSignalSchema);
   assert.ok(

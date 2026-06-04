@@ -1102,7 +1102,7 @@
       "key": "match_signal_evaluate_request",
       "purpose": "Ephemeral redacted-profile pair for deterministic match preview without private inference or live state mutation.",
       "fields": [
-        { "key": "profilePair", "type": "redacted_profile_pair", "required": true, "privacy": "private_request", "description": "Left and right profiles containing only broad cause areas, trade modes, verification preferences, location sensitivity, privacy stage, privacy constraints, and stated exclusions." }
+        { "key": "profilePair", "type": "redacted_profile_pair", "required": true, "privacy": "private_request", "description": "Left and right profiles containing only broad cause areas, trade modes, verification preferences, location sensitivity, privacy stage, privacy constraints, and stated exclusions; unsupported, private, protected-trait, raw-note, or contact-detail keys fail closed before a signal is generated." }
       ]
     },
     {
