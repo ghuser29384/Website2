@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.24-2026-06",
+  "version": "moral-trade-api-contract-v0.25-2026-06",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -471,6 +471,42 @@
       "fallback": "Fail closed if the viewer is missing; validate payload shape and import mode before writing, and do not import counterparty-linked records."
     },
     {
+      "key": "background_wish_interview_session_create",
+      "method": "POST",
+      "path": "/api/background/wish-interview/sessions",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_wish_interview_session_create_request",
+      "responseSchema": "background_wish_interview_session_create_response",
+      "rateLimitSurface": "background_wish_interview_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication and an existing viewer-owned wish profile before creating a shadow-only interview session; route returns only schema-bound questions, stores no raw transcript in session state, and never mutates the profile."
+    },
+    {
+      "key": "background_wish_interview_answer_create",
+      "method": "POST",
+      "path": "/api/background/wish-interview/sessions/:id/answer",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_wish_interview_answer_create_request",
+      "responseSchema": "background_wish_interview_answer_create_response",
+      "rateLimitSurface": "background_wish_interview_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer-owned session access, current question order, and configured encryption before saving an answer draft; answer text is encrypted in the interview-answer row, session metadata stores only field keys, option counts, and length buckets."
+    },
+    {
+      "key": "background_wish_interview_apply",
+      "method": "POST",
+      "path": "/api/background/wish-interview/sessions/:id/apply",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_wish_interview_apply_request",
+      "responseSchema": "background_wish_interview_apply_response",
+      "rateLimitSurface": "background_wish_interview_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer-owned session access and user-approved allowed field keys before applying structured deltas; disallow contact details, raw profile notes, raw source notes, protected-trait inferences, autonomous outreach, and live public-preview mutation."
+    },
+    {
       "key": "background_source_connection_create",
       "method": "POST",
       "path": "/api/background/source-connections",
@@ -507,6 +543,18 @@
       "fallback": "Require viewer authentication and viewer-owned source connection access; use raw source text only in request memory, persist only redacted shadow output, and return a reviewable summary draft with redaction counts and allowed-field signals."
     },
     {
+      "key": "background_source_connection_summary_draft_alias",
+      "method": "POST",
+      "path": "/api/background/source-connections/:id/summaries/draft",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_source_summary_draft_request",
+      "responseSchema": "background_source_summary_draft_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Alias for the authenticated review-first source summary draft route; it keeps raw source text request-only, persists only redacted shadow output, and creates no live profile signal until approval."
+    },
+    {
       "key": "background_source_summary_approve",
       "method": "POST",
       "path": "/api/background/source-summaries/:id/approve",
@@ -517,6 +565,18 @@
       "rateLimitSurface": "background_source_summary_write",
       "cacheControl": "private_no_store",
       "fallback": "Require viewer authentication before approving a viewer-owned shadow summary run into an encrypted reviewed source summary and active profile signals; raw source text remains outside storage."
+    },
+    {
+      "key": "background_source_connection_summary_approve_alias",
+      "method": "POST",
+      "path": "/api/background/source-connections/:id/summaries/:summaryId/approve",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_source_summary_approve_request",
+      "responseSchema": "background_source_summary_approve_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Alias for approving a viewer-owned source summary shadow run from a source-connection path; it verifies the draft belongs to the requested source connection before delegating to the same encrypted approval flow."
     },
     {
       "key": "background_profile_signal_recompute",
@@ -1368,6 +1428,63 @@
         { "key": "importedCounts", "type": "object", "required": true, "privacy": "private_authenticated", "description": "Counts by imported collection." },
         { "key": "schemaUrl", "type": "path", "required": true, "privacy": "private_authenticated", "description": "Public schema endpoint for the import contract." },
         { "key": "privacyNotice", "type": "string", "required": true, "privacy": "private_authenticated", "description": "Counterparty-linked records are not imported." }
+      ]
+    },
+    {
+      "key": "background_wish_interview_session_create_request",
+      "purpose": "Authenticated request to start an opt-in, schema-bound guided wish interview.",
+      "fields": [
+        { "key": "consentVersion", "type": "string", "required": false, "privacy": "private_authenticated", "description": "Optional consent-copy version accepted by the viewer; defaults to the current wish-interview consent version." }
+      ]
+    },
+    {
+      "key": "background_wish_interview_session_create_response",
+      "purpose": "Private no-store shadow-only wish-interview session and first question.",
+      "fields": [
+        { "key": "sessionId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned background shadow-run id for this interview session." },
+        { "key": "question", "type": "object_or_null", "required": true, "privacy": "private_authenticated", "description": "Current schema-bound question with field key, answer kind, options, and reason for asking." },
+        { "key": "rawTranscriptStored", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false for session metadata." },
+        { "key": "profileMutationApplied", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false when the session is created." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "wish_interview_session_created when the shadow-only session is saved." }
+      ]
+    },
+    {
+      "key": "background_wish_interview_answer_create_request",
+      "purpose": "Authenticated answer submission for the current schema-bound wish-interview question.",
+      "fields": [
+        { "key": "questionKey", "type": "string", "required": false, "privacy": "private_authenticated", "description": "Optional current question key used to prevent out-of-order answers." },
+        { "key": "answer", "type": "string", "required": false, "privacy": "private_authenticated_encrypted", "description": "Free-text answer encrypted into the interview-answer row; it is not stored in session metadata." },
+        { "key": "selectedOptions", "type": "string_array", "required": false, "privacy": "private_authenticated", "description": "Broad approved checklist choices; unrecognized choices are discarded before session metadata is updated." }
+      ]
+    },
+    {
+      "key": "background_wish_interview_answer_create_response",
+      "purpose": "Private no-store answer draft result with redacted next-session metadata.",
+      "fields": [
+        { "key": "answerId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned encrypted interview-answer row id." },
+        { "key": "nextQuestion", "type": "object_or_null", "required": true, "privacy": "private_authenticated", "description": "Next schema-bound question, or null when the session is ready for user review." },
+        { "key": "proposedDeltaKeys", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Allowed source-permission field keys with answers awaiting explicit approval." },
+        { "key": "answerTextStoredInSession", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; session metadata stores only field keys, option counts, and length buckets." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "wish_interview_answer_drafted when the encrypted draft is saved." }
+      ]
+    },
+    {
+      "key": "background_wish_interview_apply_request",
+      "purpose": "Authenticated approval of answered guided-interview deltas.",
+      "fields": [
+        { "key": "approvedDeltaKeys", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Allowed field keys the viewer explicitly approves for interview-derived profile signals; contact details, raw profile notes, raw source notes, payment-private payloads, and protected-trait inferences are rejected." }
+      ]
+    },
+    {
+      "key": "background_wish_interview_apply_response",
+      "purpose": "Private no-store result for user-approved structured wish-interview deltas.",
+      "fields": [
+        { "key": "approvedDeltaKeys", "type": "string_array", "required": true, "privacy": "private_authenticated", "description": "Allowed field keys applied from this session." },
+        { "key": "profileSignalsCreated", "type": "integer", "required": true, "privacy": "private_authenticated", "description": "Count of interview-sourced profile signal rows created from approved broad choices or generic reviewed-detail markers." },
+        { "key": "profileMutationApplied", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; canonical wish text and public preview are not rewritten by the helper." },
+        { "key": "liveAiMutation", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." },
+        { "key": "rawTranscriptStored", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false for session metadata and matching signals." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "wish_interview_structured_delta_applied when allowed deltas are approved and the session is closed." }
       ]
     },
     {

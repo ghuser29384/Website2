@@ -393,6 +393,7 @@ export function buildProfileInterviewAnswerRow({
   profileId,
   questionKey,
   questionText,
+  status = "saved",
   uncertaintyFlags = [],
 }: {
   answer: string;
@@ -401,6 +402,7 @@ export function buildProfileInterviewAnswerRow({
   profileId: string;
   questionKey: string;
   questionText?: string;
+  status?: ProfileInterviewAnswerInsert["status"];
   uncertaintyFlags?: string[];
 }): ProfileInterviewAnswerInsert {
   return {
@@ -410,7 +412,7 @@ export function buildProfileInterviewAnswerRow({
     profile_id: profileId,
     question_key: compactText(questionKey || "manual_interview_answer", 120),
     question_text: compactText(questionText ?? "", 500),
-    status: "saved",
+    status,
     uncertainty_flags: uniqueStrings(uncertaintyFlags).slice(0, 8),
   };
 }

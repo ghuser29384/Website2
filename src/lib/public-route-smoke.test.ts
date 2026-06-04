@@ -808,11 +808,26 @@ test("background source connector permissions stay field-limited and raw-ingesti
   const sourceConnectionDraftRoute = readRepoFile(
     "src/app/api/background/source-connections/[id]/draft-summary/route.ts",
   );
+  const sourceConnectionSummaryDraftAliasRoute = readRepoFile(
+    "src/app/api/background/source-connections/[id]/summaries/draft/route.ts",
+  );
   const sourceSummaryApproveRoute = readRepoFile(
     "src/app/api/background/source-summaries/[id]/approve/route.ts",
   );
+  const sourceConnectionSummaryApproveAliasRoute = readRepoFile(
+    "src/app/api/background/source-connections/[id]/summaries/[summaryId]/approve/route.ts",
+  );
   const profileInterviewRoute = readRepoFile(
     "src/app/api/background/profile/interview/route.ts",
+  );
+  const wishInterviewSessionsRoute = readRepoFile(
+    "src/app/api/background/wish-interview/sessions/route.ts",
+  );
+  const wishInterviewAnswerRoute = readRepoFile(
+    "src/app/api/background/wish-interview/sessions/[id]/answer/route.ts",
+  );
+  const wishInterviewApplyRoute = readRepoFile(
+    "src/app/api/background/wish-interview/sessions/[id]/apply/route.ts",
   );
   const profileSignalRecomputeRoute = readRepoFile(
     "src/app/api/background/profile-signals/recompute/route.ts",
@@ -835,6 +850,7 @@ test("background source connector permissions stay field-limited and raw-ingesti
   );
   const backgroundNetworkingSource = readRepoFile("src/lib/background-networking.ts");
   const backgroundSourceAssistSource = readRepoFile("src/lib/background-source-assist.ts");
+  const backgroundWishInterviewSource = readRepoFile("src/lib/background-wish-interview.ts");
   const backgroundAiShadowSource = readRepoFile("src/lib/background-ai-shadow.ts");
   const backgroundCapabilityGateSource = readRepoFile("src/lib/background-capability-gates.ts");
   const backgroundRolloutSource = readRepoFile("src/lib/background-rollout.ts");
@@ -957,13 +973,27 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(sourceConnectionDraftRoute, /rawTextPersisted: false/);
   assert.match(sourceConnectionDraftRoute, /background_source_summary_enabled/);
   assert.match(sourceConnectionDraftRoute, /background_shadow_runs/);
+  assert.match(sourceConnectionSummaryDraftAliasRoute, /draft-summary\/route/);
   assert.match(sourceSummaryApproveRoute, /buildBackgroundProfileSignalRows/);
   assert.match(sourceSummaryApproveRoute, /approved_source_summary_promoted/);
   assert.match(sourceSummaryApproveRoute, /background_source_summary_enabled/);
+  assert.match(sourceConnectionSummaryApproveAliasRoute, /source_connection_id/);
+  assert.match(sourceConnectionSummaryApproveAliasRoute, /requested source connection/);
+  assert.match(sourceConnectionSummaryApproveAliasRoute, /source-summaries\/\[id\]\/approve\/route/);
   assert.match(profileInterviewRoute, /buildGuidedWishProfileDraft/);
   assert.match(profileInterviewRoute, /guidedWishProfileDraft/);
   assert.match(profileInterviewRoute, /shadow_first_user_approved_only/);
   assert.match(profileInterviewRoute, /background_wish_interview_enabled/);
+  assert.match(wishInterviewSessionsRoute, /BACKGROUND_WISH_INTERVIEW_MODEL_NAME/);
+  assert.match(wishInterviewSessionsRoute, /wish_interview_session_created/);
+  assert.match(wishInterviewSessionsRoute, /rawTranscriptStored: false/);
+  assert.match(wishInterviewAnswerRoute, /prepareRecordSensitiveTextFields/);
+  assert.match(wishInterviewAnswerRoute, /answerTextStoredInSession: false/);
+  assert.match(wishInterviewAnswerRoute, /wish_interview_answer_drafted/);
+  assert.match(wishInterviewApplyRoute, /validateBackgroundWishInterviewApply/);
+  assert.match(wishInterviewApplyRoute, /background_profile_signals/);
+  assert.match(wishInterviewApplyRoute, /profileMutationApplied: false/);
+  assert.match(wishInterviewApplyRoute, /wish_interview_structured_delta_applied/);
   assert.match(profileSignalRecomputeRoute, /profile_signals_recomputed/);
   assert.match(profileSignalRecomputeRoute, /background_profile_signals/);
   assert.match(profileSignalRecomputeRoute, /background_source_summary_enabled/);
@@ -1023,13 +1053,19 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(backgroundNetworkingJobRoute, /autonomousOutreachSent: false/);
   assert.match(vercelConfig, /\/api\/jobs\/background-networking/);
   assert.match(apiRateLimitSource, /background_source_summary_write: \{ limit: 12/);
+  assert.match(apiRateLimitSource, /background_wish_interview_write: \{ limit: 20/);
   assert.match(apiRateLimitSource, /background_intro_packet_write: \{ limit: 12/);
   assert.match(apiRateLimitSource, /background_opportunity_brief_read: \{ limit: 60/);
   assert.match(apiRateLimitSource, /background_opportunity_feedback_write: \{ limit: 30/);
   assert.match(apiContractProfile, /background_source_summary_create/);
+  assert.match(apiContractProfile, /background_wish_interview_session_create/);
+  assert.match(apiContractProfile, /background_wish_interview_answer_create/);
+  assert.match(apiContractProfile, /background_wish_interview_apply/);
   assert.match(apiContractProfile, /background_source_connection_create/);
   assert.match(apiContractProfile, /background_source_summary_draft/);
+  assert.match(apiContractProfile, /background_source_connection_summary_draft_alias/);
   assert.match(apiContractProfile, /background_source_summary_approve/);
+  assert.match(apiContractProfile, /background_source_connection_summary_approve_alias/);
   assert.match(apiContractProfile, /background_profile_signal_recompute/);
   assert.match(apiContractProfile, /background_intro_packet_create/);
   assert.match(apiContractProfile, /background_intro_request_create/);
@@ -1050,6 +1086,11 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(backgroundSourceAssistSource, /review_first_source_summary_no_raw_persistence/);
   assert.match(backgroundSourceAssistSource, /redactBackgroundSourceAssistRawText/);
   assert.match(backgroundSourceAssistSource, /removedEmails/);
+  assert.match(backgroundWishInterviewSource, /contact_details/);
+  assert.match(backgroundWishInterviewSource, /raw_profile_notes/);
+  assert.match(backgroundWishInterviewSource, /raw_source_notes/);
+  assert.match(backgroundWishInterviewSource, /answerTextStoredInSession: false/);
+  assert.match(backgroundWishInterviewSource, /reviewed_\$\{answer\.fieldKey\}_provided/);
   assert.match(backgroundAiShadowSource, /getBackgroundAiShadowContract/);
   assert.match(backgroundAiShadowSource, /validateBackgroundAiShadowContract/);
   assert.match(backgroundAiShadowSource, /approved_summary_shadow_evaluation_only/);

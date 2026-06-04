@@ -132,6 +132,7 @@ const REQUIRED_RATE_LIMITS = [
   "profile_portability",
   "background_opportunity_brief_read",
   "background_opportunity_feedback_write",
+  "background_wish_interview_write",
   "background_source_summary_write",
   "background_intro_packet_write",
   "wish_registry_search",

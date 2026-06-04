@@ -95,6 +95,38 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "background_wish_interview_session_create" &&
+        route.path === "/api/background/wish-interview/sessions" &&
+        route.auth === "authenticated" &&
+        route.cacheControl === "private_no_store" &&
+        route.rateLimitSurface === "background_wish_interview_write" &&
+        /shadow-only interview session/i.test(route.fallback) &&
+        /never mutates the profile/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_wish_interview_answer_create" &&
+        route.path === "/api/background/wish-interview/sessions/:id/answer" &&
+        route.rateLimitSurface === "background_wish_interview_write" &&
+        /configured encryption/i.test(route.fallback) &&
+        /field keys, option counts, and length buckets/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_wish_interview_apply" &&
+        route.path === "/api/background/wish-interview/sessions/:id/apply" &&
+        route.rateLimitSurface === "background_wish_interview_write" &&
+        /contact details/i.test(route.fallback) &&
+        /live public-preview mutation/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "background_source_connection_create" &&
         route.path === "/api/background/source-connections" &&
         route.auth === "authenticated" &&
@@ -114,9 +146,26 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "background_source_connection_summary_draft_alias" &&
+        route.path === "/api/background/source-connections/:id/summaries/draft" &&
+        route.rateLimitSurface === "background_source_summary_write" &&
+        /Alias/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "background_source_summary_approve" &&
         route.path === "/api/background/source-summaries/:id/approve" &&
         /active profile signals/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_source_connection_summary_approve_alias" &&
+        route.path === "/api/background/source-connections/:id/summaries/:summaryId/approve" &&
+        /belongs to the requested source connection/i.test(route.fallback),
     ),
   );
   assert.ok(
@@ -227,6 +276,12 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.routes.some((route) => route.key === "wish_registry_search"));
   assert.ok(profile.routes.some((route) => route.key === "funnel_events"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_export_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_interview_session_create_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_interview_session_create_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_interview_answer_create_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_interview_answer_create_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_interview_apply_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_interview_apply_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_connection_create_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_draft_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_approve_response"));
@@ -243,6 +298,36 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_feedback_create_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_feedback_create_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "private_overlap_contract_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_wish_interview_answer_create_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "answerTextStoredInSession" &&
+          field.required &&
+          /Always false/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_wish_interview_apply_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "approvedDeltaKeys" &&
+          /contact details/i.test(field.description) &&
+          /raw source notes/i.test(field.description),
+      ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "background_wish_interview_apply_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "profileMutationApplied" &&
+          field.required &&
+          /Always false/i.test(field.description),
+      ),
+  );
   assert.ok(
     profile.schemaDefinitions
       .find((schema) => schema.key === "background_source_summary_create_response")
@@ -579,6 +664,7 @@ test("api contract implementation audit proves route metadata is backed by execu
   assert.deepEqual(audit.orphanedRateLimitSurfaces, []);
   assert.ok(audit.implementedRateLimitSurfaces.includes("public_contract_read"));
   assert.ok(audit.implementedRateLimitSurfaces.includes("offer_collection_read"));
+  assert.ok(audit.implementedRateLimitSurfaces.includes("background_wish_interview_write"));
   assert.ok(audit.implementedRateLimitSurfaces.includes("background_source_summary_write"));
   assert.ok(audit.implementedRateLimitSurfaces.includes("background_intro_packet_write"));
   assert.ok(audit.implementedRateLimitSurfaces.includes("analytics_ingest"));
@@ -613,6 +699,14 @@ test("api contract implementation audit proves route metadata is backed by execu
   assert.equal(
     routeFinding("background_source_connection_revoke").resolvedRouteFile,
     "src/app/api/background/source-connections/[id]/route.ts",
+  );
+  assert.equal(
+    routeFinding("background_wish_interview_apply").resolvedRouteFile,
+    "src/app/api/background/wish-interview/sessions/[id]/apply/route.ts",
+  );
+  assert.equal(
+    routeFinding("background_source_connection_summary_approve_alias").resolvedRouteFile,
+    "src/app/api/background/source-connections/[id]/summaries/[summaryId]/approve/route.ts",
   );
 });
 
