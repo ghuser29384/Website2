@@ -37,6 +37,14 @@ test("data model profile covers the audit-named core Moral Trade entities", () =
   assert.ok(entityKeys.includes("payment_record"));
   assert.ok(entityKeys.includes("agreement_event"));
   assert.ok(entityKeys.includes("source_note"));
+  assert.ok(entityKeys.includes("background_wish_interview_session"));
+  assert.ok(entityKeys.includes("background_wish_interview_answer"));
+  assert.ok(entityKeys.includes("background_source_summary"));
+  assert.ok(entityKeys.includes("background_profile_signal"));
+  assert.ok(entityKeys.includes("background_opportunity_brief"));
+  assert.ok(entityKeys.includes("background_match_feedback"));
+  assert.ok(entityKeys.includes("background_intro_packet"));
+  assert.ok(entityKeys.includes("match_concierge_request"));
   assert.ok(entityKeys.includes("saved_search"));
   assert.ok(entityKeys.includes("profile_visibility_control"));
   assert.ok(entityKeys.includes("dispute"));
@@ -58,12 +66,34 @@ test("data model profile publishes offer fields and privacy boundaries from the 
   const stateTransitionEvent = profile.entities.find(
     (entity) => entity.key === "state_transition_event_record",
   );
+  const wishInterviewSession = profile.entities.find(
+    (entity) => entity.key === "background_wish_interview_session",
+  );
+  const sourceSummary = profile.entities.find(
+    (entity) => entity.key === "background_source_summary",
+  );
+  const profileSignal = profile.entities.find(
+    (entity) => entity.key === "background_profile_signal",
+  );
+  const opportunityBrief = profile.entities.find(
+    (entity) => entity.key === "background_opportunity_brief",
+  );
+  const introPacket = profile.entities.find((entity) => entity.key === "background_intro_packet");
+  const conciergeRequest = profile.entities.find(
+    (entity) => entity.key === "match_concierge_request",
+  );
 
   assert.ok(offer);
   assert.ok(reviewDecision);
   assert.ok(matchSuggestion);
   assert.ok(traceabilityEvent);
   assert.ok(stateTransitionEvent);
+  assert.ok(wishInterviewSession);
+  assert.ok(sourceSummary);
+  assert.ok(profileSignal);
+  assert.ok(opportunityBrief);
+  assert.ok(introPacket);
+  assert.ok(conciergeRequest);
   assert.ok(offer.requiredFields.includes("cause_areas"));
   assert.ok(offer.requiredFields.includes("offered_action"));
   assert.ok(offer.requiredFields.includes("requested_action"));
@@ -80,6 +110,16 @@ test("data model profile publishes offer fields and privacy boundaries from the 
   assert.ok(matchSuggestion.requiredFields.includes("privacy_policy_id"));
   assert.ok(matchSuggestion.requiredFields.includes("human_review_required"));
   assert.match(matchSuggestion.publicExposure, /privacy policy ids/);
+  assert.ok(wishInterviewSession.requiredFields.includes("ai_shadow_mode_allowed"));
+  assert.ok(sourceSummary.requiredFields.includes("raw_ingestion_allowed"));
+  assert.ok(sourceSummary.requiredFields.includes("retention_expires_at"));
+  assert.ok(profileSignal.requiredFields.includes("allowed_field_key"));
+  assert.ok(opportunityBrief.requiredFields.includes("human_review_required"));
+  assert.ok(introPacket.requiredFields.includes("requested_field_keys"));
+  assert.ok(conciergeRequest.requiredFields.includes("sla_due_at"));
+  assert.match(sourceSummary.publicExposure, /raw ingestion disabled/);
+  assert.match(opportunityBrief.publicExposure, /exact wishes/);
+  assert.match(introPacket.publicExposure, /never sends autonomous outreach/);
   assert.ok(traceabilityEvent.requiredFields.includes("where_recorded"));
   assert.ok(traceabilityEvent.requiredFields.includes("why"));
   assert.ok(traceabilityEvent.requiredFields.includes("audit_question_answers"));

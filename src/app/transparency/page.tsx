@@ -125,6 +125,12 @@ export default async function TransparencyPage() {
               small-sample suppression means a zero is shown as zero; a one- or two-case count is
               not made public.
             </p>
+            <p>
+              Background-networking metrics are sourced from opportunity briefs, closed-code match
+              feedback, intro packets, and match concierge requests. The report publishes counts,
+              medians, and percentages only; it never publishes brief text, exact wishes, source
+              notes, contact details, requester notes, or private case files.
+            </p>
           </div>
 
           {report.metricErrors.length ? (

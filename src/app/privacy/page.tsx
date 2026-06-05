@@ -153,6 +153,12 @@ export default async function PrivacyPage() {
             app does not automatically ingest, scrape, or search raw external data.
           </p>
           <p className="route-text">
+            The source-summary lane is manual/import first. Pasted or uploaded material may be used
+            to draft a redacted summary, but raw imported text is not copied into analytics and
+            does not become a matching input until the participant approves the summary and its
+            broad field scope.
+          </p>
+          <p className="route-text">
             Active external connectors require a separate source permission, consent notes, one of
             the supported retention windows ({BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.join(", ")}
             days), and a field list chosen from broad matching categories.
@@ -353,6 +359,11 @@ export default async function PrivacyPage() {
             Discovery alerts default to digest cadence with quiet hours and source cooldowns. Email
             copy for background networking stays generic and leaves exact wishes, contact details,
             private asks, source notes, and sensitive constraints in the dashboard.
+          </p>
+          <p className="route-text">
+            Opportunity brief alerts are dashboard-directed. They may say that a new background
+            opportunity is ready to review, but they must not include counterparty contact details,
+            exact wish text, raw source excerpts, private asks, or sensitive constraints.
           </p>
         </section>
         <section className="panel data-card data-card-wide">

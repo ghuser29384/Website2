@@ -146,6 +146,16 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "background_source_summary_draft_bg16_alias" &&
+        route.path === "/api/background/source-connections/:id/summary-draft" &&
+        route.rateLimitSurface === "background_source_summary_write" &&
+        /Bg16-compatible alias/i.test(route.fallback) &&
+        /raw imported source text request-only/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "background_source_connection_summary_draft_alias" &&
         route.path === "/api/background/source-connections/:id/summaries/draft" &&
         route.rateLimitSurface === "background_source_summary_write" &&
@@ -163,6 +173,16 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "background_source_connection_approve_bg16_alias" &&
+        route.path === "/api/background/source-connections/:id/approve" &&
+        route.requestSchema === "background_source_summary_approve_request" &&
+        /summaryId or shadowRunId/i.test(route.fallback) &&
+        /belongs to the requested source connection/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "background_source_connection_summary_approve_alias" &&
         route.path === "/api/background/source-connections/:id/summaries/:summaryId/approve" &&
         /belongs to the requested source connection/i.test(route.fallback),
@@ -174,6 +194,15 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
         route.key === "background_profile_signal_recompute" &&
         route.path === "/api/background/profile-signals/recompute" &&
         /marking expired, revoked, or stale signals/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_profile_recompute_bg16_alias" &&
+        route.path === "/api/background/profile/recompute" &&
+        route.responseSchema === "background_profile_signal_recompute_response" &&
+        /revoked, expired, and stale signal cleanup/i.test(route.fallback),
     ),
   );
   assert.ok(

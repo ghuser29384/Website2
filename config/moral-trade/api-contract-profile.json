@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.25-2026-06",
+  "version": "moral-trade-api-contract-v0.26-2026-06",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -543,6 +543,18 @@
       "fallback": "Require viewer authentication and viewer-owned source connection access; use raw source text only in request memory, persist only redacted shadow output, and return a reviewable summary draft with redaction counts and allowed-field signals."
     },
     {
+      "key": "background_source_summary_draft_bg16_alias",
+      "method": "POST",
+      "path": "/api/background/source-connections/:id/summary-draft",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_source_summary_draft_request",
+      "responseSchema": "background_source_summary_draft_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Bg16-compatible alias for the authenticated source summary draft route; it delegates to the same handler, keeps raw imported source text request-only, persists only redacted shadow output, and creates no live profile signal until approval."
+    },
+    {
       "key": "background_source_connection_summary_draft_alias",
       "method": "POST",
       "path": "/api/background/source-connections/:id/summaries/draft",
@@ -567,6 +579,18 @@
       "fallback": "Require viewer authentication before approving a viewer-owned shadow summary run into an encrypted reviewed source summary and active profile signals; raw source text remains outside storage."
     },
     {
+      "key": "background_source_connection_approve_bg16_alias",
+      "method": "POST",
+      "path": "/api/background/source-connections/:id/approve",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_source_summary_approve_request",
+      "responseSchema": "background_source_summary_approve_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Bg16-compatible alias for approving a viewer-owned source summary shadow run from a source-connection path; it requires a summaryId or shadowRunId, verifies the draft belongs to the requested source connection, and delegates to the same encrypted approval flow."
+    },
+    {
       "key": "background_source_connection_summary_approve_alias",
       "method": "POST",
       "path": "/api/background/source-connections/:id/summaries/:summaryId/approve",
@@ -589,6 +613,18 @@
       "rateLimitSurface": "background_source_summary_write",
       "cacheControl": "private_no_store",
       "fallback": "Require viewer authentication and recompute only viewer-owned derived profile-signal status, marking expired, revoked, or stale signals out of matching without exposing raw source content."
+    },
+    {
+      "key": "background_profile_recompute_bg16_alias",
+      "method": "POST",
+      "path": "/api/background/profile/recompute",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_profile_signal_recompute_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Bg16-compatible alias for viewer-owned profile-signal recomputation; it delegates to the same revoked, expired, and stale signal cleanup path and never exposes raw source content."
     },
     {
       "key": "background_source_summary_create",

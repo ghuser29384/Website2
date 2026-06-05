@@ -183,6 +183,22 @@ export default async function BackgroundNetworkingPage({
               </p>
             </article>
             <article className="panel concept-card">
+              <h3>Structured wish interview</h3>
+              <p>
+                A default-off interview lane asks deterministic clarification questions for
+                missing cause, offer, verification, availability, and safety fields. Answers stay
+                private and cannot change matching until the participant applies structured fields.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Reviewed source summaries</h3>
+              <p>
+                Manual or imported text can create a redacted summary draft for review. Raw
+                imported text is request-only, raw ingestion remains disabled, and approved
+                summaries may influence only the selected broad field permissions.
+              </p>
+            </article>
+            <article className="panel concept-card">
               <h3>Deterministic matching</h3>
               <p>
                 Candidate matches are banded from declared cause areas, trade modes, constraints,
@@ -196,6 +212,14 @@ export default async function BackgroundNetworkingPage({
                 A participant can request more detail, decline, or report a suggestion. Exact
                 wishes, contact information, and sensitive constraints should only move forward
                 after staged disclosure and mutual consent.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Opportunity briefs</h3>
+              <p>
+                A brief is a dashboard-owned broad preview with a headline, factor codes,
+                redacted-field notices, and next-step buttons. Marking interest creates a reviewed
+                intro packet draft; it does not contact the counterparty or disclose contact data.
               </p>
             </article>
             <article className="panel concept-card">
@@ -342,6 +366,14 @@ export default async function BackgroundNetworkingPage({
               privacy-design, external review, and human-control checks are satisfied.
               Private-overlap checks are not live; any future pilot must use curated tags only,
               not free text or raw tag disclosure.
+            </p>
+            <p>
+              The current source-summary path is manual/import first: participants create a source
+              connection, draft a redacted summary from user-provided material, approve the summary,
+              then recompute only viewer-owned profile signals. The bg16 route aliases are
+              published for this path as <code>/api/background/source-connections/:id/summary-draft</code>,
+              <code>/api/background/source-connections/:id/approve</code>, and{" "}
+              <code>/api/background/profile/recompute</code>.
             </p>
           </div>
 
@@ -597,8 +629,9 @@ export default async function BackgroundNetworkingPage({
               it may influence, and revoke access at any time.
             </p>
             <p className="route-text">
-              Raw connector ingestion remains disabled. Active external connections require
-              consent notes, a supported retention window (
+              Raw connector ingestion remains disabled. The manual/import source summary lane
+              supports a review card before approval, a permission table for revoke/renewal, and
+              active external connections require consent notes, a supported retention window (
               {BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS.join(", ")} days), and at least one broad
               field permission.
             </p>

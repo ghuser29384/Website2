@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-data-model-v0.1.5-2026-06",
+  "version": "moral-trade-data-model-v0.1.6-2026-06",
   "purpose": "Public contract for the core Moral Trade domain entities, required fields, privacy classes, relationship boundaries, and non-claims named by the product audit.",
   "entities": [
     {
@@ -55,6 +55,42 @@
       "requiredFields": ["id", "owner_id", "source_connection_id", "summary", "redaction_level", "created_at"],
       "relationships": ["source_connection", "private_wish_profile", "evidence_claim"],
       "publicExposure": "Only coarse source summaries may be disclosed through a valid purpose-bound grant; raw notes remain private."
+    },
+    {
+      "key": "background_wish_interview_session",
+      "label": "Background wish interview session",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "participant_id", "private_profile_id", "status", "question_set_version", "ai_shadow_mode_allowed", "expires_at", "applied_at"],
+      "relationships": ["participant", "private_wish_profile", "background_wish_interview_answer", "background_profile_signal"],
+      "publicExposure": "Stores deterministic clarification state for the participant only; it does not publish exact wishes, contact details, private answer text, or live public-preview changes."
+    },
+    {
+      "key": "background_wish_interview_answer",
+      "label": "Background wish interview answer",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "session_id", "participant_id", "prompt_key", "answer_ciphertext", "structured_patch", "created_at"],
+      "relationships": ["background_wish_interview_session", "participant"],
+      "publicExposure": "Answer text remains private and encrypted; analytics and match cards receive field keys, option counts, and length buckets rather than exact wishes or source notes."
+    },
+    {
+      "key": "background_source_summary",
+      "label": "Reviewed background source summary",
+      "category": "privacy",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "profile_id", "source_connection_id", "allowed_field_keys", "purpose", "summary_text", "retention_expires_at", "raw_ingestion_allowed", "status"],
+      "relationships": ["participant", "source_connection", "background_profile_signal", "privacy_grant"],
+      "publicExposure": "Stores only a reviewed summary with raw ingestion disabled; raw private feeds, exact requests, contacts, and source notes stay out of public previews and analytics."
+    },
+    {
+      "key": "background_profile_signal",
+      "label": "Background profile signal",
+      "category": "matching",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "profile_id", "source", "allowed_field_key", "signal_key", "confidence_band", "sensitivity", "status", "expires_at"],
+      "relationships": ["private_wish_profile", "source_connection", "background_source_summary", "background_wish_interview_session"],
+      "publicExposure": "Derived signals are viewer-owned matching inputs and expose only broad field keys or counts; revoked, expired, or stale source notes stop influencing matching."
     },
     {
       "key": "saved_search",
@@ -208,6 +244,42 @@
       "requiredFields": ["id", "left_profile_id", "right_profile_id", "status", "factor_codes", "confidence_band", "redacted_fields", "disclosure_stage", "privacy_policy_id", "human_review_required", "created_at"],
       "relationships": ["public_profile", "private_wish_profile", "privacy_grant", "notification"],
       "publicExposure": "Uses broad previews, privacy policy ids, disclosure stages, and factor codes; exact wishes, source notes, and contact details stay hidden until consent."
+    },
+    {
+      "key": "background_opportunity_brief",
+      "label": "Background opportunity brief",
+      "category": "matching",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "profile_id", "match_id", "confidence_band", "factor_codes", "redacted_fields", "delivery_state", "review_status", "human_review_required", "created_at"],
+      "relationships": ["participant", "match_suggestion", "background_match_feedback", "background_intro_packet", "notification"],
+      "publicExposure": "Shows a participant-owned broad card with factor codes and hidden-field notices; exact wishes, private asks, contact details, and source notes stay in the dashboard until consent."
+    },
+    {
+      "key": "background_match_feedback",
+      "label": "Background match feedback",
+      "category": "operations",
+      "privacyClass": "operational_private",
+      "requiredFields": ["id", "profile_id", "opportunity_brief_id", "outcome", "reason_code", "created_at", "updated_at"],
+      "relationships": ["participant", "background_opportunity_brief"],
+      "publicExposure": "Stores closed-code relevance feedback and report reasons for private operations; public transparency uses only thresholded counts and generic labels."
+    },
+    {
+      "key": "background_intro_packet",
+      "label": "Background intro packet",
+      "category": "matching",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "requester_profile_id", "opportunity_brief_id", "requested_field_keys", "purpose", "review_state", "reveal_capsule", "created_at"],
+      "relationships": ["participant", "background_opportunity_brief", "match_suggestion", "privacy_grant", "match_concierge_request"],
+      "publicExposure": "Captures a reviewed next-step request and never sends autonomous outreach or contact details; exact private fields require operator review and consent grants."
+    },
+    {
+      "key": "match_concierge_request",
+      "label": "Match concierge request",
+      "category": "review",
+      "privacyClass": "review_scoped",
+      "requiredFields": ["id", "requester_profile_id", "route", "status", "review_status", "sla_due_at", "appealed_at", "reviewed_at"],
+      "relationships": ["participant", "background_intro_packet", "privacy_grant", "match_suggestion"],
+      "publicExposure": "Operator review queue records stay review-scoped; public reporting exposes only aggregate appeal, decline, review-time, and SLA counts without notes, contacts, or private source details."
     },
     {
       "key": "notification",
