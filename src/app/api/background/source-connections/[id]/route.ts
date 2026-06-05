@@ -86,6 +86,12 @@ export async function DELETE(
       .eq("profile_id", user.id)
       .eq("source_connection_id", id)
       .eq("status", "active"),
+    supabase
+      .from("background_source_sync_jobs")
+      .update({ state: "cancelled", updated_at: now })
+      .eq("profile_id", user.id)
+      .eq("source_connection_id", id)
+      .in("state", ["queued", "running", "retry"]),
   ]);
 
   return privateJson({

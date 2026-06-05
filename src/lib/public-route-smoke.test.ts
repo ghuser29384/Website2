@@ -700,7 +700,7 @@ test("background networking and reasoning routes are distinct resilient public r
   assert.match(backgroundPage, /aiShadowContract\.prohibitedEffects/);
   assert.match(backgroundPage, /Capability gates/);
   assert.match(backgroundPage, /Open gate contract/);
-  assert.match(backgroundPage, /Private-overlap checks are not live/);
+  assert.match(backgroundPage, /Private-overlap checks are governance-gated/);
   assert.match(backgroundPage, /Private overlap contract/);
   assert.match(backgroundPage, /capabilityGateContract\.gates/);
   assert.match(backgroundPage, /capabilityGateValidation\.expansionReady/);
@@ -1134,14 +1134,14 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(capabilityGateRoute, /getBackgroundNetworkingRolloutPlan/);
   assert.match(capabilityGateRoute, /bg14Rollout/);
   assert.match(capabilityGateRoute, /expansionReady/);
-  assert.match(backgroundPrivateOverlapSource, /design_review_only/);
+  assert.match(backgroundPrivateOverlapSource, /governance_gated_pilot/);
   assert.match(backgroundPrivateOverlapSource, /formal cryptographic design review/);
   assert.match(backgroundPrivateOverlapSource, /free_text/);
   assert.match(backgroundPrivateOverlapSource, /raw_tag/);
   assert.match(backgroundPrivateOverlapSource, /deterministic broad-preview matching/);
   assert.match(privateOverlapContractRoute, /getBackgroundPrivateOverlapContract/);
   assert.match(privateOverlapContractRoute, /validateBackgroundPrivateOverlapContract/);
-  assert.match(privateOverlapContractRoute, /Private overlap checks are not live/);
+  assert.match(privateOverlapContractRoute, /Private overlap checks are governance-gated/);
   assert.match(backgroundRlsAuditSource, /validateBackgroundRlsAuditSchema/);
   assert.match(backgroundRlsAuditSource, /match_audit_events/);
   assert.match(backgroundRlsAuditSource, /background_match_feedback/);
@@ -3229,7 +3229,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiGovernanceHealthRoute, /explanationControls/);
   assert.match(aiGovernanceHealthRoute, /prohibitedUses/);
   assert.match(privateOverlapSource, /BACKGROUND_PRIVATE_OVERLAP_CONTRACT_VERSION/);
-  assert.match(privateOverlapSource, /design_review_only/);
+  assert.match(privateOverlapSource, /governance_gated_pilot/);
   assert.match(privateOverlapSource, /futureStoredFields/);
   assert.match(privateOverlapSource, /blocked_pending_crypto_review/);
   assert.match(privateOverlapSource, /formal cryptographic design review/);

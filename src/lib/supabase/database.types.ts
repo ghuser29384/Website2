@@ -1933,12 +1933,46 @@ export interface Database {
         };
         Relationships: [];
       };
+      background_helper_runs: {
+        Row: {
+          id: string;
+          profile_id: string;
+          trigger_kind: "saved_search" | "new_summary" | "manual_scan" | "scheduled_digest";
+          state: "queued" | "running" | "retry" | "done" | "failed" | "cancelled";
+          attempts: number;
+          next_run_at: string;
+          query_fingerprint: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          trigger_kind: "saved_search" | "new_summary" | "manual_scan" | "scheduled_digest";
+          state?: "queued" | "running" | "retry" | "done" | "failed" | "cancelled";
+          attempts?: number;
+          next_run_at?: string;
+          query_fingerprint: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          trigger_kind?: "saved_search" | "new_summary" | "manual_scan" | "scheduled_digest";
+          state?: "queued" | "running" | "retry" | "done" | "failed" | "cancelled";
+          attempts?: number;
+          next_run_at?: string;
+          query_fingerprint?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       background_opportunity_briefs: {
         Row: {
           id: string;
           profile_id: string;
           candidate_profile_id: string | null;
           match_id: string | null;
+          helper_run_id: string | null;
           title: string;
           confidence_band: "High" | "Moderate" | "Tentative" | "Exploratory";
           delivery_state: "pending" | "delivered" | "opened" | "interested" | "maybe_later" | "dismissed" | "expired";
@@ -1970,6 +2004,9 @@ export interface Database {
             | "maybe_later"
             | "interested"
             | null;
+          cooloff_until: string | null;
+          explanation_version: string;
+          source_scope_version: string;
           created_at: string;
           updated_at: string;
         };
@@ -1978,6 +2015,7 @@ export interface Database {
           profile_id: string;
           candidate_profile_id?: string | null;
           match_id?: string | null;
+          helper_run_id?: string | null;
           title?: string;
           confidence_band?: "High" | "Moderate" | "Tentative" | "Exploratory";
           delivery_state?: "pending" | "delivered" | "opened" | "interested" | "maybe_later" | "dismissed" | "expired";
@@ -2009,12 +2047,16 @@ export interface Database {
             | "maybe_later"
             | "interested"
             | null;
+          cooloff_until?: string | null;
+          explanation_version?: string;
+          source_scope_version?: string;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           candidate_profile_id?: string | null;
           match_id?: string | null;
+          helper_run_id?: string | null;
           title?: string;
           confidence_band?: "High" | "Moderate" | "Tentative" | "Exploratory";
           delivery_state?: "pending" | "delivered" | "opened" | "interested" | "maybe_later" | "dismissed" | "expired";
@@ -2046,6 +2088,9 @@ export interface Database {
             | "maybe_later"
             | "interested"
             | null;
+          cooloff_until?: string | null;
+          explanation_version?: string;
+          source_scope_version?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -2346,11 +2391,201 @@ export interface Database {
         };
         Relationships: [];
       };
+      background_source_sync_jobs: {
+        Row: {
+          id: string;
+          source_connection_id: string;
+          profile_id: string;
+          state: "queued" | "running" | "retry" | "done" | "failed" | "cancelled";
+          attempts: number;
+          next_run_at: string;
+          last_error_code: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          source_connection_id: string;
+          profile_id: string;
+          state?: "queued" | "running" | "retry" | "done" | "failed" | "cancelled";
+          attempts?: number;
+          next_run_at?: string;
+          last_error_code?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          source_connection_id?: string;
+          state?: "queued" | "running" | "retry" | "done" | "failed" | "cancelled";
+          attempts?: number;
+          next_run_at?: string;
+          last_error_code?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_wish_dialogue_sessions: {
+        Row: {
+          id: string;
+          profile_id: string;
+          state: "draft" | "proposed" | "applied" | "abandoned";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          state?: "draft" | "proposed" | "applied" | "abandoned";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          state?: "draft" | "proposed" | "applied" | "abandoned";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_wish_dialogue_messages: {
+        Row: {
+          id: string;
+          session_id: string;
+          profile_id: string;
+          actor: "user" | "assistant";
+          body: string;
+          body_ciphertext: string;
+          body_encryption_version: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          profile_id: string;
+          actor: "user" | "assistant";
+          body?: string;
+          body_ciphertext: string;
+          body_encryption_version: string;
+          created_at?: string;
+        };
+        Update: {
+          body?: string;
+          body_ciphertext?: string;
+          body_encryption_version?: string;
+        };
+        Relationships: [];
+      };
+      background_wish_field_proposals: {
+        Row: {
+          id: string;
+          session_id: string;
+          profile_id: string;
+          proposal: Record<string, unknown>;
+          uncertainty_flags: unknown[];
+          explanation: unknown[];
+          approved: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          profile_id: string;
+          proposal: Record<string, unknown>;
+          uncertainty_flags?: unknown[];
+          explanation?: unknown[];
+          approved?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          proposal?: Record<string, unknown>;
+          uncertainty_flags?: unknown[];
+          explanation?: unknown[];
+          approved?: boolean;
+        };
+        Relationships: [];
+      };
+      background_private_overlap_tags: {
+        Row: {
+          id: string;
+          profile_id: string;
+          tag_namespace: "exact_capability_tag" | "exact_constraint_tag" | "exact_verification_tag";
+          blinded_token: string;
+          token_version: string;
+          expiry_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          tag_namespace: "exact_capability_tag" | "exact_constraint_tag" | "exact_verification_tag";
+          blinded_token: string;
+          token_version?: string;
+          expiry_at: string;
+          created_at?: string;
+        };
+        Update: {
+          token_version?: string;
+          expiry_at?: string;
+        };
+        Relationships: [];
+      };
+      background_private_overlap_checks: {
+        Row: {
+          id: string;
+          requester_id: string;
+          counterparty_id: string;
+          stage: "registry" | "consent" | "introduced";
+          tag_namespace: "exact_capability_tag" | "exact_constraint_tag" | "exact_verification_tag";
+          result_bucket: "none" | "1" | "2_to_3" | "4_plus";
+          receipt_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          requester_id: string;
+          counterparty_id: string;
+          stage: "registry" | "consent" | "introduced";
+          tag_namespace: "exact_capability_tag" | "exact_constraint_tag" | "exact_verification_tag";
+          result_bucket: "none" | "1" | "2_to_3" | "4_plus";
+          receipt_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          result_bucket?: "none" | "1" | "2_to_3" | "4_plus";
+          receipt_id?: string | null;
+        };
+        Relationships: [];
+      };
+      transparency_receipts: {
+        Row: {
+          id: string;
+          seq: number;
+          event_type: string;
+          actor_scope: string;
+          redacted_payload: Record<string, unknown>;
+          prev_hash: string | null;
+          entry_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event_type: string;
+          actor_scope: string;
+          redacted_payload: Record<string, unknown>;
+          prev_hash?: string | null;
+          entry_hash: string;
+          created_at?: string;
+        };
+        Update: {
+          redacted_payload?: Record<string, unknown>;
+          prev_hash?: string | null;
+          entry_hash?: string;
+        };
+        Relationships: [];
+      };
       background_profile_signals: {
         Row: {
           id: string;
           profile_id: string;
-          source: "manual" | "approved_source_summary" | "interview";
+          source: "manual" | "approved_source_summary" | "interview" | "wish_dialogue";
           source_connection_id: string | null;
           source_summary_id: string | null;
           signal_key: string;
@@ -2372,7 +2607,7 @@ export interface Database {
         Insert: {
           id?: string;
           profile_id: string;
-          source: "manual" | "approved_source_summary" | "interview";
+          source: "manual" | "approved_source_summary" | "interview" | "wish_dialogue";
           source_connection_id?: string | null;
           source_summary_id?: string | null;
           signal_key: string;
@@ -2392,7 +2627,7 @@ export interface Database {
           updated_at?: string;
         };
         Update: {
-          source?: "manual" | "approved_source_summary" | "interview";
+          source?: "manual" | "approved_source_summary" | "interview" | "wish_dialogue";
           source_connection_id?: string | null;
           source_summary_id?: string | null;
           signal_key?: string;

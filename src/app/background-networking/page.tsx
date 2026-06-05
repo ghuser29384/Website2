@@ -191,6 +191,14 @@ export default async function BackgroundNetworkingPage({
               </p>
             </article>
             <article className="panel concept-card">
+              <h3>Fluent wish dialogue</h3>
+              <p>
+                A schema-bound dialogue lane accepts natural wish text, proposes broad fields and
+                uncertainty flags, and keeps those proposals draft-only until the participant
+                explicitly applies them.
+              </p>
+            </article>
+            <article className="panel concept-card">
               <h3>Reviewed source summaries</h3>
               <p>
                 Manual or imported text can create a redacted summary draft for review. Raw
@@ -251,6 +259,22 @@ export default async function BackgroundNetworkingPage({
                 Manual scans, helper jobs, saved searches, and signed-in registry searches are
                 budgeted and logged with hashed query fingerprints. Highly specific sparse
                 registry searches are withheld until the user broadens the query.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Helper runs</h3>
+              <p>
+                Helper runs queue saved-search, summary, manual-scan, or digest work from a
+                fingerprint only. They can create opportunity briefs and generic notifications, not
+                autonomous messages.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Overlap receipts</h3>
+              <p>
+                The private-overlap pilot is governance-gated and exact-tag only. Attempts receive
+                tamper-evident redacted receipts while raw tags and counterparties&apos; tag lists stay
+                hidden.
               </p>
             </article>
           </div>
@@ -364,8 +388,8 @@ export default async function BackgroundNetworkingPage({
               public gate keeps source connectors, AI summarization, and private-overlap
               computation default-off, shadow-only, or design-only until DPIA, lawful-basis,
               privacy-design, external review, and human-control checks are satisfied.
-              Private-overlap checks are not live; any future pilot must use curated tags only,
-              not free text or raw tag disclosure.
+              Private-overlap checks are governance-gated; the pilot route accepts only curated
+              exact-tag namespaces, never free text or raw tag disclosure.
             </p>
             <p>
               The current source-summary path is manual/import first: participants create a source
@@ -374,6 +398,14 @@ export default async function BackgroundNetworkingPage({
               published for this path as <code>/api/background/source-connections/:id/summary-draft</code>,
               <code>/api/background/source-connections/:id/approve</code>, and{" "}
               <code>/api/background/profile/recompute</code>.
+            </p>
+            <p>
+              The bg17 route surface adds <code>/api/background/sources</code>,{" "}
+              <code>/api/background/sources/:id/draft-summary</code>,{" "}
+              <code>/api/background/wish-dialogue/:id/proposal</code>,{" "}
+              <code>/api/background/helper-runs</code>, and{" "}
+              <code>/api/background/private-overlap/check</code>. These routes remain
+              authenticated, private, rate-limited, and consent-gated.
             </p>
           </div>
 

@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.26-2026-06",
+  "version": "moral-trade-api-contract-v0.27-2026-06",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -507,6 +507,54 @@
       "fallback": "Require viewer-owned session access and user-approved allowed field keys before applying structured deltas; disallow contact details, raw profile notes, raw source notes, protected-trait inferences, autonomous outreach, and live public-preview mutation."
     },
     {
+      "key": "background_wish_dialogue_start",
+      "method": "POST",
+      "path": "/api/background/wish-dialogue/start",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_wish_dialogue_start_request",
+      "responseSchema": "background_wish_dialogue_start_response",
+      "rateLimitSurface": "background_wish_interview_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication and configured encryption before saving optional fluent wish text; start creates only a private draft dialogue and no live profile mutation."
+    },
+    {
+      "key": "background_wish_dialogue_message",
+      "method": "POST",
+      "path": "/api/background/wish-dialogue/:id/message",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_wish_dialogue_message_request",
+      "responseSchema": "background_wish_dialogue_message_response",
+      "rateLimitSurface": "background_wish_interview_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer-owned dialogue access and configured encryption before storing user text; route stores encrypted body only and creates no proposal or profile signal by itself."
+    },
+    {
+      "key": "background_wish_dialogue_proposal",
+      "method": "POST",
+      "path": "/api/background/wish-dialogue/:id/proposal",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_wish_dialogue_proposal_response",
+      "rateLimitSurface": "background_wish_interview_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer-owned dialogue access and build only schema-bound broad field proposals plus uncertainty flags; no proposal changes matching until explicit apply."
+    },
+    {
+      "key": "background_wish_dialogue_apply",
+      "method": "POST",
+      "path": "/api/background/wish-dialogue/:id/apply",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_wish_dialogue_apply_request",
+      "responseSchema": "background_wish_dialogue_apply_response",
+      "rateLimitSurface": "background_wish_interview_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer-owned dialogue access and an unapproved proposal before creating reviewed profile signals; exact wishes, contact details, raw notes, protected-trait inferences, and live public-preview mutation remain disallowed."
+    },
+    {
       "key": "background_source_connection_create",
       "method": "POST",
       "path": "/api/background/source-connections",
@@ -519,6 +567,18 @@
       "fallback": "Require viewer authentication, explicit field scope, supported retention, configured encryption, and raw-ingestion disabled before saving a source connection consent record."
     },
     {
+      "key": "background_source_create_bg17_alias",
+      "method": "POST",
+      "path": "/api/background/sources",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_source_connection_create_request",
+      "responseSchema": "background_source_connection_create_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Bg17-compatible source alias for the same authenticated, field-scoped, raw-ingestion-disabled source connection creation flow."
+    },
+    {
       "key": "background_source_connection_revoke",
       "method": "DELETE",
       "path": "/api/background/source-connections/:id",
@@ -529,6 +589,30 @@
       "rateLimitSurface": "background_source_summary_write",
       "cacheControl": "private_no_store",
       "fallback": "Require viewer-owned source connection access before revoking the connection and excluding dependent source summaries and profile signals from future matching."
+    },
+    {
+      "key": "background_source_revoke_bg17_alias",
+      "method": "POST",
+      "path": "/api/background/sources/:id/revoke",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_source_connection_revoke_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Bg17-compatible source revocation alias; it revokes the viewer-owned connection, cancels pending sync jobs, and excludes dependent summaries and profile signals from future matching."
+    },
+    {
+      "key": "background_source_sync_queue",
+      "method": "POST",
+      "path": "/api/background/sources/:id/draft-summary",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "empty_request",
+      "responseSchema": "background_source_sync_queue_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer-owned, active, field-scoped source connection access before queueing reviewed-summary sync work; route rejects raw text and stores no raw source payload."
     },
     {
       "key": "background_source_summary_draft",
@@ -577,6 +661,18 @@
       "rateLimitSurface": "background_source_summary_write",
       "cacheControl": "private_no_store",
       "fallback": "Require viewer authentication before approving a viewer-owned shadow summary run into an encrypted reviewed source summary and active profile signals; raw source text remains outside storage."
+    },
+    {
+      "key": "background_source_summary_draft_approve_bg17_alias",
+      "method": "POST",
+      "path": "/api/background/source-summary-drafts/:id/approve",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_source_summary_approve_request",
+      "responseSchema": "background_source_summary_approve_response",
+      "rateLimitSurface": "background_source_summary_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Bg17-compatible reviewed-summary approval alias; it promotes only viewer-owned redacted draft output into encrypted reviewed summaries and profile signals."
     },
     {
       "key": "background_source_connection_approve_bg16_alias",
@@ -733,6 +829,42 @@
       "rateLimitSurface": "background_opportunity_feedback_write",
       "cacheControl": "private_no_store",
       "fallback": "Alias for authenticated opportunity feedback; it applies the same owner-only access, closed reason/outcome lattice, duplicate-update behavior, rate-limit failure mode, and no-outreach guarantee."
+    },
+    {
+      "key": "background_helper_run_create",
+      "method": "POST",
+      "path": "/api/background/helper-runs",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_helper_run_create_request",
+      "responseSchema": "background_helper_run_create_response",
+      "rateLimitSurface": "background_helper_run_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication and a supported trigger kind before queueing a helper run; persist only a query fingerprint, send no outreach, and expose Retry-After on rate limits."
+    },
+    {
+      "key": "background_opportunity_feedback_create_bg17_body_alias",
+      "method": "POST",
+      "path": "/api/background/opportunity-feedback",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_opportunity_feedback_create_request",
+      "responseSchema": "background_opportunity_feedback_create_response",
+      "rateLimitSurface": "background_opportunity_feedback_write",
+      "cacheControl": "private_no_store",
+      "fallback": "Bg17 body-based authenticated opportunity feedback alias; require briefId, owner-only access, closed reason/outcome codes, duplicate-update behavior, and no autonomous outreach."
+    },
+    {
+      "key": "background_private_overlap_check",
+      "method": "POST",
+      "path": "/api/background/private-overlap/check",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "background_private_overlap_check_request",
+      "responseSchema": "background_private_overlap_check_response",
+      "rateLimitSurface": "background_private_overlap_check",
+      "cacheControl": "private_no_store",
+      "fallback": "Require viewer authentication, curated exact-tag namespace, governance gates, and redacted transparency receipt logging; free text and raw tag inputs are rejected, and results expose only a bucket and receipt id."
     },
     {
       "key": "wish_registry_search",
@@ -1524,6 +1656,67 @@
       ]
     },
     {
+      "key": "background_wish_dialogue_start_request",
+      "purpose": "Authenticated fluent wish-dialogue start request with optional encrypted first message.",
+      "fields": [
+        { "key": "message", "type": "string", "required": false, "privacy": "private_authenticated_encrypted", "description": "Optional first wish message encrypted before storage; no proposal or profile signal is created." }
+      ]
+    },
+    {
+      "key": "background_wish_dialogue_start_response",
+      "purpose": "Private draft wish-dialogue session result.",
+      "fields": [
+        { "key": "sessionId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned wish dialogue session id." },
+        { "key": "state", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "Draft dialogue state." },
+        { "key": "rawTranscriptStored", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; user text is encrypted and never added to analytics." },
+        { "key": "liveProfileMutation", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false at dialogue start." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "wish_dialogue_session_created when the private draft is saved." }
+      ]
+    },
+    {
+      "key": "background_wish_dialogue_message_request",
+      "purpose": "Authenticated encrypted message append for a viewer-owned wish dialogue.",
+      "fields": [
+        { "key": "message", "type": "string", "required": true, "privacy": "private_authenticated_encrypted", "description": "User wish message encrypted before storage; it does not mutate matching by itself." }
+      ]
+    },
+    {
+      "key": "background_wish_dialogue_message_response",
+      "purpose": "Private no-store result for an encrypted wish-dialogue message.",
+      "fields": [
+        { "key": "messageId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Encrypted message row id." },
+        { "key": "rawTranscriptStored", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false for analytics and proposal metadata." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "wish_dialogue_message_saved when encrypted text is saved." }
+      ]
+    },
+    {
+      "key": "background_wish_dialogue_proposal_response",
+      "purpose": "Schema-bound fluent wish proposal with broad fields and uncertainty flags only.",
+      "fields": [
+        { "key": "proposalId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned draft proposal id." },
+        { "key": "proposal", "type": "object", "required": true, "privacy": "private_authenticated", "description": "Broad schema fields: causeAreas, tradeModes, verificationPreferences, coarseLocation, broadCapabilities, broadConstraints, availabilityHints, unansweredFields, uncertaintyFlags, and explanation." },
+        { "key": "profileMutationApplied", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false until explicit apply." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "wish_dialogue_proposal_created when the draft proposal is saved." }
+      ]
+    },
+    {
+      "key": "background_wish_dialogue_apply_request",
+      "purpose": "Authenticated explicit apply request for a schema-bound wish proposal.",
+      "fields": [
+        { "key": "proposalId", "type": "uuid", "required": false, "privacy": "private_authenticated", "description": "Optional proposal id; defaults to the latest unapproved proposal in the viewer-owned dialogue." }
+      ]
+    },
+    {
+      "key": "background_wish_dialogue_apply_response",
+      "purpose": "Private result for explicit application of broad wish-dialogue proposal fields.",
+      "fields": [
+        { "key": "proposalId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Applied proposal id." },
+        { "key": "profileSignalsCreated", "type": "integer", "required": true, "privacy": "private_authenticated", "description": "Count of broad profile signals created from approved proposal fields." },
+        { "key": "livePublicPreviewMutation", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; public preview is not rewritten by the dialogue apply route." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "wish_dialogue_proposal_applied when reviewed fields become profile signals." }
+      ]
+    },
+    {
       "key": "background_source_connection_create_request",
       "purpose": "Authenticated source-connection consent record for review-first source-assisted profiling.",
       "fields": [
@@ -1552,6 +1745,18 @@
         { "key": "id", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Revoked viewer-owned source connection id." },
         { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "source_connection_revoked when the connection and dependent matching signals are disabled." },
         { "key": "downstreamSignalsExcluded", "type": "boolean", "required": true, "privacy": "public_contract", "description": "True when derived profile signals are marked out of future matching." }
+      ]
+    },
+    {
+      "key": "background_source_sync_queue_response",
+      "purpose": "Private reviewed-summary sync queue result for a source connection.",
+      "fields": [
+        { "key": "jobId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned background source sync job id." },
+        { "key": "state", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "Initial queued state." },
+        { "key": "nextRunAt", "type": "iso_datetime", "required": true, "privacy": "private_authenticated", "description": "Earliest worker time for reviewed-summary sync." },
+        { "key": "rawIngestionAllowed", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." },
+        { "key": "rawTextPersisted", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; this route rejects raw text payloads." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "reviewed_summary_sync_queued when the job is queued." }
       ]
     },
     {
@@ -1709,7 +1914,8 @@
       "key": "background_opportunity_feedback_create_request",
       "purpose": "Authenticated opportunity feedback over closed reason and outcome codes.",
       "fields": [
-        { "key": "id", "type": "path_uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned opportunity brief id from the route path; cross-profile ids fail closed." },
+        { "key": "id", "type": "path_uuid", "required": false, "privacy": "private_authenticated", "description": "Viewer-owned opportunity brief id from nested feedback route path; cross-profile ids fail closed." },
+        { "key": "briefId", "type": "uuid", "required": false, "privacy": "private_authenticated", "description": "Viewer-owned opportunity brief id for the bg17 body-based opportunity feedback alias." },
         { "key": "reason", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "Closed reason code only: not_relevant, bad_timing, too_vague, safety_concern, maybe_later, or interested. Free-text feedback is not accepted." },
         { "key": "outcome", "type": "enum", "required": false, "privacy": "private_authenticated", "description": "Closed outcome code: dismissed, maybe_later, or interested. Interested outcome requires interested reason; maybe_later outcome requires maybe_later reason; dismissed outcome cannot use interested or maybe_later reason." }
       ]
@@ -1721,6 +1927,50 @@
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public_contract", "description": "True only after the owner-scoped feedback row and brief status update succeed." },
         { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "opportunity_feedback_recorded when feedback is stored; rate-limited or invalid requests create no state change." },
         { "key": "outreachSent", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; feedback never contacts a counterparty." }
+      ]
+    },
+    {
+      "key": "background_helper_run_create_request",
+      "purpose": "Authenticated helper-run queue request with no raw query persistence.",
+      "fields": [
+        { "key": "triggerKind", "type": "enum", "required": false, "privacy": "private_authenticated", "description": "saved_search, new_summary, manual_scan, or scheduled_digest; defaults to manual_scan." },
+        { "key": "query", "type": "object", "required": false, "privacy": "private_ephemeral", "description": "Optional client query object used only to derive a stable fingerprint; raw query is not stored." },
+        { "key": "windowKey", "type": "string", "required": false, "privacy": "private_authenticated", "description": "Optional idempotency window key for deduping queued helper runs." }
+      ]
+    },
+    {
+      "key": "background_helper_run_create_response",
+      "purpose": "Private helper-run queue response.",
+      "fields": [
+        { "key": "runId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Viewer-owned helper run id." },
+        { "key": "state", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "Initial queued state." },
+        { "key": "queryFingerprint", "type": "sha256_hex", "required": true, "privacy": "redacted_private", "description": "Stable query fingerprint used for idempotency and anti-enumeration accounting." },
+        { "key": "rawQueryPersisted", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false." },
+        { "key": "autonomousOutreach", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false; helper runs can queue briefs, not messages." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "helper_run_queued when the run is queued." }
+      ]
+    },
+    {
+      "key": "background_private_overlap_check_request",
+      "purpose": "Authenticated governance-gated exact-tag private-overlap check request.",
+      "fields": [
+        { "key": "counterpartyId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Counterparty profile id; self-checks are rejected by storage constraints." },
+        { "key": "namespace", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "Allowed exact-tag namespace: exact_capability_tag, exact_constraint_tag, or exact_verification_tag." },
+        { "key": "stage", "type": "enum", "required": false, "privacy": "private_authenticated", "description": "registry, consent, or introduced stage; defaults to registry." },
+        { "key": "freeText", "type": "never", "required": false, "privacy": "public_contract", "description": "Rejected when present; overlap checks never accept free text." },
+        { "key": "rawTags", "type": "never", "required": false, "privacy": "public_contract", "description": "Rejected when present; overlap checks compare stored blinded tokens only." }
+      ]
+    },
+    {
+      "key": "background_private_overlap_check_response",
+      "purpose": "Private-overlap check response with only bucketed output and redacted receipt id.",
+      "fields": [
+        { "key": "resultBucket", "type": "enum", "required": true, "privacy": "private_authenticated", "description": "none, 1, 2_to_3, 4_plus, or blocked; raw matching tags are never returned." },
+        { "key": "receiptId", "type": "uuid", "required": true, "privacy": "private_authenticated", "description": "Transparency receipt id for blocked or completed overlap check." },
+        { "key": "checkId", "type": "uuid", "required": false, "privacy": "private_authenticated", "description": "Overlap check id when governance gates pass and the bucketed check is recorded." },
+        { "key": "blockers", "type": "string_array", "required": false, "privacy": "public_contract", "description": "Governance, validation, or service blockers for blocked checks." },
+        { "key": "rawTagsRevealed", "type": "boolean", "required": false, "privacy": "public_contract", "description": "Always false for successful checks." },
+        { "key": "stateMutation", "type": "enum", "required": true, "privacy": "public_contract", "description": "private_overlap_check_receipted or private_overlap_check_blocked_receipted." }
       ]
     },
     {

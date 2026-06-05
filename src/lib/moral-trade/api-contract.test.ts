@@ -127,12 +127,48 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "background_wish_dialogue_proposal" &&
+        route.path === "/api/background/wish-dialogue/:id/proposal" &&
+        route.rateLimitSurface === "background_wish_interview_write" &&
+        /schema-bound broad field proposals/i.test(route.fallback) &&
+        /explicit apply/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_wish_dialogue_apply" &&
+        route.path === "/api/background/wish-dialogue/:id/apply" &&
+        /exact wishes/i.test(route.fallback) &&
+        /live public-preview mutation/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "background_source_connection_create" &&
         route.path === "/api/background/source-connections" &&
         route.auth === "authenticated" &&
         route.cacheControl === "private_no_store" &&
         route.rateLimitSurface === "background_source_summary_write" &&
         /raw-ingestion disabled/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_source_create_bg17_alias" &&
+        route.path === "/api/background/sources" &&
+        /Bg17-compatible source alias/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_source_sync_queue" &&
+        route.path === "/api/background/sources/:id/draft-summary" &&
+        route.responseSchema === "background_source_sync_queue_response" &&
+        /rejects raw text/i.test(route.fallback),
     ),
   );
   assert.ok(
@@ -302,6 +338,26 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
         /same owner-only access/i.test(route.fallback),
     ),
   );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_helper_run_create" &&
+        route.path === "/api/background/helper-runs" &&
+        route.rateLimitSurface === "background_helper_run_write" &&
+        /query fingerprint/i.test(route.fallback) &&
+        /Retry-After/i.test(route.fallback),
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "background_private_overlap_check" &&
+        route.path === "/api/background/private-overlap/check" &&
+        route.rateLimitSurface === "background_private_overlap_check" &&
+        /free text/i.test(route.fallback) &&
+        /receipt id/i.test(route.fallback),
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "wish_registry_search"));
   assert.ok(profile.routes.some((route) => route.key === "funnel_events"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "profile_export_response"));
@@ -311,7 +367,11 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_interview_answer_create_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_interview_apply_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_interview_apply_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_dialogue_start_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_dialogue_proposal_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_wish_dialogue_apply_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_connection_create_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_sync_queue_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_draft_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_source_summary_approve_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_profile_signal_recompute_response"));
@@ -373,6 +433,8 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_brief_list_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_feedback_create_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_opportunity_feedback_create_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_helper_run_create_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "background_private_overlap_check_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "private_overlap_contract_response"));
   assert.ok(
     profile.schemaDefinitions
@@ -798,6 +860,8 @@ test("api contract implementation audit proves route metadata is backed by execu
   assert.ok(audit.implementedRateLimitSurfaces.includes("background_wish_interview_write"));
   assert.ok(audit.implementedRateLimitSurfaces.includes("background_source_summary_write"));
   assert.ok(audit.implementedRateLimitSurfaces.includes("background_intro_packet_write"));
+  assert.ok(audit.implementedRateLimitSurfaces.includes("background_helper_run_write"));
+  assert.ok(audit.implementedRateLimitSurfaces.includes("background_private_overlap_check"));
   assert.ok(audit.implementedRateLimitSurfaces.includes("analytics_ingest"));
   assert.ok(audit.implementedCacheControls.includes("no_store_dynamic"));
   assert.ok(audit.implementedCacheControls.includes("private_no_store"));
@@ -834,6 +898,26 @@ test("api contract implementation audit proves route metadata is backed by execu
   assert.equal(
     routeFinding("background_wish_interview_apply").resolvedRouteFile,
     "src/app/api/background/wish-interview/sessions/[id]/apply/route.ts",
+  );
+  assert.equal(
+    routeFinding("background_wish_dialogue_apply").resolvedRouteFile,
+    "src/app/api/background/wish-dialogue/[id]/apply/route.ts",
+  );
+  assert.equal(
+    routeFinding("background_source_create_bg17_alias").resolvedRouteFile,
+    "src/app/api/background/sources/route.ts",
+  );
+  assert.equal(
+    routeFinding("background_source_sync_queue").resolvedRouteFile,
+    "src/app/api/background/sources/[id]/draft-summary/route.ts",
+  );
+  assert.equal(
+    routeFinding("background_helper_run_create").resolvedRouteFile,
+    "src/app/api/background/helper-runs/route.ts",
+  );
+  assert.equal(
+    routeFinding("background_private_overlap_check").resolvedRouteFile,
+    "src/app/api/background/private-overlap/check/route.ts",
   );
   assert.equal(
     routeFinding("background_source_connection_summary_approve_alias").resolvedRouteFile,

@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-data-model-v0.1.6-2026-06",
+  "version": "moral-trade-data-model-v0.1.7-2026-06",
   "purpose": "Public contract for the core Moral Trade domain entities, required fields, privacy classes, relationship boundaries, and non-claims named by the product audit.",
   "entities": [
     {
@@ -75,6 +75,33 @@
       "publicExposure": "Answer text remains private and encrypted; analytics and match cards receive field keys, option counts, and length buckets rather than exact wishes or source notes."
     },
     {
+      "key": "background_wish_dialogue_session",
+      "label": "Background wish dialogue session",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "profile_id", "state", "created_at", "updated_at"],
+      "relationships": ["participant", "background_wish_dialogue_message", "background_wish_field_proposal", "background_profile_signal"],
+      "publicExposure": "Stores private fluent-composer workflow state only; natural-language wish text is encrypted in messages, exact wishes stay out of public previews, and matching cannot change until a proposal is explicitly applied."
+    },
+    {
+      "key": "background_wish_dialogue_message",
+      "label": "Background wish dialogue message",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "session_id", "profile_id", "actor", "body_ciphertext", "body_encryption_version", "created_at"],
+      "relationships": ["background_wish_dialogue_session", "participant"],
+      "publicExposure": "Message bodies are encrypted private inputs for schema-bound proposals; analytics, public previews, and notifications never receive raw dialogue text or exact wishes."
+    },
+    {
+      "key": "background_wish_field_proposal",
+      "label": "Background wish field proposal",
+      "category": "profile",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "session_id", "profile_id", "proposal", "uncertainty_flags", "approved", "created_at"],
+      "relationships": ["background_wish_dialogue_session", "participant", "background_profile_signal"],
+      "publicExposure": "Stores schema-bound broad field proposals and uncertainty flags only; exact wishes, contact details, raw notes, and protected-trait inferences are rejected before apply."
+    },
+    {
       "key": "background_source_summary",
       "label": "Reviewed background source summary",
       "category": "privacy",
@@ -82,6 +109,15 @@
       "requiredFields": ["id", "profile_id", "source_connection_id", "allowed_field_keys", "purpose", "summary_text", "retention_expires_at", "raw_ingestion_allowed", "status"],
       "relationships": ["participant", "source_connection", "background_profile_signal", "privacy_grant"],
       "publicExposure": "Stores only a reviewed summary with raw ingestion disabled; raw private feeds, exact requests, contacts, and source notes stay out of public previews and analytics."
+    },
+    {
+      "key": "background_source_sync_job",
+      "label": "Background source sync job",
+      "category": "operations",
+      "privacyClass": "operational_private",
+      "requiredFields": ["id", "source_connection_id", "profile_id", "state", "attempts", "next_run_at", "created_at", "updated_at"],
+      "relationships": ["participant", "source_connection"],
+      "publicExposure": "Queues reviewed-summary sync work for a viewer-owned source connection; raw private feeds and source payloads are not stored, and revocation cancels queued or retrying jobs."
     },
     {
       "key": "background_profile_signal",
@@ -255,6 +291,15 @@
       "publicExposure": "Shows a participant-owned broad card with factor codes and hidden-field notices; exact wishes, private asks, contact details, and source notes stay in the dashboard until consent."
     },
     {
+      "key": "background_helper_run",
+      "label": "Background helper run",
+      "category": "operations",
+      "privacyClass": "operational_private",
+      "requiredFields": ["id", "profile_id", "trigger_kind", "state", "attempts", "next_run_at", "query_fingerprint", "created_at", "updated_at"],
+      "relationships": ["participant", "saved_search", "background_source_summary", "background_opportunity_brief"],
+      "publicExposure": "Stores queued helper work and a hashed query fingerprint only; helper runs may prepare opportunity briefs and generic notifications but cannot send autonomous outreach."
+    },
+    {
       "key": "background_match_feedback",
       "label": "Background match feedback",
       "category": "operations",
@@ -271,6 +316,33 @@
       "requiredFields": ["id", "requester_profile_id", "opportunity_brief_id", "requested_field_keys", "purpose", "review_state", "reveal_capsule", "created_at"],
       "relationships": ["participant", "background_opportunity_brief", "match_suggestion", "privacy_grant", "match_concierge_request"],
       "publicExposure": "Captures a reviewed next-step request and never sends autonomous outreach or contact details; exact private fields require operator review and consent grants."
+    },
+    {
+      "key": "background_private_overlap_tag",
+      "label": "Background private overlap tag",
+      "category": "privacy",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "profile_id", "tag_namespace", "blinded_token", "token_version", "expiry_at", "created_at"],
+      "relationships": ["participant", "background_private_overlap_check"],
+      "publicExposure": "Stores blinded exact-tag tokens only; raw tags, canonical tags, free text, exact wishes, and contact details are forbidden."
+    },
+    {
+      "key": "background_private_overlap_check",
+      "label": "Background private overlap check",
+      "category": "privacy",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "requester_id", "counterparty_id", "stage", "tag_namespace", "result_bucket", "receipt_id", "created_at"],
+      "relationships": ["participant", "background_private_overlap_tag", "transparency_receipt"],
+      "publicExposure": "Records only a bucketed overlap result and receipt id after governance gates; public exposure is redacted, and raw matching tags or counterparty tag sets are never exposed."
+    },
+    {
+      "key": "transparency_receipt",
+      "label": "Transparency receipt",
+      "category": "provenance",
+      "privacyClass": "private_authenticated",
+      "requiredFields": ["id", "seq", "event_type", "actor_scope", "redacted_payload", "entry_hash", "created_at"],
+      "relationships": ["participant", "background_private_overlap_check", "privacy_grant"],
+      "publicExposure": "Participant-visible append-only receipt metadata uses redacted payloads and hash chaining; exact wishes, source notes, contact details, and raw tags are excluded."
     },
     {
       "key": "match_concierge_request",

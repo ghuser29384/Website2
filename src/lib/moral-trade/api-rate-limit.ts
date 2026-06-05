@@ -22,9 +22,11 @@ export type MoralTradeApiRateLimitSurface =
   | "profile_portability"
   | "background_opportunity_brief_read"
   | "background_opportunity_feedback_write"
+  | "background_helper_run_write"
   | "background_wish_interview_write"
   | "background_source_summary_write"
   | "background_intro_packet_write"
+  | "background_private_overlap_check"
   | "wish_registry_search"
   | "analytics_ingest";
 
@@ -49,9 +51,11 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   profile_portability: { limit: 12, windowMs: 60_000 },
   background_opportunity_brief_read: { limit: 60, windowMs: 60_000 },
   background_opportunity_feedback_write: { limit: 30, windowMs: 60_000 },
+  background_helper_run_write: { limit: 12, windowMs: 60_000 },
   background_wish_interview_write: { limit: 20, windowMs: 60_000 },
   background_source_summary_write: { limit: 12, windowMs: 60_000 },
   background_intro_packet_write: { limit: 12, windowMs: 60_000 },
+  background_private_overlap_check: { limit: 12, windowMs: 60_000 },
   wish_registry_search: { limit: 60, windowMs: 60_000 },
   analytics_ingest: { limit: 120, windowMs: 60_000 },
 } as const satisfies Record<MoralTradeApiRateLimitSurface, { limit: number; windowMs: number }>;

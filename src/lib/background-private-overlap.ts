@@ -1,16 +1,16 @@
 export const BACKGROUND_PRIVATE_OVERLAP_CONTRACT_VERSION =
-  "background-private-overlap-design-v0.1-2026-06";
+  "background-private-overlap-pilot-v0.2-2026-06";
 export const BACKGROUND_PRIVATE_OVERLAP_VALIDATOR_VERSION =
-  "background-private-overlap-validator-v0.1";
+  "background-private-overlap-validator-v0.2";
 
 export type BackgroundPrivateOverlapNamespace =
-  | "capability_tags"
-  | "constraint_flags"
-  | "verification_preferences"
-  | "coarse_availability";
+  | "exact_capability_tag"
+  | "exact_constraint_tag"
+  | "exact_verification_tag";
 
 export type BackgroundPrivateOverlapEndpointStatus =
   | "blocked_pending_crypto_review"
+  | "governance_gated"
   | "not_implemented";
 
 export interface BackgroundPrivateOverlapNamespaceRule {
@@ -42,9 +42,9 @@ export interface BackgroundPrivateOverlapContract {
   };
   plannedEndpoints: BackgroundPrivateOverlapPlannedEndpoint[];
   purpose: string;
-  releaseState: "design_review_only";
+  releaseState: "governance_gated_pilot";
   requiredReviews: string[];
-  storageState: "not_created";
+  storageState: "pilot_schema_created";
   version: typeof BACKGROUND_PRIVATE_OVERLAP_CONTRACT_VERSION;
 }
 
@@ -79,11 +79,26 @@ export interface BackgroundPrivateOverlapPilotGateInput {
 export interface BackgroundPrivateOverlapPilotGate {
   blockers: string[];
   curatedTagsOnly: true;
-  liveEndpointEnabled: false;
-  allowed: false;
+  liveEndpointEnabled: boolean;
+  allowed: boolean;
   namespace: BackgroundPrivateOverlapNamespace | null;
   rawInputsAccepted: false;
-  stateMutation: false;
+  stateMutation: boolean;
+}
+
+export interface BackgroundPrivateOverlapCheckInput {
+  counterpartyId?: string | null;
+  freeText?: unknown;
+  namespace?: string | null;
+  rawTags?: unknown;
+  stage?: string | null;
+}
+
+export interface BackgroundPrivateOverlapCheckValidation {
+  blockers: string[];
+  counterpartyId: string;
+  namespace: BackgroundPrivateOverlapNamespace | null;
+  stage: "registry" | "consent" | "introduced";
 }
 
 const REQUIRED_REVIEWS = [
@@ -131,11 +146,30 @@ function isBackgroundPrivateOverlapNamespace(value?: string | null): value is Ba
   }
 
   return [
-    "capability_tags",
-    "constraint_flags",
-    "verification_preferences",
-    "coarse_availability",
+    "exact_capability_tag",
+    "exact_constraint_tag",
+    "exact_verification_tag",
   ].includes(value);
+}
+
+export function normalizeBackgroundPrivateOverlapNamespace(value?: string | null) {
+  if (isBackgroundPrivateOverlapNamespace(value)) {
+    return value;
+  }
+
+  if (value === "capability_tags") {
+    return "exact_capability_tag";
+  }
+
+  if (value === "constraint_flags") {
+    return "exact_constraint_tag";
+  }
+
+  if (value === "verification_preferences") {
+    return "exact_verification_tag";
+  }
+
+  return null;
 }
 
 function hasUnsafePrivateOverlapTag(value: string) {
@@ -153,7 +187,7 @@ export function evaluateBackgroundPrivateOverlapPilotGate({
   threatModelApproved = false,
 }: BackgroundPrivateOverlapPilotGateInput): BackgroundPrivateOverlapPilotGate {
   const blockers: string[] = [];
-  const normalizedNamespace = isBackgroundPrivateOverlapNamespace(namespace) ? namespace : null;
+  const normalizedNamespace = normalizeBackgroundPrivateOverlapNamespace(namespace);
   const cleanTags = requestedTags.map((tag) => tag.trim()).filter(Boolean);
 
   if (!adminFeatureFlagEnabled) {
@@ -192,29 +226,112 @@ export function evaluateBackgroundPrivateOverlapPilotGate({
     blockers.push("free_text_or_raw_private_tag_rejected");
   }
 
+  const allowed = blockers.length === 0;
+
   return {
     blockers,
     curatedTagsOnly: true,
-    liveEndpointEnabled: false,
-    allowed: false,
+    liveEndpointEnabled: allowed,
+    allowed,
     namespace: normalizedNamespace,
     rawInputsAccepted: false,
-    stateMutation: false,
+    stateMutation: allowed,
+  };
+}
+
+function normalizeStage(value?: string | null): "registry" | "consent" | "introduced" {
+  if (value === "consent" || value === "introduced") {
+    return value;
+  }
+
+  return "registry";
+}
+
+export function validateBackgroundPrivateOverlapCheckInput({
+  counterpartyId,
+  freeText,
+  namespace,
+  rawTags,
+  stage,
+}: BackgroundPrivateOverlapCheckInput): BackgroundPrivateOverlapCheckValidation {
+  const blockers: string[] = [];
+  const normalizedNamespace = normalizeBackgroundPrivateOverlapNamespace(namespace);
+  const normalizedCounterpartyId = typeof counterpartyId === "string" ? counterpartyId.trim() : "";
+
+  if (!normalizedCounterpartyId) {
+    blockers.push("counterparty_required");
+  }
+
+  if (!normalizedNamespace) {
+    blockers.push("curated_namespace_required");
+  }
+
+  if (typeof freeText === "string" && freeText.trim()) {
+    blockers.push("free_text_rejected");
+  }
+
+  if (Array.isArray(rawTags) && rawTags.length) {
+    blockers.push("raw_tag_input_rejected");
+  }
+
+  return {
+    blockers,
+    counterpartyId: normalizedCounterpartyId,
+    namespace: normalizedNamespace,
+    stage: normalizeStage(stage),
+  };
+}
+
+export function bucketBackgroundPrivateOverlapCount(count: number) {
+  if (count <= 0) {
+    return "none" as const;
+  }
+
+  if (count === 1) {
+    return "1" as const;
+  }
+
+  if (count <= 3) {
+    return "2_to_3" as const;
+  }
+
+  return "4_plus" as const;
+}
+
+export function buildBackgroundPrivateOverlapReceiptPayload({
+  blockers = [],
+  namespace,
+  resultBucket,
+  stage,
+}: {
+  blockers?: string[];
+  namespace: BackgroundPrivateOverlapNamespace | null;
+  resultBucket?: string;
+  stage: "registry" | "consent" | "introduced";
+}) {
+  return {
+    blockers,
+    namespace,
+    resultBucket: resultBucket ?? "blocked",
+    stage,
+    storedRawTags: false,
+    version: BACKGROUND_PRIVATE_OVERLAP_CONTRACT_VERSION,
   };
 }
 
 export function getBackgroundPrivateOverlapContract(): BackgroundPrivateOverlapContract {
   return {
     blockedUntil: [
-      "No live /api/background/private-overlap routes are enabled.",
-      "No background_private_overlap_tags or background_private_overlap_checks tables are created.",
+      "The /api/background/private-overlap/check route remains governance-gated.",
+      "Production use is blocked until DPIA, threat-model, external privacy/security, and formal cryptographic reviews are complete.",
       "No raw or canonical tags are stored.",
       "No overlap result can change matching, disclosure, ranking, or outreach state.",
     ],
     contractTests: [
       "background_private_overlap_contract_validator",
-      "background_private_overlap_no_live_endpoint_smoke",
+      "background_private_overlap_governance_gated_route_smoke",
       "background_private_overlap_route_contract_smoke",
+      "background_private_overlap_receipt_chain_validator",
     ],
     fallbackBehavior:
       "Use current deterministic broad-preview matching when the private-overlap service is unavailable, unreviewed, or disabled.",
@@ -230,43 +347,36 @@ export function getBackgroundPrivateOverlapContract(): BackgroundPrivateOverlapC
     liveEndpointEnabled: false,
     namespaceRules: [
       {
-        allowedSource: "approved profile synthesis capability tags only",
-        key: "capability_tags",
-        label: "Capability tags",
+        allowedSource: "approved exact capability tags only",
+        key: "exact_capability_tag",
+        label: "Exact capability tag",
         rawValueRetention: "forbidden",
         storedRepresentation: "blinded_token_only",
       },
       {
-        allowedSource: "approved broad constraint flags only",
-        key: "constraint_flags",
-        label: "Constraint flags",
+        allowedSource: "approved exact constraint tags only",
+        key: "exact_constraint_tag",
+        label: "Exact constraint tag",
         rawValueRetention: "forbidden",
         storedRepresentation: "blinded_token_only",
       },
       {
-        allowedSource: "approved verification-preference tags only",
-        key: "verification_preferences",
-        label: "Verification preferences",
-        rawValueRetention: "forbidden",
-        storedRepresentation: "blinded_token_only",
-      },
-      {
-        allowedSource: "approved coarse availability tags only",
-        key: "coarse_availability",
-        label: "Coarse availability",
+        allowedSource: "approved exact verification tags only",
+        key: "exact_verification_tag",
+        label: "Exact verification tag",
         rawValueRetention: "forbidden",
         storedRepresentation: "blinded_token_only",
       },
     ],
     participantOutput: {
-      allowed: ["overlap_count_bucket", "factor_codes", "blockers"],
+      allowed: ["result_bucket", "receipt_id", "blockers"],
       forbidden: ["matching_tag_names", "non_overlap_tags", "raw_tokens", "counterparty_tag_set"],
     },
     plannedEndpoints: [
       {
         method: "POST",
-        path: "/api/background/private-overlap/evaluate",
-        status: "blocked_pending_crypto_review",
+        path: "/api/background/private-overlap/check",
+        status: "governance_gated",
       },
       {
         method: "POST",
@@ -280,10 +390,10 @@ export function getBackgroundPrivateOverlapContract(): BackgroundPrivateOverlapC
       },
     ],
     purpose:
-      "Design-only guardrail for future narrow privacy-preserving overlap checks over curated tags, without shipping live overlap APIs or storage before cryptographic review.",
-    releaseState: "design_review_only",
+      "Governance-gated pilot guardrail for narrow exact-tag overlap checks over blinded tokens, without accepting free text, revealing raw tags, or enabling production use before cryptographic review.",
+    releaseState: "governance_gated_pilot",
     requiredReviews: [...REQUIRED_REVIEWS],
-    storageState: "not_created",
+    storageState: "pilot_schema_created",
     version: BACKGROUND_PRIVATE_OVERLAP_CONTRACT_VERSION,
   };
 }
@@ -297,11 +407,11 @@ export function validateBackgroundPrivateOverlapContract(
     .join(", ");
   const checks = [
     check(
-      "design-only-release-state",
-      "Private-overlap remains design-review-only and not live-ready",
-      contract.releaseState === "design_review_only" &&
+      "governance-gated-release-state",
+      "Private-overlap remains governance-gated and not production live-ready",
+      contract.releaseState === "governance_gated_pilot" &&
         contract.liveEndpointEnabled === false &&
-        contract.storageState === "not_created",
+        contract.storageState === "pilot_schema_created",
       `${contract.releaseState}; live=${contract.liveEndpointEnabled}; storage=${contract.storageState}`,
     ),
     check(
@@ -315,7 +425,7 @@ export function validateBackgroundPrivateOverlapContract(
       "Namespaces are curated tags only and exclude free text",
       namespaceKeys.length > 0 &&
         namespaceKeys.every((key) =>
-          ["capability_tags", "constraint_flags", "verification_preferences", "coarse_availability"].includes(key),
+          ["exact_capability_tag", "exact_constraint_tag", "exact_verification_tag"].includes(key),
         ) &&
         !namespaceKeys.some((key) => /free|text|wish|contact|location/i.test(key)),
       namespaceKeys.join(", "),
@@ -349,10 +459,12 @@ export function validateBackgroundPrivateOverlapContract(
     ),
     check(
       "blocked-live-endpoints",
-      "Planned live endpoints are blocked pending cryptographic review",
+      "Planned private-overlap endpoints are blocked or governance-gated pending review",
       contract.plannedEndpoints.length === 3 &&
         contract.plannedEndpoints.every(
-          (endpoint) => endpoint.status === "blocked_pending_crypto_review",
+          (endpoint) =>
+            endpoint.status === "blocked_pending_crypto_review" ||
+            endpoint.status === "governance_gated",
         ) &&
         contract.plannedEndpoints.every((endpoint) =>
           endpoint.path.startsWith("/api/background/private-overlap/"),
@@ -361,9 +473,9 @@ export function validateBackgroundPrivateOverlapContract(
     ),
     check(
       "counts-only-output",
-      "Participant output is limited to counts, factor codes, and blockers",
-      contract.participantOutput.allowed.includes("overlap_count_bucket") &&
-        contract.participantOutput.allowed.includes("factor_codes") &&
+      "Participant output is limited to buckets, receipts, and blockers",
+      contract.participantOutput.allowed.includes("result_bucket") &&
+        contract.participantOutput.allowed.includes("receipt_id") &&
         contract.participantOutput.forbidden.includes("matching_tag_names") &&
         contract.participantOutput.forbidden.includes("counterparty_tag_set"),
       `${contract.participantOutput.allowed.join(", ")} | forbidden ${contract.participantOutput.forbidden.join(", ")}`,

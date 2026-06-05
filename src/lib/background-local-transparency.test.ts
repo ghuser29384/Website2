@@ -8,6 +8,10 @@ import {
   getBackgroundLocalTransparencyReceiptKey,
   summarizeLocalTransparencyReceipts,
 } from "@/lib/background-local-transparency";
+import {
+  buildTransparencyReceiptEntry,
+  verifyTransparencyReceiptChain,
+} from "@/lib/background-transparency-receipts";
 
 test("local match explanation receipts keep only compact safe provenance metadata", () => {
   const receipt = buildLocalMatchExplanationReceipt({
@@ -96,4 +100,74 @@ test("local transparency summary counts explanation, grant, and revoked receipts
     matchExplanations: 1,
     revokedConsentReceipts: 1,
   });
+});
+
+test("transparency receipts form a tamper-evident redacted hash chain", () => {
+  const first = buildTransparencyReceiptEntry({
+    actorScope: "profile:profile-1",
+    eventType: "background_private_overlap_check",
+    redactedPayload: {
+      namespace: "exact_capability_tag",
+      resultBucket: "1",
+      storedRawTags: false,
+    },
+  });
+  const second = buildTransparencyReceiptEntry({
+    actorScope: "profile:profile-1",
+    eventType: "background_private_overlap_check",
+    previousEntryHash: first.entry_hash,
+    redactedPayload: {
+      namespace: "exact_verification_tag",
+      resultBucket: "none",
+      storedRawTags: false,
+    },
+  });
+
+  assert.equal(first.prev_hash, null);
+  assert.equal(second.prev_hash, first.entry_hash);
+  assert.equal(
+    verifyTransparencyReceiptChain([
+      {
+        actor_scope: first.actor_scope,
+        entry_hash: first.entry_hash,
+        event_type: first.event_type,
+        prev_hash: first.prev_hash ?? null,
+        redacted_payload: first.redacted_payload,
+      },
+      {
+        actor_scope: second.actor_scope,
+        entry_hash: second.entry_hash,
+        event_type: second.event_type,
+        prev_hash: second.prev_hash ?? null,
+        redacted_payload: second.redacted_payload,
+      },
+    ]),
+    true,
+  );
+  assert.equal(
+    verifyTransparencyReceiptChain([
+      {
+        actor_scope: first.actor_scope,
+        entry_hash: first.entry_hash,
+        event_type: first.event_type,
+        prev_hash: first.prev_hash ?? null,
+        redacted_payload: { ...first.redacted_payload, resultBucket: "4_plus" },
+      },
+    ]),
+    false,
+  );
+});
+
+test("transparency receipts reject unredacted private payloads", () => {
+  assert.throws(
+    () =>
+      buildTransparencyReceiptEntry({
+        actorScope: "profile:profile-1",
+        eventType: "background_private_overlap_check",
+        redactedPayload: {
+          note: "exact private wish: contact alex@example.org",
+        },
+      }),
+    /redacted payloads only/,
+  );
 });

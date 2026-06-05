@@ -46,7 +46,7 @@ export async function GET(request: Request) {
       liveReady: validation.liveReady,
     },
     publicNonClaim:
-      "Private overlap checks are not live; any future pilot must not use free text and must not reveal raw tags.",
+      "Private overlap checks are governance-gated; the pilot route must not use free text and must not reveal raw tags.",
     blockers: validation.blockers,
   });
 }

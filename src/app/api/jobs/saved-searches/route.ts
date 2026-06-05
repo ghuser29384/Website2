@@ -4,6 +4,7 @@ import {
   evaluateDeterministicMatch,
   getDeterministicSignalsFromSynthesis,
 } from "@/lib/background-networking";
+import { buildBackgroundOpportunityNotificationCopy } from "@/lib/background-helper-runs";
 import {
   buildMatchExplanationSnapshot,
   buildPrivacySafeMatchAuditMetadata,
@@ -397,22 +398,21 @@ async function processSavedSearches(request: Request) {
         runRefreshed += 1;
       } else {
         runCreated += 1;
+        const notificationCopy = buildBackgroundOpportunityNotificationCopy();
         const notificationResult = await insertWishNotificationsWithSafeEmail({
           notifications: [
             {
               profile_id: search.profile_id,
               kind: "match",
-              title: "New opportunity brief",
-              body:
-                "A saved search found a privacy-safe opportunity brief. Exact wishes and contact details are still hidden.",
+              title: notificationCopy.title,
+              body: notificationCopy.body,
               match_id: matchId,
             },
             {
               profile_id: preview.profile_id,
               kind: "match",
-              title: "New opportunity brief",
-              body:
-                "A saved search found a privacy-safe opportunity brief. Exact wishes and contact details are still hidden.",
+              title: notificationCopy.title,
+              body: notificationCopy.body,
               match_id: matchId,
             },
           ],

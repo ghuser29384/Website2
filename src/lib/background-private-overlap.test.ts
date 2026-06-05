@@ -3,21 +3,25 @@ import { existsSync } from "node:fs";
 import test from "node:test";
 
 import {
+  bucketBackgroundPrivateOverlapCount,
+  buildBackgroundPrivateOverlapReceiptPayload,
   evaluateBackgroundPrivateOverlapPilotGate,
   getBackgroundPrivateOverlapContract,
+  validateBackgroundPrivateOverlapCheckInput,
   validateBackgroundPrivateOverlapContract,
 } from "@/lib/background-private-overlap";
 
-test("private-overlap contract is design-review-only and not live-ready", () => {
+test("private-overlap contract is governance-gated and not production live-ready", () => {
   const contract = getBackgroundPrivateOverlapContract();
   const validation = validateBackgroundPrivateOverlapContract(contract);
 
   assert.equal(validation.status, "pass");
   assert.equal(validation.liveReady, false);
   assert.deepEqual(validation.blockers, []);
-  assert.equal(contract.releaseState, "design_review_only");
+  assert.equal(contract.releaseState, "governance_gated_pilot");
   assert.equal(contract.liveEndpointEnabled, false);
-  assert.equal(contract.storageState, "not_created");
+  assert.equal(contract.storageState, "pilot_schema_created");
+  assert.ok(contract.plannedEndpoints.some((endpoint) => endpoint.path === "/api/background/private-overlap/check"));
   assert.ok(contract.requiredReviews.some((review) => /formal cryptographic/i.test(review)));
   assert.ok(contract.requiredReviews.some((review) => /DPIA/i.test(review)));
 });
@@ -32,7 +36,7 @@ test("private-overlap contract rejects live endpoints before review", () => {
   const validation = validateBackgroundPrivateOverlapContract(weakened);
 
   assert.equal(validation.status, "fail");
-  assert.ok(validation.blockers.some((blocker) => blocker.includes("design-only-release-state")));
+  assert.ok(validation.blockers.some((blocker) => blocker.includes("governance-gated-release-state")));
 });
 
 test("private-overlap contract rejects free-text namespaces and raw stored fields", () => {
@@ -93,7 +97,7 @@ test("private-overlap pilot gate is curated-tag-only and non-production by defau
     dpiaApproved: true,
     environment: "production",
     externalReviewApproved: true,
-    namespace: "capability_tags",
+    namespace: "exact_capability_tag",
     requestedTags: ["grantmaking", "exact wish: contact alice@example.org"],
     threatModelApproved: true,
   });
@@ -103,7 +107,44 @@ test("private-overlap pilot gate is curated-tag-only and non-production by defau
   assert.equal(gate.rawInputsAccepted, false);
   assert.equal(gate.stateMutation, false);
   assert.equal(gate.curatedTagsOnly, true);
-  assert.equal(gate.namespace, "capability_tags");
+  assert.equal(gate.namespace, "exact_capability_tag");
   assert.ok(gate.blockers.includes("production_disabled_until_external_review"));
   assert.ok(gate.blockers.includes("free_text_or_raw_private_tag_rejected"));
+});
+
+test("private-overlap check validation rejects free text and raw tag input", () => {
+  const validation = validateBackgroundPrivateOverlapCheckInput({
+    counterpartyId: "counterparty-1",
+    freeText: "Find people like this exact private wish",
+    namespace: "capability_tags",
+    rawTags: ["animal welfare"],
+    stage: "consent",
+  });
+
+  assert.equal(validation.namespace, "exact_capability_tag");
+  assert.equal(validation.stage, "consent");
+  assert.ok(validation.blockers.includes("free_text_rejected"));
+  assert.ok(validation.blockers.includes("raw_tag_input_rejected"));
+});
+
+test("private-overlap buckets counts and redacted receipt payloads", () => {
+  assert.equal(bucketBackgroundPrivateOverlapCount(0), "none");
+  assert.equal(bucketBackgroundPrivateOverlapCount(1), "1");
+  assert.equal(bucketBackgroundPrivateOverlapCount(3), "2_to_3");
+  assert.equal(bucketBackgroundPrivateOverlapCount(4), "4_plus");
+
+  const payload = buildBackgroundPrivateOverlapReceiptPayload({
+    blockers: ["dpia_required"],
+    namespace: "exact_verification_tag",
+    stage: "registry",
+  });
+
+  assert.deepEqual(payload, {
+    blockers: ["dpia_required"],
+    namespace: "exact_verification_tag",
+    resultBucket: "blocked",
+    stage: "registry",
+    storedRawTags: false,
+    version: "background-private-overlap-pilot-v0.2-2026-06",
+  });
 });
