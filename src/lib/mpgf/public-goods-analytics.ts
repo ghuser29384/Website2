@@ -36,6 +36,9 @@ export interface MpgfPublicGoodsAnalyticsEventJson {
   amountBucket?: MpgfPublicGoodsAnalyticsAmountBucket;
   visibilityMode?: MpgfPublicGoodsVisibilityMode;
   captureMode?: MpgfPublicGoodsCaptureMode;
+  counterpartBucketCount?: number;
+  minimumCounterpartyClearedCents?: number;
+  maxExposureCents?: number;
   isRecurring?: boolean;
   eligibilityState?: MpgfPublicGoodsPledge["eligibilityState"];
   campaignStatus?: string;

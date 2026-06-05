@@ -43,6 +43,28 @@ function centsField(record: Record<string, unknown>) {
   return Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
 }
 
+function centsNamedField(record: Record<string, unknown>, centsKey: string, dollarsKey: string) {
+  const cents = Number(record[centsKey]);
+
+  if (Number.isInteger(cents) && cents > 0) {
+    return cents;
+  }
+
+  const dollars = Number(record[dollarsKey]);
+
+  return Number.isFinite(dollars) ? Math.round(dollars * 100) : undefined;
+}
+
+function stringListField(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item));
+  }
+
+  return typeof value === "string" ? value : undefined;
+}
+
 function visibilityMode(value: unknown): MpgfPublicGoodsVisibilityMode {
   return value === "public_supporter" || value === "public_reason" ? value : "private_amount";
 }
@@ -79,10 +101,15 @@ function toPledgeIntentRow(
     idempotency_key_hash: pledgeIntent.idempotencyKeyHash,
     amount_cents: pledgeIntent.amountCents,
     currency: "usd",
+    acceptable_counterpart_buckets: pledgeIntent.acceptableCounterpartBuckets,
+    minimum_counterparty_cleared_cents: pledgeIntent.minimumCounterpartyClearedCents,
+    max_exposure_cents: pledgeIntent.maxExposureCents,
     visibility_pref: pledgeIntent.visibilityMode,
     payment_state: pledgeIntent.paymentState,
     counting_state: pledgeIntent.countingState,
     fallback_rule: pledgeIntent.fallbackRule as unknown as Json,
+    donor_exposure_disclosure: pledgeIntent.donorExposureDisclosure as unknown as Json,
+    cross_view_clearance_policy: pledgeIntent.crossViewClearancePolicy,
     capture_policy: pledgeIntent.capturePolicy,
     created_at: pledgeIntent.createdAt,
     updated_at: pledgeIntent.createdAt,
@@ -100,6 +127,11 @@ function toConditionalPledgeRow(
     profile_id: profileId,
     amount_cents: pledgeIntent.amountCents,
     counted_cap_cents: countedCapCents(),
+    acceptable_counterpart_buckets: pledgeIntent.acceptableCounterpartBuckets,
+    minimum_counterparty_cleared_cents: pledgeIntent.minimumCounterpartyClearedCents,
+    max_exposure_cents: pledgeIntent.maxExposureCents,
+    failure_path_disclosure: pledgeIntent.donorExposureDisclosure as unknown as Json,
+    cross_view_clearance_policy: pledgeIntent.crossViewClearancePolicy,
     visibility: pledgeIntent.visibilityMode,
     payment_mode: pledgeIntent.paymentMode,
     status: "pledge_saved",
@@ -170,6 +202,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ rou
       campaignId: stringField(record, "campaignId"),
       userId: viewer.authUser.id,
       amountCents: centsField(record),
+      acceptableCounterpartBuckets: stringListField(record, "acceptableCounterpartBuckets"),
+      minimumCounterpartyClearedCents: centsNamedField(
+        record,
+        "minimumCounterpartyClearedCents",
+        "minimumCounterpartyClearedDollars",
+      ),
       paymentMode: contributionMode(record.paymentMode),
       visibilityMode: visibilityMode(record.visibilityMode),
       idempotencyKey: stringField(record, "idempotencyKey"),

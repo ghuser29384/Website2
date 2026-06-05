@@ -119,6 +119,8 @@ import {
 import {
   MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW,
   MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY,
+  MPGF_PUBLIC_GOODS_CROSS_VIEW_CLEARANCE_POLICY,
+  MPGF_PUBLIC_GOODS_DONOR_EXPOSURE_DISCLOSURE_POLICY,
   authorizeMpgfPublicGoodsPledgeIntentPayment,
   createMpgfPublicGoodsPledgeIntent,
   getMpgfPublicGoodsContributionFlowApi,
@@ -203,6 +205,14 @@ import {
   buildMpgfPublicGoodsCoalitionRoutingReport,
   getMpgfPublicGoodsCoalitionRoutingReportApi,
 } from "./mpgf/public-goods-coalition-routing";
+import {
+  MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY,
+  MPGF_PUBLIC_GOODS_CUSTODY_POLICY,
+  MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY,
+  MPGF_PUBLIC_GOODS_RECIPIENT_REGISTRY_POLICY,
+  buildMpgfPublicGoodsEcmRulebookReport,
+  getMpgfPublicGoodsEcmRulebookReportApi,
+} from "./mpgf/public-goods-ecm-rulebook";
 import {
   MPGF_PUBLIC_GOODS_EVERY_ORG_FAST_ROUTE_POLICY,
   MPGF_PUBLIC_GOODS_EVERY_ORG_PRIVACY_POLICY,
@@ -1070,8 +1080,22 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.contributionFlow?.pledgeIntentPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/pledge-intents`);
   assert.equal(round.round.contributionFlow?.manualEvidenceFallbackPath, "/api/mpgf/evidence/manual");
   assert.equal(round.round.contributionFlow?.defaultContributionMode, "every_org_fast_route");
+  assert.equal(round.round.contributionFlow?.crossViewClearancePolicy, MPGF_PUBLIC_GOODS_CROSS_VIEW_CLEARANCE_POLICY);
+  assert.equal(round.round.contributionFlow?.donorExposureDisclosurePolicy, MPGF_PUBLIC_GOODS_DONOR_EXPOSURE_DISCLOSURE_POLICY);
   assert.match(round.round.contributionFlow?.savedCommitmentPolicy ?? "", /setup_intent_first/);
   assert.ok(round.round.contributionFlow?.stateObjects.includes("provider_payment_event"));
+  assert.ok(round.round.contributionFlow?.stateObjects.includes("cross_view_intent_terms"));
+  assert.equal(round.round.ecmRulebook.policy, MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY);
+  assert.equal(round.round.ecmRulebook.reportPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/rulebook`);
+  assert.equal(round.round.ecmRulebook.custodyPolicy, MPGF_PUBLIC_GOODS_CUSTODY_POLICY);
+  assert.equal(round.round.ecmRulebook.batchCadencePolicy, MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY);
+  assert.equal(round.round.ecmRulebook.recipientRegistryPolicy, MPGF_PUBLIC_GOODS_RECIPIENT_REGISTRY_POLICY);
+  assert.equal(round.round.ecmRulebook.longLivedRoundOpenHoldsAllowed, false);
+  assert.equal(round.round.ecmRulebook.escrowClaimAllowed, false);
+  assert.equal(round.round.ecmRulebook.donorDisclosure.maxExposureRequiredBeforeAuthorization, true);
+  assert.equal(round.round.ecmRulebook.donorDisclosure.counterpartBucketsRequired, true);
+  assert.equal(round.round.ecmRulebook.moralReputationCanIncreaseAllocationPower, false);
+  assert.equal(round.round.ecmRulebook.noGlobalMoralRanking, true);
   assert.equal(round.round.cgVqaf?.policy, MPGF_PUBLIC_GOODS_CG_VQAF_POLICY);
   assert.equal(round.round.cgVqaf?.reportPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/cg-vqaf`);
   assert.equal(
@@ -1167,6 +1191,8 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(persistedRoundDetail.round.sponsorPool.flywheelAvailableForRoundCents, 0);
   assert.equal(persistedRoundDetail.round.sponsorPool.refillAvailableForNextRoundCents, 0);
   assert.equal(persistedRoundDetail.round.contributionFlow?.pledgeIntentPath, `/api/mpgf/rounds/${persistedRound.id}/pledge-intents`);
+  assert.equal(persistedRoundDetail.round.ecmRulebook.reportPath, `/api/mpgf/rounds/${persistedRound.id}/rulebook`);
+  assert.equal(persistedRoundDetail.round.ecmRulebook.escrowClaimAllowed, false);
   assert.equal(persistedRoundDetail.round.cgVqaf?.reportPath, `/api/mpgf/rounds/${persistedRound.id}/cg-vqaf`);
   assert.equal(
     persistedRoundDetail.round.cgVqaf?.commonGroundDiscoveryPath,
@@ -1318,6 +1344,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/rounds/route.ts", /listMpgfPublicGoodsRoundsApi/],
     ["src/app/api/mpgf/rounds/[roundId]/route.ts", /getMpgfPublicGoodsRoundApi/],
     ["src/app/api/mpgf/rounds/[roundId]/campaigns/route.ts", /listMpgfPublicGoodsCampaignsApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/rulebook/route.ts", /getMpgfPublicGoodsEcmRulebookReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", /getMpgfPublicGoodsCgVqafReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/coalition-routing/route.ts", /getMpgfPublicGoodsCoalitionRoutingReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/identity-integrity/route.ts", /getMpgfPublicGoodsIdentityIntegrityReportApi/],
@@ -1530,6 +1557,8 @@ test("MPGF contribution intents verify identity before conditional payment autho
     campaignId: demoMpgfPublicGoodsCampaigns[0]?.id ?? "",
     userId: "demo-contributor-private-user",
     amountCents: 12_500,
+    acceptableCounterpartBuckets: ["animal-welfare", "existential-risk"],
+    minimumCounterpartyClearedCents: 7_500,
     paymentMode: "stripe_setup_intent_saved_commitment",
     idempotencyKey: "private-idempotency-key-001",
   });
@@ -1580,6 +1609,8 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.equal(contributionFlow.primaryFlow, MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW);
   assert.equal(contributionFlow.privacyPolicy, MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY);
   assert.equal(contributionFlow.defaultContributionMode, "every_org_fast_route");
+  assert.equal(contributionFlow.crossViewClearancePolicy, MPGF_PUBLIC_GOODS_CROSS_VIEW_CLEARANCE_POLICY);
+  assert.equal(contributionFlow.donorExposureDisclosurePolicy, MPGF_PUBLIC_GOODS_DONOR_EXPOSURE_DISCLOSURE_POLICY);
   assert.deepEqual(
     contributionFlow.modeOrder.map((mode) => mode.mode),
     ["every_org_fast_route", "stripe_setup_intent_saved_commitment", "manual_proof_fallback"],
@@ -1590,6 +1621,7 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.deepEqual(contributionFlow.stateObjects, [
     "pledge_intent",
     "conditional_pledge",
+    "cross_view_intent_terms",
     "identity_verification",
     "payment_authorization",
     "provider_payment_event",
@@ -1605,6 +1637,16 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.equal(intent.paymentState, "intent_created");
   assert.equal(intent.paymentMode, "stripe_setup_intent_saved_commitment");
   assert.equal(intent.countingState, "preview_only");
+  assert.deepEqual(intent.acceptableCounterpartBuckets, ["animal-welfare", "existential-risk"]);
+  assert.equal(intent.minimumCounterpartyClearedCents, 7_500);
+  assert.equal(intent.counterpartDistinctBucketRequired, true);
+  assert.equal(intent.maxExposureCents, 12_500);
+  assert.equal(intent.crossViewClearancePolicy, MPGF_PUBLIC_GOODS_CROSS_VIEW_CLEARANCE_POLICY);
+  assert.equal(intent.donorExposureDisclosurePolicy, MPGF_PUBLIC_GOODS_DONOR_EXPOSURE_DISCLOSURE_POLICY);
+  assert.equal(intent.fallbackRule.roundNotClearedMode, "expire_without_charge");
+  assert.equal(intent.fallbackRule.authorizationExpiredMode, "reauthorize_only_after_clearance_reconfirmed");
+  assert.equal(intent.donorExposureDisclosure.maxExposureCents, 12_500);
+  assert.ok(intent.donorExposureDisclosure.exactClearanceConditions.some((condition) => /distinct counterpart buckets/.test(condition)));
   assert.match(intent.userRefHash, /^sha256:/);
   assert.match(intent.idempotencyKeyHash, /^sha256:/);
   assert.equal(intent.fallbackRule.manualEvidencePath, "/api/mpgf/evidence/manual");
@@ -1642,6 +1684,9 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(route, /mpgf_conditional_pledges/);
   assert.match(route, /conditionalPledgeId: pledgeIntent\.id/);
   assert.match(route, /counted_cap_cents/);
+  assert.match(route, /acceptableCounterpartBuckets/);
+  assert.match(route, /minimumCounterpartyClearedCents/);
+  assert.match(route, /donor_exposure_disclosure/);
   assert.match(route, /capture_policy: pledgeIntent\.capturePolicy/);
   assert.match(route, /status: "pledge_saved"/);
   assert.match(route, /persistence/);
@@ -1661,11 +1706,16 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(schemaSql, /create table if not exists public\.mpgf_payment_authorizations/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_provider_payment_events/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_conditional_pledges/);
+  assert.match(schemaSql, /acceptable_counterpart_buckets/);
+  assert.match(schemaSql, /minimum_counterparty_cleared_cents/);
+  assert.match(schemaSql, /donor_exposure_disclosure/);
   assert.match(schemaSql, /constraint mpgf_payment_authorizations_provider_or_manual/);
   assert.match(schemaSql, /create policy "mpgf_provider_payment_events_service_only"/);
   assert.match(schemaSql, /comment on table public\.mpgf_provider_payment_events/);
   assert.match(databaseTypes, /mpgf_pledge_intents: \{/);
   assert.match(databaseTypes, /mpgf_conditional_pledges: \{/);
+  assert.match(databaseTypes, /acceptable_counterpart_buckets: string\[\]/);
+  assert.match(databaseTypes, /minimum_counterparty_cleared_cents: number/);
   assert.match(databaseTypes, /mpgf_identity_verifications: \{/);
   assert.match(databaseTypes, /mpgf_payment_authorizations: \{/);
   assert.match(databaseTypes, /mpgf_provider_payment_events: \{/);
@@ -1679,6 +1729,10 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(consoleSource, /Open Every\.org fast route/);
   assert.match(consoleSource, /Save Stripe commitment/);
   assert.match(consoleSource, /Save pledge intent/);
+  assert.match(consoleSource, /Acceptable counterpart buckets/);
+  assert.match(consoleSource, /Minimum counterpart-cleared volume/);
+  assert.match(consoleSource, /Max exposure/);
+  assert.match(consoleSource, /Authorization timing/);
   assert.match(consoleSource, /Manual proof fallback/);
   assert.match(consoleSource, /id="manual-proof-fallback"/);
   assert.match(contributionModal, /\/api\/mpgf\/every-org\/donate-link/);
@@ -1688,6 +1742,10 @@ test("MPGF contribution intents verify identity before conditional payment autho
   assert.match(contributionModal, /evidence_submission_started/);
   assert.match(contributionModal, /mpgf_contribution_route/);
   assert.match(contributionModal, /Open manual proof fallback/);
+  assert.match(contributionModal, /Acceptable counterpart buckets/);
+  assert.match(contributionModal, /Minimum counterpart-cleared volume/);
+  assert.match(contributionModal, /Max exposure/);
+  assert.match(contributionModal, /Authorization timing/);
   assert.match(contributionModal, /If verified/);
   assert.match(contributionModal, /Unlock gap after route/);
   assert.match(contributionModal, /projectedDirectCents/);
@@ -1703,6 +1761,70 @@ test("MPGF contribution intents verify identity before conditional payment autho
   ]) {
     assert.equal(serialized.includes(forbidden), false);
   }
+});
+
+test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil terms", () => {
+  const report = buildMpgfPublicGoodsEcmRulebookReport();
+  const apiReport = getMpgfPublicGoodsEcmRulebookReportApi(demoMpgfAssuranceRound.id);
+  const unknownReport = getMpgfPublicGoodsEcmRulebookReportApi("unknown-round");
+  const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/rulebook/route.ts", "utf8");
+  const roundApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
+  const roundPage = readFileSync("src/app/mpgf/rounds/[roundId]/page.tsx", "utf8");
+  const schemaSql = readFileSync("supabase/schema.sql", "utf8");
+  const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
+  const migration = readFileSync("supabase/migrations/20260604_mpgf_ecm_rulebook.sql", "utf8");
+
+  assert.equal(report.policy, MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY);
+  assert.equal(report.batchCadencePolicy, MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY);
+  assert.equal(report.custodyPolicy, MPGF_PUBLIC_GOODS_CUSTODY_POLICY);
+  assert.equal(report.recipientRegistryPolicy, MPGF_PUBLIC_GOODS_RECIPIENT_REGISTRY_POLICY);
+  assert.equal(report.batchEngine.longLivedRoundOpenHoldsAllowed, false);
+  assert.deepEqual(report.batchEngine.stages, [
+    "round_open",
+    "round_close",
+    "batch_clear_cross_view_conditions",
+    "just_in_time_authorization_or_partner_custody",
+    "recipient_verification_and_challenge_window",
+    "capture_release_cancel_or_reroute",
+    "audit_publication",
+  ]);
+  assert.equal(report.custodyAndRelease.postClearCustodialState, "awaiting_partner_or_fiscal_host_custody_confirmation");
+  assert.equal(report.custodyAndRelease.escrowClaimAllowed, false);
+  assert.equal(report.custodyAndRelease.releaseOnlyAfterRecipientVerification, true);
+  assert.equal(report.custodyAndRelease.releaseOnlyAfterChallengeWindowCompletion, true);
+  assert.ok(report.custodyAndRelease.donorFailureHandling.includes("release_authorization_if_recipient_verification_fails"));
+  assert.equal(report.donorDisclosure.maxExposureRequiredBeforeAuthorization, true);
+  assert.equal(report.donorDisclosure.counterpartBucketsRequired, true);
+  assert.equal(report.donorDisclosure.minimumCounterpartyVolumeRequired, true);
+  assert.equal(report.identityAndAntiSybil.moralReputationCanIncreaseAllocationPower, false);
+  assert.equal(report.identityAndAntiSybil.noGlobalMoralRanking, true);
+  assert.equal(report.preservedInvariants.antiThreatAndBaselineIntegrityAreBlockingGates, true);
+  assert.equal(report.preservedInvariants.immutableProvenanceForRelianceBearingChanges, true);
+  assert.equal(report.recipientRegistry.length, demoMpgfPublicGoodsCampaigns.length);
+  assert.ok(report.recipientRegistry.every((recipient) => recipient.legalEntityOrFiscalHost));
+  assert.match(report.calcHash, /^sha256:/);
+  assert.ok(apiReport);
+  assert.equal(apiReport.policy, report.policy);
+  assert.equal(unknownReport, null);
+  assert.match(route, /loadMpgfPublicGoodsAllocationContext/);
+  assert.match(route, /buildMpgfPublicGoodsEcmRulebookReport/);
+  assert.match(route, /allocationContextSource/);
+  assert.match(roundApi, /ecmRulebook/);
+  assert.match(roundApi, /recipientRegistryCount/);
+  assert.match(roundPage, /Fixed ECM rulebook/);
+  assert.match(roundPage, /counterpart-bucket conditions/);
+  assert.match(roundPage, /ECM rulebook report/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_round_rulebooks/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_recipient_registry/);
+  assert.match(schemaSql, /create table if not exists public\.mpgf_custody_holds/);
+  assert.match(schemaSql, /moral_reputation_can_increase_allocation_power boolean not null default false/);
+  assert.match(databaseTypes, /mpgf_round_rulebooks/);
+  assert.match(databaseTypes, /mpgf_recipient_registry/);
+  assert.match(databaseTypes, /mpgf_custody_holds/);
+  assert.match(migration, /alter table public\.mpgf_pledge_intents/);
+  assert.match(migration, /acceptable_counterpart_buckets/);
+  assert.match(migration, /public\.mpgf_custody_holds/);
+  assert.match(migration, /escrow_claim_allowed boolean not null default false/);
 });
 
 test("MPGF Every.org fast route creates Donate Links and imports partner webhooks without custody", () => {

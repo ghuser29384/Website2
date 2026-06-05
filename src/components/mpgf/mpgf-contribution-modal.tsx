@@ -45,7 +45,7 @@ function formatUsd(cents: number) {
 }
 
 function amountToCents(value: number) {
-  return Math.max(0, Math.round(value * 100));
+  return Number.isFinite(value) ? Math.max(0, Math.round(value * 100)) : 0;
 }
 
 function assignBrowserLocation(url: string) {
@@ -107,6 +107,10 @@ export function MpgfContributionModal({
   const [mode, setMode] = useState<ContributionMode>("fast_route");
   const [amountDollars, setAmountDollars] = useState(25);
   const [campaignId, setCampaignId] = useState(campaigns[0]?.campaignId ?? "");
+  const [counterpartBuckets, setCounterpartBuckets] = useState(
+    "animal-welfare, existential-risk, institutional-integrity",
+  );
+  const [minimumCounterpartyDollars, setMinimumCounterpartyDollars] = useState(25);
   const [countForMatching, setCountForMatching] = useState(true);
   const [futureUseConsentAccepted, setFutureUseConsentAccepted] = useState(false);
   const [pending, setPending] = useState(false);
@@ -128,6 +132,7 @@ export function MpgfContributionModal({
   const thresholdGapAfterCents = selectedCampaign
     ? Math.max(0, selectedCampaign.thresholdAmountCents - projectedDirectCents)
     : 0;
+  const minimumCounterpartyCents = amountToCents(minimumCounterpartyDollars);
   const supporterGapAfter = selectedCampaign
     ? Math.max(0, selectedCampaign.thresholdDonors - projectedVerifiedSupporters)
     : 0;
@@ -246,7 +251,9 @@ export function MpgfContributionModal({
         },
         body: JSON.stringify({
           amountCents: activeAmountCents,
+          acceptableCounterpartBuckets: counterpartBuckets,
           campaignId,
+          minimumCounterpartyClearedCents: minimumCounterpartyCents,
           explicitFutureUseConsent: futureUseConsentAccepted,
           roundId,
         }),
@@ -372,6 +379,29 @@ export function MpgfContributionModal({
                   />
                   <span>Count my gift for matching up to cap</span>
                 </label>
+
+                <label>
+                  Acceptable counterpart buckets
+                  <textarea
+                    placeholder="Comma-separated distinct moral buckets"
+                    value={counterpartBuckets}
+                    onChange={(event) => setCounterpartBuckets(event.currentTarget.value)}
+                  />
+                </label>
+
+                <label>
+                  Minimum counterpart-cleared volume
+                  <span className="mpgf-money-input">
+                    <span>$</span>
+                    <input
+                      min="1"
+                      step="1"
+                      type="number"
+                      value={minimumCounterpartyDollars}
+                      onChange={(event) => setMinimumCounterpartyDollars(Number(event.currentTarget.value))}
+                    />
+                  </span>
+                </label>
               </div>
 
               <dl className="mpgf-summary-grid mpgf-modal-summary">
@@ -382,6 +412,14 @@ export function MpgfContributionModal({
                 <div>
                   <dt>Counted for matching</dt>
                   <dd>{formatUsd(countedCents)}</dd>
+                </div>
+                <div>
+                  <dt>Max exposure</dt>
+                  <dd>{formatUsd(activeAmountCents)}</dd>
+                </div>
+                <div>
+                  <dt>Counterpart minimum</dt>
+                  <dd>{formatUsd(minimumCounterpartyCents)}</dd>
                 </div>
                 <div>
                   <dt>Per-donor cap</dt>
@@ -438,6 +476,14 @@ export function MpgfContributionModal({
                 <div>
                   <dt>Counting state</dt>
                   <dd>{modeSummary[mode].state}</dd>
+                </div>
+                <div>
+                  <dt>Failure path</dt>
+                  <dd>expire, release authorization, or donor fallback reroute</dd>
+                </div>
+                <div>
+                  <dt>Authorization timing</dt>
+                  <dd>near clearing only</dd>
                 </div>
                 <div>
                   <dt>Threshold</dt>

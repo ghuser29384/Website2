@@ -9,6 +9,7 @@ import { getViewer } from "@/lib/app-data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import { getMpgfPublicGoodsCgVqafReportApi } from "@/lib/mpgf/public-goods-cg-vqaf";
 import { getMpgfPublicGoodsCoalitionRoutingReportApi } from "@/lib/mpgf/public-goods-coalition-routing";
+import { getMpgfPublicGoodsEcmRulebookReportApi } from "@/lib/mpgf/public-goods-ecm-rulebook";
 import { getMpgfPublicGoodsIdentityIntegrityReportApi } from "@/lib/mpgf/public-goods-identity-integrity";
 import {
   getMpgfPublicGoodsAllocationReportApi,
@@ -130,9 +131,10 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
   const ledger = getMpgfPublicGoodsLedgerApi();
   const cgVqaf = getMpgfPublicGoodsCgVqafReportApi(roundId);
   const coalitionRouting = getMpgfPublicGoodsCoalitionRoutingReportApi(roundId);
+  const ecmRulebook = getMpgfPublicGoodsEcmRulebookReportApi(roundId);
   const identityIntegrity = getMpgfPublicGoodsIdentityIntegrityReportApi(roundId);
 
-  if (!roundResult || !campaignResult || !preview || !allocation || !cgVqaf || !coalitionRouting || !identityIntegrity) {
+  if (!roundResult || !campaignResult || !preview || !allocation || !cgVqaf || !coalitionRouting || !ecmRulebook || !identityIntegrity) {
     notFound();
   }
 
@@ -365,6 +367,58 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
               <dt>Public report</dt>
               <dd>
                 <Link href={round.coalitionRouting.reportPath}>coalition-routing report</Link>
+              </dd>
+            </div>
+          </dl>
+        </article>
+
+        <article className="mpgf-panel">
+          <p className="eyebrow">Fixed ECM rulebook</p>
+          <h2>Cross-view terms, custody gates, and recipient registry are public before clearing</h2>
+          <p>
+            Donors see maximum exposure, counterpart-bucket conditions, failure handling,
+            sponsor-match rules, and just-in-time authorization timing before a pledge can be
+            authorized. Cleared funds require partner or fiscal-host custody confirmation before release.
+          </p>
+          <dl className="mpgf-summary-grid">
+            <div>
+              <dt>Clearing time</dt>
+              <dd>{formatDate(ecmRulebook.roundRulebook.clearingAt)}</dd>
+            </div>
+            <div>
+              <dt>Base match ratio</dt>
+              <dd>{ecmRulebook.roundRulebook.baseMatchRatio}:1</dd>
+            </div>
+            <div>
+              <dt>Donor cap</dt>
+              <dd>{formatUsd(ecmRulebook.roundRulebook.perDonorCapCents)}</dd>
+            </div>
+            <div>
+              <dt>Round-open holds</dt>
+              <dd>{ecmRulebook.batchEngine.longLivedRoundOpenHoldsAllowed ? "allowed" : "not allowed"}</dd>
+            </div>
+            <div>
+              <dt>Custody state</dt>
+              <dd>{ecmRulebook.custodyAndRelease.postClearCustodialState.replaceAll("_", " ")}</dd>
+            </div>
+            <div>
+              <dt>Escrow claim</dt>
+              <dd>{ecmRulebook.custodyAndRelease.escrowClaimAllowed ? "approved" : "not claimed without legal approval"}</dd>
+            </div>
+            <div>
+              <dt>Recipient registry</dt>
+              <dd>
+                {ecmRulebook.recipientRegistry.length} destinations;{" "}
+                {ecmRulebook.recipientRegistry.filter((recipient) =>
+                  recipient.registryStatus === "eligible_after_review_and_challenge",
+                ).length}{" "}
+                payable after review
+              </dd>
+            </div>
+            <div>
+              <dt>Public report</dt>
+              <dd>
+                <Link href={round.ecmRulebook.reportPath}>ECM rulebook report</Link>
               </dd>
             </div>
           </dl>

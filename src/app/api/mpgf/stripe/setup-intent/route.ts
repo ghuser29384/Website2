@@ -42,6 +42,28 @@ function centsField(record: Record<string, unknown>) {
   return Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
 }
 
+function centsNamedField(record: Record<string, unknown>, centsKey: string, dollarsKey: string) {
+  const cents = Number(record[centsKey]);
+
+  if (Number.isInteger(cents) && cents > 0) {
+    return cents;
+  }
+
+  const dollars = Number(record[dollarsKey]);
+
+  return Number.isFinite(dollars) ? Math.round(dollars * 100) : undefined;
+}
+
+function stringListField(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item));
+  }
+
+  return typeof value === "string" ? value : undefined;
+}
+
 function booleanField(record: Record<string, unknown>, key: string) {
   return record[key] === true;
 }
@@ -187,9 +209,15 @@ export async function POST(request: Request) {
     }
 
     const baseSetup = createMpgfStripeSavedCommitmentSetup({
+      acceptableCounterpartBuckets: stringListField(record, "acceptableCounterpartBuckets"),
       amountCents: centsField(record),
       campaignId: stringField(record, "campaignId"),
       conditionalPledgeId: stringField(record, "conditionalPledgeId") || undefined,
+      minimumCounterpartyClearedCents: centsNamedField(
+        record,
+        "minimumCounterpartyClearedCents",
+        "minimumCounterpartyClearedDollars",
+      ),
       pledgeIntentId: stringField(record, "pledgeIntentId") || undefined,
       roundId: stringField(record, "roundId") || undefined,
       userRef: viewer.authUser.id,
@@ -255,9 +283,11 @@ export async function POST(request: Request) {
       metadata: { ...baseSetup.setupIntentCreateParams.metadata },
     });
     const setupRecord = createMpgfStripeSavedCommitmentSetup({
+      acceptableCounterpartBuckets: baseSetup.acceptableCounterpartBuckets,
       amountCents: baseSetup.amountCents,
       campaignId: baseSetup.campaignId,
       conditionalPledgeId: baseSetup.conditionalPledgeId,
+      minimumCounterpartyClearedCents: baseSetup.minimumCounterpartyClearedCents,
       pledgeIntentId: baseSetup.pledgeIntentId,
       providerCustomerRef: customer.id,
       providerSetupIntentRef: setupIntent.id,

@@ -93,6 +93,8 @@ export interface RecordPublicGoodsPledgeInput extends Required<MpgfParticipantId
   idempotencyKey: string;
   campaignId: string;
   amountCents: number;
+  acceptableCounterpartBuckets?: string[] | string;
+  minimumCounterpartyClearedCents?: number;
   visibilityMode: MpgfPublicGoodsVisibilityMode;
   captureMode: MpgfPublicGoodsCaptureMode;
   isRecurring: boolean;
@@ -602,6 +604,28 @@ function mapPublicGoodsPledgeRow(row: Record<string, unknown>): MpgfPublicGoodsP
     campaignId: String(row.campaign_id),
     userId: toStringOrUndefined(row.user_ref) ?? toStringOrUndefined(row.profile_id) ?? "mpgf-participant",
     amountCents: toNumber(row.amount_cents),
+    acceptableCounterpartBuckets: Array.isArray(row.acceptable_counterpart_buckets)
+      ? row.acceptable_counterpart_buckets.map(String)
+      : ["any-pre-vetted-distinct-moral-bucket"],
+    minimumCounterpartyClearedCents: row.minimum_counterparty_cleared_cents == null
+      ? Math.max(100, toNumber(row.amount_cents))
+      : toNumber(row.minimum_counterparty_cleared_cents),
+    counterpartDistinctBucketRequired: true,
+    maxExposureCents: row.max_exposure_cents == null ? toNumber(row.amount_cents) : toNumber(row.max_exposure_cents),
+    donorExposureDisclosure: {
+      maxExposureCents: row.max_exposure_cents == null ? toNumber(row.amount_cents) : toNumber(row.max_exposure_cents),
+      exactClearanceConditions: Array.isArray((row.donor_exposure_disclosure as Record<string, unknown> | undefined)?.exactClearanceConditions)
+        ? ((row.donor_exposure_disclosure as Record<string, unknown>).exactClearanceConditions as unknown[]).map(String)
+        : [],
+      roundFailureBehavior: String((row.donor_exposure_disclosure as Record<string, unknown> | undefined)?.roundFailureBehavior ?? ""),
+      recipientVerificationFailureBehavior: String(
+        (row.donor_exposure_disclosure as Record<string, unknown> | undefined)?.recipientVerificationFailureBehavior ?? "",
+      ),
+      authorizationTiming: String((row.donor_exposure_disclosure as Record<string, unknown> | undefined)?.authorizationTiming ?? ""),
+      authorizationExpiryBehavior: String(
+        (row.donor_exposure_disclosure as Record<string, unknown> | undefined)?.authorizationExpiryBehavior ?? "",
+      ),
+    },
     visibilityMode: coercePublicGoodsVisibilityMode(row.visibility_mode),
     isRecurring: Boolean(row.is_recurring),
     captureMode: coercePublicGoodsCaptureMode(row.capture_mode),
@@ -1029,6 +1053,8 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
     amountCents,
     visibilityMode: input.visibilityMode,
     captureMode: input.captureMode,
+    acceptableCounterpartBuckets: input.acceptableCounterpartBuckets,
+    minimumCounterpartyClearedCents: input.minimumCounterpartyClearedCents,
     isRecurring: input.isRecurring,
     supporterReason: input.supporterReason,
     identityAttestation,
@@ -1049,6 +1075,8 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
       amountCents,
       visibilityMode: input.visibilityMode,
       captureMode: input.captureMode,
+      acceptableCounterpartBuckets: pledge.acceptableCounterpartBuckets,
+      minimumCounterpartyClearedCents: pledge.minimumCounterpartyClearedCents,
       isRecurring: input.isRecurring,
       supporterReason: input.supporterReason?.trim() || null,
     },
@@ -1088,6 +1116,10 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
         amount_cents: pledge.amountCents,
         currency: "usd",
         visibility_mode: pledge.visibilityMode,
+        acceptable_counterpart_buckets: pledge.acceptableCounterpartBuckets,
+        minimum_counterparty_cleared_cents: pledge.minimumCounterpartyClearedCents,
+        max_exposure_cents: pledge.maxExposureCents,
+        donor_exposure_disclosure: pledge.donorExposureDisclosure,
         is_recurring: pledge.isRecurring,
         capture_mode: pledge.captureMode,
         eligibility_state: pledge.eligibilityState,
@@ -1125,6 +1157,9 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
         amountCents,
         captureMode: pledge.captureMode,
         visibilityMode: pledge.visibilityMode,
+        acceptableCounterpartBuckets: pledge.acceptableCounterpartBuckets,
+        minimumCounterpartyClearedCents: pledge.minimumCounterpartyClearedCents,
+        maxExposureCents: pledge.maxExposureCents,
         paymentAdapterMode: paymentAdapter.mode,
         proofRequired: paymentAdapter.proofRequired,
       },
@@ -1138,6 +1173,9 @@ export async function persistMpgfPublicGoodsPledge(input: RecordPublicGoodsPledg
         eventJson: {
           amountBucket: bucketMpgfPublicGoodsAmountCents(amountCents),
           visibilityMode: pledge.visibilityMode,
+          counterpartBucketCount: pledge.acceptableCounterpartBuckets?.length ?? 0,
+          minimumCounterpartyClearedCents: pledge.minimumCounterpartyClearedCents,
+          maxExposureCents: pledge.maxExposureCents,
           captureMode: pledge.captureMode,
           isRecurring: pledge.isRecurring,
           eligibilityState: savedPledge.eligibilityState,

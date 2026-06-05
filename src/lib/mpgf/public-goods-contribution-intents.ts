@@ -8,6 +8,8 @@ import { evaluateMpgfPublicGoodsIdentityAdapter } from "./public-goods-identity"
 import { resolveMpgfPublicGoodsPaymentAdapter } from "./public-goods-payment-adapter";
 import type {
   MpgfPublicGoodsCampaign,
+  MpgfPublicGoodsCrossViewIntentTerms,
+  MpgfPublicGoodsDonorExposureDisclosure,
   MpgfPublicGoodsIdentityAttestation,
   MpgfPublicGoodsRound,
   MpgfPublicGoodsVisibilityMode,
@@ -18,6 +20,12 @@ export const MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY =
 
 export const MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW =
   "verify_identity_then_conditionally_authorize_payment_manual_evidence_fallback";
+
+export const MPGF_PUBLIC_GOODS_CROSS_VIEW_CLEARANCE_POLICY =
+  "explicit_distinct_counterpart_bucket_conditions_before_moral_trade_counting";
+
+export const MPGF_PUBLIC_GOODS_DONOR_EXPOSURE_DISCLOSURE_POLICY =
+  "max_exposure_clearance_conditions_failure_paths_and_jit_authorization_visible_before_authorization";
 
 export const MPGF_PUBLIC_GOODS_EVERY_ORG_DONATE_LINK_PATH =
   "/api/mpgf/every-org/donate-link";
@@ -80,6 +88,10 @@ export interface MpgfPublicGoodsPledgeIntent {
   userRefHash: string;
   idempotencyKeyHash: string;
   amountCents: number;
+  acceptableCounterpartBuckets: string[];
+  minimumCounterpartyClearedCents: number;
+  counterpartDistinctBucketRequired: true;
+  maxExposureCents: number;
   paymentMode: MpgfPublicGoodsContributionMode;
   visibilityMode: MpgfPublicGoodsVisibilityMode;
   paymentState: MpgfPublicGoodsPledgeIntentPaymentState;
@@ -88,7 +100,13 @@ export interface MpgfPublicGoodsPledgeIntent {
     manualEvidencePath: "/api/mpgf/evidence/manual";
     legacyManualEvidencePath: "/api/mpgf/contributions/manual-evidence";
     providerUnavailableMode: "manual_evidence_after_review";
+    roundNotClearedMode: MpgfPublicGoodsCrossViewIntentTerms["fallbackRule"]["roundNotClearedMode"];
+    recipientVerificationFailedMode: MpgfPublicGoodsCrossViewIntentTerms["fallbackRule"]["recipientVerificationFailedMode"];
+    authorizationExpiredMode: MpgfPublicGoodsCrossViewIntentTerms["fallbackRule"]["authorizationExpiredMode"];
   };
+  donorExposureDisclosure: MpgfPublicGoodsDonorExposureDisclosure;
+  crossViewClearancePolicy: typeof MPGF_PUBLIC_GOODS_CROSS_VIEW_CLEARANCE_POLICY;
+  donorExposureDisclosurePolicy: typeof MPGF_PUBLIC_GOODS_DONOR_EXPOSURE_DISCLOSURE_POLICY;
   capturePolicy: "capture_only_after_threshold_review_and_challenge_window";
   primaryFlow: typeof MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW;
   privacyPolicy: typeof MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY;
@@ -170,6 +188,54 @@ function campaignForId(campaignId: string, campaigns: MpgfPublicGoodsCampaign[])
   return campaigns.find((campaign) => campaign.id === campaignId || campaign.slug === campaignId) ?? null;
 }
 
+function normalizeCounterpartBuckets(value: string[] | string | undefined, campaign: MpgfPublicGoodsCampaign) {
+  const selectedCampaignBuckets = new Set(
+    campaign.causeTags.map((tag) =>
+      tag.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
+    ),
+  );
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,;\n]/)
+      : [];
+  const normalized = rawItems
+    .map((item) => item.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""))
+    .filter(Boolean)
+    .filter((item) => !selectedCampaignBuckets.has(item));
+  const unique = [...new Set(normalized)].slice(0, 12);
+
+  return unique.length > 0 ? unique : ["any-pre-vetted-distinct-moral-bucket"];
+}
+
+function defaultMinimumCounterpartyClearedCents(amountCents: number, campaign: MpgfPublicGoodsCampaign) {
+  return Math.max(100, Math.min(amountCents, campaign.thresholdAmountCents));
+}
+
+function buildDonorExposureDisclosure(input: {
+  amountCents: number;
+  campaign: MpgfPublicGoodsCampaign;
+  minimumCounterpartyClearedCents: number;
+}): MpgfPublicGoodsDonorExposureDisclosure {
+  return {
+    maxExposureCents: input.amountCents,
+    exactClearanceConditions: [
+      "round parameters and sponsor-match schedule were published before the round opened",
+      "the selected campaign clears its amount and verified-supporter thresholds",
+      `at least ${input.minimumCounterpartyClearedCents} cents clears from accepted distinct counterpart buckets`,
+      "identity, anti-sybil, anti-threat, baseline-integrity, recipient-review, and challenge-window gates pass",
+      "payment capture or partner custody happens only near clearing, not as a long-lived round-open hold",
+    ],
+    roundFailureBehavior: input.campaign.exitRule || "The pledge expires without charge if round conditions fail.",
+    recipientVerificationFailureBehavior:
+      "Release the authorization or reroute only under the donor fallback rule after recipient review fails.",
+    authorizationTiming:
+      "Save the payment method or external route first; authorize or capture only after threshold, review, and challenge gates clear.",
+    authorizationExpiryBehavior:
+      "If the provider authorization expires before capture, re-confirm clearance and reauthorize instead of silently charging later.",
+  };
+}
+
 export function buildMpgfPublicGoodsContributionFlowApi(roundId: string) {
   return {
     ok: true,
@@ -206,6 +272,8 @@ export function buildMpgfPublicGoodsContributionFlowApi(roundId: string) {
     ],
     defaultContributionMode: "every_org_fast_route" as const,
     savedCommitmentPolicy: "setup_intent_first_payment_intent_only_after_threshold_review_and_challenge",
+    crossViewClearancePolicy: MPGF_PUBLIC_GOODS_CROSS_VIEW_CLEARANCE_POLICY,
+    donorExposureDisclosurePolicy: MPGF_PUBLIC_GOODS_DONOR_EXPOSURE_DISCLOSURE_POLICY,
     pledgeIntentPath: `/api/mpgf/rounds/${roundId}/pledge-intents`,
     identityVerificationPathTemplate: "/api/mpgf/pledge-intents/:id/verify-identity",
     paymentAuthorizationPathTemplate: "/api/mpgf/pledge-intents/:id/authorize-payment",
@@ -220,6 +288,7 @@ export function buildMpgfPublicGoodsContributionFlowApi(roundId: string) {
     stateObjects: [
       "pledge_intent",
       "conditional_pledge",
+      "cross_view_intent_terms",
       "identity_verification",
       "payment_authorization",
       "provider_payment_event",
@@ -231,6 +300,8 @@ export function buildMpgfPublicGoodsContributionFlowApi(roundId: string) {
       "identity verification precedes provider authorization",
       "Every.org fast-route redirects show pending state only until partner webhook import and review",
       "Stripe saved commitments use SetupIntent-first instead of long-lived card holds",
+      "pledge intents record accepted distinct counterpart buckets and minimum counterparty-cleared volume",
+      "donor-facing screens disclose maximum exposure, clearance conditions, authorization timing, and failure paths before authorization",
       "payments capture only after threshold, review, and challenge gates",
       "manual evidence is fallback, not the primary path",
       "provider webhooks cannot authorize final payout by themselves",
@@ -253,6 +324,8 @@ export function createMpgfPublicGoodsPledgeIntent({
   campaignId,
   userId,
   amountCents,
+  acceptableCounterpartBuckets,
+  minimumCounterpartyClearedCents,
   paymentMode = "every_org_fast_route",
   visibilityMode = "private_amount",
   idempotencyKey,
@@ -266,6 +339,8 @@ export function createMpgfPublicGoodsPledgeIntent({
   amountCents: number;
   paymentMode?: MpgfPublicGoodsContributionMode;
   visibilityMode?: MpgfPublicGoodsVisibilityMode;
+  acceptableCounterpartBuckets?: string[] | string;
+  minimumCounterpartyClearedCents?: number;
   idempotencyKey?: string;
   now?: Date;
 }): MpgfPublicGoodsPledgeIntent {
@@ -293,6 +368,16 @@ export function createMpgfPublicGoodsPledgeIntent({
   const id = `pledge-intent-${slugPart(campaign.id)}-${hashValue("intent-id", stableKey).slice(7, 19)}`;
   const idempotencyKeyHash = hashValue("idempotency", stableKey);
   const userRefHash = hashValue("user-ref", userId);
+  const normalizedCounterpartBuckets = normalizeCounterpartBuckets(acceptableCounterpartBuckets, campaign);
+  const normalizedMinimumCounterpartyClearedCents = Math.max(
+    100,
+    clampCents(minimumCounterpartyClearedCents ?? defaultMinimumCounterpartyClearedCents(normalizedAmountCents, campaign)),
+  );
+  const donorExposureDisclosure = buildDonorExposureDisclosure({
+    amountCents: normalizedAmountCents,
+    campaign,
+    minimumCounterpartyClearedCents: normalizedMinimumCounterpartyClearedCents,
+  });
 
   return {
     id,
@@ -301,6 +386,10 @@ export function createMpgfPublicGoodsPledgeIntent({
     userRefHash,
     idempotencyKeyHash,
     amountCents: normalizedAmountCents,
+    acceptableCounterpartBuckets: normalizedCounterpartBuckets,
+    minimumCounterpartyClearedCents: normalizedMinimumCounterpartyClearedCents,
+    counterpartDistinctBucketRequired: true,
+    maxExposureCents: normalizedAmountCents,
     paymentMode,
     visibilityMode,
     paymentState: "intent_created",
@@ -309,12 +398,28 @@ export function createMpgfPublicGoodsPledgeIntent({
       manualEvidencePath: "/api/mpgf/evidence/manual",
       legacyManualEvidencePath: "/api/mpgf/contributions/manual-evidence",
       providerUnavailableMode: "manual_evidence_after_review",
+      roundNotClearedMode: "expire_without_charge",
+      recipientVerificationFailedMode: "release_authorization_or_reroute_to_next_eligible_common_ground_project",
+      authorizationExpiredMode: "reauthorize_only_after_clearance_reconfirmed",
     },
+    donorExposureDisclosure,
+    crossViewClearancePolicy: MPGF_PUBLIC_GOODS_CROSS_VIEW_CLEARANCE_POLICY,
+    donorExposureDisclosurePolicy: MPGF_PUBLIC_GOODS_DONOR_EXPOSURE_DISCLOSURE_POLICY,
     capturePolicy: "capture_only_after_threshold_review_and_challenge_window",
     primaryFlow: MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW,
     privacyPolicy: MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY,
     createdAt: now.toISOString(),
-    calcHash: calcHash([roundId, campaign.id, userRefHash, idempotencyKeyHash, normalizedAmountCents, paymentMode, visibilityMode]),
+    calcHash: calcHash([
+      roundId,
+      campaign.id,
+      userRefHash,
+      idempotencyKeyHash,
+      normalizedAmountCents,
+      normalizedCounterpartBuckets,
+      normalizedMinimumCounterpartyClearedCents,
+      paymentMode,
+      visibilityMode,
+    ]),
   };
 }
 

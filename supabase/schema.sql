@@ -6477,6 +6477,10 @@ create table if not exists public.mpgf_public_goods_pledges (
   user_ref text not null,
   amount_cents bigint not null check (amount_cents > 0),
   currency text not null default 'usd' check (currency = 'usd'),
+  acceptable_counterpart_buckets text[] not null default array['any-pre-vetted-distinct-moral-bucket'],
+  minimum_counterparty_cleared_cents bigint not null default 100 check (minimum_counterparty_cleared_cents >= 0),
+  max_exposure_cents bigint not null default 0 check (max_exposure_cents >= 0),
+  donor_exposure_disclosure jsonb not null default '{}'::jsonb,
   visibility_mode text not null check (
     visibility_mode in ('private_amount', 'public_supporter', 'public_reason')
   ),
@@ -6684,6 +6688,9 @@ create table if not exists public.mpgf_pledge_intents (
   idempotency_key_hash text not null unique check (idempotency_key_hash ~ '^sha256:[0-9a-f]{64}$'),
   amount_cents bigint not null check (amount_cents > 0),
   currency text not null default 'usd' check (currency = 'usd'),
+  acceptable_counterpart_buckets text[] not null default array['any-pre-vetted-distinct-moral-bucket'],
+  minimum_counterparty_cleared_cents bigint not null default 100 check (minimum_counterparty_cleared_cents >= 0),
+  max_exposure_cents bigint not null default 0 check (max_exposure_cents >= 0),
   visibility_pref text not null default 'private_amount' check (
     visibility_pref in ('private_amount', 'public_supporter', 'public_reason')
   ),
@@ -6706,8 +6713,13 @@ create table if not exists public.mpgf_pledge_intents (
   ),
   fallback_rule jsonb not null default jsonb_build_object(
     'manualEvidencePath', '/api/mpgf/evidence/manual',
-    'providerUnavailableMode', 'manual_evidence_after_review'
+    'providerUnavailableMode', 'manual_evidence_after_review',
+    'roundNotClearedMode', 'expire_without_charge',
+    'recipientVerificationFailedMode', 'release_authorization_or_reroute_to_next_eligible_common_ground_project',
+    'authorizationExpiredMode', 'reauthorize_only_after_clearance_reconfirmed'
   ),
+  donor_exposure_disclosure jsonb not null default '{}'::jsonb,
+  cross_view_clearance_policy text not null default 'explicit_distinct_counterpart_bucket_conditions_before_moral_trade_counting',
   capture_policy text not null default 'capture_only_after_threshold_review_and_challenge_window' check (
     capture_policy = 'capture_only_after_threshold_review_and_challenge_window'
   ),
@@ -6911,6 +6923,77 @@ create table if not exists public.mpgf_coalition_candidates (
   unique (round_id, campaign_id)
 );
 
+create table if not exists public.mpgf_round_rulebooks (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  policy text not null default 'ecm_core_supervised_custody_cross_view_batch_rulebook_v1',
+  batch_cadence_policy text not null default 'recurring_batch_rounds_close_clear_jit_authorize_custody_verify_challenge_release_audit',
+  custody_policy text not null default 'partner_or_fiscal_host_supervised_custody_required_for_cleared_funds_no_platform_escrow_claim',
+  rulebook_json jsonb not null,
+  published_before_round_open boolean not null default true,
+  no_global_moral_ranking boolean not null default true check (no_global_moral_ranking = true),
+  moral_reputation_can_increase_allocation_power boolean not null default false check (
+    moral_reputation_can_increase_allocation_power = false
+  ),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (round_id, policy)
+);
+
+create table if not exists public.mpgf_recipient_registry (
+  id text primary key,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  legal_entity_or_fiscal_host text not null,
+  registry_status text not null check (
+    registry_status in (
+      'eligible_after_review_and_challenge',
+      'review_required_before_payable',
+      'demo_only_not_payable',
+      'blocked_not_payable'
+    )
+  ),
+  payout_rail text not null check (
+    payout_rail in ('partner_donation_route', 'fiscal_host_release', 'signed_sponsor_route', 'not_payable_demo_only')
+  ),
+  allowed_uses text[] not null default '{}',
+  receipt_or_milestone_rules text not null,
+  review_state text not null,
+  challenge_state text not null check (challenge_state in ('challenge_window_open', 'closed_or_not_open')),
+  challenge_window_ends_at timestamptz,
+  public_aggregation_only boolean not null default true check (public_aggregation_only = true),
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (campaign_id)
+);
+
+create table if not exists public.mpgf_custody_holds (
+  id text primary key,
+  round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
+  campaign_id text not null references public.mpgf_public_goods_campaigns (id) on delete cascade,
+  pledge_intent_id text references public.mpgf_pledge_intents (id) on delete set null,
+  provider text not null check (provider in ('stripe', 'fiscal_host', 'external_provider', 'manual_evidence')),
+  custodial_state text not null check (
+    custodial_state in (
+      'awaiting_partner_or_fiscal_host_custody_confirmation',
+      'custody_confirmed',
+      'release_ready_after_challenge_window',
+      'released',
+      'cancelled',
+      'expired'
+    )
+  ),
+  amount_cents bigint not null check (amount_cents >= 0),
+  max_exposure_cents bigint not null check (max_exposure_cents >= amount_cents),
+  escrow_claim_allowed boolean not null default false check (escrow_claim_allowed = false),
+  release_only_after_recipient_verification boolean not null default true check (
+    release_only_after_recipient_verification = true
+  ),
+  release_only_after_challenge_window_completion boolean not null default true check (
+    release_only_after_challenge_window_completion = true
+  ),
+  failure_rule jsonb not null default '{}'::jsonb,
+  provider_ref_hash text check (provider_ref_hash is null or provider_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
 create table if not exists public.mpgf_conditional_pledges (
   id text primary key,
   round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
@@ -6918,6 +7001,9 @@ create table if not exists public.mpgf_conditional_pledges (
   profile_id uuid references public.profiles (id) on delete set null,
   amount_cents bigint not null check (amount_cents > 0),
   counted_cap_cents bigint not null check (counted_cap_cents > 0),
+  acceptable_counterpart_buckets text[] not null default array['any-pre-vetted-distinct-moral-bucket'],
+  minimum_counterparty_cleared_cents bigint not null default 100 check (minimum_counterparty_cleared_cents >= 0),
+  max_exposure_cents bigint not null default 0 check (max_exposure_cents >= 0),
   visibility text not null default 'private_amount' check (visibility in ('private_amount', 'public_supporter', 'public_reason')),
   payment_mode text not null check (payment_mode in ('every_org_fast_route', 'stripe_setup_intent_saved_commitment', 'manual_proof_fallback')),
   status text not null default 'signal_only' check (
@@ -6927,6 +7013,8 @@ create table if not exists public.mpgf_conditional_pledges (
   capture_policy text not null default 'capture_only_after_threshold_review_and_challenge_window' check (
     capture_policy = 'capture_only_after_threshold_review_and_challenge_window'
   ),
+  failure_path_disclosure jsonb not null default '{}'::jsonb,
+  cross_view_clearance_policy text not null default 'explicit_distinct_counterpart_bucket_conditions_before_moral_trade_counting',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -7183,6 +7271,15 @@ on public.mpgf_support_stances (round_id, campaign_id, stance);
 create index if not exists mpgf_coalition_candidates_round_status_idx
 on public.mpgf_coalition_candidates (round_id, candidate_status, threshold_feasible_flag);
 
+create index if not exists mpgf_round_rulebooks_round_idx
+on public.mpgf_round_rulebooks (round_id, policy);
+
+create index if not exists mpgf_recipient_registry_status_idx
+on public.mpgf_recipient_registry (registry_status, payout_rail);
+
+create index if not exists mpgf_custody_holds_round_state_idx
+on public.mpgf_custody_holds (round_id, custodial_state, created_at desc);
+
 create index if not exists mpgf_conditional_pledges_round_campaign_idx
 on public.mpgf_conditional_pledges (round_id, campaign_id, status, payment_mode);
 
@@ -7223,6 +7320,9 @@ alter table public.mpgf_support_signals enable row level security;
 alter table public.mpgf_user_budgets enable row level security;
 alter table public.mpgf_support_stances enable row level security;
 alter table public.mpgf_coalition_candidates enable row level security;
+alter table public.mpgf_round_rulebooks enable row level security;
+alter table public.mpgf_recipient_registry enable row level security;
+alter table public.mpgf_custody_holds enable row level security;
 alter table public.mpgf_conditional_pledges enable row level security;
 alter table public.mpgf_every_org_partner_events enable row level security;
 alter table public.mpgf_payment_method_tokens enable row level security;
@@ -7372,6 +7472,27 @@ for select
 to anon, authenticated
 using (true);
 
+drop policy if exists "mpgf_round_rulebooks_public_select" on public.mpgf_round_rulebooks;
+create policy "mpgf_round_rulebooks_public_select"
+on public.mpgf_round_rulebooks
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_recipient_registry_public_select" on public.mpgf_recipient_registry;
+create policy "mpgf_recipient_registry_public_select"
+on public.mpgf_recipient_registry
+for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "mpgf_custody_holds_service_only_select" on public.mpgf_custody_holds;
+create policy "mpgf_custody_holds_service_only_select"
+on public.mpgf_custody_holds
+for select
+to service_role
+using (true);
+
 drop policy if exists "mpgf_conditional_pledges_select_own" on public.mpgf_conditional_pledges;
 create policy "mpgf_conditional_pledges_select_own"
 on public.mpgf_conditional_pledges
@@ -7467,6 +7588,8 @@ grant select on
   public.mpgf_public_goods_review_cases,
   public.mpgf_sponsor_pool_entries,
   public.mpgf_coalition_candidates,
+  public.mpgf_round_rulebooks,
+  public.mpgf_recipient_registry,
   public.mpgf_allocation_results,
   public.mpgf_dissent_notes,
   public.mpgf_milestones
@@ -7514,6 +7637,9 @@ grant all on
   public.mpgf_user_budgets,
   public.mpgf_support_stances,
   public.mpgf_coalition_candidates,
+  public.mpgf_round_rulebooks,
+  public.mpgf_recipient_registry,
+  public.mpgf_custody_holds,
   public.mpgf_conditional_pledges,
   public.mpgf_every_org_partner_events,
   public.mpgf_payment_method_tokens,
@@ -7550,6 +7676,15 @@ comment on table public.mpgf_support_stances is
 
 comment on table public.mpgf_coalition_candidates is
   'Aggregate coalition-feasibility candidates for Coalition-Routed Escrowed Conditional Matching. Rows publish threshold feasibility, cluster breadth, and routed weak-support totals only.';
+
+comment on table public.mpgf_round_rulebooks is
+  'Published MPGF ECM-core round rulebooks: fixed match schedule, batch cadence, custody policy, donor disclosure rules, and preserved safety/privacy/provenance invariants.';
+
+comment on table public.mpgf_recipient_registry is
+  'Public MPGF recipient registry with legal entity or fiscal host, payout rail, allowed uses, receipt or milestone rules, review state, and challenge state.';
+
+comment on table public.mpgf_custody_holds is
+  'Private post-clear MPGF custody-hold records. These require partner or fiscal-host custody confirmation and do not create a platform escrow claim.';
 
 comment on table public.mpgf_conditional_pledges is
   'CG-VQAF conditional pledge records for fast Every.org routes, Stripe SetupIntent saved commitments, and manual proof fallback.';

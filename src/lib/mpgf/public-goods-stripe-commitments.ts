@@ -75,6 +75,9 @@ interface MpgfStripeMetadata {
   pledgeIntentId: string;
   conditionalPledgeId: string;
   amountCents: string;
+  acceptableCounterpartBucketsHash: string;
+  minimumCounterpartyClearedCents: string;
+  maxExposureCents: string;
   noGlobalMoralRanking: "true";
   finalPayoutAuthorized: "false";
 }
@@ -89,6 +92,9 @@ export interface MpgfStripeSavedCommitmentSetup {
   conditionalPledgeId: string;
   userRefHash: string;
   amountCents: number;
+  acceptableCounterpartBuckets: string[];
+  minimumCounterpartyClearedCents: number;
+  maxExposureCents: number;
   currency: "usd";
   provider: "stripe";
   setupStatus: StripeSetupStatus;
@@ -235,8 +241,10 @@ function campaignForId(campaignId: string, campaigns: MpgfPublicGoodsCampaign[])
 
 function metadataFor(input: {
   amountCents: number;
+  acceptableCounterpartBuckets: string[];
   campaignId: string;
   conditionalPledgeId: string;
+  minimumCounterpartyClearedCents: number;
   pledgeIntentId: string;
   roundId: string;
 }): MpgfStripeMetadata {
@@ -248,6 +256,9 @@ function metadataFor(input: {
     pledgeIntentId: input.pledgeIntentId,
     conditionalPledgeId: input.conditionalPledgeId,
     amountCents: String(input.amountCents),
+    acceptableCounterpartBucketsHash: hashScoped("counterpart-buckets", input.acceptableCounterpartBuckets),
+    minimumCounterpartyClearedCents: String(input.minimumCounterpartyClearedCents),
+    maxExposureCents: String(input.amountCents),
     noGlobalMoralRanking: "true",
     finalPayoutAuthorized: "false",
   };
@@ -320,11 +331,33 @@ function gateBlockers(gateState: MpgfStripeGateState) {
   return blockers;
 }
 
+function normalizeCounterpartBuckets(value: string[] | string | undefined, campaign: MpgfPublicGoodsCampaign) {
+  const selectedCampaignBuckets = new Set(
+    campaign.causeTags.map((tag) =>
+      tag.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
+    ),
+  );
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,;\n]/)
+      : [];
+  const normalized = rawItems
+    .map((item) => item.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""))
+    .filter(Boolean)
+    .filter((item) => !selectedCampaignBuckets.has(item));
+  const unique = [...new Set(normalized)].slice(0, 12);
+
+  return unique.length > 0 ? unique : ["any-pre-vetted-distinct-moral-bucket"];
+}
+
 export function createMpgfStripeSavedCommitmentSetup({
+  acceptableCounterpartBuckets,
   amountCents,
   campaignId,
   campaigns = demoMpgfPublicGoodsCampaigns,
   conditionalPledgeId,
+  minimumCounterpartyClearedCents,
   now = new Date("2026-06-01T12:00:00.000Z"),
   pledgeIntentId,
   providerCustomerRef,
@@ -334,10 +367,12 @@ export function createMpgfStripeSavedCommitmentSetup({
   roundId = round.id,
   userRef,
 }: {
+  acceptableCounterpartBuckets?: string[] | string;
   amountCents: number;
   campaignId: string;
   campaigns?: MpgfPublicGoodsCampaign[];
   conditionalPledgeId?: string;
+  minimumCounterpartyClearedCents?: number;
   now?: Date;
   pledgeIntentId?: string;
   providerCustomerRef?: string;
@@ -371,10 +406,17 @@ export function createMpgfStripeSavedCommitmentSetup({
     pledgeIntentId?.trim() ||
     `pledge-intent-${slugPart(campaign.id)}-${hashScoped("pledge-intent", [roundId, campaign.id, userRef, normalizedAmountCents]).slice(7, 19)}`;
   const stableConditionalPledgeId = conditionalPledgeId?.trim() || stablePledgeIntentId;
+  const normalizedCounterpartBuckets = normalizeCounterpartBuckets(acceptableCounterpartBuckets, campaign);
+  const normalizedMinimumCounterpartyClearedCents = Math.max(
+    100,
+    clampCents(minimumCounterpartyClearedCents ?? Math.min(normalizedAmountCents, campaign.thresholdAmountCents)),
+  );
   const metadata = metadataFor({
     amountCents: normalizedAmountCents,
+    acceptableCounterpartBuckets: normalizedCounterpartBuckets,
     campaignId: campaign.id,
     conditionalPledgeId: stableConditionalPledgeId,
+    minimumCounterpartyClearedCents: normalizedMinimumCounterpartyClearedCents,
     pledgeIntentId: stablePledgeIntentId,
     roundId,
   });
@@ -398,6 +440,9 @@ export function createMpgfStripeSavedCommitmentSetup({
     conditionalPledgeId: stableConditionalPledgeId,
     userRefHash: hashScoped("user-ref", userRef.trim()),
     amountCents: normalizedAmountCents,
+    acceptableCounterpartBuckets: normalizedCounterpartBuckets,
+    minimumCounterpartyClearedCents: normalizedMinimumCounterpartyClearedCents,
+    maxExposureCents: normalizedAmountCents,
     currency: "usd",
     provider: "stripe",
     setupStatus: providerSetupIntentIdHash ? "setup_intent_created" : "setup_intent_created",
@@ -436,6 +481,8 @@ export function createMpgfStripeSavedCommitmentSetup({
       stableConditionalPledgeId,
       hashScoped("user-ref", userRef.trim()),
       normalizedAmountCents,
+      normalizedCounterpartBuckets,
+      normalizedMinimumCounterpartyClearedCents,
       providerCustomerIdHash ?? null,
       providerSetupIntentIdHash ?? null,
       providerPaymentMethodIdHash ?? null,
@@ -565,11 +612,13 @@ export function recordMpgfStripeSavedCommitmentWebhook(
 }
 
 export function buildMpgfStripeConditionalPaymentIntentPlan({
+  acceptableCounterpartBuckets,
   amountCents,
   campaignId,
   campaigns = demoMpgfPublicGoodsCampaigns,
   conditionalPledgeId,
   gateState,
+  minimumCounterpartyClearedCents,
   pledgeIntentId,
   providerCustomerRef,
   providerPaymentMethodRef,
@@ -577,11 +626,13 @@ export function buildMpgfStripeConditionalPaymentIntentPlan({
   round = demoMpgfAssuranceRound,
   roundId = round.id,
 }: {
+  acceptableCounterpartBuckets?: string[] | string;
   amountCents: number;
   campaignId: string;
   campaigns?: MpgfPublicGoodsCampaign[];
   conditionalPledgeId: string;
   gateState: MpgfStripeGateState;
+  minimumCounterpartyClearedCents?: number;
   pledgeIntentId: string;
   providerCustomerRef: string;
   providerPaymentMethodRef: string;
@@ -614,10 +665,17 @@ export function buildMpgfStripeConditionalPaymentIntentPlan({
   const providerCustomerIdHash = hashScoped("customer", providerCustomerRef.trim());
   const providerPaymentMethodIdHash = hashScoped("payment-method", providerPaymentMethodRef.trim());
   const providerSetupIntentIdHash = hashScoped("setup-intent", providerSetupIntentRef.trim());
+  const normalizedCounterpartBuckets = normalizeCounterpartBuckets(acceptableCounterpartBuckets, campaign);
+  const normalizedMinimumCounterpartyClearedCents = Math.max(
+    100,
+    clampCents(minimumCounterpartyClearedCents ?? Math.min(normalizedAmountCents, campaign.thresholdAmountCents)),
+  );
   const metadata = metadataFor({
     amountCents: normalizedAmountCents,
+    acceptableCounterpartBuckets: normalizedCounterpartBuckets,
     campaignId: campaign.id,
     conditionalPledgeId,
+    minimumCounterpartyClearedCents: normalizedMinimumCounterpartyClearedCents,
     pledgeIntentId,
     roundId,
   });

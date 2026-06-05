@@ -470,6 +470,27 @@ export type MpgfPublicGoodsCaptureMode = "external_handoff" | "stored_payment_me
 
 export type MpgfPublicGoodsVisibilityMode = "private_amount" | "public_supporter" | "public_reason";
 
+export interface MpgfPublicGoodsCrossViewIntentTerms {
+  acceptableCounterpartBuckets: string[];
+  minimumCounterpartyClearedCents: number;
+  counterpartDistinctBucketRequired: true;
+  fallbackRule: {
+    roundNotClearedMode: "expire_without_charge";
+    recipientVerificationFailedMode: "release_authorization_or_reroute_to_next_eligible_common_ground_project";
+    authorizationExpiredMode: "reauthorize_only_after_clearance_reconfirmed";
+  };
+  recognitionConsent: MpgfPublicGoodsVisibilityMode;
+}
+
+export interface MpgfPublicGoodsDonorExposureDisclosure {
+  maxExposureCents: number;
+  exactClearanceConditions: string[];
+  roundFailureBehavior: string;
+  recipientVerificationFailureBehavior: string;
+  authorizationTiming: string;
+  authorizationExpiryBehavior: string;
+}
+
 export type MpgfPublicGoodsReviewAction = "approve" | "needs_evidence" | "block" | "challenge" | "finalize";
 
 export type MpgfPublicGoodsReviewReasonCode =
@@ -534,6 +555,11 @@ export interface MpgfPublicGoodsPledge {
   campaignId: string;
   userId: string;
   amountCents: number;
+  acceptableCounterpartBuckets?: string[];
+  minimumCounterpartyClearedCents?: number;
+  counterpartDistinctBucketRequired?: true;
+  maxExposureCents?: number;
+  donorExposureDisclosure?: MpgfPublicGoodsDonorExposureDisclosure;
   visibilityMode: MpgfPublicGoodsVisibilityMode;
   isRecurring: boolean;
   captureMode: MpgfPublicGoodsCaptureMode;

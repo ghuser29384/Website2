@@ -131,6 +131,10 @@ export function MpgfConsole({
   const [monthlyPledge, setMonthlyPledge] = useState(10);
   const [publicGoodsCampaignId, setPublicGoodsCampaignId] = useState("campaign-global-health-basic-needs");
   const [publicGoodsPledgeAmount, setPublicGoodsPledgeAmount] = useState(25);
+  const [publicGoodsCounterpartBuckets, setPublicGoodsCounterpartBuckets] = useState(
+    "animal-welfare, existential-risk, institutional-integrity",
+  );
+  const [publicGoodsMinimumCounterpartyDollars, setPublicGoodsMinimumCounterpartyDollars] = useState(25);
   const [publicGoodsVisibilityMode, setPublicGoodsVisibilityMode] =
     useState<MpgfPublicGoodsVisibilityMode>("private_amount");
   const [publicGoodsCaptureMode, setPublicGoodsCaptureMode] =
@@ -439,6 +443,8 @@ export function MpgfConsole({
         idempotencyKey: publicGoodsPledgeIdempotencyKey,
         campaignId: selectedPublicGoodsCampaign.id,
         amountDollars: publicGoodsPledgeAmount,
+        acceptableCounterpartBuckets: publicGoodsCounterpartBuckets,
+        minimumCounterpartyClearedDollars: publicGoodsMinimumCounterpartyDollars,
         visibilityMode: publicGoodsVisibilityMode,
         captureMode: publicGoodsCaptureMode,
         isRecurring: publicGoodsRecurring,
@@ -470,6 +476,8 @@ export function MpgfConsole({
         campaign: selectedPublicGoodsCampaign,
         userId: identity.userId,
         amountCents: Math.max(1, Math.round(publicGoodsPledgeAmount * 100)),
+        acceptableCounterpartBuckets: publicGoodsCounterpartBuckets,
+        minimumCounterpartyClearedCents: Math.max(100, Math.round(publicGoodsMinimumCounterpartyDollars * 100)),
         visibilityMode: publicGoodsVisibilityMode,
         captureMode: publicGoodsCaptureMode,
         isRecurring: publicGoodsRecurring,
@@ -550,7 +558,9 @@ export function MpgfConsole({
         },
         body: JSON.stringify({
           amountCents: Math.max(100, Math.round(publicGoodsPledgeAmount * 100)),
+          acceptableCounterpartBuckets: publicGoodsCounterpartBuckets,
           campaignId: selectedPublicGoodsCampaign.id,
+          minimumCounterpartyClearedCents: Math.max(100, Math.round(publicGoodsMinimumCounterpartyDollars * 100)),
           explicitFutureUseConsent: futureUseConsentAccepted,
         }),
       });
@@ -838,6 +848,27 @@ export function MpgfConsole({
                 </select>
               </label>
               <label>
+                Acceptable counterpart buckets
+                <textarea
+                  placeholder="Comma-separated moral buckets that may clear against this pledge"
+                  value={publicGoodsCounterpartBuckets}
+                  onChange={(event) => setPublicGoodsCounterpartBuckets(readFormControlValue(event))}
+                />
+              </label>
+              <label>
+                Minimum counterpart-cleared volume
+                <span className="mpgf-money-input">
+                  <span>$</span>
+                  <input
+                    min="1"
+                    step="1"
+                    type="number"
+                    value={publicGoodsMinimumCounterpartyDollars}
+                    onChange={(event) => setPublicGoodsMinimumCounterpartyDollars(readNumericFormControlValue(event))}
+                  />
+                </span>
+              </label>
+              <label>
                 Capture mode
                 <select
                   value={publicGoodsCaptureMode}
@@ -893,6 +924,22 @@ export function MpgfConsole({
               <div>
                 <dt>Saved path</dt>
                 <dd>SetupIntent first</dd>
+              </div>
+              <div>
+                <dt>Max exposure</dt>
+                <dd>{formatUsd(Math.max(100, Math.round(publicGoodsPledgeAmount * 100)))}</dd>
+              </div>
+              <div>
+                <dt>Counterpart minimum</dt>
+                <dd>{formatUsd(Math.max(100, Math.round(publicGoodsMinimumCounterpartyDollars * 100)))}</dd>
+              </div>
+              <div>
+                <dt>Failure path</dt>
+                <dd>expire, release authorization, or donor fallback reroute</dd>
+              </div>
+              <div>
+                <dt>Authorization timing</dt>
+                <dd>near clearing only</dd>
               </div>
               <div>
                 <dt>Deadline</dt>

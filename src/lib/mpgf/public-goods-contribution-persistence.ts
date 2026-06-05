@@ -7,6 +7,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import {
   MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW,
   MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY,
+  MPGF_PUBLIC_GOODS_CROSS_VIEW_CLEARANCE_POLICY,
+  MPGF_PUBLIC_GOODS_DONOR_EXPOSURE_DISCLOSURE_POLICY,
   type MpgfPublicGoodsIdentityVerification,
   type MpgfPublicGoodsPaymentAuthorization,
   type MpgfPublicGoodsPaymentAuthorizationStatus,
@@ -61,6 +63,17 @@ function hashRawPayload(value: string) {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
+function fullFallbackRule(): MpgfPublicGoodsPledgeIntent["fallbackRule"] {
+  return {
+    manualEvidencePath: "/api/mpgf/evidence/manual",
+    legacyManualEvidencePath: "/api/mpgf/contributions/manual-evidence",
+    providerUnavailableMode: "manual_evidence_after_review",
+    roundNotClearedMode: "expire_without_charge",
+    recipientVerificationFailedMode: "release_authorization_or_reroute_to_next_eligible_common_ground_project",
+    authorizationExpiredMode: "reauthorize_only_after_clearance_reconfirmed",
+  };
+}
+
 function fallbackRule(value: Json): MpgfPublicGoodsPledgeIntent["fallbackRule"] {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const record = value as Record<string, unknown>;
@@ -70,18 +83,59 @@ function fallbackRule(value: Json): MpgfPublicGoodsPledgeIntent["fallbackRule"] 
       record.legacyManualEvidencePath === "/api/mpgf/contributions/manual-evidence" &&
       record.providerUnavailableMode === "manual_evidence_after_review"
     ) {
+      return fullFallbackRule();
+    }
+  }
+
+  return fullFallbackRule();
+}
+
+function donorExposureDisclosure(row: MpgfPledgeIntentRow): MpgfPublicGoodsPledgeIntent["donorExposureDisclosure"] {
+  const existing = row.donor_exposure_disclosure;
+
+  if (existing && typeof existing === "object" && !Array.isArray(existing)) {
+    const record = existing as Record<string, unknown>;
+    const exactClearanceConditions = Array.isArray(record.exactClearanceConditions)
+      ? record.exactClearanceConditions.filter((condition): condition is string => typeof condition === "string")
+      : [];
+
+    if (
+      typeof record.maxExposureCents === "number" &&
+      exactClearanceConditions.length > 0 &&
+      typeof record.roundFailureBehavior === "string" &&
+      typeof record.recipientVerificationFailureBehavior === "string" &&
+      typeof record.authorizationTiming === "string" &&
+      typeof record.authorizationExpiryBehavior === "string"
+    ) {
       return {
-        manualEvidencePath: "/api/mpgf/evidence/manual",
-        legacyManualEvidencePath: "/api/mpgf/contributions/manual-evidence",
-        providerUnavailableMode: "manual_evidence_after_review",
+        maxExposureCents: record.maxExposureCents,
+        exactClearanceConditions,
+        roundFailureBehavior: record.roundFailureBehavior,
+        recipientVerificationFailureBehavior: record.recipientVerificationFailureBehavior,
+        authorizationTiming: record.authorizationTiming,
+        authorizationExpiryBehavior: record.authorizationExpiryBehavior,
       };
     }
   }
 
+  const maxExposureCents = Number(row.max_exposure_cents || row.amount_cents);
+  const minimumCounterpartyClearedCents = Number(row.minimum_counterparty_cleared_cents || 100);
+
   return {
-    manualEvidencePath: "/api/mpgf/evidence/manual",
-    legacyManualEvidencePath: "/api/mpgf/contributions/manual-evidence",
-    providerUnavailableMode: "manual_evidence_after_review",
+    maxExposureCents,
+    exactClearanceConditions: [
+      "fixed round rulebook is published before the round opens",
+      `at least ${minimumCounterpartyClearedCents} cents clears from accepted distinct counterpart buckets`,
+      "identity, anti-sybil, anti-threat, baseline, recipient-review, and challenge-window gates pass",
+      "authorization or custody happens near clearing instead of as a long-lived round-open hold",
+    ],
+    roundFailureBehavior: "The pledge expires without charge if round conditions fail.",
+    recipientVerificationFailureBehavior:
+      "Release the authorization or reroute only under the donor fallback rule after recipient review fails.",
+    authorizationTiming:
+      "Save the payment method or external route first; authorize or capture only after threshold, review, and challenge gates clear.",
+    authorizationExpiryBehavior:
+      "If the provider authorization expires before capture, re-confirm clearance and reauthorize instead of silently charging later.",
   };
 }
 
@@ -96,11 +150,18 @@ function pledgeIntentFromRow(
     userRefHash: row.user_ref_hash,
     idempotencyKeyHash: row.idempotency_key_hash,
     amountCents: Number(row.amount_cents),
+    acceptableCounterpartBuckets: row.acceptable_counterpart_buckets,
+    minimumCounterpartyClearedCents: Number(row.minimum_counterparty_cleared_cents),
+    counterpartDistinctBucketRequired: true,
+    maxExposureCents: Number(row.max_exposure_cents || row.amount_cents),
     paymentMode: conditionalPledge?.payment_mode ?? "every_org_fast_route",
     visibilityMode: row.visibility_pref,
     paymentState: row.payment_state,
     countingState: row.counting_state,
     fallbackRule: fallbackRule(row.fallback_rule),
+    donorExposureDisclosure: donorExposureDisclosure(row),
+    crossViewClearancePolicy: MPGF_PUBLIC_GOODS_CROSS_VIEW_CLEARANCE_POLICY,
+    donorExposureDisclosurePolicy: MPGF_PUBLIC_GOODS_DONOR_EXPOSURE_DISCLOSURE_POLICY,
     capturePolicy: row.capture_policy,
     primaryFlow: MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_FLOW,
     privacyPolicy: MPGF_PUBLIC_GOODS_CONTRIBUTION_INTENT_PRIVACY_POLICY,
@@ -112,6 +173,9 @@ function pledgeIntentFromRow(
       row.user_ref_hash,
       row.idempotency_key_hash,
       row.amount_cents,
+      row.acceptable_counterpart_buckets,
+      row.minimum_counterparty_cleared_cents,
+      row.max_exposure_cents,
       row.payment_state,
       row.counting_state,
     ]),

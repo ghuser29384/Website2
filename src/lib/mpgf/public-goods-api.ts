@@ -27,6 +27,10 @@ import {
   buildMpgfPublicGoodsCoalitionRoutingReport,
 } from "./public-goods-coalition-routing";
 import { buildMpgfPublicGoodsContributionFlowApi } from "./public-goods-contribution-intents";
+import {
+  MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY,
+  buildMpgfPublicGoodsEcmRulebookReport,
+} from "./public-goods-ecm-rulebook";
 import { MPGF_PUBLIC_GOODS_FINALIZATION_POLICY } from "./public-goods-finalization";
 import { MPGF_PUBLIC_GOODS_GOVERNANCE_BALLOT_POLICY } from "./public-goods-governance-ballots";
 import {
@@ -280,6 +284,11 @@ export function buildMpgfPublicGoodsRoundApi({
     matchPool,
     supportSignals: sourceSupportSignals,
   });
+  const ecmRulebook = buildMpgfPublicGoodsEcmRulebookReport({
+    campaigns,
+    round,
+    matchPool,
+  });
   const identityIntegrity = buildMpgfPublicGoodsIdentityIntegrityReport({
     campaigns,
     pledges,
@@ -349,6 +358,29 @@ export function buildMpgfPublicGoodsRoundApi({
         flywheelSourceTypes: sponsorPoolFlywheel.sourceTypes,
       },
       contributionFlow,
+      ecmRulebook: {
+        policy: MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY,
+        reportPath: `/api/mpgf/rounds/${round.id}/rulebook`,
+        custodyPolicy: ecmRulebook.custodyPolicy,
+        batchCadencePolicy: ecmRulebook.batchCadencePolicy,
+        recipientRegistryPolicy: ecmRulebook.recipientRegistryPolicy,
+        clearingAt: ecmRulebook.roundRulebook.clearingAt,
+        baseMatchRatio: ecmRulebook.roundRulebook.baseMatchRatio,
+        qfBonusCapMultiple: ecmRulebook.roundRulebook.qfBonusCapMultiple,
+        perDonorCapCents: ecmRulebook.roundRulebook.perDonorCapCents,
+        sponsorPoolSegregation: ecmRulebook.roundRulebook.sponsorPoolSegregation,
+        longLivedRoundOpenHoldsAllowed: ecmRulebook.batchEngine.longLivedRoundOpenHoldsAllowed,
+        postClearCustodialState: ecmRulebook.custodyAndRelease.postClearCustodialState,
+        escrowClaimAllowed: ecmRulebook.custodyAndRelease.escrowClaimAllowed,
+        donorDisclosure: ecmRulebook.donorDisclosure,
+        recipientRegistryCount: ecmRulebook.recipientRegistry.length,
+        payableRecipientCount: ecmRulebook.recipientRegistry.filter((recipient) =>
+          recipient.registryStatus === "eligible_after_review_and_challenge",
+        ).length,
+        moralReputationCanIncreaseAllocationPower:
+          ecmRulebook.identityAndAntiSybil.moralReputationCanIncreaseAllocationPower,
+        noGlobalMoralRanking: ecmRulebook.identityAndAntiSybil.noGlobalMoralRanking,
+      },
       cgVqaf: cgVqaf
         ? {
             policy: MPGF_PUBLIC_GOODS_CG_VQAF_POLICY,

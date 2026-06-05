@@ -677,10 +677,36 @@ export function createMpgfPublicGoodsIdentityAttestation(input: {
   };
 }
 
+function normalizeMpgfCounterpartBuckets(value: string[] | string | undefined, campaign: MpgfPublicGoodsCampaign) {
+  const campaignBuckets = new Set(
+    campaign.causeTags.map((tag) =>
+      tag.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
+    ),
+  );
+  const sourceItems = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,;\n]/)
+      : [];
+  const buckets = sourceItems
+    .map((item) => item.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""))
+    .filter(Boolean)
+    .filter((item) => !campaignBuckets.has(item));
+  const uniqueBuckets = [...new Set(buckets)].slice(0, 12);
+
+  return uniqueBuckets.length > 0 ? uniqueBuckets : ["any-pre-vetted-distinct-moral-bucket"];
+}
+
+function defaultMpgfCounterpartyClearedCents(amountCents: number, campaign: MpgfPublicGoodsCampaign) {
+  return Math.max(100, Math.min(amountCents, campaign.thresholdAmountCents));
+}
+
 export function createMpgfPublicGoodsPledge(input: {
   campaign: MpgfPublicGoodsCampaign;
   userId: string;
   amountCents: number;
+  acceptableCounterpartBuckets?: string[] | string;
+  minimumCounterpartyClearedCents?: number;
   visibilityMode?: MpgfPublicGoodsVisibilityMode;
   captureMode?: MpgfPublicGoodsCaptureMode;
   identityAttestation?: MpgfPublicGoodsIdentityAttestation;
@@ -739,14 +765,39 @@ export function createMpgfPublicGoodsPledge(input: {
     : input.amountCents < 100
       ? "below_minimum"
       : attestationActive
-        ? "eligible"
-        : "pending_review";
+      ? "eligible"
+      : "pending_review";
+  const acceptableCounterpartBuckets = normalizeMpgfCounterpartBuckets(input.acceptableCounterpartBuckets, input.campaign);
+  const minimumCounterpartyClearedCents = Math.max(
+    100,
+    Math.floor(input.minimumCounterpartyClearedCents ?? defaultMpgfCounterpartyClearedCents(input.amountCents, input.campaign)),
+  );
 
   return {
     id: `pledge-public-goods-${input.campaign.slug}-${input.userId}-${input.amountCents}`,
     campaignId: input.campaign.id,
     userId: input.userId,
     amountCents: input.amountCents,
+    acceptableCounterpartBuckets,
+    minimumCounterpartyClearedCents,
+    counterpartDistinctBucketRequired: true,
+    maxExposureCents: input.amountCents,
+    donorExposureDisclosure: {
+      maxExposureCents: input.amountCents,
+      exactClearanceConditions: [
+        "fixed round rulebook is published before the round opens",
+        "campaign amount and verified-supporter thresholds clear",
+        `at least ${minimumCounterpartyClearedCents} cents clears from accepted distinct counterpart buckets`,
+        "identity, anti-sybil, anti-threat, baseline, recipient-review, and challenge gates pass",
+      ],
+      roundFailureBehavior: input.campaign.exitRule || "Pledge expires without charge if the round fails to clear.",
+      recipientVerificationFailureBehavior:
+        "Release authorization or reroute only under the donor fallback rule after recipient verification fails.",
+      authorizationTiming:
+        "Authorize or capture only near clearing after threshold, review, and challenge gates; do not place a long-lived round-open hold.",
+      authorizationExpiryBehavior:
+        "If authorization expires before capture, re-confirm clearance and reauthorize instead of silently charging later.",
+    },
     visibilityMode,
     isRecurring: input.isRecurring ?? false,
     captureMode,
