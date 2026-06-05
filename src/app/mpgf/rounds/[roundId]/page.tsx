@@ -374,13 +374,20 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
 
         <article className="mpgf-panel">
           <p className="eyebrow">Fixed ECM rulebook</p>
-          <h2>Cross-view terms, custody gates, and recipient registry are public before clearing</h2>
+          <h2>ECM-core plus Moral Trade safeguards stays public before clearing</h2>
           <p>
-            Donors see maximum exposure, counterpart-bucket conditions, failure handling,
-            sponsor-match rules, and just-in-time authorization timing before a pledge can be
-            authorized. Cleared funds require partner or fiscal-host custody confirmation before release.
+            Donors see maximum exposure, counterpart-bucket conditions, refund or reroute
+            outcomes, sponsor-match rules, a one-to-two-week batch cadence, and just-in-time
+            authorization timing before a pledge can be authorized. Cleared funds require partner
+            or fiscal-host custody confirmation before release.
           </p>
           <dl className="mpgf-summary-grid">
+            <div>
+              <dt>Batch cadence</dt>
+              <dd>
+                {ecmRulebook.roundRulebook.batchWindowMinDays}-{ecmRulebook.roundRulebook.batchWindowMaxDays} days
+              </dd>
+            </div>
             <div>
               <dt>Clearing time</dt>
               <dd>{formatDate(ecmRulebook.roundRulebook.clearingAt)}</dd>
@@ -392,6 +399,16 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
             <div>
               <dt>Donor cap</dt>
               <dd>{formatUsd(ecmRulebook.roundRulebook.perDonorCapCents)}</dd>
+            </div>
+            <div>
+              <dt>Cross-view premium</dt>
+              <dd>
+                up to {Math.round(ecmRulebook.crossViewSubsidySchedule.maxPremiumBps / 100)}%; QF preserved
+              </dd>
+            </div>
+            <div>
+              <dt>Fallback outcome</dt>
+              <dd>{ecmRulebook.refundAndReroute.unmatchedBatchMode.replaceAll("_", " ")}</dd>
             </div>
             <div>
               <dt>Round-open holds</dt>
@@ -414,6 +431,10 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
                 ).length}{" "}
                 payable after review
               </dd>
+            </div>
+            <div>
+              <dt>Recipient standard</dt>
+              <dd>{ecmRulebook.recipientEligibilityRules.launchBias.replaceAll("_", " ")}</dd>
             </div>
             <div>
               <dt>Public report</dt>

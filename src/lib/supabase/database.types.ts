@@ -3924,8 +3924,14 @@ export interface Database {
           id: string;
           round_id: string;
           policy: string;
+          ecm_plus_hybrid_policy: string;
           batch_cadence_policy: string;
           custody_policy: string;
+          refund_reroute_policy: string;
+          cross_view_subsidy_policy: string;
+          batch_interval_min_days: number;
+          batch_interval_max_days: number;
+          cross_view_subsidy_schedule: Json;
           rulebook_json: Json;
           published_before_round_open: boolean;
           no_global_moral_ranking: true;
@@ -3936,8 +3942,14 @@ export interface Database {
           id: string;
           round_id: string;
           policy?: string;
+          ecm_plus_hybrid_policy?: string;
           batch_cadence_policy?: string;
           custody_policy?: string;
+          refund_reroute_policy?: string;
+          cross_view_subsidy_policy?: string;
+          batch_interval_min_days?: number;
+          batch_interval_max_days?: number;
+          cross_view_subsidy_schedule?: Json;
           rulebook_json: Json;
           published_before_round_open?: boolean;
           no_global_moral_ranking?: true;
@@ -3946,8 +3958,14 @@ export interface Database {
         };
         Update: {
           policy?: string;
+          ecm_plus_hybrid_policy?: string;
           batch_cadence_policy?: string;
           custody_policy?: string;
+          refund_reroute_policy?: string;
+          cross_view_subsidy_policy?: string;
+          batch_interval_min_days?: number;
+          batch_interval_max_days?: number;
+          cross_view_subsidy_schedule?: Json;
           rulebook_json?: Json;
           published_before_round_open?: boolean;
           no_global_moral_ranking?: true;

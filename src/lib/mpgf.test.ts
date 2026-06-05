@@ -207,9 +207,12 @@ import {
 } from "./mpgf/public-goods-coalition-routing";
 import {
   MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY,
+  MPGF_PUBLIC_GOODS_CROSS_VIEW_SUBSIDY_POLICY,
   MPGF_PUBLIC_GOODS_CUSTODY_POLICY,
   MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY,
+  MPGF_PUBLIC_GOODS_ECM_PLUS_HYBRID_POLICY,
   MPGF_PUBLIC_GOODS_RECIPIENT_REGISTRY_POLICY,
+  MPGF_PUBLIC_GOODS_REFUND_REROUTE_POLICY,
   buildMpgfPublicGoodsEcmRulebookReport,
   getMpgfPublicGoodsEcmRulebookReportApi,
 } from "./mpgf/public-goods-ecm-rulebook";
@@ -1086,13 +1089,24 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.ok(round.round.contributionFlow?.stateObjects.includes("provider_payment_event"));
   assert.ok(round.round.contributionFlow?.stateObjects.includes("cross_view_intent_terms"));
   assert.equal(round.round.ecmRulebook.policy, MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY);
+  assert.equal(round.round.ecmRulebook.ecmPlusHybridPolicy, MPGF_PUBLIC_GOODS_ECM_PLUS_HYBRID_POLICY);
   assert.equal(round.round.ecmRulebook.reportPath, `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/rulebook`);
   assert.equal(round.round.ecmRulebook.custodyPolicy, MPGF_PUBLIC_GOODS_CUSTODY_POLICY);
   assert.equal(round.round.ecmRulebook.batchCadencePolicy, MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY);
+  assert.equal(round.round.ecmRulebook.refundReroutePolicy, MPGF_PUBLIC_GOODS_REFUND_REROUTE_POLICY);
+  assert.equal(round.round.ecmRulebook.crossViewSubsidyPolicy, MPGF_PUBLIC_GOODS_CROSS_VIEW_SUBSIDY_POLICY);
   assert.equal(round.round.ecmRulebook.recipientRegistryPolicy, MPGF_PUBLIC_GOODS_RECIPIENT_REGISTRY_POLICY);
+  assert.equal(round.round.ecmRulebook.batchWindowMinDays, 7);
+  assert.equal(round.round.ecmRulebook.batchWindowMaxDays, 14);
+  assert.equal(round.round.ecmRulebook.preserveCappedQfBreadthBonus, true);
   assert.equal(round.round.ecmRulebook.longLivedRoundOpenHoldsAllowed, false);
   assert.equal(round.round.ecmRulebook.escrowClaimAllowed, false);
   assert.equal(round.round.ecmRulebook.donorDisclosure.maxExposureRequiredBeforeAuthorization, true);
+  assert.equal(round.round.ecmRulebook.refundAndReroute.silentFailureAllowed, false);
+  assert.equal(round.round.ecmRulebook.crossViewSubsidySchedule.maxPremiumBps, 1500);
+  assert.equal(round.round.ecmRulebook.crossViewSubsidySchedule.preservesCappedQfBreadthBonus, true);
+  assert.equal(round.round.ecmRulebook.crossViewSubsidySchedule.moralReputationCanIncreasePremium, false);
+  assert.equal(round.round.ecmRulebook.recipientEligibilityRules.payableOnlyIfRegistryStatusEligible, true);
   assert.equal(round.round.ecmRulebook.donorDisclosure.counterpartBucketsRequired, true);
   assert.equal(round.round.ecmRulebook.moralReputationCanIncreaseAllocationPower, false);
   assert.equal(round.round.ecmRulebook.noGlobalMoralRanking, true);
@@ -1773,11 +1787,20 @@ test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil
   const schemaSql = readFileSync("supabase/schema.sql", "utf8");
   const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
   const migration = readFileSync("supabase/migrations/20260604_mpgf_ecm_rulebook.sql", "utf8");
+  const ecmPlusMigration = readFileSync("supabase/migrations/20260605_mpgf_ecm_plus_subsidy.sql", "utf8");
 
   assert.equal(report.policy, MPGF_PUBLIC_GOODS_ECM_CORE_RULEBOOK_POLICY);
+  assert.equal(report.ecmPlusHybridPolicy, MPGF_PUBLIC_GOODS_ECM_PLUS_HYBRID_POLICY);
   assert.equal(report.batchCadencePolicy, MPGF_PUBLIC_GOODS_BATCH_CADENCE_POLICY);
   assert.equal(report.custodyPolicy, MPGF_PUBLIC_GOODS_CUSTODY_POLICY);
   assert.equal(report.recipientRegistryPolicy, MPGF_PUBLIC_GOODS_RECIPIENT_REGISTRY_POLICY);
+  assert.equal(report.refundReroutePolicy, MPGF_PUBLIC_GOODS_REFUND_REROUTE_POLICY);
+  assert.equal(report.crossViewSubsidyPolicy, MPGF_PUBLIC_GOODS_CROSS_VIEW_SUBSIDY_POLICY);
+  assert.equal(report.roundRulebook.batchWindowMinDays, 7);
+  assert.equal(report.roundRulebook.batchWindowMaxDays, 14);
+  assert.equal(report.roundRulebook.preserveCappedQfBreadthBonus, true);
+  assert.equal(report.batchEngine.recurringCadence, "one_to_two_week_batch_rounds");
+  assert.equal(report.batchEngine.fixedCadencePublishedBeforeRoundOpen, true);
   assert.equal(report.batchEngine.longLivedRoundOpenHoldsAllowed, false);
   assert.deepEqual(report.batchEngine.stages, [
     "round_open",
@@ -1793,6 +1816,15 @@ test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil
   assert.equal(report.custodyAndRelease.releaseOnlyAfterRecipientVerification, true);
   assert.equal(report.custodyAndRelease.releaseOnlyAfterChallengeWindowCompletion, true);
   assert.ok(report.custodyAndRelease.donorFailureHandling.includes("release_authorization_if_recipient_verification_fails"));
+  assert.equal(report.refundAndReroute.unmatchedBatchMode, "expire_without_charge_or_release_authorization");
+  assert.equal(report.refundAndReroute.silentFailureAllowed, false);
+  assert.ok(report.refundAndReroute.donorChoices.includes("refund_captured_funds_when_provider_supports"));
+  assert.ok(report.refundAndReroute.donorChoices.includes("reroute_to_next_eligible_common_ground_project"));
+  assert.equal(report.crossViewSubsidySchedule.appliesAfterBaseMatch, true);
+  assert.equal(report.crossViewSubsidySchedule.preservesCappedQfBreadthBonus, true);
+  assert.equal(report.crossViewSubsidySchedule.maxPremiumBps, 1500);
+  assert.equal(report.crossViewSubsidySchedule.moralReputationCanIncreasePremium, false);
+  assert.ok(report.crossViewSubsidySchedule.rows.some((row) => row.tier === "three_or_more_distinct_moral_buckets"));
   assert.equal(report.donorDisclosure.maxExposureRequiredBeforeAuthorization, true);
   assert.equal(report.donorDisclosure.counterpartBucketsRequired, true);
   assert.equal(report.donorDisclosure.minimumCounterpartyVolumeRequired, true);
@@ -1800,6 +1832,9 @@ test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil
   assert.equal(report.identityAndAntiSybil.noGlobalMoralRanking, true);
   assert.equal(report.preservedInvariants.antiThreatAndBaselineIntegrityAreBlockingGates, true);
   assert.equal(report.preservedInvariants.immutableProvenanceForRelianceBearingChanges, true);
+  assert.equal(report.recipientEligibilityRules.payableOnlyIfRegistryStatusEligible, true);
+  assert.equal(report.recipientEligibilityRules.objectiveReceiptOrMilestoneEvidenceRequired, true);
+  assert.equal(report.recipientEligibilityRules.taxAndDonationReceiptClaimsMustMatchPayoutRail, true);
   assert.equal(report.recipientRegistry.length, demoMpgfPublicGoodsCampaigns.length);
   assert.ok(report.recipientRegistry.every((recipient) => recipient.legalEntityOrFiscalHost));
   assert.match(report.calcHash, /^sha256:/);
@@ -1812,9 +1847,16 @@ test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil
   assert.match(roundApi, /ecmRulebook/);
   assert.match(roundApi, /recipientRegistryCount/);
   assert.match(roundPage, /Fixed ECM rulebook/);
+  assert.match(roundPage, /ECM-core plus Moral Trade safeguards/);
+  assert.match(roundPage, /Batch cadence/);
+  assert.match(roundPage, /Cross-view premium/);
+  assert.match(roundPage, /Fallback outcome/);
   assert.match(roundPage, /counterpart-bucket conditions/);
   assert.match(roundPage, /ECM rulebook report/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_round_rulebooks/);
+  assert.match(schemaSql, /ecm_plus_hybrid_policy/);
+  assert.match(schemaSql, /batch_interval_min_days integer not null default 7/);
+  assert.match(schemaSql, /cross_view_subsidy_schedule jsonb not null/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_recipient_registry/);
   assert.match(schemaSql, /create table if not exists public\.mpgf_custody_holds/);
   assert.match(schemaSql, /moral_reputation_can_increase_allocation_power boolean not null default false/);
@@ -1825,6 +1867,9 @@ test("MPGF ECM-core rulebook publishes custody, batch, recipient, and anti-sybil
   assert.match(migration, /acceptable_counterpart_buckets/);
   assert.match(migration, /public\.mpgf_custody_holds/);
   assert.match(migration, /escrow_claim_allowed boolean not null default false/);
+  assert.match(ecmPlusMigration, /ecm_plus_hybrid_policy/);
+  assert.match(ecmPlusMigration, /refund_reroute_policy/);
+  assert.match(ecmPlusMigration, /cross_view_subsidy_schedule/);
 });
 
 test("MPGF Every.org fast route creates Donate Links and imports partner webhooks without custody", () => {
