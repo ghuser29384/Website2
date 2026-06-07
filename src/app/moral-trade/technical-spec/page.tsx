@@ -63,6 +63,10 @@ import {
   validateMoralTradeAntiEnumerationContract,
 } from "@/lib/moral-trade/anti-enumeration";
 import {
+  getMoralTradePrivacyGovernanceContract,
+  validateMoralTradePrivacyGovernanceContract,
+} from "@/lib/moral-trade/privacy-governance";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -183,6 +187,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const antiEnumerationContract = getMoralTradeAntiEnumerationContract();
   const antiEnumerationValidation =
     validateMoralTradeAntiEnumerationContract(antiEnumerationContract);
+  const privacyGovernanceContract = getMoralTradePrivacyGovernanceContract();
+  const privacyGovernanceValidation =
+    validateMoralTradePrivacyGovernanceContract(privacyGovernanceContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -281,6 +288,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     accountSecurityValidation,
     reviewerQualityValidation,
     antiEnumerationValidation,
+    privacyGovernanceValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -399,6 +407,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Anti-enumeration",
       status: antiEnumerationValidation.status,
       summary: `${antiEnumerationContract.surfaces.length} discovery surface(s), ${antiEnumerationContract.countBuckets.length} count bucket(s).`,
+    },
+    {
+      blockers: privacyGovernanceValidation.blockers.length,
+      family: "Policy inputs",
+      href: "/api/moral-trade/privacy-governance/contract",
+      label: "Privacy governance",
+      status: privacyGovernanceValidation.status,
+      summary: `${privacyGovernanceContract.surfaces.length} disclosure surface(s), ${privacyGovernanceContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: productionReadinessValidation.blockers.length,
@@ -1435,7 +1451,75 @@ export default async function MoralTradeTechnicalSpecPage() {
           </div>
         </section>
 
-        <section className="section section-white" aria-labelledby="production-readiness-contract-heading">
+        <section className="section section-white" aria-labelledby="privacy-governance-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Privacy-governance contract</p>
+            <h2 id="privacy-governance-contract-heading">
+              Private facts require a current grant, review, and reconstructible access log before disclosure.
+            </h2>
+            <p>
+              Moraltrade60 requires exact wishes, contact details, sensitive constraints, raw source
+              notes, and private evidence to move only through explicit, revocable privacy grants
+              and audited access logs. This contract separates reviewer access, counterparty
+              previews, contact introductions, evidence review, profile export, and redacted public
+              publication, while keeping raw private artifacts, access paths, reviewer notes, and
+              participant-specific access records out of the public contract surface.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Privacy governance {privacyGovernanceContract.version}
+              </p>
+              <h3>Status {privacyGovernanceValidation.status}</h3>
+              <p>
+                {privacyGovernanceValidation.checks.length} check(s),{" "}
+                {privacyGovernanceValidation.blockers.length} blocker(s),{" "}
+                {privacyGovernanceContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/privacy-governance/contract">
+              Open privacy-governance JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Disclosure surfaces</h3>
+              <ul className="clean-list">
+                {privacyGovernanceContract.surfaces.map((surface) => (
+                  <li key={surface}>{surface.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {privacyGovernanceContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Existing grant ledger</h3>
+              <ul className="clean-list">
+                {privacyGovernanceContract.existingRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {privacyGovernanceContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="production-readiness-contract-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Production readiness contract</p>
             <h2 id="production-readiness-contract-heading">

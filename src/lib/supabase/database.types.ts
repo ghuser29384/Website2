@@ -4234,6 +4234,11 @@ export interface Database {
           status: "draft" | "granted" | "revoked";
           notes: string;
           expires_at: string | null;
+          privacy_policy_ref: string | null;
+          purpose_code: string;
+          grant_hash: string | null;
+          revoked_at: string | null;
+          superseded_by: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -4248,6 +4253,11 @@ export interface Database {
           status?: "draft" | "granted" | "revoked";
           notes?: string;
           expires_at?: string | null;
+          privacy_policy_ref?: string | null;
+          purpose_code?: string;
+          grant_hash?: string | null;
+          revoked_at?: string | null;
+          superseded_by?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -4260,6 +4270,11 @@ export interface Database {
           status?: "draft" | "granted" | "revoked";
           notes?: string;
           expires_at?: string | null;
+          privacy_policy_ref?: string | null;
+          purpose_code?: string;
+          grant_hash?: string | null;
+          revoked_at?: string | null;
+          superseded_by?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -4307,6 +4322,284 @@ export interface Database {
           status?: "pending" | "approved" | "denied" | "withdrawn";
           updated_at?: string;
           resolved_at?: string | null;
+        };
+        Relationships: [];
+      };
+      moral_trade_privacy_grant_policies: {
+        Row: {
+          id: string;
+          policy_snapshot_id: string;
+          policy_version: string;
+          surface:
+            | "reviewer_access"
+            | "counterparty_preview"
+            | "contact_introduction"
+            | "evidence_review"
+            | "profile_export"
+            | "public_redacted_publication";
+          status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          grant_required_bool: boolean;
+          access_log_required_bool: boolean;
+          role_limit_required_bool: boolean;
+          purpose_limit_required_bool: boolean;
+          revocable_grant_required_bool: boolean;
+          expiry_required_bool: boolean;
+          data_security_review_required_bool: boolean;
+          confidentiality_review_required_bool: boolean;
+          reviewer_quality_required_bool: boolean;
+          account_security_required_bool: boolean;
+          participant_confirmation_required_bool: boolean;
+          external_authority_required_bool: boolean;
+          redaction_required_bool: boolean;
+          public_redaction_policy_required_bool: boolean;
+          max_access_log_age_days: number;
+          policy_hash: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          policy_snapshot_id: string;
+          policy_version?: string;
+          surface:
+            | "reviewer_access"
+            | "counterparty_preview"
+            | "contact_introduction"
+            | "evidence_review"
+            | "profile_export"
+            | "public_redacted_publication";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          grant_required_bool?: boolean;
+          access_log_required_bool?: boolean;
+          role_limit_required_bool?: boolean;
+          purpose_limit_required_bool?: boolean;
+          revocable_grant_required_bool?: boolean;
+          expiry_required_bool?: boolean;
+          data_security_review_required_bool?: boolean;
+          confidentiality_review_required_bool?: boolean;
+          reviewer_quality_required_bool?: boolean;
+          account_security_required_bool?: boolean;
+          participant_confirmation_required_bool?: boolean;
+          external_authority_required_bool?: boolean;
+          redaction_required_bool?: boolean;
+          public_redaction_policy_required_bool?: boolean;
+          max_access_log_age_days?: number;
+          policy_hash: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          policy_snapshot_id?: string;
+          policy_version?: string;
+          surface?:
+            | "reviewer_access"
+            | "counterparty_preview"
+            | "contact_introduction"
+            | "evidence_review"
+            | "profile_export"
+            | "public_redacted_publication";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          grant_required_bool?: boolean;
+          access_log_required_bool?: boolean;
+          role_limit_required_bool?: boolean;
+          purpose_limit_required_bool?: boolean;
+          revocable_grant_required_bool?: boolean;
+          expiry_required_bool?: boolean;
+          data_security_review_required_bool?: boolean;
+          confidentiality_review_required_bool?: boolean;
+          reviewer_quality_required_bool?: boolean;
+          account_security_required_bool?: boolean;
+          participant_confirmation_required_bool?: boolean;
+          external_authority_required_bool?: boolean;
+          redaction_required_bool?: boolean;
+          public_redaction_policy_required_bool?: boolean;
+          max_access_log_age_days?: number;
+          policy_hash?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_privacy_access_logs: {
+        Row: {
+          id: string;
+          privacy_grant_id: string;
+          privacy_policy_ref: string;
+          surface:
+            | "reviewer_access"
+            | "counterparty_preview"
+            | "contact_introduction"
+            | "evidence_review"
+            | "profile_export"
+            | "public_redacted_publication";
+          owner_profile_id_hash: string;
+          actor_id_hash: string | null;
+          actor_role: string;
+          purpose_code: string;
+          field_key: string;
+          access_decision: "allowed" | "blocked" | "redacted";
+          private_data_returned_bool: boolean;
+          raw_private_artifact_returned_bool: boolean;
+          redaction_applied_bool: boolean;
+          role_limited_bool: boolean;
+          purpose_limited_bool: boolean;
+          counterparty_disclosure_bool: boolean;
+          public_disclosure_bool: boolean;
+          access_reason: string;
+          access_hash: string;
+          occurred_at: string;
+          expires_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          privacy_grant_id: string;
+          privacy_policy_ref: string;
+          surface:
+            | "reviewer_access"
+            | "counterparty_preview"
+            | "contact_introduction"
+            | "evidence_review"
+            | "profile_export"
+            | "public_redacted_publication";
+          owner_profile_id_hash: string;
+          actor_id_hash?: string | null;
+          actor_role?: string;
+          purpose_code?: string;
+          field_key: string;
+          access_decision?: "allowed" | "blocked" | "redacted";
+          private_data_returned_bool?: boolean;
+          raw_private_artifact_returned_bool?: boolean;
+          redaction_applied_bool?: boolean;
+          role_limited_bool?: boolean;
+          purpose_limited_bool?: boolean;
+          counterparty_disclosure_bool?: boolean;
+          public_disclosure_bool?: boolean;
+          access_reason?: string;
+          access_hash: string;
+          occurred_at?: string;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          privacy_grant_id?: string;
+          privacy_policy_ref?: string;
+          surface?:
+            | "reviewer_access"
+            | "counterparty_preview"
+            | "contact_introduction"
+            | "evidence_review"
+            | "profile_export"
+            | "public_redacted_publication";
+          owner_profile_id_hash?: string;
+          actor_id_hash?: string | null;
+          actor_role?: string;
+          purpose_code?: string;
+          field_key?: string;
+          access_decision?: "allowed" | "blocked" | "redacted";
+          private_data_returned_bool?: boolean;
+          raw_private_artifact_returned_bool?: boolean;
+          redaction_applied_bool?: boolean;
+          role_limited_bool?: boolean;
+          purpose_limited_bool?: boolean;
+          counterparty_disclosure_bool?: boolean;
+          public_disclosure_bool?: boolean;
+          access_reason?: string;
+          access_hash?: string;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_privacy_disclosure_reviews: {
+        Row: {
+          id: string;
+          privacy_grant_id: string;
+          privacy_policy_ref: string;
+          surface:
+            | "reviewer_access"
+            | "counterparty_preview"
+            | "contact_introduction"
+            | "evidence_review"
+            | "profile_export"
+            | "public_redacted_publication";
+          review_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          confidentiality_review_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          data_security_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          account_security_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          participant_confirmation_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          external_authority_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          review_hash: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          expires_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          privacy_grant_id: string;
+          privacy_policy_ref: string;
+          surface:
+            | "reviewer_access"
+            | "counterparty_preview"
+            | "contact_introduction"
+            | "evidence_review"
+            | "profile_export"
+            | "public_redacted_publication";
+          review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          confidentiality_review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          data_security_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          account_security_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          participant_confirmation_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          external_authority_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          review_hash: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          privacy_grant_id?: string;
+          privacy_policy_ref?: string;
+          surface?:
+            | "reviewer_access"
+            | "counterparty_preview"
+            | "contact_introduction"
+            | "evidence_review"
+            | "profile_export"
+            | "public_redacted_publication";
+          review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          confidentiality_review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          data_security_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          account_security_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          participant_confirmation_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          external_authority_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          review_hash?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -5631,6 +5924,9 @@ export interface Database {
             | "participant_eligibility"
             | "recipient_destination_verification"
             | "account_security"
+            | "reviewer_quality"
+            | "anti_enumeration"
+            | "privacy_disclosure"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -5668,6 +5964,9 @@ export interface Database {
             | "participant_eligibility"
             | "recipient_destination_verification"
             | "account_security"
+            | "reviewer_quality"
+            | "anti_enumeration"
+            | "privacy_disclosure"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -5704,6 +6003,9 @@ export interface Database {
             | "participant_eligibility"
             | "recipient_destination_verification"
             | "account_security"
+            | "reviewer_quality"
+            | "anti_enumeration"
+            | "privacy_disclosure"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"

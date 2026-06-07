@@ -112,6 +112,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_account_security_contract",
   "moral_trade_reviewer_quality_contract",
   "moral_trade_anti_enumeration_contract",
+  "moral_trade_privacy_governance_contract",
   "moral_trade_production_readiness_contract",
   "moral_trade_recipient_destination_contract",
   "moral_trade_provenance_schema",

@@ -40,6 +40,10 @@ import {
   validateMoralTradeAntiEnumerationContract,
 } from "@/lib/moral-trade/anti-enumeration";
 import {
+  getMoralTradePrivacyGovernanceContract,
+  validateMoralTradePrivacyGovernanceContract,
+} from "@/lib/moral-trade/privacy-governance";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -171,6 +175,9 @@ export async function GET(request: Request) {
   const antiEnumerationContract = getMoralTradeAntiEnumerationContract();
   const antiEnumerationValidation =
     validateMoralTradeAntiEnumerationContract(antiEnumerationContract);
+  const privacyGovernanceContract = getMoralTradePrivacyGovernanceContract();
+  const privacyGovernanceValidation =
+    validateMoralTradePrivacyGovernanceContract(privacyGovernanceContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -265,6 +272,7 @@ export async function GET(request: Request) {
       accountSecurityValidation.status === "pass" &&
       reviewerQualityValidation.status === "pass" &&
       antiEnumerationValidation.status === "pass" &&
+      privacyGovernanceValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
@@ -299,6 +307,7 @@ export async function GET(request: Request) {
     accountSecurityValidation,
     reviewerQualityValidation,
     antiEnumerationValidation,
+    privacyGovernanceValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -459,6 +468,30 @@ export async function GET(request: Request) {
       ),
       antiEnumerationContractTests:
         antiEnumerationContract.contractTests,
+      privacyGovernanceContractVersion:
+        privacyGovernanceContract.version,
+      privacyGovernanceSurfaces:
+        privacyGovernanceContract.surfaces,
+      privacyGovernanceAudienceStages:
+        privacyGovernanceContract.audienceStages,
+      privacyGovernanceAccessLevels:
+        privacyGovernanceContract.accessLevels,
+      privacyGovernanceFailClosedStatuses:
+        privacyGovernanceContract.failClosedStatuses,
+      privacyGovernanceFirstClassRecordTables:
+        privacyGovernanceContract.firstClassRecordTables,
+      privacyGovernanceExistingRecordTables:
+        privacyGovernanceContract.existingRecordTables,
+      privacyGovernancePolicySnapshotSubjects:
+        privacyGovernanceContract.policySnapshotSubjects,
+      privacyGovernanceSampleEvaluationStatuses: Object.fromEntries(
+        privacyGovernanceContract.sampleEvaluations.map((evaluation) => [
+          evaluation.surface,
+          evaluation.status,
+        ]),
+      ),
+      privacyGovernanceContractTests:
+        privacyGovernanceContract.contractTests,
       productionReadinessContractVersion:
         productionReadinessContract.version,
       productionReadinessControlKeys:
