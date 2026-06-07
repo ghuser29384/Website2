@@ -4824,6 +4824,288 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_matching_clearing_runs: {
+        Row: {
+          id: string;
+          policy_snapshot_id: string;
+          flow_type:
+            | "donation_offset_batch"
+            | "pledge_swap_preview"
+            | "broad_match_candidate"
+            | "public_goods_round";
+          run_status: "draft" | "dry_run" | "reviewed" | "blocked" | "locked" | "superseded" | "expired";
+          algorithm_version: string;
+          deterministic_algorithm_bool: boolean;
+          input_bundle_hash: string;
+          excluded_records_hash: string;
+          privacy_policy_snapshot_id: string | null;
+          state_interpretation_policy_id: string | null;
+          result_hash: string;
+          review_decision_id: string | null;
+          manual_override_action_id: string | null;
+          manual_override_approved_bool: boolean;
+          database_order_matching_bool: boolean;
+          hidden_match_reasoning_bool: boolean;
+          payable_transition_bool: boolean;
+          reliance_bearing_transition_bool: boolean;
+          private_counterparty_data_public_bool: boolean;
+          run_hash: string;
+          reviewed_at: string | null;
+          expires_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          policy_snapshot_id: string;
+          flow_type:
+            | "donation_offset_batch"
+            | "pledge_swap_preview"
+            | "broad_match_candidate"
+            | "public_goods_round";
+          run_status?: "draft" | "dry_run" | "reviewed" | "blocked" | "locked" | "superseded" | "expired";
+          algorithm_version?: string;
+          deterministic_algorithm_bool?: boolean;
+          input_bundle_hash: string;
+          excluded_records_hash: string;
+          privacy_policy_snapshot_id?: string | null;
+          state_interpretation_policy_id?: string | null;
+          result_hash: string;
+          review_decision_id?: string | null;
+          manual_override_action_id?: string | null;
+          manual_override_approved_bool?: boolean;
+          database_order_matching_bool?: boolean;
+          hidden_match_reasoning_bool?: boolean;
+          payable_transition_bool?: boolean;
+          reliance_bearing_transition_bool?: boolean;
+          private_counterparty_data_public_bool?: boolean;
+          run_hash: string;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          policy_snapshot_id?: string;
+          flow_type?:
+            | "donation_offset_batch"
+            | "pledge_swap_preview"
+            | "broad_match_candidate"
+            | "public_goods_round";
+          run_status?: "draft" | "dry_run" | "reviewed" | "blocked" | "locked" | "superseded" | "expired";
+          algorithm_version?: string;
+          deterministic_algorithm_bool?: boolean;
+          input_bundle_hash?: string;
+          excluded_records_hash?: string;
+          privacy_policy_snapshot_id?: string | null;
+          state_interpretation_policy_id?: string | null;
+          result_hash?: string;
+          review_decision_id?: string | null;
+          manual_override_action_id?: string | null;
+          manual_override_approved_bool?: boolean;
+          database_order_matching_bool?: boolean;
+          hidden_match_reasoning_bool?: boolean;
+          payable_transition_bool?: boolean;
+          reliance_bearing_transition_bool?: boolean;
+          private_counterparty_data_public_bool?: boolean;
+          run_hash?: string;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_matched_trade_lock_proposals: {
+        Row: {
+          id: string;
+          matching_clearing_run_id: string;
+          proposal_status:
+            | "draft"
+            | "participant_review"
+            | "confirmed"
+            | "locked"
+            | "declined"
+            | "expired"
+            | "superseded"
+            | "blocked";
+          proposal_subject_kind:
+            | "donation_offset_batch"
+            | "pledge_swap_match"
+            | "broad_match_candidate"
+            | "public_goods_round";
+          exact_terms_hash: string;
+          counterparty_bucket_hash: string;
+          matched_volume_hash: string;
+          clearing_ratio_bps: number;
+          ratio_bounds_status:
+            | "passed"
+            | "missing"
+            | "under_review"
+            | "failed"
+            | "out_of_bounds"
+            | "stale"
+            | "superseded";
+          baseline_snapshot_hash: string;
+          destination_verification_ref: string | null;
+          commitment_reservation_ref: string;
+          atomic_settlement_group_ref: string;
+          final_confirmation_refs: string[];
+          confirmation_state: "missing" | "stale" | "scope_mismatch" | "passed" | "not_required_for_stage";
+          fallback_terms_hash: string;
+          evidence_standard_hash: string;
+          private_counterparty_data_public_bool: boolean;
+          proposal_hash: string;
+          review_decision_id: string | null;
+          reviewed_at: string | null;
+          expires_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          matching_clearing_run_id: string;
+          proposal_status?:
+            | "draft"
+            | "participant_review"
+            | "confirmed"
+            | "locked"
+            | "declined"
+            | "expired"
+            | "superseded"
+            | "blocked";
+          proposal_subject_kind:
+            | "donation_offset_batch"
+            | "pledge_swap_match"
+            | "broad_match_candidate"
+            | "public_goods_round";
+          exact_terms_hash: string;
+          counterparty_bucket_hash: string;
+          matched_volume_hash: string;
+          clearing_ratio_bps?: number;
+          ratio_bounds_status?:
+            | "passed"
+            | "missing"
+            | "under_review"
+            | "failed"
+            | "out_of_bounds"
+            | "stale"
+            | "superseded";
+          baseline_snapshot_hash: string;
+          destination_verification_ref?: string | null;
+          commitment_reservation_ref?: string;
+          atomic_settlement_group_ref?: string;
+          final_confirmation_refs?: string[];
+          confirmation_state?: "missing" | "stale" | "scope_mismatch" | "passed" | "not_required_for_stage";
+          fallback_terms_hash: string;
+          evidence_standard_hash: string;
+          private_counterparty_data_public_bool?: boolean;
+          proposal_hash: string;
+          review_decision_id?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          matching_clearing_run_id?: string;
+          proposal_status?:
+            | "draft"
+            | "participant_review"
+            | "confirmed"
+            | "locked"
+            | "declined"
+            | "expired"
+            | "superseded"
+            | "blocked";
+          proposal_subject_kind?:
+            | "donation_offset_batch"
+            | "pledge_swap_match"
+            | "broad_match_candidate"
+            | "public_goods_round";
+          exact_terms_hash?: string;
+          counterparty_bucket_hash?: string;
+          matched_volume_hash?: string;
+          clearing_ratio_bps?: number;
+          ratio_bounds_status?:
+            | "passed"
+            | "missing"
+            | "under_review"
+            | "failed"
+            | "out_of_bounds"
+            | "stale"
+            | "superseded";
+          baseline_snapshot_hash?: string;
+          destination_verification_ref?: string | null;
+          commitment_reservation_ref?: string;
+          atomic_settlement_group_ref?: string;
+          final_confirmation_refs?: string[];
+          confirmation_state?: "missing" | "stale" | "scope_mismatch" | "passed" | "not_required_for_stage";
+          fallback_terms_hash?: string;
+          evidence_standard_hash?: string;
+          private_counterparty_data_public_bool?: boolean;
+          proposal_hash?: string;
+          review_decision_id?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_matching_clearing_reproducibility_checks: {
+        Row: {
+          id: string;
+          matching_clearing_run_id: string;
+          check_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          rerun_input_bundle_hash: string;
+          rerun_result_hash: string;
+          deterministic_replay_bool: boolean;
+          variance_reason: string;
+          check_hash: string;
+          checked_at: string | null;
+          expires_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          matching_clearing_run_id: string;
+          check_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          rerun_input_bundle_hash: string;
+          rerun_result_hash: string;
+          deterministic_replay_bool?: boolean;
+          variance_reason?: string;
+          check_hash: string;
+          checked_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          matching_clearing_run_id?: string;
+          check_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          rerun_input_bundle_hash?: string;
+          rerun_result_hash?: string;
+          deterministic_replay_bool?: boolean;
+          variance_reason?: string;
+          check_hash?: string;
+          checked_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       risk_signals: {
         Row: {
           id: string;
@@ -6149,6 +6431,8 @@ export interface Database {
             | "anti_enumeration"
             | "privacy_disclosure"
             | "impact_claim_methodology"
+            | "matching_clearing"
+            | "matched_trade_lock"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -6190,6 +6474,8 @@ export interface Database {
             | "anti_enumeration"
             | "privacy_disclosure"
             | "impact_claim_methodology"
+            | "matching_clearing"
+            | "matched_trade_lock"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -6230,6 +6516,8 @@ export interface Database {
             | "anti_enumeration"
             | "privacy_disclosure"
             | "impact_claim_methodology"
+            | "matching_clearing"
+            | "matched_trade_lock"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"

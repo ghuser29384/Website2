@@ -71,6 +71,10 @@ import {
   validateMoralTradeImpactClaimContract,
 } from "@/lib/moral-trade/impact-claims";
 import {
+  getMoralTradeMatchingClearingContract,
+  validateMoralTradeMatchingClearingContract,
+} from "@/lib/moral-trade/matching-clearing";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -197,6 +201,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const impactClaimContract = getMoralTradeImpactClaimContract();
   const impactClaimValidation =
     validateMoralTradeImpactClaimContract(impactClaimContract);
+  const matchingClearingContract = getMoralTradeMatchingClearingContract();
+  const matchingClearingValidation =
+    validateMoralTradeMatchingClearingContract(matchingClearingContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -297,6 +304,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     antiEnumerationValidation,
     privacyGovernanceValidation,
     impactClaimValidation,
+    matchingClearingValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -431,6 +439,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Impact claims",
       status: impactClaimValidation.status,
       summary: `${impactClaimContract.claimTypes.length} claim type(s), ${impactClaimContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: matchingClearingValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/matching-clearing/contract",
+      label: "Matching clearing",
+      status: matchingClearingValidation.status,
+      summary: `${matchingClearingContract.flowTypes.length} flow type(s), ${matchingClearingContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: productionReadinessValidation.blockers.length,
@@ -633,6 +649,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/match-signal/contract">
                 View match contract
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/matching-clearing/contract">
+                View clearing contract
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
                 View appeal contract
@@ -1596,6 +1615,79 @@ export default async function MoralTradeTechnicalSpecPage() {
               <h3>Fail-closed statuses</h3>
               <ul className="clean-list">
                 {impactClaimContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="matching-clearing-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Matching-clearing contract</p>
+            <h2 id="matching-clearing-contract-heading">
+              Payable or reliance-bearing clearing requires a frozen deterministic run and final matched lock.
+            </h2>
+            <p>
+              Moraltrade60 requires donation-offset batches, pledge-swap previews, broad
+              match-candidate generation, and public-goods clearing to reference reproducible
+              matching-clearing runs before any obligation is payable, reliance-bearing, or counted
+              as complete. The contract also requires matched-trade lock proposals with exact terms,
+              fresh final confirmations, ratio bounds, baseline snapshots, verified destinations,
+              commitment reservations, and atomic settlement groups.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Matching clearing {matchingClearingContract.version}
+              </p>
+              <h3>Status {matchingClearingValidation.status}</h3>
+              <p>
+                {matchingClearingValidation.checks.length} check(s),{" "}
+                {matchingClearingValidation.blockers.length} blocker(s),{" "}
+                {matchingClearingContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/matching-clearing/contract">
+              Open matching-clearing JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Flow types</h3>
+              <ul className="clean-list">
+                {matchingClearingContract.flowTypes.map((flowType) => (
+                  <li key={flowType}>{flowType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {matchingClearingContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Run and lock statuses</h3>
+              <ul className="clean-list">
+                {matchingClearingContract.runStatuses.map((status) => (
+                  <li key={`run-${status}`}>run: {status.replaceAll("_", " ")}</li>
+                ))}
+                {matchingClearingContract.lockProposalStatuses.map((status) => (
+                  <li key={`proposal-${status}`}>
+                    proposal: {status.replaceAll("_", " ")}
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {matchingClearingContract.failClosedStatuses.map((status) => (
                   <li key={status}>{status.replaceAll("_", " ")}</li>
                 ))}
               </ul>

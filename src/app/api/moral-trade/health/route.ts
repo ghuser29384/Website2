@@ -48,6 +48,10 @@ import {
   validateMoralTradeImpactClaimContract,
 } from "@/lib/moral-trade/impact-claims";
 import {
+  getMoralTradeMatchingClearingContract,
+  validateMoralTradeMatchingClearingContract,
+} from "@/lib/moral-trade/matching-clearing";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -185,6 +189,9 @@ export async function GET(request: Request) {
   const impactClaimContract = getMoralTradeImpactClaimContract();
   const impactClaimValidation =
     validateMoralTradeImpactClaimContract(impactClaimContract);
+  const matchingClearingContract = getMoralTradeMatchingClearingContract();
+  const matchingClearingValidation =
+    validateMoralTradeMatchingClearingContract(matchingClearingContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -281,6 +288,7 @@ export async function GET(request: Request) {
       antiEnumerationValidation.status === "pass" &&
       privacyGovernanceValidation.status === "pass" &&
       impactClaimValidation.status === "pass" &&
+      matchingClearingValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
@@ -317,6 +325,7 @@ export async function GET(request: Request) {
     antiEnumerationValidation,
     privacyGovernanceValidation,
     impactClaimValidation,
+    matchingClearingValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -523,6 +532,28 @@ export async function GET(request: Request) {
       ),
       impactClaimContractTests:
         impactClaimContract.contractTests,
+      matchingClearingContractVersion:
+        matchingClearingContract.version,
+      matchingClearingFlowTypes:
+        matchingClearingContract.flowTypes,
+      matchingClearingRunStatuses:
+        matchingClearingContract.runStatuses,
+      matchingClearingProposalStatuses:
+        matchingClearingContract.lockProposalStatuses,
+      matchingClearingFailClosedStatuses:
+        matchingClearingContract.failClosedStatuses,
+      matchingClearingFirstClassRecordTables:
+        matchingClearingContract.firstClassRecordTables,
+      matchingClearingPolicySnapshotSubjects:
+        matchingClearingContract.policySnapshotSubjects,
+      matchingClearingSampleEvaluationStatuses: Object.fromEntries(
+        matchingClearingContract.sampleEvaluations.map((evaluation) => [
+          evaluation.flowType,
+          evaluation.status,
+        ]),
+      ),
+      matchingClearingContractTests:
+        matchingClearingContract.contractTests,
       productionReadinessContractVersion:
         productionReadinessContract.version,
       productionReadinessControlKeys:
@@ -811,6 +842,12 @@ export async function GET(request: Request) {
       ...releaseGateValidation.blockers,
       ...participantConfirmationValidation.blockers,
       ...participantEligibilityValidation.blockers,
+      ...accountSecurityValidation.blockers,
+      ...reviewerQualityValidation.blockers,
+      ...antiEnumerationValidation.blockers,
+      ...privacyGovernanceValidation.blockers,
+      ...impactClaimValidation.blockers,
+      ...matchingClearingValidation.blockers,
       ...productionReadinessValidation.blockers,
       ...recipientDestinationValidation.blockers,
       ...provenanceValidation.blockers,

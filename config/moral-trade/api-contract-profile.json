@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.37-2026-06",
+  "version": "moral-trade-api-contract-v0.38-2026-06",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -217,6 +217,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return impact-claim validation blockers and fail-closed sample evaluations; never expose private evidence, reviewer notes, methodology payloads, recipient-sensitive outcome details, or participant-specific impact-claim records."
+    },
+    {
+      "key": "moral_trade_matching_clearing_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/matching-clearing/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "matching_clearing_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return matching-clearing validation blockers and fail-closed sample evaluations; never expose raw input bundles, private counterparty data, exact private constraints, private wishes, hidden match reasoning, reviewer notes, or participant-specific final confirmations."
     },
     {
       "key": "moral_trade_production_readiness_contract",
@@ -1166,7 +1178,7 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, production-readiness, recipient-destination, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, production-readiness, recipient-destination, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
@@ -1181,6 +1193,7 @@
         { "key": "antiEnumerationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Anti-enumeration validator result for frozen policy snapshots, discovery access-event logging, query fingerprints, bucketed counts, sparse suppression, timing equalization, rate limits, and repeated-probe audits." },
         { "key": "privacyGovernanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Privacy-governance validator result for frozen privacy-disclosure policies, explicit revocable privacy grants, purpose-limited and role-limited privacy access logs, disclosure reviews, redaction, and fail-closed private-data access." },
         { "key": "impactClaimValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Impact-claim validator result for frozen methodology policies, first-class impact-claim records, claim-typed evidence, uncertainty disclosure, transfer-vs-impact separation, content moderation, reviewer quality, privileged-action approval, audit integrity, and public-metric suppression." },
+        { "key": "matchingClearingValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Matching-clearing validator result for frozen deterministic runs, input-bundle hashes, reproducibility checks, privacy/state policy snapshots, matched-trade lock proposals, final confirmations, ratio bounds, baseline snapshots, verified destinations, commitment reservations, and atomic settlement groups." },
         { "key": "productionReadinessValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Production-readiness validator result for account security, backup recovery, deployment/configuration provenance, schema migration safety, environment isolation, financial reconciliation, audit integrity, and data-security controls." },
         { "key": "recipientDestinationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Recipient/destination validator result for first-class recipient registry entries, payment destinations, review dimensions, immutable policy snapshots, privileged-action approvals, and fail-closed stale or unverified records." },
         { "key": "provenanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Provenance object contract validator result." },
@@ -1347,6 +1360,19 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class impact-claim methodology policies, impact-claim records, surfaces, claim types, evidence claim types, fail-closed statuses, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Privacy rule, fail-closed rule, first-class table names, policy subjects, surfaces, claim types, evidence claim types, fail-closed statuses, sample statuses, and test hooks without private evidence, reviewer notes, methodology payloads, recipient-sensitive outcome details, or participant-specific impact-claim records." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Impact-claim blockers that prevent relying on public impact, outcome, cost-effectiveness, moral-value, or transfer metric publication as impact." }
+      ]
+    },
+    {
+      "key": "matching_clearing_contract_response",
+      "purpose": "Public validator-backed matching-clearing contract for deterministic frozen runs, reproducibility checks, privacy-safe result hashes, and matched-trade lock proposals before donation-offset batches, pledge-swap previews, broad match candidates, or public-goods clearing become payable, reliance-bearing, or publicly counted.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the matching-clearing contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the matching-clearing validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Matching-clearing contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class matching-clearing runs, lock proposals, reproducibility checks, flow types, run/proposal statuses, fail-closed statuses, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Privacy rule, fail-closed rule, first-class table names, policy subjects, flow types, run statuses, matched lock proposal statuses, fail-closed statuses, sample statuses, and test hooks without raw input bundles, private counterparty data, exact private constraints, hidden match reasoning, reviewer notes, or participant-specific final confirmations." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Matching-clearing blockers that prevent payable, reliance-bearing, locked, or publicly counted clearing." }
       ]
     },
     {
