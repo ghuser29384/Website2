@@ -2110,6 +2110,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const reviewerQualitySource = readRepoFile(
     "src/lib/moral-trade/reviewer-quality.ts",
   );
+  const antiEnumerationSource = readRepoFile(
+    "src/lib/moral-trade/anti-enumeration.ts",
+  );
   const productionReadinessSource = readRepoFile(
     "src/lib/moral-trade/production-readiness.ts",
   );
@@ -2181,6 +2184,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const reviewerQualityMigration = readRepoFile(
     "supabase/migrations/20260607_zzzzzzz_moral_trade_reviewer_quality_records.sql",
   );
+  const antiEnumerationMigration = readRepoFile(
+    "supabase/migrations/20260607_zzzzzzzz_moral_trade_anti_enumeration_records.sql",
+  );
   const recipientDestinationMigration = readRepoFile(
     "supabase/migrations/20260607_zzzz_moral_trade_recipient_destination_records.sql",
   );
@@ -2220,6 +2226,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const reviewerQualityContractRoute = readRepoFile(
     "src/app/api/moral-trade/reviewer-quality/contract/route.ts",
+  );
+  const antiEnumerationContractRoute = readRepoFile(
+    "src/app/api/moral-trade/anti-enumeration/contract/route.ts",
   );
   const productionReadinessContractRoute = readRepoFile(
     "src/app/api/moral-trade/production-readiness/contract/route.ts",
@@ -2463,6 +2472,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(reviewerQualitySource, /Reviewer judgment is not an ungoverned primitive/);
   assert.match(reviewerQualitySource, /second_review_missing/);
   assert.match(reviewerQualitySource, /default_approval_detected/);
+  assert.match(antiEnumerationSource, /getMoralTradeAntiEnumerationContract/);
+  assert.match(antiEnumerationSource, /evaluateMoralTradeAntiEnumeration/);
+  assert.match(antiEnumerationSource, /moral_trade_anti_enumeration_policies/);
+  assert.match(antiEnumerationSource, /moral_trade_discovery_access_events/);
+  assert.match(antiEnumerationSource, /moral_trade_discovery_probe_audits/);
+  assert.match(antiEnumerationSource, /Repeated discovery is not an oracle/);
+  assert.match(antiEnumerationSource, /repeated_probe_budget_exceeded/);
+  assert.match(antiEnumerationSource, /raw_query_logged/);
   assert.match(productionReadinessSource, /getMoralTradeProductionReadinessContract/);
   assert.match(productionReadinessSource, /evaluateMoralTradeProductionReadiness/);
   assert.match(productionReadinessSource, /moral_trade_account_security_events/);
@@ -2503,6 +2520,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(reviewerQualityMigration, /reviewer_quality_policy_ref/);
   assert.match(reviewerQualityMigration, /conflict_of_interest_state/);
   assert.match(reviewerQualityMigration, /default_approval_prohibited_bool/);
+  assert.match(antiEnumerationMigration, /moral_trade_anti_enumeration_policies/);
+  assert.match(antiEnumerationMigration, /moral_trade_discovery_access_events/);
+  assert.match(antiEnumerationMigration, /moral_trade_discovery_probe_audits/);
+  assert.match(antiEnumerationMigration, /anti_enumeration_policy_ref/);
+  assert.match(antiEnumerationMigration, /result_count_bucket/);
+  assert.match(antiEnumerationMigration, /raw_query_stored_bool/);
+  assert.match(antiEnumerationMigration, /timing_equalized_bool/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_registry_entries/);
   assert.match(recipientDestinationMigration, /moral_trade_payment_destinations/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_destination_reviews/);
@@ -2521,6 +2545,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /moral_trade_review_quality_audits/);
   assert.match(schemaSource, /reviewer_quality_policy_ref/);
   assert.match(schemaSource, /conflict_of_interest_state/);
+  assert.match(schemaSource, /moral_trade_anti_enumeration_policies/);
+  assert.match(schemaSource, /moral_trade_discovery_access_events/);
+  assert.match(schemaSource, /moral_trade_discovery_probe_audits/);
+  assert.match(schemaSource, /anti_enumeration_policy_ref/);
+  assert.match(schemaSource, /result_count_bucket/);
   assert.match(schemaSource, /moral_trade_recipient_registry_entries/);
   assert.match(schemaSource, /moral_trade_payment_destinations/);
   assert.match(schemaSource, /moral_trade_recipient_destination_reviews/);
@@ -2920,6 +2949,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_participant_eligibility_contract/);
   assert.match(apiContractSource, /moral_trade_account_security_contract/);
   assert.match(apiContractSource, /moral_trade_reviewer_quality_contract/);
+  assert.match(apiContractSource, /moral_trade_anti_enumeration_contract/);
   assert.match(apiContractSource, /moral_trade_production_readiness_contract/);
   assert.match(apiContractSource, /provenance-schema-validator/);
   assert.match(apiContractSource, /moral_trade_schema_registry/);
@@ -2974,6 +3004,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /reviewer_quality_contract_response/);
   assert.match(apiContractProfile, /moral_trade_reviewer_quality_contract/);
   assert.match(apiContractProfile, /reviewer identities, private reviewer notes, conflict facts/);
+  assert.match(apiContractProfile, /anti_enumeration_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_anti_enumeration_contract/);
+  assert.match(apiContractProfile, /raw query text, exact hidden result counts/);
   assert.match(apiContractProfile, /production_readiness_contract_response/);
   assert.match(apiContractProfile, /moral_trade_production_readiness_contract/);
   assert.match(apiContractProfile, /account-security events, backup contents, configuration values/);
@@ -3145,6 +3178,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /reviewerQualityContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /reviewerQualityContract\.reviewTypes/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/reviewer-quality\/contract/);
+  assert.match(technicalSpecPage, /Anti-enumeration contract/);
+  assert.match(technicalSpecPage, /antiEnumerationContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /antiEnumerationContract\.surfaces/);
+  assert.match(technicalSpecPage, /\/api\/moral-trade\/anti-enumeration\/contract/);
   assert.match(technicalSpecPage, /Production readiness contract/);
   assert.match(technicalSpecPage, /productionReadinessContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/production-readiness\/contract/);
@@ -3303,6 +3340,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /reviewerQualityValidation/);
   assert.match(healthRoute, /reviewerQualityReviewTypes/);
   assert.match(healthRoute, /reviewerQualityFirstClassRecordTables/);
+  assert.match(healthRoute, /antiEnumerationValidation/);
+  assert.match(healthRoute, /antiEnumerationSurfaces/);
+  assert.match(healthRoute, /antiEnumerationFirstClassRecordTables/);
   assert.match(healthRoute, /productionReadinessValidation/);
   assert.match(healthRoute, /productionReadinessControlKeys/);
   assert.match(healthRoute, /productionReadinessFirstClassRecordTables/);
@@ -3414,6 +3454,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(reviewerQualityContractRoute, /validateMoralTradeReviewerQualityContract/);
   assert.match(reviewerQualityContractRoute, /reviewTypes/);
   assert.match(reviewerQualityContractRoute, /reviewerQualitySampleEvaluationStatuses/);
+  assert.match(antiEnumerationContractRoute, /validateMoralTradeAntiEnumerationContract/);
+  assert.match(antiEnumerationContractRoute, /surfaces/);
+  assert.match(antiEnumerationContractRoute, /antiEnumerationSampleEvaluationStatuses/);
   assert.match(productionReadinessContractRoute, /validateMoralTradeProductionReadinessContract/);
   assert.match(productionReadinessContractRoute, /firstClassRecordTables/);
   assert.match(productionReadinessContractRoute, /productionReadinessSampleEvaluationStatuses/);

@@ -59,6 +59,10 @@ import {
   validateMoralTradeReviewerQualityContract,
 } from "@/lib/moral-trade/reviewer-quality";
 import {
+  getMoralTradeAntiEnumerationContract,
+  validateMoralTradeAntiEnumerationContract,
+} from "@/lib/moral-trade/anti-enumeration";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -176,6 +180,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const reviewerQualityContract = getMoralTradeReviewerQualityContract();
   const reviewerQualityValidation =
     validateMoralTradeReviewerQualityContract(reviewerQualityContract);
+  const antiEnumerationContract = getMoralTradeAntiEnumerationContract();
+  const antiEnumerationValidation =
+    validateMoralTradeAntiEnumerationContract(antiEnumerationContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -273,6 +280,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     participantEligibilityValidation,
     accountSecurityValidation,
     reviewerQualityValidation,
+    antiEnumerationValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -383,6 +391,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Reviewer quality",
       status: reviewerQualityValidation.status,
       summary: `${reviewerQualityContract.reviewTypes.length} review type(s), ${reviewerQualityContract.failClosedStatuses.length} fail-closed status(es).`,
+    },
+    {
+      blockers: antiEnumerationValidation.blockers.length,
+      family: "Policy inputs",
+      href: "/api/moral-trade/anti-enumeration/contract",
+      label: "Anti-enumeration",
+      status: antiEnumerationValidation.status,
+      summary: `${antiEnumerationContract.surfaces.length} discovery surface(s), ${antiEnumerationContract.countBuckets.length} count bucket(s).`,
     },
     {
       blockers: productionReadinessValidation.blockers.length,
@@ -1344,6 +1360,75 @@ export default async function MoralTradeTechnicalSpecPage() {
               <ul className="clean-list">
                 {reviewerQualityContract.policySnapshotSubjects.map((subject) => (
                   <li key={subject}>{subject.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="anti-enumeration-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Anti-enumeration contract</p>
+            <h2 id="anti-enumeration-contract-heading">
+              Discovery surfaces must not become an oracle for hidden offers, rare views, or exact willingness.
+            </h2>
+            <p>
+              Moraltrade60 requires search, browse, preview generation, invite-link creation,
+              match-candidate browsing, and transparency reporting to use frozen
+              anti-enumeration policies. This contract binds those surfaces to stable query
+              fingerprints, bucketed result counts, sparse-result suppression, timing-equalized
+              responses where configured, discovery access-event logs, and repeated-probe audits
+              without publishing raw query text, exact counts, private wishes, rare clusters, or
+              exact constraints.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Anti-enumeration {antiEnumerationContract.version}
+              </p>
+              <h3>Status {antiEnumerationValidation.status}</h3>
+              <p>
+                {antiEnumerationValidation.checks.length} check(s),{" "}
+                {antiEnumerationValidation.blockers.length} blocker(s),{" "}
+                {antiEnumerationContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/anti-enumeration/contract">
+              Open anti-enumeration JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Discovery surfaces</h3>
+              <ul className="clean-list">
+                {antiEnumerationContract.surfaces.map((surface) => (
+                  <li key={surface}>{surface.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {antiEnumerationContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {antiEnumerationContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Count buckets</h3>
+              <ul className="clean-list">
+                {antiEnumerationContract.countBuckets.map((bucket) => (
+                  <li key={bucket}>{bucket.replaceAll("_", " ")}</li>
                 ))}
               </ul>
             </article>

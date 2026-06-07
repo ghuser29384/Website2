@@ -73,6 +73,14 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "moral_trade_anti_enumeration_contract" &&
+        route.path === "/api/moral-trade/anti-enumeration/contract" &&
+        route.responseSchema === "anti_enumeration_contract_response",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "moral_trade_production_readiness_contract" &&
         route.path === "/api/moral-trade/production-readiness/contract" &&
         route.responseSchema === "production_readiness_contract_response",
@@ -599,6 +607,7 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "participant_eligibility_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "account_security_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "reviewer_quality_contract_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "anti_enumeration_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "production_readiness_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "recipient_destination_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "schema_registry_response"));
@@ -626,6 +635,11 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
     profile.schemaDefinitions
       .find((schema) => schema.key === "moral_trade_aggregate_health_response")
       ?.fields.some((field) => field.key === "reviewerQualityValidation"),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "moral_trade_aggregate_health_response")
+      ?.fields.some((field) => field.key === "antiEnumerationValidation"),
   );
   assert.ok(
     profile.schemaDefinitions

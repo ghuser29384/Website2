@@ -6651,6 +6651,288 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_anti_enumeration_policies: {
+        Row: {
+          id: string;
+          policy_snapshot_id: string;
+          policy_version: string;
+          surface:
+            | "public_search"
+            | "signed_in_search"
+            | "public_browse"
+            | "preview_generation"
+            | "invite_link_creation"
+            | "match_candidate_browsing"
+            | "transparency_report";
+          status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          rate_limit_required_bool: boolean;
+          query_fingerprint_required_bool: boolean;
+          access_event_logging_required_bool: boolean;
+          bucketed_counts_required_bool: boolean;
+          sparse_suppression_required_bool: boolean;
+          timing_equalization_required_bool: boolean;
+          incident_escalation_required_bool: boolean;
+          max_repeated_fingerprint_count: number;
+          min_public_bucket_size: number;
+          max_event_age_days: number;
+          policy_hash: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          policy_snapshot_id: string;
+          policy_version?: string;
+          surface:
+            | "public_search"
+            | "signed_in_search"
+            | "public_browse"
+            | "preview_generation"
+            | "invite_link_creation"
+            | "match_candidate_browsing"
+            | "transparency_report";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          rate_limit_required_bool?: boolean;
+          query_fingerprint_required_bool?: boolean;
+          access_event_logging_required_bool?: boolean;
+          bucketed_counts_required_bool?: boolean;
+          sparse_suppression_required_bool?: boolean;
+          timing_equalization_required_bool?: boolean;
+          incident_escalation_required_bool?: boolean;
+          max_repeated_fingerprint_count?: number;
+          min_public_bucket_size?: number;
+          max_event_age_days?: number;
+          policy_hash: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          policy_snapshot_id?: string;
+          policy_version?: string;
+          surface?:
+            | "public_search"
+            | "signed_in_search"
+            | "public_browse"
+            | "preview_generation"
+            | "invite_link_creation"
+            | "match_candidate_browsing"
+            | "transparency_report";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          rate_limit_required_bool?: boolean;
+          query_fingerprint_required_bool?: boolean;
+          access_event_logging_required_bool?: boolean;
+          bucketed_counts_required_bool?: boolean;
+          sparse_suppression_required_bool?: boolean;
+          timing_equalization_required_bool?: boolean;
+          incident_escalation_required_bool?: boolean;
+          max_repeated_fingerprint_count?: number;
+          min_public_bucket_size?: number;
+          max_event_age_days?: number;
+          policy_hash?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_discovery_access_events: {
+        Row: {
+          id: string;
+          surface:
+            | "public_search"
+            | "signed_in_search"
+            | "public_browse"
+            | "preview_generation"
+            | "invite_link_creation"
+            | "match_candidate_browsing"
+            | "transparency_report";
+          anti_enumeration_policy_ref: string;
+          actor_id_hash: string | null;
+          query_fingerprint: string | null;
+          source_route: string;
+          result_count_bucket:
+            | "zero"
+            | "one_or_two_suppressed"
+            | "three_to_nine"
+            | "ten_to_forty_nine"
+            | "fifty_plus"
+            | "not_returned";
+          raw_query_stored_bool: boolean;
+          exact_result_count_exposed_bool: boolean;
+          sparse_suppression_applied_bool: boolean;
+          timing_equalized_bool: boolean;
+          rate_limit_applied_bool: boolean;
+          delayed_response_applied_bool: boolean;
+          redacted_response_applied_bool: boolean;
+          event_hash: string;
+          occurred_at: string;
+          expires_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          surface:
+            | "public_search"
+            | "signed_in_search"
+            | "public_browse"
+            | "preview_generation"
+            | "invite_link_creation"
+            | "match_candidate_browsing"
+            | "transparency_report";
+          anti_enumeration_policy_ref: string;
+          actor_id_hash?: string | null;
+          query_fingerprint?: string | null;
+          source_route?: string;
+          result_count_bucket?:
+            | "zero"
+            | "one_or_two_suppressed"
+            | "three_to_nine"
+            | "ten_to_forty_nine"
+            | "fifty_plus"
+            | "not_returned";
+          raw_query_stored_bool?: boolean;
+          exact_result_count_exposed_bool?: boolean;
+          sparse_suppression_applied_bool?: boolean;
+          timing_equalized_bool?: boolean;
+          rate_limit_applied_bool?: boolean;
+          delayed_response_applied_bool?: boolean;
+          redacted_response_applied_bool?: boolean;
+          event_hash: string;
+          occurred_at?: string;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          surface?:
+            | "public_search"
+            | "signed_in_search"
+            | "public_browse"
+            | "preview_generation"
+            | "invite_link_creation"
+            | "match_candidate_browsing"
+            | "transparency_report";
+          anti_enumeration_policy_ref?: string;
+          actor_id_hash?: string | null;
+          query_fingerprint?: string | null;
+          source_route?: string;
+          result_count_bucket?:
+            | "zero"
+            | "one_or_two_suppressed"
+            | "three_to_nine"
+            | "ten_to_forty_nine"
+            | "fifty_plus"
+            | "not_returned";
+          raw_query_stored_bool?: boolean;
+          exact_result_count_exposed_bool?: boolean;
+          sparse_suppression_applied_bool?: boolean;
+          timing_equalized_bool?: boolean;
+          rate_limit_applied_bool?: boolean;
+          delayed_response_applied_bool?: boolean;
+          redacted_response_applied_bool?: boolean;
+          event_hash?: string;
+          occurred_at?: string;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_discovery_probe_audits: {
+        Row: {
+          id: string;
+          surface:
+            | "public_search"
+            | "signed_in_search"
+            | "public_browse"
+            | "preview_generation"
+            | "invite_link_creation"
+            | "match_candidate_browsing"
+            | "transparency_report";
+          anti_enumeration_policy_ref: string;
+          query_fingerprint: string;
+          audit_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          event_count: number;
+          unique_actor_hash_count: number;
+          repeated_fingerprint_count: number;
+          sparse_result_hit_count: number;
+          timing_variance_ms: number;
+          escalation_incident_ref: string | null;
+          audit_hash: string;
+          audited_at: string | null;
+          expires_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          surface:
+            | "public_search"
+            | "signed_in_search"
+            | "public_browse"
+            | "preview_generation"
+            | "invite_link_creation"
+            | "match_candidate_browsing"
+            | "transparency_report";
+          anti_enumeration_policy_ref: string;
+          query_fingerprint: string;
+          audit_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          event_count?: number;
+          unique_actor_hash_count?: number;
+          repeated_fingerprint_count?: number;
+          sparse_result_hit_count?: number;
+          timing_variance_ms?: number;
+          escalation_incident_ref?: string | null;
+          audit_hash: string;
+          audited_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          surface?:
+            | "public_search"
+            | "signed_in_search"
+            | "public_browse"
+            | "preview_generation"
+            | "invite_link_creation"
+            | "match_candidate_browsing"
+            | "transparency_report";
+          anti_enumeration_policy_ref?: string;
+          query_fingerprint?: string;
+          audit_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          event_count?: number;
+          unique_actor_hash_count?: number;
+          repeated_fingerprint_count?: number;
+          sparse_result_hit_count?: number;
+          timing_variance_ms?: number;
+          escalation_incident_ref?: string | null;
+          audit_hash?: string;
+          audited_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       moral_trade_backup_recovery_policies: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;

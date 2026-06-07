@@ -36,6 +36,10 @@ import {
   validateMoralTradeReviewerQualityContract,
 } from "@/lib/moral-trade/reviewer-quality";
 import {
+  getMoralTradeAntiEnumerationContract,
+  validateMoralTradeAntiEnumerationContract,
+} from "@/lib/moral-trade/anti-enumeration";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -164,6 +168,9 @@ export async function GET(request: Request) {
   const reviewerQualityContract = getMoralTradeReviewerQualityContract();
   const reviewerQualityValidation =
     validateMoralTradeReviewerQualityContract(reviewerQualityContract);
+  const antiEnumerationContract = getMoralTradeAntiEnumerationContract();
+  const antiEnumerationValidation =
+    validateMoralTradeAntiEnumerationContract(antiEnumerationContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -257,6 +264,7 @@ export async function GET(request: Request) {
       participantEligibilityValidation.status === "pass" &&
       accountSecurityValidation.status === "pass" &&
       reviewerQualityValidation.status === "pass" &&
+      antiEnumerationValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
@@ -290,6 +298,7 @@ export async function GET(request: Request) {
     participantEligibilityValidation,
     accountSecurityValidation,
     reviewerQualityValidation,
+    antiEnumerationValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -430,6 +439,26 @@ export async function GET(request: Request) {
       ),
       reviewerQualityContractTests:
         reviewerQualityContract.contractTests,
+      antiEnumerationContractVersion:
+        antiEnumerationContract.version,
+      antiEnumerationSurfaces:
+        antiEnumerationContract.surfaces,
+      antiEnumerationCountBuckets:
+        antiEnumerationContract.countBuckets,
+      antiEnumerationFailClosedStatuses:
+        antiEnumerationContract.failClosedStatuses,
+      antiEnumerationFirstClassRecordTables:
+        antiEnumerationContract.firstClassRecordTables,
+      antiEnumerationPolicySnapshotSubjects:
+        antiEnumerationContract.policySnapshotSubjects,
+      antiEnumerationSampleEvaluationStatuses: Object.fromEntries(
+        antiEnumerationContract.sampleEvaluations.map((evaluation) => [
+          evaluation.surface,
+          evaluation.status,
+        ]),
+      ),
+      antiEnumerationContractTests:
+        antiEnumerationContract.contractTests,
       productionReadinessContractVersion:
         productionReadinessContract.version,
       productionReadinessControlKeys:
