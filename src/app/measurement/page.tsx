@@ -4,7 +4,14 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { StatusBadge } from "@/components/ui/page-primitives";
-import { getViewer } from "@/lib/app-data";
+import { getViewer, listOpenOffersPreview } from "@/lib/app-data";
+import {
+  buildMarketplaceKpiSnapshot,
+  getMarketplaceMeasurementContract,
+  validateMarketplaceKpiSnapshot,
+  validateMarketplaceMeasurementContract,
+  type MarketplaceKpiKey,
+} from "@/lib/marketplace-measurement";
 import {
   MEASUREMENT_BASELINE_ROUTES,
   MEASUREMENT_EVENT_SPECS,
@@ -18,8 +25,10 @@ import {
   getMoralTradeEvaluationSampleAudits,
   validateMoralTradeEvaluationProfile,
 } from "@/lib/moral-trade/evaluation";
+import { buildPublicOffersCollectionPayload } from "@/lib/public-offers";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 export const metadata: Metadata = {
   title: "Measurement Plan",
@@ -114,12 +123,37 @@ const evaluationMetricGroups = [
   },
 ] as const;
 
+const marketplaceKpiKeys: MarketplaceKpiKey[] = [
+  "live_offer_count",
+  "reviewable_offer_count",
+  "completed_agreement_count",
+  "common_ground_budget_activation_rate",
+  "threshold_clear_rate",
+  "sponsor_leverage_ratio",
+  "demo_data_live_mix_block_count",
+  "privacy_leakage_incidents_target_zero",
+];
+
 function formatContractToken(value: string) {
   return value.replaceAll("_", " ");
 }
 
 export default async function MeasurementPage() {
   const viewer = await getViewer();
+  const marketplaceLiveOffers = hasSupabaseEnv()
+    ? await listOpenOffersPreview(120, "all")
+    : [];
+  const publicOffersPayload = buildPublicOffersCollectionPayload({
+    liveOffers: marketplaceLiveOffers,
+    searchParams: new URLSearchParams("tab=all"),
+  });
+  const marketplaceContract = getMarketplaceMeasurementContract();
+  const marketplaceContractValidation = validateMarketplaceMeasurementContract();
+  const marketplaceKpiSnapshot = buildMarketplaceKpiSnapshot({ publicOffersPayload });
+  const marketplaceKpiValidation = validateMarketplaceKpiSnapshot(marketplaceKpiSnapshot);
+  const marketplaceKpisByKey = new Map(
+    marketplaceKpiSnapshot.kpis.map((kpi) => [kpi.key, kpi]),
+  );
   const evaluationProfile = getMoralTradeEvaluationProfile();
   const evaluationValidation = validateMoralTradeEvaluationProfile(evaluationProfile);
   const evaluationSampleAudits = getMoralTradeEvaluationSampleAudits();
@@ -177,6 +211,73 @@ export default async function MeasurementPage() {
               </div>
             </div>
           ))}
+        </section>
+
+        <section aria-labelledby="marketplace-kpis-heading">
+          <div className="protocol-workflow-card-head">
+            <div>
+              <p className="eyebrow">Marketplace KPIs</p>
+              <h2 id="marketplace-kpis-heading">Public marketplace metrics are thresholded.</h2>
+            </div>
+            <StatusBadge
+              tone={
+                marketplaceContractValidation.status === "pass" &&
+                marketplaceKpiValidation.status === "pass"
+                  ? "default"
+                  : "warning"
+              }
+            >
+              {marketplaceContractValidation.status}
+            </StatusBadge>
+          </div>
+          <p>
+            The marketplace KPI contract covers live inventory, reviewable activity, agreement
+            completion, Common Ground Budget activation, support conversion, threshold clearing,
+            sponsor leverage, safety blockers, deployment blockers, and privacy failures. Public
+            release uses small-cell suppression and never treats seed templates, worked examples,
+            rounds, or demo records as live agreement volume.
+          </p>
+          <p className="route-text">
+            Contract: {marketplaceContract.version}. Minimum public count:{" "}
+            {marketplaceContract.minimumPublicCount}. KPI definitions:{" "}
+            {marketplaceContract.kpiDefinitions.length}. Event specs:{" "}
+            {marketplaceContract.eventSpecs.map((spec) => spec.eventType).join(", ")}.
+          </p>
+          <div className="data-grid">
+            {marketplaceKpiKeys.map((key) => {
+              const kpi = marketplaceKpisByKey.get(key);
+
+              return (
+                <article className="panel data-card" key={key}>
+                  <p className="eyebrow">{kpi?.status ?? "contract_only"}</p>
+                  <h3>{kpi?.label ?? formatContractToken(key)}</h3>
+                  <p className="route-text">
+                    <strong>{kpi?.displayValue ?? "Not yet instrumented"}</strong>
+                  </p>
+                  <p className="route-text">
+                    Sample size: {kpi?.sampleSize ?? 0}. Source:{" "}
+                    {kpi?.source ?? "contract_only"}.
+                  </p>
+                </article>
+              );
+            })}
+            <article className="panel data-card">
+              <h3>Live-metric exclusions</h3>
+              <ul className="compact-list">
+                {marketplaceKpiSnapshot.excludedNonLiveInputs.map((entry) => (
+                  <li key={entry.source}>
+                    <strong>{formatContractToken(entry.source)}:</strong> {entry.count} excluded.
+                  </li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <p className="route-text">
+            {marketplaceKpiSnapshot.privacyNote}{" "}
+            <Link className="text-button" href="/api/moral-trade/health">
+              Open health JSON
+            </Link>
+          </p>
         </section>
 
         <section aria-labelledby="quality-audits-heading">

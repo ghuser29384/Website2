@@ -13,6 +13,11 @@ import {
 } from "@/lib/background-rollout";
 import { PARTNER_COHORTS } from "@/lib/growth";
 import {
+  MARKETPLACE_KPI_KEYS,
+  MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS,
+  validateMarketplaceMeasurementContract,
+} from "@/lib/marketplace-measurement";
+import {
   MEASUREMENT_EVENT_SPECS,
   MEASUREMENT_GUARDRAILS,
   MEASUREMENT_PERFORMANCE_BASELINE,
@@ -1239,6 +1244,9 @@ test("cohort page exposes founding progress, referral, and one-counterparty invi
 test("growth activation surfaces persist attribution, onboarding, webinars, and cloning", () => {
   const growthSource = readRepoFile("src/lib/growth.ts");
   const migrationSource = readRepoFile("supabase/migrations/20260526_growth_activation.sql");
+  const marketplaceMeasurementMigration = readRepoFile(
+    "supabase/migrations/20260607_marketplace_measurement_events.sql",
+  );
   const onboardingPage = readRepoFile("src/app/onboarding/page.tsx");
   const partnerPage = readRepoFile("src/app/cohort/[partnerSlug]/page.tsx");
   const adminGrowthPage = readRepoFile("src/app/admin/growth/page.tsx");
@@ -1257,6 +1265,13 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(growthSource, /donation_route_clicked/);
   assert.match(growthSource, /registry_search_executed/);
   assert.match(growthSource, /performance_metric_recorded/);
+  assert.match(growthSource, /marketplace_tab_viewed/);
+  assert.match(growthSource, /marketplace_filter_applied/);
+  assert.match(growthSource, /marketplace_seed_template_selected/);
+  assert.match(growthSource, /marketplace_create_from_template_started/);
+  assert.match(growthSource, /filterKeys/);
+  assert.match(growthSource, /marketplaceTab/);
+  assert.match(growthSource, /liveMetricEligible/);
   assert.match(growthSource, /metricValueBucket/);
   assert.match(growthSource, /PARTNER_COHORTS/);
   assert.match(growthSource, /sanitizeFunnelEventMetadata/);
@@ -1271,6 +1286,11 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.match(migrationSource, /cohort_onboarding_profiles/);
   assert.match(migrationSource, /webinar_rsvps/);
   assert.match(migrationSource, /email_nurture_subscriptions/);
+  assert.match(marketplaceMeasurementMigration, /performance_metric_recorded/);
+  assert.match(marketplaceMeasurementMigration, /marketplace_tab_viewed/);
+  assert.match(marketplaceMeasurementMigration, /marketplace_filter_applied/);
+  assert.match(marketplaceMeasurementMigration, /marketplace_seed_template_selected/);
+  assert.match(marketplaceMeasurementMigration, /marketplace_create_from_template_started/);
   assert.match(apiSource, /parseAttributionCookie/);
   assert.match(apiSource, /takeMoralTradeApiRateLimitSlot\(request, "analytics_ingest"\)/);
   assert.match(apiSource, /ANALYTICS_OPT_OUT_COOKIE_NAME/);
@@ -1296,6 +1316,11 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
   assert.doesNotMatch(funnelTracker, /searchParams\.toString\(\)/);
   assert.doesNotMatch(funnelTracker, /query:\s*searchParams\.get\("search"\)/);
   assert.match(funnelTracker, /performance_metric_recorded/);
+  assert.match(funnelTracker, /marketplace_tab_viewed/);
+  assert.match(funnelTracker, /marketplace_filter_applied/);
+  assert.match(funnelTracker, /marketplace_seed_template_selected/);
+  assert.match(funnelTracker, /marketplace_create_from_template_started/);
+  assert.doesNotMatch(funnelTracker, /window\.location\.search/);
   assert.match(funnelTracker, /metricValueBucket/);
   assert.match(funnelTracker, /CLS/);
   assert.match(funnelTracker, /INP/);
@@ -1319,10 +1344,20 @@ test("growth activation surfaces persist attribution, onboarding, webinars, and 
 
 test("public measurement plan stays aligned with privacy-safe analytics", () => {
   const validation = validateMeasurementPlan();
+  const marketplaceValidation = validateMarketplaceMeasurementContract();
   const measurementPage = readRepoFile("src/app/measurement/page.tsx");
+  const marketplaceMeasurementSource = readRepoFile("src/lib/marketplace-measurement.ts");
+  const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const packageSource = readRepoFile("package.json");
   const routeBaselineScript = readRepoFile("scripts/check-public-route-baseline.mjs");
 
+  assert.equal(marketplaceValidation.status, "pass");
+  assert.deepEqual(marketplaceValidation.blockers, []);
+  assert.ok(MARKETPLACE_KPI_KEYS.includes("live_offer_count"));
+  assert.ok(MARKETPLACE_KPI_KEYS.includes("completed_agreement_count"));
+  assert.ok(MARKETPLACE_KPI_KEYS.includes("privacy_leakage_incidents_target_zero"));
+  assert.ok(MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS.includes("marketplace_tab_viewed"));
+  assert.ok(MARKETPLACE_MEASUREMENT_FUNNEL_EVENTS.includes("marketplace_seed_template_selected"));
   assert.deepEqual(validation.invalidEvents, []);
   assert.deepEqual(validation.duplicateEvents, []);
   assert.deepEqual(validation.sensitiveMetadata, []);
@@ -1338,6 +1373,9 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "cohort_interest_started"));
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "detail_request_resolved"));
   assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "performance_metric_recorded"));
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "marketplace_tab_viewed"));
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "marketplace_filter_applied"));
+  assert.ok(MEASUREMENT_EVENT_SPECS.some((spec) => spec.eventType === "marketplace_seed_template_selected"));
   assert.match(MEASUREMENT_PERFORMANCE_BASELINE.command, /npm run measure:routes/);
   assert.equal(MEASUREMENT_PERFORMANCE_BASELINE.baseUrlEnv, "MORALTRADE_BASE_URL");
   assert.equal(MEASUREMENT_PERFORMANCE_BASELINE.outputPathEnv, "MORALTRADE_BASELINE_OUTPUT");
@@ -1345,6 +1383,13 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.devices.some((device) => device.key === "mobile"));
   assert.ok(MEASUREMENT_PERFORMANCE_BASELINE.requiredChecks.includes("no_framework_overlay"));
   assert.match(measurementPage, /Protocol-quality audits/);
+  assert.match(measurementPage, /Marketplace KPIs/);
+  assert.match(measurementPage, /Public marketplace metrics are thresholded/);
+  assert.match(measurementPage, /getMarketplaceMeasurementContract/);
+  assert.match(measurementPage, /buildMarketplaceKpiSnapshot/);
+  assert.match(measurementPage, /validateMarketplaceKpiSnapshot/);
+  assert.match(measurementPage, /live_offer_count/);
+  assert.match(measurementPage, /demo_data_live_mix_block_count/);
   assert.match(measurementPage, /Copilot and review metrics stay public/);
   assert.match(measurementPage, /getMoralTradeEvaluationProfile/);
   assert.match(measurementPage, /getMoralTradeEvaluationSampleAudits/);
@@ -1356,6 +1401,13 @@ test("public measurement plan stays aligned with privacy-safe analytics", () => 
   assert.match(measurementPage, /\/api\/moral-trade\/evaluation\/health/);
   assert.match(measurementPage, /Executable baseline command/);
   assert.match(measurementPage, /MEASUREMENT_PERFORMANCE_BASELINE/);
+  assert.match(marketplaceMeasurementSource, /MARKETPLACE_METRIC_MIN_PUBLIC_COUNT = 3/);
+  assert.match(marketplaceMeasurementSource, /MARKETPLACE_KPI_KEYS/);
+  assert.match(marketplaceMeasurementSource, /small-cell suppression/);
+  assert.match(marketplaceMeasurementSource, /excludedNonLiveInputs/);
+  assert.match(healthRoute, /getMarketplaceMeasurementContract/);
+  assert.match(healthRoute, /marketplaceMeasurementKpiKeys/);
+  assert.match(healthRoute, /marketplaceMeasurementEventTypes/);
   assert.match(packageSource, /measure:routes/);
   assert.match(routeBaselineScript, /process\.env\[config\.baseUrlEnv\]/);
   assert.match(routeBaselineScript, /process\.env\[config\.outputPathEnv\]/);

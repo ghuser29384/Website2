@@ -114,6 +114,63 @@ export const MEASUREMENT_EVENT_SPECS: MeasurementEventSpec[] = [
     decisionUse: "Improve draft scaffolding when users stall before creating terms.",
   },
   {
+    eventType: "marketplace_tab_viewed",
+    stage: "activation",
+    question: "Which public marketplace lane do visitors inspect before creating or cloning terms?",
+    allowedMetadata: [
+      "marketplaceTab",
+      "queryLengthBucket",
+      "queryPresent",
+      "routeFamily",
+      "searchParamKeys",
+    ],
+    decisionUse:
+      "Separate live inventory, rounds, worked examples, and demo views without counting non-live lanes as liquidity.",
+  },
+  {
+    eventType: "marketplace_filter_applied",
+    stage: "activation",
+    question: "Which public filter shapes cause users to narrow the marketplace?",
+    allowedMetadata: [
+      "filterKeys",
+      "marketplaceTab",
+      "queryLengthBucket",
+      "queryPresent",
+      "routeFamily",
+      "searchParamKeys",
+    ],
+    decisionUse:
+      "Improve filters using only parameter keys and query-length buckets, not raw search text or rare moral attributes.",
+  },
+  {
+    eventType: "marketplace_seed_template_selected",
+    stage: "activation",
+    question: "Which reviewed seed templates help visitors start a draft?",
+    allowedMetadata: [
+      "liveMetricEligible",
+      "routeFamily",
+      "template",
+      "templateKind",
+    ],
+    decisionUse:
+      "Invest in seed templates that produce reviewable drafts while excluding them from live offer metrics.",
+  },
+  {
+    eventType: "marketplace_create_from_template_started",
+    stage: "activation",
+    question: "Do reviewed seed templates become draft starts without implying completed trade volume?",
+    allowedMetadata: [
+      "generatedBy",
+      "liveMetricEligible",
+      "mode",
+      "routeFamily",
+      "template",
+      "templateKind",
+    ],
+    decisionUse:
+      "Measure template-backed activation as reviewable activity, not completed agreements or sponsor leverage.",
+  },
+  {
     eventType: "clone_example_action",
     stage: "activation",
     question: "Which worked examples become editable first actions?",
@@ -230,6 +287,11 @@ export const MEASUREMENT_GUARDRAILS: MeasurementGuardrail[] = [
       "Measurement should improve copy, route order, review operations, and performance; it must not create engagement feeds, hidden ranking, or autonomous outreach.",
   },
   {
+    title: "Separate live metrics from demos and templates",
+    rule:
+      "Marketplace analytics may count reviewed seed-template and demo interactions as activation signals, but they must not inflate live offers, completed agreements, sponsor leverage, or moral-trade volume.",
+  },
+  {
     title: "Strip location-bearing URL detail",
     rule:
       "Analytics may keep route paths and coarse referrer paths, but query strings, hashes, raw search text, and UTM detail are sanitized or bucketed before storage.",
@@ -306,6 +368,12 @@ export const MEASUREMENT_ROADMAP: MeasurementRoadmapItem[] = [
     status: "planned",
     detail:
       "Publish cohort-scale counts for route clarity, review queues, safety reports, performance health, and disclosure resolution without exposing individual records.",
+  },
+  {
+    title: "Marketplace KPI aggregation",
+    status: "active",
+    detail:
+      "Publish only thresholded marketplace counts, rates, ratios, and medians, with demo records, worked examples, and reviewed seed templates excluded from live metrics.",
   },
 ];
 

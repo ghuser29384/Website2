@@ -45,6 +45,10 @@ export const FUNNEL_EVENT_TYPES = [
   "day_one_return",
   "day_seven_return",
   "performance_metric_recorded",
+  "marketplace_tab_viewed",
+  "marketplace_filter_applied",
+  "marketplace_seed_template_selected",
+  "marketplace_create_from_template_started",
 ] as const;
 
 export type FunnelEventType = (typeof FUNNEL_EVENT_TYPES)[number];
@@ -228,7 +232,10 @@ const FUNNEL_METADATA_ALLOWED_KEYS = new Set([
   "hasNote",
   "hasSession",
   "hasTargetUrl",
+  "filterKeys",
   "matchesCreated",
+  "liveMetricEligible",
+  "marketplaceTab",
   "metricName",
   "metricRating",
   "metricValueBucket",
@@ -237,11 +244,13 @@ const FUNNEL_METADATA_ALLOWED_KEYS = new Set([
   "participantKind",
   "partnerSlug",
   "primaryGoal",
+  "routeFamily",
   "stage",
   "step",
   "targetKind",
   "taskCount",
   "template",
+  "templateKind",
 ]);
 
 const SENSITIVE_FUNNEL_METADATA_KEY_PATTERN =
@@ -440,6 +449,23 @@ export function sanitizeFunnelEventMetadata(value: unknown) {
 
         if (searchParamKeys.length) {
           safeMetadata.searchParamKeys = searchParamKeys;
+        }
+      }
+      continue;
+    }
+
+    if (key === "filterKeys") {
+      if (Array.isArray(rawValue)) {
+        const filterKeys = Array.from(
+          new Set(
+            rawValue
+              .map((entry) => normalizeFunnelMetadataKey(String(entry)))
+              .filter((entry) => entry && !SENSITIVE_FUNNEL_METADATA_KEY_PATTERN.test(entry)),
+          ),
+        ).slice(0, 12);
+
+        if (filterKeys.length) {
+          safeMetadata.filterKeys = filterKeys;
         }
       }
       continue;

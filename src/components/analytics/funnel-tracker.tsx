@@ -25,6 +25,9 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
   if (href.includes("/worked-examples") || href.includes("/offers?view=examples")) {
     return "worked_example_opened";
   }
+  if (href.includes("/offers/new") && href.includes("template=")) {
+    return "marketplace_seed_template_selected";
+  }
   if (href.includes("/offers/new") && href.includes("example=")) return "clone_example_action";
   if (href.includes("/offers/new")) return "create_trade_started";
   if (href.includes("/dashboard#wish-profile")) return "wish_profile_started";
@@ -34,6 +37,44 @@ function inferClickEvent(target: HTMLAnchorElement): FunnelEventType | null {
   if (href.includes("/mpgf")) return "public_good_action_logged";
 
   return null;
+}
+
+function normalizeMarketplaceTab(value: string | null) {
+  if (value === "live" || value === "rounds" || value === "demo") return value;
+  if (value === "worked_examples" || value === "worked-examples" || value === "examples") {
+    return "worked_examples";
+  }
+  return "default";
+}
+
+function inferTemplateKind(value: string | null) {
+  if (value === "offset" || value === "donation-offset") return "donation_offset";
+  if (value === "pledge" || value === "pledge-swap") return "pledge_swap";
+  return "reviewed_seed_template";
+}
+
+function getTemplateMetadata(href: string) {
+  try {
+    const url = new URL(href, window.location.origin);
+    const mode = url.searchParams.get("mode");
+    const template = url.searchParams.get("template");
+
+    return {
+      generatedBy: "reviewed_seed_template",
+      liveMetricEligible: false,
+      mode: mode ?? "",
+      routeFamily: "marketplace",
+      template: template ?? "",
+      templateKind: inferTemplateKind(mode),
+    };
+  } catch {
+    return {
+      generatedBy: "reviewed_seed_template",
+      liveMetricEligible: false,
+      routeFamily: "marketplace",
+      templateKind: "reviewed_seed_template",
+    };
+  }
 }
 
 function postFunnelEvent(eventType: FunnelEventType, metadata: Record<string, unknown>) {
@@ -116,12 +157,48 @@ export function FunnelTracker() {
   });
 
   useEffect(() => {
-    postFunnelEvent("page_view", buildPrivacySafeSearchMetadata(searchParams));
+    const searchMetadata = buildPrivacySafeSearchMetadata(searchParams);
+
+    postFunnelEvent("page_view", searchMetadata);
+
+    if (pathname === "/offers") {
+      const marketplaceTab = normalizeMarketplaceTab(
+        searchParams.get("tab") ?? searchParams.get("view"),
+      );
+      const searchParamKeys = Array.isArray(searchMetadata.searchParamKeys)
+        ? searchMetadata.searchParamKeys
+        : [];
+      const filterKeys = searchParamKeys.filter(
+        (key) => !["tab", "view", "page", "pageSize", "page_size"].includes(String(key)),
+      );
+
+      postFunnelEvent("marketplace_tab_viewed", {
+        ...searchMetadata,
+        marketplaceTab,
+        routeFamily: "marketplace",
+      });
+
+      if (filterKeys.length || searchMetadata.queryPresent) {
+        postFunnelEvent("marketplace_filter_applied", {
+          ...searchMetadata,
+          filterKeys,
+          marketplaceTab,
+          routeFamily: "marketplace",
+        });
+      }
+    }
 
     if (pathname.startsWith("/offers/examples/")) {
       postFunnelEvent("worked_example_opened", {
         exampleId: pathname.split("/").pop() ?? "",
       });
+    }
+
+    if (pathname === "/offers/new" && searchParams.get("template")) {
+      postFunnelEvent(
+        "marketplace_create_from_template_started",
+        getTemplateMetadata(window.location.href),
+      );
     }
 
     if (pathname === "/login") {
@@ -154,6 +231,9 @@ export function FunnelTracker() {
       postFunnelEvent(inferredEvent, {
         href: sanitizeFunnelEventPath(target.href),
         label: target.textContent?.replace(/\s+/g, " ").trim() ?? "",
+        ...(inferredEvent === "marketplace_seed_template_selected"
+          ? getTemplateMetadata(target.href)
+          : {}),
       });
     }
 

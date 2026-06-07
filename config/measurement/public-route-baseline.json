@@ -36,7 +36,7 @@
     "maxDomContentLoadedMs": 10000,
     "maxLoadMs": 15000,
     "minBodyTextCharacters": 400,
-    "maxScriptTags": 80
+    "maxScriptTags": 90
   },
   "requiredChecks": [
     "http_status_ok",

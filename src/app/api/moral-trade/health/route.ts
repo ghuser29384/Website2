@@ -58,6 +58,10 @@ import {
   validateMoralTradeTransparencyReportContract,
 } from "@/lib/moral-trade/transparency-report";
 import {
+  getMarketplaceMeasurementContract,
+  validateMarketplaceMeasurementContract,
+} from "@/lib/marketplace-measurement";
+import {
   auditMoralTradeApiImplementationContract,
   getMoralTradeApiContractProfile,
   validateMoralTradeApiContractProfile,
@@ -164,6 +168,9 @@ export async function GET(request: Request) {
   const transparencyReportContract = getMoralTradeTransparencyReportContract();
   const transparencyReportValidation =
     validateMoralTradeTransparencyReportContract(transparencyReportContract);
+  const marketplaceMeasurementContract = getMarketplaceMeasurementContract();
+  const marketplaceMeasurementValidation =
+    validateMarketplaceMeasurementContract();
   const apiContractProfile = getMoralTradeApiContractProfile();
   const apiContractValidation = validateMoralTradeApiContractProfile(apiContractProfile);
   const apiContractImplementationAudit =
@@ -199,6 +206,7 @@ export async function GET(request: Request) {
       performanceValidation.status === "pass" &&
       externalityValidation.status === "pass" &&
       transparencyReportValidation.status === "pass" &&
+      marketplaceMeasurementValidation.status === "pass" &&
       apiContractValidation.status === "pass" &&
       apiContractImplementationAudit.status === "pass" &&
       aiGovernanceValidation.status === "pass" &&
@@ -224,6 +232,7 @@ export async function GET(request: Request) {
     performanceValidation,
     externalityValidation,
     transparencyReportValidation,
+    marketplaceMeasurementValidation,
     apiContractValidation,
     apiContractImplementationAudit,
     aiGovernanceValidation,
@@ -421,6 +430,17 @@ export async function GET(request: Request) {
       ),
       transparencyReportPrivacyRules: transparencyReportContract.privacyRules,
       transparencyReportContractTests: transparencyReportContract.contractTests,
+      marketplaceMeasurementVersion: marketplaceMeasurementContract.version,
+      marketplaceMeasurementMinimumPublicCount:
+        marketplaceMeasurementContract.minimumPublicCount,
+      marketplaceMeasurementEventTypes: marketplaceMeasurementContract.eventSpecs.map(
+        (event) => event.eventType,
+      ),
+      marketplaceMeasurementKpiKeys:
+        marketplaceMeasurementContract.kpiDefinitions.map((kpi) => kpi.key),
+      marketplaceMeasurementPrivacyRules: marketplaceMeasurementContract.privacyRules,
+      marketplaceMeasurementContractTests:
+        marketplaceMeasurementContract.contractTests,
       apiContractProfileVersion: apiContractProfile.version,
       apiContractImplementationAuditStatus: apiContractImplementationAudit.status,
       apiRoutes: apiContractProfile.routes.map((route) => route.key),
@@ -497,6 +517,7 @@ export async function GET(request: Request) {
       ...performanceValidation.blockers,
       ...externalityValidation.blockers,
       ...transparencyReportValidation.blockers,
+      ...marketplaceMeasurementValidation.blockers,
       ...apiContractValidation.blockers,
       ...apiContractImplementationAudit.blockers,
       ...aiGovernanceValidation.blockers,

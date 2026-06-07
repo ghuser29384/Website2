@@ -123,6 +123,39 @@ test("performance metric metadata keeps only privacy-safe metric buckets", () =>
   assert.equal(serialized.includes("secret private performance context"), false);
 });
 
+test("marketplace measurement metadata keeps template ids and filter buckets without raw search text", () => {
+  const metadata = sanitizeFunnelEventMetadata({
+    contactEmail: "person@example.com",
+    filterKeys: ["mode", "cause", "private_wish"],
+    liveMetricEligible: false,
+    marketplaceTab: "worked_examples",
+    query: "exact private wish about a counterparty",
+    routeFamily: "marketplace",
+    search: "q=secret&mode=offset&source_note=raw",
+    sourceNote: "raw note from private feed",
+    template: "pure-opposed-cause",
+    templateKind: "donation_offset",
+  });
+  const serialized = JSON.stringify(metadata);
+
+  assert.equal(isFunnelEventType("marketplace_tab_viewed"), true);
+  assert.equal(isFunnelEventType("marketplace_filter_applied"), true);
+  assert.equal(isFunnelEventType("marketplace_seed_template_selected"), true);
+  assert.equal(isFunnelEventType("marketplace_create_from_template_started"), true);
+  assert.deepEqual(metadata.filterKeys, ["mode", "cause"]);
+  assert.equal(metadata.liveMetricEligible, false);
+  assert.equal(metadata.marketplaceTab, "worked_examples");
+  assert.equal(metadata.queryPresent, true);
+  assert.equal(metadata.queryLengthBucket, "20-99");
+  assert.deepEqual(metadata.searchParamKeys, ["q", "mode"]);
+  assert.equal(metadata.template, "pure-opposed-cause");
+  assert.equal(metadata.templateKind, "donation_offset");
+  assert.equal(serialized.includes("exact private wish"), false);
+  assert.equal(serialized.includes("source_note"), false);
+  assert.equal(serialized.includes("person@example.com"), false);
+  assert.equal(serialized.includes("raw note"), false);
+});
+
 test("funnel event path and referrer sanitizers drop query strings and hashes", () => {
   assert.equal(
     sanitizeFunnelEventPath("/wish-registry?search=secret#details"),
