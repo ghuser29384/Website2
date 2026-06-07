@@ -7,6 +7,7 @@ import { Breadcrumbs, MetricCard, PageHero, SectionHeader, StepCard } from "@/co
 import { getDonationOffsetOverview, getViewer, type DonationOffsetOverview } from "@/lib/app-data";
 import {
   buildDemoDonationOffsetDonorOfRecordPreview,
+  buildDemoDonationOffsetPaymentDestinationPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
   getConsensusCharities,
@@ -140,6 +141,7 @@ export default async function DonationOffsetsPage() {
   const consensusCharities = getConsensusCharities();
   const clearingDryRun = buildDonationOffsetDryRun(overview);
   const donorOfRecordPreview = buildDemoDonationOffsetDonorOfRecordPreview();
+  const paymentDestinationPreview = buildDemoDonationOffsetPaymentDestinationPreview();
   const createOffsetHref = viewer
     ? "/offers/new?mode=offset"
     : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
@@ -348,6 +350,98 @@ export default async function DonationOffsetsPage() {
                   : "No preview blockers. Final lock still requires fresh confirmations and review."}
               </p>
             </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="offset-payment-destination-heading">
+          <SectionHeader
+            eyebrow="Recipient and destination verification"
+            id="offset-payment-destination-heading"
+            title="Payment locators are evidence until reviewed."
+          >
+            Recipient names, donation URLs, bank details, wallet addresses, and fiscal-host notes
+            do not become reusable payment destinations until they resolve to reviewed recipient
+            registry and payment-destination records.
+          </SectionHeader>
+          <div className="protocol-review-panel protocol-review-panel-needs_human_review">
+            <div className="protocol-review-head">
+              <div>
+                <p className="eyebrow">Destination verification status</p>
+                <h3>No capture or release before verified routing.</h3>
+                <p>
+                  Capture allowed: {String(paymentDestinationPreview.captureAllowed)}. Release
+                  allowed: {String(paymentDestinationPreview.releaseAllowed)}. Raw locator is
+                  payment destination:{" "}
+                  {String(paymentDestinationPreview.evidenceLocatorIsPaymentDestination)}.
+                </p>
+              </div>
+              <span className="protocol-review-status">
+                {paymentDestinationPreview.releaseStage.replaceAll("_", " ")}
+              </span>
+            </div>
+
+            <div className="protocol-review-grid">
+              <div>
+                <strong>Recipient registry</strong>
+                <ul className="clean-list">
+                  <li>Recipient: {paymentDestinationPreview.recipientLabel}</li>
+                  <li>
+                    Identity:{" "}
+                    {paymentDestinationPreview.recipientIdentityStatus.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Registry entry required:{" "}
+                    {String(paymentDestinationPreview.requiresRecipientRegistryEntry)}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <strong>Payment destination</strong>
+                <ul className="clean-list">
+                  <li>
+                    Kind: {paymentDestinationPreview.paymentDestinationKind.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Review:{" "}
+                    {paymentDestinationPreview.paymentDestinationReviewStatus.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Verified before capture:{" "}
+                    {String(
+                      paymentDestinationPreview.requiresVerifiedPaymentDestinationBeforeCapture,
+                    )}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <strong>Reuse boundary</strong>
+                <p>
+                  Free-text destination reusable:{" "}
+                  {String(paymentDestinationPreview.freeTextDestinationReusable)}. Reviewers must
+                  keep copied links and payment identifiers out of reusable routing until verified.
+                </p>
+              </div>
+            </div>
+
+            <ol className="protocol-provenance-list">
+              {paymentDestinationPreview.gates.map((gate) => (
+                <li
+                  className={`protocol-provenance-item protocol-provenance-item-${donorGateStatusClass(
+                    gate.status,
+                  )}`}
+                  key={gate.key}
+                >
+                  <span className="protocol-step-status">
+                    {formatDonorGateStatus(gate.status)}
+                  </span>
+                  <div>
+                    <strong>{gate.label}</strong>
+                    <p>{gate.detail}</p>
+                    <small>{gate.nextAction}</small>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </div>
         </section>
 

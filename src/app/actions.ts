@@ -148,20 +148,27 @@ import {
 import {
   assessDonationOffsetModeration,
   buildDonationOffsetDonorOfRecordPreview,
+  buildDonationOffsetPaymentDestinationPreview,
   calculateDonationOffsetPreview,
   findRegisteredCharityById,
   formatDonationOffsetUnmatchedRule,
   normalizeDonationOffsetCharitableSolicitationTreatment,
   normalizeDonationOffsetDestinationVerificationStatus,
   normalizeDonationOffsetDonorOfRecordRole,
+  normalizeDonationOffsetPaymentDestinationKind,
+  normalizeDonationOffsetPaymentDestinationReviewStatus,
+  normalizeDonationOffsetRecipientIdentityStatus,
   normalizeDonationOffsetTaxReceiptTreatment,
   summarizeDonationOffsetDonorOfRecordForNotes,
+  summarizeDonationOffsetPaymentDestinationForNotes,
   validateDonationOffsetDonorOfRecordInput,
+  validateDonationOffsetPaymentDestinationInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
   type DonationOffsetFields,
   type DonationOffsetDonorOfRecordInput,
   type DonationOffsetParticipationMode,
+  type DonationOffsetPaymentDestinationInput,
   type DonationOffsetPoolSide,
   type DonationOffsetTimeHorizon,
   type DonationOffsetUnmatchedSurplusRule,
@@ -3481,12 +3488,13 @@ export async function createOfferAction(formData: FormData) {
   const verificationMetadataAcknowledged = normalizedMode === "offset"
     ? readBoolean(formData, "offset_verification_metadata_acknowledgement")
     : false;
+  const selectedDonationOffsetDestination =
+    normalizedMode === "offset" ? findRegisteredCharityById(compromiseDestinationId) : null;
   const donationOffsetDonorOfRecordInput: DonationOffsetDonorOfRecordInput | null =
     normalizedMode === "offset"
       ? {
           destinationLabel:
-            findRegisteredCharityById(compromiseDestinationId)?.name ||
-            "Selected compromise destination",
+            selectedDonationOffsetDestination?.name || "Selected compromise destination",
           donationPlatform: readRequired(formData, "offset_donor_record_donation_platform"),
           donorOfRecordRole: normalizeDonationOffsetDonorOfRecordRole(
             readOptional(formData, "offset_donor_of_record_role"),
@@ -3528,6 +3536,56 @@ export async function createOfferAction(formData: FormData) {
       : null;
   const donationOffsetDonorOfRecordPreview = donationOffsetDonorOfRecordInput
     ? buildDonationOffsetDonorOfRecordPreview(donationOffsetDonorOfRecordInput)
+    : null;
+  const donationOffsetPaymentDestinationInput: DonationOffsetPaymentDestinationInput | null =
+    normalizedMode === "offset"
+      ? {
+          recipientLabel:
+            selectedDonationOffsetDestination?.name || "Selected compromise destination",
+          recipientIdentityStatus: normalizeDonationOffsetRecipientIdentityStatus(
+            readOptional(formData, "offset_recipient_identity_status"),
+          ),
+          paymentDestinationKind: normalizeDonationOffsetPaymentDestinationKind(
+            readOptional(formData, "offset_payment_destination_kind"),
+          ),
+          paymentDestinationLocator: readRequired(
+            formData,
+            "offset_payment_destination_locator",
+          ),
+          paymentDestinationReviewStatus: normalizeDonationOffsetPaymentDestinationReviewStatus(
+            readOptional(formData, "offset_payment_destination_review_status"),
+          ),
+          antiImpersonationReviewed: readBoolean(
+            formData,
+            "offset_anti_impersonation_reviewed",
+          ),
+          jurisdictionReviewed: readBoolean(formData, "offset_jurisdiction_reviewed"),
+          prohibitedUseReviewed: readBoolean(formData, "offset_prohibited_use_reviewed"),
+          destinationControlledByRecipient: readBoolean(
+            formData,
+            "offset_destination_controlled_by_recipient",
+          ),
+          freeTextDestination: readBoolean(formData, "offset_free_text_destination"),
+          reuseAcrossAgreementsRequested: readBoolean(
+            formData,
+            "offset_destination_reuse_requested",
+          ),
+          captureOrReleaseRequested: readBoolean(
+            formData,
+            "offset_capture_or_release_requested",
+          ),
+          participantAcknowledgedEvidenceNotDestination: readBoolean(
+            formData,
+            "offset_evidence_not_destination_acknowledgement",
+          ),
+          participantAcknowledgedNoCaptureBeforeVerification: readBoolean(
+            formData,
+            "offset_no_capture_before_verification_acknowledgement",
+          ),
+        }
+      : null;
+  const donationOffsetPaymentDestinationPreview = donationOffsetPaymentDestinationInput
+    ? buildDonationOffsetPaymentDestinationPreview(donationOffsetPaymentDestinationInput)
     : null;
   const newOfferReturnPath =
     normalizedMode === "offset"
@@ -3659,6 +3717,20 @@ export async function createOfferAction(formData: FormData) {
     }
   }
 
+  if (donationOffsetPaymentDestinationInput) {
+    const paymentDestinationErrors = validateDonationOffsetPaymentDestinationInput(
+      donationOffsetPaymentDestinationInput,
+    );
+
+    if (paymentDestinationErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        paymentDestinationErrors[0] ?? "Complete the donation offset payment-destination terms.",
+      );
+    }
+  }
+
   if (pledgePerformanceBondFields?.enabled) {
     const bondValidation = validatePerformanceBondTerms(
       pledgePerformanceBondFields.terms,
@@ -3735,6 +3807,9 @@ export async function createOfferAction(formData: FormData) {
       : "",
     donationOffsetDonorOfRecordPreview
       ? summarizeDonationOffsetDonorOfRecordForNotes(donationOffsetDonorOfRecordPreview)
+      : "",
+    donationOffsetPaymentDestinationPreview
+      ? summarizeDonationOffsetPaymentDestinationForNotes(donationOffsetPaymentDestinationPreview)
       : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, protocolTransition),
   ]
@@ -4211,6 +4286,9 @@ export async function createOfferAction(formData: FormData) {
       : "",
     donationOffsetDonorOfRecordPreview
       ? summarizeDonationOffsetDonorOfRecordForNotes(donationOffsetDonorOfRecordPreview)
+      : "",
+    donationOffsetPaymentDestinationPreview
+      ? summarizeDonationOffsetPaymentDestinationForNotes(donationOffsetPaymentDestinationPreview)
       : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, provenanceResult.transition),
   ]

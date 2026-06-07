@@ -5,14 +5,18 @@ import { readFileSync } from "node:fs";
 import {
   assessDonationOffsetModeration,
   buildDemoDonationOffsetDonorOfRecordPreview,
+  buildDemoDonationOffsetPaymentDestinationPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
   buildDonationOffsetDonorOfRecordPreview,
+  buildDonationOffsetPaymentDestinationPreview,
   calculateDonationOffsetPreview,
   calculateDonationOffsetPoolProgress,
   createDefaultDonationOffsetFields,
   summarizeDonationOffsetDonorOfRecordForNotes,
+  summarizeDonationOffsetPaymentDestinationForNotes,
   validateDonationOffsetDonorOfRecordInput,
+  validateDonationOffsetPaymentDestinationInput,
   validateDonationOffsetSubmissionGuards,
   validateDonationOffsetFields,
 } from "@/lib/donation-offsets";
@@ -322,6 +326,120 @@ test("donation offset donor-of-record summary freezes lock treatment in notes", 
   assert.match(summary, /Requires frozen donor-of-record, receipt, solicitation, and destination treatment before final confirmations: yes/);
 });
 
+test("donation offset payment destination preview treats locators as evidence before verification", () => {
+  const preview = buildDemoDonationOffsetPaymentDestinationPreview();
+
+  assert.equal(preview.schemaVersion, "donation-offset-payment-destination-preview-v1");
+  assert.equal(preview.releaseStage, "donation_offset_preview_no_capture");
+  assert.equal(preview.captureAllowed, false);
+  assert.equal(preview.releaseAllowed, false);
+  assert.equal(preview.relianceBearing, false);
+  assert.equal(preview.evidenceLocatorIsPaymentDestination, false);
+  assert.equal(preview.freeTextDestinationReusable, false);
+  assert.equal(preview.requiresRecipientRegistryEntry, true);
+  assert.equal(preview.requiresVerifiedPaymentDestinationBeforeCapture, true);
+  assert.equal(preview.gates.some((gate) => gate.key === "recipient-identity"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "payment-destination-routing"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "anti-impersonation"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "free-text-destination-reuse"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "evidence-vs-destination"), true);
+});
+
+test("donation offset payment destination validation rejects missing acknowledgements", () => {
+  const errors = validateDonationOffsetPaymentDestinationInput({
+    recipientLabel: "GiveWell Top Charities Fund",
+    recipientIdentityStatus: "registered_recipient",
+    paymentDestinationKind: "registered_charity_page",
+    paymentDestinationLocator: "https://www.every.org/givewell-top-charities-fund",
+    paymentDestinationReviewStatus: "needs_review",
+    antiImpersonationReviewed: false,
+    jurisdictionReviewed: false,
+    prohibitedUseReviewed: false,
+    destinationControlledByRecipient: false,
+    freeTextDestination: false,
+    reuseAcrossAgreementsRequested: false,
+    captureOrReleaseRequested: false,
+    participantAcknowledgedEvidenceNotDestination: false,
+    participantAcknowledgedNoCaptureBeforeVerification: false,
+  });
+
+  assert.ok(errors.some((error) => /evidence inputs, not payment destinations/i.test(error)));
+  assert.ok(errors.some((error) => /no capture or release/i.test(error)));
+});
+
+test("donation offset payment destination preview blocks unverified free-text reuse", () => {
+  const preview = buildDonationOffsetPaymentDestinationPreview({
+    recipientLabel: "Community fiscal host",
+    recipientIdentityStatus: "free_text_or_unverified",
+    paymentDestinationKind: "payment_processor_link",
+    paymentDestinationLocator: "https://example.com/donate",
+    paymentDestinationReviewStatus: "needs_review",
+    antiImpersonationReviewed: false,
+    jurisdictionReviewed: false,
+    prohibitedUseReviewed: false,
+    destinationControlledByRecipient: false,
+    freeTextDestination: true,
+    reuseAcrossAgreementsRequested: true,
+    captureOrReleaseRequested: false,
+    participantAcknowledgedEvidenceNotDestination: true,
+    participantAcknowledgedNoCaptureBeforeVerification: true,
+  });
+
+  assert.equal(preview.freeTextDestinationReusable, false);
+  assert.equal(preview.gates.find((gate) => gate.key === "recipient-identity")?.status, "human_review");
+  assert.equal(preview.gates.find((gate) => gate.key === "free-text-destination-reuse")?.status, "blocked");
+});
+
+test("donation offset payment destination preview fails closed on premature capture or release", () => {
+  const preview = buildDonationOffsetPaymentDestinationPreview({
+    recipientLabel: "GiveWell Top Charities Fund",
+    recipientIdentityStatus: "registered_recipient",
+    paymentDestinationKind: "registered_charity_page",
+    paymentDestinationLocator: "https://www.every.org/givewell-top-charities-fund",
+    paymentDestinationReviewStatus: "needs_review",
+    antiImpersonationReviewed: false,
+    jurisdictionReviewed: false,
+    prohibitedUseReviewed: false,
+    destinationControlledByRecipient: false,
+    freeTextDestination: false,
+    reuseAcrossAgreementsRequested: false,
+    captureOrReleaseRequested: true,
+    participantAcknowledgedEvidenceNotDestination: true,
+    participantAcknowledgedNoCaptureBeforeVerification: true,
+  });
+  const errors = validateDonationOffsetPaymentDestinationInput({
+    recipientLabel: "GiveWell Top Charities Fund",
+    recipientIdentityStatus: "registered_recipient",
+    paymentDestinationKind: "registered_charity_page",
+    paymentDestinationLocator: "https://www.every.org/givewell-top-charities-fund",
+    paymentDestinationReviewStatus: "needs_review",
+    antiImpersonationReviewed: false,
+    jurisdictionReviewed: false,
+    prohibitedUseReviewed: false,
+    destinationControlledByRecipient: false,
+    freeTextDestination: false,
+    reuseAcrossAgreementsRequested: false,
+    captureOrReleaseRequested: true,
+    participantAcknowledgedEvidenceNotDestination: true,
+    participantAcknowledgedNoCaptureBeforeVerification: true,
+  });
+
+  assert.equal(preview.captureAllowed, false);
+  assert.equal(preview.releaseAllowed, false);
+  assert.ok(preview.blockedGateCount >= 1);
+  assert.ok(errors.some((error) => /cannot request capture or release/i.test(error)));
+});
+
+test("donation offset payment destination summary records verification boundaries", () => {
+  const summary = summarizeDonationOffsetPaymentDestinationForNotes(
+    buildDemoDonationOffsetPaymentDestinationPreview(),
+  );
+
+  assert.match(summary, /Raw recipient\/payment locator is payment destination: no/);
+  assert.match(summary, /Free-text destination reusable across agreements: no/);
+  assert.match(summary, /Requires verified payment destination before capture\/release: yes/);
+});
+
 test("donation offset page renders the moraltrade60 batch-clearing preview surface", () => {
   const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
   const helper = readFileSync("src/lib/donation-offsets.ts", "utf8");
@@ -347,6 +465,19 @@ test("donation offset donor-of-record UI and server action are wired", () => {
   assert.match(form, /No tax advice/);
   assert.match(action, /validateDonationOffsetDonorOfRecordInput/);
   assert.match(action, /summarizeDonationOffsetDonorOfRecordForNotes/);
+});
+
+test("donation offset payment-destination UI and server action are wired", () => {
+  const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
+  const form = readFileSync("src/components/offers/offer-create-form.tsx", "utf8");
+  const action = readFileSync("src/app/actions.ts", "utf8");
+
+  assert.match(page, /Recipient and destination verification/);
+  assert.match(page, /buildDemoDonationOffsetPaymentDestinationPreview/);
+  assert.match(form, /offset_payment_destination_kind/);
+  assert.match(form, /offset_evidence_not_destination_acknowledgement/);
+  assert.match(action, /validateDonationOffsetPaymentDestinationInput/);
+  assert.match(action, /summarizeDonationOffsetPaymentDestinationForNotes/);
 });
 
 test("pool moderation flags missing deadline when pool mode is selected", () => {

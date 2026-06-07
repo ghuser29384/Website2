@@ -33,11 +33,30 @@ export type DonationOffsetDestinationVerificationStatus =
   | "registered_destination_selected"
   | "external_unverified"
   | "unknown";
+export type DonationOffsetRecipientIdentityStatus =
+  | "registered_recipient"
+  | "fiscal_host_or_intermediary"
+  | "free_text_or_unverified"
+  | "unknown";
+export type DonationOffsetPaymentDestinationKind =
+  | "registered_charity_page"
+  | "payment_processor_link"
+  | "bank_account"
+  | "wallet_address"
+  | "fiscal_host"
+  | "unknown";
+export type DonationOffsetPaymentDestinationReviewStatus =
+  | "verified"
+  | "needs_review"
+  | "blocked"
+  | "unknown";
 export type DonationOffsetDonorOfRecordGateStatus =
   | "pass"
   | "needs_input"
   | "human_review"
   | "blocked";
+export type DonationOffsetPaymentDestinationGateStatus =
+  DonationOffsetDonorOfRecordGateStatus;
 
 export interface RegisteredCharity {
   id: string;
@@ -222,6 +241,53 @@ export interface DonationOffsetDonorOfRecordPreview {
   blockedGateCount: number;
   humanReviewGateCount: number;
   readyForLockReview: boolean;
+}
+
+export interface DonationOffsetPaymentDestinationInput {
+  recipientLabel: string;
+  recipientIdentityStatus: DonationOffsetRecipientIdentityStatus;
+  paymentDestinationKind: DonationOffsetPaymentDestinationKind;
+  paymentDestinationLocator: string;
+  paymentDestinationReviewStatus: DonationOffsetPaymentDestinationReviewStatus;
+  antiImpersonationReviewed: boolean;
+  jurisdictionReviewed: boolean;
+  prohibitedUseReviewed: boolean;
+  destinationControlledByRecipient: boolean;
+  freeTextDestination: boolean;
+  reuseAcrossAgreementsRequested: boolean;
+  captureOrReleaseRequested: boolean;
+  participantAcknowledgedEvidenceNotDestination: boolean;
+  participantAcknowledgedNoCaptureBeforeVerification: boolean;
+}
+
+export interface DonationOffsetPaymentDestinationGate {
+  key: string;
+  label: string;
+  status: DonationOffsetPaymentDestinationGateStatus;
+  detail: string;
+  nextAction: string;
+  blockerCodes: string[];
+}
+
+export interface DonationOffsetPaymentDestinationPreview {
+  schemaVersion: "donation-offset-payment-destination-preview-v1";
+  releaseStage: "donation_offset_preview_no_capture";
+  captureAllowed: false;
+  releaseAllowed: false;
+  relianceBearing: false;
+  freeTextDestinationReusable: false;
+  evidenceLocatorIsPaymentDestination: false;
+  requiresRecipientRegistryEntry: true;
+  requiresVerifiedPaymentDestinationBeforeCapture: true;
+  recipientLabel: string;
+  recipientIdentityStatus: DonationOffsetRecipientIdentityStatus;
+  paymentDestinationKind: DonationOffsetPaymentDestinationKind;
+  paymentDestinationLocator: string;
+  paymentDestinationReviewStatus: DonationOffsetPaymentDestinationReviewStatus;
+  gates: DonationOffsetPaymentDestinationGate[];
+  blockedGateCount: number;
+  humanReviewGateCount: number;
+  readyForRecipientRegistryReview: boolean;
 }
 
 export interface DonationOffsetModerationAssessment {
@@ -558,6 +624,53 @@ export function normalizeDonationOffsetDestinationVerificationStatus(
   return "registered_destination_selected";
 }
 
+export function normalizeDonationOffsetRecipientIdentityStatus(
+  value: string | null | undefined,
+): DonationOffsetRecipientIdentityStatus {
+  if (
+    value === "registered_recipient" ||
+    value === "fiscal_host_or_intermediary" ||
+    value === "free_text_or_unverified" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetPaymentDestinationKind(
+  value: string | null | undefined,
+): DonationOffsetPaymentDestinationKind {
+  if (
+    value === "registered_charity_page" ||
+    value === "payment_processor_link" ||
+    value === "bank_account" ||
+    value === "wallet_address" ||
+    value === "fiscal_host" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetPaymentDestinationReviewStatus(
+  value: string | null | undefined,
+): DonationOffsetPaymentDestinationReviewStatus {
+  if (
+    value === "verified" ||
+    value === "needs_review" ||
+    value === "blocked" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
 function donorGate({
   key,
   label,
@@ -582,6 +695,374 @@ function hasMeaningfulText(value: string) {
 
 function formatDonationOffsetDonorGateStatus(status: DonationOffsetDonorOfRecordGateStatus) {
   return status.replaceAll("_", " ");
+}
+
+function paymentDestinationGate({
+  key,
+  label,
+  status,
+  detail,
+  nextAction,
+  blockerCodes = [],
+}: DonationOffsetPaymentDestinationGate) {
+  return {
+    key,
+    label,
+    status,
+    detail,
+    nextAction,
+    blockerCodes,
+  };
+}
+
+function hasPaymentDestinationLocator(value: string) {
+  return value.trim().length >= 6;
+}
+
+function formatDonationOffsetPaymentDestinationGateStatus(
+  status: DonationOffsetPaymentDestinationGateStatus,
+) {
+  return status.replaceAll("_", " ");
+}
+
+function blockIfCaptureOrReleaseRequested(
+  status: DonationOffsetPaymentDestinationGateStatus,
+  captureOrReleaseRequested: boolean,
+) {
+  return captureOrReleaseRequested && status !== "pass" ? "blocked" : status;
+}
+
+export function buildDonationOffsetPaymentDestinationPreview(
+  input: DonationOffsetPaymentDestinationInput,
+): DonationOffsetPaymentDestinationPreview {
+  const recipientLabelPresent = hasMeaningfulText(input.recipientLabel);
+  const locatorPresent = hasPaymentDestinationLocator(input.paymentDestinationLocator);
+  const recipientNeedsRegistryReview =
+    input.recipientIdentityStatus === "fiscal_host_or_intermediary" ||
+    input.recipientIdentityStatus === "free_text_or_unverified";
+  const rawFreeTextDestination =
+    input.freeTextDestination ||
+    input.recipientIdentityStatus === "free_text_or_unverified" ||
+    input.paymentDestinationKind === "bank_account" ||
+    input.paymentDestinationKind === "wallet_address";
+  const paymentDestinationReviewPassed =
+    input.paymentDestinationReviewStatus === "verified" &&
+    input.paymentDestinationKind !== "unknown" &&
+    locatorPresent;
+  const antiImpersonationStatus = blockIfCaptureOrReleaseRequested(
+    input.antiImpersonationReviewed ? "pass" : "human_review",
+    input.captureOrReleaseRequested,
+  );
+  const jurisdictionStatus = blockIfCaptureOrReleaseRequested(
+    input.jurisdictionReviewed ? "pass" : "human_review",
+    input.captureOrReleaseRequested,
+  );
+  const prohibitedUseStatus = blockIfCaptureOrReleaseRequested(
+    input.prohibitedUseReviewed ? "pass" : "human_review",
+    input.captureOrReleaseRequested,
+  );
+  const recipientControlStatus = blockIfCaptureOrReleaseRequested(
+    input.destinationControlledByRecipient ? "pass" : "human_review",
+    input.captureOrReleaseRequested,
+  );
+  const recipientIdentityStatus = blockIfCaptureOrReleaseRequested(
+    !recipientLabelPresent || input.recipientIdentityStatus === "unknown"
+      ? "needs_input"
+      : recipientNeedsRegistryReview
+        ? "human_review"
+        : "pass",
+    input.captureOrReleaseRequested,
+  );
+  const paymentDestinationStatus = blockIfCaptureOrReleaseRequested(
+    input.paymentDestinationReviewStatus === "blocked"
+      ? "blocked"
+      : !locatorPresent ||
+          input.paymentDestinationKind === "unknown" ||
+          input.paymentDestinationReviewStatus === "unknown"
+        ? "needs_input"
+        : paymentDestinationReviewPassed
+          ? "pass"
+          : "human_review",
+    input.captureOrReleaseRequested,
+  );
+  const freeTextReuseStatus =
+    rawFreeTextDestination || input.reuseAcrossAgreementsRequested
+      ? blockIfCaptureOrReleaseRequested(
+          input.reuseAcrossAgreementsRequested && !paymentDestinationReviewPassed
+            ? "blocked"
+            : "human_review",
+          input.captureOrReleaseRequested,
+        )
+      : "pass";
+  const evidenceBoundaryStatus = input.participantAcknowledgedEvidenceNotDestination
+    ? "pass"
+    : "needs_input";
+  const captureBoundaryStatus = input.captureOrReleaseRequested
+    ? "blocked"
+    : input.participantAcknowledgedNoCaptureBeforeVerification
+      ? "pass"
+      : "needs_input";
+
+  const gates = [
+    paymentDestinationGate({
+      key: "recipient-identity",
+      label: "Recipient identity",
+      status: recipientIdentityStatus,
+      detail:
+        recipientIdentityStatus === "pass"
+          ? "The draft points at a registered recipient identity for the preview."
+          : recipientIdentityStatus === "human_review"
+            ? "Fiscal-host, intermediary, or free-text recipient identity needs registry review before routing."
+            : recipientIdentityStatus === "blocked"
+              ? "Capture or release is blocked until recipient identity resolves to a reviewed registry entry."
+              : "Name the recipient and choose its identity status before publishing the preview.",
+      nextAction:
+        recipientIdentityStatus === "pass"
+          ? "Keep the registry identity frozen for final lock review."
+          : "Resolve the recipient to a reviewed recipient registry entry.",
+      blockerCodes: recipientIdentityStatus === "pass" ? [] : ["recipient_registry_review_required"],
+    }),
+    paymentDestinationGate({
+      key: "payment-destination-routing",
+      label: "Payment destination routing",
+      status: paymentDestinationStatus,
+      detail:
+        paymentDestinationStatus === "pass"
+          ? "The destination locator is marked verified for the selected recipient."
+          : paymentDestinationStatus === "blocked"
+            ? "The payment destination is blocked or capture/release was requested before verification."
+            : paymentDestinationStatus === "human_review"
+              ? "The destination locator is evidence for manual review, not a reusable payment route."
+              : "Provide a destination locator, destination kind, and review status.",
+      nextAction:
+        paymentDestinationStatus === "pass"
+          ? "Verify provider routing at release time before moving money."
+          : "Create or review a payment-destination record before any capture or release.",
+      blockerCodes:
+        paymentDestinationStatus === "pass" ? [] : ["verified_payment_destination_required"],
+    }),
+    paymentDestinationGate({
+      key: "anti-impersonation",
+      label: "Anti-impersonation review",
+      status: antiImpersonationStatus,
+      detail:
+        antiImpersonationStatus === "pass"
+          ? "Recipient and destination impersonation risk is marked reviewed."
+          : "Recipient names, URLs, bank details, wallets, and charity identifiers need anti-impersonation review.",
+      nextAction:
+        antiImpersonationStatus === "pass"
+          ? "Retain anti-impersonation evidence for release review."
+          : "Run anti-impersonation review before relying on this destination.",
+      blockerCodes: antiImpersonationStatus === "pass" ? [] : ["anti_impersonation_review_required"],
+    }),
+    paymentDestinationGate({
+      key: "jurisdiction-review",
+      label: "Jurisdiction review",
+      status: jurisdictionStatus,
+      detail:
+        jurisdictionStatus === "pass"
+          ? "Recipient and destination jurisdiction status is marked reviewed."
+          : "Recipient jurisdiction, payment-rail eligibility, and fiscal-host routing need review.",
+      nextAction:
+        jurisdictionStatus === "pass"
+          ? "Keep the jurisdiction decision tied to the payment-destination record."
+          : "Review jurisdiction and payment-rail eligibility before lock or release.",
+      blockerCodes: jurisdictionStatus === "pass" ? [] : ["jurisdiction_review_required"],
+    }),
+    paymentDestinationGate({
+      key: "prohibited-use-review",
+      label: "Prohibited-use review",
+      status: prohibitedUseStatus,
+      detail:
+        prohibitedUseStatus === "pass"
+          ? "Prohibited-use screening is marked reviewed."
+          : "Recipient and destination use need prohibited-use, sanctions, and financial-crime screening.",
+      nextAction:
+        prohibitedUseStatus === "pass"
+          ? "Keep prohibited-use screening attached to the reviewed destination."
+          : "Complete prohibited-use review before capture or release.",
+      blockerCodes: prohibitedUseStatus === "pass" ? [] : ["prohibited_use_review_required"],
+    }),
+    paymentDestinationGate({
+      key: "recipient-control",
+      label: "Recipient control",
+      status: recipientControlStatus,
+      detail:
+        recipientControlStatus === "pass"
+          ? "The destination is marked as controlled by the reviewed recipient."
+          : "The destination needs proof that it is controlled by the recipient or reviewed fiscal host.",
+      nextAction:
+        recipientControlStatus === "pass"
+          ? "Recheck control before release if the destination changes."
+          : "Verify recipient control before any payment destination can be reused.",
+      blockerCodes: recipientControlStatus === "pass" ? [] : ["recipient_control_review_required"],
+    }),
+    paymentDestinationGate({
+      key: "free-text-destination-reuse",
+      label: "Free-text destination reuse",
+      status: freeTextReuseStatus,
+      detail:
+        freeTextReuseStatus === "pass"
+          ? "No free-text, bank, wallet, or reuse request is being treated as a reusable payment route."
+          : freeTextReuseStatus === "blocked"
+            ? "Free-text or unverified destinations cannot be reused across agreements before verification."
+            : "Free-text names, copied links, bank details, wallets, and fiscal-host notes remain one-off evidence inputs.",
+      nextAction:
+        freeTextReuseStatus === "pass"
+          ? "Keep raw locators out of reusable routing records unless reviewed."
+          : "Create reviewed recipient registry and payment-destination records before reuse.",
+      blockerCodes:
+        freeTextReuseStatus === "pass" ? [] : ["free_text_destination_reuse_review_required"],
+    }),
+    paymentDestinationGate({
+      key: "evidence-vs-destination",
+      label: "Evidence is not destination",
+      status: evidenceBoundaryStatus,
+      detail:
+        evidenceBoundaryStatus === "pass"
+          ? "The participant acknowledged that submitted locators are evidence inputs, not payment destinations."
+          : "The participant must acknowledge that names, URLs, wallets, bank details, and receipts are evidence only.",
+      nextAction:
+        evidenceBoundaryStatus === "pass"
+          ? "Store raw locators as review evidence until a destination record is verified."
+          : "Require the evidence-vs-destination acknowledgement.",
+      blockerCodes: evidenceBoundaryStatus === "pass" ? [] : ["evidence_destination_boundary_missing"],
+    }),
+    paymentDestinationGate({
+      key: "capture-release-boundary",
+      label: "Capture and release boundary",
+      status: captureBoundaryStatus,
+      detail:
+        captureBoundaryStatus === "pass"
+          ? "The participant acknowledged that this preview cannot capture or release funds before verification."
+          : captureBoundaryStatus === "blocked"
+            ? "This preview requested capture or release before verified recipient and payment-destination records exist."
+            : "The participant must acknowledge no capture or release before verification.",
+      nextAction:
+        captureBoundaryStatus === "pass"
+          ? "Keep capture and release disabled until release-gate review passes."
+          : "Remove capture/release requests and acknowledge the no-capture boundary.",
+      blockerCodes: captureBoundaryStatus === "pass" ? [] : ["capture_release_boundary_required"],
+    }),
+  ];
+  const blockedGateCount = gates.filter((gate) => gate.status === "blocked").length;
+  const humanReviewGateCount = gates.filter(
+    (gate) => gate.status === "human_review" || gate.status === "needs_input",
+  ).length;
+
+  return {
+    schemaVersion: "donation-offset-payment-destination-preview-v1",
+    releaseStage: "donation_offset_preview_no_capture",
+    captureAllowed: false,
+    releaseAllowed: false,
+    relianceBearing: false,
+    freeTextDestinationReusable: false,
+    evidenceLocatorIsPaymentDestination: false,
+    requiresRecipientRegistryEntry: true,
+    requiresVerifiedPaymentDestinationBeforeCapture: true,
+    recipientLabel: input.recipientLabel.trim() || "Selected recipient",
+    recipientIdentityStatus: input.recipientIdentityStatus,
+    paymentDestinationKind: input.paymentDestinationKind,
+    paymentDestinationLocator: input.paymentDestinationLocator.trim() || "Unspecified destination locator",
+    paymentDestinationReviewStatus: input.paymentDestinationReviewStatus,
+    gates,
+    blockedGateCount,
+    humanReviewGateCount,
+    readyForRecipientRegistryReview:
+      blockedGateCount === 0 && gates.every((gate) => gate.status !== "needs_input"),
+  };
+}
+
+export function validateDonationOffsetPaymentDestinationInput(
+  input: DonationOffsetPaymentDestinationInput,
+) {
+  const errors: string[] = [];
+  const preview = buildDonationOffsetPaymentDestinationPreview(input);
+
+  if (!hasMeaningfulText(input.recipientLabel)) {
+    errors.push("Name the donation-offset recipient before publishing the preview.");
+  }
+
+  if (input.recipientIdentityStatus === "unknown") {
+    errors.push("Choose the recipient identity status for this donation offset.");
+  }
+
+  if (input.paymentDestinationKind === "unknown") {
+    errors.push("Choose the payment destination kind for this donation offset.");
+  }
+
+  if (!hasPaymentDestinationLocator(input.paymentDestinationLocator)) {
+    errors.push("Add a payment destination locator for recipient review.");
+  }
+
+  if (input.paymentDestinationReviewStatus === "unknown") {
+    errors.push("Choose the payment destination review status.");
+  }
+
+  if (!input.participantAcknowledgedEvidenceNotDestination) {
+    errors.push("Acknowledge that submitted recipient names, URLs, wallets, bank details, and receipts are evidence inputs, not payment destinations.");
+  }
+
+  if (!input.participantAcknowledgedNoCaptureBeforeVerification) {
+    errors.push("Acknowledge that no capture or release can happen before recipient and payment-destination verification.");
+  }
+
+  if (input.captureOrReleaseRequested) {
+    errors.push("Donation-offset previews cannot request capture or release before verified recipient and payment-destination records exist.");
+  }
+
+  for (const gate of preview.gates) {
+    if (gate.status === "blocked") {
+      errors.push(`${gate.label}: ${gate.nextAction}`);
+    }
+  }
+
+  return errors;
+}
+
+export function summarizeDonationOffsetPaymentDestinationForNotes(
+  preview: DonationOffsetPaymentDestinationPreview,
+) {
+  const gateSummary = preview.gates
+    .map((gate) => `${gate.label}: ${formatDonationOffsetPaymentDestinationGateStatus(gate.status)}`)
+    .join("; ");
+
+  return [
+    "Donation-offset recipient and payment-destination preview:",
+    `Schema version: ${preview.schemaVersion}`,
+    `Release stage: ${preview.releaseStage}`,
+    `Recipient: ${preview.recipientLabel}`,
+    `Recipient identity status: ${preview.recipientIdentityStatus.replaceAll("_", " ")}`,
+    `Payment destination kind: ${preview.paymentDestinationKind.replaceAll("_", " ")}`,
+    `Payment destination locator: ${preview.paymentDestinationLocator}`,
+    `Payment destination review status: ${preview.paymentDestinationReviewStatus.replaceAll("_", " ")}`,
+    "Capture allowed from this preview: no",
+    "Release allowed from this preview: no",
+    "Raw recipient/payment locator is payment destination: no",
+    "Free-text destination reusable across agreements: no",
+    "Requires recipient registry entry before capture/release: yes",
+    "Requires verified payment destination before capture/release: yes",
+    `Manual-review gates: ${gateSummary}`,
+  ].join("\n");
+}
+
+export function buildDemoDonationOffsetPaymentDestinationPreview() {
+  return buildDonationOffsetPaymentDestinationPreview({
+    recipientLabel: "GiveWell Top Charities Fund",
+    recipientIdentityStatus: "registered_recipient",
+    paymentDestinationKind: "registered_charity_page",
+    paymentDestinationLocator: "https://www.every.org/givewell-top-charities-fund",
+    paymentDestinationReviewStatus: "needs_review",
+    antiImpersonationReviewed: false,
+    jurisdictionReviewed: false,
+    prohibitedUseReviewed: false,
+    destinationControlledByRecipient: false,
+    freeTextDestination: false,
+    reuseAcrossAgreementsRequested: false,
+    captureOrReleaseRequested: false,
+    participantAcknowledgedEvidenceNotDestination: true,
+    participantAcknowledgedNoCaptureBeforeVerification: true,
+  });
 }
 
 export function buildDonationOffsetDonorOfRecordPreview(

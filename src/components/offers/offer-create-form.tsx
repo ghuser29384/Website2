@@ -27,6 +27,7 @@ import {
 } from "@/lib/performance-bonds";
 import {
   buildDonationOffsetDonorOfRecordPreview,
+  buildDonationOffsetPaymentDestinationPreview,
   calculateDonationOffsetPoolProgress,
   calculateDonationOffsetPreview,
   createDefaultDonationOffsetFields,
@@ -40,6 +41,7 @@ import {
   getSelectableRegisteredCharities,
   findRegisteredCharityById,
   validateDonationOffsetDonorOfRecordInput,
+  validateDonationOffsetPaymentDestinationInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
   DONATION_OFFSET_PARTICIPATION_MODE_OPTIONS,
@@ -52,6 +54,10 @@ import {
   type DonationOffsetDonorOfRecordGateStatus,
   type DonationOffsetDonorOfRecordInput,
   type DonationOffsetDonorOfRecordRole,
+  type DonationOffsetPaymentDestinationInput,
+  type DonationOffsetPaymentDestinationKind,
+  type DonationOffsetPaymentDestinationReviewStatus,
+  type DonationOffsetRecipientIdentityStatus,
   type DonationOffsetTaxReceiptTreatment,
 } from "@/lib/donation-offsets";
 import {
@@ -265,6 +271,7 @@ const defaultOffsetDonorOfRecordExplanation =
   "The participant who makes the external donation remains donor of record; Moral Trade is not donor of record.";
 const defaultOffsetTaxReceiptExplanation =
   "No participant should claim tax deductibility from Moral Trade. Any external receipt remains an operational record subject to legal review.";
+const defaultOffsetPaymentDestinationLocator = "https://www.every.org/givewell-top-charities-fund";
 const defaultPledgeReciprocalReleaseRule =
   "If one side exits under the stated rule, both sides are released from future obligations while completed or disputed past obligations remain reviewable.";
 const defaultPledgeWithdrawalBeforeLockRule =
@@ -1023,6 +1030,27 @@ export function OfferCreateForm({
     useState(true);
   const [offsetDestinationVerificationStatus, setOffsetDestinationVerificationStatus] =
     useState<DonationOffsetDestinationVerificationStatus>("registered_destination_selected");
+  const [offsetRecipientIdentityStatus, setOffsetRecipientIdentityStatus] =
+    useState<DonationOffsetRecipientIdentityStatus>("registered_recipient");
+  const [offsetPaymentDestinationKind, setOffsetPaymentDestinationKind] =
+    useState<DonationOffsetPaymentDestinationKind>("registered_charity_page");
+  const [offsetPaymentDestinationLocator, setOffsetPaymentDestinationLocator] = useState("");
+  const [offsetPaymentDestinationReviewStatus, setOffsetPaymentDestinationReviewStatus] =
+    useState<DonationOffsetPaymentDestinationReviewStatus>("needs_review");
+  const [offsetAntiImpersonationReviewed, setOffsetAntiImpersonationReviewed] = useState(false);
+  const [offsetPaymentJurisdictionReviewed, setOffsetPaymentJurisdictionReviewed] = useState(false);
+  const [offsetProhibitedUseReviewed, setOffsetProhibitedUseReviewed] = useState(false);
+  const [offsetDestinationControlledByRecipient, setOffsetDestinationControlledByRecipient] =
+    useState(false);
+  const [offsetFreeTextDestination, setOffsetFreeTextDestination] = useState(false);
+  const [offsetDestinationReuseRequested, setOffsetDestinationReuseRequested] = useState(false);
+  const [offsetCaptureOrReleaseRequested, setOffsetCaptureOrReleaseRequested] = useState(false);
+  const [offsetEvidenceNotDestinationAcknowledged, setOffsetEvidenceNotDestinationAcknowledged] =
+    useState(false);
+  const [
+    offsetNoCaptureBeforeVerificationAcknowledged,
+    setOffsetNoCaptureBeforeVerificationAcknowledged,
+  ] = useState(false);
   const [offerImpact, setOfferImpact] = useState(initialTemplate?.offerImpact ?? "7");
   const [minCounterpartyImpact, setMinCounterpartyImpact] = useState(initialTemplate?.minCounterpartyImpact ?? "6");
   const [verificationPreference, setVerificationPreference] = useState(initialTemplate?.verification ?? "Annual receipts");
@@ -1178,6 +1206,54 @@ export function OfferCreateForm({
         ? validateDonationOffsetDonorOfRecordInput(donationOffsetDonorOfRecordInput)
         : [],
     [donationOffsetDonorOfRecordInput, isOffset],
+  );
+  const effectivePaymentDestinationLocator =
+    offsetPaymentDestinationLocator || selectedCompromiseDestination?.websiteUrl || defaultOffsetPaymentDestinationLocator;
+  const donationOffsetPaymentDestinationInput = useMemo<DonationOffsetPaymentDestinationInput>(
+    () => ({
+      recipientLabel: selectedCompromiseDestination?.name ?? "Selected compromise destination",
+      recipientIdentityStatus: offsetRecipientIdentityStatus,
+      paymentDestinationKind: offsetPaymentDestinationKind,
+      paymentDestinationLocator: effectivePaymentDestinationLocator,
+      paymentDestinationReviewStatus: offsetPaymentDestinationReviewStatus,
+      antiImpersonationReviewed: offsetAntiImpersonationReviewed,
+      jurisdictionReviewed: offsetPaymentJurisdictionReviewed,
+      prohibitedUseReviewed: offsetProhibitedUseReviewed,
+      destinationControlledByRecipient: offsetDestinationControlledByRecipient,
+      freeTextDestination: offsetFreeTextDestination,
+      reuseAcrossAgreementsRequested: offsetDestinationReuseRequested,
+      captureOrReleaseRequested: offsetCaptureOrReleaseRequested,
+      participantAcknowledgedEvidenceNotDestination: offsetEvidenceNotDestinationAcknowledged,
+      participantAcknowledgedNoCaptureBeforeVerification:
+        offsetNoCaptureBeforeVerificationAcknowledged,
+    }),
+    [
+      effectivePaymentDestinationLocator,
+      offsetAntiImpersonationReviewed,
+      offsetCaptureOrReleaseRequested,
+      offsetDestinationControlledByRecipient,
+      offsetDestinationReuseRequested,
+      offsetEvidenceNotDestinationAcknowledged,
+      offsetFreeTextDestination,
+      offsetNoCaptureBeforeVerificationAcknowledged,
+      offsetPaymentDestinationKind,
+      offsetPaymentDestinationReviewStatus,
+      offsetPaymentJurisdictionReviewed,
+      offsetProhibitedUseReviewed,
+      offsetRecipientIdentityStatus,
+      selectedCompromiseDestination?.name,
+    ],
+  );
+  const donationOffsetPaymentDestinationPreview = useMemo(
+    () => buildDonationOffsetPaymentDestinationPreview(donationOffsetPaymentDestinationInput),
+    [donationOffsetPaymentDestinationInput],
+  );
+  const donationOffsetPaymentDestinationErrors = useMemo(
+    () =>
+      isOffset
+        ? validateDonationOffsetPaymentDestinationInput(donationOffsetPaymentDestinationInput)
+        : [],
+    [donationOffsetPaymentDestinationInput, isOffset],
   );
   const baselineAmountCents = Math.round((Number(baselineAmountUsd) || 0) * 100);
   const baselineBondCapCents = calculatePilotBaselineBondCapCents(baselineAmountCents);
@@ -1398,12 +1474,14 @@ export function OfferCreateForm({
             }),
             ...baselineBondValidation.errors,
             ...donationOffsetDonorOfRecordErrors,
+            ...donationOffsetPaymentDestinationErrors,
           ]
         : [],
     [
       antiThreatCertified,
       baselineBondValidation.errors,
       donationOffsetDonorOfRecordErrors,
+      donationOffsetPaymentDestinationErrors,
       evidenceUrl,
       isOffset,
       normalizedOffsetFields,
@@ -3869,6 +3947,266 @@ export function OfferCreateForm({
                   </div>
                   <ol className="protocol-provenance-list">
                     {donationOffsetDonorOfRecordPreview.gates.map((gate) => (
+                      <li
+                        className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
+                          gate.status,
+                        )}`}
+                        key={gate.key}
+                      >
+                        <span className="protocol-step-status">
+                          {formatOffsetDonorGateStatus(gate.status)}
+                        </span>
+                        <div>
+                          <strong>{gate.label}</strong>
+                          <p>{gate.detail}</p>
+                          <small>{gate.nextAction}</small>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="field">
+              <legend>Recipient and payment-destination verification</legend>
+              <div className="panel subtle-panel">
+                <div className="panel-head">
+                  <div>
+                    <p className="eyebrow">Evidence before routing</p>
+                    <h3>Names, links, bank details, and wallets need destination review</h3>
+                  </div>
+                  <span className="badge badge-warning">
+                    {donationOffsetPaymentDestinationPreview.releaseStage.replaceAll("_", " ")}
+                  </span>
+                </div>
+                <p className="panel-note">
+                  Submitted recipient and destination locators are review evidence. They do not
+                  become reusable payment routes until recipient registry, anti-impersonation,
+                  jurisdiction, prohibited-use, and payment-destination checks are non-blocking.
+                </p>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Recipient identity</span>
+                    <select
+                      name="offset_recipient_identity_status"
+                      required={isOffset}
+                      value={offsetRecipientIdentityStatus}
+                      onChange={(event) =>
+                        setOffsetRecipientIdentityStatus(
+                          readFormControlValue(event) as DonationOffsetRecipientIdentityStatus,
+                        )
+                      }
+                    >
+                      <option value="registered_recipient">Registered recipient</option>
+                      <option value="fiscal_host_or_intermediary">Fiscal host or intermediary</option>
+                      <option value="free_text_or_unverified">Free-text or unverified recipient</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Destination kind</span>
+                    <select
+                      name="offset_payment_destination_kind"
+                      required={isOffset}
+                      value={offsetPaymentDestinationKind}
+                      onChange={(event) =>
+                        setOffsetPaymentDestinationKind(
+                          readFormControlValue(event) as DonationOffsetPaymentDestinationKind,
+                        )
+                      }
+                    >
+                      <option value="registered_charity_page">Registered charity page</option>
+                      <option value="payment_processor_link">Payment processor link</option>
+                      <option value="bank_account">Bank account</option>
+                      <option value="wallet_address">Wallet address</option>
+                      <option value="fiscal_host">Fiscal host</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Destination locator</span>
+                    <input
+                      name="offset_payment_destination_locator"
+                      required={isOffset}
+                      type="text"
+                      value={effectivePaymentDestinationLocator}
+                      onChange={(event) =>
+                        setOffsetPaymentDestinationLocator(readFormControlValue(event))
+                      }
+                    />
+                    <small>
+                      URL, charity identifier, fiscal-host path, bank reference, or wallet string
+                      for review evidence.
+                    </small>
+                  </label>
+                  <label className="field">
+                    <span>Payment-destination review</span>
+                    <select
+                      name="offset_payment_destination_review_status"
+                      required={isOffset}
+                      value={offsetPaymentDestinationReviewStatus}
+                      onChange={(event) =>
+                        setOffsetPaymentDestinationReviewStatus(
+                          readFormControlValue(event) as DonationOffsetPaymentDestinationReviewStatus,
+                        )
+                      }
+                    >
+                      <option value="needs_review">Needs review</option>
+                      <option value="verified">Verified destination</option>
+                      <option value="blocked">Blocked destination</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="radio-row">
+                    <input
+                      checked={offsetAntiImpersonationReviewed}
+                      name="offset_anti_impersonation_reviewed"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetAntiImpersonationReviewed(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Anti-impersonation review is non-blocking.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetPaymentJurisdictionReviewed}
+                      name="offset_jurisdiction_reviewed"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetPaymentJurisdictionReviewed(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Jurisdiction and payment-rail eligibility review is non-blocking.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetProhibitedUseReviewed}
+                      name="offset_prohibited_use_reviewed"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetProhibitedUseReviewed(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Prohibited-use and financial-crime screening is non-blocking.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetDestinationControlledByRecipient}
+                      name="offset_destination_controlled_by_recipient"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetDestinationControlledByRecipient(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Destination control by the recipient or reviewed fiscal host is verified.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetFreeTextDestination}
+                      name="offset_free_text_destination"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetFreeTextDestination(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>This includes free-text, copied-link, bank, wallet, or fiscal-host notes.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetDestinationReuseRequested}
+                      name="offset_destination_reuse_requested"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetDestinationReuseRequested(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Reuse across agreements is requested.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetCaptureOrReleaseRequested}
+                      name="offset_capture_or_release_requested"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetCaptureOrReleaseRequested(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>This draft requests capture or release now.</span>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="radio-row">
+                    <input
+                      checked={offsetEvidenceNotDestinationAcknowledged}
+                      name="offset_evidence_not_destination_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetEvidenceNotDestinationAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Submitted locators are evidence inputs, not payment destinations.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNoCaptureBeforeVerificationAcknowledged}
+                      name="offset_no_capture_before_verification_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNoCaptureBeforeVerificationAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>No capture or release can happen before recipient and destination verification.</span>
+                  </label>
+                </div>
+
+                <div className="protocol-provenance-preflight" aria-live="polite">
+                  <div className="protocol-provenance-head">
+                    <div>
+                      <strong>Payment-destination preview</strong>
+                      <p>
+                        Capture allowed:{" "}
+                        {donationOffsetPaymentDestinationPreview.captureAllowed ? "yes" : "no"}.
+                        Release allowed:{" "}
+                        {donationOffsetPaymentDestinationPreview.releaseAllowed ? "yes" : "no"}.
+                      </p>
+                    </div>
+                    <span className="protocol-review-status">
+                      {donationOffsetPaymentDestinationPreview.humanReviewGateCount} review item
+                      {donationOffsetPaymentDestinationPreview.humanReviewGateCount === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <ol className="protocol-provenance-list">
+                    {donationOffsetPaymentDestinationPreview.gates.map((gate) => (
                       <li
                         className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
                           gate.status,
