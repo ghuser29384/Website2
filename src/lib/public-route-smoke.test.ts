@@ -2097,6 +2097,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const protocolSource = readRepoFile("src/lib/moral-trade/protocol.ts");
   const dataModelSource = readRepoFile("src/lib/moral-trade/data-model.ts");
   const policyBundleSource = readRepoFile("src/lib/moral-trade/policy-bundle.ts");
+  const releaseGateSource = readRepoFile("src/lib/moral-trade/release-gates.ts");
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
   const offerWritePathSource = readRepoFile("src/lib/moral-trade/offer-write-path.ts");
   const agreementWritePathSource = readRepoFile("src/lib/moral-trade/agreement-write-path.ts");
@@ -2171,6 +2172,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const policyBundleContractRoute = readRepoFile(
     "src/app/api/moral-trade/policy-bundle/contract/route.ts",
+  );
+  const releaseGateContractRoute = readRepoFile(
+    "src/app/api/moral-trade/release-gates/contract/route.ts",
   );
   const copilotContractRoute = readRepoFile("src/app/api/moral-trade/copilot/contract/route.ts");
   const copilotReviewRoute = readRepoFile("src/app/api/moral-trade/copilot/review/route.ts");
@@ -2373,6 +2377,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(policyBundleSource, /PROHIBITED_PROPOSAL_FIXTURES/);
   assert.match(policyBundleSource, /private_feed_payloads/);
   assert.match(policyBundleSource, /policy_bundle_contract_validator/);
+  assert.match(releaseGateSource, /getMoralTradeReleaseGateContract/);
+  assert.match(releaseGateSource, /evaluateMoralTradeReleaseGate/);
+  assert.match(releaseGateSource, /moral_trade_policy_snapshots/);
+  assert.match(releaseGateSource, /moral_trade_release_gate_requirement_results/);
+  assert.match(releaseGateSource, /waiver_without_neutral_review/);
+  assert.match(releaseGateSource, /missing_inactive_control_representation/);
   assert.match(provenanceSource, /validateMoralTradeProvenanceBundle/);
   assert.match(provenanceSource, /getMoralTradeProvenanceContract/);
   assert.match(provenanceSource, /validateMoralTradeProvenanceContract/);
@@ -2957,6 +2967,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Raw artifacts, private notes, contact details, and exact wishes/);
   assert.match(technicalSpecPage, /policyBundleContract\.verificationMethodTaxonomy/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/policy-bundle\/contract/);
+  assert.match(technicalSpecPage, /Release gate contract/);
+  assert.match(technicalSpecPage, /releaseGateContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /\/api\/moral-trade\/release-gates\/contract/);
   assert.match(technicalSpecPage, /Evidence object contract/);
   assert.match(technicalSpecPage, /traceability events/);
   assert.match(technicalSpecPage, /external entity dedupe failures/);
@@ -3093,6 +3106,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /policyBundleStrictInputBundle/);
   assert.match(healthRoute, /policyBundleProhibitedPatternCodes/);
   assert.match(healthRoute, /policyBundleVerificationMethods/);
+  assert.match(healthRoute, /releaseGateValidation/);
+  assert.match(healthRoute, /releaseGateStageKeys/);
+  assert.match(healthRoute, /releaseGateFirstClassRecordTables/);
   assert.match(healthRoute, /stateTransitionRules/);
   assert.match(healthRoute, /provenanceObjectSchemas/);
   assert.match(healthRoute, /provenanceValidation/);
@@ -3183,6 +3199,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(policyBundleContractRoute, /strictInputBundle/);
   assert.match(policyBundleContractRoute, /prohibitedPatternCodes/);
   assert.match(policyBundleContractRoute, /verificationMethodKeys/);
+  assert.match(releaseGateContractRoute, /validateMoralTradeReleaseGateContract/);
+  assert.match(releaseGateContractRoute, /firstClassRecordTables/);
+  assert.match(releaseGateContractRoute, /sampleEvaluations/);
   assert.match(copilotContractRoute, /validateMoralTradeCopilotContract/);
   assert.match(copilotContractRoute, /getMoralTradeCopilotRolloutReadinessAudits/);
   assert.match(copilotContractRoute, /promptTemplates/);

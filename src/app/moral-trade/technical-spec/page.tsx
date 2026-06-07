@@ -39,6 +39,10 @@ import {
   validateMoralTradePolicyBundleContract,
 } from "@/lib/moral-trade/policy-bundle";
 import {
+  getMoralTradeReleaseGateContract,
+  validateMoralTradeReleaseGateContract,
+} from "@/lib/moral-trade/release-gates";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -127,6 +131,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const policyBundleContract = getMoralTradePolicyBundleContract();
   const policyBundleValidation =
     validateMoralTradePolicyBundleContract(policyBundleContract);
+  const releaseGateContract = getMoralTradeReleaseGateContract();
+  const releaseGateValidation =
+    validateMoralTradeReleaseGateContract(releaseGateContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -207,6 +214,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     validation,
     dataModelValidation,
     policyBundleValidation,
+    releaseGateValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -275,6 +283,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Policy bundle",
       status: policyBundleValidation.status,
       summary: `${policyBundleContract.prohibitedPatternRegistry.length} prohibited pattern(s), ${policyBundleContract.verificationLoop.length} verification step(s).`,
+    },
+    {
+      blockers: releaseGateValidation.blockers.length,
+      family: "Policy inputs",
+      href: "/api/moral-trade/release-gates/contract",
+      label: "Release gates",
+      status: releaseGateValidation.status,
+      summary: `${releaseGateContract.stages.length} stage(s), ${releaseGateContract.requirementDefinitions.length} fail-closed requirement(s).`,
     },
     {
       blockers: copilotValidation.blockers.length,
@@ -883,6 +899,76 @@ export default async function MoralTradeTechnicalSpecPage() {
                     ? "Blocks matchable status until resolved."
                     : "Routes, explains, or records without granting reliance."}
                 </p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="release-gate-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Release gate contract</p>
+            <h2 id="release-gate-contract-heading">
+              Payable and reliance-bearing states fail closed unless first-class gate evidence passes.
+            </h2>
+            <p>
+              Moraltrade60 requires policy snapshots, state interpretation, feature flags, and
+              release-gate requirement results to be reviewable subjects. This contract makes
+              missing, stale, unknown, under-review, or mutable states block launch unless a frozen
+              policy snapshot explicitly marks a control not required for the current stage.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">Release gates {releaseGateContract.version}</p>
+              <h3>Status {releaseGateValidation.status}</h3>
+              <p>
+                {releaseGateValidation.checks.length} check(s),{" "}
+                {releaseGateValidation.blockers.length} blocker(s),{" "}
+                {releaseGateContract.firstClassRecordTables.length} first-class record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/release-gates/contract">
+              Open release gate JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Stage flags</h3>
+              <ul className="clean-list">
+                {releaseGateContract.stages.map((stage) => (
+                  <li key={stage.key}>
+                    {stage.key.replaceAll("_", " ")}: {stage.featureFlagKey}
+                  </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {releaseGateContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Privileged actions</h3>
+              <ul className="clean-list">
+                {releaseGateContract.privilegedActionKeys.slice(0, 7).map((action) => (
+                  <li key={action}>{action.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>State interpretation</h3>
+              <p>{releaseGateContract.stateInterpretationRule}</p>
+            </article>
+          </div>
+          <div className="data-grid">
+            {releaseGateContract.requirementDefinitions.slice(0, 8).map((requirement) => (
+              <article className="panel data-card" key={requirement.key}>
+                <p className="detail-kicker">{requirement.category}</p>
+                <h3>{requirement.label}</h3>
+                <p>{requirement.description}</p>
               </article>
             ))}
           </div>

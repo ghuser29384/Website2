@@ -16,6 +16,10 @@ import {
   validateMoralTradePolicyBundleContract,
 } from "@/lib/moral-trade/policy-bundle";
 import {
+  getMoralTradeReleaseGateContract,
+  validateMoralTradeReleaseGateContract,
+} from "@/lib/moral-trade/release-gates";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -115,6 +119,9 @@ export async function GET(request: Request) {
   const policyBundleContract = getMoralTradePolicyBundleContract();
   const policyBundleValidation =
     validateMoralTradePolicyBundleContract(policyBundleContract);
+  const releaseGateContract = getMoralTradeReleaseGateContract();
+  const releaseGateValidation =
+    validateMoralTradeReleaseGateContract(releaseGateContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -191,6 +198,7 @@ export async function GET(request: Request) {
       validation.status === "pass" &&
       dataModelValidation.status === "pass" &&
       policyBundleValidation.status === "pass" &&
+      releaseGateValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -217,6 +225,7 @@ export async function GET(request: Request) {
     validation,
     dataModelValidation,
     policyBundleValidation,
+    releaseGateValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -259,6 +268,21 @@ export async function GET(request: Request) {
         policyBundleContract.verificationMethodTaxonomy.map((entry) => entry.key),
       policyBundleRedactions: policyBundleContract.redactionPolicy.map((entry) => entry.key),
       policyBundleContractTests: policyBundleContract.contractTests,
+      releaseGateContractVersion: releaseGateContract.version,
+      releaseGateStageKeys: releaseGateContract.stages.map((stage) => stage.key),
+      releaseGateRequirementKeys:
+        releaseGateContract.requirementDefinitions.map((requirement) => requirement.key),
+      releaseGateFirstClassRecordTables: releaseGateContract.firstClassRecordTables,
+      releaseGatePolicySnapshotSubjects:
+        releaseGateContract.immutablePolicySnapshotSubjects,
+      releaseGatePrivilegedActionKeys: releaseGateContract.privilegedActionKeys,
+      releaseGateSampleEvaluationStatuses: Object.fromEntries(
+        releaseGateContract.sampleEvaluations.map((evaluation) => [
+          evaluation.stage,
+          evaluation.status,
+        ]),
+      ),
+      releaseGateContractTests: releaseGateContract.contractTests,
       statusValues: profile.statusValues,
       decisionPipeline: profile.decisionPipeline.map((step) => ({
         key: step.key,
@@ -502,6 +526,7 @@ export async function GET(request: Request) {
       ...validation.blockers,
       ...dataModelValidation.blockers,
       ...policyBundleValidation.blockers,
+      ...releaseGateValidation.blockers,
       ...provenanceValidation.blockers,
       ...schemaRegistryValidation.blockers,
       ...copilotValidation.blockers,

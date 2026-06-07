@@ -21,6 +21,7 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 - public marketplace tab separation for live offers, rounds, worked examples, and demo records
 - reviewed seed templates for donation offsets and pledge swaps so the marketplace has safe starting points without fabricating live liquidity
 - privacy-safe marketplace measurement events and aggregate KPI definitions
+- fail-closed release-gate contract, public route, and first-class policy-snapshot / requirement-result records for payable, reliance-bearing, and public-metric stages
 - route-baseline verification for the public routes listed in `moraltrade60.md`
 
 ### Migration Summary
@@ -31,6 +32,9 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
   - Adds no-capture payment authorization records and state needed for controlled preview paths.
 - `supabase/migrations/20260607_marketplace_measurement_events.sql`
   - Extends the `funnel_events` event-type constraint with marketplace tab, filter, seed-template, template-start, and performance metric events.
+- `supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql`
+  - Adds first-class `moral_trade_policy_snapshots`, `moral_trade_state_interpretation_policies`, `moral_trade_release_gates`, `moral_trade_release_gate_requirement_results`, and `moral_trade_privileged_action_records` tables.
+  - Keeps missing, stale, unknown, under-review, mutable, or unreviewed gate evidence fail-closed before payable, reliance-bearing, public-metric, manual-capture, manual-payout, private-grant, or emergency-unpause behavior.
 
 ### Route Screenshots
 
@@ -42,7 +46,9 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 
 ```bash
 node --import tsx --test src/lib/marketplace-measurement.test.ts src/lib/growth.test.ts src/lib/public-offers.test.ts src/lib/public-route-smoke.test.ts
+node --import tsx --test src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 npm run lint -- src/lib/marketplace-measurement.ts src/lib/marketplace-measurement.test.ts src/lib/growth.ts src/lib/growth.test.ts src/components/analytics/funnel-tracker.tsx src/lib/measurement-plan.ts src/app/measurement/page.tsx src/app/api/moral-trade/health/route.ts src/lib/public-route-smoke.test.ts scripts/check-public-route-baseline.mjs
+npm run lint -- src/lib/moral-trade/release-gates.ts src/lib/moral-trade/release-gates.test.ts src/app/api/moral-trade/release-gates/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 git diff --check
 npm run build
 MORALTRADE_BASE_URL=http://127.0.0.1:3000 npm run measure:routes
@@ -51,6 +57,7 @@ MORALTRADE_BASE_URL=http://127.0.0.1:3000 npm run measure:routes
 Observed results:
 
 - focused test bundle: `71` tests passed
+- release-gate/API/source-smoke bundle: `60` tests passed
 - lint: passed
 - whitespace check: passed
 - production build: passed
@@ -102,6 +109,20 @@ Public offers contract sample:
 }
 ```
 
+Release-gate contract sample:
+
+```json
+{
+  "status": "pass",
+  "validatorName": "moral-trade-release-gate-contract",
+  "validatorVersion": "moral-trade-release-gate-validator-v0.1",
+  "sampleEvaluations": {
+    "public_goods_preview": "pass",
+    "donation_offset_payable": "blocked"
+  }
+}
+```
+
 Route baseline summary:
 
 ```json
@@ -126,12 +147,13 @@ Route baseline summary:
 - Sensitive metadata keys such as raw wishes, source notes, private evidence, contact details, receipts, prompts, and counterparty-specific messages are rejected by the sanitizer or validator.
 - Seed templates, worked examples, demo records, and rounds are explicitly excluded from live offer, completed-agreement, sponsor-leverage, and moral-trade volume metrics.
 - Public KPI snapshots use small-cell suppression with a minimum public count of `3`.
-- The health and measurement surfaces publish validator status and aggregate contract metadata, not private participant records.
+- The release-gate route publishes static stage, requirement, policy-snapshot, and privileged-action contract metadata; it does not expose private gate records, participant confirmations, payment records, or reviewer notes.
+- The health, measurement, and release-gate surfaces publish validator status and aggregate contract metadata, not private participant records.
 
 ### Remaining Blockers And Non-Claims
 
 - There are still `0` live public offers and `0` completed agreements in the local public-offer sample; reviewed examples and seed templates are scaffolding, not evidence of real liquidity.
 - Real-money capture and payout remain blocked until capped-real-money release gates, provider reconciliation, privileged-action controls, and reviewer approvals are complete.
 - Donation offsets and pledge swaps remain preview/manual-review oriented unless later release gates explicitly promote them.
-- `moraltrade60.md` includes broader long-tail requirements beyond this PR slice, including full release-gate requirement-result records, audit-integrity checkpoints, backup recovery policy, account-security policy, and production configuration provenance.
+- `moraltrade60.md` includes broader long-tail requirements beyond this PR slice, including live audit-integrity checkpoint production wiring, backup recovery policy, account-security policy, financial reconciliation operation, and production configuration provenance.
 - Local `gh` is unavailable, so this package provides a PR-ready body and artifacts but does not prove that a GitHub PR object was created.

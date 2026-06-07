@@ -106,6 +106,7 @@ const REQUIRED_ROUTES = [
   "public_offer_create_similar",
   "moral_trade_data_model_contract",
   "moral_trade_policy_bundle_contract",
+  "moral_trade_release_gate_contract",
   "moral_trade_provenance_schema",
   "moral_trade_schema_registry",
   "moral_trade_copilot_contract",

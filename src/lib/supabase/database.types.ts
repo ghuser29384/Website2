@@ -5597,6 +5597,356 @@ export interface Database {
         Relationships: [];
       };
     };
+      moral_trade_policy_snapshots: {
+        Row: {
+          id: string;
+          subject_kind:
+            | "release_gate"
+            | "state_interpretation"
+            | "payment_capture"
+            | "payout_release"
+            | "refund_cancellation"
+            | "provider_source_authentication"
+            | "time_authority"
+            | "notification"
+            | "fx"
+            | "platform_fee"
+            | "public_metrics"
+            | "data_retention"
+            | "participant_eligibility"
+            | "recipient_destination_verification";
+          subject_key: string;
+          version_label: string;
+          status: "draft" | "approved" | "immutable" | "superseded" | "revoked";
+          snapshot_hash: string;
+          snapshot_payload: Json;
+          approved_by: string | null;
+          approved_at: string | null;
+          immutable_after: string | null;
+          superseded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          subject_kind:
+            | "release_gate"
+            | "state_interpretation"
+            | "payment_capture"
+            | "payout_release"
+            | "refund_cancellation"
+            | "provider_source_authentication"
+            | "time_authority"
+            | "notification"
+            | "fx"
+            | "platform_fee"
+            | "public_metrics"
+            | "data_retention"
+            | "participant_eligibility"
+            | "recipient_destination_verification";
+          subject_key: string;
+          version_label: string;
+          status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
+          snapshot_hash: string;
+          snapshot_payload?: Json;
+          approved_by?: string | null;
+          approved_at?: string | null;
+          immutable_after?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          subject_kind?:
+            | "release_gate"
+            | "state_interpretation"
+            | "payment_capture"
+            | "payout_release"
+            | "refund_cancellation"
+            | "provider_source_authentication"
+            | "time_authority"
+            | "notification"
+            | "fx"
+            | "platform_fee"
+            | "public_metrics"
+            | "data_retention"
+            | "participant_eligibility"
+            | "recipient_destination_verification";
+          subject_key?: string;
+          version_label?: string;
+          status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
+          snapshot_hash?: string;
+          snapshot_payload?: Json;
+          approved_by?: string | null;
+          approved_at?: string | null;
+          immutable_after?: string | null;
+          superseded_by?: string | null;
+        };
+        Relationships: [];
+      };
+      moral_trade_state_interpretation_policies: {
+        Row: {
+          id: string;
+          policy_snapshot_id: string;
+          state_family: string;
+          missing_state_behavior: "block" | "not_required_for_stage";
+          unknown_state_behavior: "block" | "not_required_for_stage";
+          stale_state_behavior: "block" | "not_required_for_stage";
+          under_review_state_behavior: "block" | "not_required_for_stage";
+          unmapped_state_behavior: "block" | "not_required_for_stage";
+          superseded_state_behavior: "block" | "not_required_for_stage";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          policy_snapshot_id: string;
+          state_family: string;
+          missing_state_behavior?: "block" | "not_required_for_stage";
+          unknown_state_behavior?: "block" | "not_required_for_stage";
+          stale_state_behavior?: "block" | "not_required_for_stage";
+          under_review_state_behavior?: "block" | "not_required_for_stage";
+          unmapped_state_behavior?: "block" | "not_required_for_stage";
+          superseded_state_behavior?: "block" | "not_required_for_stage";
+          created_at?: string;
+        };
+        Update: {
+          policy_snapshot_id?: string;
+          state_family?: string;
+          missing_state_behavior?: "block" | "not_required_for_stage";
+          unknown_state_behavior?: "block" | "not_required_for_stage";
+          stale_state_behavior?: "block" | "not_required_for_stage";
+          under_review_state_behavior?: "block" | "not_required_for_stage";
+          unmapped_state_behavior?: "block" | "not_required_for_stage";
+          superseded_state_behavior?: "block" | "not_required_for_stage";
+        };
+        Relationships: [];
+      };
+      moral_trade_privileged_action_records: {
+        Row: {
+          id: string;
+          subject_kind:
+            | "release_gate"
+            | "policy_snapshot"
+            | "recipient_destination"
+            | "privacy_grant"
+            | "impact_claim"
+            | "blocker_override"
+            | "manual_capture"
+            | "manual_payout_release"
+            | "emergency_unpause"
+            | "refund_cancellation";
+          subject_id: string | null;
+          action_key:
+            | "release_gate_approval"
+            | "policy_snapshot_approval"
+            | "recipient_destination_verification"
+            | "private_data_access_grant"
+            | "impact_claim_publication"
+            | "blocker_override"
+            | "manual_capture"
+            | "manual_payout_release"
+            | "emergency_unpause"
+            | "nonroutine_refund_cancellation";
+          status: "requested" | "approved" | "blocked" | "expired" | "superseded";
+          requested_by: string | null;
+          first_approver_id: string | null;
+          second_approver_id: string | null;
+          neutral_reviewer_id: string | null;
+          reason_codes: string[];
+          emergency_pause_allowed: boolean;
+          decided_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          subject_kind:
+            | "release_gate"
+            | "policy_snapshot"
+            | "recipient_destination"
+            | "privacy_grant"
+            | "impact_claim"
+            | "blocker_override"
+            | "manual_capture"
+            | "manual_payout_release"
+            | "emergency_unpause"
+            | "refund_cancellation";
+          subject_id?: string | null;
+          action_key:
+            | "release_gate_approval"
+            | "policy_snapshot_approval"
+            | "recipient_destination_verification"
+            | "private_data_access_grant"
+            | "impact_claim_publication"
+            | "blocker_override"
+            | "manual_capture"
+            | "manual_payout_release"
+            | "emergency_unpause"
+            | "nonroutine_refund_cancellation";
+          status?: "requested" | "approved" | "blocked" | "expired" | "superseded";
+          requested_by?: string | null;
+          first_approver_id?: string | null;
+          second_approver_id?: string | null;
+          neutral_reviewer_id?: string | null;
+          reason_codes?: string[];
+          emergency_pause_allowed?: boolean;
+          decided_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          subject_kind?:
+            | "release_gate"
+            | "policy_snapshot"
+            | "recipient_destination"
+            | "privacy_grant"
+            | "impact_claim"
+            | "blocker_override"
+            | "manual_capture"
+            | "manual_payout_release"
+            | "emergency_unpause"
+            | "refund_cancellation";
+          subject_id?: string | null;
+          action_key?:
+            | "release_gate_approval"
+            | "policy_snapshot_approval"
+            | "recipient_destination_verification"
+            | "private_data_access_grant"
+            | "impact_claim_publication"
+            | "blocker_override"
+            | "manual_capture"
+            | "manual_payout_release"
+            | "emergency_unpause"
+            | "nonroutine_refund_cancellation";
+          status?: "requested" | "approved" | "blocked" | "expired" | "superseded";
+          requested_by?: string | null;
+          first_approver_id?: string | null;
+          second_approver_id?: string | null;
+          neutral_reviewer_id?: string | null;
+          reason_codes?: string[];
+          emergency_pause_allowed?: boolean;
+          decided_at?: string | null;
+        };
+        Relationships: [];
+      };
+      moral_trade_release_gates: {
+        Row: {
+          id: string;
+          stage:
+            | "public_goods_preview"
+            | "donation_offset_payable"
+            | "pledge_swap_reliance_manual_pilot"
+            | "capped_real_money_release"
+            | "public_metric_release";
+          feature_flag_key: string;
+          status: "draft" | "under_review" | "approved" | "blocked" | "paused" | "superseded";
+          policy_snapshot_bundle_hash: string;
+          state_interpretation_policy_snapshot_id: string;
+          approval_action_record_id: string | null;
+          emergency_paused: boolean;
+          approved_by: string | null;
+          approved_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          stage:
+            | "public_goods_preview"
+            | "donation_offset_payable"
+            | "pledge_swap_reliance_manual_pilot"
+            | "capped_real_money_release"
+            | "public_metric_release";
+          feature_flag_key: string;
+          status?: "draft" | "under_review" | "approved" | "blocked" | "paused" | "superseded";
+          policy_snapshot_bundle_hash: string;
+          state_interpretation_policy_snapshot_id: string;
+          approval_action_record_id?: string | null;
+          emergency_paused?: boolean;
+          approved_by?: string | null;
+          approved_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          stage?:
+            | "public_goods_preview"
+            | "donation_offset_payable"
+            | "pledge_swap_reliance_manual_pilot"
+            | "capped_real_money_release"
+            | "public_metric_release";
+          feature_flag_key?: string;
+          status?: "draft" | "under_review" | "approved" | "blocked" | "paused" | "superseded";
+          policy_snapshot_bundle_hash?: string;
+          state_interpretation_policy_snapshot_id?: string;
+          approval_action_record_id?: string | null;
+          emergency_paused?: boolean;
+          approved_by?: string | null;
+          approved_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_release_gate_requirement_results: {
+        Row: {
+          id: string;
+          release_gate_id: string;
+          requirement_key: string;
+          status:
+            | "passed"
+            | "not_required_for_stage"
+            | "waived_by_neutral_review"
+            | "failed"
+            | "missing"
+            | "stale"
+            | "unknown"
+            | "under_review";
+          evidence_ref: string;
+          policy_snapshot_id: string | null;
+          privileged_action_record_id: string | null;
+          recorded_by: string | null;
+          recorded_at: string;
+          notes: string;
+        };
+        Insert: {
+          id?: string;
+          release_gate_id: string;
+          requirement_key: string;
+          status:
+            | "passed"
+            | "not_required_for_stage"
+            | "waived_by_neutral_review"
+            | "failed"
+            | "missing"
+            | "stale"
+            | "unknown"
+            | "under_review";
+          evidence_ref?: string;
+          policy_snapshot_id?: string | null;
+          privileged_action_record_id?: string | null;
+          recorded_by?: string | null;
+          recorded_at?: string;
+          notes?: string;
+        };
+        Update: {
+          requirement_key?: string;
+          status?:
+            | "passed"
+            | "not_required_for_stage"
+            | "waived_by_neutral_review"
+            | "failed"
+            | "missing"
+            | "stale"
+            | "unknown"
+            | "under_review";
+          evidence_ref?: string;
+          policy_snapshot_id?: string | null;
+          privileged_action_record_id?: string | null;
+          recorded_by?: string | null;
+          recorded_at?: string;
+          notes?: string;
+        };
+        Relationships: [];
+      };
     Views: {
       wish_profile_previews: {
         Row: {
