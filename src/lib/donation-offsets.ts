@@ -78,6 +78,76 @@ export interface DonationOffsetPoolProgress {
   status: "open" | "assurance_pending" | "assurance_met" | "closed";
 }
 
+export interface DonationOffsetBatchCommitment {
+  id: string;
+  participantLabel: string;
+  side: DonationOffsetPoolSide;
+  amountUsd: number;
+  ratioMinimum: number;
+  ratioMaximum: number;
+  status: "active" | "withdrawn" | "blocked";
+}
+
+export interface DonationOffsetCommitmentReservation {
+  commitmentId: string;
+  participantLabel: string;
+  side: DonationOffsetPoolSide;
+  committedUsd: number;
+  reservedUsd: number;
+  unreservedUsd: number;
+  ratioMinimum: number;
+  ratioMaximum: number;
+  reservationStatus: "reserved" | "partially_reserved" | "unreserved" | "blocked";
+  blockerCodes: string[];
+}
+
+export interface DonationOffsetAtomicSettlementPreview {
+  id: string;
+  status: "ready_for_final_lock_confirmation" | "blocked_preview_only";
+  requiredParticipantCount: number;
+  finalConfirmationCount: number;
+  allOrNone: true;
+  captureAllowed: false;
+  relianceBearing: false;
+  blockerCodes: string[];
+}
+
+export interface DonationOffsetFinalLockProposalPreview {
+  id: string;
+  status: "preview_only_no_capture" | "blocked";
+  exactMatchedSideAUsd: number;
+  exactMatchedSideBUsd: number;
+  exactCompromiseDestinationUsd: number;
+  clearingRatio: string;
+  destinationLabel: string;
+  evidenceStandard: string;
+  deadlineLabel: string;
+  requiredFreshConfirmations: number;
+  noCapture: true;
+  createsPaymentCapture: false;
+  relianceBearing: false;
+  blockerCodes: string[];
+}
+
+export interface DonationOffsetBatchClearingDryRun {
+  schemaVersion: "donation-offset-batch-clearing-dry-run-v1";
+  poolId: string;
+  poolName: string;
+  releaseStage: "donation_offset_preview_no_capture";
+  ratioBoundStatus: "within_bounds" | "out_of_bounds" | "insufficient_sides";
+  commitmentInventory: DonationOffsetCommitmentReservation[];
+  matchedSideAUsd: number;
+  matchedSideBUsd: number;
+  compromiseTotalUsd: number;
+  unmatchedSideAUsd: number;
+  unmatchedSideBUsd: number;
+  assuranceMinimumUsd: number;
+  assuranceReached: boolean;
+  atomicSettlementGroup: DonationOffsetAtomicSettlementPreview;
+  finalLockProposal: DonationOffsetFinalLockProposalPreview;
+  userFacingBlockers: string[];
+}
+
 export interface DonationOffsetModerationAssessment {
   status: DonationOffsetModerationStatus;
   reasons: string[];
@@ -466,6 +536,276 @@ export function calculateDonationOffsetPoolProgress({
     assuranceReached,
     status,
   };
+}
+
+function usdToCents(value: number | null | undefined) {
+  const normalized = normalizeUsdThreshold(value);
+  return Math.round((normalized ?? 0) * 100);
+}
+
+function centsToUsd(value: number) {
+  return Number((Math.max(0, value) / 100).toFixed(2));
+}
+
+function distributeReservedCents(commitments: DonationOffsetBatchCommitment[], targetUsd: number) {
+  const targetCents = usdToCents(targetUsd);
+  const commitmentCents = commitments.map((commitment) => ({
+    id: commitment.id,
+    amountCents: usdToCents(commitment.amountUsd),
+  }));
+  const totalCents = commitmentCents.reduce((sum, commitment) => sum + commitment.amountCents, 0);
+
+  if (!commitmentCents.length || targetCents <= 0 || totalCents <= 0) {
+    return new Map(commitmentCents.map((commitment) => [commitment.id, 0]));
+  }
+
+  const rawReservations = commitmentCents.map((commitment) => {
+    const raw = (commitment.amountCents / totalCents) * Math.min(targetCents, totalCents);
+
+    return {
+      id: commitment.id,
+      floorCents: Math.floor(raw),
+      remainder: raw - Math.floor(raw),
+    };
+  });
+  const floorTotal = rawReservations.reduce((sum, reservation) => sum + reservation.floorCents, 0);
+  const reservations = new Map(rawReservations.map((reservation) => [reservation.id, reservation.floorCents]));
+  let remainder = Math.min(targetCents, totalCents) - floorTotal;
+
+  for (const reservation of [...rawReservations].sort(
+    (left, right) => right.remainder - left.remainder || left.id.localeCompare(right.id),
+  )) {
+    if (remainder <= 0) {
+      break;
+    }
+
+    reservations.set(reservation.id, (reservations.get(reservation.id) ?? 0) + 1);
+    remainder -= 1;
+  }
+
+  return reservations;
+}
+
+function commitmentBlockers(commitment: DonationOffsetBatchCommitment, offsetRatio: number) {
+  const blockers: string[] = [];
+
+  if (commitment.status !== "active") {
+    blockers.push(`commitment_${commitment.status}`);
+  }
+
+  if (commitment.amountUsd <= 0 || !Number.isFinite(commitment.amountUsd)) {
+    blockers.push("commitment_amount_missing");
+  }
+
+  if (commitment.ratioMinimum > offsetRatio || commitment.ratioMaximum < offsetRatio) {
+    blockers.push("clearing_ratio_outside_participant_bounds");
+  }
+
+  return blockers;
+}
+
+function reservationStatus({
+  reservedCents,
+  committedCents,
+  blockers,
+}: {
+  reservedCents: number;
+  committedCents: number;
+  blockers: string[];
+}): DonationOffsetCommitmentReservation["reservationStatus"] {
+  if (blockers.length) {
+    return "blocked";
+  }
+
+  if (reservedCents <= 0) {
+    return "unreserved";
+  }
+
+  return reservedCents >= committedCents ? "reserved" : "partially_reserved";
+}
+
+export function buildDonationOffsetBatchClearingDryRun({
+  poolId,
+  poolName,
+  offsetRatio,
+  assuranceMinimumUsd,
+  assuranceDeadline,
+  destinationLabel,
+  verificationMethod,
+  commitments,
+  now = new Date(),
+}: {
+  poolId: string;
+  poolName: string;
+  offsetRatio: number | null | undefined;
+  assuranceMinimumUsd: number | null | undefined;
+  assuranceDeadline?: string | null;
+  destinationLabel: string;
+  verificationMethod: DonationOffsetVerificationMethod;
+  commitments: DonationOffsetBatchCommitment[];
+  now?: Date;
+}): DonationOffsetBatchClearingDryRun {
+  const normalizedRatio = offsetRatio && Number.isFinite(offsetRatio) && offsetRatio > 0 ? offsetRatio : 1;
+  const eligibleCommitments = commitments.filter(
+    (commitment) => commitmentBlockers(commitment, normalizedRatio).length === 0,
+  );
+  const sideACommitments = eligibleCommitments.filter((commitment) => commitment.side === "side_a");
+  const sideBCommitments = eligibleCommitments.filter((commitment) => commitment.side === "side_b");
+  const sideATotalUsd = centsToUsd(sideACommitments.reduce((sum, commitment) => sum + usdToCents(commitment.amountUsd), 0));
+  const sideBTotalUsd = centsToUsd(sideBCommitments.reduce((sum, commitment) => sum + usdToCents(commitment.amountUsd), 0));
+  const preview = calculateDonationOffsetPreview({
+    baselineAmountUsd: sideATotalUsd,
+    requestedMatchingAmountUsd: sideBTotalUsd,
+    offsetRatio: normalizedRatio,
+    unmatchedSurplusRule: "donate_to_compromise_destination",
+  });
+  const sideAReservations = distributeReservedCents(sideACommitments, preview.matchedBaselineUsd);
+  const sideBReservations = distributeReservedCents(sideBCommitments, preview.matchedCounterpartyUsd);
+  const reservationById = new Map([...sideAReservations, ...sideBReservations]);
+  const assuranceTarget = normalizeUsdThreshold(assuranceMinimumUsd) ?? 0;
+  const assuranceReached = assuranceTarget <= 0 || preview.compromiseTotalUsd >= assuranceTarget;
+  const deadlinePassed = Boolean(assuranceDeadline && Date.parse(assuranceDeadline) < now.getTime());
+  const ratioOutOfBounds = commitments.some(
+    (commitment) => commitmentBlockers(commitment, normalizedRatio).includes("clearing_ratio_outside_participant_bounds"),
+  );
+  const missingSide = sideATotalUsd <= 0 || sideBTotalUsd <= 0;
+  const blockerCodes = [
+    ...(missingSide ? ["missing_counterparty_side"] : []),
+    ...(ratioOutOfBounds ? ["clearing_ratio_outside_participant_bounds"] : []),
+    ...(!assuranceReached ? ["assurance_threshold_not_met"] : []),
+    ...(deadlinePassed ? ["assurance_deadline_closed"] : []),
+  ];
+  const participantCount = commitments.filter((commitment) => commitment.status === "active").length;
+  const status = blockerCodes.length
+    ? "blocked_preview_only"
+    : "ready_for_final_lock_confirmation";
+  const proposalStatus = blockerCodes.length ? "blocked" : "preview_only_no_capture";
+
+  return {
+    schemaVersion: "donation-offset-batch-clearing-dry-run-v1",
+    poolId,
+    poolName,
+    releaseStage: "donation_offset_preview_no_capture",
+    ratioBoundStatus: ratioOutOfBounds ? "out_of_bounds" : missingSide ? "insufficient_sides" : "within_bounds",
+    commitmentInventory: commitments.map((commitment) => {
+      const blockers = commitmentBlockers(commitment, normalizedRatio);
+      const committedCents = usdToCents(commitment.amountUsd);
+      const reservedCents = blockers.length ? 0 : reservationById.get(commitment.id) ?? 0;
+
+      return {
+        commitmentId: commitment.id,
+        participantLabel: commitment.participantLabel,
+        side: commitment.side,
+        committedUsd: centsToUsd(committedCents),
+        reservedUsd: centsToUsd(reservedCents),
+        unreservedUsd: centsToUsd(Math.max(0, committedCents - reservedCents)),
+        ratioMinimum: commitment.ratioMinimum,
+        ratioMaximum: commitment.ratioMaximum,
+        reservationStatus: reservationStatus({ reservedCents, committedCents, blockers }),
+        blockerCodes: blockers,
+      };
+    }),
+    matchedSideAUsd: preview.matchedBaselineUsd,
+    matchedSideBUsd: preview.matchedCounterpartyUsd,
+    compromiseTotalUsd: preview.compromiseTotalUsd,
+    unmatchedSideAUsd: preview.unmatchedBaselineUsd,
+    unmatchedSideBUsd: preview.unmatchedCounterpartyUsd,
+    assuranceMinimumUsd: assuranceTarget,
+    assuranceReached,
+    atomicSettlementGroup: {
+      id: `atomic-settlement-preview:${poolId}`,
+      status,
+      requiredParticipantCount: participantCount,
+      finalConfirmationCount: 0,
+      allOrNone: true,
+      captureAllowed: false,
+      relianceBearing: false,
+      blockerCodes,
+    },
+    finalLockProposal: {
+      id: `final-lock-proposal-preview:${poolId}`,
+      status: proposalStatus,
+      exactMatchedSideAUsd: preview.matchedBaselineUsd,
+      exactMatchedSideBUsd: preview.matchedCounterpartyUsd,
+      exactCompromiseDestinationUsd: preview.compromiseTotalUsd,
+      clearingRatio: formatDonationOffsetRatio(normalizedRatio),
+      destinationLabel,
+      evidenceStandard: formatDonationOffsetVerificationMethod(verificationMethod),
+      deadlineLabel: assuranceDeadline
+        ? new Date(assuranceDeadline).toLocaleDateString("en-US")
+        : "No deadline configured",
+      requiredFreshConfirmations: participantCount,
+      noCapture: true,
+      createsPaymentCapture: false,
+      relianceBearing: false,
+      blockerCodes,
+    },
+    userFacingBlockers: blockerCodes.map((code) => {
+      switch (code) {
+        case "missing_counterparty_side":
+          return "The batch needs active commitments on both sides before it can lock.";
+        case "clearing_ratio_outside_participant_bounds":
+          return "At least one participant's ratio bounds do not accept this clearing ratio.";
+        case "assurance_threshold_not_met":
+          return "The matched compromise amount has not reached the pool assurance threshold.";
+        case "assurance_deadline_closed":
+          return "The assurance deadline has closed, so this batch cannot lock without review.";
+        default:
+          return "This batch remains preview-only until review clears the blocker.";
+      }
+    }),
+  };
+}
+
+export function buildDemoDonationOffsetBatchClearingDryRun() {
+  return buildDonationOffsetBatchClearingDryRun({
+    poolId: "demo-offset-pool-common-ground",
+    poolName: "Demo common-ground offset pool",
+    offsetRatio: 1,
+    assuranceMinimumUsd: 1_000,
+    assuranceDeadline: "2026-07-31T23:59:59.000Z",
+    destinationLabel: "GiveWell Top Charities Fund",
+    verificationMethod: "proof_of_past_donations",
+    commitments: [
+      {
+        id: "demo-side-a-global-health-redirect",
+        participantLabel: "2 Side A commitments",
+        side: "side_a",
+        amountUsd: 600,
+        ratioMinimum: 0.8,
+        ratioMaximum: 1.25,
+        status: "active",
+      },
+      {
+        id: "demo-side-a-climate-redirect",
+        participantLabel: "1 Side A commitment",
+        side: "side_a",
+        amountUsd: 400,
+        ratioMinimum: 1,
+        ratioMaximum: 1,
+        status: "active",
+      },
+      {
+        id: "demo-side-b-animal-welfare-redirect",
+        participantLabel: "2 Side B commitments",
+        side: "side_b",
+        amountUsd: 700,
+        ratioMinimum: 0.75,
+        ratioMaximum: 1.25,
+        status: "active",
+      },
+      {
+        id: "demo-side-b-longtermist-redirect",
+        participantLabel: "1 Side B commitment",
+        side: "side_b",
+        amountUsd: 300,
+        ratioMinimum: 1,
+        ratioMaximum: 1,
+        status: "active",
+      },
+    ],
+    now: new Date("2026-06-07T12:00:00.000Z"),
+  });
 }
 
 export function formatDonationOffsetPoolStatus(value: DonationOffsetPoolProgress["status"]) {

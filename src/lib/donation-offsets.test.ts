@@ -1,8 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
   assessDonationOffsetModeration,
+  buildDemoDonationOffsetBatchClearingDryRun,
+  buildDonationOffsetBatchClearingDryRun,
   calculateDonationOffsetPreview,
   calculateDonationOffsetPoolProgress,
   createDefaultDonationOffsetFields,
@@ -138,6 +141,84 @@ test("pool progress reaches assurance once matched compromise exceeds threshold"
   assert.equal(progress.status, "assurance_met");
   assert.equal(progress.matchedCompromiseUsd, 1200);
   assert.equal(progress.assuranceProgressPct, 100);
+});
+
+test("donation offset batch dry run creates commitment reservations and no-capture lock proposal", () => {
+  const dryRun = buildDemoDonationOffsetBatchClearingDryRun();
+
+  assert.equal(dryRun.schemaVersion, "donation-offset-batch-clearing-dry-run-v1");
+  assert.equal(dryRun.releaseStage, "donation_offset_preview_no_capture");
+  assert.equal(dryRun.ratioBoundStatus, "within_bounds");
+  assert.equal(dryRun.assuranceReached, true);
+  assert.equal(dryRun.atomicSettlementGroup.status, "ready_for_final_lock_confirmation");
+  assert.equal(dryRun.atomicSettlementGroup.allOrNone, true);
+  assert.equal(dryRun.atomicSettlementGroup.captureAllowed, false);
+  assert.equal(dryRun.atomicSettlementGroup.relianceBearing, false);
+  assert.equal(dryRun.finalLockProposal.status, "preview_only_no_capture");
+  assert.equal(dryRun.finalLockProposal.noCapture, true);
+  assert.equal(dryRun.finalLockProposal.createsPaymentCapture, false);
+  assert.equal(dryRun.finalLockProposal.relianceBearing, false);
+  assert.equal(dryRun.finalLockProposal.requiredFreshConfirmations, 4);
+  assert.equal(dryRun.compromiseTotalUsd, 2000);
+  assert.ok(dryRun.commitmentInventory.every((reservation) => reservation.reservedUsd > 0));
+});
+
+test("donation offset batch dry run fails closed when ratio bounds reject clearing", () => {
+  const dryRun = buildDonationOffsetBatchClearingDryRun({
+    poolId: "test-pool",
+    poolName: "Test pool",
+    offsetRatio: 2,
+    assuranceMinimumUsd: 100,
+    assuranceDeadline: "2099-01-01T00:00:00.000Z",
+    destinationLabel: "Test compromise charity",
+    verificationMethod: "proof_of_past_donations",
+    commitments: [
+      {
+        id: "side-a",
+        participantLabel: "Side A",
+        side: "side_a",
+        amountUsd: 100,
+        ratioMinimum: 0.5,
+        ratioMaximum: 1,
+        status: "active",
+      },
+      {
+        id: "side-b",
+        participantLabel: "Side B",
+        side: "side_b",
+        amountUsd: 200,
+        ratioMinimum: 0.5,
+        ratioMaximum: 3,
+        status: "active",
+      },
+    ],
+    now: new Date("2026-06-07T12:00:00.000Z"),
+  });
+
+  assert.equal(dryRun.ratioBoundStatus, "out_of_bounds");
+  assert.equal(dryRun.atomicSettlementGroup.status, "blocked_preview_only");
+  assert.equal(dryRun.finalLockProposal.status, "blocked");
+  assert.ok(dryRun.atomicSettlementGroup.blockerCodes.includes("clearing_ratio_outside_participant_bounds"));
+  assert.ok(dryRun.atomicSettlementGroup.blockerCodes.includes("missing_counterparty_side"));
+  assert.ok(
+    dryRun.commitmentInventory.some((reservation) =>
+      reservation.blockerCodes.includes("clearing_ratio_outside_participant_bounds"),
+    ),
+  );
+});
+
+test("donation offset page renders the moraltrade60 batch-clearing preview surface", () => {
+  const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
+  const helper = readFileSync("src/lib/donation-offsets.ts", "utf8");
+
+  assert.match(page, /Batch clearing dry run/);
+  assert.match(page, /commitment inventory/i);
+  assert.match(page, /Final lock proposal/);
+  assert.match(page, /No capture in preview/);
+  assert.match(page, /buildDonationOffsetBatchClearingDryRun/);
+  assert.match(helper, /AtomicSettlementPreview/);
+  assert.match(helper, /ready_for_final_lock_confirmation/);
+  assert.match(helper, /createsPaymentCapture: false/);
 });
 
 test("pool moderation flags missing deadline when pool mode is selected", () => {

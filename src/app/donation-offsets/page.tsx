@@ -4,8 +4,14 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs, MetricCard, PageHero, SectionHeader, StepCard } from "@/components/ui/page-primitives";
-import { getDonationOffsetOverview, getViewer } from "@/lib/app-data";
-import { getConsensusCharities } from "@/lib/donation-offsets";
+import { getDonationOffsetOverview, getViewer, type DonationOffsetOverview } from "@/lib/app-data";
+import {
+  buildDemoDonationOffsetBatchClearingDryRun,
+  buildDonationOffsetBatchClearingDryRun,
+  getConsensusCharities,
+  type DonationOffsetBatchClearingDryRun,
+  type DonationOffsetVerificationMethod,
+} from "@/lib/donation-offsets";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -54,10 +60,67 @@ function formatUsdFromCents(amountCents: number | null | undefined) {
   }).format(amountCents / 100);
 }
 
+function formatUsdFromUsd(amountUsd: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: amountUsd % 1 === 0 ? 0 : 2,
+  }).format(amountUsd);
+}
+
+function buildDonationOffsetDryRun(overview: DonationOffsetOverview | null): DonationOffsetBatchClearingDryRun {
+  const pool = overview?.pools[0];
+
+  if (!pool) {
+    return buildDemoDonationOffsetBatchClearingDryRun();
+  }
+
+  const offsetRatio = Number(pool.offset_ratio);
+  const sideALabel = pool.side_a_label || "Side A";
+  const sideBLabel = pool.side_b_label || "Side B";
+
+  return buildDonationOffsetBatchClearingDryRun({
+    poolId: pool.id,
+    poolName: pool.name,
+    offsetRatio,
+    assuranceMinimumUsd: pool.assurance_minimum_cents / 100,
+    assuranceDeadline: pool.assurance_deadline_at,
+    destinationLabel: pool.compromiseCharity?.name ?? "Selected compromise destination",
+    verificationMethod: pool.verification_method as DonationOffsetVerificationMethod,
+    commitments: [
+      {
+        id: `${pool.id}:side-a-aggregate`,
+        participantLabel: `${pool.sideACommitmentCount} ${sideALabel} commitments`,
+        side: "side_a",
+        amountUsd: pool.sideATotalCents / 100,
+        ratioMinimum: offsetRatio,
+        ratioMaximum: offsetRatio,
+        status: pool.sideATotalCents > 0 ? "active" : "blocked",
+      },
+      {
+        id: `${pool.id}:side-b-aggregate`,
+        participantLabel: `${pool.sideBCommitmentCount} ${sideBLabel} commitments`,
+        side: "side_b",
+        amountUsd: pool.sideBTotalCents / 100,
+        ratioMinimum: offsetRatio,
+        ratioMaximum: offsetRatio,
+        status: pool.sideBTotalCents > 0 ? "active" : "blocked",
+      },
+    ],
+  });
+}
+
+function formatDryRunStatus(value: DonationOffsetBatchClearingDryRun["atomicSettlementGroup"]["status"]) {
+  return value === "ready_for_final_lock_confirmation"
+    ? "Ready for final confirmations"
+    : "Blocked preview only";
+}
+
 export default async function DonationOffsetsPage() {
   const viewer = await getViewer();
   const overview = hasSupabaseEnv() ? await getDonationOffsetOverview() : null;
   const consensusCharities = getConsensusCharities();
+  const clearingDryRun = buildDonationOffsetDryRun(overview);
   const createOffsetHref = viewer
     ? "/offers/new?mode=offset"
     : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
@@ -189,6 +252,83 @@ export default async function DonationOffsetsPage() {
               value={overview ? String(overview.pools.length) : "Unavailable"}
               detail="Pools gathering commitments before verification."
             />
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="offset-clearing-heading">
+          <SectionHeader
+            eyebrow="Batch clearing dry run"
+            id="offset-clearing-heading"
+            title="Preview atomic offset lock before reliance."
+          >
+            This dry run reserves commitment inventory, checks ratio bounds, previews all-or-none
+            settlement, and drafts final-lock terms without capture, custody, or reliance.
+          </SectionHeader>
+          <div className="pilot-metric-grid">
+            <MetricCard
+              label="Matched side A"
+              value={formatUsdFromUsd(clearingDryRun.matchedSideAUsd)}
+              detail="Reserved only inside this preview bundle."
+            />
+            <MetricCard
+              label="Matched side B"
+              value={formatUsdFromUsd(clearingDryRun.matchedSideBUsd)}
+              detail={`Clearing ratio ${clearingDryRun.finalLockProposal.clearingRatio}.`}
+            />
+            <MetricCard
+              label="Compromise destination"
+              value={formatUsdFromUsd(clearingDryRun.compromiseTotalUsd)}
+              detail={clearingDryRun.finalLockProposal.destinationLabel}
+            />
+            <MetricCard
+              label="Atomic status"
+              value={formatDryRunStatus(clearingDryRun.atomicSettlementGroup.status)}
+              detail="All required participants must freshly confirm before lock."
+            />
+          </div>
+          <div className="mpgf-table" aria-label="Donation offset commitment inventory reservation">
+            <div className="mpgf-table-row mpgf-table-head">
+              <span>Commitment inventory</span>
+              <span>Committed</span>
+              <span>Reserved</span>
+              <span>Status</span>
+            </div>
+            {clearingDryRun.commitmentInventory.map((reservation) => (
+              <div className="mpgf-table-row" key={reservation.commitmentId}>
+                <span>{reservation.participantLabel}</span>
+                <span>{formatUsdFromUsd(reservation.committedUsd)}</span>
+                <span>{formatUsdFromUsd(reservation.reservedUsd)}</span>
+                <span>
+                  {reservation.reservationStatus.replaceAll("_", " ")}
+                  {reservation.blockerCodes.length ? `: ${reservation.blockerCodes.join(", ")}` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="concept-grid">
+            <article className="panel concept-card">
+              <h3>Final lock proposal</h3>
+              <p>
+                Exact matched volume: {formatUsdFromUsd(clearingDryRun.finalLockProposal.exactCompromiseDestinationUsd)} to{" "}
+                {clearingDryRun.finalLockProposal.destinationLabel}. Evidence standard:{" "}
+                {clearingDryRun.finalLockProposal.evidenceStandard}.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>No capture in preview</h3>
+              <p>
+                Capture allowed: no. Reliance-bearing: no. Required fresh confirmations:{" "}
+                {clearingDryRun.finalLockProposal.requiredFreshConfirmations}.
+              </p>
+            </article>
+            <article className="panel concept-card">
+              <h3>Fail-closed blockers</h3>
+              <p>
+                {clearingDryRun.userFacingBlockers.length
+                  ? clearingDryRun.userFacingBlockers.join(" ")
+                  : "No preview blockers. Final lock still requires fresh confirmations and review."}
+              </p>
+            </article>
           </div>
         </section>
 
