@@ -138,6 +138,7 @@ import {
   type PerformanceBondStatus,
   type PerformanceBondTermsInput,
 } from "@/lib/performance-bonds";
+import { buildAgreementPaymentAuthorizationPreview } from "@/lib/agreement-payment-authorization";
 import {
   ANALYTICS_OPT_OUT_COOKIE_NAME,
   ATTRIBUTION_COOKIE_NAME,
@@ -294,6 +295,8 @@ type DonationOffsetOfferInsert = Database["public"]["Tables"]["donation_offset_o
 type DonationOffsetMatchInsert = Database["public"]["Tables"]["donation_offset_matches"]["Insert"];
 type DonationOffsetPoolInsert = Database["public"]["Tables"]["donation_offset_pools"]["Insert"];
 type AgreementPaymentScheduleInsert = Database["public"]["Tables"]["agreement_payment_schedules"]["Insert"];
+type AgreementPaymentInsert = Database["public"]["Tables"]["agreement_payments"]["Insert"];
+type OfferRow = Database["public"]["Tables"]["offers"]["Row"];
 type PersonalDelegateInsert = Database["public"]["Tables"]["personal_delegates"]["Insert"];
 type SourceConnectionInsert = Database["public"]["Tables"]["source_connections"]["Insert"];
 type HelperStrategyInsert = Database["public"]["Tables"]["helper_strategies"]["Insert"];
@@ -8072,10 +8075,6 @@ export async function createAgreementPaymentCheckoutAction(formData: FormData) {
     redirectWithMessage("/dashboard", "error", "Supabase is not configured yet.");
   }
 
-  if (!hasStripeEnv()) {
-    redirectWithMessage("/dashboard", "error", "Stripe is not configured yet. Add STRIPE_SECRET_KEY.");
-  }
-
   const agreementId = readRequired(formData, "agreement_id");
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const amountCents = readMoneyCents(formData, "amount");
@@ -8109,6 +8108,114 @@ export async function createAgreementPaymentCheckoutAction(formData: FormData) {
 
   if (!viewerIsParticipant) {
     redirectWithMessage(returnTo, "error", "You can only pay inside your own agreements.");
+  }
+
+  const { data: linkedOffer, error: linkedOfferError } = agreement.offer_id
+    ? await supabase.from("offers").select("*").eq("id", agreement.offer_id).maybeSingle()
+    : { data: null, error: null };
+
+  if (linkedOfferError) {
+    logSupabaseActionError("Failed to load linked offer for payment authorization", linkedOfferError, {
+      agreementId,
+      offerId: agreement.offer_id,
+    });
+    redirectWithMessage(returnTo, "error", linkedOfferError.message);
+  }
+
+  const offer = linkedOffer as OfferRow | null;
+  const paymentAuthorizationPreview = buildAgreementPaymentAuthorizationPreview({
+    agreementCompletionState: agreement.completion_state,
+    agreementSource: agreement.source,
+    hasAtomicSettlementGroup: false,
+    hasFreshFinalConfirmations: false,
+    hasMatchedTradeLockProposal: false,
+    hasNonConflictingCommitmentReservation: false,
+    offerMode: offer?.mode,
+    participantEligibilityCleared: false,
+    paymentRailReviewCleared: false,
+    providerConfigured: hasStripeEnv(),
+    providerSupportsConditionalAuthorization: false,
+    reviewStage: agreement.status,
+    termsText: [
+      agreement.notes,
+      agreement.structured_terms,
+      agreement.no_trade_baseline,
+      agreement.counterfactual_declaration,
+      agreement.duration_terms,
+      agreement.exit_conditions,
+      agreement.evidence_rule,
+      offer?.offer_action,
+      offer?.request_action,
+      offer?.notes,
+      notes,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  });
+
+  if (!paymentAuthorizationPreview.checkoutCreationAllowed) {
+    if (!paymentAuthorizationPreview.requiresConditionalAuthorization) {
+      redirectWithMessage(returnTo, "error", "Stripe is not configured yet. Add STRIPE_SECRET_KEY.");
+    }
+
+    const payeeId =
+      agreement.proposer_id === viewer.authUser.id ? agreement.responder_id : agreement.proposer_id;
+    const platformFeeCents = calculatePlatformFeeCents(amountCents);
+    const stubPayload: AgreementPaymentInsert = {
+      agreement_id: agreementId,
+      payer_id: viewer.authUser.id,
+      payee_id: payeeId,
+      amount_cents: amountCents,
+      currency,
+      cadence_interval_unit: cadenceUnit,
+      cadence_interval_value: cadenceValue,
+      platform_fee_cents: platformFeeCents,
+      authorization_mode: paymentAuthorizationPreview.authorizationMode,
+      authorization_status: paymentAuthorizationPreview.authorizationStatus,
+      capture_policy: paymentAuthorizationPreview.capturePolicy,
+      authorization_gate_snapshot: paymentAuthorizationPreview.gateSnapshot,
+      notes: [
+        notes,
+        paymentAuthorizationPreview.statusLabel,
+        "No Stripe Checkout was created. Payment authorization remains a manual-review stub until a frozen lock proposal, fresh final confirmations, reservation, atomic settlement, eligibility/payment-rail review, and conditional provider path are all non-blocking.",
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+      status: "draft",
+    };
+    const { data: stubPayment, error: stubError } = await supabase
+      .from("agreement_payments")
+      .insert(stubPayload)
+      .select("*")
+      .single();
+
+    if (stubError || !stubPayment) {
+      logSupabaseActionError("Failed to create agreement payment authorization stub", stubError, {
+        agreementId,
+        payerId: viewer.authUser.id,
+        payeeId,
+      });
+      redirectWithMessage(
+        returnTo,
+        "error",
+        stubError?.message ?? "Unable to create payment authorization stub.",
+      );
+    }
+
+    await supabase.from("agreement_events").insert({
+      agreement_id: agreementId,
+      actor_id: viewer.authUser.id,
+      event_type: "payment_update",
+      summary: `Payment authorization stub recorded for ${(amountCents / 100).toFixed(2)} ${currency.toUpperCase()}.`,
+      details: paymentAuthorizationPreview.gateSnapshot,
+    });
+
+    revalidatePath(`/agreements/${agreementId}`);
+    redirectWithMessage(
+      returnTo,
+      "message",
+      "Payment authorization stub recorded. No Stripe checkout or capture was created.",
+    );
   }
 
   const payeeId =
@@ -8148,6 +8255,10 @@ export async function createAgreementPaymentCheckoutAction(formData: FormData) {
       cadence_interval_unit: cadenceUnit,
       cadence_interval_value: cadenceValue,
       platform_fee_cents: platformFeeCents,
+      authorization_mode: paymentAuthorizationPreview.authorizationMode,
+      authorization_status: paymentAuthorizationPreview.authorizationStatus,
+      capture_policy: paymentAuthorizationPreview.capturePolicy,
+      authorization_gate_snapshot: paymentAuthorizationPreview.gateSnapshot,
       notes,
       status: "draft",
     })

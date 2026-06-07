@@ -699,6 +699,12 @@ export interface Database {
           stripe_payment_intent_id: string | null;
           stripe_charge_id: string | null;
           receipt_url: string | null;
+          authorization_mode: "direct_checkout" | "manual_review_stub" | "provider_managed_conditional_authorization";
+          authorization_status: "not_required_for_stage" | "stub_blocked" | "manual_review_required" | "authorization_pending" | "authorized" | "authorization_failed" | "expired" | "capture_blocked";
+          capture_policy: "direct_checkout_after_participant_request" | "no_capture_until_matched_lock_confirmed";
+          authorization_gate_snapshot: string;
+          authorization_expires_at: string | null;
+          authorized_at: string | null;
           notes: string;
           created_at: string;
           updated_at: string;
@@ -719,6 +725,12 @@ export interface Database {
           stripe_payment_intent_id?: string | null;
           stripe_charge_id?: string | null;
           receipt_url?: string | null;
+          authorization_mode?: "direct_checkout" | "manual_review_stub" | "provider_managed_conditional_authorization";
+          authorization_status?: "not_required_for_stage" | "stub_blocked" | "manual_review_required" | "authorization_pending" | "authorized" | "authorization_failed" | "expired" | "capture_blocked";
+          capture_policy?: "direct_checkout_after_participant_request" | "no_capture_until_matched_lock_confirmed";
+          authorization_gate_snapshot?: string;
+          authorization_expires_at?: string | null;
+          authorized_at?: string | null;
           notes?: string;
           created_at?: string;
           updated_at?: string;
@@ -735,6 +747,12 @@ export interface Database {
           stripe_payment_intent_id?: string | null;
           stripe_charge_id?: string | null;
           receipt_url?: string | null;
+          authorization_mode?: "direct_checkout" | "manual_review_stub" | "provider_managed_conditional_authorization";
+          authorization_status?: "not_required_for_stage" | "stub_blocked" | "manual_review_required" | "authorization_pending" | "authorized" | "authorization_failed" | "expired" | "capture_blocked";
+          capture_policy?: "direct_checkout_after_participant_request" | "no_capture_until_matched_lock_confirmed";
+          authorization_gate_snapshot?: string;
+          authorization_expires_at?: string | null;
+          authorized_at?: string | null;
           notes?: string;
           updated_at?: string;
           paid_at?: string | null;

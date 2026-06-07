@@ -557,6 +557,12 @@ create table if not exists public.agreement_payments (
   stripe_payment_intent_id text,
   stripe_charge_id text,
   receipt_url text,
+  authorization_mode text not null default 'direct_checkout' check (authorization_mode in ('direct_checkout', 'manual_review_stub', 'provider_managed_conditional_authorization')),
+  authorization_status text not null default 'not_required_for_stage' check (authorization_status in ('not_required_for_stage', 'stub_blocked', 'manual_review_required', 'authorization_pending', 'authorized', 'authorization_failed', 'expired', 'capture_blocked')),
+  capture_policy text not null default 'direct_checkout_after_participant_request' check (capture_policy in ('direct_checkout_after_participant_request', 'no_capture_until_matched_lock_confirmed')),
+  authorization_gate_snapshot text not null default '',
+  authorization_expires_at timestamptz,
+  authorized_at timestamptz,
   notes text not null default '',
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
@@ -1917,6 +1923,7 @@ create index if not exists agreement_payments_agreement_id_idx on public.agreeme
 create index if not exists agreement_payments_payer_id_idx on public.agreement_payments (payer_id, created_at desc);
 create index if not exists agreement_payments_payee_id_idx on public.agreement_payments (payee_id, created_at desc);
 create index if not exists agreement_payments_session_idx on public.agreement_payments (stripe_checkout_session_id);
+create index if not exists agreement_payments_authorization_idx on public.agreement_payments (agreement_id, authorization_mode, authorization_status, capture_policy, created_at desc);
 create index if not exists agreement_payment_schedules_agreement_id_idx on public.agreement_payment_schedules (agreement_id, next_due_at asc);
 create index if not exists agreement_payment_schedules_due_idx on public.agreement_payment_schedules (status, next_due_at asc);
 create index if not exists agreement_events_agreement_id_idx on public.agreement_events (agreement_id, created_at desc);

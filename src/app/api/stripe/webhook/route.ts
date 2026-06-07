@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
 import type { Database } from "@/lib/supabase/database.types";
+import { isAgreementPaymentCapturePermitted } from "@/lib/agreement-payment-authorization";
 import { handleMpgfStripeWebhookEvent, hashStripeWebhookBody } from "@/lib/mpgf/real-money";
 import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -24,6 +25,46 @@ async function markPaymentFromSession(
   const supabase = createServiceClient();
   const paymentIntent =
     typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id ?? null;
+
+  const { data: currentPayment } = await supabase
+    .from("agreement_payments")
+    .select("*")
+    .eq("id", paymentId)
+    .maybeSingle();
+
+  if (!currentPayment) {
+    return;
+  }
+
+  if (
+    status === "paid" &&
+    !isAgreementPaymentCapturePermitted({
+      authorizationMode: currentPayment.authorization_mode,
+      authorizationStatus: currentPayment.authorization_status,
+      capturePolicy: currentPayment.capture_policy,
+    })
+  ) {
+    await supabase
+      .from("agreement_payments")
+      .update({
+        authorization_status: "capture_blocked",
+        authorization_gate_snapshot: [
+          currentPayment.authorization_gate_snapshot,
+          `stripe_checkout_session:${session.id}:capture_blocked`,
+        ]
+          .filter(Boolean)
+          .join(";"),
+      })
+      .eq("id", paymentId);
+    await supabase.from("agreement_events").insert({
+      agreement_id: currentPayment.agreement_id,
+      actor_id: currentPayment.payer_id,
+      event_type: "payment_update",
+      summary: "Stripe checkout completion was blocked by the payment authorization stub.",
+      details: session.id,
+    });
+    return;
+  }
 
   const { data: payment } = await supabase
     .from("agreement_payments")

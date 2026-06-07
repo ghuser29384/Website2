@@ -27,7 +27,9 @@ import {
   formatPerformanceBondAmount,
   splitConfigFromJson,
 } from "@/lib/performance-bonds";
+import { buildAgreementPaymentAuthorizationPreview } from "@/lib/agreement-payment-authorization";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
+import { hasStripeEnv } from "@/lib/stripe";
 import type { Database } from "@/lib/supabase/database.types";
 
 export const metadata: Metadata = {
@@ -163,6 +165,34 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
     agreement.evidence_rule ||
     agreement.offer?.verification ||
     "Name the receipts, logs, attestations, or provider records that will count.";
+  const paymentAuthorizationPreview = buildAgreementPaymentAuthorizationPreview({
+    agreementCompletionState: agreement.completion_state,
+    agreementSource: agreement.source,
+    hasAtomicSettlementGroup: false,
+    hasFreshFinalConfirmations: false,
+    hasMatchedTradeLockProposal: false,
+    hasNonConflictingCommitmentReservation: false,
+    offerMode: agreement.offer?.mode,
+    participantEligibilityCleared: false,
+    paymentRailReviewCleared: false,
+    providerConfigured: hasStripeEnv(),
+    providerSupportsConditionalAuthorization: false,
+    reviewStage: agreement.status,
+    termsText: [
+      agreement.notes,
+      agreement.structured_terms,
+      agreement.no_trade_baseline,
+      agreement.counterfactual_declaration,
+      agreement.duration_terms,
+      agreement.exit_conditions,
+      agreement.evidence_rule,
+      agreement.offer?.offer_action,
+      agreement.offer?.request_action,
+      agreement.offer?.notes,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  });
 
   return (
     <div className="page-shell">
@@ -774,15 +804,40 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
             <p className="eyebrow">Payments</p>
             <h2>Payment, reminders, refund review, and disputes</h2>
             <p>
-              Stripe Checkout handles individual payments. Recurring cadence here creates reminder
-              schedules rather than automatic charges.
+              Payment capture is gated by agreement type. Donation offsets, pledge swaps, and
+              compensated moral-action agreements record no-capture authorization stubs until
+              lock, confirmation, reservation, atomic-settlement, eligibility, and conditional
+              provider gates are non-blocking.
             </p>
+          </div>
+
+          <div className="status-banner">
+            <strong>{paymentAuthorizationPreview.statusLabel}</strong>
+            <p>
+              Trade mode: {paymentAuthorizationPreview.tradeMode.replaceAll("_", " ")}. Capture
+              policy: {paymentAuthorizationPreview.capturePolicy.replaceAll("_", " ")}.
+            </p>
+            <div className="mini-list" aria-label="Payment authorization gates">
+              {paymentAuthorizationPreview.gates.map((gate) => (
+                <span className="source-pill" key={gate.key}>
+                  {gate.label}: {gate.status.replaceAll("_", " ")}
+                </span>
+              ))}
+            </div>
           </div>
 
           <div className="data-grid">
             <article className="panel data-card">
-              <p className="detail-kicker">Pay now</p>
-              <h3>Create a Stripe checkout</h3>
+              <p className="detail-kicker">
+                {paymentAuthorizationPreview.checkoutCreationAllowed
+                  ? "Pay now"
+                  : "Authorization stub"}
+              </p>
+              <h3>
+                {paymentAuthorizationPreview.checkoutCreationAllowed
+                  ? "Create a Stripe checkout"
+                  : "Record no-capture payment authorization"}
+              </h3>
               <form action={createAgreementPaymentCheckoutAction} className="stack-form compact-form">
                 <input name="agreement_id" type="hidden" value={agreement.id} />
                 <input name="return_to" type="hidden" value={`/agreements/${agreement.id}`} />
@@ -817,7 +872,9 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                   <input name="notes" placeholder="What this payment covers" />
                 </label>
                 <button className="button button-primary button-mini" type="submit">
-                  Pay with Stripe
+                  {paymentAuthorizationPreview.checkoutCreationAllowed
+                    ? "Pay with Stripe"
+                    : "Record authorization stub"}
                 </button>
               </form>
             </article>
@@ -878,6 +935,12 @@ export default async function AgreementPage({ params, searchParams }: AgreementP
                     <span className="badge">{payment.status.replace("_", " ")}</span>
                     <span className="source-pill">
                       {formatCadence(payment.cadence_interval_value, payment.cadence_interval_unit)}
+                    </span>
+                    <span className="source-pill">
+                      Auth {payment.authorization_status.replaceAll("_", " ")}
+                    </span>
+                    <span className="source-pill">
+                      {payment.capture_policy.replaceAll("_", " ")}
                     </span>
                     {payment.paid_at ? (
                       <span className="source-pill">

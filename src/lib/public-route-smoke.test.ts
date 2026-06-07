@@ -3703,3 +3703,26 @@ test("core Moral Trade email outbox copy stays generic and dashboard-directed", 
   assert.equal(stripeWebhookRoute.includes("for agreement ${payment.agreement_id}"), false);
   assert.equal(stripeWebhookRoute.includes("payment ${payment.id} failed"), false);
 });
+
+test("agreement payment checkout path records no-capture authorization stubs for controlled trades", () => {
+  const agreementPage = readRepoFile("src/app/agreements/[agreementId]/page.tsx");
+  const actionsSource = readRepoFile("src/app/actions.ts");
+  const stripeWebhookRoute = readRepoFile("src/app/api/stripe/webhook/route.ts");
+  const schemaSql = readRepoFile("supabase/schema.sql");
+  const migration = readRepoFile(
+    "supabase/migrations/20260607_agreement_payment_authorization_stubs.sql",
+  );
+
+  assert.match(agreementPage, /buildAgreementPaymentAuthorizationPreview/);
+  assert.match(agreementPage, /Record no-capture payment authorization/);
+  assert.match(agreementPage, /Payment authorization gates/);
+  assert.match(actionsSource, /buildAgreementPaymentAuthorizationPreview/);
+  assert.match(actionsSource, /No Stripe Checkout was created/);
+  assert.match(actionsSource, /authorization_mode: paymentAuthorizationPreview\.authorizationMode/);
+  assert.match(stripeWebhookRoute, /isAgreementPaymentCapturePermitted/);
+  assert.match(stripeWebhookRoute, /capture_blocked/);
+  assert.match(schemaSql, /authorization_mode text not null default 'direct_checkout'/);
+  assert.match(schemaSql, /no_capture_until_matched_lock_confirmed/);
+  assert.match(migration, /agreement_payments_authorization_mode_check/);
+  assert.match(migration, /agreement_payments_capture_policy_check/);
+});
