@@ -116,6 +116,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_impact_claim_contract",
   "moral_trade_matching_clearing_contract",
   "moral_trade_baseline_integrity_contract",
+  "moral_trade_agreement_amendment_contract",
   "moral_trade_production_readiness_contract",
   "moral_trade_recipient_destination_contract",
   "moral_trade_provenance_schema",

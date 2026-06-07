@@ -113,6 +113,14 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "moral_trade_agreement_amendment_contract" &&
+        route.path === "/api/moral-trade/agreement-amendments/contract" &&
+        route.responseSchema === "agreement_amendment_contract_response",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "moral_trade_production_readiness_contract" &&
         route.path === "/api/moral-trade/production-readiness/contract" &&
         route.responseSchema === "production_readiness_contract_response",
@@ -611,6 +619,16 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
       ),
   );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "empty_request"));
+  assert.ok(
+    profile.schemaDefinitions.some(
+      (schema) => schema.key === "agreement_amendment_contract_response",
+    ),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "moral_trade_aggregate_health_response")
+      ?.fields.some((field) => field.key === "agreementAmendmentValidation"),
+  );
   assert.ok(
     profile.schemaDefinitions
       .find((schema) => schema.key === "api_contract_response")

@@ -5326,6 +5326,304 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_agreement_amendment_policies: {
+        Row: {
+          id: string;
+          policy_snapshot_id: string;
+          policy_version: string;
+          subject_type:
+            | "locked_donation_offset"
+            | "locked_pledge_swap"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          amendment_type:
+            | "correction"
+            | "mutual_modification"
+            | "pause"
+            | "early_termination"
+            | "evidence_standard_change"
+            | "schedule_change"
+            | "compensation_change"
+            | "destination_change"
+            | "baseline_correction"
+            | "privacy_change"
+            | "other";
+          status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          renewed_confirmation_required_bool: boolean;
+          neutral_review_required_for_burden_shift_bool: boolean;
+          non_retroactivity_required_bool: boolean;
+          before_after_hash_required_bool: boolean;
+          notice_required_bool: boolean;
+          reviewer_quality_required_bool: boolean;
+          baseline_integrity_required_bool: boolean;
+          max_amendment_age_days: number;
+          policy_hash: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          policy_snapshot_id: string;
+          policy_version?: string;
+          subject_type:
+            | "locked_donation_offset"
+            | "locked_pledge_swap"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          amendment_type:
+            | "correction"
+            | "mutual_modification"
+            | "pause"
+            | "early_termination"
+            | "evidence_standard_change"
+            | "schedule_change"
+            | "compensation_change"
+            | "destination_change"
+            | "baseline_correction"
+            | "privacy_change"
+            | "other";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          renewed_confirmation_required_bool?: boolean;
+          neutral_review_required_for_burden_shift_bool?: boolean;
+          non_retroactivity_required_bool?: boolean;
+          before_after_hash_required_bool?: boolean;
+          notice_required_bool?: boolean;
+          reviewer_quality_required_bool?: boolean;
+          baseline_integrity_required_bool?: boolean;
+          max_amendment_age_days?: number;
+          policy_hash: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          policy_snapshot_id?: string;
+          policy_version?: string;
+          subject_type?:
+            | "locked_donation_offset"
+            | "locked_pledge_swap"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          amendment_type?:
+            | "correction"
+            | "mutual_modification"
+            | "pause"
+            | "early_termination"
+            | "evidence_standard_change"
+            | "schedule_change"
+            | "compensation_change"
+            | "destination_change"
+            | "baseline_correction"
+            | "privacy_change"
+            | "other";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          renewed_confirmation_required_bool?: boolean;
+          neutral_review_required_for_burden_shift_bool?: boolean;
+          non_retroactivity_required_bool?: boolean;
+          before_after_hash_required_bool?: boolean;
+          notice_required_bool?: boolean;
+          reviewer_quality_required_bool?: boolean;
+          baseline_integrity_required_bool?: boolean;
+          max_amendment_age_days?: number;
+          policy_hash?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_agreement_amendment_records: {
+        Row: {
+          id: string;
+          agreement_amendment_policy_ref: string;
+          subject_type:
+            | "locked_donation_offset"
+            | "locked_pledge_swap"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          subject_ref: string;
+          amendment_type:
+            | "correction"
+            | "mutual_modification"
+            | "pause"
+            | "early_termination"
+            | "evidence_standard_change"
+            | "schedule_change"
+            | "compensation_change"
+            | "destination_change"
+            | "baseline_correction"
+            | "privacy_change"
+            | "other";
+          amendment_state:
+            | "draft"
+            | "presented"
+            | "confirmed"
+            | "approved"
+            | "applied"
+            | "rejected"
+            | "withdrawn"
+            | "superseded"
+            | "stale";
+          material_change_bool: boolean;
+          burden_or_benefit_shift_bool: boolean;
+          parent_record_edit_detected_bool: boolean;
+          retroactive_performance_change_bool: boolean;
+          evidence_claim_retyped_bool: boolean;
+          exposure_increase_bool: boolean;
+          funds_redirect_bool: boolean;
+          compensation_change_bool: boolean;
+          cancellation_rights_narrowed_bool: boolean;
+          privacy_disclosure_change_bool: boolean;
+          donor_of_record_change_bool: boolean;
+          third_party_obligation_change_bool: boolean;
+          before_terms_hash: string;
+          after_terms_hash: string;
+          policy_snapshot_bundle_hash: string;
+          renewed_confirmation_refs: string[];
+          confirmation_state: "missing" | "stale" | "scope_mismatch" | "passed" | "not_required_for_stage";
+          neutral_review_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          notice_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          baseline_integrity_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          amendment_hash: string;
+          review_decision_id: string | null;
+          reviewed_at: string | null;
+          expires_at: string | null;
+          applied_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agreement_amendment_policy_ref: string;
+          subject_type:
+            | "locked_donation_offset"
+            | "locked_pledge_swap"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          subject_ref?: string;
+          amendment_type:
+            | "correction"
+            | "mutual_modification"
+            | "pause"
+            | "early_termination"
+            | "evidence_standard_change"
+            | "schedule_change"
+            | "compensation_change"
+            | "destination_change"
+            | "baseline_correction"
+            | "privacy_change"
+            | "other";
+          amendment_state?:
+            | "draft"
+            | "presented"
+            | "confirmed"
+            | "approved"
+            | "applied"
+            | "rejected"
+            | "withdrawn"
+            | "superseded"
+            | "stale";
+          material_change_bool?: boolean;
+          burden_or_benefit_shift_bool?: boolean;
+          parent_record_edit_detected_bool?: boolean;
+          retroactive_performance_change_bool?: boolean;
+          evidence_claim_retyped_bool?: boolean;
+          exposure_increase_bool?: boolean;
+          funds_redirect_bool?: boolean;
+          compensation_change_bool?: boolean;
+          cancellation_rights_narrowed_bool?: boolean;
+          privacy_disclosure_change_bool?: boolean;
+          donor_of_record_change_bool?: boolean;
+          third_party_obligation_change_bool?: boolean;
+          before_terms_hash: string;
+          after_terms_hash: string;
+          policy_snapshot_bundle_hash: string;
+          renewed_confirmation_refs?: string[];
+          confirmation_state?: "missing" | "stale" | "scope_mismatch" | "passed" | "not_required_for_stage";
+          neutral_review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          notice_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          baseline_integrity_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          amendment_hash: string;
+          review_decision_id?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          applied_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          agreement_amendment_policy_ref?: string;
+          subject_type?:
+            | "locked_donation_offset"
+            | "locked_pledge_swap"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          subject_ref?: string;
+          amendment_type?:
+            | "correction"
+            | "mutual_modification"
+            | "pause"
+            | "early_termination"
+            | "evidence_standard_change"
+            | "schedule_change"
+            | "compensation_change"
+            | "destination_change"
+            | "baseline_correction"
+            | "privacy_change"
+            | "other";
+          amendment_state?:
+            | "draft"
+            | "presented"
+            | "confirmed"
+            | "approved"
+            | "applied"
+            | "rejected"
+            | "withdrawn"
+            | "superseded"
+            | "stale";
+          material_change_bool?: boolean;
+          burden_or_benefit_shift_bool?: boolean;
+          parent_record_edit_detected_bool?: boolean;
+          retroactive_performance_change_bool?: boolean;
+          evidence_claim_retyped_bool?: boolean;
+          exposure_increase_bool?: boolean;
+          funds_redirect_bool?: boolean;
+          compensation_change_bool?: boolean;
+          cancellation_rights_narrowed_bool?: boolean;
+          privacy_disclosure_change_bool?: boolean;
+          donor_of_record_change_bool?: boolean;
+          third_party_obligation_change_bool?: boolean;
+          before_terms_hash?: string;
+          after_terms_hash?: string;
+          policy_snapshot_bundle_hash?: string;
+          renewed_confirmation_refs?: string[];
+          confirmation_state?: "missing" | "stale" | "scope_mismatch" | "passed" | "not_required_for_stage";
+          neutral_review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          notice_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          baseline_integrity_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          amendment_hash?: string;
+          review_decision_id?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          applied_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       risk_signals: {
         Row: {
           id: string;
@@ -6655,6 +6953,7 @@ export interface Database {
             | "matched_trade_lock"
             | "baseline_integrity"
             | "baseline_manufacturing"
+            | "agreement_amendment"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -6700,6 +6999,7 @@ export interface Database {
             | "matched_trade_lock"
             | "baseline_integrity"
             | "baseline_manufacturing"
+            | "agreement_amendment"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -6744,6 +7044,7 @@ export interface Database {
             | "matched_trade_lock"
             | "baseline_integrity"
             | "baseline_manufacturing"
+            | "agreement_amendment"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"

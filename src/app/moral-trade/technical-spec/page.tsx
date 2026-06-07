@@ -79,6 +79,10 @@ import {
   validateMoralTradeBaselineIntegrityContract,
 } from "@/lib/moral-trade/baseline-integrity";
 import {
+  getMoralTradeAgreementAmendmentContract,
+  validateMoralTradeAgreementAmendmentContract,
+} from "@/lib/moral-trade/agreement-amendments";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -214,6 +218,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeBaselineIntegrityContract(
       baselineIntegrityContract,
     );
+  const agreementAmendmentContract =
+    getMoralTradeAgreementAmendmentContract();
+  const agreementAmendmentValidation =
+    validateMoralTradeAgreementAmendmentContract(
+      agreementAmendmentContract,
+    );
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -316,6 +326,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     impactClaimValidation,
     matchingClearingValidation,
     baselineIntegrityValidation,
+    agreementAmendmentValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -466,6 +477,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Baseline integrity",
       status: baselineIntegrityValidation.status,
       summary: `${baselineIntegrityContract.transitions.length} transition(s), ${baselineIntegrityContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: agreementAmendmentValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/agreement-amendments/contract",
+      label: "Agreement amendments",
+      status: agreementAmendmentValidation.status,
+      summary: `${agreementAmendmentContract.transitions.length} transition(s), ${agreementAmendmentContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: productionReadinessValidation.blockers.length,
@@ -674,6 +693,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/baseline-integrity/contract">
                 View baseline contract
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/agreement-amendments/contract">
+                View amendment contract
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
                 View appeal contract
@@ -1778,6 +1800,75 @@ export default async function MoralTradeTechnicalSpecPage() {
               <h3>Fail-closed statuses</h3>
               <ul className="clean-list">
                 {baselineIntegrityContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="agreement-amendment-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Agreement-amendment contract</p>
+            <h2 id="agreement-amendment-contract-heading">
+              Locked donation offsets and pledge swaps cannot be changed by editing parent records.
+            </h2>
+            <p>
+              Moraltrade60 requires post-lock material changes to use append-only
+              agreement-amendment records, before/after terms hashes, policy-snapshot bundles,
+              renewed confirmations from affected participants, notice, reviewer-quality checks,
+              baseline-integrity checks, and neutral review when burdens or benefits shift. This
+              contract blocks retroactive performance changes, evidence retyping, exposure
+              increases, fund redirects, compensation changes, narrowed cancellation rights, and
+              privacy or donor-of-record changes without the required controls.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Agreement amendments {agreementAmendmentContract.version}
+              </p>
+              <h3>Status {agreementAmendmentValidation.status}</h3>
+              <p>
+                {agreementAmendmentValidation.checks.length} check(s),{" "}
+                {agreementAmendmentValidation.blockers.length} blocker(s),{" "}
+                {agreementAmendmentContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/agreement-amendments/contract">
+              Open agreement-amendment JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Transitions</h3>
+              <ul className="clean-list">
+                {agreementAmendmentContract.transitions.map((transition) => (
+                  <li key={transition}>{transition.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {agreementAmendmentContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Amendment types</h3>
+              <ul className="clean-list">
+                {agreementAmendmentContract.amendmentTypes.map((type) => (
+                  <li key={type}>{type.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {agreementAmendmentContract.failClosedStatuses.map((status) => (
                   <li key={status}>{status.replaceAll("_", " ")}</li>
                 ))}
               </ul>

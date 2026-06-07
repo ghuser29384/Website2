@@ -2125,6 +2125,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const baselineIntegritySource = readRepoFile(
     "src/lib/moral-trade/baseline-integrity.ts",
   );
+  const agreementAmendmentSource = readRepoFile(
+    "src/lib/moral-trade/agreement-amendments.ts",
+  );
   const productionReadinessSource = readRepoFile(
     "src/lib/moral-trade/production-readiness.ts",
   );
@@ -2211,6 +2214,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const baselineIntegrityMigration = readRepoFile(
     "supabase/migrations/20260607_zzzzzzzzzzzz_moral_trade_baseline_integrity_records.sql",
   );
+  const agreementAmendmentMigration = readRepoFile(
+    "supabase/migrations/20260607_zzzzzzzzzzzzz_moral_trade_agreement_amendment_records.sql",
+  );
   const recipientDestinationMigration = readRepoFile(
     "supabase/migrations/20260607_zzzz_moral_trade_recipient_destination_records.sql",
   );
@@ -2265,6 +2271,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const baselineIntegrityContractRoute = readRepoFile(
     "src/app/api/moral-trade/baseline-integrity/contract/route.ts",
+  );
+  const agreementAmendmentContractRoute = readRepoFile(
+    "src/app/api/moral-trade/agreement-amendments/contract/route.ts",
   );
   const productionReadinessContractRoute = readRepoFile(
     "src/app/api/moral-trade/production-readiness/contract/route.ts",
@@ -2551,6 +2560,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(baselineIntegritySource, /good_faith_confidence_conflated/);
   assert.match(baselineIntegritySource, /additionality_review_missing/);
   assert.match(baselineIntegritySource, /externality_review_missing/);
+  assert.match(agreementAmendmentSource, /getMoralTradeAgreementAmendmentContract/);
+  assert.match(agreementAmendmentSource, /evaluateMoralTradeAgreementAmendment/);
+  assert.match(agreementAmendmentSource, /moral_trade_agreement_amendment_policies/);
+  assert.match(agreementAmendmentSource, /moral_trade_agreement_amendment_records/);
+  assert.match(agreementAmendmentSource, /Parent-record edits are not amendments/);
+  assert.match(agreementAmendmentSource, /parent_record_edit_detected/);
+  assert.match(agreementAmendmentSource, /renewed_confirmation_missing/);
+  assert.match(agreementAmendmentSource, /neutral_review_missing/);
   assert.match(productionReadinessSource, /getMoralTradeProductionReadinessContract/);
   assert.match(productionReadinessSource, /evaluateMoralTradeProductionReadiness/);
   assert.match(productionReadinessSource, /moral_trade_account_security_events/);
@@ -2623,6 +2640,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(baselineIntegrityMigration, /baseline_manufacturing/);
   assert.match(baselineIntegrityMigration, /marketplace_created/);
   assert.match(baselineIntegrityMigration, /good_faith_confidence_separated_bool/);
+  assert.match(agreementAmendmentMigration, /moral_trade_agreement_amendment_policies/);
+  assert.match(agreementAmendmentMigration, /moral_trade_agreement_amendment_records/);
+  assert.match(agreementAmendmentMigration, /agreement_amendment/);
+  assert.match(agreementAmendmentMigration, /parent_record_edit_detected_bool/);
+  assert.match(agreementAmendmentMigration, /renewed_confirmation_refs/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_registry_entries/);
   assert.match(recipientDestinationMigration, /moral_trade_payment_destinations/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_destination_reviews/);
@@ -2662,6 +2684,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /moral_trade_baseline_integrity_policies/);
   assert.match(schemaSource, /moral_trade_baseline_integrity_assessments/);
   assert.match(schemaSource, /baseline_manufacturing/);
+  assert.match(schemaSource, /moral_trade_agreement_amendment_policies/);
+  assert.match(schemaSource, /moral_trade_agreement_amendment_records/);
+  assert.match(schemaSource, /agreement_amendment/);
   assert.match(schemaSource, /moral_trade_recipient_registry_entries/);
   assert.match(schemaSource, /moral_trade_payment_destinations/);
   assert.match(schemaSource, /moral_trade_recipient_destination_reviews/);
@@ -3066,6 +3091,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_impact_claim_contract/);
   assert.match(apiContractSource, /moral_trade_matching_clearing_contract/);
   assert.match(apiContractSource, /moral_trade_baseline_integrity_contract/);
+  assert.match(apiContractSource, /moral_trade_agreement_amendment_contract/);
   assert.match(apiContractSource, /moral_trade_production_readiness_contract/);
   assert.match(apiContractSource, /provenance-schema-validator/);
   assert.match(apiContractSource, /moral_trade_schema_registry/);
@@ -3135,6 +3161,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /baseline_integrity_contract_response/);
   assert.match(apiContractProfile, /moral_trade_baseline_integrity_contract/);
   assert.match(apiContractProfile, /raw baseline narratives, private evidence/);
+  assert.match(apiContractProfile, /agreement_amendment_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_agreement_amendment_contract/);
+  assert.match(apiContractProfile, /private amendment narratives, participant identities/);
   assert.match(apiContractProfile, /production_readiness_contract_response/);
   assert.match(apiContractProfile, /moral_trade_production_readiness_contract/);
   assert.match(apiContractProfile, /account-security events, backup contents, configuration values/);
@@ -3326,6 +3355,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /baselineIntegrityContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /baselineIntegrityContract\.transitions/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/baseline-integrity\/contract/);
+  assert.match(technicalSpecPage, /Agreement-amendment contract/);
+  assert.match(technicalSpecPage, /agreementAmendmentContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /agreementAmendmentContract\.transitions/);
+  assert.match(technicalSpecPage, /agreementAmendmentContract\.amendmentTypes/);
+  assert.match(technicalSpecPage, /\/api\/moral-trade\/agreement-amendments\/contract/);
   assert.match(technicalSpecPage, /Production readiness contract/);
   assert.match(technicalSpecPage, /productionReadinessContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/production-readiness\/contract/);
@@ -3499,6 +3533,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /baselineIntegrityValidation/);
   assert.match(healthRoute, /baselineIntegrityTransitionKeys/);
   assert.match(healthRoute, /baselineIntegrityFirstClassRecordTables/);
+  assert.match(healthRoute, /agreementAmendmentValidation/);
+  assert.match(healthRoute, /agreementAmendmentTransitionKeys/);
+  assert.match(healthRoute, /agreementAmendmentFirstClassRecordTables/);
   assert.match(healthRoute, /productionReadinessValidation/);
   assert.match(healthRoute, /productionReadinessControlKeys/);
   assert.match(healthRoute, /productionReadinessFirstClassRecordTables/);
@@ -3625,6 +3662,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(baselineIntegrityContractRoute, /validateMoralTradeBaselineIntegrityContract/);
   assert.match(baselineIntegrityContractRoute, /transitions/);
   assert.match(baselineIntegrityContractRoute, /baselineIntegritySampleEvaluationStatuses/);
+  assert.match(agreementAmendmentContractRoute, /validateMoralTradeAgreementAmendmentContract/);
+  assert.match(agreementAmendmentContractRoute, /amendmentTypes/);
+  assert.match(agreementAmendmentContractRoute, /agreementAmendmentSampleEvaluationStatuses/);
   assert.match(productionReadinessContractRoute, /validateMoralTradeProductionReadinessContract/);
   assert.match(productionReadinessContractRoute, /firstClassRecordTables/);
   assert.match(productionReadinessContractRoute, /productionReadinessSampleEvaluationStatuses/);

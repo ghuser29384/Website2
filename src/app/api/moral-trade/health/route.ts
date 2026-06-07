@@ -56,6 +56,10 @@ import {
   validateMoralTradeBaselineIntegrityContract,
 } from "@/lib/moral-trade/baseline-integrity";
 import {
+  getMoralTradeAgreementAmendmentContract,
+  validateMoralTradeAgreementAmendmentContract,
+} from "@/lib/moral-trade/agreement-amendments";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -202,6 +206,12 @@ export async function GET(request: Request) {
     validateMoralTradeBaselineIntegrityContract(
       baselineIntegrityContract,
     );
+  const agreementAmendmentContract =
+    getMoralTradeAgreementAmendmentContract();
+  const agreementAmendmentValidation =
+    validateMoralTradeAgreementAmendmentContract(
+      agreementAmendmentContract,
+    );
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -300,6 +310,7 @@ export async function GET(request: Request) {
       impactClaimValidation.status === "pass" &&
       matchingClearingValidation.status === "pass" &&
       baselineIntegrityValidation.status === "pass" &&
+      agreementAmendmentValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
@@ -338,6 +349,7 @@ export async function GET(request: Request) {
     impactClaimValidation,
     matchingClearingValidation,
     baselineIntegrityValidation,
+    agreementAmendmentValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -590,6 +602,32 @@ export async function GET(request: Request) {
       ),
       baselineIntegrityContractTests:
         baselineIntegrityContract.contractTests,
+      agreementAmendmentContractVersion:
+        agreementAmendmentContract.version,
+      agreementAmendmentTransitionKeys:
+        agreementAmendmentContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      agreementAmendmentSubjectTypes:
+        agreementAmendmentContract.subjectTypes,
+      agreementAmendmentTypes:
+        agreementAmendmentContract.amendmentTypes,
+      agreementAmendmentStates:
+        agreementAmendmentContract.amendmentStates,
+      agreementAmendmentFailClosedStatuses:
+        agreementAmendmentContract.failClosedStatuses,
+      agreementAmendmentFirstClassRecordTables:
+        agreementAmendmentContract.firstClassRecordTables,
+      agreementAmendmentPolicySnapshotSubjects:
+        agreementAmendmentContract.policySnapshotSubjects,
+      agreementAmendmentSampleEvaluationStatuses: Object.fromEntries(
+        agreementAmendmentContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      agreementAmendmentContractTests:
+        agreementAmendmentContract.contractTests,
       productionReadinessContractVersion:
         productionReadinessContract.version,
       productionReadinessControlKeys:
@@ -885,6 +923,7 @@ export async function GET(request: Request) {
       ...impactClaimValidation.blockers,
       ...matchingClearingValidation.blockers,
       ...baselineIntegrityValidation.blockers,
+      ...agreementAmendmentValidation.blockers,
       ...productionReadinessValidation.blockers,
       ...recipientDestinationValidation.blockers,
       ...provenanceValidation.blockers,

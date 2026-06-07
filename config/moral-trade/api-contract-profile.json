@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-api-contract-v0.39-2026-06",
-  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, baseline-integrity/manufacturing governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
+  "version": "moral-trade-api-contract-v0.40-2026-06",
+  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, baseline-integrity/manufacturing governance, agreement-amendment governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
       "key": "moral_trade_health",
@@ -241,6 +241,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return baseline-integrity/manufacturing validation blockers and fail-closed sample evaluations; never expose raw baseline narratives, private evidence, exact private constraints, counterparty-specific timing, reviewer notes, or participant-specific assessments."
+    },
+    {
+      "key": "moral_trade_agreement_amendment_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/agreement-amendments/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "agreement_amendment_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return agreement-amendment validation blockers and fail-closed sample evaluations; never expose private amendment narratives, participant identities, confirmation payloads, reviewer notes, payment details, private baselines, or counterparty-specific terms."
     },
     {
       "key": "moral_trade_production_readiness_contract",
@@ -1190,7 +1202,7 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, production-readiness, recipient-destination, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, production-readiness, recipient-destination, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
@@ -1207,6 +1219,7 @@
         { "key": "impactClaimValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Impact-claim validator result for frozen methodology policies, first-class impact-claim records, claim-typed evidence, uncertainty disclosure, transfer-vs-impact separation, content moderation, reviewer quality, privileged-action approval, audit integrity, and public-metric suppression." },
         { "key": "matchingClearingValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Matching-clearing validator result for frozen deterministic runs, input-bundle hashes, reproducibility checks, privacy/state policy snapshots, matched-trade lock proposals, final confirmations, ratio bounds, baseline snapshots, verified destinations, commitment reservations, and atomic settlement groups." },
         { "key": "baselineIntegrityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Baseline-integrity validator result for frozen baseline-integrity/manufacturing policies, non-blocking assessments, baseline source classification, good-faith/confidence separation, additionality and externality review, reviewer quality, participant confirmation, and fail-closed manufactured-baseline handling." },
+        { "key": "agreementAmendmentValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Agreement-amendment validator result for append-only amendment records, renewed confirmations, non-retroactivity checks, before/after hashes, notice, reviewer quality, baseline integrity, and neutral review before material post-lock changes." },
         { "key": "productionReadinessValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Production-readiness validator result for account security, backup recovery, deployment/configuration provenance, schema migration safety, environment isolation, financial reconciliation, audit integrity, and data-security controls." },
         { "key": "recipientDestinationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Recipient/destination validator result for first-class recipient registry entries, payment destinations, review dimensions, immutable policy snapshots, privileged-action approvals, and fail-closed stale or unverified records." },
         { "key": "provenanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Provenance object contract validator result." },
@@ -1399,6 +1412,19 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class baseline-integrity policies, baseline-integrity assessments, transition coverage, subject types, assessment states, baseline source kinds, launch classifications, fail-closed statuses, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Privacy rule, fail-closed rule, first-class table names, policy subjects, transitions, subject types, assessment states, baseline source kinds, launch classifications, fail-closed statuses, sample statuses, and test hooks without raw baseline narratives, private evidence, exact private constraints, counterparty-specific timing, reviewer notes, or participant-specific assessments." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Baseline-integrity blockers that keep donation offsets and pledge swaps preview-only, manual-review, or rejected-threat/externality until non-blocking." }
+      ]
+    },
+    {
+      "key": "agreement_amendment_contract_response",
+      "purpose": "Public validator-backed agreement-amendment contract for append-only amendment policies, amendment records, before/after terms hashes, renewed confirmations, non-retroactivity checks, neutral review, notice, reviewer quality, and baseline integrity before locked donation offsets, pledge swaps, lock proposals, or cleared agreements can materially change.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the agreement-amendment contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the agreement-amendment validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Agreement-amendment contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class agreement-amendment policies, amendment records, transition coverage, subject types, amendment types, amendment states, confirmation states, fail-closed statuses, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Privacy rule, fail-closed rule, first-class table names, policy subjects, transitions, subject types, amendment types, amendment states, confirmation states, fail-closed statuses, sample statuses, and test hooks without private amendment narratives, participant identities, confirmation payloads, reviewer notes, payment details, private baselines, or counterparty-specific terms." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Agreement-amendment blockers that prevent silent, unilateral, retroactive, unconfirmed, unreviewed, or improperly hashed material post-lock changes." }
       ]
     },
     {
