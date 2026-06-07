@@ -51,6 +51,10 @@ import {
   validateMoralTradeParticipantEligibilityContract,
 } from "@/lib/moral-trade/participant-eligibility";
 import {
+  getMoralTradeAccountSecurityContract,
+  validateMoralTradeAccountSecurityContract,
+} from "@/lib/moral-trade/account-security";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -162,6 +166,9 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeParticipantEligibilityContract(
       participantEligibilityContract,
     );
+  const accountSecurityContract = getMoralTradeAccountSecurityContract();
+  const accountSecurityValidation =
+    validateMoralTradeAccountSecurityContract(accountSecurityContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -257,6 +264,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     releaseGateValidation,
     participantConfirmationValidation,
     participantEligibilityValidation,
+    accountSecurityValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -351,6 +359,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Participant eligibility",
       status: participantEligibilityValidation.status,
       summary: `${participantEligibilityContract.reviewDimensions.length} review dimension(s), ${participantEligibilityContract.transitionDefinitions.length} gated transition(s).`,
+    },
+    {
+      blockers: accountSecurityValidation.blockers.length,
+      family: "Policy inputs",
+      href: "/api/moral-trade/account-security/contract",
+      label: "Account security",
+      status: accountSecurityValidation.status,
+      summary: `${accountSecurityContract.highRiskActions.length} high-risk action(s), ${accountSecurityContract.eventTypes.length} event type(s).`,
     },
     {
       blockers: productionReadinessValidation.blockers.length,
@@ -1177,6 +1193,73 @@ export default async function MoralTradeTechnicalSpecPage() {
               <h3>Fail-closed statuses</h3>
               <ul className="clean-list">
                 {participantEligibilityContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="account-security-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Account security contract</p>
+            <h2 id="account-security-contract-heading">
+              High-risk participant actions require policy-backed account checks.
+            </h2>
+            <p>
+              Moraltrade60 says confirmations, payment-method changes, payout approvals, privacy
+              grants, identity-artifact changes, and contact introductions cannot rely on an
+              authenticated browser session alone. This contract makes frozen account-security
+              policies and account-security events first-class blockers before money, reliance,
+              private disclosure, or exposure increases can proceed.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Account security {accountSecurityContract.version}
+              </p>
+              <h3>Status {accountSecurityValidation.status}</h3>
+              <p>
+                {accountSecurityValidation.checks.length} check(s),{" "}
+                {accountSecurityValidation.blockers.length} blocker(s),{" "}
+                {accountSecurityContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/account-security/contract">
+              Open account-security JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>High-risk actions</h3>
+              <ul className="clean-list">
+                {accountSecurityContract.highRiskActions.map((action) => (
+                  <li key={action}>{action.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Event types</h3>
+              <ul className="clean-list">
+                {accountSecurityContract.eventTypes.map((eventType) => (
+                  <li key={eventType}>{eventType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {accountSecurityContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {accountSecurityContract.failClosedStatuses.map((status) => (
                   <li key={status}>{status.replaceAll("_", " ")}</li>
                 ))}
               </ul>

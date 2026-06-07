@@ -28,6 +28,10 @@ import {
   validateMoralTradeParticipantEligibilityContract,
 } from "@/lib/moral-trade/participant-eligibility";
 import {
+  getMoralTradeAccountSecurityContract,
+  validateMoralTradeAccountSecurityContract,
+} from "@/lib/moral-trade/account-security";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -150,6 +154,9 @@ export async function GET(request: Request) {
     validateMoralTradeParticipantEligibilityContract(
       participantEligibilityContract,
     );
+  const accountSecurityContract = getMoralTradeAccountSecurityContract();
+  const accountSecurityValidation =
+    validateMoralTradeAccountSecurityContract(accountSecurityContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -241,6 +248,7 @@ export async function GET(request: Request) {
       releaseGateValidation.status === "pass" &&
       participantConfirmationValidation.status === "pass" &&
       participantEligibilityValidation.status === "pass" &&
+      accountSecurityValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
@@ -272,6 +280,7 @@ export async function GET(request: Request) {
     releaseGateValidation,
     participantConfirmationValidation,
     participantEligibilityValidation,
+    accountSecurityValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -374,6 +383,26 @@ export async function GET(request: Request) {
       ),
       participantEligibilityContractTests:
         participantEligibilityContract.contractTests,
+      accountSecurityContractVersion:
+        accountSecurityContract.version,
+      accountSecurityHighRiskActions:
+        accountSecurityContract.highRiskActions,
+      accountSecurityEventTypes:
+        accountSecurityContract.eventTypes,
+      accountSecurityFailClosedStatuses:
+        accountSecurityContract.failClosedStatuses,
+      accountSecurityFirstClassRecordTables:
+        accountSecurityContract.firstClassRecordTables,
+      accountSecurityPolicySnapshotSubjects:
+        accountSecurityContract.policySnapshotSubjects,
+      accountSecuritySampleEvaluationStatuses: Object.fromEntries(
+        accountSecurityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.action,
+          evaluation.status,
+        ]),
+      ),
+      accountSecurityContractTests:
+        accountSecurityContract.contractTests,
       productionReadinessContractVersion:
         productionReadinessContract.version,
       productionReadinessControlKeys:

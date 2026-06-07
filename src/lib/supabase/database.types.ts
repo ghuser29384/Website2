@@ -6217,15 +6217,249 @@ export interface Database {
         Relationships: [];
       };
       moral_trade_account_security_policies: {
-        Row: SupabaseMoralTradeOperationalRow;
-        Insert: SupabaseMoralTradeOperationalInsert;
-        Update: SupabaseMoralTradeOperationalUpdate;
+        Row: {
+          id: string;
+          policy_snapshot_id: string;
+          status: "ready" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          step_up_required_actions: string[];
+          cooldown_required_actions: string[];
+          high_risk_event_window_hours: number;
+          notice_required: boolean;
+          policy_version: string;
+          applies_to_action:
+            | "login"
+            | "payment_method_change"
+            | "participant_confirmation"
+            | "payment_authorization"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_grant"
+            | "identity_artifact_change"
+            | "contact_introduction"
+            | "account_recovery"
+            | "email_change"
+            | "mfa_change"
+            | "exposure_increase"
+            | "reliance_bearing_agreement";
+          step_up_required_bool: boolean;
+          trusted_device_required_bool: boolean;
+          cooldown_hours: number;
+          risk_signals_json: Json;
+          high_risk_behavior: "block" | "step_up" | "cooldown" | "manual_review";
+          account_recovery_behavior: "block_real_money" | "manual_review" | "limited_access";
+          reviewer_decision_ref: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          policy_snapshot_id: string;
+          status?: "ready" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          step_up_required_actions?: string[];
+          cooldown_required_actions?: string[];
+          high_risk_event_window_hours?: number;
+          notice_required?: boolean;
+          policy_version?: string;
+          applies_to_action?:
+            | "login"
+            | "payment_method_change"
+            | "participant_confirmation"
+            | "payment_authorization"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_grant"
+            | "identity_artifact_change"
+            | "contact_introduction"
+            | "account_recovery"
+            | "email_change"
+            | "mfa_change"
+            | "exposure_increase"
+            | "reliance_bearing_agreement";
+          step_up_required_bool?: boolean;
+          trusted_device_required_bool?: boolean;
+          cooldown_hours?: number;
+          risk_signals_json?: Json;
+          high_risk_behavior?: "block" | "step_up" | "cooldown" | "manual_review";
+          account_recovery_behavior?: "block_real_money" | "manual_review" | "limited_access";
+          reviewer_decision_ref?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          policy_snapshot_id?: string;
+          status?: "ready" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          step_up_required_actions?: string[];
+          cooldown_required_actions?: string[];
+          high_risk_event_window_hours?: number;
+          notice_required?: boolean;
+          policy_version?: string;
+          applies_to_action?:
+            | "login"
+            | "payment_method_change"
+            | "participant_confirmation"
+            | "payment_authorization"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_grant"
+            | "identity_artifact_change"
+            | "contact_introduction"
+            | "account_recovery"
+            | "email_change"
+            | "mfa_change"
+            | "exposure_increase"
+            | "reliance_bearing_agreement";
+          step_up_required_bool?: boolean;
+          trusted_device_required_bool?: boolean;
+          cooldown_hours?: number;
+          risk_signals_json?: Json;
+          high_risk_behavior?: "block" | "step_up" | "cooldown" | "manual_review";
+          account_recovery_behavior?: "block_real_money" | "manual_review" | "limited_access";
+          reviewer_decision_ref?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       moral_trade_account_security_events: {
-        Row: SupabaseMoralTradeOperationalRow;
-        Insert: SupabaseMoralTradeOperationalInsert;
-        Update: SupabaseMoralTradeOperationalUpdate;
+        Row: {
+          id: string;
+          profile_id: string | null;
+          event_type:
+            | "login"
+            | "password_change"
+            | "new_device"
+            | "session_anomaly"
+            | "payment_method_change"
+            | "email_change"
+            | "mfa_change"
+            | "account_recovery"
+            | "identity_artifact_change"
+            | "participant_identity_change"
+            | "step_up_passed"
+            | "step_up_failed"
+            | "manual_review";
+          risk_status: "ready" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review" | "high_risk_event_open";
+          policy_snapshot_id: string | null;
+          notice_record_status: "delivered" | "not_required_for_stage" | "missing" | "failed" | "stale";
+          step_up_status: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale";
+          cooldown_until: string | null;
+          event_hash: string;
+          resolved_by: string | null;
+          resolved_at: string | null;
+          participant_id_hash: string;
+          account_security_policy_ref: string | null;
+          risk_state: "low" | "medium" | "high" | "blocked" | "manual_review" | "stale";
+          action_subject_type:
+            | "common_ground_budget"
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "cleared_trade_agreement"
+            | "privacy_grant"
+            | "payment_event"
+            | "payout_milestone"
+            | "contact_interaction_record"
+            | "participant_confirmation_record"
+            | "participant_eligibility_record";
+          action_subject_id: string;
+          notice_ref: string | null;
+          trusted_device_status: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          reviewer_decision_ref: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id?: string | null;
+          event_type:
+            | "login"
+            | "password_change"
+            | "new_device"
+            | "session_anomaly"
+            | "payment_method_change"
+            | "email_change"
+            | "mfa_change"
+            | "account_recovery"
+            | "identity_artifact_change"
+            | "participant_identity_change"
+            | "step_up_passed"
+            | "step_up_failed"
+            | "manual_review";
+          risk_status?: "ready" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review" | "high_risk_event_open";
+          policy_snapshot_id?: string | null;
+          notice_record_status?: "delivered" | "not_required_for_stage" | "missing" | "failed" | "stale";
+          step_up_status?: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale";
+          cooldown_until?: string | null;
+          event_hash: string;
+          resolved_by?: string | null;
+          resolved_at?: string | null;
+          participant_id_hash?: string;
+          account_security_policy_ref?: string | null;
+          risk_state?: "low" | "medium" | "high" | "blocked" | "manual_review" | "stale";
+          action_subject_type?:
+            | "common_ground_budget"
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "cleared_trade_agreement"
+            | "privacy_grant"
+            | "payment_event"
+            | "payout_milestone"
+            | "contact_interaction_record"
+            | "participant_confirmation_record"
+            | "participant_eligibility_record";
+          action_subject_id?: string;
+          notice_ref?: string | null;
+          trusted_device_status?: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          reviewer_decision_ref?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          profile_id?: string | null;
+          event_type?:
+            | "login"
+            | "password_change"
+            | "new_device"
+            | "session_anomaly"
+            | "payment_method_change"
+            | "email_change"
+            | "mfa_change"
+            | "account_recovery"
+            | "identity_artifact_change"
+            | "participant_identity_change"
+            | "step_up_passed"
+            | "step_up_failed"
+            | "manual_review";
+          risk_status?: "ready" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review" | "high_risk_event_open";
+          policy_snapshot_id?: string | null;
+          notice_record_status?: "delivered" | "not_required_for_stage" | "missing" | "failed" | "stale";
+          step_up_status?: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale";
+          cooldown_until?: string | null;
+          event_hash?: string;
+          resolved_by?: string | null;
+          resolved_at?: string | null;
+          participant_id_hash?: string;
+          account_security_policy_ref?: string | null;
+          risk_state?: "low" | "medium" | "high" | "blocked" | "manual_review" | "stale";
+          action_subject_type?:
+            | "common_ground_budget"
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "cleared_trade_agreement"
+            | "privacy_grant"
+            | "payment_event"
+            | "payout_milestone"
+            | "contact_interaction_record"
+            | "participant_confirmation_record"
+            | "participant_eligibility_record";
+          action_subject_id?: string;
+          notice_ref?: string | null;
+          trusted_device_status?: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          reviewer_decision_ref?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       moral_trade_backup_recovery_policies: {
