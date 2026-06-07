@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import {
+  MpgfCommonGroundBudgetSavePanel,
+  type CommonGroundBudgetSavePayload,
+} from "@/components/mpgf/mpgf-common-ground-budget-save-panel";
 import { MpgfContributionModal } from "@/components/mpgf/mpgf-contribution-modal";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { MpgfSupportSignalPanel } from "@/components/mpgf/mpgf-support-signal-panel";
@@ -258,6 +262,27 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
     })),
   });
   const commonGroundBudgetReleaseGate = commonGroundBudgetPreview.releaseGateRequirementBundle;
+  const commonGroundBudgetSavePayload = {
+    baselineConfidenceLevel: commonGroundBudgetPreview.baselineConfidenceLevel,
+    baselineConfidenceRationale: commonGroundBudgetPreview.baselineConfidenceRationale,
+    budgetPeriod: commonGroundBudgetPreview.budgetPeriod,
+    defaultAllocationBaseline: commonGroundBudgetPreview.defaultAllocationBaseline,
+    fallbackRule: commonGroundBudgetPreview.fallbackRule,
+    monthlyBudgetCents,
+    participantSurplusConfirmed: commonGroundBudgetPreview.participantSurplusConfirmed,
+    roundBudgetCents,
+    savePreview: true,
+    settlementCurrency: commonGroundBudgetPreview.settlementCurrency,
+    stances: commonGroundBudgetPreview.rows.map((row) => ({
+      campaignId: row.campaignId,
+      stance: row.stance,
+      maxAllocCents: row.maxAllocCents,
+      maxAllocPctBps: row.maxAllocPctBps,
+      rankOrder: row.rankOrder,
+      redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${row.campaignId}`),
+    })),
+    unroutableBudgetPolicy: commonGroundBudgetPreview.unroutableBudgetPolicy,
+  } satisfies CommonGroundBudgetSavePayload;
   const contributionModalCampaigns = campaignResult.campaigns.map((campaign) => ({
     campaignId: campaign.campaignId,
     countedForMatchCents: campaign.countedForMatchCents,
@@ -588,6 +613,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                         <th scope="col">Stance</th>
                         <th scope="col">Cap, cents</th>
                         <th scope="col">Cap, pct bps</th>
+                        <th scope="col">Optional note</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -617,6 +643,15 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                               name={`maxAllocPctBps_${row.campaignId}`}
                               type="number"
                               defaultValue={row.maxAllocPctBps}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              maxLength={160}
+                              name={`redactedNote_${row.campaignId}`}
+                              placeholder="Private review note"
+                              type="text"
+                              defaultValue={searchParamValue(resolvedSearchParams, `redactedNote_${row.campaignId}`)}
                             />
                           </td>
                         </tr>
@@ -706,6 +741,16 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   ))}
                 </div>
               ) : null}
+              <MpgfCommonGroundBudgetSavePanel
+                activationState={commonGroundBudgetPreview.activationState}
+                apiPath={`/api/mpgf/rounds/${round.id}/common-ground-budget-preview`}
+                blockedReasonCount={commonGroundBudgetPreview.userFacingBlockers.length}
+                participantConfirmationHash={commonGroundBudgetPreview.participantConfirmationHash}
+                payload={commonGroundBudgetSavePayload}
+                paymentCaptureAllowed={commonGroundBudgetPreview.paymentCaptureAllowed}
+                releaseGateRequirementBundleHash={commonGroundBudgetPreview.releaseGateRequirementBundleHash}
+                termsSnapshotHash={commonGroundBudgetPreview.termsSnapshotHash}
+              />
               <div className="mpgf-pool-directory">
                 {commonGroundBudgetPreview.rows.map((row) => (
                   <article className="mpgf-panel" key={`budget-preview-${row.campaignId}`}>

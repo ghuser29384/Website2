@@ -2776,6 +2776,7 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   });
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/coalition-routing/route.ts", "utf8");
   const budgetPreviewRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/common-ground-budget-preview/route.ts", "utf8");
+  const budgetSavePanel = readFileSync("src/components/mpgf/mpgf-common-ground-budget-save-panel.tsx", "utf8");
   const roundRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/route.ts", "utf8");
   const publicApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
   const supportSignalContract = buildMpgfPublicGoodsSupportSignalContractApi(persistedRound.id);
@@ -2924,8 +2925,22 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(roundPage, /Later-stage controls held back/);
   assert.match(roundPage, /Your default allocation baseline/);
   assert.match(roundPage, /This routing is acceptable to me relative to my stated default/);
+  assert.match(roundPage, /MpgfCommonGroundBudgetSavePanel/);
+  assert.match(roundPage, /commonGroundBudgetSavePayload/);
+  assert.match(roundPage, /redactedNote_/);
+  assert.match(roundPage, /Optional note/);
   assert.match(roundPage, /paymentCaptureAllowed/);
   assert.match(roundPage, /coalition-routing report/);
+  assert.match(budgetSavePanel, /"use client"/);
+  assert.match(budgetSavePanel, /Save no-capture budget preview/);
+  assert.match(budgetSavePanel, /fetch\(apiPath/);
+  assert.match(budgetSavePanel, /JSON\.stringify\(payload\)/);
+  assert.match(budgetSavePanel, /activationState === "ready_for_confirmation"/);
+  assert.match(budgetSavePanel, /blockedReasonCount === 0/);
+  assert.match(budgetSavePanel, /participantConfirmationHash/);
+  assert.match(budgetSavePanel, /paymentCaptureAllowed: false/);
+  assert.match(budgetSavePanel, /saved_no_capture/);
+  assert.match(budgetSavePanel, /No payment capture was authorized/);
 
   for (const table of [
     "mpgf_user_budgets",
