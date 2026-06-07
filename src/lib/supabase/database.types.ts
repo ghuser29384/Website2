@@ -6,6 +6,22 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+type SupabaseMoralTradeOperationalRow = {
+  id: string;
+  created_at: string;
+  [key: string]: Json | undefined;
+};
+
+type SupabaseMoralTradeOperationalInsert = {
+  id?: string;
+  created_at?: string;
+  [key: string]: Json | undefined;
+};
+
+type SupabaseMoralTradeOperationalUpdate = {
+  [key: string]: Json | undefined;
+};
+
 export interface Database {
   public: {
     Tables: {
@@ -5614,7 +5630,16 @@ export interface Database {
             | "public_metrics"
             | "data_retention"
             | "participant_eligibility"
-            | "recipient_destination_verification";
+            | "recipient_destination_verification"
+            | "account_security"
+            | "backup_recovery"
+            | "deployment_release"
+            | "configuration_snapshot"
+            | "schema_migration"
+            | "environment_data_isolation"
+            | "financial_reconciliation"
+            | "audit_integrity"
+            | "data_security";
           subject_key: string;
           version_label: string;
           status: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -5642,7 +5667,16 @@ export interface Database {
             | "public_metrics"
             | "data_retention"
             | "participant_eligibility"
-            | "recipient_destination_verification";
+            | "recipient_destination_verification"
+            | "account_security"
+            | "backup_recovery"
+            | "deployment_release"
+            | "configuration_snapshot"
+            | "schema_migration"
+            | "environment_data_isolation"
+            | "financial_reconciliation"
+            | "audit_integrity"
+            | "data_security";
           subject_key: string;
           version_label: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -5669,7 +5703,16 @@ export interface Database {
             | "public_metrics"
             | "data_retention"
             | "participant_eligibility"
-            | "recipient_destination_verification";
+            | "recipient_destination_verification"
+            | "account_security"
+            | "backup_recovery"
+            | "deployment_release"
+            | "configuration_snapshot"
+            | "schema_migration"
+            | "environment_data_isolation"
+            | "financial_reconciliation"
+            | "audit_integrity"
+            | "data_security";
           subject_key?: string;
           version_label?: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -6172,6 +6215,108 @@ export interface Database {
           revoked_at?: string | null;
           superseded_by?: string | null;
         };
+        Relationships: [];
+      };
+      moral_trade_account_security_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_account_security_events: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_backup_recovery_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_backup_recovery_checkpoints: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_deployment_release_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_configuration_snapshots: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_configuration_change_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_schema_migration_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_schema_migration_runs: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_environment_data_isolation_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_environment_data_isolation_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_financial_reconciliation_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_financial_reconciliation_runs: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_audit_integrity_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_audit_integrity_checkpoints: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_data_security_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_key_version_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
     Views: {

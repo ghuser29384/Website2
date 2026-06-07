@@ -24,6 +24,10 @@ import {
   validateMoralTradeParticipantConfirmationContract,
 } from "@/lib/moral-trade/participant-confirmations";
 import {
+  getMoralTradeProductionReadinessContract,
+  validateMoralTradeProductionReadinessContract,
+} from "@/lib/moral-trade/production-readiness";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -132,6 +136,12 @@ export async function GET(request: Request) {
     validateMoralTradeParticipantConfirmationContract(
       participantConfirmationContract,
     );
+  const productionReadinessContract =
+    getMoralTradeProductionReadinessContract();
+  const productionReadinessValidation =
+    validateMoralTradeProductionReadinessContract(
+      productionReadinessContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -210,6 +220,7 @@ export async function GET(request: Request) {
       policyBundleValidation.status === "pass" &&
       releaseGateValidation.status === "pass" &&
       participantConfirmationValidation.status === "pass" &&
+      productionReadinessValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -238,6 +249,7 @@ export async function GET(request: Request) {
     policyBundleValidation,
     releaseGateValidation,
     participantConfirmationValidation,
+    productionReadinessValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -316,6 +328,26 @@ export async function GET(request: Request) {
         })),
       participantConfirmationContractTests:
         participantConfirmationContract.contractTests,
+      productionReadinessContractVersion:
+        productionReadinessContract.version,
+      productionReadinessControlKeys:
+        productionReadinessContract.controlDefinitions.map((control) => control.key),
+      productionReadinessGateKeys:
+        productionReadinessContract.gateDefinitions.map((gate) => gate.key),
+      productionReadinessFailClosedStatuses:
+        productionReadinessContract.failClosedStatuses,
+      productionReadinessFirstClassRecordTables:
+        productionReadinessContract.firstClassRecordTables,
+      productionReadinessPolicySnapshotSubjects:
+        productionReadinessContract.policySnapshotSubjects,
+      productionReadinessSampleEvaluationStatuses: Object.fromEntries(
+        productionReadinessContract.sampleEvaluations.map((evaluation) => [
+          evaluation.gate,
+          evaluation.status,
+        ]),
+      ),
+      productionReadinessContractTests:
+        productionReadinessContract.contractTests,
       statusValues: profile.statusValues,
       decisionPipeline: profile.decisionPipeline.map((step) => ({
         key: step.key,
@@ -561,6 +593,7 @@ export async function GET(request: Request) {
       ...policyBundleValidation.blockers,
       ...releaseGateValidation.blockers,
       ...participantConfirmationValidation.blockers,
+      ...productionReadinessValidation.blockers,
       ...provenanceValidation.blockers,
       ...schemaRegistryValidation.blockers,
       ...copilotValidation.blockers,

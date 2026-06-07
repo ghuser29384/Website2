@@ -170,6 +170,15 @@ const POLICY_SNAPSHOT_SUBJECTS = [
   "data_retention",
   "participant_eligibility",
   "recipient_destination_verification",
+  "account_security",
+  "backup_recovery",
+  "deployment_release",
+  "configuration_snapshot",
+  "schema_migration",
+  "environment_data_isolation",
+  "financial_reconciliation",
+  "audit_integrity",
+  "data_security",
 ] as const;
 
 const PRIVILEGED_ACTION_KEYS = [

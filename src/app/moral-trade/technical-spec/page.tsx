@@ -47,6 +47,10 @@ import {
   validateMoralTradeParticipantConfirmationContract,
 } from "@/lib/moral-trade/participant-confirmations";
 import {
+  getMoralTradeProductionReadinessContract,
+  validateMoralTradeProductionReadinessContract,
+} from "@/lib/moral-trade/production-readiness";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -144,6 +148,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeParticipantConfirmationContract(
       participantConfirmationContract,
     );
+  const productionReadinessContract =
+    getMoralTradeProductionReadinessContract();
+  const productionReadinessValidation =
+    validateMoralTradeProductionReadinessContract(
+      productionReadinessContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -226,6 +236,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     policyBundleValidation,
     releaseGateValidation,
     participantConfirmationValidation,
+    productionReadinessValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -310,6 +321,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Participant confirmations",
       status: participantConfirmationValidation.status,
       summary: `${participantConfirmationContract.confirmationScopes.length} scope(s), ${participantConfirmationContract.failClosedStatuses.length} fail-closed status(es).`,
+    },
+    {
+      blockers: productionReadinessValidation.blockers.length,
+      family: "Operations",
+      href: "/api/moral-trade/production-readiness/contract",
+      label: "Production readiness",
+      status: productionReadinessValidation.status,
+      summary: `${productionReadinessContract.controlDefinitions.length} control(s), ${productionReadinessContract.gateDefinitions.length} gated transition(s).`,
     },
     {
       blockers: copilotValidation.blockers.length,
@@ -1057,6 +1076,82 @@ export default async function MoralTradeTechnicalSpecPage() {
                 ))}
               </ul>
             </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="production-readiness-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Production readiness contract</p>
+            <h2 id="production-readiness-contract-heading">
+              Operational records block money, privacy, metrics, and privileged changes when stale.
+            </h2>
+            <p>
+              Moraltrade60 requires account security, backup recovery, deployment configuration,
+              migration safety, environment isolation, reconciliation, audit integrity, and
+              data-security controls before high-risk transitions. This contract publishes the
+              required record families and fail-closed statuses without exposing private
+              operational evidence.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Production readiness {productionReadinessContract.version}
+              </p>
+              <h3>Status {productionReadinessValidation.status}</h3>
+              <p>
+                {productionReadinessValidation.checks.length} check(s),{" "}
+                {productionReadinessValidation.blockers.length} blocker(s),{" "}
+                {productionReadinessContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/production-readiness/contract">
+              Open readiness JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Controls</h3>
+              <ul className="clean-list">
+                {productionReadinessContract.controlDefinitions.map((control) => (
+                  <li key={control.key}>{control.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {productionReadinessContract.gateDefinitions.map((gate) => (
+                  <li key={gate.key}>{gate.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {productionReadinessContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Policy subjects</h3>
+              <ul className="clean-list">
+                {productionReadinessContract.policySnapshotSubjects.map((subject) => (
+                  <li key={subject}>{subject.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="data-grid">
+            {productionReadinessContract.controlDefinitions.slice(0, 6).map((control) => (
+              <article className="panel data-card" key={control.key}>
+                <p className="detail-kicker">{control.policySnapshotSubject}</p>
+                <h3>{control.label}</h3>
+                <p>{control.description}</p>
+              </article>
+            ))}
           </div>
         </section>
 

@@ -23,6 +23,7 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 - privacy-safe marketplace measurement events and aggregate KPI definitions
 - fail-closed release-gate contract, public route, and first-class policy-snapshot / requirement-result records for payable, reliance-bearing, and public-metric stages
 - first-class participant-confirmation and consent-quality contracts/records for routing, clearing, capture, payout release, privacy disclosure, exposure increases, and material-term changes
+- fail-closed production-readiness contract and records for account security, backup recovery, deployment/config provenance, schema migration safety, environment isolation, financial reconciliation, audit integrity, and data-security/key-management controls
 - route-baseline verification for the public routes listed in `moraltrade60.md`
 
 ### Migration Summary
@@ -39,6 +40,10 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 - `supabase/migrations/20260607_zz_moral_trade_participant_confirmation_records.sql`
   - Adds first-class `moral_trade_participant_confirmation_records` and `moral_trade_consent_quality_records` tables.
   - Binds confirmations to frozen baseline, terms snapshot, policy snapshot bundle, maximum exposure, notice state, consent-quality state, eligible-set/fallback hashes where relevant, expiry, supersession, and exact confirmation scope.
+- `supabase/migrations/20260607_zzz_moral_trade_production_readiness_records.sql`
+  - Adds first-class records for account-security events, backup/restore checkpoints, deployment-release records, configuration snapshots/changes, schema-migration runs, environment-data-isolation records, financial-reconciliation runs, audit-integrity checkpoints, data-security policies, and key-version records.
+  - Extends policy-snapshot subject support for account security, backup recovery, deployment release, configuration snapshot, schema migration, environment data isolation, financial reconciliation, audit integrity, and data security.
+  - Keeps missing, stale, drifted, unverified, restore-failed, high-risk-account, variance-unresolved, invalid-hash, or mutable-policy operational evidence fail-closed before money movement, payout release, public money metrics, privacy disclosure, release-gate promotion, or non-emergency privileged changes.
 
 ### Route Screenshots
 
@@ -52,9 +57,11 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 node --import tsx --test src/lib/marketplace-measurement.test.ts src/lib/growth.test.ts src/lib/public-offers.test.ts src/lib/public-route-smoke.test.ts
 node --import tsx --test src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 node --import tsx --test src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
+node --import tsx --test src/lib/moral-trade/production-readiness.test.ts src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 npm run lint -- src/lib/marketplace-measurement.ts src/lib/marketplace-measurement.test.ts src/lib/growth.ts src/lib/growth.test.ts src/components/analytics/funnel-tracker.tsx src/lib/measurement-plan.ts src/app/measurement/page.tsx src/app/api/moral-trade/health/route.ts src/lib/public-route-smoke.test.ts scripts/check-public-route-baseline.mjs
 npm run lint -- src/lib/moral-trade/release-gates.ts src/lib/moral-trade/release-gates.test.ts src/app/api/moral-trade/release-gates/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 npm run lint -- src/lib/moral-trade/participant-confirmations.ts src/lib/moral-trade/participant-confirmations.test.ts src/app/api/moral-trade/participant-confirmations/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
+npm run lint -- src/lib/moral-trade/production-readiness.ts src/lib/moral-trade/production-readiness.test.ts src/app/api/moral-trade/production-readiness/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 git diff --check
 npm run build
 MORALTRADE_BASE_URL=http://127.0.0.1:3000 npm run measure:routes
@@ -65,6 +72,7 @@ Observed results:
 - focused test bundle: `71` tests passed
 - release-gate/API/source-smoke bundle: `60` tests passed
 - participant-confirmation/release-gate/API/source-smoke bundle: `67` tests passed
+- production-readiness/participant-confirmation/release-gate/API/source-smoke bundle: `72` tests passed
 - lint: passed
 - whitespace check: passed
 - production build: passed
@@ -144,6 +152,20 @@ Participant-confirmation contract sample:
 }
 ```
 
+Production-readiness contract sample:
+
+```json
+{
+  "status": "pass",
+  "validatorName": "moral-trade-production-readiness-contract",
+  "validatorVersion": "moral-trade-production-readiness-validator-v0.1",
+  "sampleEvaluations": {
+    "sandbox_calculation_preview": "pass",
+    "payout_release": "blocked"
+  }
+}
+```
+
 Route baseline summary:
 
 ```json
@@ -170,12 +192,13 @@ Route baseline summary:
 - Public KPI snapshots use small-cell suppression with a minimum public count of `3`.
 - The release-gate route publishes static stage, requirement, policy-snapshot, and privileged-action contract metadata; it does not expose private gate records, participant confirmations, payment records, or reviewer notes.
 - The participant-confirmation route publishes static subject/scope/status/hash-field contract metadata; it does not expose private participant confirmation rows, notice records, baselines, payment records, or reviewer notes.
-- The health, measurement, release-gate, and participant-confirmation surfaces publish validator status and aggregate contract metadata, not private participant records.
+- The production-readiness route publishes static control/gate/table/status contract metadata; it does not expose account-security event details, backup contents, configuration values, provider payloads, reconciliation line items, audit rows, private access logs, or key material.
+- The health, measurement, release-gate, participant-confirmation, and production-readiness surfaces publish validator status and aggregate contract metadata, not private participant records or private operational evidence.
 
 ### Remaining Blockers And Non-Claims
 
 - There are still `0` live public offers and `0` completed agreements in the local public-offer sample; reviewed examples and seed templates are scaffolding, not evidence of real liquidity.
-- Real-money capture and payout remain blocked until capped-real-money release gates, provider reconciliation, privileged-action controls, and reviewer approvals are complete.
+- Real-money capture and payout remain blocked until capped-real-money release gates, live provider reconciliation runs, privileged-action approvals, current backup/restore checkpoints, deployment/configuration snapshots, audit-integrity checkpoints, and reviewer approvals are complete.
 - Donation offsets and pledge swaps remain preview/manual-review oriented unless later release gates explicitly promote them.
-- `moraltrade60.md` includes broader long-tail requirements beyond this PR slice, including live audit-integrity checkpoint production wiring, backup recovery policy, account-security policy, financial reconciliation operation, and production configuration provenance.
+- `moraltrade60.md` includes broader long-tail requirements beyond this PR slice, including live operational execution for the new production-readiness records, participant eligibility, recipient/payment destination verification, matching-clearing run reproducibility, privacy-grant/access-log enforcement, impact-claim review, anti-enumeration logging, reviewer-quality audits, appeal records, and full donation-offset/pledge-swap clearing previews.
 - Local `gh` is unavailable, so this package provides a PR-ready body and artifacts but does not prove that a GitHub PR object was created.

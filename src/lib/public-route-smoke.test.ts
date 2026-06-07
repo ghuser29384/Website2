@@ -2101,6 +2101,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const participantConfirmationSource = readRepoFile(
     "src/lib/moral-trade/participant-confirmations.ts",
   );
+  const productionReadinessSource = readRepoFile(
+    "src/lib/moral-trade/production-readiness.ts",
+  );
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
   const offerWritePathSource = readRepoFile("src/lib/moral-trade/offer-write-path.ts");
   const agreementWritePathSource = readRepoFile("src/lib/moral-trade/agreement-write-path.ts");
@@ -2154,6 +2157,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const reviewDecisionIdempotencyMigration = readRepoFile(
     "supabase/migrations/20260529_moral_trade_review_decision_idempotency.sql",
   );
+  const productionReadinessMigration = readRepoFile(
+    "supabase/migrations/20260607_zzz_moral_trade_production_readiness_records.sql",
+  );
   const schemaSource = readRepoFile("supabase/schema.sql");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
@@ -2181,6 +2187,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const participantConfirmationContractRoute = readRepoFile(
     "src/app/api/moral-trade/participant-confirmations/contract/route.ts",
+  );
+  const productionReadinessContractRoute = readRepoFile(
+    "src/app/api/moral-trade/production-readiness/contract/route.ts",
   );
   const copilotContractRoute = readRepoFile("src/app/api/moral-trade/copilot/contract/route.ts");
   const copilotReviewRoute = readRepoFile("src/app/api/moral-trade/copilot/review/route.ts");
@@ -2395,6 +2404,27 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(participantConfirmationSource, /moral_trade_consent_quality_records/);
   assert.match(participantConfirmationSource, /confirmation_not_recorded/);
   assert.match(participantConfirmationSource, /eligible_set_hash_required/);
+  assert.match(productionReadinessSource, /getMoralTradeProductionReadinessContract/);
+  assert.match(productionReadinessSource, /evaluateMoralTradeProductionReadiness/);
+  assert.match(productionReadinessSource, /moral_trade_account_security_events/);
+  assert.match(productionReadinessSource, /moral_trade_backup_recovery_checkpoints/);
+  assert.match(productionReadinessSource, /moral_trade_deployment_release_records/);
+  assert.match(productionReadinessSource, /moral_trade_configuration_snapshots/);
+  assert.match(productionReadinessSource, /moral_trade_schema_migration_runs/);
+  assert.match(productionReadinessSource, /moral_trade_environment_data_isolation_records/);
+  assert.match(productionReadinessSource, /moral_trade_financial_reconciliation_runs/);
+  assert.match(productionReadinessSource, /moral_trade_audit_integrity_checkpoints/);
+  assert.match(productionReadinessSource, /moral_trade_data_security_policies/);
+  assert.match(productionReadinessSource, /variance_unresolved/);
+  assert.match(productionReadinessMigration, /moral_trade_account_security_events/);
+  assert.match(productionReadinessMigration, /moral_trade_backup_recovery_checkpoints/);
+  assert.match(productionReadinessMigration, /moral_trade_financial_reconciliation_runs/);
+  assert.match(productionReadinessMigration, /moral_trade_audit_integrity_checkpoints/);
+  assert.match(productionReadinessMigration, /moral_trade_configuration_snapshots/);
+  assert.match(schemaSource, /moral_trade_account_security_events/);
+  assert.match(schemaSource, /moral_trade_backup_recovery_checkpoints/);
+  assert.match(schemaSource, /moral_trade_financial_reconciliation_runs/);
+  assert.match(schemaSource, /moral_trade_audit_integrity_checkpoints/);
   assert.match(provenanceSource, /validateMoralTradeProvenanceBundle/);
   assert.match(provenanceSource, /getMoralTradeProvenanceContract/);
   assert.match(provenanceSource, /validateMoralTradeProvenanceContract/);
@@ -2788,6 +2818,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /data-model-contract-route/);
   assert.match(apiContractSource, /moral_trade_policy_bundle_contract/);
   assert.match(apiContractSource, /policy-bundle-contract-route/);
+  assert.match(apiContractSource, /moral_trade_production_readiness_contract/);
   assert.match(apiContractSource, /provenance-schema-validator/);
   assert.match(apiContractSource, /moral_trade_schema_registry/);
   assert.match(apiContractSource, /schema-registry-route/);
@@ -2832,6 +2863,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /moral_trade_policy_bundle_contract/);
   assert.match(apiContractProfile, /policy-bundle validation blockers/);
   assert.match(apiContractProfile, /unseeded prohibited patterns/);
+  assert.match(apiContractProfile, /production_readiness_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_production_readiness_contract/);
+  assert.match(apiContractProfile, /account-security events, backup contents, configuration values/);
   assert.match(apiContractProfile, /schema_registry_response/);
   assert.match(apiContractProfile, /moral_trade_schema_registry/);
   assert.match(apiContractProfile, /data-model schema/);
@@ -2985,6 +3019,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Participant confirmation contract/);
   assert.match(technicalSpecPage, /participantConfirmationContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/participant-confirmations\/contract/);
+  assert.match(technicalSpecPage, /Production readiness contract/);
+  assert.match(technicalSpecPage, /productionReadinessContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /\/api\/moral-trade\/production-readiness\/contract/);
   assert.match(technicalSpecPage, /Evidence object contract/);
   assert.match(technicalSpecPage, /traceability events/);
   assert.match(technicalSpecPage, /external entity dedupe failures/);
@@ -3127,6 +3164,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /participantConfirmationValidation/);
   assert.match(healthRoute, /participantConfirmationScopes/);
   assert.match(healthRoute, /participantConfirmationFirstClassRecordTables/);
+  assert.match(healthRoute, /productionReadinessValidation/);
+  assert.match(healthRoute, /productionReadinessControlKeys/);
+  assert.match(healthRoute, /productionReadinessFirstClassRecordTables/);
   assert.match(healthRoute, /stateTransitionRules/);
   assert.match(healthRoute, /provenanceObjectSchemas/);
   assert.match(healthRoute, /provenanceValidation/);
@@ -3223,6 +3263,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(participantConfirmationContractRoute, /validateMoralTradeParticipantConfirmationContract/);
   assert.match(participantConfirmationContractRoute, /confirmationScopes/);
   assert.match(participantConfirmationContractRoute, /failClosedStatuses/);
+  assert.match(productionReadinessContractRoute, /validateMoralTradeProductionReadinessContract/);
+  assert.match(productionReadinessContractRoute, /firstClassRecordTables/);
+  assert.match(productionReadinessContractRoute, /productionReadinessSampleEvaluationStatuses/);
   assert.match(copilotContractRoute, /validateMoralTradeCopilotContract/);
   assert.match(copilotContractRoute, /getMoralTradeCopilotRolloutReadinessAudits/);
   assert.match(copilotContractRoute, /promptTemplates/);
