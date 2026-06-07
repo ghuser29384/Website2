@@ -63,6 +63,18 @@ import {
   type MoralTradeProtocolDraftReview,
   type MoralTradeVerificationStepStatus,
 } from "@/lib/proposal-review";
+import {
+  buildPledgeSwapManualReviewPreview,
+  validatePledgeSwapManualReviewInput,
+  type PledgeSwapActionReversibility,
+  type PledgeSwapBaselineConfidence,
+  type PledgeSwapBinarySafetyAssertion,
+  type PledgeSwapGateStatus,
+  type PledgeSwapManualReviewInput,
+  type PledgeSwapOrdinaryServiceClassification,
+  type PledgeSwapRepresentativeAuthority,
+  type PledgeSwapThirdPartyObligation,
+} from "@/lib/pledge-swaps";
 
 interface DonationOffsetPoolOption {
   id: string;
@@ -241,6 +253,30 @@ interface TemplateTextareaSuggestionsProps {
 }
 
 const defaultOffsetFields = createDefaultDonationOffsetFields();
+const defaultPledgeReciprocalReleaseRule =
+  "If one side exits under the stated rule, both sides are released from future obligations while completed or disputed past obligations remain reviewable.";
+const defaultPledgeWithdrawalBeforeLockRule =
+  "Either side can withdraw before final lock without penalty or private-detail escalation.";
+const defaultPledgeEvidencePlan =
+  "Use a public log, dated receipt, or similarly narrow artifact for the promised action.";
+const defaultPledgeLeastIntrusiveAlternative =
+  "Use a dated self-log or receipt before private messages, location history, protected-trait disclosure, or third-party exposure.";
+
+function formatPledgeGateStatus(status: PledgeSwapGateStatus) {
+  return status.replaceAll("_", " ");
+}
+
+function pledgeGateStatusClass(status: PledgeSwapGateStatus) {
+  if (status === "blocked") {
+    return "blocked";
+  }
+
+  if (status === "needs_input" || status === "human_review") {
+    return "human_review";
+  }
+
+  return "pass";
+}
 
 const OFFER_TEMPLATES: OfferTemplate[] = [
   {
@@ -795,6 +831,53 @@ export function OfferCreateForm({
   const [requestAction, setRequestAction] = useState(initialTemplate?.requestAction ?? "");
   const [baselineStatement, setBaselineStatement] = useState(initialTemplate?.baselineStatement ?? "");
   const [additionalityStatement, setAdditionalityStatement] = useState("");
+  const [pledgeMaxObligationDays, setPledgeMaxObligationDays] = useState("30");
+  const [pledgeReciprocalReleaseRule, setPledgeReciprocalReleaseRule] = useState(
+    defaultPledgeReciprocalReleaseRule,
+  );
+  const [pledgeWithdrawalBeforeLockRule, setPledgeWithdrawalBeforeLockRule] = useState(
+    defaultPledgeWithdrawalBeforeLockRule,
+  );
+  const [pledgeChallengeWindowDays, setPledgeChallengeWindowDays] = useState("14");
+  const [pledgeNeutralReviewRequired, setPledgeNeutralReviewRequired] = useState(true);
+  const [pledgeEvidencePlan, setPledgeEvidencePlan] = useState(defaultPledgeEvidencePlan);
+  const [pledgeLeastIntrusiveAlternative, setPledgeLeastIntrusiveAlternative] = useState(
+    defaultPledgeLeastIntrusiveAlternative,
+  );
+  const [pledgeBaselinePredatesOffer, setPledgeBaselinePredatesOffer] = useState(true);
+  const [pledgeBaselineConfidence, setPledgeBaselineConfidence] =
+    useState<PledgeSwapBaselineConfidence>("medium");
+  const [pledgeCompensatedMoralAction, setPledgeCompensatedMoralAction] = useState(false);
+  const [pledgeCompensationSummary, setPledgeCompensationSummary] = useState("");
+  const [pledgeOrdinaryServiceClassification, setPledgeOrdinaryServiceClassification] =
+    useState<PledgeSwapOrdinaryServiceClassification>("not_ordinary_service_market");
+  const [pledgeNegativeCommitmentScope, setPledgeNegativeCommitmentScope] = useState("");
+  const [pledgeActionReversibility, setPledgeActionReversibility] =
+    useState<PledgeSwapActionReversibility>("continuing_but_suspendable");
+  const [pledgeThirdPartyObligation, setPledgeThirdPartyObligation] =
+    useState<PledgeSwapThirdPartyObligation>("none_known");
+  const [pledgeRepresentativeAuthority, setPledgeRepresentativeAuthority] =
+    useState<PledgeSwapRepresentativeAuthority>("self_only");
+  const [pledgeReportingIntegrity, setPledgeReportingIntegrity] =
+    useState<PledgeSwapBinarySafetyAssertion>("clear");
+  const [pledgeCivilRights, setPledgeCivilRights] =
+    useState<PledgeSwapBinarySafetyAssertion>("clear");
+  const [pledgeParticipantAutonomy, setPledgeParticipantAutonomy] =
+    useState<PledgeSwapBinarySafetyAssertion>("clear");
+  const [pledgeConfidentialityPrivacy, setPledgeConfidentialityPrivacy] =
+    useState<PledgeSwapBinarySafetyAssertion>("clear");
+  const [pledgeEvidenceAuthenticity, setPledgeEvidenceAuthenticity] =
+    useState<PledgeSwapBinarySafetyAssertion>("possible_or_unknown");
+  const [pledgeFinancialCrime, setPledgeFinancialCrime] =
+    useState<PledgeSwapBinarySafetyAssertion>("clear");
+  const [pledgeNonTransferability, setPledgeNonTransferability] =
+    useState<PledgeSwapBinarySafetyAssertion>("clear");
+  const [pledgeRegulatedGoodsHazardousActivity, setPledgeRegulatedGoodsHazardousActivity] =
+    useState<PledgeSwapBinarySafetyAssertion>("clear");
+  const [pledgeCyberAbuseDigitalIntegrity, setPledgeCyberAbuseDigitalIntegrity] =
+    useState<PledgeSwapBinarySafetyAssertion>("clear");
+  const [pledgeAntiCorruptionProcessIntegrity, setPledgeAntiCorruptionProcessIntegrity] =
+    useState<PledgeSwapBinarySafetyAssertion>("clear");
   const [baselineBondEnabled, setBaselineBondEnabled] = useState(false);
   const [baselineBondAmountUsd, setBaselineBondAmountUsd] = useState("50");
   const [baselineBondForfeitDestinationId, setBaselineBondForfeitDestinationId] = useState(
@@ -1100,6 +1183,95 @@ export function OfferCreateForm({
       pledgePerformanceBondsEnabled,
     ],
   );
+  const pledgeSwapManualReviewInput = useMemo<PledgeSwapManualReviewInput>(() => {
+    const parsedPledgeMaxObligationDays = Number(pledgeMaxObligationDays);
+    const parsedPledgeChallengeWindowDays = Number(pledgeChallengeWindowDays);
+
+    return {
+      offeredAction: offerAction,
+      requestedAction: requestAction,
+      noTradeBaseline: baselineStatement,
+      additionalityStatement,
+      maxObligationDays:
+        Number.isInteger(parsedPledgeMaxObligationDays) && parsedPledgeMaxObligationDays > 0
+          ? parsedPledgeMaxObligationDays
+          : null,
+      reciprocalReleaseRule: pledgeReciprocalReleaseRule,
+      withdrawalBeforeLockRule: pledgeWithdrawalBeforeLockRule,
+      challengeWindowDays:
+        Number.isInteger(parsedPledgeChallengeWindowDays) && parsedPledgeChallengeWindowDays > 0
+          ? parsedPledgeChallengeWindowDays
+          : null,
+      neutralReviewRequired: pledgeNeutralReviewRequired,
+      evidencePlan: pledgeEvidencePlan,
+      leastIntrusiveAlternative: pledgeLeastIntrusiveAlternative,
+      baselinePredatesOffer: pledgeBaselinePredatesOffer,
+      baselineConfidence: pledgeBaselineConfidence,
+      compensatedMoralAction: pledgeCompensatedMoralAction,
+      compensationSummary: pledgeCompensationSummary,
+      ordinaryServiceClassification: pledgeOrdinaryServiceClassification,
+      negativeCommitmentScope: pledgeNegativeCommitmentScope,
+      actionReversibility: pledgeActionReversibility,
+      thirdPartyObligation: pledgeThirdPartyObligation,
+      representativeAuthority: pledgeRepresentativeAuthority,
+      reportingIntegrity: pledgeReportingIntegrity,
+      civilRights: pledgeCivilRights,
+      participantAutonomy: pledgeParticipantAutonomy,
+      confidentialityPrivacy: pledgeConfidentialityPrivacy,
+      evidenceAuthenticity: pledgeEvidenceAuthenticity,
+      financialCrime: pledgeFinancialCrime,
+      nonTransferability: pledgeNonTransferability,
+      regulatedGoodsHazardousActivity: pledgeRegulatedGoodsHazardousActivity,
+      cyberAbuseDigitalIntegrity: pledgeCyberAbuseDigitalIntegrity,
+      antiCorruptionProcessIntegrity: pledgeAntiCorruptionProcessIntegrity,
+      performanceBondPreviewEnabled: isPledge && pledgePerformanceBondsEnabled && performanceBondEnabled,
+    };
+  }, [
+    additionalityStatement,
+    baselineStatement,
+    isPledge,
+    offerAction,
+    performanceBondEnabled,
+    pledgeActionReversibility,
+    pledgeAntiCorruptionProcessIntegrity,
+    pledgeBaselineConfidence,
+    pledgeBaselinePredatesOffer,
+    pledgeChallengeWindowDays,
+    pledgeCivilRights,
+    pledgeCompensatedMoralAction,
+    pledgeCompensationSummary,
+    pledgeConfidentialityPrivacy,
+    pledgeCyberAbuseDigitalIntegrity,
+    pledgeEvidenceAuthenticity,
+    pledgeEvidencePlan,
+    pledgeFinancialCrime,
+    pledgeLeastIntrusiveAlternative,
+    pledgeMaxObligationDays,
+    pledgeNegativeCommitmentScope,
+    pledgeNeutralReviewRequired,
+    pledgeNonTransferability,
+    pledgeOrdinaryServiceClassification,
+    pledgeParticipantAutonomy,
+    pledgePerformanceBondsEnabled,
+    pledgeReciprocalReleaseRule,
+    pledgeRegulatedGoodsHazardousActivity,
+    pledgeReportingIntegrity,
+    pledgeRepresentativeAuthority,
+    pledgeThirdPartyObligation,
+    pledgeWithdrawalBeforeLockRule,
+    requestAction,
+  ]);
+  const pledgeSwapManualReviewPreview = useMemo(
+    () => buildPledgeSwapManualReviewPreview(pledgeSwapManualReviewInput),
+    [pledgeSwapManualReviewInput],
+  );
+  const pledgeSwapManualReviewErrors = useMemo(
+    () =>
+      isPledge
+        ? validatePledgeSwapManualReviewInput(pledgeSwapManualReviewInput)
+        : [],
+    [isPledge, pledgeSwapManualReviewInput],
+  );
 
   const liveOffsetErrors = useMemo(
     () =>
@@ -1180,8 +1352,13 @@ export function OfferCreateForm({
     return errors;
   }, [additionalityStatement, baselineStatement, exitCondition, isPayment, isPledge, notes, offerAction, requestAction]);
   const liveOfferErrors = useMemo(
-    () => [...liveCoreOfferErrors, ...liveOffsetErrors, ...performanceBondValidation.errors],
-    [liveCoreOfferErrors, liveOffsetErrors, performanceBondValidation.errors],
+    () => [
+      ...liveCoreOfferErrors,
+      ...liveOffsetErrors,
+      ...performanceBondValidation.errors,
+      ...pledgeSwapManualReviewErrors,
+    ],
+    [liveCoreOfferErrors, liveOffsetErrors, performanceBondValidation.errors, pledgeSwapManualReviewErrors],
   );
   const reviewVerificationMethod = isOffset
     ? formatDonationOffsetVerificationMethod(effectiveVerificationMethod)
@@ -1297,9 +1474,15 @@ export function OfferCreateForm({
         title: "Set evidence rules",
         detail: isOffset
           ? "Offset fields, evidence method, surplus rule, and pool safeguards must pass checks."
-          : `${verificationPreference} over ${reviewPeriod}.`,
+          : isPledge
+            ? "Manual-review terms, schedule, and least-intrusive evidence plan must be complete."
+            : `${verificationPreference} over ${reviewPeriod}.`,
         href: "#offer-evidence",
-        complete: isOffset ? liveOffsetErrors.length === 0 : Boolean(verificationPreference && reviewPeriod),
+        complete: isOffset
+          ? liveOffsetErrors.length === 0
+          : isPledge
+            ? pledgeSwapManualReviewErrors.length === 0
+            : Boolean(verificationPreference && reviewPeriod),
       },
       {
         id: "publish",
@@ -1320,6 +1503,7 @@ export function OfferCreateForm({
       liveOffsetErrors.length,
       mode,
       offerAction,
+      pledgeSwapManualReviewErrors.length,
       requestAction,
       reviewPeriod,
       verificationPreference,
@@ -1374,6 +1558,35 @@ export function OfferCreateForm({
     setPaymentIntervalUnit(template.paymentIntervalUnit);
     setPaymentIntervalValue(template.paymentIntervalValue);
     setTrustLevel(template.trustLevel);
+
+    if (template.mode === "pledge") {
+      setPledgeMaxObligationDays(template.duration === "30 days" ? "30" : "90");
+      setPledgeChallengeWindowDays("14");
+      setPledgeReciprocalReleaseRule(defaultPledgeReciprocalReleaseRule);
+      setPledgeWithdrawalBeforeLockRule(defaultPledgeWithdrawalBeforeLockRule);
+      setPledgeNeutralReviewRequired(true);
+      setPledgeEvidencePlan(defaultPledgeEvidencePlan);
+      setPledgeLeastIntrusiveAlternative(defaultPledgeLeastIntrusiveAlternative);
+      setPledgeBaselinePredatesOffer(true);
+      setPledgeBaselineConfidence("medium");
+      setPledgeCompensatedMoralAction(false);
+      setPledgeCompensationSummary("");
+      setPledgeOrdinaryServiceClassification("not_ordinary_service_market");
+      setPledgeNegativeCommitmentScope("");
+      setPledgeActionReversibility("continuing_but_suspendable");
+      setPledgeThirdPartyObligation("none_known");
+      setPledgeRepresentativeAuthority("self_only");
+      setPledgeReportingIntegrity("clear");
+      setPledgeCivilRights("clear");
+      setPledgeParticipantAutonomy("clear");
+      setPledgeConfidentialityPrivacy("clear");
+      setPledgeEvidenceAuthenticity("possible_or_unknown");
+      setPledgeFinancialCrime("clear");
+      setPledgeNonTransferability("clear");
+      setPledgeRegulatedGoodsHazardousActivity("clear");
+      setPledgeCyberAbuseDigitalIntegrity("clear");
+      setPledgeAntiCorruptionProcessIntegrity("clear");
+    }
 
     if (template.offset) {
       setBaselineAmountUsd(template.offset.baselineAmountUsd);
@@ -2345,6 +2558,461 @@ export function OfferCreateForm({
               additionality claim to evaluate alongside the no-trade baseline.
             </small>
           </label>
+        ) : null}
+
+        {isPledge ? (
+          <fieldset className="field baseline-bond-fieldset" id="pledge-manual-review">
+            <legend>Pledge-swap manual-review terms</legend>
+            <div className="panel subtle-panel">
+              <div className="panel-head">
+                <div>
+                  <p className="eyebrow">Before any final lock</p>
+                  <h3>Keep the pledge reviewable without expanding surveillance.</h3>
+                </div>
+                <span className="badge badge-warning">
+                  {pledgeSwapManualReviewPreview.releaseStage.replaceAll("_", " ")}
+                </span>
+              </div>
+              <p className="panel-note">
+                A match candidate does not create a deal. Final reliance requires a frozen lock
+                proposal, fresh confirmations, commitment reservation, and neutral review.
+              </p>
+
+              <div className="field-grid">
+                <label className="field">
+                  <span>Maximum obligation duration</span>
+                  <input
+                    max="366"
+                    min="1"
+                    name="pledge_swap_max_obligation_days"
+                    required={isPledge}
+                    type="number"
+                    value={pledgeMaxObligationDays}
+                    onChange={(event) => setPledgeMaxObligationDays(readFormControlValue(event))}
+                  />
+                  <small>Preview stage limit: 366 days or less.</small>
+                </label>
+                <label className="field">
+                  <span>Challenge window</span>
+                  <select
+                    name="pledge_swap_challenge_window_days"
+                    value={pledgeChallengeWindowDays}
+                    onChange={(event) => setPledgeChallengeWindowDays(readFormControlValue(event))}
+                  >
+                    <option value="7">7 days</option>
+                    <option value="14">14 days</option>
+                    <option value="30">30 days</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Baseline confidence</span>
+                  <select
+                    name="pledge_swap_baseline_confidence"
+                    value={pledgeBaselineConfidence}
+                    onChange={(event) =>
+                      setPledgeBaselineConfidence(
+                        readFormControlValue(event) as PledgeSwapBaselineConfidence,
+                      )
+                    }
+                  >
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="low">Low - manual review</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="field-grid">
+                <label className="radio-row">
+                  <input
+                    checked={pledgeBaselinePredatesOffer}
+                    name="pledge_swap_baseline_predates_offer"
+                    type="checkbox"
+                    onChange={(event) =>
+                      setPledgeBaselinePredatesOffer((event.currentTarget as HTMLInputElement).checked)
+                    }
+                  />
+                  <span>The no-trade baseline predates this offer.</span>
+                </label>
+                <label className="radio-row">
+                  <input
+                    checked={pledgeNeutralReviewRequired}
+                    name="pledge_swap_neutral_review_required"
+                    required={isPledge}
+                    type="checkbox"
+                    onChange={(event) =>
+                      setPledgeNeutralReviewRequired((event.currentTarget as HTMLInputElement).checked)
+                    }
+                  />
+                  <span>Challenges, disputes, and forfeiture decisions require neutral review.</span>
+                </label>
+              </div>
+
+              <div className="field-grid">
+                <label className="field">
+                  <span>Reciprocal release rule</span>
+                  <textarea
+                    name="pledge_swap_reciprocal_release_rule"
+                    required={isPledge}
+                    rows={3}
+                    value={pledgeReciprocalReleaseRule}
+                    onChange={(event) => setPledgeReciprocalReleaseRule(readFormControlValue(event))}
+                  />
+                  <small>State what happens to future duties if one side exits or performance fails.</small>
+                </label>
+                <label className="field">
+                  <span>Withdrawal before lock</span>
+                  <textarea
+                    name="pledge_swap_withdrawal_before_lock_rule"
+                    required={isPledge}
+                    rows={3}
+                    value={pledgeWithdrawalBeforeLockRule}
+                    onChange={(event) =>
+                      setPledgeWithdrawalBeforeLockRule(readFormControlValue(event))
+                    }
+                  />
+                  <small>Before final confirmation, withdrawal must not create penalty or private-detail escalation.</small>
+                </label>
+              </div>
+
+              <div className="field-grid" id="pledge-manual-evidence">
+                <label className="field">
+                  <span>Least-intrusive evidence plan</span>
+                  <textarea
+                    name="pledge_swap_evidence_plan"
+                    required={isPledge}
+                    rows={3}
+                    value={pledgeEvidencePlan}
+                    onChange={(event) => setPledgeEvidencePlan(readFormControlValue(event))}
+                  />
+                </label>
+                <label className="field">
+                  <span>Less-intrusive fallback</span>
+                  <textarea
+                    name="pledge_swap_least_intrusive_alternative"
+                    required={isPledge}
+                    rows={3}
+                    value={pledgeLeastIntrusiveAlternative}
+                    onChange={(event) =>
+                      setPledgeLeastIntrusiveAlternative(readFormControlValue(event))
+                    }
+                  />
+                </label>
+              </div>
+
+              <div className="field-grid">
+                <label className="field">
+                  <span>Action reversibility</span>
+                  <select
+                    name="pledge_swap_action_reversibility"
+                    value={pledgeActionReversibility}
+                    onChange={(event) =>
+                      setPledgeActionReversibility(
+                        readFormControlValue(event) as PledgeSwapActionReversibility,
+                      )
+                    }
+                  >
+                    <option value="continuing_but_suspendable">Continuing but suspendable</option>
+                    <option value="reversible_or_low_stakes">Reversible or low stakes</option>
+                    <option value="unknown">Unknown - manual review</option>
+                    <option value="irreversible_or_high_stakes">Irreversible or high stakes - blocked</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Third-party obligation</span>
+                  <select
+                    name="pledge_swap_third_party_obligation"
+                    value={pledgeThirdPartyObligation}
+                    onChange={(event) =>
+                      setPledgeThirdPartyObligation(
+                        readFormControlValue(event) as PledgeSwapThirdPartyObligation,
+                      )
+                    }
+                  >
+                    <option value="none_known">No known third-party duty</option>
+                    <option value="possible_or_unknown">Possible or unknown - manual review</option>
+                    <option value="conflict_declared">Conflict declared - blocked</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Representative authority</span>
+                  <select
+                    name="pledge_swap_representative_authority"
+                    value={pledgeRepresentativeAuthority}
+                    onChange={(event) =>
+                      setPledgeRepresentativeAuthority(
+                        readFormControlValue(event) as PledgeSwapRepresentativeAuthority,
+                      )
+                    }
+                  >
+                    <option value="self_only">I bind only my own actions/resources</option>
+                    <option value="claims_representative_authority">I claim representative authority</option>
+                    <option value="unknown">Unknown - manual review</option>
+                  </select>
+                </label>
+              </div>
+
+              <label className="field">
+                <span>Negative or abstention commitment scope</span>
+                <textarea
+                  name="pledge_swap_negative_commitment_scope"
+                  placeholder="If this asks someone not to do something, define the covered action, time window, substitutes, exclusions, and evidence standard."
+                  rows={3}
+                  value={pledgeNegativeCommitmentScope}
+                  onChange={(event) => setPledgeNegativeCommitmentScope(readFormControlValue(event))}
+                />
+              </label>
+
+              <div className="field-grid">
+                <label className="radio-row">
+                  <input
+                    checked={pledgeCompensatedMoralAction}
+                    name="pledge_swap_compensated_moral_action"
+                    type="checkbox"
+                    onChange={(event) =>
+                      setPledgeCompensatedMoralAction(
+                        (event.currentTarget as HTMLInputElement).checked,
+                      )
+                    }
+                  />
+                  <span>This includes compensation for a moral action or abstention.</span>
+                </label>
+                <label className="field">
+                  <span>Ordinary-service classification</span>
+                  <select
+                    name="pledge_swap_ordinary_service_classification"
+                    value={pledgeOrdinaryServiceClassification}
+                    onChange={(event) =>
+                      setPledgeOrdinaryServiceClassification(
+                        readFormControlValue(event) as PledgeSwapOrdinaryServiceClassification,
+                      )
+                    }
+                  >
+                    <option value="not_ordinary_service_market">Not an ordinary-service market</option>
+                    <option value="unclear">Unclear - manual review</option>
+                    <option value="ordinary_service_or_procurement">Ordinary service/procurement - manual review</option>
+                  </select>
+                </label>
+              </div>
+
+              {pledgeCompensatedMoralAction ? (
+                <label className="field">
+                  <span>Compensation terms</span>
+                  <textarea
+                    name="pledge_swap_compensation_summary"
+                    required={pledgeCompensatedMoralAction}
+                    rows={3}
+                    value={pledgeCompensationSummary}
+                    onChange={(event) => setPledgeCompensationSummary(readFormControlValue(event))}
+                  />
+                  <small>Compensation cannot become payable or reliance-bearing without manual review.</small>
+                </label>
+              ) : (
+                <input name="pledge_swap_compensation_summary" type="hidden" value="" />
+              )}
+
+              <details className="panel subtle-panel">
+                <summary className="panel-summary">Safety assessment gates</summary>
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Reporting integrity</span>
+                    <select
+                      name="pledge_swap_reporting_integrity"
+                      value={pledgeReportingIntegrity}
+                      onChange={(event) =>
+                        setPledgeReportingIntegrity(
+                          readFormControlValue(event) as PledgeSwapBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">No reporting suppression term</option>
+                      <option value="possible_or_unknown">Possible or unknown - manual review</option>
+                      <option value="triggered">Unsafe or triggered - blocked</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Civil rights</span>
+                    <select
+                      name="pledge_swap_civil_rights"
+                      value={pledgeCivilRights}
+                      onChange={(event) =>
+                        setPledgeCivilRights(
+                          readFormControlValue(event) as PledgeSwapBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">No civil-rights issue known</option>
+                      <option value="possible_or_unknown">Possible or unknown - manual review</option>
+                      <option value="triggered">Unsafe or triggered - blocked</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Autonomy/coercion</span>
+                    <select
+                      name="pledge_swap_participant_autonomy"
+                      value={pledgeParticipantAutonomy}
+                      onChange={(event) =>
+                        setPledgeParticipantAutonomy(
+                          readFormControlValue(event) as PledgeSwapBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Voluntary; no vulnerability known</option>
+                      <option value="possible_or_unknown">Possible or unknown - manual review</option>
+                      <option value="triggered">Unsafe or triggered - blocked</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Confidentiality/privacy</span>
+                    <select
+                      name="pledge_swap_confidentiality_privacy"
+                      value={pledgeConfidentialityPrivacy}
+                      onChange={(event) =>
+                        setPledgeConfidentialityPrivacy(
+                          readFormControlValue(event) as PledgeSwapBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">No private-data requirement known</option>
+                      <option value="possible_or_unknown">Possible or unknown - manual review</option>
+                      <option value="triggered">Unsafe or triggered - blocked</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Evidence authenticity</span>
+                    <select
+                      name="pledge_swap_evidence_authenticity"
+                      value={pledgeEvidenceAuthenticity}
+                      onChange={(event) =>
+                        setPledgeEvidenceAuthenticity(
+                          readFormControlValue(event) as PledgeSwapBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="possible_or_unknown">Source-traceable review needed</option>
+                      <option value="clear">Clear for preview</option>
+                      <option value="triggered">Unsafe or triggered - blocked</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Financial crime/fraud</span>
+                    <select
+                      name="pledge_swap_financial_crime"
+                      value={pledgeFinancialCrime}
+                      onChange={(event) =>
+                        setPledgeFinancialCrime(
+                          readFormControlValue(event) as PledgeSwapBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">No unusual funds or fraud issue known</option>
+                      <option value="possible_or_unknown">Possible or unknown - manual review</option>
+                      <option value="triggered">Unsafe or triggered - blocked</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Non-transferability</span>
+                    <select
+                      name="pledge_swap_non_transferability"
+                      value={pledgeNonTransferability}
+                      onChange={(event) =>
+                        setPledgeNonTransferability(
+                          readFormControlValue(event) as PledgeSwapBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Non-transferable participant-specific terms</option>
+                      <option value="possible_or_unknown">Possible or unknown - manual review</option>
+                      <option value="triggered">Unsafe or triggered - blocked</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Regulated goods/hazards</span>
+                    <select
+                      name="pledge_swap_regulated_goods_hazardous_activity"
+                      value={pledgeRegulatedGoodsHazardousActivity}
+                      onChange={(event) =>
+                        setPledgeRegulatedGoodsHazardousActivity(
+                          readFormControlValue(event) as PledgeSwapBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">No regulated goods or hazard known</option>
+                      <option value="possible_or_unknown">Possible or unknown - manual review</option>
+                      <option value="triggered">Unsafe or triggered - blocked</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Cyber/digital integrity</span>
+                    <select
+                      name="pledge_swap_cyber_abuse_digital_integrity"
+                      value={pledgeCyberAbuseDigitalIntegrity}
+                      onChange={(event) =>
+                        setPledgeCyberAbuseDigitalIntegrity(
+                          readFormControlValue(event) as PledgeSwapBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">No cyber-abuse issue known</option>
+                      <option value="possible_or_unknown">Possible or unknown - manual review</option>
+                      <option value="triggered">Unsafe or triggered - blocked</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Anti-corruption</span>
+                    <select
+                      name="pledge_swap_anti_corruption_process_integrity"
+                      value={pledgeAntiCorruptionProcessIntegrity}
+                      onChange={(event) =>
+                        setPledgeAntiCorruptionProcessIntegrity(
+                          readFormControlValue(event) as PledgeSwapBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">No improper-inducement issue known</option>
+                      <option value="possible_or_unknown">Possible or unknown - manual review</option>
+                      <option value="triggered">Unsafe or triggered - blocked</option>
+                    </select>
+                  </label>
+                </div>
+              </details>
+
+              <div className="protocol-provenance-preflight" aria-live="polite">
+                <div className="protocol-provenance-head">
+                  <div>
+                    <strong>Manual-review preview</strong>
+                    <p>
+                      Ready for manual review: {pledgeSwapManualReviewPreview.readyForManualReview ? "yes" : "no"}.
+                      Blocked gates: {pledgeSwapManualReviewPreview.blockedGateCount}.
+                    </p>
+                  </div>
+                  <span className="protocol-review-status">
+                    {pledgeSwapManualReviewPreview.humanReviewGateCount} review item
+                    {pledgeSwapManualReviewPreview.humanReviewGateCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <ol className="protocol-provenance-list">
+                  {pledgeSwapManualReviewPreview.gates.map((gate) => (
+                    <li
+                      className={`protocol-provenance-item protocol-provenance-item-${pledgeGateStatusClass(
+                        gate.status,
+                      )}`}
+                      key={gate.key}
+                    >
+                      <span className="protocol-step-status">
+                        {formatPledgeGateStatus(gate.status)}
+                      </span>
+                      <div>
+                        <strong>{gate.label}</strong>
+                        <p>{gate.detail}</p>
+                        <small>{gate.nextAction}</small>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          </fieldset>
         ) : null}
 
         {isOffset ? (

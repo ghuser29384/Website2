@@ -181,6 +181,18 @@ import {
   isMoralTradeOfferCreateProvenanceUniqueViolation,
   validateMoralTradeOfferCreateTransition,
 } from "@/lib/moral-trade/offer-write-path";
+import {
+  buildPledgeSwapManualReviewPreview,
+  summarizePledgeSwapManualReviewForNotes,
+  validatePledgeSwapManualReviewInput,
+  type PledgeSwapActionReversibility,
+  type PledgeSwapBaselineConfidence,
+  type PledgeSwapBinarySafetyAssertion,
+  type PledgeSwapManualReviewInput,
+  type PledgeSwapOrdinaryServiceClassification,
+  type PledgeSwapRepresentativeAuthority,
+  type PledgeSwapThirdPartyObligation,
+} from "@/lib/pledge-swaps";
 import { buildMoralTradeSafeEmailCopy } from "@/lib/moral-trade/email-copy";
 import { persistBaselineBondStatusTransition } from "@/lib/moral-trade/baseline-bond-transitions";
 import { persistMoralTradeEvidenceSubmission } from "@/lib/moral-trade/evidence-persistence";
@@ -287,6 +299,72 @@ function readOptional(formData: FormData, key: string) {
 function readBoolean(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim().toLowerCase();
   return value === "on" || value === "true" || value === "1" || value === "yes";
+}
+
+function readPositiveIntOrNull(formData: FormData, key: string) {
+  const value = Number(readOptional(formData, key));
+
+  if (!Number.isInteger(value) || value <= 0) {
+    return null;
+  }
+
+  return value;
+}
+
+function normalizePledgeSwapBaselineConfidence(value: string): PledgeSwapBaselineConfidence {
+  if (value === "low" || value === "high") {
+    return value;
+  }
+
+  return "medium";
+}
+
+function normalizePledgeSwapOrdinaryServiceClassification(
+  value: string,
+): PledgeSwapOrdinaryServiceClassification {
+  if (value === "ordinary_service_or_procurement" || value === "unclear") {
+    return value;
+  }
+
+  return "not_ordinary_service_market";
+}
+
+function normalizePledgeSwapActionReversibility(value: string): PledgeSwapActionReversibility {
+  if (
+    value === "reversible_or_low_stakes" ||
+    value === "irreversible_or_high_stakes" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "continuing_but_suspendable";
+}
+
+function normalizePledgeSwapThirdPartyObligation(value: string): PledgeSwapThirdPartyObligation {
+  if (value === "possible_or_unknown" || value === "conflict_declared") {
+    return value;
+  }
+
+  return "none_known";
+}
+
+function normalizePledgeSwapRepresentativeAuthority(
+  value: string,
+): PledgeSwapRepresentativeAuthority {
+  if (value === "claims_representative_authority" || value === "unknown") {
+    return value;
+  }
+
+  return "self_only";
+}
+
+function normalizePledgeSwapBinarySafetyAssertion(value: string): PledgeSwapBinarySafetyAssertion {
+  if (value === "possible_or_unknown" || value === "triggered") {
+    return value;
+  }
+
+  return "clear";
 }
 
 async function replaceBackgroundIntentClaims({
@@ -3402,7 +3480,9 @@ export async function createOfferAction(formData: FormData) {
         }${poolId ? `&offset_pool_id=${encodeURIComponent(poolId)}` : ""}${
           poolSide ? `&offset_pool_side=${poolSide}` : ""
         }`
-      : "/offers/new";
+      : normalizedMode === "pledge"
+        ? "/offers/new?mode=pledge"
+        : "/offers/new";
   const pledgePerformanceBondConfig = getPerformanceBondConfig();
   const pledgePerformanceBondFields =
     normalizedMode === "pledge" && pledgePerformanceBondConfig.enabled
@@ -3413,6 +3493,75 @@ export async function createOfferAction(formData: FormData) {
           prefix: "performance_bond",
         })
       : null;
+  const pledgeSwapManualReviewInput: PledgeSwapManualReviewInput | null =
+    normalizedMode === "pledge"
+      ? {
+          offeredAction: offerAction,
+          requestedAction: requestAction,
+          noTradeBaseline: baselineStatement,
+          additionalityStatement,
+          maxObligationDays: readPositiveIntOrNull(formData, "pledge_swap_max_obligation_days"),
+          reciprocalReleaseRule: readRequired(formData, "pledge_swap_reciprocal_release_rule"),
+          withdrawalBeforeLockRule: readRequired(formData, "pledge_swap_withdrawal_before_lock_rule"),
+          challengeWindowDays: readPositiveIntOrNull(formData, "pledge_swap_challenge_window_days"),
+          neutralReviewRequired: readBoolean(formData, "pledge_swap_neutral_review_required"),
+          evidencePlan: readRequired(formData, "pledge_swap_evidence_plan"),
+          leastIntrusiveAlternative: readRequired(formData, "pledge_swap_least_intrusive_alternative"),
+          baselinePredatesOffer: readBoolean(formData, "pledge_swap_baseline_predates_offer"),
+          baselineConfidence: normalizePledgeSwapBaselineConfidence(
+            readOptional(formData, "pledge_swap_baseline_confidence"),
+          ),
+          compensatedMoralAction: readBoolean(formData, "pledge_swap_compensated_moral_action"),
+          compensationSummary: readOptional(formData, "pledge_swap_compensation_summary"),
+          ordinaryServiceClassification: normalizePledgeSwapOrdinaryServiceClassification(
+            readOptional(formData, "pledge_swap_ordinary_service_classification"),
+          ),
+          negativeCommitmentScope: readOptional(formData, "pledge_swap_negative_commitment_scope"),
+          actionReversibility: normalizePledgeSwapActionReversibility(
+            readOptional(formData, "pledge_swap_action_reversibility"),
+          ),
+          thirdPartyObligation: normalizePledgeSwapThirdPartyObligation(
+            readOptional(formData, "pledge_swap_third_party_obligation"),
+          ),
+          representativeAuthority: normalizePledgeSwapRepresentativeAuthority(
+            readOptional(formData, "pledge_swap_representative_authority"),
+          ),
+          reportingIntegrity: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_reporting_integrity"),
+          ),
+          civilRights: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_civil_rights"),
+          ),
+          participantAutonomy: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_participant_autonomy"),
+          ),
+          confidentialityPrivacy: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_confidentiality_privacy"),
+          ),
+          evidenceAuthenticity: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_evidence_authenticity"),
+          ),
+          financialCrime: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_financial_crime"),
+          ),
+          nonTransferability: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_non_transferability"),
+          ),
+          regulatedGoodsHazardousActivity: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_regulated_goods_hazardous_activity"),
+          ),
+          cyberAbuseDigitalIntegrity: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_cyber_abuse_digital_integrity"),
+          ),
+          antiCorruptionProcessIntegrity: normalizePledgeSwapBinarySafetyAssertion(
+            readOptional(formData, "pledge_swap_anti_corruption_process_integrity"),
+          ),
+          performanceBondPreviewEnabled: Boolean(pledgePerformanceBondFields?.enabled),
+        }
+      : null;
+  const pledgeSwapManualReviewPreview = pledgeSwapManualReviewInput
+    ? buildPledgeSwapManualReviewPreview(pledgeSwapManualReviewInput)
+    : null;
 
   if (!offerAction || !requestAction || !baselineStatement || !exitCondition || !offeredCause || !requestedCause) {
     redirectWithMessage(newOfferReturnPath, "error", "Complete all required offer fields.");
@@ -3424,6 +3573,20 @@ export async function createOfferAction(formData: FormData) {
       "error",
       "Explain why this personal pledge swap is additional to the no-trade baseline.",
     );
+  }
+
+  if (pledgeSwapManualReviewInput) {
+    const pledgeSwapValidationErrors = validatePledgeSwapManualReviewInput(
+      pledgeSwapManualReviewInput,
+    );
+
+    if (pledgeSwapValidationErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        pledgeSwapValidationErrors[0] ?? "Complete the pledge-swap manual-review terms.",
+      );
+    }
   }
 
   if (pledgePerformanceBondFields?.enabled) {
@@ -3497,6 +3660,9 @@ export async function createOfferAction(formData: FormData) {
     `No-trade baseline / default: ${baselineStatement}`,
     additionalityStatement ? `Why this is additional: ${additionalityStatement}` : "",
     `Exit, pause, or expiry condition: ${exitCondition}`,
+    pledgeSwapManualReviewPreview
+      ? summarizePledgeSwapManualReviewForNotes(pledgeSwapManualReviewPreview)
+      : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, protocolTransition),
   ]
     .filter(Boolean)
@@ -3967,6 +4133,9 @@ export async function createOfferAction(formData: FormData) {
     `No-trade baseline / default: ${baselineStatement}`,
     additionalityStatement ? `Why this is additional: ${additionalityStatement}` : "",
     `Exit, pause, or expiry condition: ${exitCondition}`,
+    pledgeSwapManualReviewPreview
+      ? summarizePledgeSwapManualReviewForNotes(pledgeSwapManualReviewPreview)
+      : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, provenanceResult.transition),
   ]
     .filter(Boolean)
