@@ -17,7 +17,11 @@ import { updateProfileDataRightRequestAction } from "@/app/background-networking
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { formatBaselineBondAmount, normalizeBaselineBondStatus } from "@/lib/baseline-bonds";
-import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
+import {
+  buildAgreementReviewerConsolePreview,
+  evaluateAdminOperatorAccess,
+  isAdminEmail,
+} from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import {
@@ -808,7 +812,21 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               </div>
               <div className="data-grid">
                 {queues?.agreementEvidenceReviews.length ? (
-                  queues.agreementEvidenceReviews.map(({ reviewCase, evidenceItem, agreement }) => (
+                  queues.agreementEvidenceReviews.map(({ reviewCase, evidenceItem, agreement }) => {
+                    const reviewerConsolePreview = buildAgreementReviewerConsolePreview({
+                      appealReason: reviewCase.appeal_reason,
+                      assignedReviewerId: reviewCase.assigned_reviewer_id,
+                      conflictOfInterestNotes: reviewCase.conflict_of_interest_notes,
+                      evidenceItemAttached: Boolean(evidenceItem),
+                      neutralReviewAssignment: reviewCase.neutral_review_assignment,
+                      reviewPanelNotes: reviewCase.review_panel_notes,
+                      reviewScope: reviewCase.review_scope,
+                      reviewerConflictState: reviewCase.reviewer_conflict_state,
+                      reviewerRole: reviewCase.reviewer_role,
+                      status: reviewCase.status,
+                    });
+
+                    return (
                     <article className="panel data-card" key={reviewCase.id}>
                       <p className="detail-kicker">
                         {reviewCase.reviewer_role.replaceAll("_", " ")} |{" "}
@@ -840,6 +858,22 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                           <strong>Appeal:</strong> {reviewCase.appeal_reason}
                         </p>
                       ) : null}
+                      <div className="status-banner">
+                        <strong>{reviewerConsolePreview.statusLabel}</strong>
+                        <p>
+                          Conflict:{" "}
+                          {reviewerConsolePreview.reviewerConflictState.replaceAll("_", " ")}.
+                          Neutral assignment:{" "}
+                          {reviewerConsolePreview.neutralReviewAssignment.replaceAll("_", " ")}.
+                        </p>
+                        <div className="mini-list" aria-label="Reviewer console gates">
+                          {reviewerConsolePreview.gates.map((gate) => (
+                            <span className="source-pill" key={gate.key}>
+                              {gate.label}: {gate.status.replaceAll("_", " ")}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                       <form action={updateAgreementReviewCaseAction} className="compact-form">
                         <input name="review_case_id" type="hidden" value={reviewCase.id} />
                         <input name="return_to" type="hidden" value="/admin" />
@@ -886,6 +920,46 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                             />
                           </label>
                         </div>
+                        <fieldset className="review-readiness-fieldset">
+                          <legend>Reviewer conflict and neutral assignment</legend>
+                          <div className="field-grid">
+                            <label className="field">
+                              <span>Conflict state</span>
+                              <select
+                                name="reviewer_conflict_state"
+                                defaultValue={reviewCase.reviewer_conflict_state}
+                              >
+                                <option value="not_checked">Not checked</option>
+                                <option value="no_conflict_declared">No conflict declared</option>
+                                <option value="possible_conflict">Possible conflict</option>
+                                <option value="conflict_disclosed">Conflict disclosed</option>
+                                <option value="recused">Recused</option>
+                              </select>
+                            </label>
+                            <label className="field">
+                              <span>Neutral review assignment</span>
+                              <select
+                                name="neutral_review_assignment"
+                                defaultValue={reviewCase.neutral_review_assignment}
+                              >
+                                <option value="unassigned">Unassigned</option>
+                                <option value="operator_review_only">Operator review only</option>
+                                <option value="neutral_reviewer_assigned">Neutral reviewer assigned</option>
+                                <option value="neutral_panel_assigned">Neutral panel assigned</option>
+                                <option value="not_required_for_stage">Not required for stage</option>
+                              </select>
+                            </label>
+                          </div>
+                          <label className="field">
+                            <span>Panel / neutral assignment notes</span>
+                            <textarea
+                              defaultValue={reviewCase.review_panel_notes}
+                              name="review_panel_notes"
+                              placeholder="Neutral reviewer, panel composition, recusal handling, or why neutral review is not required."
+                              rows={3}
+                            />
+                          </label>
+                        </fieldset>
                         <label className="field">
                           <span>Conflict-of-interest notes</span>
                           <textarea
@@ -934,7 +1008,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         </button>
                       </form>
                     </article>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="empty-state">
                     <div>

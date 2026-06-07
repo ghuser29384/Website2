@@ -903,7 +903,10 @@ export interface Database {
           reviewer_role: "operator" | "validator" | "external_reviewer" | "admin";
           review_scope: string;
           status: "open" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved" | "appealed" | "closed";
+          reviewer_conflict_state: "not_checked" | "no_conflict_declared" | "possible_conflict" | "conflict_disclosed" | "recused";
+          neutral_review_assignment: "unassigned" | "operator_review_only" | "neutral_reviewer_assigned" | "neutral_panel_assigned" | "not_required_for_stage";
           conflict_of_interest_notes: string;
+          review_panel_notes: string;
           reviewer_notes: string;
           public_reasoning_summary: string;
           sla_due_at: string;
@@ -925,7 +928,10 @@ export interface Database {
           reviewer_role?: "operator" | "validator" | "external_reviewer" | "admin";
           review_scope?: string;
           status?: "open" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved" | "appealed" | "closed";
+          reviewer_conflict_state?: "not_checked" | "no_conflict_declared" | "possible_conflict" | "conflict_disclosed" | "recused";
+          neutral_review_assignment?: "unassigned" | "operator_review_only" | "neutral_reviewer_assigned" | "neutral_panel_assigned" | "not_required_for_stage";
           conflict_of_interest_notes?: string;
+          review_panel_notes?: string;
           reviewer_notes?: string;
           public_reasoning_summary?: string;
           sla_due_at?: string;
@@ -944,7 +950,10 @@ export interface Database {
           reviewer_role?: "operator" | "validator" | "external_reviewer" | "admin";
           review_scope?: string;
           status?: "open" | "under_review" | "challenge_window_open" | "reviewed_complete" | "disputed_unresolved" | "appealed" | "closed";
+          reviewer_conflict_state?: "not_checked" | "no_conflict_declared" | "possible_conflict" | "conflict_disclosed" | "recused";
+          neutral_review_assignment?: "unassigned" | "operator_review_only" | "neutral_reviewer_assigned" | "neutral_panel_assigned" | "not_required_for_stage";
           conflict_of_interest_notes?: string;
+          review_panel_notes?: string;
           reviewer_notes?: string;
           public_reasoning_summary?: string;
           sla_due_at?: string;

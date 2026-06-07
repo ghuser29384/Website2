@@ -5,7 +5,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { PostgrestError } from "@supabase/supabase-js";
 
-import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
+import {
+  evaluateAdminOperatorAccess,
+  isAdminEmail,
+  normalizeAgreementReviewerConflictState,
+  normalizeNeutralReviewAssignment,
+} from "@/lib/admin";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getSiteUrl, hasSupabaseEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
@@ -9208,10 +9213,17 @@ export async function updateAgreementReviewCaseAction(formData: FormData) {
     reviewer_role: reviewerRole,
     assigned_reviewer_id: admin.authUser.id,
     review_scope: truncateText(readOptional(formData, "review_scope"), 900),
+    reviewer_conflict_state: normalizeAgreementReviewerConflictState(
+      readOptional(formData, "reviewer_conflict_state"),
+    ),
+    neutral_review_assignment: normalizeNeutralReviewAssignment(
+      readOptional(formData, "neutral_review_assignment"),
+    ),
     conflict_of_interest_notes: truncateText(
       readOptional(formData, "conflict_of_interest_notes"),
       1000,
     ),
+    review_panel_notes: truncateText(readOptional(formData, "review_panel_notes"), 1000),
     reviewer_notes: truncateText(readOptional(formData, "reviewer_notes"), 1400),
     public_reasoning_summary: truncateText(
       readOptional(formData, "public_reasoning_summary"),

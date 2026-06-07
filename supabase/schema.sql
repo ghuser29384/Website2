@@ -670,7 +670,10 @@ create table if not exists public.agreement_review_cases (
   reviewer_role text not null default 'operator' check (reviewer_role in ('operator', 'validator', 'external_reviewer', 'admin')),
   review_scope text not null default '',
   status text not null default 'open' check (status in ('open', 'under_review', 'challenge_window_open', 'reviewed_complete', 'disputed_unresolved', 'appealed', 'closed')),
+  reviewer_conflict_state text not null default 'not_checked' check (reviewer_conflict_state in ('not_checked', 'no_conflict_declared', 'possible_conflict', 'conflict_disclosed', 'recused')),
+  neutral_review_assignment text not null default 'unassigned' check (neutral_review_assignment in ('unassigned', 'operator_review_only', 'neutral_reviewer_assigned', 'neutral_panel_assigned', 'not_required_for_stage')),
   conflict_of_interest_notes text not null default '',
+  review_panel_notes text not null default '',
   reviewer_notes text not null default '',
   public_reasoning_summary text not null default '',
   sla_due_at timestamptz not null default (timezone('utc', now()) + interval '72 hours'),
@@ -1921,6 +1924,7 @@ create index if not exists agreement_evidence_items_agreement_idx on public.agre
 create index if not exists agreement_evidence_items_status_idx on public.agreement_evidence_items (status, updated_at desc);
 create index if not exists agreement_review_cases_status_sla_idx on public.agreement_review_cases (status, sla_due_at asc, created_at desc);
 create index if not exists agreement_review_cases_agreement_idx on public.agreement_review_cases (agreement_id, created_at desc);
+create index if not exists agreement_review_cases_reviewer_console_idx on public.agreement_review_cases (reviewer_conflict_state, neutral_review_assignment, status, sla_due_at asc);
 create index if not exists profile_verification_badges_profile_idx on public.profile_verification_badges (profile_id, badge_type);
 create index if not exists moral_trade_provenance_agents_owner_idx on public.moral_trade_provenance_agents (owner_profile_id, created_at desc);
 create index if not exists moral_trade_evidence_artifacts_owner_subject_idx on public.moral_trade_evidence_artifacts (owner_profile_id, subject_kind, subject_id, created_at desc);
