@@ -148,6 +148,7 @@ import {
 import {
   assessDonationOffsetModeration,
   buildDonationOffsetDonorOfRecordPreview,
+  buildDonationOffsetExternalityEvidencePreview,
   buildDonationOffsetPaymentDestinationPreview,
   calculateDonationOffsetPreview,
   findRegisteredCharityById,
@@ -155,18 +156,24 @@ import {
   normalizeDonationOffsetCharitableSolicitationTreatment,
   normalizeDonationOffsetDestinationVerificationStatus,
   normalizeDonationOffsetDonorOfRecordRole,
+  normalizeDonationOffsetEvidenceBurden,
+  normalizeDonationOffsetFallbackPolicy,
+  normalizeDonationOffsetNonparticipantExternalityStatus,
   normalizeDonationOffsetPaymentDestinationKind,
   normalizeDonationOffsetPaymentDestinationReviewStatus,
   normalizeDonationOffsetRecipientIdentityStatus,
   normalizeDonationOffsetTaxReceiptTreatment,
   summarizeDonationOffsetDonorOfRecordForNotes,
+  summarizeDonationOffsetExternalityEvidenceForNotes,
   summarizeDonationOffsetPaymentDestinationForNotes,
   validateDonationOffsetDonorOfRecordInput,
+  validateDonationOffsetExternalityEvidenceInput,
   validateDonationOffsetPaymentDestinationInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
   type DonationOffsetFields,
   type DonationOffsetDonorOfRecordInput,
+  type DonationOffsetExternalityEvidenceInput,
   type DonationOffsetParticipationMode,
   type DonationOffsetPaymentDestinationInput,
   type DonationOffsetPoolSide,
@@ -3587,6 +3594,73 @@ export async function createOfferAction(formData: FormData) {
   const donationOffsetPaymentDestinationPreview = donationOffsetPaymentDestinationInput
     ? buildDonationOffsetPaymentDestinationPreview(donationOffsetPaymentDestinationInput)
     : null;
+  const donationOffsetExternalityEvidenceInput: DonationOffsetExternalityEvidenceInput | null =
+    normalizedMode === "offset"
+      ? {
+          recipientLabel:
+            selectedDonationOffsetDestination?.name || "Selected compromise destination",
+          nonparticipantExternalityStatus:
+            normalizeDonationOffsetNonparticipantExternalityStatus(
+              readOptional(formData, "offset_nonparticipant_externality_status"),
+            ),
+          nonparticipantHarmSummary: readRequired(
+            formData,
+            "offset_nonparticipant_harm_summary",
+          ),
+          antiThreatReviewed: readBoolean(
+            formData,
+            "offset_anti_threat_externality_reviewed",
+          ),
+          evidenceBurden: normalizeDonationOffsetEvidenceBurden(
+            readOptional(formData, "offset_evidence_burden"),
+          ),
+          evidencePlanSummary: readRequired(formData, "offset_evidence_plan_summary"),
+          leastIntrusiveAlternative: readRequired(
+            formData,
+            "offset_least_intrusive_evidence_alternative",
+          ),
+          privacySensitiveEvidenceRequested: readBoolean(
+            formData,
+            "offset_privacy_sensitive_evidence_requested",
+          ),
+          highBurdenEvidenceReviewerApproved: readBoolean(
+            formData,
+            "offset_high_burden_evidence_reviewer_approved",
+          ),
+          impactClaimReviewRequired: readBoolean(
+            formData,
+            "offset_impact_claim_review_required",
+          ),
+          impactClaimMethodologyReviewed: readBoolean(
+            formData,
+            "offset_impact_claim_methodology_reviewed",
+          ),
+          fallbackPolicy: normalizeDonationOffsetFallbackPolicy(
+            readOptional(formData, "offset_fallback_policy"),
+          ),
+          fallbackExplanation: readRequired(formData, "offset_fallback_explanation"),
+          lockOrRelianceRequested: readBoolean(formData, "offset_lock_or_reliance_requested"),
+          participantAcknowledgedNonparticipantHarmsNotWaived: readBoolean(
+            formData,
+            "offset_nonparticipant_harms_not_waived_acknowledgement",
+          ),
+          participantAcknowledgedLeastIntrusiveEvidence: readBoolean(
+            formData,
+            "offset_least_intrusive_evidence_acknowledgement",
+          ),
+          participantAcknowledgedNoImpactClaimFromReceipt: readBoolean(
+            formData,
+            "offset_no_impact_claim_from_receipt_acknowledgement",
+          ),
+          participantAcknowledgedFallbackNoSilentReroute: readBoolean(
+            formData,
+            "offset_fallback_no_silent_reroute_acknowledgement",
+          ),
+        }
+      : null;
+  const donationOffsetExternalityEvidencePreview = donationOffsetExternalityEvidenceInput
+    ? buildDonationOffsetExternalityEvidencePreview(donationOffsetExternalityEvidenceInput)
+    : null;
   const newOfferReturnPath =
     normalizedMode === "offset"
       ? `/offers/new?mode=offset${
@@ -3731,6 +3805,21 @@ export async function createOfferAction(formData: FormData) {
     }
   }
 
+  if (donationOffsetExternalityEvidenceInput) {
+    const externalityEvidenceErrors = validateDonationOffsetExternalityEvidenceInput(
+      donationOffsetExternalityEvidenceInput,
+    );
+
+    if (externalityEvidenceErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        externalityEvidenceErrors[0] ??
+          "Complete the donation offset externality and evidence terms.",
+      );
+    }
+  }
+
   if (pledgePerformanceBondFields?.enabled) {
     const bondValidation = validatePerformanceBondTerms(
       pledgePerformanceBondFields.terms,
@@ -3810,6 +3899,9 @@ export async function createOfferAction(formData: FormData) {
       : "",
     donationOffsetPaymentDestinationPreview
       ? summarizeDonationOffsetPaymentDestinationForNotes(donationOffsetPaymentDestinationPreview)
+      : "",
+    donationOffsetExternalityEvidencePreview
+      ? summarizeDonationOffsetExternalityEvidenceForNotes(donationOffsetExternalityEvidencePreview)
       : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, protocolTransition),
   ]
@@ -4289,6 +4381,9 @@ export async function createOfferAction(formData: FormData) {
       : "",
     donationOffsetPaymentDestinationPreview
       ? summarizeDonationOffsetPaymentDestinationForNotes(donationOffsetPaymentDestinationPreview)
+      : "",
+    donationOffsetExternalityEvidencePreview
+      ? summarizeDonationOffsetExternalityEvidenceForNotes(donationOffsetExternalityEvidencePreview)
       : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, provenanceResult.transition),
   ]

@@ -7,6 +7,7 @@ import { Breadcrumbs, MetricCard, PageHero, SectionHeader, StepCard } from "@/co
 import { getDonationOffsetOverview, getViewer, type DonationOffsetOverview } from "@/lib/app-data";
 import {
   buildDemoDonationOffsetDonorOfRecordPreview,
+  buildDemoDonationOffsetExternalityEvidencePreview,
   buildDemoDonationOffsetPaymentDestinationPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
@@ -142,6 +143,7 @@ export default async function DonationOffsetsPage() {
   const clearingDryRun = buildDonationOffsetDryRun(overview);
   const donorOfRecordPreview = buildDemoDonationOffsetDonorOfRecordPreview();
   const paymentDestinationPreview = buildDemoDonationOffsetPaymentDestinationPreview();
+  const externalityEvidencePreview = buildDemoDonationOffsetExternalityEvidencePreview();
   const createOffsetHref = viewer
     ? "/offers/new?mode=offset"
     : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
@@ -425,6 +427,93 @@ export default async function DonationOffsetsPage() {
 
             <ol className="protocol-provenance-list">
               {paymentDestinationPreview.gates.map((gate) => (
+                <li
+                  className={`protocol-provenance-item protocol-provenance-item-${donorGateStatusClass(
+                    gate.status,
+                  )}`}
+                  key={gate.key}
+                >
+                  <span className="protocol-step-status">
+                    {formatDonorGateStatus(gate.status)}
+                  </span>
+                  <div>
+                    <strong>{gate.label}</strong>
+                    <p>{gate.detail}</p>
+                    <small>{gate.nextAction}</small>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="offset-externality-evidence-heading">
+          <SectionHeader
+            eyebrow="Externality and evidence burden"
+            id="offset-externality-evidence-heading"
+            title="Direct consent is not enough to clear third-party harms."
+          >
+            Donation-offset previews must show nonparticipant-externality status, evidence burden,
+            least-intrusive alternatives, impact-claim separation, and fallback behavior before any
+            final lock or reliance.
+          </SectionHeader>
+          <div className="protocol-review-panel protocol-review-panel-needs_human_review">
+            <div className="protocol-review-head">
+              <div>
+                <p className="eyebrow">Preview-only review bundle</p>
+                <h3>No clearing, capture, or reliance before externality review.</h3>
+                <p>
+                  Clearing allowed: {String(externalityEvidencePreview.clearingAllowed)}.
+                  Participant consent waives nonparticipant harms:{" "}
+                  {String(externalityEvidencePreview.participantConsentWaivesNonparticipantHarms)}.
+                  Receipt creates impact claim:{" "}
+                  {String(externalityEvidencePreview.receiptCreatesImpactClaim)}.
+                </p>
+              </div>
+              <span className="protocol-review-status">
+                {externalityEvidencePreview.releaseStage.replaceAll("_", " ")}
+              </span>
+            </div>
+
+            <div className="protocol-review-grid">
+              <div>
+                <strong>Externality status</strong>
+                <ul className="clean-list">
+                  <li>Recipient: {externalityEvidencePreview.recipientLabel}</li>
+                  <li>
+                    Review:{" "}
+                    {externalityEvidencePreview.nonparticipantExternalityStatus.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Required before clearing:{" "}
+                    {String(
+                      externalityEvidencePreview.requiresNonparticipantExternalityReviewBeforeClearing,
+                    )}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <strong>Evidence burden</strong>
+                <ul className="clean-list">
+                  <li>{externalityEvidencePreview.evidenceBurden.replaceAll("_", " ")}</li>
+                  <li>
+                    Least-intrusive rule:{" "}
+                    {String(externalityEvidencePreview.requiresLeastIntrusiveEvidenceBeforeLock)}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <strong>Fallback</strong>
+                <p>
+                  Policy: {externalityEvidencePreview.fallbackPolicy.replaceAll("_", " ")}.
+                  Fallback must be frozen before lock and cannot silently reroute funds or
+                  obligations.
+                </p>
+              </div>
+            </div>
+
+            <ol className="protocol-provenance-list">
+              {externalityEvidencePreview.gates.map((gate) => (
                 <li
                   className={`protocol-provenance-item protocol-provenance-item-${donorGateStatusClass(
                     gate.status,

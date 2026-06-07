@@ -27,6 +27,7 @@ import {
 } from "@/lib/performance-bonds";
 import {
   buildDonationOffsetDonorOfRecordPreview,
+  buildDonationOffsetExternalityEvidencePreview,
   buildDonationOffsetPaymentDestinationPreview,
   calculateDonationOffsetPoolProgress,
   calculateDonationOffsetPreview,
@@ -41,6 +42,7 @@ import {
   getSelectableRegisteredCharities,
   findRegisteredCharityById,
   validateDonationOffsetDonorOfRecordInput,
+  validateDonationOffsetExternalityEvidenceInput,
   validateDonationOffsetPaymentDestinationInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
@@ -54,6 +56,10 @@ import {
   type DonationOffsetDonorOfRecordGateStatus,
   type DonationOffsetDonorOfRecordInput,
   type DonationOffsetDonorOfRecordRole,
+  type DonationOffsetEvidenceBurden,
+  type DonationOffsetExternalityEvidenceInput,
+  type DonationOffsetFallbackPolicy,
+  type DonationOffsetNonparticipantExternalityStatus,
   type DonationOffsetPaymentDestinationInput,
   type DonationOffsetPaymentDestinationKind,
   type DonationOffsetPaymentDestinationReviewStatus,
@@ -272,6 +278,14 @@ const defaultOffsetDonorOfRecordExplanation =
 const defaultOffsetTaxReceiptExplanation =
   "No participant should claim tax deductibility from Moral Trade. Any external receipt remains an operational record subject to legal review.";
 const defaultOffsetPaymentDestinationLocator = "https://www.every.org/givewell-top-charities-fund";
+const defaultOffsetExternalitySummary =
+  "Review should check whether redirecting opposed donations creates material third-party, recipient, or public-good harms outside the direct donor pair.";
+const defaultOffsetEvidencePlanSummary =
+  "Use a public donation receipt or narrow payment confirmation sufficient to show the external transfer.";
+const defaultOffsetLeastIntrusiveAlternative =
+  "A dated receipt or public charity payment confirmation should be tried before private financial records or third-party exposure.";
+const defaultOffsetFallbackExplanation =
+  "If externality, evidence, destination, or review gates fail, keep the record in manual review rather than silently rerouting funds.";
 const defaultPledgeReciprocalReleaseRule =
   "If one side exits under the stated rule, both sides are released from future obligations while completed or disputed past obligations remain reviewable.";
 const defaultPledgeWithdrawalBeforeLockRule =
@@ -1051,6 +1065,44 @@ export function OfferCreateForm({
     offsetNoCaptureBeforeVerificationAcknowledged,
     setOffsetNoCaptureBeforeVerificationAcknowledged,
   ] = useState(false);
+  const [offsetNonparticipantExternalityStatus, setOffsetNonparticipantExternalityStatus] =
+    useState<DonationOffsetNonparticipantExternalityStatus>("needs_review");
+  const [offsetNonparticipantHarmSummary, setOffsetNonparticipantHarmSummary] = useState(
+    defaultOffsetExternalitySummary,
+  );
+  const [offsetAntiThreatExternalityReviewed, setOffsetAntiThreatExternalityReviewed] =
+    useState(false);
+  const [offsetEvidenceBurden, setOffsetEvidenceBurden] =
+    useState<DonationOffsetEvidenceBurden>("ordinary_receipt_or_public_log");
+  const [offsetEvidencePlanSummary, setOffsetEvidencePlanSummary] = useState(
+    defaultOffsetEvidencePlanSummary,
+  );
+  const [offsetLeastIntrusiveAlternative, setOffsetLeastIntrusiveAlternative] = useState(
+    defaultOffsetLeastIntrusiveAlternative,
+  );
+  const [offsetPrivacySensitiveEvidenceRequested, setOffsetPrivacySensitiveEvidenceRequested] =
+    useState(false);
+  const [offsetHighBurdenEvidenceReviewerApproved, setOffsetHighBurdenEvidenceReviewerApproved] =
+    useState(false);
+  const [offsetImpactClaimReviewRequired, setOffsetImpactClaimReviewRequired] = useState(false);
+  const [offsetImpactClaimMethodologyReviewed, setOffsetImpactClaimMethodologyReviewed] =
+    useState(false);
+  const [offsetFallbackPolicy, setOffsetFallbackPolicy] =
+    useState<DonationOffsetFallbackPolicy>("manual_review");
+  const [offsetFallbackExplanation, setOffsetFallbackExplanation] = useState(
+    defaultOffsetFallbackExplanation,
+  );
+  const [offsetLockOrRelianceRequested, setOffsetLockOrRelianceRequested] = useState(false);
+  const [
+    offsetNonparticipantHarmsNotWaivedAcknowledged,
+    setOffsetNonparticipantHarmsNotWaivedAcknowledged,
+  ] = useState(false);
+  const [offsetLeastIntrusiveEvidenceAcknowledged, setOffsetLeastIntrusiveEvidenceAcknowledged] =
+    useState(false);
+  const [offsetNoImpactClaimFromReceiptAcknowledged, setOffsetNoImpactClaimFromReceiptAcknowledged] =
+    useState(false);
+  const [offsetFallbackNoSilentRerouteAcknowledged, setOffsetFallbackNoSilentRerouteAcknowledged] =
+    useState(false);
   const [offerImpact, setOfferImpact] = useState(initialTemplate?.offerImpact ?? "7");
   const [minCounterpartyImpact, setMinCounterpartyImpact] = useState(initialTemplate?.minCounterpartyImpact ?? "6");
   const [verificationPreference, setVerificationPreference] = useState(initialTemplate?.verification ?? "Annual receipts");
@@ -1254,6 +1306,62 @@ export function OfferCreateForm({
         ? validateDonationOffsetPaymentDestinationInput(donationOffsetPaymentDestinationInput)
         : [],
     [donationOffsetPaymentDestinationInput, isOffset],
+  );
+  const donationOffsetExternalityEvidenceInput = useMemo<DonationOffsetExternalityEvidenceInput>(
+    () => ({
+      recipientLabel: selectedCompromiseDestination?.name ?? "Selected compromise destination",
+      nonparticipantExternalityStatus: offsetNonparticipantExternalityStatus,
+      nonparticipantHarmSummary: offsetNonparticipantHarmSummary,
+      antiThreatReviewed: offsetAntiThreatExternalityReviewed,
+      evidenceBurden: offsetEvidenceBurden,
+      evidencePlanSummary: offsetEvidencePlanSummary,
+      leastIntrusiveAlternative: offsetLeastIntrusiveAlternative,
+      privacySensitiveEvidenceRequested: offsetPrivacySensitiveEvidenceRequested,
+      highBurdenEvidenceReviewerApproved: offsetHighBurdenEvidenceReviewerApproved,
+      impactClaimReviewRequired: offsetImpactClaimReviewRequired,
+      impactClaimMethodologyReviewed: offsetImpactClaimMethodologyReviewed,
+      fallbackPolicy: offsetFallbackPolicy,
+      fallbackExplanation: offsetFallbackExplanation,
+      lockOrRelianceRequested: offsetLockOrRelianceRequested,
+      participantAcknowledgedNonparticipantHarmsNotWaived:
+        offsetNonparticipantHarmsNotWaivedAcknowledged,
+      participantAcknowledgedLeastIntrusiveEvidence: offsetLeastIntrusiveEvidenceAcknowledged,
+      participantAcknowledgedNoImpactClaimFromReceipt:
+        offsetNoImpactClaimFromReceiptAcknowledged,
+      participantAcknowledgedFallbackNoSilentReroute:
+        offsetFallbackNoSilentRerouteAcknowledged,
+    }),
+    [
+      offsetAntiThreatExternalityReviewed,
+      offsetEvidenceBurden,
+      offsetEvidencePlanSummary,
+      offsetFallbackExplanation,
+      offsetFallbackNoSilentRerouteAcknowledged,
+      offsetFallbackPolicy,
+      offsetHighBurdenEvidenceReviewerApproved,
+      offsetImpactClaimMethodologyReviewed,
+      offsetImpactClaimReviewRequired,
+      offsetLeastIntrusiveAlternative,
+      offsetLeastIntrusiveEvidenceAcknowledged,
+      offsetLockOrRelianceRequested,
+      offsetNoImpactClaimFromReceiptAcknowledged,
+      offsetNonparticipantExternalityStatus,
+      offsetNonparticipantHarmSummary,
+      offsetNonparticipantHarmsNotWaivedAcknowledged,
+      offsetPrivacySensitiveEvidenceRequested,
+      selectedCompromiseDestination?.name,
+    ],
+  );
+  const donationOffsetExternalityEvidencePreview = useMemo(
+    () => buildDonationOffsetExternalityEvidencePreview(donationOffsetExternalityEvidenceInput),
+    [donationOffsetExternalityEvidenceInput],
+  );
+  const donationOffsetExternalityEvidenceErrors = useMemo(
+    () =>
+      isOffset
+        ? validateDonationOffsetExternalityEvidenceInput(donationOffsetExternalityEvidenceInput)
+        : [],
+    [donationOffsetExternalityEvidenceInput, isOffset],
   );
   const baselineAmountCents = Math.round((Number(baselineAmountUsd) || 0) * 100);
   const baselineBondCapCents = calculatePilotBaselineBondCapCents(baselineAmountCents);
@@ -1475,12 +1583,14 @@ export function OfferCreateForm({
             ...baselineBondValidation.errors,
             ...donationOffsetDonorOfRecordErrors,
             ...donationOffsetPaymentDestinationErrors,
+            ...donationOffsetExternalityEvidenceErrors,
           ]
         : [],
     [
       antiThreatCertified,
       baselineBondValidation.errors,
       donationOffsetDonorOfRecordErrors,
+      donationOffsetExternalityEvidenceErrors,
       donationOffsetPaymentDestinationErrors,
       evidenceUrl,
       isOffset,
@@ -4207,6 +4317,317 @@ export function OfferCreateForm({
                   </div>
                   <ol className="protocol-provenance-list">
                     {donationOffsetPaymentDestinationPreview.gates.map((gate) => (
+                      <li
+                        className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
+                          gate.status,
+                        )}`}
+                        key={gate.key}
+                      >
+                        <span className="protocol-step-status">
+                          {formatOffsetDonorGateStatus(gate.status)}
+                        </span>
+                        <div>
+                          <strong>{gate.label}</strong>
+                          <p>{gate.detail}</p>
+                          <small>{gate.nextAction}</small>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="field">
+              <legend>Externality and evidence burden</legend>
+              <div className="panel subtle-panel">
+                <div className="panel-head">
+                  <div>
+                    <p className="eyebrow">Before final lock</p>
+                    <h3>Review nonparticipant harms and use least-intrusive evidence</h3>
+                  </div>
+                  <span className="badge badge-warning">
+                    {donationOffsetExternalityEvidencePreview.releaseStage.replaceAll("_", " ")}
+                  </span>
+                </div>
+                <p className="panel-note">
+                  Direct participant consent does not waive harms to affected third parties,
+                  recipients, or public goods. Receipts can prove transfer facts, but impact
+                  claims and invasive evidence demands need separate review.
+                </p>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Nonparticipant externality status</span>
+                    <select
+                      name="offset_nonparticipant_externality_status"
+                      required={isOffset}
+                      value={offsetNonparticipantExternalityStatus}
+                      onChange={(event) =>
+                        setOffsetNonparticipantExternalityStatus(
+                          readFormControlValue(event) as DonationOffsetNonparticipantExternalityStatus,
+                        )
+                      }
+                    >
+                      <option value="needs_review">Needs review</option>
+                      <option value="non_blocking_review">Non-blocking review</option>
+                      <option value="serious_unresolved_harm">Serious unresolved harm</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Evidence burden</span>
+                    <select
+                      name="offset_evidence_burden"
+                      required={isOffset}
+                      value={offsetEvidenceBurden}
+                      onChange={(event) =>
+                        setOffsetEvidenceBurden(
+                          readFormControlValue(event) as DonationOffsetEvidenceBurden,
+                        )
+                      }
+                    >
+                      <option value="ordinary_receipt_or_public_log">Ordinary receipt or public log</option>
+                      <option value="third_party_audit">Third-party audit</option>
+                      <option value="privacy_sensitive_or_high_burden">Privacy-sensitive or high-burden</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="field">
+                  <span>Nonparticipant harm summary</span>
+                  <textarea
+                    name="offset_nonparticipant_harm_summary"
+                    required={isOffset}
+                    rows={3}
+                    value={offsetNonparticipantHarmSummary}
+                    onChange={(event) =>
+                      setOffsetNonparticipantHarmSummary(readFormControlValue(event))
+                    }
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Evidence plan summary</span>
+                  <textarea
+                    name="offset_evidence_plan_summary"
+                    required={isOffset}
+                    rows={3}
+                    value={offsetEvidencePlanSummary}
+                    onChange={(event) => setOffsetEvidencePlanSummary(readFormControlValue(event))}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Least-intrusive sufficient evidence</span>
+                  <textarea
+                    name="offset_least_intrusive_evidence_alternative"
+                    required={isOffset}
+                    rows={3}
+                    value={offsetLeastIntrusiveAlternative}
+                    onChange={(event) =>
+                      setOffsetLeastIntrusiveAlternative(readFormControlValue(event))
+                    }
+                  />
+                </label>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Fallback policy</span>
+                    <select
+                      name="offset_fallback_policy"
+                      required={isOffset}
+                      value={offsetFallbackPolicy}
+                      onChange={(event) =>
+                        setOffsetFallbackPolicy(
+                          readFormControlValue(event) as DonationOffsetFallbackPolicy,
+                        )
+                      }
+                    >
+                      <option value="manual_review">Manual review</option>
+                      <option value="cancel_or_refund">Cancel or refund</option>
+                      <option value="carry_forward_with_renewed_confirmation">Carry forward with renewed confirmation</option>
+                      <option value="return_to_donors">Return to donors</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Fallback explanation</span>
+                    <textarea
+                      name="offset_fallback_explanation"
+                      required={isOffset}
+                      rows={3}
+                      value={offsetFallbackExplanation}
+                      onChange={(event) =>
+                        setOffsetFallbackExplanation(readFormControlValue(event))
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="radio-row">
+                    <input
+                      checked={offsetAntiThreatExternalityReviewed}
+                      name="offset_anti_threat_externality_reviewed"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetAntiThreatExternalityReviewed(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Anti-threat and manufactured-baseline review is non-blocking.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetPrivacySensitiveEvidenceRequested}
+                      name="offset_privacy_sensitive_evidence_requested"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetPrivacySensitiveEvidenceRequested(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Evidence plan requests private, sensitive, or high-burden records.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetHighBurdenEvidenceReviewerApproved}
+                      name="offset_high_burden_evidence_reviewer_approved"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetHighBurdenEvidenceReviewerApproved(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Reviewer has approved the high-burden evidence plan.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetImpactClaimReviewRequired}
+                      name="offset_impact_claim_review_required"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetImpactClaimReviewRequired(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>This offset will publish an impact, outcome, or moral-value claim.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetImpactClaimMethodologyReviewed}
+                      name="offset_impact_claim_methodology_reviewed"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetImpactClaimMethodologyReviewed(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Impact-claim methodology review is non-blocking.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetLockOrRelianceRequested}
+                      name="offset_lock_or_reliance_requested"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetLockOrRelianceRequested(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>This draft requests final lock or reliance now.</span>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNonparticipantHarmsNotWaivedAcknowledged}
+                      name="offset_nonparticipant_harms_not_waived_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNonparticipantHarmsNotWaivedAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Participant consent cannot waive harms to nonparticipants.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetLeastIntrusiveEvidenceAcknowledged}
+                      name="offset_least_intrusive_evidence_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetLeastIntrusiveEvidenceAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Use least-intrusive sufficient evidence for the claim type.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNoImpactClaimFromReceiptAcknowledged}
+                      name="offset_no_impact_claim_from_receipt_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNoImpactClaimFromReceiptAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Receipts and payment proof do not create impact claims.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetFallbackNoSilentRerouteAcknowledged}
+                      name="offset_fallback_no_silent_reroute_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetFallbackNoSilentRerouteAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Failed review cannot silently reroute funds or obligations.</span>
+                  </label>
+                </div>
+
+                <div className="protocol-provenance-preflight" aria-live="polite">
+                  <div className="protocol-provenance-head">
+                    <div>
+                      <strong>Externality and evidence preview</strong>
+                      <p>
+                        Clearing allowed:{" "}
+                        {donationOffsetExternalityEvidencePreview.clearingAllowed ? "yes" : "no"}.
+                        Receipt creates impact claim:{" "}
+                        {donationOffsetExternalityEvidencePreview.receiptCreatesImpactClaim
+                          ? "yes"
+                          : "no"}.
+                      </p>
+                    </div>
+                    <span className="protocol-review-status">
+                      {donationOffsetExternalityEvidencePreview.humanReviewGateCount} review item
+                      {donationOffsetExternalityEvidencePreview.humanReviewGateCount === 1
+                        ? ""
+                        : "s"}
+                    </span>
+                  </div>
+                  <ol className="protocol-provenance-list">
+                    {donationOffsetExternalityEvidencePreview.gates.map((gate) => (
                       <li
                         className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
                           gate.status,

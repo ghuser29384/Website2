@@ -50,12 +50,30 @@ export type DonationOffsetPaymentDestinationReviewStatus =
   | "needs_review"
   | "blocked"
   | "unknown";
+export type DonationOffsetNonparticipantExternalityStatus =
+  | "non_blocking_review"
+  | "needs_review"
+  | "serious_unresolved_harm"
+  | "unknown";
+export type DonationOffsetEvidenceBurden =
+  | "ordinary_receipt_or_public_log"
+  | "third_party_audit"
+  | "privacy_sensitive_or_high_burden"
+  | "unknown";
+export type DonationOffsetFallbackPolicy =
+  | "cancel_or_refund"
+  | "carry_forward_with_renewed_confirmation"
+  | "manual_review"
+  | "return_to_donors"
+  | "unknown";
 export type DonationOffsetDonorOfRecordGateStatus =
   | "pass"
   | "needs_input"
   | "human_review"
   | "blocked";
 export type DonationOffsetPaymentDestinationGateStatus =
+  DonationOffsetDonorOfRecordGateStatus;
+export type DonationOffsetExternalityEvidenceGateStatus =
   DonationOffsetDonorOfRecordGateStatus;
 
 export interface RegisteredCharity {
@@ -288,6 +306,57 @@ export interface DonationOffsetPaymentDestinationPreview {
   blockedGateCount: number;
   humanReviewGateCount: number;
   readyForRecipientRegistryReview: boolean;
+}
+
+export interface DonationOffsetExternalityEvidenceInput {
+  recipientLabel: string;
+  nonparticipantExternalityStatus: DonationOffsetNonparticipantExternalityStatus;
+  nonparticipantHarmSummary: string;
+  antiThreatReviewed: boolean;
+  evidenceBurden: DonationOffsetEvidenceBurden;
+  evidencePlanSummary: string;
+  leastIntrusiveAlternative: string;
+  privacySensitiveEvidenceRequested: boolean;
+  highBurdenEvidenceReviewerApproved: boolean;
+  impactClaimReviewRequired: boolean;
+  impactClaimMethodologyReviewed: boolean;
+  fallbackPolicy: DonationOffsetFallbackPolicy;
+  fallbackExplanation: string;
+  lockOrRelianceRequested: boolean;
+  participantAcknowledgedNonparticipantHarmsNotWaived: boolean;
+  participantAcknowledgedLeastIntrusiveEvidence: boolean;
+  participantAcknowledgedNoImpactClaimFromReceipt: boolean;
+  participantAcknowledgedFallbackNoSilentReroute: boolean;
+}
+
+export interface DonationOffsetExternalityEvidenceGate {
+  key: string;
+  label: string;
+  status: DonationOffsetExternalityEvidenceGateStatus;
+  detail: string;
+  nextAction: string;
+  blockerCodes: string[];
+}
+
+export interface DonationOffsetExternalityEvidencePreview {
+  schemaVersion: "donation-offset-externality-evidence-preview-v1";
+  releaseStage: "donation_offset_preview_no_capture";
+  captureAllowed: false;
+  clearingAllowed: false;
+  relianceBearing: false;
+  participantConsentWaivesNonparticipantHarms: false;
+  receiptCreatesImpactClaim: false;
+  requiresNonparticipantExternalityReviewBeforeClearing: true;
+  requiresLeastIntrusiveEvidenceBeforeLock: true;
+  requiresFallbackPolicyBeforeLock: true;
+  recipientLabel: string;
+  nonparticipantExternalityStatus: DonationOffsetNonparticipantExternalityStatus;
+  evidenceBurden: DonationOffsetEvidenceBurden;
+  fallbackPolicy: DonationOffsetFallbackPolicy;
+  gates: DonationOffsetExternalityEvidenceGate[];
+  blockedGateCount: number;
+  humanReviewGateCount: number;
+  readyForExternalityReview: boolean;
 }
 
 export interface DonationOffsetModerationAssessment {
@@ -671,6 +740,52 @@ export function normalizeDonationOffsetPaymentDestinationReviewStatus(
   return "unknown";
 }
 
+export function normalizeDonationOffsetNonparticipantExternalityStatus(
+  value: string | null | undefined,
+): DonationOffsetNonparticipantExternalityStatus {
+  if (
+    value === "non_blocking_review" ||
+    value === "needs_review" ||
+    value === "serious_unresolved_harm" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetEvidenceBurden(
+  value: string | null | undefined,
+): DonationOffsetEvidenceBurden {
+  if (
+    value === "ordinary_receipt_or_public_log" ||
+    value === "third_party_audit" ||
+    value === "privacy_sensitive_or_high_burden" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetFallbackPolicy(
+  value: string | null | undefined,
+): DonationOffsetFallbackPolicy {
+  if (
+    value === "cancel_or_refund" ||
+    value === "carry_forward_with_renewed_confirmation" ||
+    value === "manual_review" ||
+    value === "return_to_donors" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
 function donorGate({
   key,
   label,
@@ -730,6 +845,31 @@ function blockIfCaptureOrReleaseRequested(
   captureOrReleaseRequested: boolean,
 ) {
   return captureOrReleaseRequested && status !== "pass" ? "blocked" : status;
+}
+
+function externalityEvidenceGate({
+  key,
+  label,
+  status,
+  detail,
+  nextAction,
+  blockerCodes = [],
+}: DonationOffsetExternalityEvidenceGate) {
+  return {
+    key,
+    label,
+    status,
+    detail,
+    nextAction,
+    blockerCodes,
+  };
+}
+
+function blockIfLockOrRelianceRequested(
+  status: DonationOffsetExternalityEvidenceGateStatus,
+  lockOrRelianceRequested: boolean,
+) {
+  return lockOrRelianceRequested && status !== "pass" ? "blocked" : status;
 }
 
 export function buildDonationOffsetPaymentDestinationPreview(
@@ -1062,6 +1202,347 @@ export function buildDemoDonationOffsetPaymentDestinationPreview() {
     captureOrReleaseRequested: false,
     participantAcknowledgedEvidenceNotDestination: true,
     participantAcknowledgedNoCaptureBeforeVerification: true,
+  });
+}
+
+export function buildDonationOffsetExternalityEvidencePreview(
+  input: DonationOffsetExternalityEvidenceInput,
+): DonationOffsetExternalityEvidencePreview {
+  const harmSummaryPresent = hasMeaningfulText(input.nonparticipantHarmSummary);
+  const evidencePlanPresent = hasMeaningfulText(input.evidencePlanSummary);
+  const leastIntrusivePresent = hasMeaningfulText(input.leastIntrusiveAlternative);
+  const fallbackPresent =
+    input.fallbackPolicy !== "unknown" && hasMeaningfulText(input.fallbackExplanation);
+  const highBurdenEvidence =
+    input.evidenceBurden === "privacy_sensitive_or_high_burden" ||
+    input.privacySensitiveEvidenceRequested;
+  const externalityStatus = blockIfLockOrRelianceRequested(
+    input.nonparticipantExternalityStatus === "serious_unresolved_harm"
+      ? "blocked"
+      : input.nonparticipantExternalityStatus === "unknown"
+        ? "needs_input"
+        : input.nonparticipantExternalityStatus === "needs_review"
+          ? "human_review"
+          : "pass",
+    input.lockOrRelianceRequested,
+  );
+  const antiThreatStatus = blockIfLockOrRelianceRequested(
+    input.antiThreatReviewed ? "pass" : "human_review",
+    input.lockOrRelianceRequested,
+  );
+  const evidenceBurdenStatus = blockIfLockOrRelianceRequested(
+    input.evidenceBurden === "unknown"
+      ? "needs_input"
+      : highBurdenEvidence && !input.highBurdenEvidenceReviewerApproved
+        ? "human_review"
+        : input.evidenceBurden === "third_party_audit"
+          ? "human_review"
+          : "pass",
+    input.lockOrRelianceRequested,
+  );
+  const leastIntrusiveStatus = blockIfLockOrRelianceRequested(
+    !evidencePlanPresent || !leastIntrusivePresent
+      ? "needs_input"
+      : input.participantAcknowledgedLeastIntrusiveEvidence
+        ? "pass"
+        : "needs_input",
+    input.lockOrRelianceRequested,
+  );
+  const impactClaimStatus = blockIfLockOrRelianceRequested(
+    input.participantAcknowledgedNoImpactClaimFromReceipt &&
+      (!input.impactClaimReviewRequired || input.impactClaimMethodologyReviewed)
+      ? "pass"
+      : input.impactClaimReviewRequired
+        ? "human_review"
+        : "needs_input",
+    input.lockOrRelianceRequested,
+  );
+  const nonparticipantConsentStatus = blockIfLockOrRelianceRequested(
+    input.participantAcknowledgedNonparticipantHarmsNotWaived
+      ? "pass"
+      : "needs_input",
+    input.lockOrRelianceRequested,
+  );
+  const fallbackStatus = blockIfLockOrRelianceRequested(
+    fallbackPresent && input.participantAcknowledgedFallbackNoSilentReroute
+      ? "pass"
+      : "needs_input",
+    input.lockOrRelianceRequested,
+  );
+  const lockBoundaryStatus = input.lockOrRelianceRequested ? "blocked" : "pass";
+
+  const gates = [
+    externalityEvidenceGate({
+      key: "nonparticipant-externality",
+      label: "Nonparticipant externality",
+      status: externalityStatus,
+      detail:
+        externalityStatus === "pass"
+          ? "The nonparticipant-externality assessment is marked non-blocking for this preview."
+          : externalityStatus === "blocked"
+            ? "Serious unresolved third-party, recipient, or public-good harm blocks clearing even if direct participants agree."
+            : externalityStatus === "human_review"
+              ? "Potential third-party, recipient, or public-good harms need review before lock."
+              : "Choose the nonparticipant-externality status before publishing the preview.",
+      nextAction:
+        externalityStatus === "pass"
+          ? "Keep the externality decision attached to the final lock proposal."
+          : "Resolve nonparticipant externality review before clearing or reliance.",
+      blockerCodes: externalityStatus === "pass" ? [] : ["nonparticipant_externality_review_required"],
+    }),
+    externalityEvidenceGate({
+      key: "externality-summary",
+      label: "Externality summary",
+      status: harmSummaryPresent ? "pass" : "needs_input",
+      detail: harmSummaryPresent
+        ? "The preview records a plain-language summary of third-party, recipient, and public-good effects."
+        : "The preview needs a plain-language nonparticipant-harm summary.",
+      nextAction: harmSummaryPresent
+        ? "Keep private or sensitive facts out of public summaries."
+        : "State who outside the direct participants could be affected and how.",
+      blockerCodes: harmSummaryPresent ? [] : ["externality_summary_missing"],
+    }),
+    externalityEvidenceGate({
+      key: "anti-threat-externality",
+      label: "Anti-threat and manufactured-baseline review",
+      status: antiThreatStatus,
+      detail:
+        antiThreatStatus === "pass"
+          ? "Threat-like or marketplace-created harmful baselines are marked reviewed."
+          : "Donation-offset baselines need anti-threat review so direct consent cannot convert coercion into moral trade.",
+      nextAction:
+        antiThreatStatus === "pass"
+          ? "Keep anti-threat review separate from participant surplus confirmation."
+          : "Complete anti-threat review before any lock or public completed-trade count.",
+      blockerCodes: antiThreatStatus === "pass" ? [] : ["anti_threat_externality_review_required"],
+    }),
+    externalityEvidenceGate({
+      key: "evidence-burden",
+      label: "Evidence burden",
+      status: evidenceBurdenStatus,
+      detail:
+        evidenceBurdenStatus === "pass"
+          ? "The evidence plan is ordinary-burden and compatible with preview-stage review."
+          : evidenceBurdenStatus === "blocked"
+            ? "High-burden, privacy-sensitive, or unclassified evidence cannot support lock or reliance without review."
+            : evidenceBurdenStatus === "human_review"
+              ? "Third-party audit or privacy-sensitive evidence needs reviewer approval and user-facing disclosure before lock."
+              : "Choose the evidence-burden class before publishing the preview.",
+      nextAction:
+        evidenceBurdenStatus === "pass"
+          ? "Use the least intrusive sufficient proof packet for the claim type."
+          : "Approve or replace the evidence plan with a less intrusive alternative before lock.",
+      blockerCodes: evidenceBurdenStatus === "pass" ? [] : ["evidence_burden_review_required"],
+    }),
+    externalityEvidenceGate({
+      key: "least-intrusive-alternative",
+      label: "Least-intrusive evidence alternative",
+      status: leastIntrusiveStatus,
+      detail:
+        leastIntrusiveStatus === "pass"
+          ? "The preview includes a least-intrusive-sufficient evidence alternative."
+          : "Donation-offset verification cannot demand invasive proof when less intrusive evidence is enough.",
+      nextAction:
+        leastIntrusiveStatus === "pass"
+          ? "Reviewers should reject later evidence escalation without renewed approval."
+          : "Describe the least intrusive proof that could satisfy the claim.",
+      blockerCodes: leastIntrusiveStatus === "pass" ? [] : ["least_intrusive_evidence_missing"],
+    }),
+    externalityEvidenceGate({
+      key: "impact-claim-separation",
+      label: "Impact claim separation",
+      status: impactClaimStatus,
+      detail:
+        impactClaimStatus === "pass"
+          ? "Receipt/payment proof is separated from causal impact, outcome, and moral-value claims."
+          : "Impact claims need their own reviewed methodology; receipts and payment evidence cannot prove impact by themselves.",
+      nextAction:
+        impactClaimStatus === "pass"
+          ? "Keep gross transfer, net payout, and impact claims separately labeled."
+          : "Review methodology before publishing any impact or moral-value claim.",
+      blockerCodes: impactClaimStatus === "pass" ? [] : ["impact_claim_methodology_review_required"],
+    }),
+    externalityEvidenceGate({
+      key: "nonparticipant-consent-boundary",
+      label: "Nonparticipant consent boundary",
+      status: nonparticipantConsentStatus,
+      detail:
+        nonparticipantConsentStatus === "pass"
+          ? "The participant acknowledged that direct participant consent cannot waive harms to nonparticipants."
+          : "The participant must acknowledge that nonparticipant harms remain blockers.",
+      nextAction:
+        nonparticipantConsentStatus === "pass"
+          ? "Keep participant surplus confirmation necessary but not sufficient for clearing."
+          : "Require acknowledgement before publishing the offset preview.",
+      blockerCodes: nonparticipantConsentStatus === "pass" ? [] : ["nonparticipant_consent_boundary_missing"],
+    }),
+    externalityEvidenceGate({
+      key: "fallback-cancellation-policy",
+      label: "Fallback and cancellation policy",
+      status: fallbackStatus,
+      detail:
+        fallbackStatus === "pass"
+          ? "The preview states what happens if externality, evidence, destination, or review gates fail."
+          : "Blocked-release behavior needs an explicit fallback such as cancel, refund, carry-forward, or manual review.",
+      nextAction:
+        fallbackStatus === "pass"
+          ? "Do not silently reroute funds or obligations outside the frozen fallback."
+          : "Choose and explain the fallback before lock.",
+      blockerCodes: fallbackStatus === "pass" ? [] : ["fallback_policy_missing"],
+    }),
+    externalityEvidenceGate({
+      key: "lock-reliance-boundary",
+      label: "Lock and reliance boundary",
+      status: lockBoundaryStatus,
+      detail:
+        lockBoundaryStatus === "pass"
+          ? "This is a preview-only bundle and does not request lock, capture, release, or reliance."
+          : "This draft requested lock or reliance before externality, evidence, and fallback gates are non-blocking.",
+      nextAction:
+        lockBoundaryStatus === "pass"
+          ? "Require final lock confirmation against a frozen proposal before reliance."
+          : "Remove premature lock or reliance requests.",
+      blockerCodes: lockBoundaryStatus === "pass" ? [] : ["lock_reliance_boundary_required"],
+    }),
+  ];
+  const blockedGateCount = gates.filter((gate) => gate.status === "blocked").length;
+  const humanReviewGateCount = gates.filter(
+    (gate) => gate.status === "human_review" || gate.status === "needs_input",
+  ).length;
+
+  return {
+    schemaVersion: "donation-offset-externality-evidence-preview-v1",
+    releaseStage: "donation_offset_preview_no_capture",
+    captureAllowed: false,
+    clearingAllowed: false,
+    relianceBearing: false,
+    participantConsentWaivesNonparticipantHarms: false,
+    receiptCreatesImpactClaim: false,
+    requiresNonparticipantExternalityReviewBeforeClearing: true,
+    requiresLeastIntrusiveEvidenceBeforeLock: true,
+    requiresFallbackPolicyBeforeLock: true,
+    recipientLabel: input.recipientLabel.trim() || "Selected recipient",
+    nonparticipantExternalityStatus: input.nonparticipantExternalityStatus,
+    evidenceBurden: input.evidenceBurden,
+    fallbackPolicy: input.fallbackPolicy,
+    gates,
+    blockedGateCount,
+    humanReviewGateCount,
+    readyForExternalityReview:
+      blockedGateCount === 0 && gates.every((gate) => gate.status !== "needs_input"),
+  };
+}
+
+export function validateDonationOffsetExternalityEvidenceInput(
+  input: DonationOffsetExternalityEvidenceInput,
+) {
+  const errors: string[] = [];
+  const preview = buildDonationOffsetExternalityEvidencePreview(input);
+
+  if (input.nonparticipantExternalityStatus === "unknown") {
+    errors.push("Choose the nonparticipant-externality review status.");
+  }
+
+  if (!hasMeaningfulText(input.nonparticipantHarmSummary)) {
+    errors.push("Summarize potential third-party, recipient, or public-good effects.");
+  }
+
+  if (input.evidenceBurden === "unknown") {
+    errors.push("Choose the evidence-burden class for this donation offset.");
+  }
+
+  if (!hasMeaningfulText(input.evidencePlanSummary)) {
+    errors.push("Summarize the donation-offset evidence plan.");
+  }
+
+  if (!hasMeaningfulText(input.leastIntrusiveAlternative)) {
+    errors.push("Describe the least-intrusive sufficient evidence alternative.");
+  }
+
+  if (input.fallbackPolicy === "unknown" || !hasMeaningfulText(input.fallbackExplanation)) {
+    errors.push("State the fallback or cancellation policy for blocked release.");
+  }
+
+  if (!input.participantAcknowledgedNonparticipantHarmsNotWaived) {
+    errors.push("Acknowledge that participant consent cannot waive harms to nonparticipants.");
+  }
+
+  if (!input.participantAcknowledgedLeastIntrusiveEvidence) {
+    errors.push("Acknowledge the least-intrusive-sufficient-evidence rule.");
+  }
+
+  if (!input.participantAcknowledgedNoImpactClaimFromReceipt) {
+    errors.push("Acknowledge that receipts and payment proof do not create impact claims.");
+  }
+
+  if (!input.participantAcknowledgedFallbackNoSilentReroute) {
+    errors.push("Acknowledge that failed review cannot silently reroute funds or obligations.");
+  }
+
+  if (input.lockOrRelianceRequested) {
+    errors.push("Donation-offset previews cannot request lock or reliance before externality, evidence, and fallback gates are non-blocking.");
+  }
+
+  for (const gate of preview.gates) {
+    if (gate.status === "blocked") {
+      errors.push(`${gate.label}: ${gate.nextAction}`);
+    }
+  }
+
+  return errors;
+}
+
+export function summarizeDonationOffsetExternalityEvidenceForNotes(
+  preview: DonationOffsetExternalityEvidencePreview,
+) {
+  const gateSummary = preview.gates
+    .map((gate) => `${gate.label}: ${formatDonationOffsetDonorGateStatus(gate.status)}`)
+    .join("; ");
+
+  return [
+    "Donation-offset nonparticipant-externality and evidence preview:",
+    `Schema version: ${preview.schemaVersion}`,
+    `Release stage: ${preview.releaseStage}`,
+    `Recipient: ${preview.recipientLabel}`,
+    `Nonparticipant externality status: ${preview.nonparticipantExternalityStatus.replaceAll("_", " ")}`,
+    `Evidence burden: ${preview.evidenceBurden.replaceAll("_", " ")}`,
+    `Fallback policy: ${preview.fallbackPolicy.replaceAll("_", " ")}`,
+    "Capture allowed from this preview: no",
+    "Clearing allowed from this preview: no",
+    "Reliance-bearing from this preview: no",
+    "Participant consent waives nonparticipant harms: no",
+    "Receipt creates impact claim: no",
+    "Requires nonparticipant-externality review before clearing: yes",
+    "Requires least-intrusive evidence before lock: yes",
+    "Requires fallback policy before lock: yes",
+    `Manual-review gates: ${gateSummary}`,
+  ].join("\n");
+}
+
+export function buildDemoDonationOffsetExternalityEvidencePreview() {
+  return buildDonationOffsetExternalityEvidencePreview({
+    recipientLabel: "GiveWell Top Charities Fund",
+    nonparticipantExternalityStatus: "needs_review",
+    nonparticipantHarmSummary:
+      "Review should check whether redirecting opposed donations creates material third-party, recipient, or public-good harms outside the direct donor pair.",
+    antiThreatReviewed: false,
+    evidenceBurden: "ordinary_receipt_or_public_log",
+    evidencePlanSummary:
+      "Use a public donation receipt or narrow payment confirmation sufficient to show the external transfer.",
+    leastIntrusiveAlternative:
+      "A dated receipt or public charity payment confirmation should be tried before private financial records or third-party exposure.",
+    privacySensitiveEvidenceRequested: false,
+    highBurdenEvidenceReviewerApproved: false,
+    impactClaimReviewRequired: false,
+    impactClaimMethodologyReviewed: false,
+    fallbackPolicy: "manual_review",
+    fallbackExplanation:
+      "If externality, evidence, destination, or review gates fail, keep the record in manual review rather than silently rerouting funds.",
+    lockOrRelianceRequested: false,
+    participantAcknowledgedNonparticipantHarmsNotWaived: true,
+    participantAcknowledgedLeastIntrusiveEvidence: true,
+    participantAcknowledgedNoImpactClaimFromReceipt: true,
+    participantAcknowledgedFallbackNoSilentReroute: true,
   });
 }
 

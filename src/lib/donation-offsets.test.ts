@@ -5,17 +5,21 @@ import { readFileSync } from "node:fs";
 import {
   assessDonationOffsetModeration,
   buildDemoDonationOffsetDonorOfRecordPreview,
+  buildDemoDonationOffsetExternalityEvidencePreview,
   buildDemoDonationOffsetPaymentDestinationPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
   buildDonationOffsetDonorOfRecordPreview,
+  buildDonationOffsetExternalityEvidencePreview,
   buildDonationOffsetPaymentDestinationPreview,
   calculateDonationOffsetPreview,
   calculateDonationOffsetPoolProgress,
   createDefaultDonationOffsetFields,
   summarizeDonationOffsetDonorOfRecordForNotes,
+  summarizeDonationOffsetExternalityEvidenceForNotes,
   summarizeDonationOffsetPaymentDestinationForNotes,
   validateDonationOffsetDonorOfRecordInput,
+  validateDonationOffsetExternalityEvidenceInput,
   validateDonationOffsetPaymentDestinationInput,
   validateDonationOffsetSubmissionGuards,
   validateDonationOffsetFields,
@@ -440,6 +444,122 @@ test("donation offset payment destination summary records verification boundarie
   assert.match(summary, /Requires verified payment destination before capture\/release: yes/);
 });
 
+test("donation offset externality and evidence preview is no-capture and non-reliance-bearing", () => {
+  const preview = buildDemoDonationOffsetExternalityEvidencePreview();
+
+  assert.equal(preview.schemaVersion, "donation-offset-externality-evidence-preview-v1");
+  assert.equal(preview.releaseStage, "donation_offset_preview_no_capture");
+  assert.equal(preview.captureAllowed, false);
+  assert.equal(preview.clearingAllowed, false);
+  assert.equal(preview.relianceBearing, false);
+  assert.equal(preview.participantConsentWaivesNonparticipantHarms, false);
+  assert.equal(preview.receiptCreatesImpactClaim, false);
+  assert.equal(preview.requiresNonparticipantExternalityReviewBeforeClearing, true);
+  assert.equal(preview.requiresLeastIntrusiveEvidenceBeforeLock, true);
+  assert.equal(preview.requiresFallbackPolicyBeforeLock, true);
+  assert.equal(preview.gates.some((gate) => gate.key === "nonparticipant-externality"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "least-intrusive-alternative"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "fallback-cancellation-policy"), true);
+});
+
+test("donation offset externality preview blocks serious unresolved nonparticipant harm", () => {
+  const preview = buildDonationOffsetExternalityEvidencePreview({
+    recipientLabel: "GiveWell Top Charities Fund",
+    nonparticipantExternalityStatus: "serious_unresolved_harm",
+    nonparticipantHarmSummary:
+      "The proposed offset appears to create material third-party harm that has not been resolved.",
+    antiThreatReviewed: true,
+    evidenceBurden: "ordinary_receipt_or_public_log",
+    evidencePlanSummary: "Use a public receipt for the external donation.",
+    leastIntrusiveAlternative:
+      "A public receipt is enough before asking for private financial records.",
+    privacySensitiveEvidenceRequested: false,
+    highBurdenEvidenceReviewerApproved: false,
+    impactClaimReviewRequired: false,
+    impactClaimMethodologyReviewed: false,
+    fallbackPolicy: "manual_review",
+    fallbackExplanation:
+      "Keep the offset in manual review instead of clearing or rerouting funds.",
+    lockOrRelianceRequested: false,
+    participantAcknowledgedNonparticipantHarmsNotWaived: true,
+    participantAcknowledgedLeastIntrusiveEvidence: true,
+    participantAcknowledgedNoImpactClaimFromReceipt: true,
+    participantAcknowledgedFallbackNoSilentReroute: true,
+  });
+
+  assert.equal(preview.blockedGateCount, 1);
+  assert.equal(preview.gates.find((gate) => gate.key === "nonparticipant-externality")?.status, "blocked");
+});
+
+test("donation offset externality validation rejects missing acknowledgements and fallback", () => {
+  const errors = validateDonationOffsetExternalityEvidenceInput({
+    recipientLabel: "GiveWell Top Charities Fund",
+    nonparticipantExternalityStatus: "unknown",
+    nonparticipantHarmSummary: "",
+    antiThreatReviewed: false,
+    evidenceBurden: "unknown",
+    evidencePlanSummary: "",
+    leastIntrusiveAlternative: "",
+    privacySensitiveEvidenceRequested: false,
+    highBurdenEvidenceReviewerApproved: false,
+    impactClaimReviewRequired: true,
+    impactClaimMethodologyReviewed: false,
+    fallbackPolicy: "unknown",
+    fallbackExplanation: "",
+    lockOrRelianceRequested: false,
+    participantAcknowledgedNonparticipantHarmsNotWaived: false,
+    participantAcknowledgedLeastIntrusiveEvidence: false,
+    participantAcknowledgedNoImpactClaimFromReceipt: false,
+    participantAcknowledgedFallbackNoSilentReroute: false,
+  });
+
+  assert.ok(errors.some((error) => /nonparticipant-externality/i.test(error)));
+  assert.ok(errors.some((error) => /least-intrusive/i.test(error)));
+  assert.ok(errors.some((error) => /impact claims/i.test(error)));
+  assert.ok(errors.some((error) => /fallback/i.test(error)));
+});
+
+test("donation offset externality preview requires review for high-burden evidence", () => {
+  const preview = buildDonationOffsetExternalityEvidencePreview({
+    recipientLabel: "GiveWell Top Charities Fund",
+    nonparticipantExternalityStatus: "non_blocking_review",
+    nonparticipantHarmSummary:
+      "No material nonparticipant harm is identified in this bounded offset preview.",
+    antiThreatReviewed: true,
+    evidenceBurden: "privacy_sensitive_or_high_burden",
+    evidencePlanSummary:
+      "The proposed evidence would include sensitive donor financial records.",
+    leastIntrusiveAlternative:
+      "A redacted receipt or public charity payment confirmation should be sufficient first.",
+    privacySensitiveEvidenceRequested: true,
+    highBurdenEvidenceReviewerApproved: false,
+    impactClaimReviewRequired: false,
+    impactClaimMethodologyReviewed: false,
+    fallbackPolicy: "cancel_or_refund",
+    fallbackExplanation:
+      "Cancel the pending agreement if the evidence plan cannot be approved without invasive records.",
+    lockOrRelianceRequested: false,
+    participantAcknowledgedNonparticipantHarmsNotWaived: true,
+    participantAcknowledgedLeastIntrusiveEvidence: true,
+    participantAcknowledgedNoImpactClaimFromReceipt: true,
+    participantAcknowledgedFallbackNoSilentReroute: true,
+  });
+
+  assert.equal(preview.gates.find((gate) => gate.key === "evidence-burden")?.status, "human_review");
+  assert.equal(preview.gates.find((gate) => gate.key === "least-intrusive-alternative")?.status, "pass");
+});
+
+test("donation offset externality summary records evidence and impact boundaries", () => {
+  const summary = summarizeDonationOffsetExternalityEvidenceForNotes(
+    buildDemoDonationOffsetExternalityEvidencePreview(),
+  );
+
+  assert.match(summary, /Participant consent waives nonparticipant harms: no/);
+  assert.match(summary, /Receipt creates impact claim: no/);
+  assert.match(summary, /Requires least-intrusive evidence before lock: yes/);
+  assert.match(summary, /Requires fallback policy before lock: yes/);
+});
+
 test("donation offset page renders the moraltrade60 batch-clearing preview surface", () => {
   const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
   const helper = readFileSync("src/lib/donation-offsets.ts", "utf8");
@@ -478,6 +598,19 @@ test("donation offset payment-destination UI and server action are wired", () =>
   assert.match(form, /offset_evidence_not_destination_acknowledgement/);
   assert.match(action, /validateDonationOffsetPaymentDestinationInput/);
   assert.match(action, /summarizeDonationOffsetPaymentDestinationForNotes/);
+});
+
+test("donation offset externality and evidence UI and server action are wired", () => {
+  const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
+  const form = readFileSync("src/components/offers/offer-create-form.tsx", "utf8");
+  const action = readFileSync("src/app/actions.ts", "utf8");
+
+  assert.match(page, /Externality and evidence burden/);
+  assert.match(page, /buildDemoDonationOffsetExternalityEvidencePreview/);
+  assert.match(form, /offset_nonparticipant_externality_status/);
+  assert.match(form, /offset_least_intrusive_evidence_acknowledgement/);
+  assert.match(action, /validateDonationOffsetExternalityEvidenceInput/);
+  assert.match(action, /summarizeDonationOffsetExternalityEvidenceForNotes/);
 });
 
 test("pool moderation flags missing deadline when pool mode is selected", () => {
