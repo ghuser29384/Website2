@@ -5884,6 +5884,12 @@ output {
   line-height: 1.45;
 }
 
+.offer-template-button small {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .protocol-review-panel {
   display: grid;
   gap: 1rem;

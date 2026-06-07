@@ -7,6 +7,7 @@ import { isPaymentBondsEnabled } from "@/lib/baseline-bonds";
 import { getFormMessage } from "@/lib/form-state";
 import { getDonationOffsetOverview, getOfferById, getViewer } from "@/lib/app-data";
 import { getMoralTradeProvenanceContract } from "@/lib/moral-trade/provenance";
+import { getReviewedMarketplaceSeedTemplate } from "@/lib/marketplace-seed-templates";
 import { buildCreateSimilarTemplateFromLiveOffer } from "@/lib/offer-create-similar";
 import { isPublicLiveOfferId } from "@/lib/offer-follows";
 import { getPerformanceBondConfig } from "@/lib/performance-bonds";
@@ -289,6 +290,12 @@ const MORAL_TRADE_TYPE_TEMPLATES: Record<string, OfferTemplate> = {
 function getMoralTradeTypeTemplate(templateId: string | undefined): OfferTemplate | null {
   if (!templateId) {
     return null;
+  }
+
+  const reviewedSeedTemplate = getReviewedMarketplaceSeedTemplate(templateId);
+
+  if (reviewedSeedTemplate) {
+    return reviewedSeedTemplate.prefill;
   }
 
   return MORAL_TRADE_TYPE_TEMPLATES[templateId] ?? null;

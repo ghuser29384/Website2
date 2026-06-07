@@ -3271,6 +3271,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(publicOffersSource, /hiddenZeroCountFacets/);
   assert.match(publicOffersSource, /PublicMarketplaceTab = "live" \| "rounds" \| "worked_examples" \| "demo"/);
   assert.match(publicOffersSource, /availableTabs/);
+  assert.match(publicOffersSource, /reviewedSeedTemplates/);
+  assert.match(publicOffersSource, /reviewed-seed-templates/);
   assert.match(publicOffersSource, /marketplace-tab-separation/);
   assert.match(publicOffersSource, /public-offer-listing/);
   assert.match(publicOffersSource, /validateMoralTradeJsonSchemaSubset/);
@@ -3464,13 +3466,16 @@ test("offer creation form has live client validation aligned with server-require
 
 test("offer creation form exposes preset templates without weakening validation", () => {
   const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
+  const seedTemplatesSource = readRepoFile("src/lib/marketplace-seed-templates.ts");
 
-  assert.match(offerForm, /OFFER_TEMPLATES/);
-  assert.match(offerForm, /30-day pledge swap/);
-  assert.match(offerForm, /Matched donation offset/);
-  assert.match(offerForm, /Threshold offset pool/);
+  assert.match(offerForm, /REVIEWED_MARKETPLACE_SEED_TEMPLATES/);
+  assert.match(seedTemplatesSource, /30-day reciprocal pledge swap/);
+  assert.match(seedTemplatesSource, /Direct donation-offset redirect/);
+  assert.match(seedTemplatesSource, /Threshold offset pool/);
+  assert.match(seedTemplatesSource, /Bargained coordination/);
   assert.match(offerForm, /applyOfferTemplate/);
   assert.match(offerForm, /Templates focus on the launch wedge/);
+  assert.match(offerForm, /applyOfferTemplate\(template\.prefill\)/);
   assert.match(offerForm, /setOfferAction\(template\.offerAction\)/);
   assert.match(offerForm, /setBaselineStatement\(template\.baselineStatement\)/);
   assert.match(offerForm, /disabled=\{!canPublishOffer\}/);
@@ -3620,9 +3625,12 @@ test("create trade route family has stable signed-out entry points", () => {
 });
 
 test("marketplace pilot copy separates live offers from worked examples", () => {
+  const adminPage = readRepoFile("src/app/admin/page.tsx");
   const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const offerForm = readRepoFile("src/components/offers/offer-create-form.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
   const roundPage = readRepoFile("src/app/mpgf/rounds/[roundId]/page.tsx");
+  const seedTemplatesSource = readRepoFile("src/lib/marketplace-seed-templates.ts");
 
   assert.match(offersPage, /Live offers/);
   assert.match(offersPage, /Worked examples/);
@@ -3639,6 +3647,9 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /common-ground-budget-preview/);
   assert.match(offersPage, /createDonationOffsetTemplateHref/);
   assert.match(offersPage, /createPledgeSwapTemplateHref/);
+  assert.match(offersPage, /REVIEWED_MARKETPLACE_SEED_TEMPLATES/);
+  assert.match(offersPage, /Reviewed seed templates/);
+  assert.match(offersPage, /admin-reviewed donation-offset/);
   assert.match(offersPage, /Demo rounds and seed projects stay clearly labeled/);
   assert.match(offersPage, /payment capture and clearing stay disabled/);
   assert.match(offersPage, /Public offer count/);
@@ -3659,7 +3670,17 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /visibleFormatCounts/);
   assert.match(offersPage, /collection-trust-panel/);
   assert.match(roundPage, /id="common-ground-budget-preview"/);
+  assert.match(seedTemplatesSource, /REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT/);
+  assert.match(seedTemplatesSource, /REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT/);
+  assert.match(seedTemplatesSource, /promotionBehavior: "reviewed_template_only"/);
+  assert.match(seedTemplatesSource, /liveMetricEligible: false/);
+  assert.match(seedTemplatesSource, /reviewStatus: "admin_reviewed"/);
+  assert.match(offerForm, /REVIEWED_MARKETPLACE_SEED_TEMPLATES/);
+  assert.match(offerForm, /template\.reviewStatusLabel/);
+  assert.match(adminPage, /Reviewed seed template promotion controls/);
+  assert.match(adminPage, /Promotion requires reviewed live-template approval/);
   assert.match(globalCss, /\.marketplace-bootstrap-grid/);
+  assert.match(globalCss, /\.offer-template-button small/);
   assert.match(globalCss, /\.marketplace-bootstrap-projects/);
   assert.equal(offersPage.includes("Browse the narrow pilot wedge"), false);
   assert.equal(offersPage.includes("worked example s"), false);

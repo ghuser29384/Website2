@@ -4,6 +4,13 @@ import {
   validateMoralTradeJsonSchemaSubset,
   type MoralTradeJsonSchemaDocument,
 } from "@/lib/moral-trade/json-schema-subset";
+import {
+  getPublicReviewedSeedTemplateSummaries,
+  REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT,
+  REVIEWED_MARKETPLACE_SEED_TEMPLATE_COUNT,
+  REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT,
+  type PublicReviewedSeedTemplateSummary,
+} from "@/lib/marketplace-seed-templates";
 import { demoMpgfAssuranceRound, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
 import { formatMode, type OfferMode } from "@/lib/offers";
 import {
@@ -109,9 +116,13 @@ export interface PublicOffersMeta {
   query: string;
   liveOfferCount: number;
   workedExampleCount: number;
+  reviewedSeedTemplateCount: number;
+  reviewedDonationOffsetTemplateCount: number;
+  reviewedPledgeSwapTemplateCount: number;
   defaultedToWorkedExamples: boolean;
   hiddenZeroCountFacets: boolean;
   availableTabs: PublicOffersTabSummary[];
+  reviewedSeedTemplates: PublicReviewedSeedTemplateSummary[];
   availableFacets: {
     cause: PublicOfferFacet[];
     format: PublicOfferFacet[];
@@ -165,9 +176,13 @@ export interface PublicOffersFacetsPayload {
     | "query"
     | "liveOfferCount"
     | "workedExampleCount"
+    | "reviewedSeedTemplateCount"
+    | "reviewedDonationOffsetTemplateCount"
+    | "reviewedPledgeSwapTemplateCount"
     | "defaultedToWorkedExamples"
     | "hiddenZeroCountFacets"
     | "availableTabs"
+    | "reviewedSeedTemplates"
   >;
   publicContract: PublicOffersContract;
   availableFacets: PublicOffersMeta["availableFacets"];
@@ -909,12 +924,16 @@ export function buildPublicOffersCollectionPayload({
       query,
       liveOfferCount,
       workedExampleCount,
+      reviewedSeedTemplateCount: REVIEWED_MARKETPLACE_SEED_TEMPLATE_COUNT,
+      reviewedDonationOffsetTemplateCount: REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT,
+      reviewedPledgeSwapTemplateCount: REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT,
       defaultedToWorkedExamples: !requestedTab && defaultTab === "worked_examples",
       hiddenZeroCountFacets: true,
       availableTabs: buildPublicOffersTabSummaries({
         liveOfferCount,
         workedExampleCount,
       }),
+      reviewedSeedTemplates: getPublicReviewedSeedTemplateSummaries(),
       availableFacets: {
         cause: buildFacet(facetScope, (listing) => [
           listing.primaryCause,
@@ -956,9 +975,13 @@ export function buildPublicOffersFacetsPayload({
       query: collection.meta.query,
       liveOfferCount: collection.meta.liveOfferCount,
       workedExampleCount: collection.meta.workedExampleCount,
+      reviewedSeedTemplateCount: collection.meta.reviewedSeedTemplateCount,
+      reviewedDonationOffsetTemplateCount: collection.meta.reviewedDonationOffsetTemplateCount,
+      reviewedPledgeSwapTemplateCount: collection.meta.reviewedPledgeSwapTemplateCount,
       defaultedToWorkedExamples: collection.meta.defaultedToWorkedExamples,
       hiddenZeroCountFacets: collection.meta.hiddenZeroCountFacets,
       availableTabs: collection.meta.availableTabs,
+      reviewedSeedTemplates: collection.meta.reviewedSeedTemplates,
     },
     publicContract: buildPublicOffersContract({
       publicApiRoute: "/api/offers/facets",
@@ -1044,6 +1067,27 @@ function marketplaceTabsAreSeparated(tabs: readonly PublicOffersTabSummary[]) {
   );
 }
 
+function reviewedSeedTemplatesSatisfyBootstrapPath(
+  templates: readonly PublicReviewedSeedTemplateSummary[],
+) {
+  const donationOffsetCount = templates.filter((template) => template.format === "donation_offset").length;
+  const pledgeSwapCount = templates.filter((template) => template.format === "pledge_swap").length;
+
+  return (
+    donationOffsetCount >= 2 &&
+    donationOffsetCount <= 4 &&
+    pledgeSwapCount >= 2 &&
+    pledgeSwapCount <= 4 &&
+    templates.every(
+      (template) =>
+        template.reviewStatus === "admin_reviewed" &&
+        template.environment === "seed_template" &&
+        template.liveMetricEligible === false &&
+        template.promotionBehavior === "reviewed_template_only",
+    )
+  );
+}
+
 export function validatePublicOffersCollectionPayload(
   payload: PublicOffersCollectionPayload,
 ): PublicOffersValidation {
@@ -1075,6 +1119,13 @@ export function validatePublicOffersCollectionPayload(
       "Public marketplace separates live, rounds, worked examples, and demo lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
+    ),
+    validationCheck(
+      "reviewed-seed-templates",
+      "Marketplace publishes reviewed seed templates without counting them as live liquidity",
+      reviewedSeedTemplatesSatisfyBootstrapPath(payload.meta.reviewedSeedTemplates) &&
+        payload.meta.reviewedSeedTemplateCount === payload.meta.reviewedSeedTemplates.length,
+      `offset=${payload.meta.reviewedDonationOffsetTemplateCount}; pledge=${payload.meta.reviewedPledgeSwapTemplateCount}; total=${payload.meta.reviewedSeedTemplateCount}`,
     ),
     validationCheck(
       "listing-field-shape",
@@ -1230,6 +1281,13 @@ export function validatePublicOffersFacetsPayload(
       "Facet metadata separates live, rounds, worked examples, and demo lanes",
       marketplaceTabsAreSeparated(payload.meta.availableTabs),
       payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
+    ),
+    validationCheck(
+      "reviewed-seed-templates",
+      "Facet metadata publishes reviewed seed templates without live-metric eligibility",
+      reviewedSeedTemplatesSatisfyBootstrapPath(payload.meta.reviewedSeedTemplates) &&
+        payload.meta.reviewedSeedTemplateCount === payload.meta.reviewedSeedTemplates.length,
+      `offset=${payload.meta.reviewedDonationOffsetTemplateCount}; pledge=${payload.meta.reviewedPledgeSwapTemplateCount}; total=${payload.meta.reviewedSeedTemplateCount}`,
     ),
     validationCheck(
       "privacy-and-nonclaims",

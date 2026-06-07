@@ -97,6 +97,7 @@ import {
   type PaymentIntervalUnit,
   type OfferMode,
 } from "@/lib/offers";
+import { REVIEWED_MARKETPLACE_SEED_TEMPLATES } from "@/lib/marketplace-seed-templates";
 import {
   evaluateMoralTradeProtocolDraft,
   formatProtocolReviewStatus,
@@ -360,100 +361,6 @@ function offsetDonorGateStatusClass(status: DonationOffsetDonorOfRecordGateStatu
 
   return "pass";
 }
-
-const OFFER_TEMPLATES: OfferTemplate[] = [
-  {
-    title: "30-day pledge swap",
-    description: "A short, reviewable commitment in exchange for a reciprocal action.",
-    mode: "pledge",
-    offeredCause: "Animal welfare",
-    requestedCause: "Global poverty",
-    compromiseCause: "Not needed",
-    offerAction:
-      "I will follow a vegetarian diet for the review period and keep a simple public log of exceptions.",
-    requestAction:
-      "The counterparty will donate to an evidence-focused global health or poverty charity during the same period.",
-    baselineStatement:
-      "Without this trade, I would not make this short diet commitment during the next 30 days.",
-    exitCondition:
-      "Either side can pause before the review period starts; after it starts, missed evidence creates an unresolved record rather than a completed one.",
-    notes:
-      "This is a voluntary pledge swap. Each side should be free to decline, pause, or renegotiate if the burden becomes materially different from what was stated.",
-    offerImpact: "7",
-    minCounterpartyImpact: "6",
-    verification: "Public pledge",
-    duration: "30 days",
-    paymentIntervalUnit: "none",
-    paymentIntervalValue: "1",
-    trustLevel: "3",
-  },
-  {
-    title: "Matched donation offset",
-    description: "Redirect opposed donations to a named compromise destination with evidence rules.",
-    mode: "offset",
-    offeredCause: "Democracy",
-    requestedCause: "Global poverty",
-    compromiseCause: "Global poverty",
-    offerAction:
-      "I will redirect a real planned donation away from my baseline opposed cause and into the named compromise destination.",
-    requestAction:
-      "The counterparty will redirect the matched portion of their opposed donation into the same compromise destination.",
-    baselineStatement:
-      "I have a real baseline intention to make the opposed donation unless this offset clears review.",
-    exitCondition:
-      "If the match is incomplete by the deadline, the unmatched surplus rule controls and the record stays unresolved until evidence is reviewed.",
-    notes:
-      "This offset should only be used for a genuine baseline intention. It is not a threat, custody promise, tax claim, or legal escrow arrangement.",
-    offerImpact: "7",
-    minCounterpartyImpact: "7",
-    verification: "Manual review required",
-    duration: "3 months",
-    paymentIntervalUnit: "none",
-    paymentIntervalValue: "1",
-    trustLevel: "4",
-    offset: {
-      baselineAmountUsd: "1000",
-      requestedMatchingAmountUsd: "1000",
-      baselineOpposedCause: "Democracy",
-      requestedOpposedCause: "Gun rights",
-      participationMode: "direct",
-      offsetRatio: "1",
-    },
-  },
-  {
-    title: "Threshold offset pool",
-    description: "A pooled donation offset with a named threshold and review gate.",
-    mode: "offset",
-    offeredCause: "Democracy",
-    requestedCause: "Global poverty",
-    compromiseCause: "Not needed",
-    offerAction:
-      "I will join a pooled offset and redirect my baseline opposed donation if the pool reaches the assurance threshold.",
-    requestAction:
-      "Counterparties on the other side will redirect matching opposed donations into the same compromise destination.",
-    baselineStatement:
-      "The pool only counts commitments attached to a real baseline donation intention and reviewable evidence.",
-    exitCondition:
-      "If the assurance threshold is not met by the deadline, the pool closes or follows its published unmatched-surplus rule.",
-    notes:
-      "This is a thresholded offset pool, not custody, escrow, tax advice, or a guarantee that funds have moved before evidence review.",
-    offerImpact: "7",
-    minCounterpartyImpact: "7",
-    verification: "Manual review required",
-    duration: "3 months",
-    paymentIntervalUnit: "none",
-    paymentIntervalValue: "1",
-    trustLevel: "4",
-    offset: {
-      baselineAmountUsd: "500",
-      requestedMatchingAmountUsd: "500",
-      baselineOpposedCause: "Democracy",
-      requestedOpposedCause: "Gun rights",
-      participationMode: "pool",
-      offsetRatio: "1",
-    },
-  },
-];
 
 const EXIT_CONDITION_TEMPLATE_SUGGESTIONS: TextareaTemplateSuggestion[] = [
   {
@@ -2477,15 +2384,19 @@ export function OfferCreateForm({
           </p>
         </div>
         <div className="offer-template-grid">
-          {OFFER_TEMPLATES.map((template) => (
+          {REVIEWED_MARKETPLACE_SEED_TEMPLATES.map((template) => (
             <button
               className="offer-template-button"
-              key={template.title}
+              key={template.id}
               type="button"
-              onClick={() => applyOfferTemplate(template)}
+              onClick={() => applyOfferTemplate(template.prefill)}
             >
-              <strong>{template.title}</strong>
-              <span>{template.description}</span>
+              <strong>{template.prefill.title}</strong>
+              <span>{template.publicSummary}</span>
+              <small>
+                {template.formatLabel} · {template.reviewStatusLabel} ·{" "}
+                {template.environmentLabel}
+              </small>
             </button>
           ))}
         </div>

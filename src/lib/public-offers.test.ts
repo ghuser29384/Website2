@@ -30,10 +30,18 @@ test("public offers collection defaults to worked examples when live inventory i
   assert.equal(payload.meta.defaultedToWorkedExamples, true);
   assert.equal(payload.meta.liveOfferCount, 0);
   assert.equal(payload.meta.workedExampleCount, 8);
+  assert.equal(payload.meta.reviewedSeedTemplateCount, 4);
+  assert.equal(payload.meta.reviewedDonationOffsetTemplateCount, 2);
+  assert.equal(payload.meta.reviewedPledgeSwapTemplateCount, 2);
   assert.deepEqual(
     payload.meta.availableTabs.map((tab) => tab.value),
     ["live", "rounds", "worked_examples", "demo"],
   );
+  assert.deepEqual(
+    payload.meta.reviewedSeedTemplates.map((template) => template.id),
+    ["pure-opposed-cause", "market-mediated", "reciprocal-mixed", "bargained-coordination"],
+  );
+  assert.ok(payload.meta.reviewedSeedTemplates.every((template) => !template.liveMetricEligible));
   assert.ok(
     payload.meta.availableTabs
       .filter((tab) => tab.value !== "live")
@@ -158,6 +166,7 @@ test("public offers collection separates rounds and demo lanes from offer listin
   assert.equal(demoPayload.meta.tab, "demo");
   assert.equal(roundsPayload.items.length, 0);
   assert.equal(demoPayload.items.length, 0);
+  assert.equal(roundsPayload.meta.reviewedSeedTemplateCount, 4);
   assert.equal(roundsPayload.meta.availableTabs.find((tab) => tab.value === "rounds")?.count, 1);
   assert.ok(
     (demoPayload.meta.availableTabs.find((tab) => tab.value === "demo")?.count ?? 0) > 0,
@@ -201,6 +210,8 @@ test("public offer facets endpoint payload hides zero-count options", () => {
     payload.meta.availableTabs.map((tab) => tab.value),
     ["live", "rounds", "worked_examples", "demo"],
   );
+  assert.equal(payload.meta.reviewedSeedTemplateCount, 4);
+  assert.ok(payload.meta.reviewedSeedTemplates.every((template) => !template.liveMetricEligible));
   assert.ok(allFacets.length > 0);
   assert.ok(allFacets.every((facet) => facet.count > 0));
 });
@@ -219,6 +230,12 @@ test("public offers API route returns validator-backed collection JSON", async (
   assert.deepEqual(
     body.meta.availableTabs.map((tab: { value: string }) => tab.value),
     ["live", "rounds", "worked_examples", "demo"],
+  );
+  assert.equal(body.meta.reviewedSeedTemplateCount, 4);
+  assert.ok(
+    body.meta.reviewedSeedTemplates.every(
+      (template: { liveMetricEligible: boolean }) => template.liveMetricEligible === false,
+    ),
   );
   assert.equal(body.publicContract.publicApiRoute, "/api/offers");
   assert.equal(
@@ -282,6 +299,7 @@ test("public offer facets API route returns validator-backed facets JSON", async
     body.meta.availableTabs.map((tab: { value: string }) => tab.value),
     ["live", "rounds", "worked_examples", "demo"],
   );
+  assert.equal(body.meta.reviewedSeedTemplateCount, 4);
   assert.equal(body.publicContract.publicApiRoute, "/api/offers/facets");
   assert.equal(body.validation.status, "pass");
   assert.deepEqual(body.blockers, []);

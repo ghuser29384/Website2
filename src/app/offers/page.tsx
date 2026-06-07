@@ -17,6 +17,11 @@ import {
 } from "@/lib/baseline-bonds";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffersPage, OFFERS_PAGE_SIZE, type OfferRecord } from "@/lib/app-data";
+import {
+  REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT,
+  REVIEWED_MARKETPLACE_SEED_TEMPLATES,
+  REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT,
+} from "@/lib/marketplace-seed-templates";
 import { demoMpgfAssuranceRound, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import { formatMode } from "@/lib/offers";
@@ -612,6 +617,12 @@ function getCreateSimilarHref(listing: MarketplaceListing, viewerPresent: boolea
   return viewerPresent ? target : `/signup?returnTo=${encodeURIComponent(target)}`;
 }
 
+function getSeedTemplateHref(templateId: string, viewerPresent: boolean) {
+  const target = `/offers/new?template=${encodeURIComponent(templateId)}`;
+
+  return viewerPresent ? target : `/signup?returnTo=${encodeURIComponent(target)}`;
+}
+
 function getCauseGroup(listing: MarketplaceListing) {
   return (
     CAUSE_GROUPS.find((group) => listingMatchesCause(listing, group.label)) ?? {
@@ -651,6 +662,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const seedRoundProjects = demoMpgfPublicGoodsCampaigns
     .filter((campaign) => campaign.reviewStatus === "approved")
     .slice(0, 7);
+  const seedTemplates = REVIEWED_MARKETPLACE_SEED_TEMPLATES;
+  const seedTemplateCount: number = seedTemplates.length;
   const seedRoundCount = demoMpgfAssuranceRound.id ? 1 : 0;
   const seedRoundHref = `/mpgf/rounds/${demoMpgfAssuranceRound.id}#common-ground-budget-preview`;
   const createTemplateHref = viewer ? "/offers/new" : "/signup?returnTo=/offers/new";
@@ -962,6 +975,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <strong>{seedRoundProjects.length}</strong> demo{" "}
                 {seedRoundProjects.length === 1 ? "record" : "records"}
               </span>
+              <span>
+                <strong>{seedTemplateCount}</strong> reviewed{" "}
+                {seedTemplateCount === 1 ? "template" : "templates"}
+              </span>
             </div>
           </section>
 
@@ -1082,9 +1099,23 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <p className="eyebrow">Template lane</p>
               <h3>Create from template</h3>
               <p>
-                Donation-offset and bounded pledge-swap templates are visible, but remain draft or
-                preview-only until review and later release gates approve reliance.
+                {REVIEWED_DONATION_OFFSET_SEED_TEMPLATE_COUNT} admin-reviewed donation-offset
+                templates and {REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT} pledge-swap templates are
+                visible, but remain draft or preview-only until review and later release gates
+                approve reliance.
               </p>
+              <ul className="marketplace-bootstrap-projects" aria-label="Reviewed seed templates">
+                {seedTemplates.map((template) => (
+                  <li key={template.id}>
+                    <span>
+                      <Link href={getSeedTemplateHref(template.id, Boolean(viewer))}>
+                        {template.prefill.title}
+                      </Link>
+                    </span>
+                    <strong>{template.formatLabel}</strong>
+                  </li>
+                ))}
+              </ul>
               <div className="marketplace-bootstrap-actions">
                 <Link className="button button-primary button-mini" href={createTemplateHref}>
                   Start template

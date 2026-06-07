@@ -24,6 +24,7 @@ import {
 } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
+import { REVIEWED_MARKETPLACE_SEED_TEMPLATES } from "@/lib/marketplace-seed-templates";
 import {
   evidenceSchemaFromJson,
   formatPerformanceBondAmount,
@@ -732,6 +733,43 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           </section>
         ) : (
           <>
+            <section className="section section-white">
+              <div className="section-head">
+                <p className="eyebrow">Marketplace bootstrap</p>
+                <h2>Reviewed seed template promotion controls</h2>
+                <p>
+                  Seed templates are operator-reviewed bootstrap records. They remain excluded from
+                  live offer, agreement, payment, and moral-trade volume metrics unless promoted by
+                  a separate reviewed live-template approval.
+                </p>
+              </div>
+              <div className="data-grid">
+                {REVIEWED_MARKETPLACE_SEED_TEMPLATES.map((template) => (
+                  <article className="panel data-card" key={template.id}>
+                    <p className="detail-kicker">
+                      {template.formatLabel} | {template.reviewStatusLabel}
+                    </p>
+                    <h3>{template.prefill.title}</h3>
+                    <p className="route-text">{template.reviewSummary}</p>
+                    <ul className="trust-check-list">
+                      <li>{template.environmentLabel}</li>
+                      <li>{template.promotionControlLabel}</li>
+                      <li>Live metric eligible: {template.liveMetricEligible ? "yes" : "no"}</li>
+                      <li>Review decision: {template.reviewDecisionId}</li>
+                    </ul>
+                    <div className="hero-actions">
+                      <Link className="button button-secondary button-mini" href={template.templateHref}>
+                        Open template
+                      </Link>
+                      <button className="button button-secondary button-mini" type="button" disabled>
+                        Promotion requires reviewed live-template approval
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
             <section className="section section-white">
               <div className="section-head">
                 <p className="eyebrow">Privacy operations</p>
