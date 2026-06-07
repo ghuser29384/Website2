@@ -4603,6 +4603,227 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_impact_claim_methodology_policies: {
+        Row: {
+          id: string;
+          policy_snapshot_id: string;
+          policy_version: string;
+          claim_type:
+            | "transfer_metric"
+            | "payout_metric"
+            | "sponsor_leverage_metric"
+            | "outcome_claim"
+            | "cost_effectiveness_claim"
+            | "causal_impact_claim"
+            | "moral_value_claim";
+          status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          evidence_required_bool: boolean;
+          uncertainty_disclosure_required_bool: boolean;
+          transfer_separation_required_bool: boolean;
+          content_moderation_required_bool: boolean;
+          reviewer_quality_required_bool: boolean;
+          privileged_action_required_bool: boolean;
+          audit_integrity_required_bool: boolean;
+          public_metric_suppression_required_bool: boolean;
+          min_evidence_refs: number;
+          methodology_hash: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          policy_snapshot_id: string;
+          policy_version?: string;
+          claim_type:
+            | "transfer_metric"
+            | "payout_metric"
+            | "sponsor_leverage_metric"
+            | "outcome_claim"
+            | "cost_effectiveness_claim"
+            | "causal_impact_claim"
+            | "moral_value_claim";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          evidence_required_bool?: boolean;
+          uncertainty_disclosure_required_bool?: boolean;
+          transfer_separation_required_bool?: boolean;
+          content_moderation_required_bool?: boolean;
+          reviewer_quality_required_bool?: boolean;
+          privileged_action_required_bool?: boolean;
+          audit_integrity_required_bool?: boolean;
+          public_metric_suppression_required_bool?: boolean;
+          min_evidence_refs?: number;
+          methodology_hash: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          policy_snapshot_id?: string;
+          policy_version?: string;
+          claim_type?:
+            | "transfer_metric"
+            | "payout_metric"
+            | "sponsor_leverage_metric"
+            | "outcome_claim"
+            | "cost_effectiveness_claim"
+            | "causal_impact_claim"
+            | "moral_value_claim";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          evidence_required_bool?: boolean;
+          uncertainty_disclosure_required_bool?: boolean;
+          transfer_separation_required_bool?: boolean;
+          content_moderation_required_bool?: boolean;
+          reviewer_quality_required_bool?: boolean;
+          privileged_action_required_bool?: boolean;
+          audit_integrity_required_bool?: boolean;
+          public_metric_suppression_required_bool?: boolean;
+          min_evidence_refs?: number;
+          methodology_hash?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_impact_claim_records: {
+        Row: {
+          id: string;
+          methodology_policy_ref: string;
+          surface:
+            | "offer_detail"
+            | "public_dashboard"
+            | "transparency_report"
+            | "round_summary"
+            | "recipient_project_page";
+          claim_type:
+            | "transfer_metric"
+            | "payout_metric"
+            | "sponsor_leverage_metric"
+            | "outcome_claim"
+            | "cost_effectiveness_claim"
+            | "causal_impact_claim"
+            | "moral_value_claim";
+          publication_status: "draft" | "under_review" | "reviewed" | "published" | "blocked" | "stale" | "superseded";
+          claim_subject_ref: string;
+          evidence_refs: string[];
+          evidence_claim_types: string[];
+          uncertainty_disclosure: string;
+          transfer_vs_impact_label: string;
+          gross_transfer_amount_displayed_bool: boolean;
+          net_recipient_payout_displayed_bool: boolean;
+          sponsor_leverage_displayed_bool: boolean;
+          payment_evidence_used_as_impact_bool: boolean;
+          impact_claim_text_public_bool: boolean;
+          content_moderation_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          privileged_action_record_id: string | null;
+          privileged_action_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          audit_integrity_checkpoint_id: string | null;
+          audit_integrity_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          public_metric_suppression_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          private_evidence_public_bool: boolean;
+          claim_hash: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          expires_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          methodology_policy_ref: string;
+          surface:
+            | "offer_detail"
+            | "public_dashboard"
+            | "transparency_report"
+            | "round_summary"
+            | "recipient_project_page";
+          claim_type:
+            | "transfer_metric"
+            | "payout_metric"
+            | "sponsor_leverage_metric"
+            | "outcome_claim"
+            | "cost_effectiveness_claim"
+            | "causal_impact_claim"
+            | "moral_value_claim";
+          publication_status?: "draft" | "under_review" | "reviewed" | "published" | "blocked" | "stale" | "superseded";
+          claim_subject_ref?: string;
+          evidence_refs?: string[];
+          evidence_claim_types?: string[];
+          uncertainty_disclosure?: string;
+          transfer_vs_impact_label?: string;
+          gross_transfer_amount_displayed_bool?: boolean;
+          net_recipient_payout_displayed_bool?: boolean;
+          sponsor_leverage_displayed_bool?: boolean;
+          payment_evidence_used_as_impact_bool?: boolean;
+          impact_claim_text_public_bool?: boolean;
+          content_moderation_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          privileged_action_record_id?: string | null;
+          privileged_action_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          audit_integrity_checkpoint_id?: string | null;
+          audit_integrity_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          public_metric_suppression_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          private_evidence_public_bool?: boolean;
+          claim_hash: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          methodology_policy_ref?: string;
+          surface?:
+            | "offer_detail"
+            | "public_dashboard"
+            | "transparency_report"
+            | "round_summary"
+            | "recipient_project_page";
+          claim_type?:
+            | "transfer_metric"
+            | "payout_metric"
+            | "sponsor_leverage_metric"
+            | "outcome_claim"
+            | "cost_effectiveness_claim"
+            | "causal_impact_claim"
+            | "moral_value_claim";
+          publication_status?: "draft" | "under_review" | "reviewed" | "published" | "blocked" | "stale" | "superseded";
+          claim_subject_ref?: string;
+          evidence_refs?: string[];
+          evidence_claim_types?: string[];
+          uncertainty_disclosure?: string;
+          transfer_vs_impact_label?: string;
+          gross_transfer_amount_displayed_bool?: boolean;
+          net_recipient_payout_displayed_bool?: boolean;
+          sponsor_leverage_displayed_bool?: boolean;
+          payment_evidence_used_as_impact_bool?: boolean;
+          impact_claim_text_public_bool?: boolean;
+          content_moderation_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          privileged_action_record_id?: string | null;
+          privileged_action_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          audit_integrity_checkpoint_id?: string | null;
+          audit_integrity_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          public_metric_suppression_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          private_evidence_public_bool?: boolean;
+          claim_hash?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       risk_signals: {
         Row: {
           id: string;
@@ -5927,6 +6148,7 @@ export interface Database {
             | "reviewer_quality"
             | "anti_enumeration"
             | "privacy_disclosure"
+            | "impact_claim_methodology"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -5967,6 +6189,7 @@ export interface Database {
             | "reviewer_quality"
             | "anti_enumeration"
             | "privacy_disclosure"
+            | "impact_claim_methodology"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -6006,6 +6229,7 @@ export interface Database {
             | "reviewer_quality"
             | "anti_enumeration"
             | "privacy_disclosure"
+            | "impact_claim_methodology"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"

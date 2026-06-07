@@ -2116,6 +2116,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const privacyGovernanceSource = readRepoFile(
     "src/lib/moral-trade/privacy-governance.ts",
   );
+  const impactClaimSource = readRepoFile(
+    "src/lib/moral-trade/impact-claims.ts",
+  );
   const productionReadinessSource = readRepoFile(
     "src/lib/moral-trade/production-readiness.ts",
   );
@@ -2193,6 +2196,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const privacyGovernanceMigration = readRepoFile(
     "supabase/migrations/20260607_zzzzzzzzz_moral_trade_privacy_governance_records.sql",
   );
+  const impactClaimMigration = readRepoFile(
+    "supabase/migrations/20260607_zzzzzzzzzz_moral_trade_impact_claim_records.sql",
+  );
   const recipientDestinationMigration = readRepoFile(
     "supabase/migrations/20260607_zzzz_moral_trade_recipient_destination_records.sql",
   );
@@ -2238,6 +2244,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const privacyGovernanceContractRoute = readRepoFile(
     "src/app/api/moral-trade/privacy-governance/contract/route.ts",
+  );
+  const impactClaimContractRoute = readRepoFile(
+    "src/app/api/moral-trade/impact-claims/contract/route.ts",
   );
   const productionReadinessContractRoute = readRepoFile(
     "src/app/api/moral-trade/production-readiness/contract/route.ts",
@@ -2498,6 +2507,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(privacyGovernanceSource, /No private disclosure without a reconstructible ledger/);
   assert.match(privacyGovernanceSource, /raw_private_artifact_returned/);
   assert.match(privacyGovernanceSource, /access_log_missing/);
+  assert.match(impactClaimSource, /getMoralTradeImpactClaimContract/);
+  assert.match(impactClaimSource, /evaluateMoralTradeImpactClaim/);
+  assert.match(impactClaimSource, /moral_trade_impact_claim_methodology_policies/);
+  assert.match(impactClaimSource, /moral_trade_impact_claim_records/);
+  assert.match(impactClaimSource, /Transfers are not impact/);
+  assert.match(impactClaimSource, /transfer_metric_used_as_impact/);
+  assert.match(impactClaimSource, /payment_evidence_used_as_impact/);
+  assert.match(impactClaimSource, /uncertainty_disclosure_missing/);
   assert.match(productionReadinessSource, /getMoralTradeProductionReadinessContract/);
   assert.match(productionReadinessSource, /evaluateMoralTradeProductionReadiness/);
   assert.match(productionReadinessSource, /moral_trade_account_security_events/);
@@ -2551,6 +2568,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(privacyGovernanceMigration, /privacy_policy_ref/);
   assert.match(privacyGovernanceMigration, /purpose_limited_bool/);
   assert.match(privacyGovernanceMigration, /raw_private_artifact_returned_bool/);
+  assert.match(impactClaimMigration, /moral_trade_impact_claim_methodology_policies/);
+  assert.match(impactClaimMigration, /moral_trade_impact_claim_records/);
+  assert.match(impactClaimMigration, /impact_claim_methodology/);
+  assert.match(impactClaimMigration, /payment_evidence_used_as_impact_bool/);
+  assert.match(impactClaimMigration, /uncertainty_disclosure/);
+  assert.match(impactClaimMigration, /transfer_vs_impact_label/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_registry_entries/);
   assert.match(recipientDestinationMigration, /moral_trade_payment_destinations/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_destination_reviews/);
@@ -2579,6 +2602,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /moral_trade_privacy_disclosure_reviews/);
   assert.match(schemaSource, /privacy_policy_ref/);
   assert.match(schemaSource, /raw_private_artifact_returned_bool/);
+  assert.match(schemaSource, /moral_trade_impact_claim_methodology_policies/);
+  assert.match(schemaSource, /moral_trade_impact_claim_records/);
+  assert.match(schemaSource, /impact_claim_methodology/);
+  assert.match(schemaSource, /payment_evidence_used_as_impact_bool/);
   assert.match(schemaSource, /moral_trade_recipient_registry_entries/);
   assert.match(schemaSource, /moral_trade_payment_destinations/);
   assert.match(schemaSource, /moral_trade_recipient_destination_reviews/);
@@ -2980,6 +3007,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_reviewer_quality_contract/);
   assert.match(apiContractSource, /moral_trade_anti_enumeration_contract/);
   assert.match(apiContractSource, /moral_trade_privacy_governance_contract/);
+  assert.match(apiContractSource, /moral_trade_impact_claim_contract/);
   assert.match(apiContractSource, /moral_trade_production_readiness_contract/);
   assert.match(apiContractSource, /provenance-schema-validator/);
   assert.match(apiContractSource, /moral_trade_schema_registry/);
@@ -3040,6 +3068,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /privacy_governance_contract_response/);
   assert.match(apiContractProfile, /moral_trade_privacy_governance_contract/);
   assert.match(apiContractProfile, /raw private artifacts, exact wishes, contact details/);
+  assert.match(apiContractProfile, /impact_claim_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_impact_claim_contract/);
+  assert.match(apiContractProfile, /private evidence, reviewer notes, methodology payloads/);
   assert.match(apiContractProfile, /production_readiness_contract_response/);
   assert.match(apiContractProfile, /moral_trade_production_readiness_contract/);
   assert.match(apiContractProfile, /account-security events, backup contents, configuration values/);
@@ -3219,6 +3250,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /privacyGovernanceContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /privacyGovernanceContract\.surfaces/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/privacy-governance\/contract/);
+  assert.match(technicalSpecPage, /Impact-claim contract/);
+  assert.match(technicalSpecPage, /impactClaimContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /impactClaimContract\.claimTypes/);
+  assert.match(technicalSpecPage, /\/api\/moral-trade\/impact-claims\/contract/);
   assert.match(technicalSpecPage, /Production readiness contract/);
   assert.match(technicalSpecPage, /productionReadinessContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/production-readiness\/contract/);
@@ -3383,6 +3418,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /privacyGovernanceValidation/);
   assert.match(healthRoute, /privacyGovernanceSurfaces/);
   assert.match(healthRoute, /privacyGovernanceFirstClassRecordTables/);
+  assert.match(healthRoute, /impactClaimValidation/);
+  assert.match(healthRoute, /impactClaimClaimTypes/);
+  assert.match(healthRoute, /impactClaimFirstClassRecordTables/);
   assert.match(healthRoute, /productionReadinessValidation/);
   assert.match(healthRoute, /productionReadinessControlKeys/);
   assert.match(healthRoute, /productionReadinessFirstClassRecordTables/);
@@ -3500,6 +3538,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(privacyGovernanceContractRoute, /validateMoralTradePrivacyGovernanceContract/);
   assert.match(privacyGovernanceContractRoute, /surfaces/);
   assert.match(privacyGovernanceContractRoute, /privacyGovernanceSampleEvaluationStatuses/);
+  assert.match(impactClaimContractRoute, /validateMoralTradeImpactClaimContract/);
+  assert.match(impactClaimContractRoute, /claimTypes/);
+  assert.match(impactClaimContractRoute, /impactClaimSampleEvaluationStatuses/);
   assert.match(productionReadinessContractRoute, /validateMoralTradeProductionReadinessContract/);
   assert.match(productionReadinessContractRoute, /firstClassRecordTables/);
   assert.match(productionReadinessContractRoute, /productionReadinessSampleEvaluationStatuses/);

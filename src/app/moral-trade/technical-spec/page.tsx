@@ -67,6 +67,10 @@ import {
   validateMoralTradePrivacyGovernanceContract,
 } from "@/lib/moral-trade/privacy-governance";
 import {
+  getMoralTradeImpactClaimContract,
+  validateMoralTradeImpactClaimContract,
+} from "@/lib/moral-trade/impact-claims";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -190,6 +194,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const privacyGovernanceContract = getMoralTradePrivacyGovernanceContract();
   const privacyGovernanceValidation =
     validateMoralTradePrivacyGovernanceContract(privacyGovernanceContract);
+  const impactClaimContract = getMoralTradeImpactClaimContract();
+  const impactClaimValidation =
+    validateMoralTradeImpactClaimContract(impactClaimContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -289,6 +296,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     reviewerQualityValidation,
     antiEnumerationValidation,
     privacyGovernanceValidation,
+    impactClaimValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -415,6 +423,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Privacy governance",
       status: privacyGovernanceValidation.status,
       summary: `${privacyGovernanceContract.surfaces.length} disclosure surface(s), ${privacyGovernanceContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: impactClaimValidation.blockers.length,
+      family: "Policy inputs",
+      href: "/api/moral-trade/impact-claims/contract",
+      label: "Impact claims",
+      status: impactClaimValidation.status,
+      summary: `${impactClaimContract.claimTypes.length} claim type(s), ${impactClaimContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: productionReadinessValidation.blockers.length,
@@ -1512,6 +1528,74 @@ export default async function MoralTradeTechnicalSpecPage() {
               <h3>Fail-closed statuses</h3>
               <ul className="clean-list">
                 {privacyGovernanceContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="impact-claim-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Impact-claim contract</p>
+            <h2 id="impact-claim-contract-heading">
+              Transfers, payouts, and sponsor leverage cannot be published as causal impact.
+            </h2>
+            <p>
+              Moraltrade60 requires gross transferred amount, net recipient payout, sponsor
+              leverage, moral-trade volume, outcome, cost-effectiveness, and moral-value claims to
+              stay distinct. This contract makes impact claims first-class reviewed records with
+              frozen methodology, claim-typed evidence, uncertainty disclosure, moderation,
+              reviewer-quality checks, privileged publication approval, and audit/public-metric
+              controls before public impact publication.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Impact claims {impactClaimContract.version}
+              </p>
+              <h3>Status {impactClaimValidation.status}</h3>
+              <p>
+                {impactClaimValidation.checks.length} check(s),{" "}
+                {impactClaimValidation.blockers.length} blocker(s),{" "}
+                {impactClaimContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/impact-claims/contract">
+              Open impact-claim JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Claim types</h3>
+              <ul className="clean-list">
+                {impactClaimContract.claimTypes.map((claimType) => (
+                  <li key={claimType}>{claimType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Evidence types</h3>
+              <ul className="clean-list">
+                {impactClaimContract.evidenceClaimTypes.map((claimType) => (
+                  <li key={claimType}>{claimType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {impactClaimContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {impactClaimContract.failClosedStatuses.map((status) => (
                   <li key={status}>{status.replaceAll("_", " ")}</li>
                 ))}
               </ul>

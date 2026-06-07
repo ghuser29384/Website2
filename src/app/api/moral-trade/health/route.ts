@@ -44,6 +44,10 @@ import {
   validateMoralTradePrivacyGovernanceContract,
 } from "@/lib/moral-trade/privacy-governance";
 import {
+  getMoralTradeImpactClaimContract,
+  validateMoralTradeImpactClaimContract,
+} from "@/lib/moral-trade/impact-claims";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -178,6 +182,9 @@ export async function GET(request: Request) {
   const privacyGovernanceContract = getMoralTradePrivacyGovernanceContract();
   const privacyGovernanceValidation =
     validateMoralTradePrivacyGovernanceContract(privacyGovernanceContract);
+  const impactClaimContract = getMoralTradeImpactClaimContract();
+  const impactClaimValidation =
+    validateMoralTradeImpactClaimContract(impactClaimContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -273,6 +280,7 @@ export async function GET(request: Request) {
       reviewerQualityValidation.status === "pass" &&
       antiEnumerationValidation.status === "pass" &&
       privacyGovernanceValidation.status === "pass" &&
+      impactClaimValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
@@ -308,6 +316,7 @@ export async function GET(request: Request) {
     reviewerQualityValidation,
     antiEnumerationValidation,
     privacyGovernanceValidation,
+    impactClaimValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -492,6 +501,28 @@ export async function GET(request: Request) {
       ),
       privacyGovernanceContractTests:
         privacyGovernanceContract.contractTests,
+      impactClaimContractVersion:
+        impactClaimContract.version,
+      impactClaimSurfaces:
+        impactClaimContract.surfaces,
+      impactClaimClaimTypes:
+        impactClaimContract.claimTypes,
+      impactClaimEvidenceClaimTypes:
+        impactClaimContract.evidenceClaimTypes,
+      impactClaimFailClosedStatuses:
+        impactClaimContract.failClosedStatuses,
+      impactClaimFirstClassRecordTables:
+        impactClaimContract.firstClassRecordTables,
+      impactClaimPolicySnapshotSubjects:
+        impactClaimContract.policySnapshotSubjects,
+      impactClaimSampleEvaluationStatuses: Object.fromEntries(
+        impactClaimContract.sampleEvaluations.map((evaluation) => [
+          evaluation.claimType,
+          evaluation.status,
+        ]),
+      ),
+      impactClaimContractTests:
+        impactClaimContract.contractTests,
       productionReadinessContractVersion:
         productionReadinessContract.version,
       productionReadinessControlKeys:

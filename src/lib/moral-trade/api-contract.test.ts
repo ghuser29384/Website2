@@ -89,6 +89,14 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "moral_trade_impact_claim_contract" &&
+        route.path === "/api/moral-trade/impact-claims/contract" &&
+        route.responseSchema === "impact_claim_contract_response",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "moral_trade_production_readiness_contract" &&
         route.path === "/api/moral-trade/production-readiness/contract" &&
         route.responseSchema === "production_readiness_contract_response",
@@ -617,6 +625,7 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "reviewer_quality_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "anti_enumeration_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "privacy_governance_contract_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "impact_claim_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "production_readiness_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "recipient_destination_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "schema_registry_response"));
@@ -654,6 +663,11 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
     profile.schemaDefinitions
       .find((schema) => schema.key === "moral_trade_aggregate_health_response")
       ?.fields.some((field) => field.key === "privacyGovernanceValidation"),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "moral_trade_aggregate_health_response")
+      ?.fields.some((field) => field.key === "impactClaimValidation"),
   );
   assert.ok(
     profile.schemaDefinitions
