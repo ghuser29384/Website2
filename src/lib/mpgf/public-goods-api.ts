@@ -26,6 +26,8 @@ import {
   MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CHOICE_POLICY,
   MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY,
   MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES,
 } from "./public-goods-common-ground-budget";
 import {
   MPGF_PUBLIC_GOODS_COALITION_ROUTING_POLICY,
@@ -468,6 +470,8 @@ export function buildMpgfPublicGoodsRoundApi({
         fallbackPolicy: MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY,
         previewPath: `/api/mpgf/rounds/${round.id}/common-ground-budget-preview`,
         releaseStage: "sandbox_calculation",
+        releaseGatePolicy: MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY,
+        releaseGateRequirementCount: MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES.length,
         paymentCaptureAllowed: false,
         stateMutation: "none_preview_only",
         budgetPeriodOptions: ["monthly", "round_limited"],
@@ -475,6 +479,7 @@ export function buildMpgfPublicGoodsRoundApi({
         participantSurplusConfirmationRequired: true,
         eligibleProjectSetHashRequired: true,
         fallbackRerouteLimitedToFrozenEligibleSet: true,
+        laterStageTracksFailClosed: ["real_money_capture", "donation_offsets", "pledge_swaps"],
         noGlobalMoralRanking: true,
       },
       thresholdCalibration: thresholdCalibration

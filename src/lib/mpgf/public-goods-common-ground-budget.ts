@@ -11,6 +11,60 @@ export const MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CHOICE_POLICY =
 export const MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY =
   "frozen_eligible_set_then_carry_forward_release_hold_or_manual_review_v1";
 
+export const MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY =
+  "common_ground_budget_sandbox_requirement_results_v1";
+
+export const MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES = [
+  "dry_run_calculation_bundle",
+  "route_health_baseline",
+  "privacy_review",
+  "anti_threat_review",
+  "payment_replay_tests",
+  "evidence_challenge_tests",
+  "reviewer_conflict_tests",
+  "emergency_pause_test",
+  "neutral_reviewer_approval",
+  "deployment_config_snapshot",
+  "schema_migration_dry_run",
+  "rollback_plan_test",
+  "environment_data_isolation_check",
+  "donation_offset_lock_confirmation_test",
+  "pledge_swap_performance_terms_test",
+  "commitment_inventory_double_count_test",
+  "atomic_settlement_group_test",
+  "pledge_swap_synchronized_performance_test",
+  "compensated_moral_action_terms_test",
+  "negative_commitment_substitution_test",
+  "irreversible_action_gate_test",
+  "donor_of_record_tax_receipt_test",
+  "third_party_obligation_assessment_test",
+  "baseline_integrity_manufacturing_test",
+  "compensated_action_classification_test",
+  "agreement_amendment_confirmation_test",
+  "anti_corruption_improper_inducement_test",
+  "representative_authority_verification_test",
+  "protected_reporting_non_suppression_test",
+  "civil_rights_discrimination_test",
+  "participant_autonomy_undue_influence_test",
+  "confidentiality_privacy_rights_test",
+  "evidence_authenticity_synthetic_media_test",
+  "financial_crime_fraud_screening_test",
+  "agreement_non_transferability_test",
+  "regulated_goods_hazardous_activity_test",
+  "cyber_abuse_digital_systems_integrity_test",
+  "pledge_performance_bond_neutral_forfeiture_test",
+] as const;
+
+const MPGF_COMMON_GROUND_BUDGET_SANDBOX_REQUIRED_REQUIREMENTS = new Set<
+  (typeof MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES)[number]
+>([
+  "dry_run_calculation_bundle",
+  "route_health_baseline",
+  "privacy_review",
+  "anti_threat_review",
+  "environment_data_isolation_check",
+]);
+
 export type MpgfCommonGroundBudgetPeriod = "monthly" | "round_limited";
 export type MpgfCommonGroundBudgetBaselineConfidence = "low" | "medium" | "high";
 export type MpgfCommonGroundBudgetStance = "strong" | "weak" | "dissent" | "abstain";
@@ -20,6 +74,68 @@ export type MpgfCommonGroundBudgetActivationState =
   | "ready_for_confirmation"
   | "preview_only_confirmation_required"
   | "blocked";
+
+export type MpgfCommonGroundBudgetReleaseGateRequirementCode =
+  (typeof MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES)[number];
+
+export interface MpgfCommonGroundBudgetReleaseGateRequirementResult {
+  id: string;
+  requirementCode: MpgfCommonGroundBudgetReleaseGateRequirementCode;
+  requirementGroup:
+    | "calculation"
+    | "route"
+    | "privacy"
+    | "anti_threat"
+    | "payment"
+    | "evidence"
+    | "reviewer"
+    | "deployment"
+    | "migration"
+    | "environment"
+    | "donation_offset"
+    | "pledge_swap"
+    | "legal"
+    | "safety"
+    | "security";
+  appliesToReleaseStage: "sandbox_calculation";
+  required: boolean;
+  requirementState: "passed" | "not_required_for_stage";
+  evidenceRefs: string[];
+  testArtifactHash: string | null;
+  routeOrContractRef: string | null;
+  reviewerDecisionRef: null;
+  privilegedWaiverActionRef: null;
+  reasonCodes: string[];
+  userStatus:
+    | "ready to preview"
+    | "payment not authorized"
+    | "waiting for later review";
+  userNextAction: string;
+  moneyOrObligationsAffected: false;
+}
+
+export interface MpgfCommonGroundBudgetReleaseGateBundle {
+  policy: typeof MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY;
+  releaseStage: "sandbox_calculation";
+  decisionState: "approved_for_no_capture_preview";
+  stateMutation: "none_preview_only";
+  paymentCaptureAllowed: false;
+  relianceBearingAgreementAllowed: false;
+  requiredRequirementCodes: MpgfCommonGroundBudgetReleaseGateRequirementCode[];
+  passedRequirementCodes: MpgfCommonGroundBudgetReleaseGateRequirementCode[];
+  blockedRequirementCodes: [];
+  notRequiredRequirementCodes: MpgfCommonGroundBudgetReleaseGateRequirementCode[];
+  waivedRequirementCodes: [];
+  requirementResults: MpgfCommonGroundBudgetReleaseGateRequirementResult[];
+  inactiveTrackBlockers: Array<{
+    track: "real_money_capture" | "donation_offsets" | "pledge_swaps";
+    userStatus: "payment not authorized" | "waiting for later review";
+    nextAction: string;
+    appealOrCorrectionPath: string | null;
+  }>;
+  userFacingSummary: string;
+  bundleHash: string;
+}
 
 export interface MpgfCommonGroundBudgetProject {
   id: string;
@@ -87,6 +203,9 @@ export interface MpgfCommonGroundBudgetPreview {
   participantSurplusConfirmationRequired: true;
   participantSurplusConfirmed: boolean;
   activationState: MpgfCommonGroundBudgetActivationState;
+  releaseGateRequirementBundle: MpgfCommonGroundBudgetReleaseGateBundle;
+  releaseGateRequirementBundleHash: string;
+  policySnapshotBundleHash: string;
   userFacingBlockers: Array<{
     reasonCategory: string;
     nextAction: string;
@@ -123,6 +242,192 @@ export interface MpgfCommonGroundBudgetPreview {
 
 function hashValue(value: unknown) {
   return `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;
+}
+
+function requirementGroupFor(
+  code: MpgfCommonGroundBudgetReleaseGateRequirementCode,
+): MpgfCommonGroundBudgetReleaseGateRequirementResult["requirementGroup"] {
+  if (code.includes("payment") || code.includes("donor_of_record") || code.includes("financial_crime")) {
+    return "payment";
+  }
+
+  if (code.includes("evidence") || code.includes("baseline_integrity")) {
+    return "evidence";
+  }
+
+  if (code.includes("reviewer") || code.includes("neutral_reviewer")) {
+    return "reviewer";
+  }
+
+  if (code.includes("deployment") || code.includes("route_health")) {
+    return "deployment";
+  }
+
+  if (code.includes("migration") || code.includes("rollback")) {
+    return "migration";
+  }
+
+  if (code.includes("environment")) {
+    return "environment";
+  }
+
+  if (code.includes("donation_offset") || code.includes("atomic_settlement")) {
+    return "donation_offset";
+  }
+
+  if (
+    code.includes("pledge_swap") ||
+    code.includes("compensated") ||
+    code.includes("negative_commitment") ||
+    code.includes("irreversible") ||
+    code.includes("third_party") ||
+    code.includes("representative") ||
+    code.includes("performance_bond")
+  ) {
+    return "pledge_swap";
+  }
+
+  if (code.includes("privacy") || code.includes("confidentiality")) {
+    return "privacy";
+  }
+
+  if (code.includes("anti_threat") || code.includes("civil_rights") || code.includes("corruption")) {
+    return "anti_threat";
+  }
+
+  if (code.includes("regulated") || code.includes("cyber")) {
+    return "security";
+  }
+
+  if (code.includes("autonomy") || code.includes("reporting")) {
+    return "safety";
+  }
+
+  return "calculation";
+}
+
+function userNextActionForRequirement(
+  code: MpgfCommonGroundBudgetReleaseGateRequirementCode,
+  required: boolean,
+) {
+  if (required) {
+    return "You can use the sandbox preview; it does not authorize payment or create an agreement.";
+  }
+
+  if (code.startsWith("donation_offset") || code.includes("donor_of_record")) {
+    return "Donation-offset clearing remains unavailable until its later reviewed release gate passes.";
+  }
+
+  if (
+    code.includes("pledge_swap") ||
+    code.includes("compensated") ||
+    code.includes("negative_commitment") ||
+    code.includes("irreversible") ||
+    code.includes("third_party") ||
+    code.includes("representative") ||
+    code.includes("performance_bond")
+  ) {
+    return "Pledge-swap matching remains preview-only until its later reviewed release gate passes.";
+  }
+
+  if (code.includes("payment") || code.includes("financial_crime")) {
+    return "Payment capture remains disabled until the capped real-money public-goods gate passes.";
+  }
+
+  return "No action is needed for this sandbox preview; this control is reserved for a later release stage.";
+}
+
+function buildCommonGroundBudgetReleaseGateBundle({
+  roundId,
+  termsSnapshotHash,
+}: {
+  roundId: string;
+  termsSnapshotHash: string;
+}): MpgfCommonGroundBudgetReleaseGateBundle {
+  const requirementResults = MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES.map((
+    code,
+  ): MpgfCommonGroundBudgetReleaseGateRequirementResult => {
+    const required = MPGF_COMMON_GROUND_BUDGET_SANDBOX_REQUIRED_REQUIREMENTS.has(code);
+    const requirementState: MpgfCommonGroundBudgetReleaseGateRequirementResult["requirementState"] =
+      required ? "passed" : "not_required_for_stage";
+
+    return {
+      id: hashValue(["common-ground-budget-release-gate-requirement", roundId, code, termsSnapshotHash]),
+      requirementCode: code,
+      requirementGroup: requirementGroupFor(code),
+      appliesToReleaseStage: "sandbox_calculation" as const,
+      required,
+      requirementState,
+      evidenceRefs: required
+        ? [
+            termsSnapshotHash,
+            MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY,
+            MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY,
+          ]
+        : [MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY],
+      testArtifactHash: required
+        ? hashValue(["common-ground-budget-sandbox-requirement", roundId, code, termsSnapshotHash])
+        : null,
+      routeOrContractRef: code === "route_health_baseline"
+        ? `/api/mpgf/rounds/${roundId}/common-ground-budget-preview`
+        : null,
+      reviewerDecisionRef: null,
+      privilegedWaiverActionRef: null,
+      reasonCodes: required
+        ? ["sandbox_preview_no_capture_control_present"]
+        : ["not_required_for_sandbox_calculation"],
+      userStatus: required ? "ready to preview" : "waiting for later review",
+      userNextAction: userNextActionForRequirement(code, required),
+      moneyOrObligationsAffected: false as const,
+    };
+  });
+  const passedRequirementCodes = requirementResults
+    .filter((result) => result.requirementState === "passed")
+    .map((result) => result.requirementCode);
+  const notRequiredRequirementCodes = requirementResults
+    .filter((result) => result.requirementState === "not_required_for_stage")
+    .map((result) => result.requirementCode);
+  const bundleWithoutHash: Omit<MpgfCommonGroundBudgetReleaseGateBundle, "bundleHash"> = {
+    policy: MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY,
+    releaseStage: "sandbox_calculation" as const,
+    decisionState: "approved_for_no_capture_preview" as const,
+    stateMutation: "none_preview_only" as const,
+    paymentCaptureAllowed: false as const,
+    relianceBearingAgreementAllowed: false as const,
+    requiredRequirementCodes: [...passedRequirementCodes],
+    passedRequirementCodes,
+    blockedRequirementCodes: [] as [],
+    notRequiredRequirementCodes,
+    waivedRequirementCodes: [] as [],
+    requirementResults,
+    inactiveTrackBlockers: [
+      {
+        track: "real_money_capture" as const,
+        userStatus: "payment not authorized" as const,
+        nextAction: "Payment capture stays disabled until the capped real-money public-goods gate passes.",
+        appealOrCorrectionPath: null,
+      },
+      {
+        track: "donation_offsets" as const,
+        userStatus: "waiting for later review" as const,
+        nextAction: "Donation-offset clearing is limited to templates and dry-run previews in a later slice.",
+        appealOrCorrectionPath: null,
+      },
+      {
+        track: "pledge_swaps" as const,
+        userStatus: "waiting for later review" as const,
+        nextAction: "Pledge-swap matching stays preview/manual-review only until its later release gate passes.",
+        appealOrCorrectionPath: null,
+      },
+    ],
+    userFacingSummary:
+      "This round is approved for sandbox budget calculation only. It can preview routing, but it cannot capture payments or create a reliance-bearing agreement.",
+  };
+
+  return {
+    ...bundleWithoutHash,
+    bundleHash: hashValue(bundleWithoutHash),
+  };
 }
 
 function normalizeCents(value: number | null | undefined, fallback: number) {
@@ -394,6 +699,18 @@ export function buildMpgfCommonGroundBudgetPreview(
     normalizedStances,
     MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY,
   ]);
+  const releaseGateRequirementBundle = buildCommonGroundBudgetReleaseGateBundle({
+    roundId: input.roundId,
+    termsSnapshotHash,
+  });
+  const policySnapshotBundleHash = hashValue([
+    input.roundId,
+    termsSnapshotHash,
+    MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY,
+    MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CHOICE_POLICY,
+    MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY,
+    releaseGateRequirementBundle.bundleHash,
+  ]);
 
   return {
     ok: true,
@@ -409,6 +726,9 @@ export function buildMpgfCommonGroundBudgetPreview(
     activationState: userFacingBlockers.length
       ? (blockedAllocationCents > 0 ? "blocked" : "preview_only_confirmation_required")
       : "ready_for_confirmation",
+    releaseGateRequirementBundle,
+    releaseGateRequirementBundleHash: releaseGateRequirementBundle.bundleHash,
+    policySnapshotBundleHash,
     userFacingBlockers,
     budgetPeriod,
     settlementCurrency: "usd",
@@ -432,7 +752,13 @@ export function buildMpgfCommonGroundBudgetPreview(
     cancelUntil: input.roundLockTime,
     termsSnapshotHash,
     participantConfirmationHash: input.participantSurplusConfirmed
-      ? hashValue(["participant-confirmation", termsSnapshotHash, "surplus-confirmed"])
+      ? hashValue([
+          "participant-confirmation",
+          termsSnapshotHash,
+          releaseGateRequirementBundle.bundleHash,
+          policySnapshotBundleHash,
+          "surplus-confirmed",
+        ])
       : null,
     tradeClassification: "moral_public_good_coalition",
     noGlobalMoralRanking: true,
@@ -446,6 +772,7 @@ export function buildMpgfCommonGroundBudgetPreview(
     calcHash: hashValue([
       input.roundId,
       termsSnapshotHash,
+      releaseGateRequirementBundle.bundleHash,
       rows.map((row) => [
         row.campaignId,
         row.stance,

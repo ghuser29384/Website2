@@ -202,6 +202,8 @@ import {
   MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CHOICE_POLICY,
   MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY,
   MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES,
   buildMpgfCommonGroundBudgetPreview,
 } from "./mpgf/public-goods-common-ground-budget";
 import {
@@ -1155,9 +1157,19 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.commonGroundBudget.releaseStage, "sandbox_calculation");
   assert.equal(round.round.commonGroundBudget.paymentCaptureAllowed, false);
   assert.equal(round.round.commonGroundBudget.stateMutation, "none_preview_only");
+  assert.equal(round.round.commonGroundBudget.releaseGatePolicy, MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY);
+  assert.equal(
+    round.round.commonGroundBudget.releaseGateRequirementCount,
+    MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES.length,
+  );
   assert.equal(round.round.commonGroundBudget.participantSurplusConfirmationRequired, true);
   assert.equal(round.round.commonGroundBudget.eligibleProjectSetHashRequired, true);
   assert.equal(round.round.commonGroundBudget.fallbackRerouteLimitedToFrozenEligibleSet, true);
+  assert.deepEqual(round.round.commonGroundBudget.laterStageTracksFailClosed, [
+    "real_money_capture",
+    "donation_offsets",
+    "pledge_swaps",
+  ]);
   assert.equal(round.round.commonGroundBudget.noGlobalMoralRanking, true);
   assert.equal(round.round.identityIntegrity?.policy, MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY);
   assert.equal(
@@ -2807,6 +2819,50 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.equal(budgetPreview.participantSurplusConfirmationRequired, true);
   assert.equal(budgetPreview.participantSurplusConfirmed, true);
   assert.equal(budgetPreview.activationState, "ready_for_confirmation");
+  assert.equal(
+    budgetPreview.releaseGateRequirementBundle.policy,
+    MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY,
+  );
+  assert.equal(
+    budgetPreview.releaseGateRequirementBundle.requirementResults.length,
+    MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES.length,
+  );
+  assert.deepEqual(
+    budgetPreview.releaseGateRequirementBundle.requirementResults
+      .map((result) => result.requirementCode)
+      .sort(),
+    [...MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_REQUIREMENT_CODES].sort(),
+  );
+  assert.deepEqual(budgetPreview.releaseGateRequirementBundle.blockedRequirementCodes, []);
+  assert.deepEqual(budgetPreview.releaseGateRequirementBundle.waivedRequirementCodes, []);
+  assert.deepEqual(
+    budgetPreview.releaseGateRequirementBundle.requiredRequirementCodes.sort(),
+    [
+      "anti_threat_review",
+      "dry_run_calculation_bundle",
+      "environment_data_isolation_check",
+      "privacy_review",
+      "route_health_baseline",
+    ].sort(),
+  );
+  assert.ok(
+    budgetPreview.releaseGateRequirementBundle.notRequiredRequirementCodes.includes(
+      "donation_offset_lock_confirmation_test",
+    ),
+  );
+  assert.ok(
+    budgetPreview.releaseGateRequirementBundle.notRequiredRequirementCodes.includes(
+      "pledge_swap_performance_terms_test",
+    ),
+  );
+  assert.equal(budgetPreview.releaseGateRequirementBundle.paymentCaptureAllowed, false);
+  assert.equal(budgetPreview.releaseGateRequirementBundle.relianceBearingAgreementAllowed, false);
+  assert.match(budgetPreview.releaseGateRequirementBundle.bundleHash, /^sha256:/);
+  assert.equal(
+    budgetPreview.releaseGateRequirementBundleHash,
+    budgetPreview.releaseGateRequirementBundle.bundleHash,
+  );
+  assert.match(budgetPreview.policySnapshotBundleHash, /^sha256:/);
   assert.equal(budgetPreview.tradeClassification, "moral_public_good_coalition");
   assert.equal(budgetPreview.noGlobalMoralRanking, true);
   assert.equal(budgetPreview.moralReputationAffectsAllocationPower, false);
@@ -2834,13 +2890,18 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(budgetPreviewRoute, /Sign in to preview a Common Ground Budget/);
   assert.match(budgetPreviewRoute, /stateMutation/);
   assert.match(budgetPreviewRoute, /paymentCaptureAllowed/);
+  assert.match(budgetPreviewRoute, /releaseGateRequirementBundle/);
   assert.match(budgetPreviewRoute, /loadMpgfPublicGoodsAllocationContext/);
   assert.match(publicApi, /coalitionRouting/);
   assert.match(publicApi, /commonGroundBudget/);
+  assert.match(publicApi, /releaseGateRequirementCount/);
+  assert.match(publicApi, /laterStageTracksFailClosed/);
   assert.match(publicApi, /common-ground-budget-preview/);
   assert.match(publicApi, /routedWeakSupportBudgetCents/);
   assert.match(roundPage, /Coalition-routed common-ground budget/);
   assert.match(roundPage, /Common Ground Budget preview/);
+  assert.match(roundPage, /Preview release gate/);
+  assert.match(roundPage, /Later-stage controls held back/);
   assert.match(roundPage, /Your default allocation baseline/);
   assert.match(roundPage, /This routing is acceptable to me relative to my stated default/);
   assert.match(roundPage, /paymentCaptureAllowed/);

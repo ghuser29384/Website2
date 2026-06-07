@@ -257,6 +257,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
       redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${campaign.campaignId}`),
     })),
   });
+  const commonGroundBudgetReleaseGate = commonGroundBudgetPreview.releaseGateRequirementBundle;
   const contributionModalCampaigns = campaignResult.campaigns.map((campaign) => ({
     campaignId: campaign.campaignId,
     countedForMatchCents: campaign.countedForMatchCents,
@@ -670,6 +671,31 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
                   <dd>{commonGroundBudgetPreview.activationState.replaceAll("_", " ")}</dd>
                 </div>
               </dl>
+              <div className="notice-card" aria-label="Common Ground Budget preview release gate">
+                <strong>Preview release gate</strong>
+                <p>{commonGroundBudgetReleaseGate.userFacingSummary}</p>
+                <dl className="mpgf-summary-grid">
+                  <div>
+                    <dt>Preview controls passed</dt>
+                    <dd>{commonGroundBudgetReleaseGate.passedRequirementCodes.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Later-stage controls held back</dt>
+                    <dd>{commonGroundBudgetReleaseGate.notRequiredRequirementCodes.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Reliance-bearing agreement</dt>
+                    <dd>{commonGroundBudgetReleaseGate.relianceBearingAgreementAllowed ? "available" : "unavailable"}</dd>
+                  </div>
+                  <div>
+                    <dt>Gate bundle</dt>
+                    <dd>{commonGroundBudgetPreview.releaseGateRequirementBundleHash.slice(0, 19)}...</dd>
+                  </div>
+                </dl>
+                {commonGroundBudgetReleaseGate.inactiveTrackBlockers.map((blocker) => (
+                  <p key={blocker.track}>{blocker.nextAction}</p>
+                ))}
+              </div>
               {commonGroundBudgetPreview.userFacingBlockers.length ? (
                 <div className="notice-card" aria-label="Common Ground Budget blockers">
                   <strong>Next action</strong>
