@@ -12,6 +12,32 @@ export type DonationOffsetUnmatchedSurplusRule =
   | "donate_to_original_cause"
   | "split_evenly";
 export type DonationOffsetModerationStatus = "clear" | "flagged" | "blocked";
+export type DonationOffsetDonorOfRecordRole =
+  | "participant_direct_donor"
+  | "counterparty_direct_donor"
+  | "sponsor_or_third_party"
+  | "platform_not_donor"
+  | "unknown";
+export type DonationOffsetTaxReceiptTreatment =
+  | "no_tax_benefit_claimed"
+  | "participant_may_receive_receipt"
+  | "counterparty_may_receive_receipt"
+  | "third_party_or_daf_receipt"
+  | "unknown_or_unreviewed";
+export type DonationOffsetCharitableSolicitationTreatment =
+  | "external_donation_only_no_platform_solicitation"
+  | "platform_facilitated_messaging_needs_review"
+  | "commercial_co_venture_or_match_promo"
+  | "unknown";
+export type DonationOffsetDestinationVerificationStatus =
+  | "registered_destination_selected"
+  | "external_unverified"
+  | "unknown";
+export type DonationOffsetDonorOfRecordGateStatus =
+  | "pass"
+  | "needs_input"
+  | "human_review"
+  | "blocked";
 
 export interface RegisteredCharity {
   id: string;
@@ -146,6 +172,56 @@ export interface DonationOffsetBatchClearingDryRun {
   atomicSettlementGroup: DonationOffsetAtomicSettlementPreview;
   finalLockProposal: DonationOffsetFinalLockProposalPreview;
   userFacingBlockers: string[];
+}
+
+export interface DonationOffsetDonorOfRecordInput {
+  destinationLabel: string;
+  donationPlatform: string;
+  donorOfRecordRole: DonationOffsetDonorOfRecordRole;
+  donorOfRecordExplanation: string;
+  taxReceiptTreatment: DonationOffsetTaxReceiptTreatment;
+  taxReceiptExplanation: string;
+  taxBenefitClaimed: boolean;
+  donorAdvisedFundInvolved: boolean;
+  employerMatchInvolved: boolean;
+  commercialCoVentureInvolved: boolean;
+  charitableSolicitationTreatment: DonationOffsetCharitableSolicitationTreatment;
+  jurisdictionReviewRequired: boolean;
+  participantAcknowledgedNoTaxAdvice: boolean;
+  participantAcknowledgedOperationalNotImpact: boolean;
+  receiptDoubleClaimPrevented: boolean;
+  receiptReassignmentProhibited: boolean;
+  lockTermsFrozenBeforeConfirmation: boolean;
+  destinationVerificationStatus: DonationOffsetDestinationVerificationStatus;
+}
+
+export interface DonationOffsetDonorOfRecordGate {
+  key: string;
+  label: string;
+  status: DonationOffsetDonorOfRecordGateStatus;
+  detail: string;
+  nextAction: string;
+  blockerCodes: string[];
+}
+
+export interface DonationOffsetDonorOfRecordPreview {
+  schemaVersion: "donation-offset-donor-of-record-preview-v1";
+  releaseStage: "donation_offset_preview_no_capture";
+  captureAllowed: false;
+  relianceBearing: false;
+  taxAdviceProvided: false;
+  taxDeductibilityClaimAllowed: false;
+  receiptCreatesImpactClaim: false;
+  requiresFrozenLockTreatment: true;
+  requiresJurisdictionReviewBeforeTaxBenefitClaim: true;
+  destinationLabel: string;
+  donationPlatform: string;
+  donorOfRecordRole: DonationOffsetDonorOfRecordRole;
+  taxReceiptTreatment: DonationOffsetTaxReceiptTreatment;
+  gates: DonationOffsetDonorOfRecordGate[];
+  blockedGateCount: number;
+  humanReviewGateCount: number;
+  readyForLockReview: boolean;
 }
 
 export interface DonationOffsetModerationAssessment {
@@ -426,6 +502,356 @@ export function formatDonationOffsetUnmatchedRule(value: DonationOffsetUnmatched
     default:
       return "Any unmatched remainder returns to the original donors.";
   }
+}
+
+export function normalizeDonationOffsetDonorOfRecordRole(
+  value: string | null | undefined,
+): DonationOffsetDonorOfRecordRole {
+  if (
+    value === "counterparty_direct_donor" ||
+    value === "sponsor_or_third_party" ||
+    value === "platform_not_donor" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "participant_direct_donor";
+}
+
+export function normalizeDonationOffsetTaxReceiptTreatment(
+  value: string | null | undefined,
+): DonationOffsetTaxReceiptTreatment {
+  if (
+    value === "participant_may_receive_receipt" ||
+    value === "counterparty_may_receive_receipt" ||
+    value === "third_party_or_daf_receipt" ||
+    value === "unknown_or_unreviewed"
+  ) {
+    return value;
+  }
+
+  return "no_tax_benefit_claimed";
+}
+
+export function normalizeDonationOffsetCharitableSolicitationTreatment(
+  value: string | null | undefined,
+): DonationOffsetCharitableSolicitationTreatment {
+  if (
+    value === "platform_facilitated_messaging_needs_review" ||
+    value === "commercial_co_venture_or_match_promo" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "external_donation_only_no_platform_solicitation";
+}
+
+export function normalizeDonationOffsetDestinationVerificationStatus(
+  value: string | null | undefined,
+): DonationOffsetDestinationVerificationStatus {
+  if (value === "external_unverified" || value === "unknown") {
+    return value;
+  }
+
+  return "registered_destination_selected";
+}
+
+function donorGate({
+  key,
+  label,
+  status,
+  detail,
+  nextAction,
+  blockerCodes = [],
+}: DonationOffsetDonorOfRecordGate) {
+  return {
+    key,
+    label,
+    status,
+    detail,
+    nextAction,
+    blockerCodes,
+  };
+}
+
+function hasMeaningfulText(value: string) {
+  return value.trim().length >= 12;
+}
+
+function formatDonationOffsetDonorGateStatus(status: DonationOffsetDonorOfRecordGateStatus) {
+  return status.replaceAll("_", " ");
+}
+
+export function buildDonationOffsetDonorOfRecordPreview(
+  input: DonationOffsetDonorOfRecordInput,
+): DonationOffsetDonorOfRecordPreview {
+  const donorExplicit =
+    input.donorOfRecordRole !== "unknown" && hasMeaningfulText(input.donorOfRecordExplanation);
+  const taxReceiptExplicit =
+    input.taxReceiptTreatment !== "unknown_or_unreviewed" && hasMeaningfulText(input.taxReceiptExplanation);
+  const taxBenefitNeedsReview =
+    input.taxBenefitClaimed ||
+    input.taxReceiptTreatment !== "no_tax_benefit_claimed" ||
+    input.donorAdvisedFundInvolved ||
+    input.employerMatchInvolved;
+  const solicitationNeedsReview =
+    input.charitableSolicitationTreatment !== "external_donation_only_no_platform_solicitation" ||
+    input.commercialCoVentureInvolved;
+  const destinationStatus =
+    input.destinationVerificationStatus === "registered_destination_selected"
+      ? "pass"
+      : input.destinationVerificationStatus === "external_unverified"
+        ? "human_review"
+        : "needs_input";
+  const taxStatus =
+    !taxReceiptExplicit
+      ? "needs_input"
+      : taxBenefitNeedsReview
+        ? input.jurisdictionReviewRequired
+          ? "human_review"
+          : "blocked"
+        : "pass";
+  const solicitationStatus =
+    solicitationNeedsReview
+      ? input.jurisdictionReviewRequired
+        ? "human_review"
+        : "blocked"
+      : "pass";
+  const receiptControlStatus =
+    input.receiptDoubleClaimPrevented && input.receiptReassignmentProhibited
+      ? "pass"
+      : "blocked";
+  const acknowledgmentStatus =
+    input.participantAcknowledgedNoTaxAdvice &&
+    input.participantAcknowledgedOperationalNotImpact
+      ? "pass"
+      : "needs_input";
+  const lockFreezeStatus = input.lockTermsFrozenBeforeConfirmation ? "pass" : "needs_input";
+
+  const gates = [
+    donorGate({
+      key: "donor-of-record",
+      label: "Donor of record",
+      status: donorExplicit ? "pass" : "needs_input",
+      detail: donorExplicit
+        ? "The draft names who is donor of record and states that Moral Trade is not silently reassigned as donor."
+        : "The offset needs an explicit donor-of-record treatment before any lock proposal.",
+      nextAction: donorExplicit
+        ? "Keep this treatment frozen for final lock confirmation."
+        : "State who makes the external donation and who is not donor of record.",
+      blockerCodes: donorExplicit ? [] : ["donor_of_record_missing"],
+    }),
+    donorGate({
+      key: "tax-receipt-treatment",
+      label: "Tax receipt treatment",
+      status: taxStatus,
+      detail:
+        taxStatus === "pass"
+          ? "No tax benefit is claimed from Moral Trade, and receipt handling is explicit."
+          : taxStatus === "human_review"
+            ? "Receipt, donor-advised fund, employer-match, or tax-benefit treatment needs jurisdiction review before lock."
+            : taxStatus === "blocked"
+              ? "Tax-benefit or receipt claims cannot proceed without jurisdiction review."
+              : "Tax receipt treatment must be stated before lock.",
+      nextAction:
+        taxStatus === "pass"
+          ? "Do not represent receipts as moral impact or allocation power."
+          : "Freeze receipt handling and require legal/jurisdiction review before any tax-benefit claim.",
+      blockerCodes:
+        taxStatus === "pass" ? [] : taxStatus === "blocked" ? ["tax_receipt_review_missing"] : ["tax_receipt_review"],
+    }),
+    donorGate({
+      key: "charitable-solicitation",
+      label: "Charitable solicitation and co-venture",
+      status: solicitationStatus,
+      detail:
+        solicitationStatus === "pass"
+          ? "The draft uses external donation evidence without platform solicitation, match-promo, or co-venture claims."
+          : solicitationStatus === "human_review"
+            ? "Platform-facilitated solicitation, employer match, sponsor promotion, or commercial co-venture treatment needs review."
+            : "Solicitation or co-venture claims cannot proceed without jurisdiction review.",
+      nextAction:
+        solicitationStatus === "pass"
+          ? "Keep the public copy clear that Moral Trade is not soliciting tax-deductible gifts."
+          : "Route the solicitation/co-venture treatment to legal review before lock.",
+      blockerCodes:
+        solicitationStatus === "pass"
+          ? []
+          : solicitationStatus === "blocked"
+            ? ["charitable_solicitation_review_missing"]
+            : ["charitable_solicitation_review"],
+    }),
+    donorGate({
+      key: "receipt-double-claim",
+      label: "No double-claimed receipt benefits",
+      status: receiptControlStatus,
+      detail:
+        receiptControlStatus === "pass"
+          ? "Receipt, donor-advised-fund credit, employer match, and comparable benefits cannot be double-claimed or reassigned."
+          : "Receipt benefits need explicit no-double-claim and no-reassignment controls.",
+      nextAction:
+        receiptControlStatus === "pass"
+          ? "Keep receipt benefits outside moral-trade volume and impact claims."
+          : "Require no-double-claim and no-reassignment acknowledgements.",
+      blockerCodes: receiptControlStatus === "pass" ? [] : ["receipt_double_claim_control_missing"],
+    }),
+    donorGate({
+      key: "destination-verification",
+      label: "Destination verification",
+      status: destinationStatus,
+      detail:
+        destinationStatus === "pass"
+          ? "A registered compromise destination is selected for the preview."
+          : "External or unknown destinations need anti-impersonation, jurisdiction, and prohibited-use review.",
+      nextAction:
+        destinationStatus === "pass"
+          ? "Verify payment destination before capture or release."
+          : "Resolve the destination to a verified registry entry before lock.",
+      blockerCodes: destinationStatus === "pass" ? [] : ["destination_verification_review"],
+    }),
+    donorGate({
+      key: "tax-advice-and-impact-separation",
+      label: "No tax advice or impact claim",
+      status: acknowledgmentStatus,
+      detail:
+        acknowledgmentStatus === "pass"
+          ? "The participant acknowledged that Moral Trade gives no tax advice and receipts are operational/legal facts, not impact evidence."
+          : "The participant must acknowledge no tax advice and receipt-vs-impact separation.",
+      nextAction:
+        acknowledgmentStatus === "pass"
+          ? "Keep public metrics separate from receipt, deductibility, and impact claims."
+          : "Require acknowledgements before publishing the offset preview.",
+      blockerCodes: acknowledgmentStatus === "pass" ? [] : ["tax_advice_acknowledgement_missing"],
+    }),
+    donorGate({
+      key: "final-lock-freeze",
+      label: "Final lock freeze",
+      status: lockFreezeStatus,
+      detail:
+        lockFreezeStatus === "pass"
+          ? "Donor-of-record, receipt, solicitation, and destination terms must be frozen before final confirmations."
+          : "Lock proposals must freeze donor-of-record, receipt, solicitation, and destination terms.",
+      nextAction:
+        lockFreezeStatus === "pass"
+          ? "Any later material change requires an amendment and renewed confirmations."
+          : "Confirm that final lock freezes these legal/operational terms.",
+      blockerCodes: lockFreezeStatus === "pass" ? [] : ["donor_terms_lock_freeze_missing"],
+    }),
+  ];
+  const blockedGateCount = gates.filter((gate) => gate.status === "blocked").length;
+  const humanReviewGateCount = gates.filter(
+    (gate) => gate.status === "human_review" || gate.status === "needs_input",
+  ).length;
+
+  return {
+    schemaVersion: "donation-offset-donor-of-record-preview-v1",
+    releaseStage: "donation_offset_preview_no_capture",
+    captureAllowed: false,
+    relianceBearing: false,
+    taxAdviceProvided: false,
+    taxDeductibilityClaimAllowed: false,
+    receiptCreatesImpactClaim: false,
+    requiresFrozenLockTreatment: true,
+    requiresJurisdictionReviewBeforeTaxBenefitClaim: true,
+    destinationLabel: input.destinationLabel.trim() || "Selected compromise destination",
+    donationPlatform: input.donationPlatform.trim() || "External donation platform",
+    donorOfRecordRole: input.donorOfRecordRole,
+    taxReceiptTreatment: input.taxReceiptTreatment,
+    gates,
+    blockedGateCount,
+    humanReviewGateCount,
+    readyForLockReview: blockedGateCount === 0 && gates.every((gate) => gate.status !== "needs_input"),
+  };
+}
+
+export function validateDonationOffsetDonorOfRecordInput(
+  input: DonationOffsetDonorOfRecordInput,
+) {
+  const errors: string[] = [];
+  const preview = buildDonationOffsetDonorOfRecordPreview(input);
+
+  if (!hasMeaningfulText(input.donorOfRecordExplanation)) {
+    errors.push("State the donor-of-record treatment for this donation offset.");
+  }
+
+  if (!hasMeaningfulText(input.taxReceiptExplanation)) {
+    errors.push("State the tax-receipt treatment for this donation offset.");
+  }
+
+  if (!input.participantAcknowledgedNoTaxAdvice) {
+    errors.push("Acknowledge that Moral Trade does not provide tax advice or tax deductibility.");
+  }
+
+  if (!input.participantAcknowledgedOperationalNotImpact) {
+    errors.push("Acknowledge that receipts and payment evidence are not impact claims.");
+  }
+
+  if (!input.receiptDoubleClaimPrevented || !input.receiptReassignmentProhibited) {
+    errors.push("Confirm that receipt benefits will not be double-claimed or silently reassigned.");
+  }
+
+  if (!input.lockTermsFrozenBeforeConfirmation) {
+    errors.push("Confirm that donor-of-record and receipt terms will be frozen before final lock.");
+  }
+
+  for (const gate of preview.gates) {
+    if (gate.status === "blocked") {
+      errors.push(`${gate.label}: ${gate.nextAction}`);
+    }
+  }
+
+  return errors;
+}
+
+export function summarizeDonationOffsetDonorOfRecordForNotes(
+  preview: DonationOffsetDonorOfRecordPreview,
+) {
+  const gateSummary = preview.gates
+    .map((gate) => `${gate.label}: ${formatDonationOffsetDonorGateStatus(gate.status)}`)
+    .join("; ");
+
+  return [
+    "Donation-offset donor-of-record preview:",
+    `Schema version: ${preview.schemaVersion}`,
+    `Release stage: ${preview.releaseStage}`,
+    `Destination: ${preview.destinationLabel}`,
+    `Donation platform: ${preview.donationPlatform}`,
+    `Donor-of-record role: ${preview.donorOfRecordRole.replaceAll("_", " ")}`,
+    `Tax receipt treatment: ${preview.taxReceiptTreatment.replaceAll("_", " ")}`,
+    "Moral Trade tax advice provided: no",
+    "Tax deductibility claim allowed from this preview: no",
+    "Receipt creates impact claim: no",
+    "Capture allowed before final lock: no",
+    "Requires frozen donor-of-record, receipt, solicitation, and destination treatment before final confirmations: yes",
+    `Manual-review gates: ${gateSummary}`,
+  ].join("\n");
+}
+
+export function buildDemoDonationOffsetDonorOfRecordPreview() {
+  return buildDonationOffsetDonorOfRecordPreview({
+    destinationLabel: "GiveWell Top Charities Fund",
+    donationPlatform: "External charity payment page",
+    donorOfRecordRole: "participant_direct_donor",
+    donorOfRecordExplanation:
+      "The participant who makes the external donation remains donor of record; Moral Trade is not donor of record.",
+    taxReceiptTreatment: "no_tax_benefit_claimed",
+    taxReceiptExplanation:
+      "No participant claims tax deductibility from Moral Trade. Any external receipt remains an operational record subject to legal review.",
+    taxBenefitClaimed: false,
+    donorAdvisedFundInvolved: false,
+    employerMatchInvolved: false,
+    commercialCoVentureInvolved: false,
+    charitableSolicitationTreatment: "external_donation_only_no_platform_solicitation",
+    jurisdictionReviewRequired: true,
+    participantAcknowledgedNoTaxAdvice: true,
+    participantAcknowledgedOperationalNotImpact: true,
+    receiptDoubleClaimPrevented: true,
+    receiptReassignmentProhibited: true,
+    lockTermsFrozenBeforeConfirmation: true,
+    destinationVerificationStatus: "registered_destination_selected",
+  });
 }
 
 export function getDonationOffsetComplexityWarnings(fields: DonationOffsetFields) {

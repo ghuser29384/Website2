@@ -6,10 +6,12 @@ import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs, MetricCard, PageHero, SectionHeader, StepCard } from "@/components/ui/page-primitives";
 import { getDonationOffsetOverview, getViewer, type DonationOffsetOverview } from "@/lib/app-data";
 import {
+  buildDemoDonationOffsetDonorOfRecordPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
   getConsensusCharities,
   type DonationOffsetBatchClearingDryRun,
+  type DonationOffsetDonorOfRecordGateStatus,
   type DonationOffsetVerificationMethod,
 } from "@/lib/donation-offsets";
 import { getAbsoluteUrl } from "@/lib/seo";
@@ -116,11 +118,28 @@ function formatDryRunStatus(value: DonationOffsetBatchClearingDryRun["atomicSett
     : "Blocked preview only";
 }
 
+function formatDonorGateStatus(status: DonationOffsetDonorOfRecordGateStatus) {
+  return status.replaceAll("_", " ");
+}
+
+function donorGateStatusClass(status: DonationOffsetDonorOfRecordGateStatus) {
+  if (status === "blocked") {
+    return "blocked";
+  }
+
+  if (status === "needs_input" || status === "human_review") {
+    return "human_review";
+  }
+
+  return "pass";
+}
+
 export default async function DonationOffsetsPage() {
   const viewer = await getViewer();
   const overview = hasSupabaseEnv() ? await getDonationOffsetOverview() : null;
   const consensusCharities = getConsensusCharities();
   const clearingDryRun = buildDonationOffsetDryRun(overview);
+  const donorOfRecordPreview = buildDemoDonationOffsetDonorOfRecordPreview();
   const createOffsetHref = viewer
     ? "/offers/new?mode=offset"
     : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
@@ -329,6 +348,88 @@ export default async function DonationOffsetsPage() {
                   : "No preview blockers. Final lock still requires fresh confirmations and review."}
               </p>
             </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="offset-donor-record-heading">
+          <SectionHeader
+            eyebrow="Donor-of-record and receipt preview"
+            id="offset-donor-record-heading"
+            title="Receipts are legal facts, not impact claims."
+          >
+            Donation offsets must freeze donor-of-record, receipt, charitable-solicitation, and
+            destination treatment before lock. Moral Trade does not provide tax advice or claim
+            tax deductibility from a preview.
+          </SectionHeader>
+          <div className="protocol-review-panel protocol-review-panel-needs_human_review">
+            <div className="protocol-review-head">
+              <div>
+                <p className="eyebrow">No capture preview</p>
+                <h3>Tax and receipt handling is explicit before final confirmation.</h3>
+                <p>
+                  Tax advice provided: {String(donorOfRecordPreview.taxAdviceProvided)}. Tax
+                  deductibility claim allowed:{" "}
+                  {String(donorOfRecordPreview.taxDeductibilityClaimAllowed)}. Receipt creates
+                  impact claim: {String(donorOfRecordPreview.receiptCreatesImpactClaim)}.
+                </p>
+              </div>
+              <span className="protocol-review-status">
+                {donorOfRecordPreview.releaseStage.replaceAll("_", " ")}
+              </span>
+            </div>
+
+            <div className="protocol-review-grid">
+              <div>
+                <strong>Frozen terms</strong>
+                <ul className="clean-list">
+                  <li>Destination: {donorOfRecordPreview.destinationLabel}</li>
+                  <li>Donation platform: {donorOfRecordPreview.donationPlatform}</li>
+                  <li>
+                    Donor of record:{" "}
+                    {donorOfRecordPreview.donorOfRecordRole.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Tax receipt:{" "}
+                    {donorOfRecordPreview.taxReceiptTreatment.replaceAll("_", " ")}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <strong>Before lock</strong>
+                <ul className="clean-list">
+                  <li>Destination verification before capture/release.</li>
+                  <li>No receipt benefit is double-claimed or silently reassigned.</li>
+                  <li>Any DAF, employer match, or co-venture issue needs jurisdiction review.</li>
+                </ul>
+              </div>
+              <div>
+                <strong>Public metric boundary</strong>
+                <p>
+                  Payment evidence can support gross transfer records. It cannot, by itself, prove
+                  causal impact, tax treatment, or moral value.
+                </p>
+              </div>
+            </div>
+
+            <ol className="protocol-provenance-list">
+              {donorOfRecordPreview.gates.map((gate) => (
+                <li
+                  className={`protocol-provenance-item protocol-provenance-item-${donorGateStatusClass(
+                    gate.status,
+                  )}`}
+                  key={gate.key}
+                >
+                  <span className="protocol-step-status">
+                    {formatDonorGateStatus(gate.status)}
+                  </span>
+                  <div>
+                    <strong>{gate.label}</strong>
+                    <p>{gate.detail}</p>
+                    <small>{gate.nextAction}</small>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </div>
         </section>
 

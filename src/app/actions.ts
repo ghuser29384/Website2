@@ -147,12 +147,20 @@ import {
 } from "@/lib/growth";
 import {
   assessDonationOffsetModeration,
+  buildDonationOffsetDonorOfRecordPreview,
   calculateDonationOffsetPreview,
   findRegisteredCharityById,
   formatDonationOffsetUnmatchedRule,
+  normalizeDonationOffsetCharitableSolicitationTreatment,
+  normalizeDonationOffsetDestinationVerificationStatus,
+  normalizeDonationOffsetDonorOfRecordRole,
+  normalizeDonationOffsetTaxReceiptTreatment,
+  summarizeDonationOffsetDonorOfRecordForNotes,
+  validateDonationOffsetDonorOfRecordInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
   type DonationOffsetFields,
+  type DonationOffsetDonorOfRecordInput,
   type DonationOffsetParticipationMode,
   type DonationOffsetPoolSide,
   type DonationOffsetTimeHorizon,
@@ -3473,6 +3481,54 @@ export async function createOfferAction(formData: FormData) {
   const verificationMetadataAcknowledged = normalizedMode === "offset"
     ? readBoolean(formData, "offset_verification_metadata_acknowledgement")
     : false;
+  const donationOffsetDonorOfRecordInput: DonationOffsetDonorOfRecordInput | null =
+    normalizedMode === "offset"
+      ? {
+          destinationLabel:
+            findRegisteredCharityById(compromiseDestinationId)?.name ||
+            "Selected compromise destination",
+          donationPlatform: readRequired(formData, "offset_donor_record_donation_platform"),
+          donorOfRecordRole: normalizeDonationOffsetDonorOfRecordRole(
+            readOptional(formData, "offset_donor_of_record_role"),
+          ),
+          donorOfRecordExplanation: readRequired(formData, "offset_donor_of_record_explanation"),
+          taxReceiptTreatment: normalizeDonationOffsetTaxReceiptTreatment(
+            readOptional(formData, "offset_tax_receipt_treatment"),
+          ),
+          taxReceiptExplanation: readRequired(formData, "offset_tax_receipt_explanation"),
+          taxBenefitClaimed: readBoolean(formData, "offset_tax_benefit_claimed"),
+          donorAdvisedFundInvolved: readBoolean(formData, "offset_daf_involved"),
+          employerMatchInvolved: readBoolean(formData, "offset_employer_match_involved"),
+          commercialCoVentureInvolved: readBoolean(formData, "offset_commercial_co_venture_involved"),
+          charitableSolicitationTreatment: normalizeDonationOffsetCharitableSolicitationTreatment(
+            readOptional(formData, "offset_charitable_solicitation_treatment"),
+          ),
+          jurisdictionReviewRequired: readBoolean(formData, "offset_jurisdiction_review_required"),
+          participantAcknowledgedNoTaxAdvice: readBoolean(
+            formData,
+            "offset_no_tax_advice_acknowledgement",
+          ),
+          participantAcknowledgedOperationalNotImpact: readBoolean(
+            formData,
+            "offset_receipt_operational_not_impact_acknowledgement",
+          ),
+          receiptDoubleClaimPrevented: readBoolean(formData, "offset_receipt_double_claim_prevented"),
+          receiptReassignmentProhibited: readBoolean(
+            formData,
+            "offset_receipt_reassignment_prohibited",
+          ),
+          lockTermsFrozenBeforeConfirmation: readBoolean(
+            formData,
+            "offset_donor_terms_lock_freeze_acknowledgement",
+          ),
+          destinationVerificationStatus: normalizeDonationOffsetDestinationVerificationStatus(
+            readOptional(formData, "offset_destination_verification_status"),
+          ),
+        }
+      : null;
+  const donationOffsetDonorOfRecordPreview = donationOffsetDonorOfRecordInput
+    ? buildDonationOffsetDonorOfRecordPreview(donationOffsetDonorOfRecordInput)
+    : null;
   const newOfferReturnPath =
     normalizedMode === "offset"
       ? `/offers/new?mode=offset${
@@ -3589,6 +3645,20 @@ export async function createOfferAction(formData: FormData) {
     }
   }
 
+  if (donationOffsetDonorOfRecordInput) {
+    const donorOfRecordErrors = validateDonationOffsetDonorOfRecordInput(
+      donationOffsetDonorOfRecordInput,
+    );
+
+    if (donorOfRecordErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        donorOfRecordErrors[0] ?? "Complete the donation offset donor-of-record terms.",
+      );
+    }
+  }
+
   if (pledgePerformanceBondFields?.enabled) {
     const bondValidation = validatePerformanceBondTerms(
       pledgePerformanceBondFields.terms,
@@ -3662,6 +3732,9 @@ export async function createOfferAction(formData: FormData) {
     `Exit, pause, or expiry condition: ${exitCondition}`,
     pledgeSwapManualReviewPreview
       ? summarizePledgeSwapManualReviewForNotes(pledgeSwapManualReviewPreview)
+      : "",
+    donationOffsetDonorOfRecordPreview
+      ? summarizeDonationOffsetDonorOfRecordForNotes(donationOffsetDonorOfRecordPreview)
       : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, protocolTransition),
   ]
@@ -4135,6 +4208,9 @@ export async function createOfferAction(formData: FormData) {
     `Exit, pause, or expiry condition: ${exitCondition}`,
     pledgeSwapManualReviewPreview
       ? summarizePledgeSwapManualReviewForNotes(pledgeSwapManualReviewPreview)
+      : "",
+    donationOffsetDonorOfRecordPreview
+      ? summarizeDonationOffsetDonorOfRecordForNotes(donationOffsetDonorOfRecordPreview)
       : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, provenanceResult.transition),
   ]

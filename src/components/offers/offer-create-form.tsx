@@ -26,6 +26,7 @@ import {
   validatePerformanceBondTerms,
 } from "@/lib/performance-bonds";
 import {
+  buildDonationOffsetDonorOfRecordPreview,
   calculateDonationOffsetPoolProgress,
   calculateDonationOffsetPreview,
   createDefaultDonationOffsetFields,
@@ -38,6 +39,7 @@ import {
   getDonationOffsetComplexityWarnings,
   getSelectableRegisteredCharities,
   findRegisteredCharityById,
+  validateDonationOffsetDonorOfRecordInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
   DONATION_OFFSET_PARTICIPATION_MODE_OPTIONS,
@@ -45,6 +47,12 @@ import {
   DONATION_OFFSET_TIME_HORIZON_OPTIONS,
   DONATION_OFFSET_UNMATCHED_RULE_OPTIONS,
   DONATION_OFFSET_VERIFICATION_OPTIONS,
+  type DonationOffsetCharitableSolicitationTreatment,
+  type DonationOffsetDestinationVerificationStatus,
+  type DonationOffsetDonorOfRecordGateStatus,
+  type DonationOffsetDonorOfRecordInput,
+  type DonationOffsetDonorOfRecordRole,
+  type DonationOffsetTaxReceiptTreatment,
 } from "@/lib/donation-offsets";
 import {
   CAUSE_OPTIONS,
@@ -253,6 +261,10 @@ interface TemplateTextareaSuggestionsProps {
 }
 
 const defaultOffsetFields = createDefaultDonationOffsetFields();
+const defaultOffsetDonorOfRecordExplanation =
+  "The participant who makes the external donation remains donor of record; Moral Trade is not donor of record.";
+const defaultOffsetTaxReceiptExplanation =
+  "No participant should claim tax deductibility from Moral Trade. Any external receipt remains an operational record subject to legal review.";
 const defaultPledgeReciprocalReleaseRule =
   "If one side exits under the stated rule, both sides are released from future obligations while completed or disputed past obligations remain reviewable.";
 const defaultPledgeWithdrawalBeforeLockRule =
@@ -267,6 +279,22 @@ function formatPledgeGateStatus(status: PledgeSwapGateStatus) {
 }
 
 function pledgeGateStatusClass(status: PledgeSwapGateStatus) {
+  if (status === "blocked") {
+    return "blocked";
+  }
+
+  if (status === "needs_input" || status === "human_review") {
+    return "human_review";
+  }
+
+  return "pass";
+}
+
+function formatOffsetDonorGateStatus(status: DonationOffsetDonorOfRecordGateStatus) {
+  return status.replaceAll("_", " ");
+}
+
+function offsetDonorGateStatusClass(status: DonationOffsetDonorOfRecordGateStatus) {
   if (status === "blocked") {
     return "blocked";
   }
@@ -965,6 +993,36 @@ export function OfferCreateForm({
   );
   const [assuranceDeadline, setAssuranceDeadline] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [offsetDonationPlatform, setOffsetDonationPlatform] = useState("External charity payment page");
+  const [offsetDonorOfRecordRole, setOffsetDonorOfRecordRole] =
+    useState<DonationOffsetDonorOfRecordRole>("participant_direct_donor");
+  const [offsetDonorOfRecordExplanation, setOffsetDonorOfRecordExplanation] = useState(
+    defaultOffsetDonorOfRecordExplanation,
+  );
+  const [offsetTaxReceiptTreatment, setOffsetTaxReceiptTreatment] =
+    useState<DonationOffsetTaxReceiptTreatment>("no_tax_benefit_claimed");
+  const [offsetTaxReceiptExplanation, setOffsetTaxReceiptExplanation] = useState(
+    defaultOffsetTaxReceiptExplanation,
+  );
+  const [offsetTaxBenefitClaimed, setOffsetTaxBenefitClaimed] = useState(false);
+  const [offsetDonorAdvisedFundInvolved, setOffsetDonorAdvisedFundInvolved] = useState(false);
+  const [offsetEmployerMatchInvolved, setOffsetEmployerMatchInvolved] = useState(false);
+  const [offsetCommercialCoVentureInvolved, setOffsetCommercialCoVentureInvolved] = useState(false);
+  const [offsetCharitableSolicitationTreatment, setOffsetCharitableSolicitationTreatment] =
+    useState<DonationOffsetCharitableSolicitationTreatment>(
+      "external_donation_only_no_platform_solicitation",
+    );
+  const [offsetJurisdictionReviewRequired, setOffsetJurisdictionReviewRequired] = useState(true);
+  const [offsetNoTaxAdviceAcknowledged, setOffsetNoTaxAdviceAcknowledged] = useState(false);
+  const [offsetOperationalNotImpactAcknowledged, setOffsetOperationalNotImpactAcknowledged] =
+    useState(false);
+  const [offsetReceiptDoubleClaimPrevented, setOffsetReceiptDoubleClaimPrevented] = useState(true);
+  const [offsetReceiptReassignmentProhibited, setOffsetReceiptReassignmentProhibited] =
+    useState(true);
+  const [offsetLockTermsFrozenBeforeConfirmation, setOffsetLockTermsFrozenBeforeConfirmation] =
+    useState(true);
+  const [offsetDestinationVerificationStatus, setOffsetDestinationVerificationStatus] =
+    useState<DonationOffsetDestinationVerificationStatus>("registered_destination_selected");
   const [offerImpact, setOfferImpact] = useState(initialTemplate?.offerImpact ?? "7");
   const [minCounterpartyImpact, setMinCounterpartyImpact] = useState(initialTemplate?.minCounterpartyImpact ?? "6");
   const [verificationPreference, setVerificationPreference] = useState(initialTemplate?.verification ?? "Annual receipts");
@@ -1001,6 +1059,7 @@ export function OfferCreateForm({
         : joinedPool.sideALabel
       : requestedOpposedCause;
   const effectiveCompromiseDestinationId = joinedPool?.compromiseCharityId ?? compromiseDestinationId;
+  const selectedCompromiseDestination = findRegisteredCharityById(effectiveCompromiseDestinationId);
   const effectiveOffsetRatio = joinedPool ? String(joinedPool.offsetRatio) : offsetRatio;
   const effectiveTimeHorizon = joinedPool?.timeHorizon ?? timeHorizon;
   const effectiveVerificationMethod = joinedPool?.verificationMethod ?? verificationMethod;
@@ -1066,6 +1125,59 @@ export function OfferCreateForm({
       requestedMatchingAmountUsd,
       exitCondition,
     ],
+  );
+  const donationOffsetDonorOfRecordInput = useMemo<DonationOffsetDonorOfRecordInput>(
+    () => ({
+      destinationLabel: selectedCompromiseDestination?.name ?? "Selected compromise destination",
+      donationPlatform: offsetDonationPlatform,
+      donorOfRecordRole: offsetDonorOfRecordRole,
+      donorOfRecordExplanation: offsetDonorOfRecordExplanation,
+      taxReceiptTreatment: offsetTaxReceiptTreatment,
+      taxReceiptExplanation: offsetTaxReceiptExplanation,
+      taxBenefitClaimed: offsetTaxBenefitClaimed,
+      donorAdvisedFundInvolved: offsetDonorAdvisedFundInvolved,
+      employerMatchInvolved: offsetEmployerMatchInvolved,
+      commercialCoVentureInvolved: offsetCommercialCoVentureInvolved,
+      charitableSolicitationTreatment: offsetCharitableSolicitationTreatment,
+      jurisdictionReviewRequired: offsetJurisdictionReviewRequired,
+      participantAcknowledgedNoTaxAdvice: offsetNoTaxAdviceAcknowledged,
+      participantAcknowledgedOperationalNotImpact: offsetOperationalNotImpactAcknowledged,
+      receiptDoubleClaimPrevented: offsetReceiptDoubleClaimPrevented,
+      receiptReassignmentProhibited: offsetReceiptReassignmentProhibited,
+      lockTermsFrozenBeforeConfirmation: offsetLockTermsFrozenBeforeConfirmation,
+      destinationVerificationStatus: offsetDestinationVerificationStatus,
+    }),
+    [
+      offsetCharitableSolicitationTreatment,
+      offsetCommercialCoVentureInvolved,
+      offsetDestinationVerificationStatus,
+      offsetDonationPlatform,
+      offsetDonorAdvisedFundInvolved,
+      offsetDonorOfRecordExplanation,
+      offsetDonorOfRecordRole,
+      offsetEmployerMatchInvolved,
+      offsetJurisdictionReviewRequired,
+      offsetLockTermsFrozenBeforeConfirmation,
+      offsetNoTaxAdviceAcknowledged,
+      offsetOperationalNotImpactAcknowledged,
+      offsetReceiptDoubleClaimPrevented,
+      offsetReceiptReassignmentProhibited,
+      offsetTaxBenefitClaimed,
+      offsetTaxReceiptExplanation,
+      offsetTaxReceiptTreatment,
+      selectedCompromiseDestination?.name,
+    ],
+  );
+  const donationOffsetDonorOfRecordPreview = useMemo(
+    () => buildDonationOffsetDonorOfRecordPreview(donationOffsetDonorOfRecordInput),
+    [donationOffsetDonorOfRecordInput],
+  );
+  const donationOffsetDonorOfRecordErrors = useMemo(
+    () =>
+      isOffset
+        ? validateDonationOffsetDonorOfRecordInput(donationOffsetDonorOfRecordInput)
+        : [],
+    [donationOffsetDonorOfRecordInput, isOffset],
   );
   const baselineAmountCents = Math.round((Number(baselineAmountUsd) || 0) * 100);
   const baselineBondCapCents = calculatePilotBaselineBondCapCents(baselineAmountCents);
@@ -1285,11 +1397,13 @@ export function OfferCreateForm({
               evidenceUrl,
             }),
             ...baselineBondValidation.errors,
+            ...donationOffsetDonorOfRecordErrors,
           ]
         : [],
     [
       antiThreatCertified,
       baselineBondValidation.errors,
+      donationOffsetDonorOfRecordErrors,
       evidenceUrl,
       isOffset,
       normalizedOffsetFields,
@@ -1611,6 +1725,23 @@ export function OfferCreateForm({
       setOfferExpiresAt("");
       setBaselineBondEvidenceDueAt("");
       setBaselineBondEvidenceStandard("");
+      setOffsetDonationPlatform("External charity payment page");
+      setOffsetDonorOfRecordRole("participant_direct_donor");
+      setOffsetDonorOfRecordExplanation(defaultOffsetDonorOfRecordExplanation);
+      setOffsetTaxReceiptTreatment("no_tax_benefit_claimed");
+      setOffsetTaxReceiptExplanation(defaultOffsetTaxReceiptExplanation);
+      setOffsetTaxBenefitClaimed(false);
+      setOffsetDonorAdvisedFundInvolved(false);
+      setOffsetEmployerMatchInvolved(false);
+      setOffsetCommercialCoVentureInvolved(false);
+      setOffsetCharitableSolicitationTreatment("external_donation_only_no_platform_solicitation");
+      setOffsetJurisdictionReviewRequired(true);
+      setOffsetNoTaxAdviceAcknowledged(false);
+      setOffsetOperationalNotImpactAcknowledged(false);
+      setOffsetReceiptDoubleClaimPrevented(true);
+      setOffsetReceiptReassignmentProhibited(true);
+      setOffsetLockTermsFrozenBeforeConfirmation(true);
+      setOffsetDestinationVerificationStatus("registered_destination_selected");
     }
   }
 
@@ -3448,6 +3579,316 @@ export function OfferCreateForm({
                 </small>
               </label>
             </div>
+
+            <fieldset className="field">
+              <legend>Donor-of-record and receipt treatment</legend>
+              <div className="panel subtle-panel">
+                <div className="panel-head">
+                  <div>
+                    <p className="eyebrow">Before final lock</p>
+                    <h3>Freeze receipt and tax treatment without making tax claims</h3>
+                  </div>
+                  <span className="badge badge-warning">
+                    {donationOffsetDonorOfRecordPreview.releaseStage.replaceAll("_", " ")}
+                  </span>
+                </div>
+                <p className="panel-note">
+                  Moral Trade does not provide tax advice or certify deductibility. Receipts,
+                  donor-advised-fund credits, employer matches, and co-venture facts are reviewed
+                  as operational terms, not moral impact.
+                </p>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Donation platform</span>
+                    <input
+                      name="offset_donor_record_donation_platform"
+                      required={isOffset}
+                      type="text"
+                      value={offsetDonationPlatform}
+                      onChange={(event) => setOffsetDonationPlatform(readFormControlValue(event))}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Donor of record</span>
+                    <select
+                      name="offset_donor_of_record_role"
+                      required={isOffset}
+                      value={offsetDonorOfRecordRole}
+                      onChange={(event) =>
+                        setOffsetDonorOfRecordRole(
+                          readFormControlValue(event) as DonationOffsetDonorOfRecordRole,
+                        )
+                      }
+                    >
+                      <option value="participant_direct_donor">Participant makes external donation</option>
+                      <option value="counterparty_direct_donor">Counterparty makes external donation</option>
+                      <option value="sponsor_or_third_party">Sponsor or third party</option>
+                      <option value="platform_not_donor">Moral Trade explicitly not donor</option>
+                      <option value="unknown">Unknown - needs review</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Destination verification</span>
+                    <select
+                      name="offset_destination_verification_status"
+                      required={isOffset}
+                      value={offsetDestinationVerificationStatus}
+                      onChange={(event) =>
+                        setOffsetDestinationVerificationStatus(
+                          readFormControlValue(event) as DonationOffsetDestinationVerificationStatus,
+                        )
+                      }
+                    >
+                      <option value="registered_destination_selected">Registered destination selected</option>
+                      <option value="external_unverified">External destination - manual review</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="field">
+                  <span>Donor-of-record explanation</span>
+                  <textarea
+                    name="offset_donor_of_record_explanation"
+                    required={isOffset}
+                    rows={3}
+                    value={offsetDonorOfRecordExplanation}
+                    onChange={(event) =>
+                      setOffsetDonorOfRecordExplanation(readFormControlValue(event))
+                    }
+                  />
+                </label>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Tax receipt treatment</span>
+                    <select
+                      name="offset_tax_receipt_treatment"
+                      required={isOffset}
+                      value={offsetTaxReceiptTreatment}
+                      onChange={(event) =>
+                        setOffsetTaxReceiptTreatment(
+                          readFormControlValue(event) as DonationOffsetTaxReceiptTreatment,
+                        )
+                      }
+                    >
+                      <option value="no_tax_benefit_claimed">No tax benefit claimed</option>
+                      <option value="participant_may_receive_receipt">Participant may receive external receipt</option>
+                      <option value="counterparty_may_receive_receipt">Counterparty may receive external receipt</option>
+                      <option value="third_party_or_daf_receipt">Third-party or DAF receipt</option>
+                      <option value="unknown_or_unreviewed">Unknown - needs input</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Solicitation treatment</span>
+                    <select
+                      name="offset_charitable_solicitation_treatment"
+                      required={isOffset}
+                      value={offsetCharitableSolicitationTreatment}
+                      onChange={(event) =>
+                        setOffsetCharitableSolicitationTreatment(
+                          readFormControlValue(event) as DonationOffsetCharitableSolicitationTreatment,
+                        )
+                      }
+                    >
+                      <option value="external_donation_only_no_platform_solicitation">External donation only</option>
+                      <option value="platform_facilitated_messaging_needs_review">Platform-facilitated messaging - review</option>
+                      <option value="commercial_co_venture_or_match_promo">Co-venture or match promotion - review</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="field">
+                  <span>Tax receipt explanation</span>
+                  <textarea
+                    name="offset_tax_receipt_explanation"
+                    required={isOffset}
+                    rows={3}
+                    value={offsetTaxReceiptExplanation}
+                    onChange={(event) =>
+                      setOffsetTaxReceiptExplanation(readFormControlValue(event))
+                    }
+                  />
+                </label>
+
+                <div className="field-grid">
+                  <label className="radio-row">
+                    <input
+                      checked={offsetTaxBenefitClaimed}
+                      name="offset_tax_benefit_claimed"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetTaxBenefitClaimed((event.currentTarget as HTMLInputElement).checked)
+                      }
+                    />
+                    <span>Any participant expects to claim a tax benefit.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetDonorAdvisedFundInvolved}
+                      name="offset_daf_involved"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetDonorAdvisedFundInvolved(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Donor-advised fund or fiscal sponsor is involved.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetEmployerMatchInvolved}
+                      name="offset_employer_match_involved"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetEmployerMatchInvolved(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Employer match or similar benefit is involved.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetCommercialCoVentureInvolved}
+                      name="offset_commercial_co_venture_involved"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetCommercialCoVentureInvolved(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Commercial co-venture or match promotion is involved.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetJurisdictionReviewRequired}
+                      name="offset_jurisdiction_review_required"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetJurisdictionReviewRequired(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Legal/jurisdiction review is required before any tax or solicitation claim.</span>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNoTaxAdviceAcknowledged}
+                      name="offset_no_tax_advice_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNoTaxAdviceAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>No tax advice or deductibility is provided by Moral Trade.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetOperationalNotImpactAcknowledged}
+                      name="offset_receipt_operational_not_impact_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetOperationalNotImpactAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Receipts and payment evidence are not impact claims.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetReceiptDoubleClaimPrevented}
+                      name="offset_receipt_double_claim_prevented"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetReceiptDoubleClaimPrevented(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Receipt benefits will not be double-claimed.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetReceiptReassignmentProhibited}
+                      name="offset_receipt_reassignment_prohibited"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetReceiptReassignmentProhibited(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Receipt benefits will not be silently reassigned.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetLockTermsFrozenBeforeConfirmation}
+                      name="offset_donor_terms_lock_freeze_acknowledgement"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetLockTermsFrozenBeforeConfirmation(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>These terms must be frozen before final lock confirmation.</span>
+                  </label>
+                </div>
+
+                <div className="protocol-provenance-preflight" aria-live="polite">
+                  <div className="protocol-provenance-head">
+                    <div>
+                      <strong>Donor-of-record preview</strong>
+                      <p>
+                        Ready for lock review:{" "}
+                        {donationOffsetDonorOfRecordPreview.readyForLockReview ? "yes" : "no"}.
+                        Tax claim allowed:{" "}
+                        {donationOffsetDonorOfRecordPreview.taxDeductibilityClaimAllowed
+                          ? "yes"
+                          : "no"}.
+                      </p>
+                    </div>
+                    <span className="protocol-review-status">
+                      {donationOffsetDonorOfRecordPreview.humanReviewGateCount} review item
+                      {donationOffsetDonorOfRecordPreview.humanReviewGateCount === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <ol className="protocol-provenance-list">
+                    {donationOffsetDonorOfRecordPreview.gates.map((gate) => (
+                      <li
+                        className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
+                          gate.status,
+                        )}`}
+                        key={gate.key}
+                      >
+                        <span className="protocol-step-status">
+                          {formatOffsetDonorGateStatus(gate.status)}
+                        </span>
+                        <div>
+                          <strong>{gate.label}</strong>
+                          <p>{gate.detail}</p>
+                          <small>{gate.nextAction}</small>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </fieldset>
 
             <div className="field-grid">
               <label className="field">

@@ -4,11 +4,15 @@ import { readFileSync } from "node:fs";
 
 import {
   assessDonationOffsetModeration,
+  buildDemoDonationOffsetDonorOfRecordPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
+  buildDonationOffsetDonorOfRecordPreview,
   calculateDonationOffsetPreview,
   calculateDonationOffsetPoolProgress,
   createDefaultDonationOffsetFields,
+  summarizeDonationOffsetDonorOfRecordForNotes,
+  validateDonationOffsetDonorOfRecordInput,
   validateDonationOffsetSubmissionGuards,
   validateDonationOffsetFields,
 } from "@/lib/donation-offsets";
@@ -207,6 +211,117 @@ test("donation offset batch dry run fails closed when ratio bounds reject cleari
   );
 });
 
+test("donation offset donor-of-record preview separates receipts, tax treatment, and impact claims", () => {
+  const preview = buildDemoDonationOffsetDonorOfRecordPreview();
+
+  assert.equal(preview.schemaVersion, "donation-offset-donor-of-record-preview-v1");
+  assert.equal(preview.releaseStage, "donation_offset_preview_no_capture");
+  assert.equal(preview.captureAllowed, false);
+  assert.equal(preview.relianceBearing, false);
+  assert.equal(preview.taxAdviceProvided, false);
+  assert.equal(preview.taxDeductibilityClaimAllowed, false);
+  assert.equal(preview.receiptCreatesImpactClaim, false);
+  assert.equal(preview.requiresFrozenLockTreatment, true);
+  assert.equal(preview.readyForLockReview, true);
+  assert.equal(preview.gates.some((gate) => gate.key === "donor-of-record"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "tax-receipt-treatment"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "charitable-solicitation"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "receipt-double-claim"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "tax-advice-and-impact-separation"), true);
+});
+
+test("donation offset donor-of-record validation rejects missing explicit acknowledgements", () => {
+  const errors = validateDonationOffsetDonorOfRecordInput({
+    destinationLabel: "GiveWell Top Charities Fund",
+    donationPlatform: "External charity payment page",
+    donorOfRecordRole: "unknown",
+    donorOfRecordExplanation: "",
+    taxReceiptTreatment: "unknown_or_unreviewed",
+    taxReceiptExplanation: "",
+    taxBenefitClaimed: false,
+    donorAdvisedFundInvolved: false,
+    employerMatchInvolved: false,
+    commercialCoVentureInvolved: false,
+    charitableSolicitationTreatment: "external_donation_only_no_platform_solicitation",
+    jurisdictionReviewRequired: true,
+    participantAcknowledgedNoTaxAdvice: false,
+    participantAcknowledgedOperationalNotImpact: false,
+    receiptDoubleClaimPrevented: false,
+    receiptReassignmentProhibited: false,
+    lockTermsFrozenBeforeConfirmation: false,
+    destinationVerificationStatus: "registered_destination_selected",
+  });
+
+  assert.ok(errors.some((error) => /donor-of-record/i.test(error)));
+  assert.ok(errors.some((error) => /tax-receipt/i.test(error)));
+  assert.ok(errors.some((error) => /tax advice/i.test(error)));
+  assert.ok(errors.some((error) => /impact claims/i.test(error)));
+  assert.ok(errors.some((error) => /double-claimed/i.test(error)));
+  assert.ok(errors.some((error) => /final lock/i.test(error)));
+});
+
+test("donation offset donor-of-record preview requires review for tax benefits and co-ventures", () => {
+  const preview = buildDonationOffsetDonorOfRecordPreview({
+    destinationLabel: "GiveWell Top Charities Fund",
+    donationPlatform: "External charity payment page",
+    donorOfRecordRole: "participant_direct_donor",
+    donorOfRecordExplanation:
+      "The participant who pays externally remains donor of record; Moral Trade is not donor of record.",
+    taxReceiptTreatment: "participant_may_receive_receipt",
+    taxReceiptExplanation:
+      "The external charity may issue a receipt to the external donor, subject to legal review.",
+    taxBenefitClaimed: true,
+    donorAdvisedFundInvolved: true,
+    employerMatchInvolved: true,
+    commercialCoVentureInvolved: true,
+    charitableSolicitationTreatment: "commercial_co_venture_or_match_promo",
+    jurisdictionReviewRequired: true,
+    participantAcknowledgedNoTaxAdvice: true,
+    participantAcknowledgedOperationalNotImpact: true,
+    receiptDoubleClaimPrevented: true,
+    receiptReassignmentProhibited: true,
+    lockTermsFrozenBeforeConfirmation: true,
+    destinationVerificationStatus: "registered_destination_selected",
+  });
+
+  assert.equal(preview.taxDeductibilityClaimAllowed, false);
+  assert.equal(preview.receiptCreatesImpactClaim, false);
+  assert.equal(preview.gates.find((gate) => gate.key === "tax-receipt-treatment")?.status, "human_review");
+  assert.equal(preview.gates.find((gate) => gate.key === "charitable-solicitation")?.status, "human_review");
+  assert.deepEqual(validateDonationOffsetDonorOfRecordInput({
+    destinationLabel: "GiveWell Top Charities Fund",
+    donationPlatform: "External charity payment page",
+    donorOfRecordRole: "participant_direct_donor",
+    donorOfRecordExplanation:
+      "The participant who pays externally remains donor of record; Moral Trade is not donor of record.",
+    taxReceiptTreatment: "participant_may_receive_receipt",
+    taxReceiptExplanation:
+      "The external charity may issue a receipt to the external donor, subject to legal review.",
+    taxBenefitClaimed: true,
+    donorAdvisedFundInvolved: true,
+    employerMatchInvolved: true,
+    commercialCoVentureInvolved: true,
+    charitableSolicitationTreatment: "commercial_co_venture_or_match_promo",
+    jurisdictionReviewRequired: true,
+    participantAcknowledgedNoTaxAdvice: true,
+    participantAcknowledgedOperationalNotImpact: true,
+    receiptDoubleClaimPrevented: true,
+    receiptReassignmentProhibited: true,
+    lockTermsFrozenBeforeConfirmation: true,
+    destinationVerificationStatus: "registered_destination_selected",
+  }), []);
+});
+
+test("donation offset donor-of-record summary freezes lock treatment in notes", () => {
+  const summary = summarizeDonationOffsetDonorOfRecordForNotes(
+    buildDemoDonationOffsetDonorOfRecordPreview(),
+  );
+
+  assert.match(summary, /Tax deductibility claim allowed from this preview: no/);
+  assert.match(summary, /Receipt creates impact claim: no/);
+  assert.match(summary, /Requires frozen donor-of-record, receipt, solicitation, and destination treatment before final confirmations: yes/);
+});
+
 test("donation offset page renders the moraltrade60 batch-clearing preview surface", () => {
   const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
   const helper = readFileSync("src/lib/donation-offsets.ts", "utf8");
@@ -219,6 +334,19 @@ test("donation offset page renders the moraltrade60 batch-clearing preview surfa
   assert.match(helper, /AtomicSettlementPreview/);
   assert.match(helper, /ready_for_final_lock_confirmation/);
   assert.match(helper, /createsPaymentCapture: false/);
+});
+
+test("donation offset donor-of-record UI and server action are wired", () => {
+  const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
+  const form = readFileSync("src/components/offers/offer-create-form.tsx", "utf8");
+  const action = readFileSync("src/app/actions.ts", "utf8");
+
+  assert.match(page, /Donor-of-record and receipt preview/);
+  assert.match(page, /buildDemoDonationOffsetDonorOfRecordPreview/);
+  assert.match(form, /offset_donor_of_record_role/);
+  assert.match(form, /No tax advice/);
+  assert.match(action, /validateDonationOffsetDonorOfRecordInput/);
+  assert.match(action, /summarizeDonationOffsetDonorOfRecordForNotes/);
 });
 
 test("pool moderation flags missing deadline when pool mode is selected", () => {
