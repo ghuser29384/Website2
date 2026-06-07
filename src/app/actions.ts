@@ -149,6 +149,7 @@ import {
   assessDonationOffsetModeration,
   buildDonationOffsetDonorOfRecordPreview,
   buildDonationOffsetExternalityEvidencePreview,
+  buildDonationOffsetParticipantConfirmationPreview,
   buildDonationOffsetPaymentDestinationPreview,
   calculateDonationOffsetPreview,
   findRegisteredCharityById,
@@ -158,16 +159,24 @@ import {
   normalizeDonationOffsetDonorOfRecordRole,
   normalizeDonationOffsetEvidenceBurden,
   normalizeDonationOffsetFallbackPolicy,
+  normalizeDonationOffsetAmendmentStatus,
+  normalizeDonationOffsetConfirmationScope,
+  normalizeDonationOffsetConsentQualityStatus,
+  normalizeDonationOffsetMatchedLockProposalStatus,
   normalizeDonationOffsetNonparticipantExternalityStatus,
+  normalizeDonationOffsetNoticeRecordStatus,
   normalizeDonationOffsetPaymentDestinationKind,
   normalizeDonationOffsetPaymentDestinationReviewStatus,
+  normalizeDonationOffsetParticipantConfirmationRecordStatus,
   normalizeDonationOffsetRecipientIdentityStatus,
   normalizeDonationOffsetTaxReceiptTreatment,
   summarizeDonationOffsetDonorOfRecordForNotes,
   summarizeDonationOffsetExternalityEvidenceForNotes,
+  summarizeDonationOffsetParticipantConfirmationForNotes,
   summarizeDonationOffsetPaymentDestinationForNotes,
   validateDonationOffsetDonorOfRecordInput,
   validateDonationOffsetExternalityEvidenceInput,
+  validateDonationOffsetParticipantConfirmationInput,
   validateDonationOffsetPaymentDestinationInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
@@ -175,6 +184,7 @@ import {
   type DonationOffsetDonorOfRecordInput,
   type DonationOffsetExternalityEvidenceInput,
   type DonationOffsetParticipationMode,
+  type DonationOffsetParticipantConfirmationInput,
   type DonationOffsetPaymentDestinationInput,
   type DonationOffsetPoolSide,
   type DonationOffsetTimeHorizon,
@@ -327,6 +337,16 @@ function readPositiveIntOrNull(formData: FormData, key: string) {
   const value = Number(readOptional(formData, key));
 
   if (!Number.isInteger(value) || value <= 0) {
+    return null;
+  }
+
+  return value;
+}
+
+function readNonNegativeIntOrNull(formData: FormData, key: string) {
+  const value = Number(readOptional(formData, key));
+
+  if (!Number.isInteger(value) || value < 0) {
     return null;
   }
 
@@ -3661,6 +3681,72 @@ export async function createOfferAction(formData: FormData) {
   const donationOffsetExternalityEvidencePreview = donationOffsetExternalityEvidenceInput
     ? buildDonationOffsetExternalityEvidencePreview(donationOffsetExternalityEvidenceInput)
     : null;
+  const donationOffsetParticipantConfirmationInput: DonationOffsetParticipantConfirmationInput | null =
+    normalizedMode === "offset"
+      ? {
+          baselineSnapshotId: readRequired(formData, "offset_baseline_snapshot_id"),
+          termsSnapshotId: readRequired(formData, "offset_terms_snapshot_id"),
+          policySnapshotId: readRequired(formData, "offset_policy_snapshot_id"),
+          maximumExposureUsd: readPositiveMoneyAmount(
+            formData,
+            "offset_maximum_exposure_usd",
+          ),
+          matchedTradeLockProposalStatus: normalizeDonationOffsetMatchedLockProposalStatus(
+            readOptional(formData, "offset_matched_lock_proposal_status"),
+          ),
+          confirmationRecordStatus: normalizeDonationOffsetParticipantConfirmationRecordStatus(
+            readOptional(formData, "offset_participant_confirmation_record_status"),
+          ),
+          consentQualityStatus: normalizeDonationOffsetConsentQualityStatus(
+            readOptional(formData, "offset_consent_quality_status"),
+          ),
+          noticeRecordStatus: normalizeDonationOffsetNoticeRecordStatus(
+            readOptional(formData, "offset_notice_record_status"),
+          ),
+          confirmationScope: normalizeDonationOffsetConfirmationScope(
+            readOptional(formData, "offset_confirmation_scope"),
+          ),
+          amendmentStatus: normalizeDonationOffsetAmendmentStatus(
+            readOptional(formData, "offset_amendment_status"),
+          ),
+          affectedParticipantCount:
+            readPositiveIntOrNull(formData, "offset_affected_participant_count") ?? 0,
+          freshConfirmationCount:
+            readNonNegativeIntOrNull(formData, "offset_fresh_confirmation_count") ?? -1,
+          participantSurplusConfirmed: readBoolean(
+            formData,
+            "offset_participant_surplus_confirmed",
+          ),
+          participantSurplusStatement: readRequired(
+            formData,
+            "offset_participant_surplus_statement",
+          ),
+          materialChangePending: readBoolean(formData, "offset_material_change_pending"),
+          lockOrCaptureRequested: readBoolean(formData, "offset_lock_or_capture_requested"),
+          participantAcknowledgedBaselineComparison: readBoolean(
+            formData,
+            "offset_baseline_comparison_acknowledgement",
+          ),
+          participantAcknowledgedFreshConfirmationRequired: readBoolean(
+            formData,
+            "offset_fresh_confirmation_required_acknowledgement",
+          ),
+          participantAcknowledgedNoPreselectedPaidCommitment: readBoolean(
+            formData,
+            "offset_no_preselected_paid_commitment_acknowledgement",
+          ),
+          participantAcknowledgedNoDarkPattern: readBoolean(
+            formData,
+            "offset_no_dark_pattern_acknowledgement",
+          ),
+        }
+      : null;
+  const donationOffsetParticipantConfirmationPreview =
+    donationOffsetParticipantConfirmationInput
+      ? buildDonationOffsetParticipantConfirmationPreview(
+          donationOffsetParticipantConfirmationInput,
+        )
+      : null;
   const newOfferReturnPath =
     normalizedMode === "offset"
       ? `/offers/new?mode=offset${
@@ -3820,6 +3906,21 @@ export async function createOfferAction(formData: FormData) {
     }
   }
 
+  if (donationOffsetParticipantConfirmationInput) {
+    const participantConfirmationErrors = validateDonationOffsetParticipantConfirmationInput(
+      donationOffsetParticipantConfirmationInput,
+    );
+
+    if (participantConfirmationErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        participantConfirmationErrors[0] ??
+          "Complete the donation offset participant-confirmation terms.",
+      );
+    }
+  }
+
   if (pledgePerformanceBondFields?.enabled) {
     const bondValidation = validatePerformanceBondTerms(
       pledgePerformanceBondFields.terms,
@@ -3902,6 +4003,11 @@ export async function createOfferAction(formData: FormData) {
       : "",
     donationOffsetExternalityEvidencePreview
       ? summarizeDonationOffsetExternalityEvidenceForNotes(donationOffsetExternalityEvidencePreview)
+      : "",
+    donationOffsetParticipantConfirmationPreview
+      ? summarizeDonationOffsetParticipantConfirmationForNotes(
+          donationOffsetParticipantConfirmationPreview,
+        )
       : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, protocolTransition),
   ]
@@ -4384,6 +4490,11 @@ export async function createOfferAction(formData: FormData) {
       : "",
     donationOffsetExternalityEvidencePreview
       ? summarizeDonationOffsetExternalityEvidenceForNotes(donationOffsetExternalityEvidencePreview)
+      : "",
+    donationOffsetParticipantConfirmationPreview
+      ? summarizeDonationOffsetParticipantConfirmationForNotes(
+          donationOffsetParticipantConfirmationPreview,
+        )
       : "",
     buildMoralTradeOfferProtocolNotes(protocolReview, provenanceResult.transition),
   ]

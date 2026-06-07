@@ -28,6 +28,7 @@ import {
 import {
   buildDonationOffsetDonorOfRecordPreview,
   buildDonationOffsetExternalityEvidencePreview,
+  buildDonationOffsetParticipantConfirmationPreview,
   buildDonationOffsetPaymentDestinationPreview,
   calculateDonationOffsetPoolProgress,
   calculateDonationOffsetPreview,
@@ -43,6 +44,7 @@ import {
   findRegisteredCharityById,
   validateDonationOffsetDonorOfRecordInput,
   validateDonationOffsetExternalityEvidenceInput,
+  validateDonationOffsetParticipantConfirmationInput,
   validateDonationOffsetPaymentDestinationInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
@@ -59,10 +61,17 @@ import {
   type DonationOffsetEvidenceBurden,
   type DonationOffsetExternalityEvidenceInput,
   type DonationOffsetFallbackPolicy,
+  type DonationOffsetAmendmentStatus,
+  type DonationOffsetConfirmationScope,
+  type DonationOffsetConsentQualityStatus,
   type DonationOffsetNonparticipantExternalityStatus,
+  type DonationOffsetMatchedLockProposalStatus,
+  type DonationOffsetNoticeRecordStatus,
   type DonationOffsetPaymentDestinationInput,
   type DonationOffsetPaymentDestinationKind,
   type DonationOffsetPaymentDestinationReviewStatus,
+  type DonationOffsetParticipantConfirmationInput,
+  type DonationOffsetParticipantConfirmationRecordStatus,
   type DonationOffsetRecipientIdentityStatus,
   type DonationOffsetTaxReceiptTreatment,
 } from "@/lib/donation-offsets";
@@ -286,6 +295,11 @@ const defaultOffsetLeastIntrusiveAlternative =
   "A dated receipt or public charity payment confirmation should be tried before private financial records or third-party exposure.";
 const defaultOffsetFallbackExplanation =
   "If externality, evidence, destination, or review gates fail, keep the record in manual review rather than silently rerouting funds.";
+const defaultOffsetBaselineSnapshotId = "baseline-snapshot:donation-offset-draft";
+const defaultOffsetTermsSnapshotId = "terms-snapshot:donation-offset-draft";
+const defaultOffsetPolicySnapshotId = "policy-snapshot:donation-offset-no-capture";
+const defaultOffsetParticipantSurplusStatement =
+  "I confirm this frozen donation-offset agreement is preferable or acceptable relative to my no-trade baseline.";
 const defaultPledgeReciprocalReleaseRule =
   "If one side exits under the stated rule, both sides are released from future obligations while completed or disputed past obligations remain reviewable.";
 const defaultPledgeWithdrawalBeforeLockRule =
@@ -1103,6 +1117,47 @@ export function OfferCreateForm({
     useState(false);
   const [offsetFallbackNoSilentRerouteAcknowledged, setOffsetFallbackNoSilentRerouteAcknowledged] =
     useState(false);
+  const [offsetBaselineSnapshotId, setOffsetBaselineSnapshotId] = useState(
+    defaultOffsetBaselineSnapshotId,
+  );
+  const [offsetTermsSnapshotId, setOffsetTermsSnapshotId] = useState(
+    defaultOffsetTermsSnapshotId,
+  );
+  const [offsetPolicySnapshotId, setOffsetPolicySnapshotId] = useState(
+    defaultOffsetPolicySnapshotId,
+  );
+  const [offsetMaximumExposureUsd, setOffsetMaximumExposureUsd] = useState("1000");
+  const [offsetMatchedLockProposalStatus, setOffsetMatchedLockProposalStatus] =
+    useState<DonationOffsetMatchedLockProposalStatus>("drafted");
+  const [offsetParticipantConfirmationRecordStatus, setOffsetParticipantConfirmationRecordStatus] =
+    useState<DonationOffsetParticipantConfirmationRecordStatus>("draft_only");
+  const [offsetConsentQualityStatus, setOffsetConsentQualityStatus] =
+    useState<DonationOffsetConsentQualityStatus>("needs_review");
+  const [offsetNoticeRecordStatus, setOffsetNoticeRecordStatus] =
+    useState<DonationOffsetNoticeRecordStatus>("recorded");
+  const [offsetConfirmationScope, setOffsetConfirmationScope] =
+    useState<DonationOffsetConfirmationScope>("final_lock");
+  const [offsetAmendmentStatus, setOffsetAmendmentStatus] =
+    useState<DonationOffsetAmendmentStatus>("none");
+  const [offsetAffectedParticipantCount, setOffsetAffectedParticipantCount] = useState("2");
+  const [offsetFreshConfirmationCount, setOffsetFreshConfirmationCount] = useState("0");
+  const [offsetParticipantSurplusConfirmed, setOffsetParticipantSurplusConfirmed] = useState(false);
+  const [offsetParticipantSurplusStatement, setOffsetParticipantSurplusStatement] = useState(
+    defaultOffsetParticipantSurplusStatement,
+  );
+  const [offsetMaterialChangePending, setOffsetMaterialChangePending] = useState(false);
+  const [offsetLockOrCaptureRequested, setOffsetLockOrCaptureRequested] = useState(false);
+  const [offsetBaselineComparisonAcknowledged, setOffsetBaselineComparisonAcknowledged] =
+    useState(false);
+  const [
+    offsetFreshConfirmationRequiredAcknowledged,
+    setOffsetFreshConfirmationRequiredAcknowledged,
+  ] = useState(false);
+  const [
+    offsetNoPreselectedPaidCommitmentAcknowledged,
+    setOffsetNoPreselectedPaidCommitmentAcknowledged,
+  ] = useState(false);
+  const [offsetNoDarkPatternAcknowledged, setOffsetNoDarkPatternAcknowledged] = useState(false);
   const [offerImpact, setOfferImpact] = useState(initialTemplate?.offerImpact ?? "7");
   const [minCounterpartyImpact, setMinCounterpartyImpact] = useState(initialTemplate?.minCounterpartyImpact ?? "6");
   const [verificationPreference, setVerificationPreference] = useState(initialTemplate?.verification ?? "Annual receipts");
@@ -1363,6 +1418,72 @@ export function OfferCreateForm({
         : [],
     [donationOffsetExternalityEvidenceInput, isOffset],
   );
+  const donationOffsetParticipantConfirmationInput =
+    useMemo<DonationOffsetParticipantConfirmationInput>(
+      () => ({
+        baselineSnapshotId: offsetBaselineSnapshotId,
+        termsSnapshotId: offsetTermsSnapshotId,
+        policySnapshotId: offsetPolicySnapshotId,
+        maximumExposureUsd:
+          offsetMaximumExposureUsd === "" ? null : Number(offsetMaximumExposureUsd),
+        matchedTradeLockProposalStatus: offsetMatchedLockProposalStatus,
+        confirmationRecordStatus: offsetParticipantConfirmationRecordStatus,
+        consentQualityStatus: offsetConsentQualityStatus,
+        noticeRecordStatus: offsetNoticeRecordStatus,
+        confirmationScope: offsetConfirmationScope,
+        amendmentStatus: offsetAmendmentStatus,
+        affectedParticipantCount: Number(offsetAffectedParticipantCount),
+        freshConfirmationCount: Number(offsetFreshConfirmationCount),
+        participantSurplusConfirmed: offsetParticipantSurplusConfirmed,
+        participantSurplusStatement: offsetParticipantSurplusStatement,
+        materialChangePending: offsetMaterialChangePending,
+        lockOrCaptureRequested: offsetLockOrCaptureRequested,
+        participantAcknowledgedBaselineComparison: offsetBaselineComparisonAcknowledged,
+        participantAcknowledgedFreshConfirmationRequired:
+          offsetFreshConfirmationRequiredAcknowledged,
+        participantAcknowledgedNoPreselectedPaidCommitment:
+          offsetNoPreselectedPaidCommitmentAcknowledged,
+        participantAcknowledgedNoDarkPattern: offsetNoDarkPatternAcknowledged,
+      }),
+      [
+        offsetAffectedParticipantCount,
+        offsetAmendmentStatus,
+        offsetBaselineComparisonAcknowledged,
+        offsetBaselineSnapshotId,
+        offsetConfirmationScope,
+        offsetConsentQualityStatus,
+        offsetFreshConfirmationCount,
+        offsetFreshConfirmationRequiredAcknowledged,
+        offsetLockOrCaptureRequested,
+        offsetMatchedLockProposalStatus,
+        offsetMaterialChangePending,
+        offsetMaximumExposureUsd,
+        offsetNoDarkPatternAcknowledged,
+        offsetNoPreselectedPaidCommitmentAcknowledged,
+        offsetNoticeRecordStatus,
+        offsetParticipantConfirmationRecordStatus,
+        offsetParticipantSurplusConfirmed,
+        offsetParticipantSurplusStatement,
+        offsetPolicySnapshotId,
+        offsetTermsSnapshotId,
+      ],
+    );
+  const donationOffsetParticipantConfirmationPreview = useMemo(
+    () =>
+      buildDonationOffsetParticipantConfirmationPreview(
+        donationOffsetParticipantConfirmationInput,
+      ),
+    [donationOffsetParticipantConfirmationInput],
+  );
+  const donationOffsetParticipantConfirmationErrors = useMemo(
+    () =>
+      isOffset
+        ? validateDonationOffsetParticipantConfirmationInput(
+            donationOffsetParticipantConfirmationInput,
+          )
+        : [],
+    [donationOffsetParticipantConfirmationInput, isOffset],
+  );
   const baselineAmountCents = Math.round((Number(baselineAmountUsd) || 0) * 100);
   const baselineBondCapCents = calculatePilotBaselineBondCapCents(baselineAmountCents);
   const baselineBondValidation = useMemo(
@@ -1584,6 +1705,7 @@ export function OfferCreateForm({
             ...donationOffsetDonorOfRecordErrors,
             ...donationOffsetPaymentDestinationErrors,
             ...donationOffsetExternalityEvidenceErrors,
+            ...donationOffsetParticipantConfirmationErrors,
           ]
         : [],
     [
@@ -1591,6 +1713,7 @@ export function OfferCreateForm({
       baselineBondValidation.errors,
       donationOffsetDonorOfRecordErrors,
       donationOffsetExternalityEvidenceErrors,
+      donationOffsetParticipantConfirmationErrors,
       donationOffsetPaymentDestinationErrors,
       evidenceUrl,
       isOffset,
@@ -4628,6 +4751,384 @@ export function OfferCreateForm({
                   </div>
                   <ol className="protocol-provenance-list">
                     {donationOffsetExternalityEvidencePreview.gates.map((gate) => (
+                      <li
+                        className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
+                          gate.status,
+                        )}`}
+                        key={gate.key}
+                      >
+                        <span className="protocol-step-status">
+                          {formatOffsetDonorGateStatus(gate.status)}
+                        </span>
+                        <div>
+                          <strong>{gate.label}</strong>
+                          <p>{gate.detail}</p>
+                          <small>{gate.nextAction}</small>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="field">
+              <legend>Participant confirmation and lock boundary</legend>
+              <div className="panel subtle-panel">
+                <div className="panel-head">
+                  <div>
+                    <p className="eyebrow">Fresh consent before clearing</p>
+                    <h3>Record participant surplus without authorizing capture</h3>
+                  </div>
+                  <span className="badge badge-warning">
+                    {donationOffsetParticipantConfirmationPreview.releaseStage.replaceAll("_", " ")}
+                  </span>
+                </div>
+                <p className="panel-note">
+                  Moral Trade cannot infer that an offset is preferable from a match result. The
+                  participant confirmation must compare the frozen agreement with the no-trade
+                  baseline for that participant, and this draft remains preview-only.
+                </p>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Baseline snapshot</span>
+                    <input
+                      name="offset_baseline_snapshot_id"
+                      required={isOffset}
+                      type="text"
+                      value={offsetBaselineSnapshotId}
+                      onChange={(event) =>
+                        setOffsetBaselineSnapshotId(readFormControlValue(event))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Terms snapshot</span>
+                    <input
+                      name="offset_terms_snapshot_id"
+                      required={isOffset}
+                      type="text"
+                      value={offsetTermsSnapshotId}
+                      onChange={(event) => setOffsetTermsSnapshotId(readFormControlValue(event))}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Policy snapshot</span>
+                    <input
+                      name="offset_policy_snapshot_id"
+                      required={isOffset}
+                      type="text"
+                      value={offsetPolicySnapshotId}
+                      onChange={(event) => setOffsetPolicySnapshotId(readFormControlValue(event))}
+                    />
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Maximum exposure</span>
+                    <input
+                      min="0.01"
+                      name="offset_maximum_exposure_usd"
+                      required={isOffset}
+                      step="0.01"
+                      type="number"
+                      value={offsetMaximumExposureUsd}
+                      onChange={(event) =>
+                        setOffsetMaximumExposureUsd(readFormControlValue(event))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Affected participants</span>
+                    <input
+                      min="1"
+                      name="offset_affected_participant_count"
+                      required={isOffset}
+                      step="1"
+                      type="number"
+                      value={offsetAffectedParticipantCount}
+                      onChange={(event) =>
+                        setOffsetAffectedParticipantCount(readFormControlValue(event))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Fresh confirmations</span>
+                    <input
+                      min="0"
+                      name="offset_fresh_confirmation_count"
+                      required={isOffset}
+                      step="1"
+                      type="number"
+                      value={offsetFreshConfirmationCount}
+                      onChange={(event) =>
+                        setOffsetFreshConfirmationCount(readFormControlValue(event))
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Matched-lock proposal</span>
+                    <select
+                      name="offset_matched_lock_proposal_status"
+                      required={isOffset}
+                      value={offsetMatchedLockProposalStatus}
+                      onChange={(event) =>
+                        setOffsetMatchedLockProposalStatus(
+                          readFormControlValue(event) as DonationOffsetMatchedLockProposalStatus,
+                        )
+                      }
+                    >
+                      <option value="drafted">Drafted for frozen terms</option>
+                      <option value="not_created">Not created</option>
+                      <option value="stale">Stale</option>
+                      <option value="superseded">Superseded</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Confirmation record</span>
+                    <select
+                      name="offset_participant_confirmation_record_status"
+                      required={isOffset}
+                      value={offsetParticipantConfirmationRecordStatus}
+                      onChange={(event) =>
+                        setOffsetParticipantConfirmationRecordStatus(
+                          readFormControlValue(
+                            event,
+                          ) as DonationOffsetParticipantConfirmationRecordStatus,
+                        )
+                      }
+                    >
+                      <option value="recorded_non_stale">Recorded and non-stale</option>
+                      <option value="draft_only">Draft only - review needed</option>
+                      <option value="missing">Missing</option>
+                      <option value="stale">Stale</option>
+                      <option value="superseded">Superseded</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Consent quality</span>
+                    <select
+                      name="offset_consent_quality_status"
+                      required={isOffset}
+                      value={offsetConsentQualityStatus}
+                      onChange={(event) =>
+                        setOffsetConsentQualityStatus(
+                          readFormControlValue(event) as DonationOffsetConsentQualityStatus,
+                        )
+                      }
+                    >
+                      <option value="passed">Passed</option>
+                      <option value="needs_review">Needs review</option>
+                      <option value="failed">Failed</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Notice record</span>
+                    <select
+                      name="offset_notice_record_status"
+                      required={isOffset}
+                      value={offsetNoticeRecordStatus}
+                      onChange={(event) =>
+                        setOffsetNoticeRecordStatus(
+                          readFormControlValue(event) as DonationOffsetNoticeRecordStatus,
+                        )
+                      }
+                    >
+                      <option value="recorded">Recorded</option>
+                      <option value="missing">Missing</option>
+                      <option value="failed">Failed</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Confirmation scope</span>
+                    <select
+                      name="offset_confirmation_scope"
+                      required={isOffset}
+                      value={offsetConfirmationScope}
+                      onChange={(event) =>
+                        setOffsetConfirmationScope(
+                          readFormControlValue(event) as DonationOffsetConfirmationScope,
+                        )
+                      }
+                    >
+                      <option value="final_lock">Final lock</option>
+                      <option value="renewed_material_change">Renewed material change</option>
+                      <option value="preview_only">Preview only</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Amendment status</span>
+                    <select
+                      name="offset_amendment_status"
+                      required={isOffset}
+                      value={offsetAmendmentStatus}
+                      onChange={(event) =>
+                        setOffsetAmendmentStatus(
+                          readFormControlValue(event) as DonationOffsetAmendmentStatus,
+                        )
+                      }
+                    >
+                      <option value="none">No material change pending</option>
+                      <option value="drafted_needs_confirmation">Drafted - needs confirmation</option>
+                      <option value="confirmed">Confirmed amendment</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="field">
+                  <span>Participant surplus statement</span>
+                  <textarea
+                    name="offset_participant_surplus_statement"
+                    required={isOffset}
+                    rows={3}
+                    value={offsetParticipantSurplusStatement}
+                    onChange={(event) =>
+                      setOffsetParticipantSurplusStatement(readFormControlValue(event))
+                    }
+                  />
+                </label>
+
+                <div className="field-grid">
+                  <label className="radio-row">
+                    <input
+                      checked={offsetParticipantSurplusConfirmed}
+                      name="offset_participant_surplus_confirmed"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetParticipantSurplusConfirmed(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>The participant confirms the frozen agreement against their no-trade baseline.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetMaterialChangePending}
+                      name="offset_material_change_pending"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetMaterialChangePending(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>A material change is pending and needs renewed confirmation.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetLockOrCaptureRequested}
+                      name="offset_lock_or_capture_requested"
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetLockOrCaptureRequested(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>This draft requests final lock, capture, release, or reliance now.</span>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="radio-row">
+                    <input
+                      checked={offsetBaselineComparisonAcknowledged}
+                      name="offset_baseline_comparison_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetBaselineComparisonAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Moral Trade cannot infer participant surplus from matching.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetFreshConfirmationRequiredAcknowledged}
+                      name="offset_fresh_confirmation_required_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetFreshConfirmationRequiredAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Final lock requires fresh participant confirmation records.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNoPreselectedPaidCommitmentAcknowledged}
+                      name="offset_no_preselected_paid_commitment_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNoPreselectedPaidCommitmentAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Paid commitments cannot be preselected or silently converted.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNoDarkPatternAcknowledged}
+                      name="offset_no_dark_pattern_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNoDarkPatternAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Confirmation must avoid dark-pattern pressure.</span>
+                  </label>
+                </div>
+
+                <div className="protocol-provenance-preflight" aria-live="polite">
+                  <div className="protocol-provenance-head">
+                    <div>
+                      <strong>Participant confirmation preview</strong>
+                      <p>
+                        Clearing allowed:{" "}
+                        {donationOffsetParticipantConfirmationPreview.clearingAllowed
+                          ? "yes"
+                          : "no"}
+                        . Platform infers moral surplus:{" "}
+                        {donationOffsetParticipantConfirmationPreview.platformInfersMoralSurplus
+                          ? "yes"
+                          : "no"}
+                        .
+                      </p>
+                    </div>
+                    <span className="protocol-review-status">
+                      {donationOffsetParticipantConfirmationPreview.humanReviewGateCount} review item
+                      {donationOffsetParticipantConfirmationPreview.humanReviewGateCount === 1
+                        ? ""
+                        : "s"}
+                    </span>
+                  </div>
+                  <ol className="protocol-provenance-list">
+                    {donationOffsetParticipantConfirmationPreview.gates.map((gate) => (
                       <li
                         className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
                           gate.status,

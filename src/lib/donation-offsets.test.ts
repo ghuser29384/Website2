@@ -6,20 +6,24 @@ import {
   assessDonationOffsetModeration,
   buildDemoDonationOffsetDonorOfRecordPreview,
   buildDemoDonationOffsetExternalityEvidencePreview,
+  buildDemoDonationOffsetParticipantConfirmationPreview,
   buildDemoDonationOffsetPaymentDestinationPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
   buildDonationOffsetDonorOfRecordPreview,
   buildDonationOffsetExternalityEvidencePreview,
+  buildDonationOffsetParticipantConfirmationPreview,
   buildDonationOffsetPaymentDestinationPreview,
   calculateDonationOffsetPreview,
   calculateDonationOffsetPoolProgress,
   createDefaultDonationOffsetFields,
   summarizeDonationOffsetDonorOfRecordForNotes,
   summarizeDonationOffsetExternalityEvidenceForNotes,
+  summarizeDonationOffsetParticipantConfirmationForNotes,
   summarizeDonationOffsetPaymentDestinationForNotes,
   validateDonationOffsetDonorOfRecordInput,
   validateDonationOffsetExternalityEvidenceInput,
+  validateDonationOffsetParticipantConfirmationInput,
   validateDonationOffsetPaymentDestinationInput,
   validateDonationOffsetSubmissionGuards,
   validateDonationOffsetFields,
@@ -560,6 +564,135 @@ test("donation offset externality summary records evidence and impact boundaries
   assert.match(summary, /Requires fallback policy before lock: yes/);
 });
 
+test("donation offset participant confirmation preview is first-class and no-capture", () => {
+  const preview = buildDemoDonationOffsetParticipantConfirmationPreview();
+
+  assert.equal(preview.schemaVersion, "donation-offset-participant-confirmation-preview-v1");
+  assert.equal(preview.releaseStage, "donation_offset_preview_no_capture");
+  assert.equal(preview.captureAllowed, false);
+  assert.equal(preview.clearingAllowed, false);
+  assert.equal(preview.relianceBearing, false);
+  assert.equal(preview.platformInfersMoralSurplus, false);
+  assert.equal(preview.checkboxAuthorizesCapture, false);
+  assert.equal(preview.requiresParticipantConfirmationRecord, true);
+  assert.equal(preview.requiresMatchedLockProposal, true);
+  assert.equal(preview.requiresConsentQualityRecord, true);
+  assert.equal(preview.readyForFinalLockReview, true);
+  assert.equal(preview.gates.some((gate) => gate.key === "participant-surplus-confirmation"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "matched-lock-proposal"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "participant-confirmation-record"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "fresh-confirmation-count"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "consent-quality"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "baseline-comparison-acknowledgement"), true);
+});
+
+test("donation offset participant confirmation validation rejects missing records and acknowledgements", () => {
+  const errors = validateDonationOffsetParticipantConfirmationInput({
+    baselineSnapshotId: "",
+    termsSnapshotId: "",
+    policySnapshotId: "",
+    maximumExposureUsd: null,
+    matchedTradeLockProposalStatus: "not_created",
+    confirmationRecordStatus: "missing",
+    consentQualityStatus: "unknown",
+    noticeRecordStatus: "missing",
+    confirmationScope: "unknown",
+    amendmentStatus: "unknown",
+    affectedParticipantCount: 0,
+    freshConfirmationCount: -1,
+    participantSurplusConfirmed: false,
+    participantSurplusStatement: "",
+    materialChangePending: false,
+    lockOrCaptureRequested: false,
+    participantAcknowledgedBaselineComparison: false,
+    participantAcknowledgedFreshConfirmationRequired: false,
+    participantAcknowledgedNoPreselectedPaidCommitment: false,
+    participantAcknowledgedNoDarkPattern: false,
+  });
+
+  assert.ok(errors.some((error) => /baseline snapshot/i.test(error)));
+  assert.ok(errors.some((error) => /surplus confirmation/i.test(error)));
+  assert.ok(errors.some((error) => /affected participants/i.test(error)));
+  assert.ok(errors.some((error) => /fresh confirmation count/i.test(error)));
+  assert.ok(errors.some((error) => /paid commitments cannot be preselected/i.test(error)));
+  assert.ok(errors.some((error) => /dark-pattern/i.test(error)));
+});
+
+test("donation offset participant confirmation fails closed on premature lock or capture", () => {
+  const input: Parameters<typeof buildDonationOffsetParticipantConfirmationPreview>[0] = {
+    baselineSnapshotId: "baseline-snapshot:test",
+    termsSnapshotId: "terms-snapshot:test",
+    policySnapshotId: "policy-snapshot:test",
+    maximumExposureUsd: 200,
+    matchedTradeLockProposalStatus: "drafted",
+    confirmationRecordStatus: "recorded_non_stale",
+    consentQualityStatus: "passed",
+    noticeRecordStatus: "recorded",
+    confirmationScope: "final_lock",
+    amendmentStatus: "none",
+    affectedParticipantCount: 2,
+    freshConfirmationCount: 2,
+    participantSurplusConfirmed: true,
+    participantSurplusStatement:
+      "The agreement is acceptable relative to this participant's no-trade baseline.",
+    materialChangePending: false,
+    lockOrCaptureRequested: true,
+    participantAcknowledgedBaselineComparison: true,
+    participantAcknowledgedFreshConfirmationRequired: true,
+    participantAcknowledgedNoPreselectedPaidCommitment: true,
+    participantAcknowledgedNoDarkPattern: true,
+  };
+  const preview = buildDonationOffsetParticipantConfirmationPreview(input);
+  const errors = validateDonationOffsetParticipantConfirmationInput(input);
+
+  assert.equal(preview.captureAllowed, false);
+  assert.equal(preview.clearingAllowed, false);
+  assert.equal(preview.gates.find((gate) => gate.key === "lock-capture-boundary")?.status, "blocked");
+  assert.ok(errors.some((error) => /cannot request lock or capture/i.test(error)));
+});
+
+test("donation offset participant confirmation blocks stale proposals and confirmations", () => {
+  const preview = buildDonationOffsetParticipantConfirmationPreview({
+    baselineSnapshotId: "baseline-snapshot:test",
+    termsSnapshotId: "terms-snapshot:test",
+    policySnapshotId: "policy-snapshot:test",
+    maximumExposureUsd: 200,
+    matchedTradeLockProposalStatus: "stale",
+    confirmationRecordStatus: "superseded",
+    consentQualityStatus: "passed",
+    noticeRecordStatus: "recorded",
+    confirmationScope: "final_lock",
+    amendmentStatus: "none",
+    affectedParticipantCount: 2,
+    freshConfirmationCount: 2,
+    participantSurplusConfirmed: true,
+    participantSurplusStatement:
+      "The agreement is acceptable relative to this participant's no-trade baseline.",
+    materialChangePending: false,
+    lockOrCaptureRequested: false,
+    participantAcknowledgedBaselineComparison: true,
+    participantAcknowledgedFreshConfirmationRequired: true,
+    participantAcknowledgedNoPreselectedPaidCommitment: true,
+    participantAcknowledgedNoDarkPattern: true,
+  });
+
+  assert.equal(preview.gates.find((gate) => gate.key === "matched-lock-proposal")?.status, "blocked");
+  assert.equal(preview.gates.find((gate) => gate.key === "participant-confirmation-record")?.status, "blocked");
+  assert.equal(preview.readyForFinalLockReview, false);
+});
+
+test("donation offset participant confirmation summary records consent boundaries", () => {
+  const summary = summarizeDonationOffsetParticipantConfirmationForNotes(
+    buildDemoDonationOffsetParticipantConfirmationPreview(),
+  );
+
+  assert.match(summary, /Platform infers moral surplus: no/);
+  assert.match(summary, /Checkbox authorizes capture: no/);
+  assert.match(summary, /Requires participant confirmation record: yes/);
+  assert.match(summary, /Requires matched-lock proposal: yes/);
+  assert.match(summary, /Requires consent-quality record: yes/);
+});
+
 test("donation offset page renders the moraltrade60 batch-clearing preview surface", () => {
   const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
   const helper = readFileSync("src/lib/donation-offsets.ts", "utf8");
@@ -611,6 +744,21 @@ test("donation offset externality and evidence UI and server action are wired", 
   assert.match(form, /offset_least_intrusive_evidence_acknowledgement/);
   assert.match(action, /validateDonationOffsetExternalityEvidenceInput/);
   assert.match(action, /summarizeDonationOffsetExternalityEvidenceForNotes/);
+});
+
+test("donation offset participant-confirmation UI and server action are wired", () => {
+  const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
+  const form = readFileSync("src/components/offers/offer-create-form.tsx", "utf8");
+  const action = readFileSync("src/app/actions.ts", "utf8");
+
+  assert.match(page, /Participant confirmation and lock boundary/);
+  assert.match(page, /The platform does not infer moral surplus/);
+  assert.match(page, /buildDemoDonationOffsetParticipantConfirmationPreview/);
+  assert.match(form, /offset_participant_confirmation_record_status/);
+  assert.match(form, /offset_baseline_comparison_acknowledgement/);
+  assert.match(form, /offset_lock_or_capture_requested/);
+  assert.match(action, /validateDonationOffsetParticipantConfirmationInput/);
+  assert.match(action, /summarizeDonationOffsetParticipantConfirmationForNotes/);
 });
 
 test("pool moderation flags missing deadline when pool mode is selected", () => {

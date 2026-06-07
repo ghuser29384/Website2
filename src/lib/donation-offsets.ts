@@ -66,6 +66,39 @@ export type DonationOffsetFallbackPolicy =
   | "manual_review"
   | "return_to_donors"
   | "unknown";
+export type DonationOffsetMatchedLockProposalStatus =
+  | "drafted"
+  | "not_created"
+  | "stale"
+  | "superseded"
+  | "unknown";
+export type DonationOffsetParticipantConfirmationRecordStatus =
+  | "recorded_non_stale"
+  | "draft_only"
+  | "missing"
+  | "stale"
+  | "superseded"
+  | "unknown";
+export type DonationOffsetConsentQualityStatus =
+  | "passed"
+  | "needs_review"
+  | "failed"
+  | "unknown";
+export type DonationOffsetNoticeRecordStatus =
+  | "recorded"
+  | "missing"
+  | "failed"
+  | "unknown";
+export type DonationOffsetConfirmationScope =
+  | "preview_only"
+  | "final_lock"
+  | "renewed_material_change"
+  | "unknown";
+export type DonationOffsetAmendmentStatus =
+  | "none"
+  | "drafted_needs_confirmation"
+  | "confirmed"
+  | "unknown";
 export type DonationOffsetDonorOfRecordGateStatus =
   | "pass"
   | "needs_input"
@@ -74,6 +107,8 @@ export type DonationOffsetDonorOfRecordGateStatus =
 export type DonationOffsetPaymentDestinationGateStatus =
   DonationOffsetDonorOfRecordGateStatus;
 export type DonationOffsetExternalityEvidenceGateStatus =
+  DonationOffsetDonorOfRecordGateStatus;
+export type DonationOffsetParticipantConfirmationGateStatus =
   DonationOffsetDonorOfRecordGateStatus;
 
 export interface RegisteredCharity {
@@ -357,6 +392,67 @@ export interface DonationOffsetExternalityEvidencePreview {
   blockedGateCount: number;
   humanReviewGateCount: number;
   readyForExternalityReview: boolean;
+}
+
+export interface DonationOffsetParticipantConfirmationInput {
+  baselineSnapshotId: string;
+  termsSnapshotId: string;
+  policySnapshotId: string;
+  maximumExposureUsd: number | null;
+  matchedTradeLockProposalStatus: DonationOffsetMatchedLockProposalStatus;
+  confirmationRecordStatus: DonationOffsetParticipantConfirmationRecordStatus;
+  consentQualityStatus: DonationOffsetConsentQualityStatus;
+  noticeRecordStatus: DonationOffsetNoticeRecordStatus;
+  confirmationScope: DonationOffsetConfirmationScope;
+  amendmentStatus: DonationOffsetAmendmentStatus;
+  affectedParticipantCount: number;
+  freshConfirmationCount: number;
+  participantSurplusConfirmed: boolean;
+  participantSurplusStatement: string;
+  materialChangePending: boolean;
+  lockOrCaptureRequested: boolean;
+  participantAcknowledgedBaselineComparison: boolean;
+  participantAcknowledgedFreshConfirmationRequired: boolean;
+  participantAcknowledgedNoPreselectedPaidCommitment: boolean;
+  participantAcknowledgedNoDarkPattern: boolean;
+}
+
+export interface DonationOffsetParticipantConfirmationGate {
+  key: string;
+  label: string;
+  status: DonationOffsetParticipantConfirmationGateStatus;
+  detail: string;
+  nextAction: string;
+  blockerCodes: string[];
+}
+
+export interface DonationOffsetParticipantConfirmationPreview {
+  schemaVersion: "donation-offset-participant-confirmation-preview-v1";
+  releaseStage: "donation_offset_preview_no_capture";
+  captureAllowed: false;
+  clearingAllowed: false;
+  relianceBearing: false;
+  platformInfersMoralSurplus: false;
+  checkboxAuthorizesCapture: false;
+  requiresParticipantConfirmationRecord: true;
+  requiresMatchedLockProposal: true;
+  requiresConsentQualityRecord: true;
+  baselineSnapshotId: string;
+  termsSnapshotId: string;
+  policySnapshotId: string;
+  maximumExposureUsd: number;
+  confirmationScope: DonationOffsetConfirmationScope;
+  amendmentStatus: DonationOffsetAmendmentStatus;
+  affectedParticipantCount: number;
+  freshConfirmationCount: number;
+  matchedTradeLockProposalStatus: DonationOffsetMatchedLockProposalStatus;
+  confirmationRecordStatus: DonationOffsetParticipantConfirmationRecordStatus;
+  consentQualityStatus: DonationOffsetConsentQualityStatus;
+  noticeRecordStatus: DonationOffsetNoticeRecordStatus;
+  gates: DonationOffsetParticipantConfirmationGate[];
+  blockedGateCount: number;
+  humanReviewGateCount: number;
+  readyForFinalLockReview: boolean;
 }
 
 export interface DonationOffsetModerationAssessment {
@@ -786,6 +882,99 @@ export function normalizeDonationOffsetFallbackPolicy(
   return "unknown";
 }
 
+export function normalizeDonationOffsetMatchedLockProposalStatus(
+  value: string | null | undefined,
+): DonationOffsetMatchedLockProposalStatus {
+  if (
+    value === "drafted" ||
+    value === "not_created" ||
+    value === "stale" ||
+    value === "superseded" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetParticipantConfirmationRecordStatus(
+  value: string | null | undefined,
+): DonationOffsetParticipantConfirmationRecordStatus {
+  if (
+    value === "recorded_non_stale" ||
+    value === "draft_only" ||
+    value === "missing" ||
+    value === "stale" ||
+    value === "superseded" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetConsentQualityStatus(
+  value: string | null | undefined,
+): DonationOffsetConsentQualityStatus {
+  if (
+    value === "passed" ||
+    value === "needs_review" ||
+    value === "failed" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetNoticeRecordStatus(
+  value: string | null | undefined,
+): DonationOffsetNoticeRecordStatus {
+  if (
+    value === "recorded" ||
+    value === "missing" ||
+    value === "failed" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetConfirmationScope(
+  value: string | null | undefined,
+): DonationOffsetConfirmationScope {
+  if (
+    value === "preview_only" ||
+    value === "final_lock" ||
+    value === "renewed_material_change" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetAmendmentStatus(
+  value: string | null | undefined,
+): DonationOffsetAmendmentStatus {
+  if (
+    value === "none" ||
+    value === "drafted_needs_confirmation" ||
+    value === "confirmed" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
 function donorGate({
   key,
   label,
@@ -870,6 +1059,31 @@ function blockIfLockOrRelianceRequested(
   lockOrRelianceRequested: boolean,
 ) {
   return lockOrRelianceRequested && status !== "pass" ? "blocked" : status;
+}
+
+function participantConfirmationGate({
+  key,
+  label,
+  status,
+  detail,
+  nextAction,
+  blockerCodes = [],
+}: DonationOffsetParticipantConfirmationGate) {
+  return {
+    key,
+    label,
+    status,
+    detail,
+    nextAction,
+    blockerCodes,
+  };
+}
+
+function blockIfLockOrCaptureRequested(
+  status: DonationOffsetParticipantConfirmationGateStatus,
+  lockOrCaptureRequested: boolean,
+) {
+  return lockOrCaptureRequested && status !== "pass" ? "blocked" : status;
 }
 
 export function buildDonationOffsetPaymentDestinationPreview(
@@ -1543,6 +1757,453 @@ export function buildDemoDonationOffsetExternalityEvidencePreview() {
     participantAcknowledgedLeastIntrusiveEvidence: true,
     participantAcknowledgedNoImpactClaimFromReceipt: true,
     participantAcknowledgedFallbackNoSilentReroute: true,
+  });
+}
+
+export function buildDonationOffsetParticipantConfirmationPreview(
+  input: DonationOffsetParticipantConfirmationInput,
+): DonationOffsetParticipantConfirmationPreview {
+  const baselineSnapshotPresent = hasPaymentDestinationLocator(input.baselineSnapshotId);
+  const termsSnapshotPresent = hasPaymentDestinationLocator(input.termsSnapshotId);
+  const policySnapshotPresent = hasPaymentDestinationLocator(input.policySnapshotId);
+  const exposurePresent =
+    input.maximumExposureUsd !== null &&
+    Number.isFinite(input.maximumExposureUsd) &&
+    input.maximumExposureUsd > 0;
+  const affectedCount =
+    Number.isFinite(input.affectedParticipantCount) && input.affectedParticipantCount > 0
+      ? Math.floor(input.affectedParticipantCount)
+      : 0;
+  const freshCount =
+    Number.isFinite(input.freshConfirmationCount) && input.freshConfirmationCount > 0
+      ? Math.floor(input.freshConfirmationCount)
+      : 0;
+  const surplusExplicit =
+    input.participantSurplusConfirmed && hasMeaningfulText(input.participantSurplusStatement);
+  const allFreshConfirmationsRecorded = affectedCount > 0 && freshCount >= affectedCount;
+  const snapshotStatus = blockIfLockOrCaptureRequested(
+    baselineSnapshotPresent && termsSnapshotPresent && policySnapshotPresent && exposurePresent
+      ? "pass"
+      : "needs_input",
+    input.lockOrCaptureRequested,
+  );
+  const surplusStatus = blockIfLockOrCaptureRequested(
+    surplusExplicit ? "pass" : "needs_input",
+    input.lockOrCaptureRequested,
+  );
+  const matchedProposalStatus = blockIfLockOrCaptureRequested(
+    input.matchedTradeLockProposalStatus === "drafted"
+      ? "pass"
+      : input.matchedTradeLockProposalStatus === "stale" ||
+          input.matchedTradeLockProposalStatus === "superseded"
+        ? "blocked"
+        : "needs_input",
+    input.lockOrCaptureRequested,
+  );
+  const confirmationRecordStatus = blockIfLockOrCaptureRequested(
+    input.confirmationRecordStatus === "recorded_non_stale"
+      ? "pass"
+      : input.confirmationRecordStatus === "draft_only"
+        ? "human_review"
+        : input.confirmationRecordStatus === "stale" ||
+            input.confirmationRecordStatus === "superseded"
+          ? "blocked"
+          : "needs_input",
+    input.lockOrCaptureRequested,
+  );
+  const freshConfirmationCountStatus = blockIfLockOrCaptureRequested(
+    allFreshConfirmationsRecorded
+      ? "pass"
+      : affectedCount > 0 && freshCount >= 0
+        ? "human_review"
+        : "needs_input",
+    input.lockOrCaptureRequested,
+  );
+  const consentChoiceArchitectureAcknowledged =
+    input.participantAcknowledgedNoPreselectedPaidCommitment &&
+    input.participantAcknowledgedNoDarkPattern;
+  const consentQualityStatus = blockIfLockOrCaptureRequested(
+    input.consentQualityStatus === "passed" &&
+      consentChoiceArchitectureAcknowledged
+      ? "pass"
+      : input.consentQualityStatus === "failed"
+        ? "blocked"
+        : input.consentQualityStatus === "needs_review" && consentChoiceArchitectureAcknowledged
+          ? "human_review"
+          : "needs_input",
+    input.lockOrCaptureRequested,
+  );
+  const noticeStatus = blockIfLockOrCaptureRequested(
+    input.noticeRecordStatus === "recorded"
+      ? "pass"
+      : input.noticeRecordStatus === "failed"
+        ? "blocked"
+        : "needs_input",
+    input.lockOrCaptureRequested,
+  );
+  const confirmationScopeStatus = blockIfLockOrCaptureRequested(
+    input.confirmationScope === "final_lock" ||
+      input.confirmationScope === "renewed_material_change"
+      ? input.participantAcknowledgedFreshConfirmationRequired
+        ? "pass"
+        : "needs_input"
+      : "needs_input",
+    input.lockOrCaptureRequested,
+  );
+  const baselineAcknowledgementStatus = blockIfLockOrCaptureRequested(
+    input.participantAcknowledgedBaselineComparison &&
+      input.participantAcknowledgedFreshConfirmationRequired
+      ? "pass"
+      : "needs_input",
+    input.lockOrCaptureRequested,
+  );
+  const amendmentStatus = blockIfLockOrCaptureRequested(
+    !input.materialChangePending && input.amendmentStatus === "none"
+      ? "pass"
+      : input.materialChangePending && input.amendmentStatus === "confirmed"
+        ? "pass"
+        : input.amendmentStatus === "drafted_needs_confirmation"
+          ? "human_review"
+          : "needs_input",
+    input.lockOrCaptureRequested,
+  );
+  const lockBoundaryStatus = input.lockOrCaptureRequested ? "blocked" : "pass";
+
+  const gates = [
+    participantConfirmationGate({
+      key: "frozen-snapshot-bundle",
+      label: "Frozen baseline, terms, and policy snapshots",
+      status: snapshotStatus,
+      detail:
+        snapshotStatus === "pass"
+          ? "The confirmation preview references baseline, terms, policy, and maximum-exposure snapshots."
+          : "Participant confirmation must bind to frozen baseline, terms, policy, and maximum-exposure records.",
+      nextAction:
+        snapshotStatus === "pass"
+          ? "Keep these snapshot references stable until final lock."
+          : "Create or select the frozen snapshot bundle before requesting final confirmation.",
+      blockerCodes: snapshotStatus === "pass" ? [] : ["confirmation_snapshot_bundle_missing"],
+    }),
+    participantConfirmationGate({
+      key: "participant-surplus-confirmation",
+      label: "Participant surplus confirmation",
+      status: surplusStatus,
+      detail:
+        surplusStatus === "pass"
+          ? "The participant explicitly states this agreement is preferable or acceptable relative to their no-trade baseline."
+          : "The platform cannot infer moral surplus; the participant must compare the locked agreement to their own no-trade baseline.",
+      nextAction:
+        surplusStatus === "pass"
+          ? "Record this as a first-class participant confirmation before clearing."
+          : "Collect an explicit participant surplus statement tied to the baseline snapshot.",
+      blockerCodes: surplusStatus === "pass" ? [] : ["participant_surplus_confirmation_missing"],
+    }),
+    participantConfirmationGate({
+      key: "matched-lock-proposal",
+      label: "Matched-trade lock proposal",
+      status: matchedProposalStatus,
+      detail:
+        matchedProposalStatus === "pass"
+          ? "A matched-trade lock proposal is drafted for the frozen counterparties, volume, ratio, destination, evidence, deadline, residuals, and fallback."
+          : matchedProposalStatus === "blocked"
+            ? "The matched-lock proposal is stale or superseded and cannot authorize clearing."
+            : "A broad preview or batch dry run is not enough; create a frozen matched-lock proposal.",
+      nextAction:
+        matchedProposalStatus === "pass"
+          ? "Use this proposal for fresh final confirmations."
+          : "Draft a current matched-trade lock proposal before any reliance-bearing step.",
+      blockerCodes: matchedProposalStatus === "pass" ? [] : ["matched_lock_proposal_required"],
+    }),
+    participantConfirmationGate({
+      key: "participant-confirmation-record",
+      label: "Participant confirmation record",
+      status: confirmationRecordStatus,
+      detail:
+        confirmationRecordStatus === "pass"
+          ? "Fresh, non-stale confirmation records cover all affected participants."
+          : confirmationRecordStatus === "human_review"
+            ? "Draft confirmation records exist but are not enough to authorize lock, capture, or reliance."
+            : confirmationRecordStatus === "blocked"
+              ? "Stale or superseded confirmation records block clearing until renewed."
+              : "Every affected participant needs a first-class, non-stale confirmation record.",
+      nextAction:
+        confirmationRecordStatus === "pass"
+          ? "Do not mutate material terms after confirmation without renewed confirmations."
+          : "Record fresh final confirmations for every affected participant.",
+      blockerCodes: confirmationRecordStatus === "pass" ? [] : ["participant_confirmation_record_required"],
+    }),
+    participantConfirmationGate({
+      key: "fresh-confirmation-count",
+      label: "Fresh confirmation count",
+      status: freshConfirmationCountStatus,
+      detail:
+        freshConfirmationCountStatus === "pass"
+          ? "Fresh, non-stale confirmations cover every affected participant."
+          : freshConfirmationCountStatus === "blocked"
+            ? "A lock or capture request cannot rely on missing participant confirmations."
+            : "All affected participants must have fresh confirmation records before clearing.",
+      nextAction:
+        freshConfirmationCountStatus === "pass"
+          ? "Keep confirmation expiry and supersession checks active until settlement."
+          : "Collect fresh participant confirmations for the full affected-participant set.",
+      blockerCodes:
+        freshConfirmationCountStatus === "pass"
+          ? []
+          : ["fresh_participant_confirmations_required"],
+    }),
+    participantConfirmationGate({
+      key: "consent-quality",
+      label: "Consent quality",
+      status: consentQualityStatus,
+      detail:
+        consentQualityStatus === "pass"
+          ? "Consent-quality checks are marked passed with no preselected paid commitment or dark-pattern acknowledgement gaps."
+          : consentQualityStatus === "blocked"
+            ? "Failed consent-quality checks block routing, clearing, capture, payout release, and private-data disclosure."
+            : consentQualityStatus === "human_review"
+              ? "Consent-quality review is still needed before any reliance-bearing confirmation."
+              : "Consent-quality status and choice-architecture acknowledgements are required.",
+      nextAction:
+        consentQualityStatus === "pass"
+          ? "Keep the consent-quality record tied to the confirmation scope."
+          : "Resolve consent-quality review before final lock.",
+      blockerCodes: consentQualityStatus === "pass" ? [] : ["consent_quality_record_required"],
+    }),
+    participantConfirmationGate({
+      key: "notice-record",
+      label: "Notice record",
+      status: noticeStatus,
+      detail:
+        noticeStatus === "pass"
+          ? "A notice record is available for the confirmation scope."
+          : noticeStatus === "blocked"
+            ? "Failed notice blocks deadlines, challenge rights, confirmations, and payout-release opportunities."
+            : "The confirmation needs a recorded notice under the frozen notification policy.",
+      nextAction:
+        noticeStatus === "pass"
+          ? "Use server-side notice timestamps for expiry and challenge windows."
+          : "Record notice before relying on any confirmation or deadline.",
+      blockerCodes: noticeStatus === "pass" ? [] : ["notice_record_required"],
+    }),
+    participantConfirmationGate({
+      key: "baseline-comparison-acknowledgement",
+      label: "Baseline-comparison acknowledgement",
+      status: baselineAcknowledgementStatus,
+      detail:
+        baselineAcknowledgementStatus === "pass"
+          ? "The participant acknowledges that confirmation compares the frozen agreement to their own no-trade baseline."
+          : "Final lock requires explicit baseline comparison and renewed-confirmation acknowledgement.",
+      nextAction:
+        baselineAcknowledgementStatus === "pass"
+          ? "Keep the acknowledgement tied to this proposal version."
+          : "Collect baseline-comparison and fresh-confirmation acknowledgements.",
+      blockerCodes:
+        baselineAcknowledgementStatus === "pass"
+          ? []
+          : ["baseline_comparison_acknowledgement_required"],
+    }),
+    participantConfirmationGate({
+      key: "confirmation-scope",
+      label: "Confirmation scope",
+      status: confirmationScopeStatus,
+      detail:
+        confirmationScopeStatus === "pass"
+          ? "The confirmation scope is final-lock or renewed-material-change, and fresh confirmation is acknowledged."
+          : "Preview-only or unknown confirmation scope cannot authorize clearing.",
+      nextAction:
+        confirmationScopeStatus === "pass"
+          ? "Keep the confirmation scope immutable for this proposal version."
+          : "Set the scope to final lock or renewed material change before clearing.",
+      blockerCodes: confirmationScopeStatus === "pass" ? [] : ["confirmation_scope_incomplete"],
+    }),
+    participantConfirmationGate({
+      key: "amendment-supersession",
+      label: "Amendment and supersession",
+      status: amendmentStatus,
+      detail:
+        amendmentStatus === "pass"
+          ? "No unconfirmed material change is pending, or the amendment has renewed confirmations."
+          : amendmentStatus === "human_review"
+            ? "A material change has an amendment draft but still needs affected participant confirmations."
+            : "Unknown or pending material changes require amendment review and renewed confirmations.",
+      nextAction:
+        amendmentStatus === "pass"
+          ? "Any later material change requires a superseding proposal and renewed confirmations."
+          : "Create an append-only amendment record and renew affected confirmations.",
+      blockerCodes: amendmentStatus === "pass" ? [] : ["agreement_amendment_confirmation_required"],
+    }),
+    participantConfirmationGate({
+      key: "lock-capture-boundary",
+      label: "Lock and capture boundary",
+      status: lockBoundaryStatus,
+      detail:
+        lockBoundaryStatus === "pass"
+          ? "This bundle is preview-only and does not request lock, capture, release, or reliance."
+          : "This draft requested lock or capture before confirmation records and lock proposal gates are non-blocking.",
+      nextAction:
+        lockBoundaryStatus === "pass"
+          ? "Keep capture disabled until all final lock and release gates pass."
+          : "Remove premature lock or capture requests.",
+      blockerCodes: lockBoundaryStatus === "pass" ? [] : ["lock_capture_boundary_required"],
+    }),
+  ];
+  const blockedGateCount = gates.filter((gate) => gate.status === "blocked").length;
+  const humanReviewGateCount = gates.filter(
+    (gate) => gate.status === "human_review" || gate.status === "needs_input",
+  ).length;
+
+  return {
+    schemaVersion: "donation-offset-participant-confirmation-preview-v1",
+    releaseStage: "donation_offset_preview_no_capture",
+    captureAllowed: false,
+    clearingAllowed: false,
+    relianceBearing: false,
+    platformInfersMoralSurplus: false,
+    checkboxAuthorizesCapture: false,
+    requiresParticipantConfirmationRecord: true,
+    requiresMatchedLockProposal: true,
+    requiresConsentQualityRecord: true,
+    baselineSnapshotId: input.baselineSnapshotId.trim() || "missing-baseline-snapshot",
+    termsSnapshotId: input.termsSnapshotId.trim() || "missing-terms-snapshot",
+    policySnapshotId: input.policySnapshotId.trim() || "missing-policy-snapshot",
+    maximumExposureUsd: normalizeUsdAmount(input.maximumExposureUsd) ?? 0,
+    confirmationScope: input.confirmationScope,
+    amendmentStatus: input.amendmentStatus,
+    affectedParticipantCount: affectedCount,
+    freshConfirmationCount: freshCount,
+    matchedTradeLockProposalStatus: input.matchedTradeLockProposalStatus,
+    confirmationRecordStatus: input.confirmationRecordStatus,
+    consentQualityStatus: input.consentQualityStatus,
+    noticeRecordStatus: input.noticeRecordStatus,
+    gates,
+    blockedGateCount,
+    humanReviewGateCount,
+    readyForFinalLockReview:
+      blockedGateCount === 0 && gates.every((gate) => gate.status !== "needs_input"),
+  };
+}
+
+export function validateDonationOffsetParticipantConfirmationInput(
+  input: DonationOffsetParticipantConfirmationInput,
+) {
+  const errors: string[] = [];
+  const preview = buildDonationOffsetParticipantConfirmationPreview(input);
+
+  if (!hasPaymentDestinationLocator(input.baselineSnapshotId)) {
+    errors.push("Attach a frozen no-trade baseline snapshot before final confirmation.");
+  }
+
+  if (!hasPaymentDestinationLocator(input.termsSnapshotId)) {
+    errors.push("Attach a frozen terms snapshot before final confirmation.");
+  }
+
+  if (!hasPaymentDestinationLocator(input.policySnapshotId)) {
+    errors.push("Attach a frozen policy snapshot before final confirmation.");
+  }
+
+  if (!input.maximumExposureUsd || input.maximumExposureUsd <= 0) {
+    errors.push("State the maximum exposure covered by the participant confirmation.");
+  }
+
+  if (!Number.isFinite(input.affectedParticipantCount) || input.affectedParticipantCount <= 0) {
+    errors.push("State the number of affected participants requiring confirmation.");
+  }
+
+  if (!Number.isFinite(input.freshConfirmationCount) || input.freshConfirmationCount < 0) {
+    errors.push("Fresh confirmation count cannot be negative.");
+  }
+
+  if (!input.participantSurplusConfirmed || !hasMeaningfulText(input.participantSurplusStatement)) {
+    errors.push("Record the participant's surplus confirmation relative to their no-trade baseline.");
+  }
+
+  if (!input.participantAcknowledgedBaselineComparison) {
+    errors.push("Acknowledge that Moral Trade cannot infer participant surplus from platform matching.");
+  }
+
+  if (!input.participantAcknowledgedFreshConfirmationRequired) {
+    errors.push("Acknowledge that final lock requires fresh participant confirmation records.");
+  }
+
+  if (!input.participantAcknowledgedNoPreselectedPaidCommitment) {
+    errors.push("Acknowledge that paid commitments cannot be preselected.");
+  }
+
+  if (!input.participantAcknowledgedNoDarkPattern) {
+    errors.push("Acknowledge that confirmations must avoid dark-pattern pressure.");
+  }
+
+  if (input.lockOrCaptureRequested) {
+    errors.push("Donation-offset previews cannot request lock or capture before confirmation gates are non-blocking.");
+  }
+
+  for (const gate of preview.gates) {
+    if (gate.status === "blocked") {
+      errors.push(`${gate.label}: ${gate.nextAction}`);
+    }
+  }
+
+  return errors;
+}
+
+export function summarizeDonationOffsetParticipantConfirmationForNotes(
+  preview: DonationOffsetParticipantConfirmationPreview,
+) {
+  const gateSummary = preview.gates
+    .map((gate) => `${gate.label}: ${formatDonationOffsetDonorGateStatus(gate.status)}`)
+    .join("; ");
+
+  return [
+    "Donation-offset participant-confirmation preview:",
+    `Schema version: ${preview.schemaVersion}`,
+    `Release stage: ${preview.releaseStage}`,
+    `Baseline snapshot: ${preview.baselineSnapshotId}`,
+    `Terms snapshot: ${preview.termsSnapshotId}`,
+    `Policy snapshot: ${preview.policySnapshotId}`,
+    `Maximum exposure: ${preview.maximumExposureUsd}`,
+    `Confirmation scope: ${preview.confirmationScope.replaceAll("_", " ")}`,
+    `Amendment status: ${preview.amendmentStatus.replaceAll("_", " ")}`,
+    `Affected participant count: ${preview.affectedParticipantCount}`,
+    `Fresh confirmation count: ${preview.freshConfirmationCount}`,
+    `Matched-lock proposal status: ${preview.matchedTradeLockProposalStatus.replaceAll("_", " ")}`,
+    `Confirmation record status: ${preview.confirmationRecordStatus.replaceAll("_", " ")}`,
+    `Consent quality status: ${preview.consentQualityStatus.replaceAll("_", " ")}`,
+    `Notice record status: ${preview.noticeRecordStatus.replaceAll("_", " ")}`,
+    "Capture allowed from this preview: no",
+    "Clearing allowed from this preview: no",
+    "Reliance-bearing from this preview: no",
+    "Platform infers moral surplus: no",
+    "Checkbox authorizes capture: no",
+    "Requires participant confirmation record: yes",
+    "Requires matched-lock proposal: yes",
+    "Requires consent-quality record: yes",
+    `Manual-review gates: ${gateSummary}`,
+  ].join("\n");
+}
+
+export function buildDemoDonationOffsetParticipantConfirmationPreview() {
+  return buildDonationOffsetParticipantConfirmationPreview({
+    baselineSnapshotId: "baseline-snapshot:demo-offset-v1",
+    termsSnapshotId: "terms-snapshot:demo-offset-v1",
+    policySnapshotId: "policy-snapshot:donation-offset-preview-v1",
+    maximumExposureUsd: 1000,
+    matchedTradeLockProposalStatus: "drafted",
+    confirmationRecordStatus: "draft_only",
+    consentQualityStatus: "needs_review",
+    noticeRecordStatus: "recorded",
+    confirmationScope: "final_lock",
+    amendmentStatus: "none",
+    affectedParticipantCount: 4,
+    freshConfirmationCount: 0,
+    participantSurplusConfirmed: true,
+    participantSurplusStatement:
+      "The participant states that this frozen agreement is preferable or acceptable relative to their no-trade baseline before final lock.",
+    materialChangePending: false,
+    lockOrCaptureRequested: false,
+    participantAcknowledgedBaselineComparison: true,
+    participantAcknowledgedFreshConfirmationRequired: true,
+    participantAcknowledgedNoPreselectedPaidCommitment: true,
+    participantAcknowledgedNoDarkPattern: true,
   });
 }
 

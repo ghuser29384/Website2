@@ -8,6 +8,7 @@ import { getDonationOffsetOverview, getViewer, type DonationOffsetOverview } fro
 import {
   buildDemoDonationOffsetDonorOfRecordPreview,
   buildDemoDonationOffsetExternalityEvidencePreview,
+  buildDemoDonationOffsetParticipantConfirmationPreview,
   buildDemoDonationOffsetPaymentDestinationPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
@@ -144,6 +145,7 @@ export default async function DonationOffsetsPage() {
   const donorOfRecordPreview = buildDemoDonationOffsetDonorOfRecordPreview();
   const paymentDestinationPreview = buildDemoDonationOffsetPaymentDestinationPreview();
   const externalityEvidencePreview = buildDemoDonationOffsetExternalityEvidencePreview();
+  const participantConfirmationPreview = buildDemoDonationOffsetParticipantConfirmationPreview();
   const createOffsetHref = viewer
     ? "/offers/new?mode=offset"
     : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
@@ -352,6 +354,99 @@ export default async function DonationOffsetsPage() {
                   : "No preview blockers. Final lock still requires fresh confirmations and review."}
               </p>
             </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="offset-participant-confirmation-heading">
+          <SectionHeader
+            eyebrow="Participant confirmation and lock boundary"
+            id="offset-participant-confirmation-heading"
+            title="Cleared trades need fresh participant confirmation records."
+          >
+            The platform does not infer moral surplus. Participants must explicitly confirm that
+            the frozen agreement is preferable or acceptable relative to their own no-trade
+            baseline before any clearing, capture, release, or reliance.
+          </SectionHeader>
+          <div className="protocol-review-panel protocol-review-panel-needs_human_review">
+            <div className="protocol-review-head">
+              <div>
+                <p className="eyebrow">Preview-only confirmation bundle</p>
+                <h3>Checkboxes and batch results do not authorize capture.</h3>
+                <p>
+                  Clearing allowed: {String(participantConfirmationPreview.clearingAllowed)}.
+                  Reliance-bearing: {String(participantConfirmationPreview.relianceBearing)}.
+                  Platform infers moral surplus:{" "}
+                  {String(participantConfirmationPreview.platformInfersMoralSurplus)}. Checkbox
+                  authorizes capture:{" "}
+                  {String(participantConfirmationPreview.checkboxAuthorizesCapture)}.
+                </p>
+              </div>
+              <span className="protocol-review-status">
+                {participantConfirmationPreview.releaseStage.replaceAll("_", " ")}
+              </span>
+            </div>
+
+            <div className="protocol-review-grid">
+              <div>
+                <strong>Frozen snapshot bundle</strong>
+                <ul className="clean-list">
+                  <li>Baseline: {participantConfirmationPreview.baselineSnapshotId}</li>
+                  <li>Terms: {participantConfirmationPreview.termsSnapshotId}</li>
+                  <li>Policy: {participantConfirmationPreview.policySnapshotId}</li>
+                  <li>Exposure: {formatUsdFromUsd(participantConfirmationPreview.maximumExposureUsd)}</li>
+                </ul>
+              </div>
+              <div>
+                <strong>Confirmation records</strong>
+                <ul className="clean-list">
+                  <li>
+                    Proposal:{" "}
+                    {participantConfirmationPreview.matchedTradeLockProposalStatus.replaceAll(
+                      "_",
+                      " ",
+                    )}
+                  </li>
+                  <li>
+                    Record:{" "}
+                    {participantConfirmationPreview.confirmationRecordStatus.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Fresh confirmations: {participantConfirmationPreview.freshConfirmationCount} /{" "}
+                    {participantConfirmationPreview.affectedParticipantCount}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <strong>Consent quality</strong>
+                <p>
+                  Consent quality:{" "}
+                  {participantConfirmationPreview.consentQualityStatus.replaceAll("_", " ")}.
+                  Notice record:{" "}
+                  {participantConfirmationPreview.noticeRecordStatus.replaceAll("_", " ")}.
+                  Scope: {participantConfirmationPreview.confirmationScope.replaceAll("_", " ")}.
+                </p>
+              </div>
+            </div>
+
+            <ol className="protocol-provenance-list">
+              {participantConfirmationPreview.gates.map((gate) => (
+                <li
+                  className={`protocol-provenance-item protocol-provenance-item-${donorGateStatusClass(
+                    gate.status,
+                  )}`}
+                  key={gate.key}
+                >
+                  <span className="protocol-step-status">
+                    {formatDonorGateStatus(gate.status)}
+                  </span>
+                  <div>
+                    <strong>{gate.label}</strong>
+                    <p>{gate.detail}</p>
+                    <small>{gate.nextAction}</small>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </div>
         </section>
 
