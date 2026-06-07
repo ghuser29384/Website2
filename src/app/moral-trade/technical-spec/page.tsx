@@ -47,6 +47,10 @@ import {
   validateMoralTradeParticipantConfirmationContract,
 } from "@/lib/moral-trade/participant-confirmations";
 import {
+  getMoralTradeParticipantEligibilityContract,
+  validateMoralTradeParticipantEligibilityContract,
+} from "@/lib/moral-trade/participant-eligibility";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -152,6 +156,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeParticipantConfirmationContract(
       participantConfirmationContract,
     );
+  const participantEligibilityContract =
+    getMoralTradeParticipantEligibilityContract();
+  const participantEligibilityValidation =
+    validateMoralTradeParticipantEligibilityContract(
+      participantEligibilityContract,
+    );
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -246,6 +256,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     policyBundleValidation,
     releaseGateValidation,
     participantConfirmationValidation,
+    participantEligibilityValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -332,6 +343,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Participant confirmations",
       status: participantConfirmationValidation.status,
       summary: `${participantConfirmationContract.confirmationScopes.length} scope(s), ${participantConfirmationContract.failClosedStatuses.length} fail-closed status(es).`,
+    },
+    {
+      blockers: participantEligibilityValidation.blockers.length,
+      family: "Policy inputs",
+      href: "/api/moral-trade/participant-eligibility/contract",
+      label: "Participant eligibility",
+      status: participantEligibilityValidation.status,
+      summary: `${participantEligibilityContract.reviewDimensions.length} review dimension(s), ${participantEligibilityContract.transitionDefinitions.length} gated transition(s).`,
     },
     {
       blockers: productionReadinessValidation.blockers.length,
@@ -1092,6 +1111,73 @@ export default async function MoralTradeTechnicalSpecPage() {
               <ul className="clean-list">
                 {participantConfirmationContract.requiredHashFields.map((field) => (
                   <li key={field}>{field}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="participant-eligibility-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Participant eligibility contract</p>
+            <h2 id="participant-eligibility-contract-heading">
+              Eligibility is reviewed before money, reliance, clearing, or countable support.
+            </h2>
+            <p>
+              Moraltrade60 requires identity, human-uniqueness, legal-capacity,
+              sanctions, payment-rail, jurisdiction, source-authentication, and private-artifact
+              handling checks before real-money or reliance-bearing flow. The contract keeps raw
+              identity artifacts private and prevents eligibility or Sybil signals from becoming
+              public moral reputation.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Participant eligibility {participantEligibilityContract.version}
+              </p>
+              <h3>Status {participantEligibilityValidation.status}</h3>
+              <p>
+                {participantEligibilityValidation.checks.length} check(s),{" "}
+                {participantEligibilityValidation.blockers.length} blocker(s),{" "}
+                {participantEligibilityContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/participant-eligibility/contract">
+              Open eligibility JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {participantEligibilityContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Review dimensions</h3>
+              <ul className="clean-list">
+                {participantEligibilityContract.reviewDimensions.map((dimension) => (
+                  <li key={dimension}>{dimension.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {participantEligibilityContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {participantEligibilityContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
                 ))}
               </ul>
             </article>

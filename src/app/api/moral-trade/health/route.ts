@@ -24,6 +24,10 @@ import {
   validateMoralTradeParticipantConfirmationContract,
 } from "@/lib/moral-trade/participant-confirmations";
 import {
+  getMoralTradeParticipantEligibilityContract,
+  validateMoralTradeParticipantEligibilityContract,
+} from "@/lib/moral-trade/participant-eligibility";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -140,6 +144,12 @@ export async function GET(request: Request) {
     validateMoralTradeParticipantConfirmationContract(
       participantConfirmationContract,
     );
+  const participantEligibilityContract =
+    getMoralTradeParticipantEligibilityContract();
+  const participantEligibilityValidation =
+    validateMoralTradeParticipantEligibilityContract(
+      participantEligibilityContract,
+    );
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -230,6 +240,7 @@ export async function GET(request: Request) {
       policyBundleValidation.status === "pass" &&
       releaseGateValidation.status === "pass" &&
       participantConfirmationValidation.status === "pass" &&
+      participantEligibilityValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
@@ -260,6 +271,7 @@ export async function GET(request: Request) {
     policyBundleValidation,
     releaseGateValidation,
     participantConfirmationValidation,
+    participantEligibilityValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -340,6 +352,28 @@ export async function GET(request: Request) {
         })),
       participantConfirmationContractTests:
         participantConfirmationContract.contractTests,
+      participantEligibilityContractVersion:
+        participantEligibilityContract.version,
+      participantEligibilityTransitionKeys:
+        participantEligibilityContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      participantEligibilityReviewDimensions:
+        participantEligibilityContract.reviewDimensions,
+      participantEligibilityFailClosedStatuses:
+        participantEligibilityContract.failClosedStatuses,
+      participantEligibilityFirstClassRecordTables:
+        participantEligibilityContract.firstClassRecordTables,
+      participantEligibilityPolicySnapshotSubjects:
+        participantEligibilityContract.policySnapshotSubjects,
+      participantEligibilitySampleEvaluationStatuses: Object.fromEntries(
+        participantEligibilityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      participantEligibilityContractTests:
+        participantEligibilityContract.contractTests,
       productionReadinessContractVersion:
         productionReadinessContract.version,
       productionReadinessControlKeys:
@@ -627,6 +661,7 @@ export async function GET(request: Request) {
       ...policyBundleValidation.blockers,
       ...releaseGateValidation.blockers,
       ...participantConfirmationValidation.blockers,
+      ...participantEligibilityValidation.blockers,
       ...productionReadinessValidation.blockers,
       ...recipientDestinationValidation.blockers,
       ...provenanceValidation.blockers,

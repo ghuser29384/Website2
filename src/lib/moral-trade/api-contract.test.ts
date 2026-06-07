@@ -49,6 +49,14 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "moral_trade_participant_eligibility_contract" &&
+        route.path === "/api/moral-trade/participant-eligibility/contract" &&
+        route.responseSchema === "participant_eligibility_contract_response",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "moral_trade_production_readiness_contract" &&
         route.path === "/api/moral-trade/production-readiness/contract" &&
         route.responseSchema === "production_readiness_contract_response",
@@ -572,6 +580,7 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "policy_bundle_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "release_gate_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "participant_confirmation_contract_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "participant_eligibility_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "production_readiness_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "recipient_destination_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "schema_registry_response"));
@@ -584,6 +593,11 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
     profile.schemaDefinitions
       .find((schema) => schema.key === "moral_trade_aggregate_health_response")
       ?.fields.some((field) => field.key === "participantConfirmationValidation"),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "moral_trade_aggregate_health_response")
+      ?.fields.some((field) => field.key === "participantEligibilityValidation"),
   );
   assert.ok(
     profile.schemaDefinitions

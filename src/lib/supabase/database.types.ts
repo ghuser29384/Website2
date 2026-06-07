@@ -6336,6 +6336,24 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_identity_artifact_references: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_participant_eligibility_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_participant_eligibility_reviews: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
     };
     Views: {
       wish_profile_previews: {
