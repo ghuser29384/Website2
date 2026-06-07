@@ -1157,6 +1157,11 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.commonGroundBudget.releaseStage, "sandbox_calculation");
   assert.equal(round.round.commonGroundBudget.paymentCaptureAllowed, false);
   assert.equal(round.round.commonGroundBudget.stateMutation, "none_preview_only");
+  assert.equal(round.round.commonGroundBudget.savePreviewField, "savePreview");
+  assert.equal(round.round.commonGroundBudget.savePreviewStateMutation, "common_ground_budget_preview_saved");
+  assert.equal(round.round.commonGroundBudget.savePreviewRequiresParticipantSurplusConfirmation, true);
+  assert.equal(round.round.commonGroundBudget.savePreviewPaymentCaptureAllowed, false);
+  assert.deepEqual(round.round.commonGroundBudget.savedRecords, ["mpgf_user_budgets", "mpgf_support_stances"]);
   assert.equal(round.round.commonGroundBudget.releaseGatePolicy, MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_RELEASE_GATE_POLICY);
   assert.equal(
     round.round.commonGroundBudget.releaseGateRequirementCount,
@@ -2888,6 +2893,17 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(route, /Could not load persisted MPGF coalition-routing state/);
   assert.match(roundRoute, /supportSignalSource/);
   assert.match(budgetPreviewRoute, /Sign in to preview a Common Ground Budget/);
+  assert.match(budgetPreviewRoute, /savePreview/);
+  assert.match(budgetPreviewRoute, /persistCommonGroundBudgetPreview/);
+  assert.match(budgetPreviewRoute, /preview\.activationState !== "ready_for_confirmation"/);
+  assert.match(budgetPreviewRoute, /not_saved_confirmation_required/);
+  assert.match(budgetPreviewRoute, /\.from\("mpgf_user_budgets"\)/);
+  assert.match(budgetPreviewRoute, /\.from\("mpgf_support_stances"\)/);
+  assert.match(budgetPreviewRoute, /onConflict: "round_id,user_ref_hash"/);
+  assert.match(budgetPreviewRoute, /onConflict: "id"/);
+  assert.match(budgetPreviewRoute, /common_ground_budget_preview_saved/);
+  assert.match(budgetPreviewRoute, /paymentCaptureAllowed: false/);
+  assert.match(budgetPreviewRoute, /counts_for_common_ground: row\.stance === "strong" \|\| row\.stance === "weak"/);
   assert.match(budgetPreviewRoute, /stateMutation/);
   assert.match(budgetPreviewRoute, /paymentCaptureAllowed/);
   assert.match(budgetPreviewRoute, /releaseGateRequirementBundle/);
@@ -2895,6 +2911,10 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(publicApi, /coalitionRouting/);
   assert.match(publicApi, /commonGroundBudget/);
   assert.match(publicApi, /releaseGateRequirementCount/);
+  assert.match(publicApi, /savePreviewStateMutation/);
+  assert.match(publicApi, /savePreviewRequiresParticipantSurplusConfirmation/);
+  assert.match(publicApi, /savePreviewPaymentCaptureAllowed/);
+  assert.match(publicApi, /savedRecords: \["mpgf_user_budgets", "mpgf_support_stances"\]/);
   assert.match(publicApi, /laterStageTracksFailClosed/);
   assert.match(publicApi, /common-ground-budget-preview/);
   assert.match(publicApi, /routedWeakSupportBudgetCents/);
