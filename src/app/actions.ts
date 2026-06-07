@@ -34,6 +34,15 @@ import {
   buildPrivacySafeMatchAuditSummary,
   type MatchExplanationSnapshotPayload,
 } from "@/lib/background-explanations";
+import {
+  BACKGROUND_CANDIDATE_BUDGET_VERSION,
+  buildBackgroundPurposeBindingRecord,
+  evaluateBackgroundDelegatePurposeAuthorization,
+  evaluateCandidateExposureForBackgroundRun,
+  normalizeBackgroundCandidateAudienceScope,
+  normalizeBackgroundPurposeCodeList,
+  type BackgroundCandidateExposureDecision,
+} from "@/lib/background-candidate-exposure";
 import { normalizeBackgroundConciergeAppealStatus } from "@/lib/background-concierge-appeals";
 import { insertWishNotificationsWithSafeEmail } from "@/lib/background-notifications";
 import {
@@ -76,6 +85,11 @@ import {
   getBackgroundQueryFingerprint,
   type BackgroundQueryScope,
 } from "@/lib/background-query-budget";
+import {
+  BACKGROUND_PURPOSE_POLICY_VERSION,
+  normalizeBackgroundPurposeCode,
+  type BackgroundPurposeBinding,
+} from "@/lib/background-purpose-registry";
 import { getSafeInternalPath } from "@/lib/paths";
 import {
   getBaselineBondAppealWindowEndsAt,
@@ -2336,6 +2350,51 @@ function getSharedCause(left: string[], right: string[]) {
   return left.find((cause) => rightSet.has(normalizeBackgroundToken(cause))) ?? null;
 }
 
+async function reserveBackgroundCandidateExposureSurface({
+  candidateProfileId,
+  cohortScopeId = "",
+  decision,
+  profileId,
+  purposeBinding,
+  runReason,
+  serviceSupabase,
+}: {
+  candidateProfileId: string;
+  cohortScopeId?: string;
+  decision: BackgroundCandidateExposureDecision;
+  profileId: string;
+  purposeBinding: BackgroundPurposeBinding;
+  runReason: string;
+  serviceSupabase: SupabaseServerClient;
+}) {
+  if (!decision.allowed || !decision.budgetConfig) {
+    return false;
+  }
+
+  const { data, error } = await serviceSupabase.rpc("reserve_background_candidate_exposure", {
+    target_audience_scope: decision.normalizedAudienceScope,
+    target_budget_version: decision.candidateBudgetVersion || BACKGROUND_CANDIDATE_BUDGET_VERSION,
+    target_candidate_profile_id: candidateProfileId,
+    target_cohort_scope_id: cohortScopeId,
+    target_purpose_code: purposeBinding.purposeCode,
+    target_purpose_policy_version: purposeBinding.purposePolicyVersion,
+    target_surface_limit: decision.budgetConfig.surfaceLimit,
+    target_window_days: decision.budgetConfig.windowDays,
+  });
+
+  if (error) {
+    logSupabaseActionError("Failed to reserve candidate exposure budget", error, {
+      candidateProfileId,
+      profileId,
+      runReason,
+    });
+    return false;
+  }
+
+  const reservation = data?.[0] ?? null;
+  return Boolean(reservation?.allowed);
+}
+
 async function generateWishMatchSuggestions({
   profileId,
   causes,
@@ -2361,6 +2420,8 @@ async function generateWishMatchSuggestions({
   const serviceSupabase = createServiceClient();
   const scope: BackgroundQueryScope =
     runReason === "manual-refresh" ? "manual_scan" : "profile_save_scan";
+  const backgroundGeneratedBy =
+    scope === "manual_scan" ? "manual-scan" : "profile-save-scan";
   const budgetReservation = await reserveBackgroundQueryBudget({
     metadata: { runReason },
     profileId,
@@ -2434,13 +2495,29 @@ async function generateWishMatchSuggestions({
 
   const previewRows = (previews ?? []) as WishProfilePreviewRow[];
   const previewIds = previewRows.map((preview) => preview.profile_id);
-  const { data: counterpartySyntheses, error: synthesisError } = previewIds.length
-    ? await serviceSupabase.from("profile_syntheses").select("*").in("profile_id", previewIds)
-    : { data: [] as ProfileSynthesisRow[], error: null };
+  const [
+    { data: counterpartySyntheses, error: synthesisError },
+    { data: candidateProfiles, error: candidateProfileError },
+  ] = previewIds.length
+    ? await Promise.all([
+        serviceSupabase.from("profile_syntheses").select("*").in("profile_id", previewIds),
+        serviceSupabase.from("wish_profiles").select("*").in("profile_id", previewIds),
+      ])
+    : [
+        { data: [] as ProfileSynthesisRow[], error: null },
+        { data: [] as WishProfileRow[], error: null },
+      ];
 
   if (synthesisError) {
     logSupabaseActionError("Failed to load counterparty syntheses for match generation", synthesisError, {
       profileId,
+    });
+  }
+
+  if (candidateProfileError) {
+    logSupabaseActionError("Failed to load candidate exposure settings for match generation", candidateProfileError, {
+      profileId,
+      runReason,
     });
   }
 
@@ -2450,9 +2527,17 @@ async function generateWishMatchSuggestions({
       synthesis,
     ]),
   );
+  const candidateProfileById = new Map(
+    ((candidateProfiles ?? []) as WishProfileRow[]).map((profile) => [profile.profile_id, profile]),
+  );
   const viewerSignals = getDeterministicSignalsFromSynthesis(
     (viewerSynthesis ?? null) as ProfileSynthesisRow | null,
   );
+  const purposeBinding: BackgroundPurposeBinding = {
+    purposeCode: "moral_trade_offer",
+    purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+  };
+  const audienceScope = normalizeBackgroundCandidateAudienceScope("cohort_only");
 
   let matchesCreated = 0;
   let matchesRefreshed = 0;
@@ -2461,6 +2546,17 @@ async function generateWishMatchSuggestions({
   const opportunityBriefs: Database["public"]["Tables"]["background_opportunity_briefs"]["Insert"][] = [];
 
   for (const preview of previewRows) {
+    const candidateExposureDecision = evaluateCandidateExposureForBackgroundRun({
+      audienceScope,
+      candidateProfile: candidateProfileById.get(preview.profile_id) ?? null,
+      purposeBinding,
+      surfaces: ["broad_profile"],
+    });
+
+    if (!candidateExposureDecision.allowed) {
+      continue;
+    }
+
     const evaluation = evaluateDeterministicMatch({
       counterparty: preview,
       counterpartySignals: getDeterministicSignalsFromSynthesis(
@@ -2489,6 +2585,19 @@ async function generateWishMatchSuggestions({
     });
 
     if (evaluation.score < 52) {
+      continue;
+    }
+
+    const exposureReserved = await reserveBackgroundCandidateExposureSurface({
+      candidateProfileId: preview.profile_id,
+      decision: candidateExposureDecision,
+      profileId,
+      purposeBinding,
+      runReason,
+      serviceSupabase,
+    });
+
+    if (!exposureReserved) {
       continue;
     }
 
@@ -2534,7 +2643,7 @@ async function generateWishMatchSuggestions({
         target_shared_causes: evaluation.sharedCauses,
         target_suggested_first_step: evaluation.suggestedFirstStep,
         target_risk_notes: evaluation.riskNotes,
-        target_generated_by: "rule-based",
+        target_generated_by: backgroundGeneratedBy,
       },
     );
     const match = matchResult?.[0] ?? null;
@@ -2547,19 +2656,27 @@ async function generateWishMatchSuggestions({
       continue;
     }
 
+    const { error: ownerError } = await serviceSupabase
+      .from("match_suggestions")
+      .update({
+        background_owner_profile_id: profileId,
+        generated_by: backgroundGeneratedBy,
+      })
+      .eq("id", match.match_id);
+
+    if (ownerError) {
+      logSupabaseActionError("Failed to mark background match owner", ownerError, {
+        matchId: match.match_id,
+        profileId,
+        runReason,
+      });
+    }
+
     if (match.was_created) {
       matchesCreated += 1;
       generatedNotifications.push(
         {
           profile_id: profileId,
-          match_id: match.match_id,
-          kind: "match",
-          title: "New opportunity brief",
-          body:
-            "A privacy-safe opportunity brief is ready in your dashboard. Exact wishes, private asks, and contact details are still hidden.",
-        },
-        {
-          profile_id: preview.profile_id,
           match_id: match.match_id,
           kind: "match",
           title: "New opportunity brief",
@@ -2575,26 +2692,12 @@ async function generateWishMatchSuggestions({
       buildMatchExplanationSnapshot({
         canRevealIdentity: false,
         counterpartyConsented: false,
-        generatedBy: "rule-based",
+        generatedBy: backgroundGeneratedBy,
         matchBasis,
         matchId: match.match_id,
         profileId,
-        riskNotes: evaluation.riskNotes,
-        score: evaluation.score,
-        sharedCauses: evaluation.sharedCauses,
-        sourceRunId: runReason,
-        sourceRunKind: scope,
-        status: "suggested",
-        suggestedFirstStep: evaluation.suggestedFirstStep,
-        viewerConsented: false,
-      }),
-      buildMatchExplanationSnapshot({
-        canRevealIdentity: false,
-        counterpartyConsented: false,
-        generatedBy: "rule-based",
-        matchBasis,
-        matchId: match.match_id,
-        profileId: preview.profile_id,
+        purposeCode: purposeBinding.purposeCode,
+        purposePolicyVersion: purposeBinding.purposePolicyVersion,
         riskNotes: evaluation.riskNotes,
         score: evaluation.score,
         sharedCauses: evaluation.sharedCauses,
@@ -2610,26 +2713,12 @@ async function generateWishMatchSuggestions({
         canRevealIdentity: false,
         candidateProfileId: preview.profile_id,
         counterpartyConsented: false,
-        generatedBy: "rule-based",
+        generatedBy: backgroundGeneratedBy,
         matchBasis,
         matchId: match.match_id,
         profileId,
-        riskNotes: evaluation.riskNotes,
-        score: evaluation.score,
-        sharedCauses: evaluation.sharedCauses,
-        status: "suggested",
-        suggestedFirstStep: evaluation.suggestedFirstStep,
-        title: "Opportunity brief: possible counterparty",
-        viewerConsented: false,
-      }),
-      buildOpportunityBriefRow({
-        canRevealIdentity: false,
-        candidateProfileId: profileId,
-        counterpartyConsented: false,
-        generatedBy: "rule-based",
-        matchBasis,
-        matchId: match.match_id,
-        profileId: preview.profile_id,
+        purposeCode: purposeBinding.purposeCode,
+        purposePolicyVersion: purposeBinding.purposePolicyVersion,
         riskNotes: evaluation.riskNotes,
         score: evaluation.score,
         sharedCauses: evaluation.sharedCauses,
@@ -6026,8 +6115,21 @@ export async function savePersonalDelegateAction(formData: FormData) {
   const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
   const viewer = await requireViewer(returnTo);
   const goals = readStringList(formData, "goals_json");
+  const allowedPurposeCodes = normalizeBackgroundPurposeCodeList([
+    ...readStringList(formData, "allowed_purpose_codes_json"),
+    ...readRepeatedStrings(formData, "allowed_purpose_codes", 6),
+  ]);
   const label = readOptional(formData, "label") || "Personal delegate";
   const operatingMode = normalizeDelegateMode(readOptional(formData, "operating_mode"));
+
+  if (operatingMode === "active" && !allowedPurposeCodes.length) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "An active personal delegate needs at least one allowed purpose.",
+    );
+  }
+
   const status = operatingMode === "paused" ? "paused" : "active";
   const payload: PersonalDelegateInsert = {
     profile_id: viewer.authUser.id,
@@ -6037,6 +6139,7 @@ export async function savePersonalDelegateAction(formData: FormData) {
     search_scope: readOptional(formData, "search_scope"),
     risk_tolerance: normalizeDelegateRiskTolerance(readOptional(formData, "risk_tolerance")),
     introduction_policy: normalizeIntroductionPolicy(readOptional(formData, "introduction_policy")),
+    allowed_purpose_bindings: buildBackgroundPurposeBindingRecord(allowedPurposeCodes),
     max_weekly_suggestions: readBoundedInt(formData, "max_weekly_suggestions", {
       fallback: 5,
       min: 0,
@@ -6351,6 +6454,39 @@ export async function saveHelperStrategyAction(formData: FormData) {
   }
 
   const viewer = await requireViewer(returnTo);
+  const purposeCode =
+    normalizeBackgroundPurposeCode(readOptional(formData, "purpose_code")) ?? "moral_trade_offer";
+  const purposeBinding: BackgroundPurposeBinding = {
+    purposeCode,
+    purposePolicyVersion: BACKGROUND_PURPOSE_POLICY_VERSION,
+  };
+  const supabase = await createClient();
+  const { data: delegate, error: delegateError } = await supabase
+    .from("personal_delegates")
+    .select("allowed_purpose_bindings")
+    .eq("profile_id", viewer.authUser.id)
+    .maybeSingle();
+
+  if (delegateError) {
+    logSupabaseActionError("Failed to load personal delegate purpose authorization", delegateError, {
+      userId: viewer.authUser.id,
+    });
+    redirectWithMessage(returnTo, "error", delegateError.message);
+  }
+
+  if (
+    !evaluateBackgroundDelegatePurposeAuthorization({
+      allowedPurposeBindings: delegate?.allowed_purpose_bindings,
+      purposeBinding,
+    })
+  ) {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "This helper strategy purpose is not authorized by your personal delegate.",
+    );
+  }
+
   const payload: HelperStrategyInsert = {
     profile_id: viewer.authUser.id,
     helper_kind: normalizeHelperKind(readOptional(formData, "helper_kind")),
@@ -6365,11 +6501,14 @@ export async function saveHelperStrategyAction(formData: FormData) {
       min: 0,
       max: 100,
     }),
+    purpose_code: purposeBinding.purposeCode,
+    purpose_policy_version: purposeBinding.purposePolicyVersion,
+    audience_scope: normalizeBackgroundCandidateAudienceScope(readOptional(formData, "audience_scope")),
+    cohort_scope_id: readOptional(formData, "cohort_scope_id").slice(0, 80),
     strategy_config: buildHelperStrategyConfig(formData),
     status: readBoolean(formData, "is_paused") ? "paused" : "active",
   };
 
-  const supabase = await createClient();
   const { error } = await supabase.from("helper_strategies").insert(payload);
 
   if (error) {

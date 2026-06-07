@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
+  buildBackgroundDelegateReceiptRow,
   buildIntroPacketRow,
   validateIntroPacketInput,
 } from "@/lib/background-opportunity-briefs";
@@ -126,11 +127,15 @@ export async function POST(request: Request) {
   let counterpartyProfileId =
     stringField(body.targetProfileId ?? body.counterpartyProfileId ?? body.counterparty_profile_id) ||
     null;
+  let purposeCode: string | null = null;
+  let purposePolicyVersion: string | null = null;
 
   if (opportunityBriefId) {
     const { data: brief, error: briefError } = await supabase
       .from("background_opportunity_briefs")
-      .select("id, match_id, candidate_profile_id")
+      .select(
+        "id, candidate_profile_id, delivery_state, match_id, purpose_code, purpose_policy_version, review_status, status",
+      )
       .eq("id", opportunityBriefId)
       .eq("profile_id", user.id)
       .maybeSingle();
@@ -139,8 +144,18 @@ export async function POST(request: Request) {
       return privateJson({ error: briefError?.message ?? "Opportunity brief was not found." }, 404);
     }
 
-    matchId = matchId ?? brief.match_id;
-    counterpartyProfileId = counterpartyProfileId ?? brief.candidate_profile_id;
+    if (
+      brief.review_status === "blocked" ||
+      brief.delivery_state === "expired" ||
+      ["dismissed", "expired", "muted"].includes(brief.status ?? "")
+    ) {
+      return privateJson({ error: "This opportunity brief is stale or no longer actionable." }, 409);
+    }
+
+    matchId = brief.match_id;
+    counterpartyProfileId = brief.candidate_profile_id;
+    purposeCode = brief.purpose_code;
+    purposePolicyVersion = brief.purpose_policy_version;
   }
 
   if (counterpartyProfileId === user.id) {
@@ -211,6 +226,8 @@ export async function POST(request: Request) {
     matchId,
     opportunityBriefId: opportunityBriefId || null,
     purpose,
+    purposeCode,
+    purposePolicyVersion,
     requestedFieldKeys: validation.requestedFieldKeys,
     requesterAnswers: validation.requesterAnswers,
     requesterProfileId: user.id,
@@ -223,6 +240,31 @@ export async function POST(request: Request) {
 
   if (error || !data) {
     return privateJson({ error: error?.message ?? "Unable to create intro request." }, 500);
+  }
+
+  const { data: receiptRow } = await supabase
+    .from("background_delegate_receipts")
+    .insert(
+      buildBackgroundDelegateReceiptRow({
+        factorCount: validation.requestedFieldKeys.length,
+        profileId: user.id,
+        publicSummary: "Reviewed introduction request submitted. No outreach or private detail was sent.",
+        purposeCode,
+        purposePolicyVersion,
+        receiptKind: "intro_request",
+        subjectId: data.id,
+        subjectKind: "intro_packet",
+      }),
+    )
+    .select("id")
+    .maybeSingle();
+
+  if (receiptRow) {
+    await supabase
+      .from("background_intro_packets")
+      .update({ redacted_receipt_id: receiptRow.id })
+      .eq("id", data.id)
+      .eq("requester_profile_id", user.id);
   }
 
   if (packet.opportunity_brief_id) {

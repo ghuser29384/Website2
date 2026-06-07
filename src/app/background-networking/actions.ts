@@ -16,6 +16,15 @@ import {
   normalizeBackgroundLocalDraftBody,
 } from "@/lib/background-local-drafts";
 import {
+  BACKGROUND_CANDIDATE_BUDGET_VERSION,
+  BACKGROUND_CANDIDATE_EXPOSURE_VERSION,
+  buildBackgroundCandidateBudgetRecord,
+  buildBackgroundPurposeBindingRecord,
+  normalizeBackgroundCandidateAudienceScope,
+  normalizeBackgroundInboundDelegateScope,
+  normalizeBackgroundPurposeCodeList,
+} from "@/lib/background-candidate-exposure";
+import {
   evaluateBackgroundIntroRequestCadence,
   getBackgroundIntroRequestWindowStart,
 } from "@/lib/background-intro-requests";
@@ -29,6 +38,7 @@ import {
   normalizeBackgroundOpportunityFeedbackReason,
 } from "@/lib/background-opportunity-feedback";
 import {
+  buildBackgroundDelegateReceiptRow,
   buildIntroPacketRow,
   buildProfileInterviewAnswerRow,
   buildSourceSummaryRows,
@@ -632,9 +642,11 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
     returnTo,
     windowMs: 60 * 1000,
   });
-  const matchId = readOptional(formData, "match_id") || null;
+  let matchId = readOptional(formData, "match_id") || null;
   const opportunityBriefId = readOptional(formData, "opportunity_brief_id") || null;
-  const counterpartyProfileId = readOptional(formData, "counterparty_profile_id") || null;
+  let counterpartyProfileId: string | null = null;
+  let purposeCode: string | null = null;
+  let purposePolicyVersion: string | null = null;
   const supabase = await createClient();
   let serviceClient: ReturnType<typeof createServiceClient> | null = null;
 
@@ -642,6 +654,38 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
     serviceClient = createServiceClient();
   } catch {
     serviceClient = null;
+  }
+
+  if (opportunityBriefId) {
+    const { data: brief, error: briefError } = await supabase
+      .from("background_opportunity_briefs")
+      .select(
+        "candidate_profile_id, delivery_state, match_id, purpose_code, purpose_policy_version, review_status, status",
+      )
+      .eq("id", opportunityBriefId)
+      .eq("profile_id", viewer.authUser.id)
+      .maybeSingle();
+
+    if (briefError || !brief) {
+      redirectWithMessage(returnTo, "error", briefError?.message ?? "Opportunity brief was not found.");
+    }
+
+    if (
+      brief.review_status === "blocked" ||
+      brief.delivery_state === "expired" ||
+      ["dismissed", "expired", "muted"].includes(brief.status ?? "")
+    ) {
+      redirectWithMessage(
+        returnTo,
+        "error",
+        "This opportunity brief is stale or no longer actionable.",
+      );
+    }
+
+    matchId = brief.match_id;
+    counterpartyProfileId = brief.candidate_profile_id;
+    purposeCode = brief.purpose_code;
+    purposePolicyVersion = brief.purpose_policy_version;
   }
 
   if (counterpartyProfileId) {
@@ -688,6 +732,8 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
     matchId,
     opportunityBriefId,
     purpose,
+    purposeCode,
+    purposePolicyVersion,
     requestedFieldKeys,
     requesterAnswers: {
       boundaries: readOptional(formData, "boundaries"),
@@ -704,6 +750,31 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
 
   if (error || !packetRow) {
     redirectWithMessage(returnTo, "error", error?.message ?? "Unable to create intro packet.");
+  }
+
+  const { data: receiptRow } = await supabase
+    .from("background_delegate_receipts")
+    .insert(
+      buildBackgroundDelegateReceiptRow({
+        factorCount: validation.requestedFieldKeys.length,
+        profileId: viewer.authUser.id,
+        publicSummary: "Reviewed introduction packet requested. No outreach or private detail was sent.",
+        purposeCode,
+        purposePolicyVersion,
+        receiptKind: "intro_request",
+        subjectId: packetRow.id,
+        subjectKind: "intro_packet",
+      }),
+    )
+    .select("id")
+    .maybeSingle();
+
+  if (receiptRow) {
+    await supabase
+      .from("background_intro_packets")
+      .update({ redacted_receipt_id: receiptRow.id })
+      .eq("id", packetRow.id)
+      .eq("requester_profile_id", viewer.authUser.id);
   }
 
   if (opportunityBriefId) {
@@ -747,16 +818,6 @@ export async function createBackgroundIntroPacketAction(formData: FormData) {
       summary: "Participant requested a reviewed introduction packet; no outreach was sent.",
     });
 
-    if (counterpartyProfileId) {
-      await serviceClient.from("wish_notifications").insert({
-        body:
-          "A participant requested operator review for a possible introduction. No private details or contact information were disclosed.",
-        kind: "consent",
-        match_id: matchId,
-        profile_id: counterpartyProfileId,
-        title: "Reviewed intro packet requested",
-      });
-    }
   }
 
   revalidatePath("/dashboard");
@@ -852,6 +913,96 @@ export async function saveBackgroundNotificationPreferencesAction(formData: Form
 
   revalidatePath("/dashboard");
   redirectWithMessage(returnTo, "message", "Notification preferences saved.");
+}
+
+export async function saveCandidateInboundDelegateExposureAction(formData: FormData) {
+  const returnTo = getSafeInternalPath(readOptional(formData, "return_to"), "/dashboard");
+  const viewer = await requireViewer(returnTo);
+  const discovery = normalizeBackgroundInboundDelegateScope(
+    readOptional(formData, "inbound_delegate_discovery"),
+  );
+  const now = Date.now();
+  const exposureVersion = `${BACKGROUND_CANDIDATE_EXPOSURE_VERSION}:${now}`;
+  const budgetVersion = `${BACKGROUND_CANDIDATE_BUDGET_VERSION}:${now}`;
+  const purposeCodes = normalizeBackgroundPurposeCodeList(
+    readRepeatedStrings(formData, "inbound_delegate_purpose_codes"),
+  );
+  const allowBroadProfileSurface = readBoolean(formData, "allow_broad_profile_surface");
+  const audienceScope = normalizeBackgroundCandidateAudienceScope(discovery);
+  const surfaceLimit = readBoundedInt(formData, "surface_limit", 3, 1, 50);
+  const windowDays = readBoundedInt(formData, "window_days", 30, 1, 90);
+  const pendingIntroLimit = readBoundedInt(formData, "pending_intro_limit", 3, 0, 50);
+  const allowedCohortIds = readRepeatedStrings(formData, "allowed_cohort_ids")
+    .flatMap((entry) => entry.split(/[,;\n]/))
+    .map((entry) => entry.trim())
+    .map((entry) => entry.slice(0, 80))
+    .filter(Boolean)
+    .filter((entry, index, entries) => entries.indexOf(entry) === index)
+    .slice(0, 12);
+  const cooloffUntil = parseOptionalTimestamp(readOptional(formData, "cooloff_until"));
+
+  const update: Database["public"]["Tables"]["wish_profiles"]["Update"] = {
+    allowed_cohort_ids: [],
+    candidate_exposure_version: exposureVersion,
+    candidate_inbound_budget_version: budgetVersion,
+    inbound_delegate_cooloff_until: null,
+    inbound_delegate_discovery: "off",
+    inbound_delegate_pending_intro_limit: null,
+    inbound_delegate_purpose_bindings: {},
+    inbound_delegate_purpose_codes: [],
+    inbound_delegate_surface_budget_per_window: {},
+    inbound_delegate_surfaces: [],
+    updated_at: new Date().toISOString(),
+  };
+
+  if (discovery !== "off") {
+    if (!purposeCodes.length) {
+      redirectWithMessage(returnTo, "error", "Choose at least one inbound delegate purpose.");
+    }
+
+    if (!allowBroadProfileSurface) {
+      redirectWithMessage(returnTo, "error", "Inbound delegate exposure requires the broad profile surface.");
+    }
+
+    update.allowed_cohort_ids = allowedCohortIds;
+    update.inbound_delegate_cooloff_until = cooloffUntil;
+    update.inbound_delegate_discovery = discovery;
+    update.inbound_delegate_pending_intro_limit = pendingIntroLimit;
+    update.inbound_delegate_purpose_bindings = buildBackgroundPurposeBindingRecord(purposeCodes);
+    update.inbound_delegate_purpose_codes = purposeCodes;
+    update.inbound_delegate_surface_budget_per_window = buildBackgroundCandidateBudgetRecord({
+      audienceScope,
+      purposeCodes,
+      surfaceLimit,
+      windowDays,
+    });
+    update.inbound_delegate_surfaces = ["broad_profile"];
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("wish_profiles")
+    .update(update)
+    .eq("profile_id", viewer.authUser.id);
+
+  if (error) {
+    redirectWithMessage(returnTo, "error", "Could not save candidate exposure settings.");
+  }
+
+  const serviceSupabase = createServiceClient();
+  await serviceSupabase
+    .from("background_opportunity_briefs")
+    .update({
+      delivery_state: "expired",
+      generic_dependency_label: "stale_or_unavailable",
+      status: "expired",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("candidate_profile_id", viewer.authUser.id)
+    .in("status", ["open", "opened", "interested", "maybe_later", "packet_requested"]);
+
+  revalidatePath("/dashboard");
+  redirectWithMessage(returnTo, "message", "Candidate exposure settings saved.");
 }
 
 export async function createProfileDataRightRequestAction(formData: FormData) {

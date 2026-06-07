@@ -13,6 +13,12 @@ import {
   buildPrivacySafeMatchDigestLine,
 } from "@/lib/background-explanations";
 import {
+  BACKGROUND_CANDIDATE_BUDGET_VERSION,
+  evaluateBackgroundDelegatePurposeAuthorization,
+  evaluateCandidateExposureForBackgroundRun,
+  type BackgroundCandidateExposureDecision,
+} from "@/lib/background-candidate-exposure";
+import {
   PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS,
   WISH_PROFILE_SENSITIVE_TEXT_FIELDS,
   overlayBackgroundRecordSensitiveText,
@@ -28,6 +34,7 @@ import {
 } from "@/lib/background-operations";
 import { buildOpportunityBriefRow } from "@/lib/background-opportunity-briefs";
 import { getBackgroundQueryFingerprint } from "@/lib/background-query-budget";
+import { type BackgroundPurposeBinding } from "@/lib/background-purpose-registry";
 import { isCronRequestAuthorized } from "@/lib/cron";
 import type { Database } from "@/lib/supabase/database.types";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -94,6 +101,45 @@ function getOrderedProfilePair(profileId: string, counterpartyId: string) {
     : { profileAId: counterpartyId, profileBId: profileId, viewerIsProfileA: false };
 }
 
+async function reserveCandidateExposureSurface({
+  candidateProfileId,
+  cohortScopeId,
+  decision,
+  purposeBinding,
+  supabase,
+}: {
+  candidateProfileId: string;
+  cohortScopeId: string;
+  decision: BackgroundCandidateExposureDecision;
+  purposeBinding: BackgroundPurposeBinding;
+  supabase: ReturnType<typeof createServiceClient>;
+}) {
+  if (!decision.allowed || !decision.budgetConfig) {
+    return false;
+  }
+
+  const { data, error } = await supabase.rpc("reserve_background_candidate_exposure", {
+    target_audience_scope: decision.normalizedAudienceScope,
+    target_budget_version: decision.candidateBudgetVersion || BACKGROUND_CANDIDATE_BUDGET_VERSION,
+    target_candidate_profile_id: candidateProfileId,
+    target_cohort_scope_id: cohortScopeId,
+    target_purpose_code: purposeBinding.purposeCode,
+    target_purpose_policy_version: purposeBinding.purposePolicyVersion,
+    target_surface_limit: decision.budgetConfig.surfaceLimit,
+    target_window_days: decision.budgetConfig.windowDays,
+  });
+
+  if (error) {
+    console.error("[background-networking] Failed to reserve delegate candidate exposure", {
+      candidateProfileId,
+      error: error.message,
+    });
+    return false;
+  }
+
+  return Boolean(data?.[0]?.allowed);
+}
+
 async function processDelegates(request: Request) {
   if (!isCronRequestAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -123,6 +169,7 @@ async function processDelegates(request: Request) {
     { data: syntheses, error: synthesesError },
     { data: previews, error: previewsError },
     { data: previewSyntheses, error: previewSynthesesError },
+    { data: candidateProfiles, error: candidateProfilesError },
     { data: privacyGrants, error: privacyGrantsError },
     { data: existingInvites, error: existingInvitesError },
     { data: introductionPlans, error: introductionPlansError },
@@ -140,6 +187,7 @@ async function processDelegates(request: Request) {
       : Promise.resolve({ data: [] as ProfileSynthesisRow[], error: null }),
     supabase.from("wish_profile_previews").select("*").eq("background_search_enabled", true).limit(500),
     supabase.from("profile_syntheses").select("*").limit(1000),
+    supabase.from("wish_profiles").select("*").limit(1000),
     delegateProfileIds.length
       ? supabase.from("privacy_grants").select("*").in("profile_id", delegateProfileIds)
       : Promise.resolve({ data: [] as PrivacyGrantRow[], error: null }),
@@ -177,6 +225,7 @@ async function processDelegates(request: Request) {
     synthesesError ||
     previewsError ||
     previewSynthesesError ||
+    candidateProfilesError ||
     privacyGrantsError ||
     existingInvitesError ||
     introductionPlansError ||
@@ -191,6 +240,7 @@ async function processDelegates(request: Request) {
           synthesesError?.message ??
           previewsError?.message ??
           previewSynthesesError?.message ??
+          candidateProfilesError?.message ??
           privacyGrantsError?.message ??
           existingInvitesError?.message ??
           introductionPlansError?.message ??
@@ -219,6 +269,9 @@ async function processDelegates(request: Request) {
       synthesis.profile_id,
       overlayBackgroundRecordSensitiveText(synthesis, PROFILE_SYNTHESIS_SENSITIVE_TEXT_FIELDS),
     ]),
+  );
+  const candidateProfileById = new Map(
+    ((candidateProfiles ?? []) as WishProfileRow[]).map((profile) => [profile.profile_id, profile]),
   );
   const previewRows = (previews ?? []) as WishProfilePreviewRow[];
   const privacyGrantsByProfileId = new Map<string, PrivacyGrantRow[]>();
@@ -327,6 +380,50 @@ async function processDelegates(request: Request) {
     const viewerSynthesis = synthesis;
 
     for (const strategy of strategyGroup) {
+      const purposeBinding: BackgroundPurposeBinding = {
+        purposeCode: strategy.purpose_code,
+        purposePolicyVersion: strategy.purpose_policy_version,
+      };
+      const cohortScopeId = strategy.cohort_scope_id.trim();
+
+      if (
+        !evaluateBackgroundDelegatePurposeAuthorization({
+          allowedPurposeBindings: delegate.allowed_purpose_bindings,
+          purposeBinding,
+        })
+      ) {
+        const { error: signalError } = await supabase.from("risk_signals").insert(
+          buildPrivacySafeRiskSignalInsert({
+            profile_id: delegate.profile_id,
+            signal_type: "delegate_purpose_not_authorized",
+            severity: "medium",
+            summary:
+              "A helper strategy was skipped because its purpose is not authorized by the delegate mandate.",
+            metadata: {
+              strategyId: strategy.id,
+            },
+          }),
+        );
+
+        if (!signalError) {
+          riskSignalsCreated += 1;
+        }
+
+        await supabase.from("helper_runs").insert({
+          strategy_id: strategy.id,
+          profile_id: delegate.profile_id,
+          status: "failed",
+          candidates_scanned: 0,
+          suggestions_created: 0,
+          purpose_code: purposeBinding.purposeCode,
+          purpose_policy_version: purposeBinding.purposePolicyVersion,
+          notes: "Helper strategy purpose is not authorized by the active delegate mandate.",
+          completed_at: now.toISOString(),
+        });
+
+        continue;
+      }
+
       const config = strategy.strategy_config ?? {};
       const focusCauses = toStringArray(config.focusCauses);
       const requiredTerms = toStringArray(config.requiredTerms);
@@ -472,6 +569,8 @@ async function processDelegates(request: Request) {
           status: "completed",
           candidates_scanned: 0,
           suggestions_created: createdSignals.length,
+          purpose_code: purposeBinding.purposeCode,
+          purpose_policy_version: purposeBinding.purposePolicyVersion,
           notes: createdSignals.length
             ? `Opened review prompts for ${createdSignals.join(", ")}.`
             : "Risk filter found no new deterministic review prompts.",
@@ -525,6 +624,8 @@ async function processDelegates(request: Request) {
           status: "completed",
           candidates_scanned: 0,
           suggestions_created: created ? 1 : 0,
+          purpose_code: purposeBinding.purposeCode,
+          purpose_policy_version: purposeBinding.purposePolicyVersion,
           notes: created
             ? `Drafted outreach target "${targetLabel}" for ${desiredCapability}.`
             : `An outreach draft already exists for "${targetLabel}".`,
@@ -577,6 +678,8 @@ async function processDelegates(request: Request) {
           status: "failed",
           candidates_scanned: 0,
           suggestions_created: 0,
+          purpose_code: purposeBinding.purposeCode,
+          purpose_policy_version: purposeBinding.purposePolicyVersion,
           notes: "Daily background query budget reached before this helper scan.",
           completed_at: now.toISOString(),
         });
@@ -585,6 +688,7 @@ async function processDelegates(request: Request) {
 
       let candidatesScanned = 0;
       const compatibleMatches: Array<{
+        candidateExposureDecision: BackgroundCandidateExposureDecision;
         evaluation: ReturnType<typeof evaluateDeterministicMatch>;
         preview: WishProfilePreviewRow;
         summary: string;
@@ -596,6 +700,18 @@ async function processDelegates(request: Request) {
         }
 
         candidatesScanned += 1;
+        const candidateExposureDecision = evaluateCandidateExposureForBackgroundRun({
+          audienceScope: strategy.audience_scope,
+          candidateProfile: candidateProfileById.get(preview.profile_id) ?? null,
+          cohortScopeId,
+          purposeBinding,
+          surfaces: ["broad_profile"],
+        });
+
+        if (!candidateExposureDecision.allowed) {
+          continue;
+        }
+
         const evaluation = evaluateDeterministicMatch({
           counterparty: preview,
           counterpartySignals: getDeterministicSignalsFromSynthesis(
@@ -720,6 +836,7 @@ async function processDelegates(request: Request) {
         }
 
         compatibleMatches.push({
+          candidateExposureDecision,
           evaluation,
           preview,
           summary: buildPrivacySafeMatchDigestLine({
@@ -736,7 +853,7 @@ async function processDelegates(request: Request) {
       const explanationSnapshots: ReturnType<typeof buildMatchExplanationSnapshot>[] = [];
       const opportunityBriefs: Database["public"]["Tables"]["background_opportunity_briefs"]["Insert"][] = [];
 
-      for (const { evaluation, preview } of selectedMatches) {
+      for (const { candidateExposureDecision, evaluation, preview } of selectedMatches) {
         const { profileAId, profileBId, viewerIsProfileA } = getOrderedProfilePair(
           delegate.profile_id,
           preview.profile_id,
@@ -752,6 +869,18 @@ async function processDelegates(request: Request) {
           continue;
         }
 
+        const exposureReserved = await reserveCandidateExposureSurface({
+          candidateProfileId: preview.profile_id,
+          cohortScopeId,
+          decision: candidateExposureDecision,
+          purposeBinding,
+          supabase,
+        });
+
+        if (!exposureReserved) {
+          continue;
+        }
+
         const reasonForDelegateOwner = `${evaluation.viewerReason} This came from your ${strategy.label} helper.`;
         const reasonForCounterparty =
           "A possible counterparty matched one of your broad registry previews through a helper scan. No exact wishes, helper labels, private query text, or contact details were disclosed.";
@@ -761,6 +890,7 @@ async function processDelegates(request: Request) {
           `Generated by deterministic scan: delegate:${strategy.helper_kind}`,
         ];
         const matchPayload: MatchSuggestionInsert = {
+          background_owner_profile_id: delegate.profile_id,
           dedupe_key: dedupeKey,
           generated_by: "delegate-cron",
           last_scored_at: now.toISOString(),
@@ -793,22 +923,13 @@ async function processDelegates(request: Request) {
           matchSuggestionsCreated += 1;
           const notificationCopy = buildBackgroundOpportunityNotificationCopy();
           const notificationResult = await insertWishNotificationsWithSafeEmail({
-            notifications: [
-              {
-                profile_id: delegate.profile_id,
-                kind: "match",
-                title: notificationCopy.title,
-                body: notificationCopy.body,
-                match_id: upsertedMatch.id,
-              },
-              {
-                profile_id: preview.profile_id,
-                kind: "match",
-                title: notificationCopy.title,
-                body: notificationCopy.body,
-                match_id: upsertedMatch.id,
-              },
-            ],
+            notifications: {
+              profile_id: delegate.profile_id,
+              kind: "match",
+              title: notificationCopy.title,
+              body: notificationCopy.body,
+              match_id: upsertedMatch.id,
+            },
             supabase,
           });
 
@@ -829,22 +950,8 @@ async function processDelegates(request: Request) {
             matchBasis,
             matchId: upsertedMatch.id,
             profileId: delegate.profile_id,
-            riskNotes: evaluation.riskNotes,
-            score: evaluation.score,
-            sharedCauses: evaluation.sharedCauses,
-            sourceRunId: strategy.id,
-            sourceRunKind: "delegate_scan",
-            status: upsertedMatch.status,
-            suggestedFirstStep: evaluation.suggestedFirstStep,
-            viewerConsented: false,
-          }),
-          buildMatchExplanationSnapshot({
-            canRevealIdentity: false,
-            counterpartyConsented: false,
-            generatedBy: "delegate-cron",
-            matchBasis,
-            matchId: upsertedMatch.id,
-            profileId: preview.profile_id,
+            purposeCode: purposeBinding.purposeCode,
+            purposePolicyVersion: purposeBinding.purposePolicyVersion,
             riskNotes: evaluation.riskNotes,
             score: evaluation.score,
             sharedCauses: evaluation.sharedCauses,
@@ -864,22 +971,8 @@ async function processDelegates(request: Request) {
             matchBasis,
             matchId: upsertedMatch.id,
             profileId: delegate.profile_id,
-            riskNotes: evaluation.riskNotes,
-            score: evaluation.score,
-            sharedCauses: evaluation.sharedCauses,
-            status: upsertedMatch.status,
-            suggestedFirstStep: evaluation.suggestedFirstStep,
-            title: "Opportunity brief: helper lead",
-            viewerConsented: false,
-          }),
-          buildOpportunityBriefRow({
-            canRevealIdentity: false,
-            candidateProfileId: delegate.profile_id,
-            counterpartyConsented: false,
-            generatedBy: "delegate-cron",
-            matchBasis,
-            matchId: upsertedMatch.id,
-            profileId: preview.profile_id,
+            purposeCode: purposeBinding.purposeCode,
+            purposePolicyVersion: purposeBinding.purposePolicyVersion,
             riskNotes: evaluation.riskNotes,
             score: evaluation.score,
             sharedCauses: evaluation.sharedCauses,
@@ -981,6 +1074,8 @@ async function processDelegates(request: Request) {
         status: "completed",
         candidates_scanned: candidatesScanned,
         suggestions_created: matchSuggestionsCreated + matchSuggestionsRefreshed,
+        purpose_code: purposeBinding.purposeCode,
+        purpose_policy_version: purposeBinding.purposePolicyVersion,
         notes: summary.length
           ? `Top deterministic hits: ${summary.join(" | ")}`
           : "No candidates cleared the deterministic threshold for this helper.",

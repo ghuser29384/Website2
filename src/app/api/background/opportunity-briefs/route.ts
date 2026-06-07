@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { serializeOpportunityBriefCard } from "@/lib/background-opportunity-briefs";
+import {
+  buildOpportunityBriefListResponse,
+  serializeOpportunityBriefCard,
+} from "@/lib/background-opportunity-briefs";
 import { serializeBackgroundNetworkingRolloutSurface } from "@/lib/background-rollout";
 import {
   buildMoralTradeApiRateLimitResponse,
@@ -12,7 +15,7 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function privateJson(body: Record<string, unknown>, status = 200) {
+function privateJson(body: unknown, status = 200) {
   return NextResponse.json(body, {
     headers: { "Cache-Control": "private, no-store" },
     status,
@@ -48,7 +51,9 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("background_opportunity_briefs")
-    .select("*")
+    .select(
+      "id, title, confidence_band, delivery_state, factor_codes, shared_counts, safe_summary, redacted_fields, why_text, next_step_type, hidden_fields_notice, human_review_required, reveal_consequence_notice, review_status, status, expires_at, purpose_code, purpose_policy_version, output_schema_version, redacted_receipt_id",
+    )
     .eq("profile_id", user.id)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -57,10 +62,10 @@ export async function GET(request: Request) {
     return privateJson({ error: error.message }, 500);
   }
 
-  return privateJson({
+  return privateJson(buildOpportunityBriefListResponse({
     briefs: (data ?? []).map((brief) => serializeOpportunityBriefCard(brief)),
     privacyNotice:
       "Opportunity briefs are broad-preview records. Exact wishes, private asks, source notes, constraints, and contact details remain outside this API response.",
     rollout: serializeBackgroundNetworkingRolloutSurface("background_opportunity_briefs_enabled"),
-  });
+  }));
 }

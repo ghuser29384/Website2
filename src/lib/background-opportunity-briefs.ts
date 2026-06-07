@@ -6,6 +6,12 @@ import {
   BACKGROUND_SOURCE_RETENTION_DAY_OPTIONS,
   normalizeBackgroundSourcePermissionFields,
 } from "@/lib/background-source-permissions";
+import {
+  BACKGROUND_PURPOSE_POLICY_VERSION,
+  formatBackgroundPurposeLabel,
+  normalizeBackgroundPurposeBinding,
+  type BackgroundPurposeCode,
+} from "@/lib/background-purpose-registry";
 import { normalizeDisclosureFieldKeys } from "@/lib/background-disclosure";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -13,6 +19,8 @@ type OpportunityBriefInsert =
   Database["public"]["Tables"]["background_opportunity_briefs"]["Insert"];
 type IntroPacketInsert =
   Database["public"]["Tables"]["background_intro_packets"]["Insert"];
+type DelegateReceiptInsert =
+  Database["public"]["Tables"]["background_delegate_receipts"]["Insert"];
 type SourceSummaryInsert =
   Database["public"]["Tables"]["background_source_summaries"]["Insert"];
 type GrantReceiptInsert =
@@ -21,6 +29,10 @@ type ProfileInterviewAnswerInsert =
   Database["public"]["Tables"]["background_profile_interview_answers"]["Insert"];
 
 export const BACKGROUND_OPPORTUNITY_BRIEF_VERSION = "background-opportunity-brief-v1";
+export const BACKGROUND_OPPORTUNITY_BRIEF_CARD_SCHEMA_VERSION =
+  "background-opportunity-brief-card-v2";
+export const BACKGROUND_OPPORTUNITY_BRIEF_LIST_RESPONSE_SCHEMA_VERSION =
+  "background-opportunity-brief-list-response-v2";
 
 export const BACKGROUND_OPPORTUNITY_BRIEF_DELIVERY_STATES = [
   "pending",
@@ -38,6 +50,44 @@ export const BACKGROUND_OPPORTUNITY_BRIEF_ACTIONS = [
   "dismiss",
   "report_concern",
 ] as const;
+
+const BACKGROUND_OPPORTUNITY_BRIEF_CARD_ALLOWED_KEYS = [
+  "actions",
+  "authorizationScope",
+  "blockerCodes",
+  "confidenceBand",
+  "deliveryState",
+  "dependencyState",
+  "factorCodes",
+  "hiddenFieldsNotice",
+  "humanReviewRequired",
+  "id",
+  "nextStep",
+  "purposeLabel",
+  "receiptId",
+  "redactedFields",
+  "redactionNotice",
+  "revealConsequenceNotice",
+  "reviewStatus",
+  "safeSummary",
+  "safetyBlockerCodes",
+  "scannedSurfaces",
+  "schemaVersion",
+  "status",
+  "title",
+  "visibleCounts",
+  "why",
+] as const;
+
+const BACKGROUND_OPPORTUNITY_BRIEF_LIST_RESPONSE_ALLOWED_KEYS = [
+  "briefs",
+  "privacyNotice",
+  "rollout",
+  "schemaVersion",
+] as const;
+
+const BACKGROUND_OPPORTUNITY_BRIEF_INTERNAL_KEY_PATTERN =
+  /(?:candidate|counterparty|profile_id|match_id|key_hash|discoverability|inbound|budget|cohort|source_summary|debug|exact|raw|contact|private|notes?|message|prompt|timing)/i;
 
 export const BACKGROUND_BRIEF_HIDDEN_FIELDS_NOTICE =
   "Exact wishes, private asks, contact details, raw source notes, and sensitive constraints stay hidden until a purpose-bound grant or mutual consent.";
@@ -102,6 +152,118 @@ function uniqueStrings(values: string[]) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function bucketVisibleCount(value: unknown): "withheld" | "none" | "1" | "2_to_3" | "4_plus" {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== ""
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(numericValue)) {
+    return "withheld";
+  }
+
+  if (numericValue <= 0) {
+    return "none";
+  }
+
+  if (numericValue === 1) {
+    return "1";
+  }
+
+  if (numericValue <= 3) {
+    return "2_to_3";
+  }
+
+  return "4_plus";
+}
+
+function normalizeRequesterVisibleCounts(sharedCounts?: Record<string, unknown> | null) {
+  return {
+    factorCodes: bucketVisibleCount(sharedCounts?.factorCodeCount),
+    redactedFields: bucketVisibleCount(sharedCounts?.redactedSurfaceCount),
+    sharedCauses: bucketVisibleCount(sharedCounts?.sharedCauseCount),
+  };
+}
+
+function getRequesterDependencyState(row: {
+  delivery_state?: string | null;
+  expires_at?: string | null;
+  review_status?: string | null;
+  status?: string | null;
+}) {
+  if (
+    row.status === "expired" ||
+    row.delivery_state === "expired" ||
+    (row.expires_at && Date.parse(row.expires_at) <= Date.now())
+  ) {
+    return "stale_or_unavailable" as const;
+  }
+
+  if (row.review_status === "blocked") {
+    return "review_required" as const;
+  }
+
+  return "valid" as const;
+}
+
+function genericBlockerCodes(row: {
+  delivery_state?: string | null;
+  review_status?: string | null;
+  status?: string | null;
+}) {
+  const blockers: string[] = [];
+
+  if (row.review_status === "blocked") {
+    blockers.push("review_required");
+  }
+
+  if (row.status === "expired" || row.delivery_state === "expired") {
+    blockers.push("stale_or_unavailable");
+  }
+
+  if (row.status === "dismissed" || row.status === "muted") {
+    blockers.push("participant_dismissed");
+  }
+
+  return uniqueStrings(blockers);
+}
+
+function allowedActionsForDependencyState(
+  dependencyState: ReturnType<typeof getRequesterDependencyState>,
+) {
+  if (dependencyState !== "valid") {
+    return [];
+  }
+
+  return [...BACKGROUND_OPPORTUNITY_BRIEF_ACTIONS];
+}
+
+function exactKeyValidation({
+  allowedKeys,
+  value,
+}: {
+  allowedKeys: readonly string[];
+  value: Record<string, unknown>;
+}) {
+  const allowed = new Set<string>(allowedKeys);
+  const keys = Object.keys(value);
+  const extraKeys = keys.filter((key) => !allowed.has(key));
+  const missingKeys = allowedKeys.filter(
+    (key) => !Object.prototype.hasOwnProperty.call(value, key),
+  );
+  const unsafeKeys = keys.filter((key) => BACKGROUND_OPPORTUNITY_BRIEF_INTERNAL_KEY_PATTERN.test(key));
+
+  return {
+    extraKeys,
+    missingKeys,
+    status:
+      extraKeys.length || missingKeys.length || unsafeKeys.length ? ("fail" as const) : ("pass" as const),
+    unsafeKeys,
+  };
 }
 
 function normalizeRequesterAnswerValue(value: unknown) {
@@ -222,6 +384,8 @@ export function buildOpportunityBriefRow({
   hasOpenClarification = false,
   matchId,
   profileId,
+  purposeCode,
+  purposePolicyVersion,
   title = "Opportunity brief",
   ...input
 }: MatchExplanationInput & {
@@ -230,12 +394,18 @@ export function buildOpportunityBriefRow({
   hasOpenClarification?: boolean;
   matchId: string;
   profileId: string;
+  purposeCode?: string | null;
+  purposePolicyVersion?: string | null;
   title?: string;
 }): OpportunityBriefInsert {
   const explanation = buildMatchExplanation(input);
   const nextStepType = normalizeOpportunityBriefNextStep({
     hasOpenClarification,
     viewerConsented: input.viewerConsented,
+  });
+  const purposeBinding = normalizeBackgroundPurposeBinding({
+    purposeCode,
+    purposePolicyVersion: purposePolicyVersion ?? BACKGROUND_PURPOSE_POLICY_VERSION,
   });
   const reasonCodes = explanation.reasonCodes.length
     ? explanation.reasonCodes.join(", ")
@@ -250,7 +420,10 @@ export function buildOpportunityBriefRow({
     human_review_required: true,
     match_id: matchId,
     next_step_type: nextStepType,
+    output_schema_version: BACKGROUND_OPPORTUNITY_BRIEF_CARD_SCHEMA_VERSION,
     profile_id: profileId,
+    purpose_code: purposeBinding.purposeCode,
+    purpose_policy_version: purposeBinding.purposePolicyVersion,
     redacted_fields: explanation.redactedSurfaces,
     reveal_consequence_notice: BACKGROUND_BRIEF_REVEAL_NOTICE,
     review_status: "human_review_required",
@@ -288,16 +461,147 @@ export function formatOpportunityBriefNextStep(
   }
 }
 
+export interface BackgroundRequesterOpportunityBriefCard {
+  actions: Array<(typeof BACKGROUND_OPPORTUNITY_BRIEF_ACTIONS)[number]>;
+  authorizationScope: string;
+  blockerCodes: string[];
+  confidenceBand: string;
+  deliveryState: ReturnType<typeof normalizeOpportunityBriefDeliveryState>;
+  dependencyState: "valid" | "stale_or_unavailable" | "review_required";
+  factorCodes: string[];
+  hiddenFieldsNotice: string;
+  humanReviewRequired: boolean;
+  id: string;
+  nextStep: string;
+  purposeLabel: string;
+  receiptId: string | null;
+  redactedFields: string[];
+  redactionNotice: string;
+  revealConsequenceNotice: string;
+  reviewStatus: string;
+  safeSummary: string;
+  safetyBlockerCodes: string[];
+  scannedSurfaces: string[];
+  schemaVersion: typeof BACKGROUND_OPPORTUNITY_BRIEF_CARD_SCHEMA_VERSION;
+  status: string;
+  title: string;
+  visibleCounts: ReturnType<typeof normalizeRequesterVisibleCounts>;
+  why: string;
+}
+
+export interface BackgroundOpportunityBriefListResponse {
+  briefs: BackgroundRequesterOpportunityBriefCard[];
+  privacyNotice: string;
+  rollout: Record<string, unknown>;
+  schemaVersion: typeof BACKGROUND_OPPORTUNITY_BRIEF_LIST_RESPONSE_SCHEMA_VERSION;
+}
+
+export function validateRequesterOpportunityBriefCard(value: Record<string, unknown>) {
+  return exactKeyValidation({
+    allowedKeys: BACKGROUND_OPPORTUNITY_BRIEF_CARD_ALLOWED_KEYS,
+    value,
+  });
+}
+
+export function validateOpportunityBriefListResponse(value: Record<string, unknown>) {
+  const responseValidation = exactKeyValidation({
+    allowedKeys: BACKGROUND_OPPORTUNITY_BRIEF_LIST_RESPONSE_ALLOWED_KEYS,
+    value,
+  });
+  const briefValidations = Array.isArray(value.briefs)
+    ? value.briefs.map((brief) =>
+        isRecord(brief)
+          ? validateRequesterOpportunityBriefCard(brief)
+          : {
+              extraKeys: [],
+              missingKeys: [...BACKGROUND_OPPORTUNITY_BRIEF_CARD_ALLOWED_KEYS],
+              status: "fail" as const,
+              unsafeKeys: [],
+            },
+      )
+    : [
+        {
+          extraKeys: [],
+          missingKeys: ["briefs"],
+          status: "fail" as const,
+          unsafeKeys: [],
+        },
+      ];
+  const failedBriefs = briefValidations.filter((validation) => validation.status === "fail");
+
+  return {
+    ...responseValidation,
+    briefValidations,
+    failedBriefCount: failedBriefs.length,
+    status:
+      responseValidation.status === "pass" && failedBriefs.length === 0
+        ? ("pass" as const)
+        : ("fail" as const),
+  };
+}
+
+export function assertRequesterOpportunityBriefCard(
+  card: BackgroundRequesterOpportunityBriefCard,
+) {
+  const validation = validateRequesterOpportunityBriefCard(card as unknown as Record<string, unknown>);
+
+  if (validation.status === "fail") {
+    throw new Error(
+      `Opportunity brief card schema ${BACKGROUND_OPPORTUNITY_BRIEF_CARD_SCHEMA_VERSION} rejected keys: extra=${validation.extraKeys.join(",")}; missing=${validation.missingKeys.join(",")}; unsafe=${validation.unsafeKeys.join(",")}`,
+    );
+  }
+
+  return card;
+}
+
+export function assertOpportunityBriefListResponse(
+  response: BackgroundOpportunityBriefListResponse,
+) {
+  const validation = validateOpportunityBriefListResponse(
+    response as unknown as Record<string, unknown>,
+  );
+
+  if (validation.status === "fail") {
+    throw new Error(
+      `Opportunity brief list schema ${BACKGROUND_OPPORTUNITY_BRIEF_LIST_RESPONSE_SCHEMA_VERSION} rejected the response.`,
+    );
+  }
+
+  return response;
+}
+
+export function buildOpportunityBriefListResponse({
+  briefs,
+  privacyNotice,
+  rollout,
+}: {
+  briefs: BackgroundRequesterOpportunityBriefCard[];
+  privacyNotice: string;
+  rollout: Record<string, unknown>;
+}): BackgroundOpportunityBriefListResponse {
+  return assertOpportunityBriefListResponse({
+    briefs,
+    privacyNotice,
+    rollout,
+    schemaVersion: BACKGROUND_OPPORTUNITY_BRIEF_LIST_RESPONSE_SCHEMA_VERSION,
+  });
+}
+
 export function serializeOpportunityBriefCard(row: {
   confidence_band: string;
   delivery_state?: string | null;
+  expires_at?: string | null;
   factor_codes: string[];
   hidden_fields_notice: string;
   human_review_required?: boolean | null;
   id: string;
   next_step_type: string;
-  profile_id: string;
+  output_schema_version?: string | null;
+  purpose_code?: string | null;
+  purpose_policy_version?: string | null;
   redacted_fields?: string[] | null;
+  redacted_receipt_id?: string | null;
+  receipt_id?: string | null;
   reveal_consequence_notice: string;
   review_status?: string | null;
   safe_summary?: string | null;
@@ -305,27 +609,41 @@ export function serializeOpportunityBriefCard(row: {
   status: string;
   title: string;
   why_text: string;
-}) {
-  return {
-    actions: [...BACKGROUND_OPPORTUNITY_BRIEF_ACTIONS],
+}): BackgroundRequesterOpportunityBriefCard {
+  const dependencyState = getRequesterDependencyState(row);
+  const purposeBinding = normalizeBackgroundPurposeBinding({
+    purposeCode: row.purpose_code,
+    purposePolicyVersion: row.purpose_policy_version ?? BACKGROUND_PURPOSE_POLICY_VERSION,
+  });
+  const card: BackgroundRequesterOpportunityBriefCard = {
+    actions: allowedActionsForDependencyState(dependencyState),
+    authorizationScope: "Participant-approved background delegate scope",
+    blockerCodes: genericBlockerCodes(row),
     confidenceBand: row.confidence_band,
     deliveryState: normalizeOpportunityBriefDeliveryState(row.delivery_state ?? row.status),
+    dependencyState,
     factorCodes: uniqueStrings(row.factor_codes),
     hiddenFieldsNotice: row.hidden_fields_notice || BACKGROUND_BRIEF_HIDDEN_FIELDS_NOTICE,
     humanReviewRequired: row.human_review_required ?? true,
     id: row.id,
     nextStep: formatOpportunityBriefNextStep(row.next_step_type),
-    profileId: row.profile_id,
+    purposeLabel: formatBackgroundPurposeLabel(purposeBinding),
+    receiptId: row.redacted_receipt_id ?? row.receipt_id ?? null,
     redactedFields: uniqueStrings(row.redacted_fields ?? []),
     redactionNotice: row.hidden_fields_notice || BACKGROUND_BRIEF_HIDDEN_FIELDS_NOTICE,
     revealConsequenceNotice: row.reveal_consequence_notice || BACKGROUND_BRIEF_REVEAL_NOTICE,
     reviewStatus: row.review_status ?? "human_review_required",
     safeSummary: compactText(row.safe_summary ?? row.why_text, 500),
-    sharedCounts: row.shared_counts ?? {},
+    safetyBlockerCodes: row.review_status === "blocked" ? ["review_required"] : [],
+    scannedSurfaces: ["broad_profile"],
+    schemaVersion: BACKGROUND_OPPORTUNITY_BRIEF_CARD_SCHEMA_VERSION,
     status: row.status,
     title: compactText(row.title, 140),
+    visibleCounts: normalizeRequesterVisibleCounts(row.shared_counts),
     why: compactText(row.why_text, 700),
   };
+
+  return assertRequesterOpportunityBriefCard(card);
 }
 
 export function validateIntroPacketInput({
@@ -414,6 +732,8 @@ export function buildIntroPacketRow({
   matchId,
   opportunityBriefId,
   purpose,
+  purposeCode,
+  purposePolicyVersion,
   requestedFieldKeys,
   requesterAnswers,
   requesterProfileId,
@@ -422,6 +742,8 @@ export function buildIntroPacketRow({
   matchId?: string | null;
   opportunityBriefId?: string | null;
   purpose: string;
+  purposeCode?: BackgroundPurposeCode | string | null;
+  purposePolicyVersion?: string | null;
   requestedFieldKeys: string[];
   requesterAnswers?: Record<string, unknown>;
   requesterProfileId: string;
@@ -432,18 +754,69 @@ export function buildIntroPacketRow({
     throw new Error(validation.errors.join(" "));
   }
 
+  const purposeBinding = normalizeBackgroundPurposeBinding({
+    purposeCode,
+    purposePolicyVersion: purposePolicyVersion ?? BACKGROUND_PURPOSE_POLICY_VERSION,
+  });
+
   return {
     counterparty_profile_id: counterpartyProfileId ?? null,
     match_id: matchId ?? null,
     mutual_questions: [...BACKGROUND_INTRO_PACKET_DEFAULT_QUESTIONS],
     opportunity_brief_id: opportunityBriefId ?? null,
     purpose: compactText(purpose, 700),
+    purpose_code: purposeBinding.purposeCode,
+    purpose_policy_version: purposeBinding.purposePolicyVersion,
     requested_field_keys: validation.requestedFieldKeys,
     requester_answers: validation.requesterAnswers,
     requester_profile_id: requesterProfileId,
     reveal_capsule:
       "Reviewer should prepare only field-bound details after both sides consent; no contact details are sent automatically.",
     review_state: "requested",
+  };
+}
+
+export function buildBackgroundDelegateReceiptRow({
+  blockerCount,
+  factorCount,
+  profileId,
+  publicSummary,
+  purposeCode,
+  purposePolicyVersion,
+  receiptKind,
+  subjectId,
+  subjectKind,
+}: {
+  blockerCount?: number;
+  factorCount?: number;
+  profileId: string;
+  publicSummary: string;
+  purposeCode?: string | null;
+  purposePolicyVersion?: string | null;
+  receiptKind: DelegateReceiptInsert["receipt_kind"];
+  subjectId?: string | null;
+  subjectKind: DelegateReceiptInsert["subject_kind"];
+}): DelegateReceiptInsert {
+  const purposeBinding = normalizeBackgroundPurposeBinding({
+    purposeCode,
+    purposePolicyVersion: purposePolicyVersion ?? BACKGROUND_PURPOSE_POLICY_VERSION,
+  });
+
+  return {
+    blocker_count_bucket: bucketVisibleCount(blockerCount ?? Number.NaN),
+    factor_count_bucket: bucketVisibleCount(factorCount ?? Number.NaN),
+    profile_id: profileId,
+    public_summary: compactText(publicSummary, 500),
+    purpose_code: purposeBinding.purposeCode,
+    purpose_policy_version: purposeBinding.purposePolicyVersion,
+    receipt_kind: receiptKind,
+    redacted_payload: {
+      disclosureState: "redacted",
+      privateDetailsReturned: false,
+      schemaVersion: "background-delegate-receipt-v1",
+    },
+    subject_id: subjectId ?? null,
+    subject_kind: subjectKind,
   };
 }
 

@@ -15,6 +15,10 @@ import {
   overlayBackgroundRecordSensitiveText,
   overlayEncryptedWishEntryBody,
 } from "@/lib/background-field-encryption";
+import {
+  serializeOpportunityBriefCard,
+  type BackgroundRequesterOpportunityBriefCard,
+} from "@/lib/background-opportunity-briefs";
 import type { Database } from "@/lib/supabase/database.types";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -60,8 +64,6 @@ type ClarificationQuestionRow = Database["public"]["Tables"]["clarification_ques
 type BackgroundMatchRunRow = Database["public"]["Tables"]["background_match_runs"]["Row"];
 type MatchExplanationSnapshotRow =
   Database["public"]["Tables"]["match_explanation_snapshots"]["Row"];
-type BackgroundOpportunityBriefRow =
-  Database["public"]["Tables"]["background_opportunity_briefs"]["Row"];
 type BackgroundIntroPacketRow =
   Database["public"]["Tables"]["background_intro_packets"]["Row"];
 type BackgroundSourceSummaryRow =
@@ -300,7 +302,7 @@ export interface DashboardDataResult {
   wishNotifications: WishNotificationRecord[];
   backgroundRuns: BackgroundMatchRunRow[];
   matchExplanationSnapshots: MatchExplanationSnapshotRow[];
-  opportunityBriefs: BackgroundOpportunityBriefRow[];
+  opportunityBriefs: BackgroundRequesterOpportunityBriefCard[];
   introPackets: BackgroundIntroPacketRow[];
   sourceSummaries: BackgroundSourceSummaryRow[];
   profileSignals: BackgroundProfileSignalRow[];
@@ -2479,7 +2481,7 @@ async function listMatchExplanationSnapshotsForUser(
 
 async function listOpportunityBriefsForUser(
   userId: string,
-): Promise<BackgroundOpportunityBriefRow[]> {
+): Promise<BackgroundRequesterOpportunityBriefCard[]> {
   if (!hasSupabaseEnv()) {
     return [];
   }
@@ -2487,7 +2489,9 @@ async function listOpportunityBriefsForUser(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("background_opportunity_briefs")
-    .select("*")
+    .select(
+      "id, title, confidence_band, delivery_state, factor_codes, shared_counts, safe_summary, redacted_fields, why_text, next_step_type, hidden_fields_notice, human_review_required, reveal_consequence_notice, review_status, status, expires_at, purpose_code, purpose_policy_version, output_schema_version, redacted_receipt_id",
+    )
     .eq("profile_id", userId)
     .order("created_at", { ascending: false })
     .limit(DASHBOARD_PAGE_SIZE);
@@ -2496,7 +2500,7 @@ async function listOpportunityBriefsForUser(
     throw new Error(error.message);
   }
 
-  return (data ?? []) as BackgroundOpportunityBriefRow[];
+  return (data ?? []).map((brief) => serializeOpportunityBriefCard(brief));
 }
 
 async function listIntroPacketsForUser(userId: string): Promise<BackgroundIntroPacketRow[]> {
@@ -3623,7 +3627,7 @@ export async function getDashboardData(userId: string): Promise<DashboardDataRes
     console.error("[supabase] Failed to load match explanation snapshots", { message, userId });
   }
 
-  let opportunityBriefs: BackgroundOpportunityBriefRow[] = [];
+  let opportunityBriefs: BackgroundRequesterOpportunityBriefCard[] = [];
   try {
     opportunityBriefs = await listOpportunityBriefsForUser(userId);
   } catch (error) {

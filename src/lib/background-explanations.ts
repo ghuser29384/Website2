@@ -410,6 +410,8 @@ export function buildMatchExplanationSnapshot({
 }: MatchExplanationInput & {
   matchId: string;
   profileId: string;
+  purposeCode?: string | null;
+  purposePolicyVersion?: string | null;
   sourceRunId?: string;
   sourceRunKind?: string;
 }): MatchExplanationSnapshotPayload {

@@ -1620,6 +1620,20 @@ export interface Database {
           openness_to_payment: boolean;
           openness_to_pledges: boolean;
           background_search_enabled: boolean;
+          inbound_delegate_discovery:
+            | "off"
+            | "cohort_only"
+            | "partner_matchmaker"
+            | "public_broad_preview";
+          inbound_delegate_purpose_codes: string[];
+          inbound_delegate_purpose_bindings: Record<string, unknown>;
+          inbound_delegate_surfaces: string[];
+          inbound_delegate_surface_budget_per_window: Record<string, unknown>;
+          inbound_delegate_pending_intro_limit: number | null;
+          inbound_delegate_cooloff_until: string | null;
+          candidate_inbound_budget_version: string;
+          candidate_exposure_version: string;
+          allowed_cohort_ids: string[];
           manual_source_review_enabled: boolean;
           notification_email_enabled: boolean;
           notification_dashboard_enabled: boolean;
@@ -1651,6 +1665,20 @@ export interface Database {
           openness_to_payment?: boolean;
           openness_to_pledges?: boolean;
           background_search_enabled?: boolean;
+          inbound_delegate_discovery?:
+            | "off"
+            | "cohort_only"
+            | "partner_matchmaker"
+            | "public_broad_preview";
+          inbound_delegate_purpose_codes?: string[];
+          inbound_delegate_purpose_bindings?: Record<string, unknown>;
+          inbound_delegate_surfaces?: string[];
+          inbound_delegate_surface_budget_per_window?: Record<string, unknown>;
+          inbound_delegate_pending_intro_limit?: number | null;
+          inbound_delegate_cooloff_until?: string | null;
+          candidate_inbound_budget_version?: string;
+          candidate_exposure_version?: string;
+          allowed_cohort_ids?: string[];
           manual_source_review_enabled?: boolean;
           notification_email_enabled?: boolean;
           notification_dashboard_enabled?: boolean;
@@ -1681,6 +1709,20 @@ export interface Database {
           openness_to_payment?: boolean;
           openness_to_pledges?: boolean;
           background_search_enabled?: boolean;
+          inbound_delegate_discovery?:
+            | "off"
+            | "cohort_only"
+            | "partner_matchmaker"
+            | "public_broad_preview";
+          inbound_delegate_purpose_codes?: string[];
+          inbound_delegate_purpose_bindings?: Record<string, unknown>;
+          inbound_delegate_surfaces?: string[];
+          inbound_delegate_surface_budget_per_window?: Record<string, unknown>;
+          inbound_delegate_pending_intro_limit?: number | null;
+          inbound_delegate_cooloff_until?: string | null;
+          candidate_inbound_budget_version?: string;
+          candidate_exposure_version?: string;
+          allowed_cohort_ids?: string[];
           manual_source_review_enabled?: boolean;
           notification_email_enabled?: boolean;
           notification_dashboard_enabled?: boolean;
@@ -1759,6 +1801,7 @@ export interface Database {
           suggested_first_step: string;
           risk_notes: string;
           generated_by: string;
+          background_owner_profile_id: string | null;
           status: "suggested" | "dismissed" | "introduced" | "archived";
           dedupe_key: string;
           identity_revealed: boolean;
@@ -1780,6 +1823,7 @@ export interface Database {
           suggested_first_step?: string;
           risk_notes?: string;
           generated_by?: string;
+          background_owner_profile_id?: string | null;
           status?: "suggested" | "dismissed" | "introduced" | "archived";
           dedupe_key?: string;
           identity_revealed?: boolean;
@@ -1796,6 +1840,7 @@ export interface Database {
           suggested_first_step?: string;
           risk_notes?: string;
           generated_by?: string;
+          background_owner_profile_id?: string | null;
           status?: "suggested" | "dismissed" | "introduced" | "archived";
           dedupe_key?: string;
           identity_revealed?: boolean;
@@ -1942,6 +1987,16 @@ export interface Database {
           attempts: number;
           next_run_at: string;
           query_fingerprint: string;
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version: "background-purpose-policy-v1";
+          redacted_receipt_id: string | null;
+          retention_expires_at: string;
           created_at: string;
           updated_at: string;
         };
@@ -1953,6 +2008,16 @@ export interface Database {
           attempts?: number;
           next_run_at?: string;
           query_fingerprint: string;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          redacted_receipt_id?: string | null;
+          retention_expires_at?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -1962,6 +2027,101 @@ export interface Database {
           attempts?: number;
           next_run_at?: string;
           query_fingerprint?: string;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          redacted_receipt_id?: string | null;
+          retention_expires_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_candidate_exposure_counters: {
+        Row: {
+          id: string;
+          candidate_profile_id: string | null;
+          counter_reference_state: "active" | "redacted" | "anonymized";
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version: "background-purpose-policy-v1";
+          audience_scope: "cohort_only" | "partner_matchmaker" | "public_broad_preview";
+          cohort_scope_id: string;
+          window_start: string;
+          window_end: string;
+          surface_count: number;
+          pending_intro_count: number;
+          suppressed_for_budget_count: number;
+          budget_state: "clear" | "near_limit" | "exhausted" | "cooloff";
+          candidate_inbound_budget_version_snapshot: string;
+          last_surface_at: string | null;
+          last_intro_request_at: string | null;
+          retention_expires_at: string;
+          anonymized_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          candidate_profile_id?: string | null;
+          counter_reference_state?: "active" | "redacted" | "anonymized";
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          audience_scope?: "cohort_only" | "partner_matchmaker" | "public_broad_preview";
+          cohort_scope_id?: string;
+          window_start: string;
+          window_end: string;
+          surface_count?: number;
+          pending_intro_count?: number;
+          suppressed_for_budget_count?: number;
+          budget_state?: "clear" | "near_limit" | "exhausted" | "cooloff";
+          candidate_inbound_budget_version_snapshot?: string;
+          last_surface_at?: string | null;
+          last_intro_request_at?: string | null;
+          retention_expires_at?: string;
+          anonymized_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          candidate_profile_id?: string | null;
+          counter_reference_state?: "active" | "redacted" | "anonymized";
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          audience_scope?: "cohort_only" | "partner_matchmaker" | "public_broad_preview";
+          cohort_scope_id?: string;
+          window_start?: string;
+          window_end?: string;
+          surface_count?: number;
+          pending_intro_count?: number;
+          suppressed_for_budget_count?: number;
+          budget_state?: "clear" | "near_limit" | "exhausted" | "cooloff";
+          candidate_inbound_budget_version_snapshot?: string;
+          last_surface_at?: string | null;
+          last_intro_request_at?: string | null;
+          retention_expires_at?: string;
+          anonymized_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -2007,6 +2167,19 @@ export interface Database {
           cooloff_until: string | null;
           explanation_version: string;
           source_scope_version: string;
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version: "background-purpose-policy-v1";
+          output_schema_version: "background-opportunity-brief-card-v2";
+          redacted_receipt_id: string | null;
+          retention_expires_at: string;
+          anonymized_at: string | null;
+          generic_dependency_label: "valid" | "stale_or_unavailable" | "review_required";
           created_at: string;
           updated_at: string;
         };
@@ -2050,6 +2223,19 @@ export interface Database {
           cooloff_until?: string | null;
           explanation_version?: string;
           source_scope_version?: string;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          output_schema_version?: "background-opportunity-brief-card-v2";
+          redacted_receipt_id?: string | null;
+          retention_expires_at?: string;
+          anonymized_at?: string | null;
+          generic_dependency_label?: "valid" | "stale_or_unavailable" | "review_required";
           created_at?: string;
           updated_at?: string;
         };
@@ -2091,6 +2277,19 @@ export interface Database {
           cooloff_until?: string | null;
           explanation_version?: string;
           source_scope_version?: string;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          output_schema_version?: "background-opportunity-brief-card-v2";
+          redacted_receipt_id?: string | null;
+          retention_expires_at?: string;
+          anonymized_at?: string | null;
+          generic_dependency_label?: "valid" | "stale_or_unavailable" | "review_required";
           updated_at?: string;
         };
         Relationships: [];
@@ -2183,6 +2382,17 @@ export interface Database {
             | "mutual_approved"
             | "withdrawn";
           contact_approval_requires_fresh_mfa: boolean;
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version: "background-purpose-policy-v1";
+          redacted_receipt_id: string | null;
+          retention_expires_at: string;
+          anonymized_at: string | null;
           sla_due_at: string;
           created_at: string;
           updated_at: string;
@@ -2221,6 +2431,17 @@ export interface Database {
             | "mutual_approved"
             | "withdrawn";
           contact_approval_requires_fresh_mfa?: boolean;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          redacted_receipt_id?: string | null;
+          retention_expires_at?: string;
+          anonymized_at?: string | null;
           sla_due_at?: string;
           created_at?: string;
           updated_at?: string;
@@ -2257,7 +2478,76 @@ export interface Database {
             | "mutual_approved"
             | "withdrawn";
           contact_approval_requires_fresh_mfa?: boolean;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          redacted_receipt_id?: string | null;
+          retention_expires_at?: string;
+          anonymized_at?: string | null;
           sla_due_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      background_delegate_receipts: {
+        Row: {
+          id: string;
+          profile_id: string;
+          receipt_kind: "delegate_run" | "opportunity_brief" | "stale_transition" | "intro_request";
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version: "background-purpose-policy-v1";
+          subject_kind: "helper_run" | "background_helper_run" | "opportunity_brief" | "intro_packet";
+          subject_id: string | null;
+          public_summary: string;
+          factor_count_bucket: "withheld" | "none" | "1" | "2_to_3" | "4_plus";
+          blocker_count_bucket: "withheld" | "none" | "1" | "2_to_3" | "4_plus";
+          redacted_payload: Record<string, unknown>;
+          status: "active" | "expired" | "anonymized" | "held";
+          retention_expires_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          receipt_kind: "delegate_run" | "opportunity_brief" | "stale_transition" | "intro_request";
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          subject_kind: "helper_run" | "background_helper_run" | "opportunity_brief" | "intro_packet";
+          subject_id?: string | null;
+          public_summary?: string;
+          factor_count_bucket?: "withheld" | "none" | "1" | "2_to_3" | "4_plus";
+          blocker_count_bucket?: "withheld" | "none" | "1" | "2_to_3" | "4_plus";
+          redacted_payload?: Record<string, unknown>;
+          status?: "active" | "expired" | "anonymized" | "held";
+          retention_expires_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          public_summary?: string;
+          factor_count_bucket?: "withheld" | "none" | "1" | "2_to_3" | "4_plus";
+          blocker_count_bucket?: "withheld" | "none" | "1" | "2_to_3" | "4_plus";
+          redacted_payload?: Record<string, unknown>;
+          status?: "active" | "expired" | "anonymized" | "held";
+          retention_expires_at?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -3350,6 +3640,7 @@ export interface Database {
           search_scope: string;
           risk_tolerance: "conservative" | "moderate" | "exploratory";
           introduction_policy: "ask_each_time" | "auto_draft_only";
+          allowed_purpose_bindings: Record<string, unknown>;
           max_weekly_suggestions: number;
           status: "active" | "paused";
           last_run_at: string | null;
@@ -3364,6 +3655,7 @@ export interface Database {
           search_scope?: string;
           risk_tolerance?: "conservative" | "moderate" | "exploratory";
           introduction_policy?: "ask_each_time" | "auto_draft_only";
+          allowed_purpose_bindings?: Record<string, unknown>;
           max_weekly_suggestions?: number;
           status?: "active" | "paused";
           last_run_at?: string | null;
@@ -3377,6 +3669,7 @@ export interface Database {
           search_scope?: string;
           risk_tolerance?: "conservative" | "moderate" | "exploratory";
           introduction_policy?: "ask_each_time" | "auto_draft_only";
+          allowed_purpose_bindings?: Record<string, unknown>;
           max_weekly_suggestions?: number;
           status?: "active" | "paused";
           last_run_at?: string | null;
@@ -3658,6 +3951,16 @@ export interface Database {
           priority: number;
           min_score: number;
           strategy_config: Record<string, unknown>;
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version: "background-purpose-policy-v1";
+          audience_scope: "cohort_only" | "partner_matchmaker" | "public_broad_preview";
+          cohort_scope_id: string;
           status: "active" | "paused";
           last_run_at: string | null;
           created_at: string;
@@ -3677,6 +3980,16 @@ export interface Database {
           priority?: number;
           min_score?: number;
           strategy_config?: Record<string, unknown>;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          audience_scope?: "cohort_only" | "partner_matchmaker" | "public_broad_preview";
+          cohort_scope_id?: string;
           status?: "active" | "paused";
           last_run_at?: string | null;
           created_at?: string;
@@ -3694,6 +4007,16 @@ export interface Database {
           priority?: number;
           min_score?: number;
           strategy_config?: Record<string, unknown>;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          audience_scope?: "cohort_only" | "partner_matchmaker" | "public_broad_preview";
+          cohort_scope_id?: string;
           status?: "active" | "paused";
           last_run_at?: string | null;
           updated_at?: string;
@@ -3709,6 +4032,16 @@ export interface Database {
           candidates_scanned: number;
           suggestions_created: number;
           notes: string;
+          purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version: "background-purpose-policy-v1";
+          redacted_receipt_id: string | null;
+          retention_expires_at: string;
           created_at: string;
           completed_at: string | null;
         };
@@ -3720,6 +4053,16 @@ export interface Database {
           candidates_scanned?: number;
           suggestions_created?: number;
           notes?: string;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          redacted_receipt_id?: string | null;
+          retention_expires_at?: string;
           created_at?: string;
           completed_at?: string | null;
         };
@@ -3729,6 +4072,16 @@ export interface Database {
           candidates_scanned?: number;
           suggestions_created?: number;
           notes?: string;
+          purpose_code?:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          purpose_policy_version?: "background-purpose-policy-v1";
+          redacted_receipt_id?: string | null;
+          retention_expires_at?: string;
           completed_at?: string | null;
         };
         Relationships: [];
@@ -5301,6 +5654,31 @@ export interface Database {
         Returns: {
           match_id: string;
           was_created: boolean;
+        }[];
+      };
+      reserve_background_candidate_exposure: {
+        Args: {
+          target_candidate_profile_id: string;
+          target_purpose_code:
+            | "moral_trade_offer"
+            | "donation_offset"
+            | "pledge_swap"
+            | "moral_public_good"
+            | "research_collaboration"
+            | "community_intro";
+          target_purpose_policy_version: "background-purpose-policy-v1";
+          target_audience_scope: "cohort_only" | "partner_matchmaker" | "public_broad_preview";
+          target_cohort_scope_id?: string;
+          target_surface_limit?: number;
+          target_window_days?: number;
+          target_budget_version?: string;
+        };
+        Returns: {
+          allowed: boolean;
+          budget_state: "clear" | "near_limit" | "exhausted" | "cooloff";
+          counter_id: string | null;
+          remaining: number;
+          blocker_code: string;
         }[];
       };
       viewer_consent_to_match: {
