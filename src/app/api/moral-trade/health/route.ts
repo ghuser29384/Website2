@@ -28,6 +28,10 @@ import {
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
 import {
+  getMoralTradeRecipientDestinationContract,
+  validateMoralTradeRecipientDestinationContract,
+} from "@/lib/moral-trade/recipient-destination";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -142,6 +146,12 @@ export async function GET(request: Request) {
     validateMoralTradeProductionReadinessContract(
       productionReadinessContract,
     );
+  const recipientDestinationContract =
+    getMoralTradeRecipientDestinationContract();
+  const recipientDestinationValidation =
+    validateMoralTradeRecipientDestinationContract(
+      recipientDestinationContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -221,6 +231,7 @@ export async function GET(request: Request) {
       releaseGateValidation.status === "pass" &&
       participantConfirmationValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
+      recipientDestinationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -250,6 +261,7 @@ export async function GET(request: Request) {
     releaseGateValidation,
     participantConfirmationValidation,
     productionReadinessValidation,
+    recipientDestinationValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -348,6 +360,28 @@ export async function GET(request: Request) {
       ),
       productionReadinessContractTests:
         productionReadinessContract.contractTests,
+      recipientDestinationContractVersion:
+        recipientDestinationContract.version,
+      recipientDestinationTransitionKeys:
+        recipientDestinationContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      recipientDestinationReviewDimensions:
+        recipientDestinationContract.reviewDimensions,
+      recipientDestinationFailClosedStatuses:
+        recipientDestinationContract.failClosedStatuses,
+      recipientDestinationFirstClassRecordTables:
+        recipientDestinationContract.firstClassRecordTables,
+      recipientDestinationPolicySnapshotSubjects:
+        recipientDestinationContract.policySnapshotSubjects,
+      recipientDestinationSampleEvaluationStatuses: Object.fromEntries(
+        recipientDestinationContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      recipientDestinationContractTests:
+        recipientDestinationContract.contractTests,
       statusValues: profile.statusValues,
       decisionPipeline: profile.decisionPipeline.map((step) => ({
         key: step.key,
@@ -594,6 +628,7 @@ export async function GET(request: Request) {
       ...releaseGateValidation.blockers,
       ...participantConfirmationValidation.blockers,
       ...productionReadinessValidation.blockers,
+      ...recipientDestinationValidation.blockers,
       ...provenanceValidation.blockers,
       ...schemaRegistryValidation.blockers,
       ...copilotValidation.blockers,

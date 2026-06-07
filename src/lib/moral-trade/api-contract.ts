@@ -109,6 +109,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_release_gate_contract",
   "moral_trade_participant_confirmation_contract",
   "moral_trade_production_readiness_contract",
+  "moral_trade_recipient_destination_contract",
   "moral_trade_provenance_schema",
   "moral_trade_schema_registry",
   "moral_trade_copilot_contract",

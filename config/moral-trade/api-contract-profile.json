@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.30-2026-06",
+  "version": "moral-trade-api-contract-v0.31-2026-06",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -157,6 +157,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return production-readiness validation blockers and fail-closed sample evaluations; never expose account-security events, backup contents, configuration values, provider payloads, private audit records, reconciliation details, or key material."
+    },
+    {
+      "key": "moral_trade_recipient_destination_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/recipient-destinations/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "recipient_destination_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return recipient/destination validation blockers and fail-closed sample evaluations; never expose bank details, wallet addresses, raw donation links, provider payloads, private anti-impersonation evidence, reviewer notes, or payout credentials."
     },
     {
       "key": "moral_trade_provenance_schema",
@@ -1082,7 +1094,7 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, production-readiness, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, production-readiness, recipient-destination, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
@@ -1092,6 +1104,7 @@
         { "key": "releaseGateValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Release-gate validator result for immutable policy snapshots, first-class requirement results, state interpretation, feature flags, and privileged-action approvals." },
         { "key": "participantConfirmationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Participant-confirmation validator result for first-class confirmation records, consent-quality records, hash-backed snapshots, notice state, maximum exposure, confirmation scope, and fail-closed stale or superseded records." },
         { "key": "productionReadinessValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Production-readiness validator result for account security, backup recovery, deployment/configuration provenance, schema migration safety, environment isolation, financial reconciliation, audit integrity, and data-security controls." },
+        { "key": "recipientDestinationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Recipient/destination validator result for first-class recipient registry entries, payment destinations, review dimensions, immutable policy snapshots, privileged-action approvals, and fail-closed stale or unverified records." },
         { "key": "provenanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Provenance object contract validator result." },
         { "key": "schemaRegistryValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Public JSON Schema registry validator result, including the data-model profile schema and schema-document route coverage." },
         { "key": "copilotValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Copilot contract validator result." },
@@ -1191,6 +1204,19 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class operational records, policy snapshot subjects, fail-closed statuses, high-risk gates, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, first-class table names, policy subjects, control keys, gate requirements, sample statuses, and test hooks without private operational evidence." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Production-readiness blockers that prevent relying on money movement, payout release, public money metrics, privacy disclosure, release-gate promotion, or non-emergency privileged changes." }
+      ]
+    },
+    {
+      "key": "recipient_destination_contract_response",
+      "purpose": "Public validator-backed recipient and payment-destination contract for fail-closed registry entries, destination records, anti-impersonation review, jurisdiction review, prohibited-use review, privileged-action approval, and immutable policy snapshots before lock, capture, payout, reuse, or public money claims.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the recipient/destination contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the recipient/destination validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Recipient/destination contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class recipient registry entries, payment destinations, review records, fail-closed statuses, gated transitions, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, first-class table names, policy subjects, review dimensions, transition requirements, sample statuses, and test hooks without private destination evidence." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Recipient/destination blockers that prevent relying on lock, payment capture, payout release, recipient reuse, public money metrics, or release-gate promotion." }
       ]
     },
     {

@@ -51,6 +51,10 @@ import {
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
 import {
+  getMoralTradeRecipientDestinationContract,
+  validateMoralTradeRecipientDestinationContract,
+} from "@/lib/moral-trade/recipient-destination";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -154,6 +158,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeProductionReadinessContract(
       productionReadinessContract,
     );
+  const recipientDestinationContract =
+    getMoralTradeRecipientDestinationContract();
+  const recipientDestinationValidation =
+    validateMoralTradeRecipientDestinationContract(
+      recipientDestinationContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -237,6 +247,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     releaseGateValidation,
     participantConfirmationValidation,
     productionReadinessValidation,
+    recipientDestinationValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -329,6 +340,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Production readiness",
       status: productionReadinessValidation.status,
       summary: `${productionReadinessContract.controlDefinitions.length} control(s), ${productionReadinessContract.gateDefinitions.length} gated transition(s).`,
+    },
+    {
+      blockers: recipientDestinationValidation.blockers.length,
+      family: "Money movement",
+      href: "/api/moral-trade/recipient-destinations/contract",
+      label: "Recipient destinations",
+      status: recipientDestinationValidation.status,
+      summary: `${recipientDestinationContract.reviewDimensions.length} review dimension(s), ${recipientDestinationContract.transitionDefinitions.length} gated transition(s).`,
     },
     {
       blockers: copilotValidation.blockers.length,
@@ -1152,6 +1171,73 @@ export default async function MoralTradeTechnicalSpecPage() {
                 <p>{control.description}</p>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="recipient-destination-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Recipient and destination contract</p>
+            <h2 id="recipient-destination-contract-heading">
+              Free-text recipient details cannot authorize capture, payout, reuse, or public money claims.
+            </h2>
+            <p>
+              Moraltrade60 requires verified recipient registry entries and verified payment
+              destinations before real-money or reliance-bearing transitions. This contract
+              publishes the fail-closed review dimensions, table names, and transition rules while
+              keeping raw bank details, wallet addresses, donation links, and reviewer notes out of
+              the public surface.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Recipient destinations {recipientDestinationContract.version}
+              </p>
+              <h3>Status {recipientDestinationValidation.status}</h3>
+              <p>
+                {recipientDestinationValidation.checks.length} check(s),{" "}
+                {recipientDestinationValidation.blockers.length} blocker(s),{" "}
+                {recipientDestinationContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/recipient-destinations/contract">
+              Open destination JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {recipientDestinationContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Review dimensions</h3>
+              <ul className="clean-list">
+                {recipientDestinationContract.reviewDimensions.map((dimension) => (
+                  <li key={dimension}>{dimension.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {recipientDestinationContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {recipientDestinationContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
           </div>
         </section>
 
