@@ -243,6 +243,55 @@
   gap: 0.85rem;
 }
 
+.stacked-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.checkbox-row input {
+  margin-top: 0.15rem;
+}
+
+.notice-card {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.9rem;
+  border: 1px solid var(--mpgf-line);
+  border-radius: var(--radius-md);
+  background: var(--mpgf-accent-soft);
+}
+
+.mpgf-table-wrap {
+  overflow-x: auto;
+}
+
+.mpgf-table-wrap table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+
+.mpgf-table-wrap th,
+.mpgf-table-wrap td {
+  padding: 0.65rem;
+  border-bottom: 1px solid var(--mpgf-line);
+  color: var(--ink-muted);
+  text-align: left;
+  vertical-align: top;
+}
+
 .mpgf-form-grid label,
 .mpgf-panel label,
 .mpgf-slider-list label {

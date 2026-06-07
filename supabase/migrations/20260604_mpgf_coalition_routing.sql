@@ -3,15 +3,61 @@ create table if not exists public.mpgf_user_budgets (
   round_id text not null references public.mpgf_public_goods_rounds (id) on delete cascade,
   profile_id uuid references public.profiles (id) on delete set null,
   user_ref_hash text not null check (user_ref_hash ~ '^sha256:[0-9a-f]{64}$'),
+  budget_period text not null default 'monthly' check (budget_period in ('monthly', 'round_limited')),
+  monthly_budget_cents bigint check (monthly_budget_cents is null or monthly_budget_cents >= 0),
+  round_budget_cents bigint check (round_budget_cents is null or round_budget_cents >= 0),
   total_budget_cents bigint not null check (total_budget_cents > 0),
+  settlement_currency text not null default 'usd' check (settlement_currency = 'usd'),
   currency text not null default 'usd' check (currency = 'usd'),
+  recurrence_rule text,
   payment_profile_ref_hash text check (
     payment_profile_ref_hash is null or payment_profile_ref_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  external_payment_evidence_mode text not null default 'reviewed_manual_evidence_only' check (
+    external_payment_evidence_mode = 'reviewed_manual_evidence_only'
+  ),
+  default_visibility text not null default 'private_aggregate_only' check (
+    default_visibility in ('private_aggregate_only', 'public_after_aggregation_review')
+  ),
+  default_allocation_baseline text not null default 'participant_default_allocation_or_non_participation',
+  baseline_confidence_level text not null default 'medium' check (
+    baseline_confidence_level in ('low', 'medium', 'high')
+  ),
+  baseline_confidence_rationale text,
+  participant_surplus_confirmation_required boolean not null default true check (
+    participant_surplus_confirmation_required = true
+  ),
+  participant_surplus_confirmed_at timestamptz,
+  eligible_project_set_hash text not null default 'sha256:0000000000000000000000000000000000000000000000000000000000000000' check (
+    eligible_project_set_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  eligible_pool_set_hash text not null default 'sha256:0000000000000000000000000000000000000000000000000000000000000000' check (
+    eligible_pool_set_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  project_set_change_policy text not null default 'require_reconfirmation' check (
+    project_set_change_policy in ('require_reconfirmation', 'allow_if_matches_preapproved_policy')
+  ),
+  fallback_reroute_policy_ref text not null default 'frozen_eligible_set_then_carry_forward_release_hold_or_manual_review_v1',
+  fallback_eligible_project_set_hash text not null default 'sha256:0000000000000000000000000000000000000000000000000000000000000000' check (
+    fallback_eligible_project_set_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  unroutable_budget_policy text not null default 'carry_forward' check (
+    unroutable_budget_policy in ('carry_forward', 'release_hold', 'manual_review')
   ),
   fallback_rule jsonb not null default jsonb_build_object(
     'onProjectFailure', 'release_hold',
     'onAuthorizationExpiry', 'reauthorize_near_capture',
     'carryForwardAllowed', true
+  ),
+  round_lock_confirmation_required boolean not null default true check (
+    round_lock_confirmation_required = true
+  ),
+  cancel_until timestamptz,
+  terms_snapshot_hash text check (
+    terms_snapshot_hash is null or terms_snapshot_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
+  participant_confirmation_hash text check (
+    participant_confirmation_hash is null or participant_confirmation_hash ~ '^sha256:[0-9a-f]{64}$'
   ),
   status text not null default 'draft' check (
     status in (
@@ -43,6 +89,10 @@ create table if not exists public.mpgf_support_stances (
   stance text not null check (stance in ('strong', 'weak', 'dissent', 'abstain')),
   max_alloc_amount_cents bigint check (max_alloc_amount_cents is null or max_alloc_amount_cents >= 0),
   max_alloc_pct_bps integer check (max_alloc_pct_bps is null or max_alloc_pct_bps between 0 and 10000),
+  rank_order integer check (rank_order is null or rank_order > 0),
+  redacted_note_hash text check (
+    redacted_note_hash is null or redacted_note_hash ~ '^sha256:[0-9a-f]{64}$'
+  ),
   acceptable_counter_buckets text[] not null default '{}',
   private_by_default boolean not null default true check (private_by_default = true),
   counts_for_common_ground boolean not null default true,
@@ -149,10 +199,10 @@ grant all on public.mpgf_support_stances to service_role;
 grant all on public.mpgf_coalition_candidates to service_role;
 
 comment on table public.mpgf_user_budgets is
-  'Per-round MPGF Common Ground Budget records. Budget records authorize routing under user fallback rules; public outputs remain aggregate-only.';
+  'Per-round MPGF Common Ground Budget records. Budget records freeze baseline, participant surplus confirmation, eligible-set hashes, fallback policy, and no-capture preview terms; public outputs remain aggregate-only.';
 
 comment on table public.mpgf_support_stances is
-  'Private-by-default strong, weak, dissent, or abstain stances over projects or buckets. Stances feed coalition feasibility and never create global moral rankings.';
+  'Private-by-default strong, weak, dissent, or abstain stances over projects or buckets. Stances include caps, rank order, and redacted-note hashes, feed coalition feasibility, and never create global moral rankings.';
 
 comment on table public.mpgf_coalition_candidates is
   'Aggregate coalition-feasibility candidates for Coalition-Routed Escrowed Conditional Matching. Rows publish threshold feasibility, cluster breadth, and routed weak-support totals only.';

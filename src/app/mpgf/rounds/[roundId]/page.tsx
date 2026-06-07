@@ -8,6 +8,14 @@ import { MpgfSupportSignalPanel } from "@/components/mpgf/mpgf-support-signal-pa
 import { getViewer } from "@/lib/app-data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import { getMpgfPublicGoodsCgVqafReportApi } from "@/lib/mpgf/public-goods-cg-vqaf";
+import {
+  buildMpgfCommonGroundBudgetPreview,
+  type MpgfCommonGroundBudgetBaselineConfidence,
+  type MpgfCommonGroundBudgetFallbackRule,
+  type MpgfCommonGroundBudgetPeriod,
+  type MpgfCommonGroundBudgetStance,
+  type MpgfCommonGroundBudgetUnroutablePolicy,
+} from "@/lib/mpgf/public-goods-common-ground-budget";
 import { getMpgfPublicGoodsCoalitionRoutingReportApi } from "@/lib/mpgf/public-goods-coalition-routing";
 import { getMpgfPublicGoodsEcmRulebookReportApi } from "@/lib/mpgf/public-goods-ecm-rulebook";
 import { getMpgfPublicGoodsIdentityIntegrityReportApi } from "@/lib/mpgf/public-goods-identity-integrity";
@@ -23,6 +31,7 @@ import { getAbsoluteUrl } from "@/lib/seo";
 
 interface MpgfRoundPageProps {
   params: Promise<{ roundId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 function formatDate(value: string) {
@@ -55,6 +64,70 @@ function formatMaybeUsd(cents: number | null | undefined) {
 
 function formatBonusRange(cents: number | null | undefined) {
   return typeof cents === "number" ? `$0 - ${formatUsd(cents)}` : "hidden while incident is frozen";
+}
+
+function searchParamValue(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+  fallback = "",
+) {
+  const value = params[key];
+
+  return Array.isArray(value) ? value[0] ?? fallback : value ?? fallback;
+}
+
+function searchParamNumber(
+  params: Record<string, string | string[] | undefined>,
+  key: string,
+  fallback: number,
+) {
+  const parsed = Number(searchParamValue(params, key));
+
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+}
+
+function budgetPeriodFromParams(
+  params: Record<string, string | string[] | undefined>,
+): MpgfCommonGroundBudgetPeriod {
+  return searchParamValue(params, "budgetPeriod") === "round_limited" ? "round_limited" : "monthly";
+}
+
+function baselineConfidenceFromParams(
+  params: Record<string, string | string[] | undefined>,
+): MpgfCommonGroundBudgetBaselineConfidence {
+  const value = searchParamValue(params, "baselineConfidenceLevel");
+
+  return value === "low" || value === "high" ? value : "medium";
+}
+
+function fallbackRuleFromParams(
+  params: Record<string, string | string[] | undefined>,
+): MpgfCommonGroundBudgetFallbackRule {
+  const value = searchParamValue(params, "fallbackRule");
+
+  return value === "reroute" || value === "release_hold" ? value : "carry_forward";
+}
+
+function unroutablePolicyFromParams(
+  params: Record<string, string | string[] | undefined>,
+): MpgfCommonGroundBudgetUnroutablePolicy {
+  const value = searchParamValue(params, "unroutableBudgetPolicy");
+
+  return value === "release_hold" || value === "manual_review" ? value : "carry_forward";
+}
+
+function stanceFromParams(
+  params: Record<string, string | string[] | undefined>,
+  campaignId: string,
+  index: number,
+): MpgfCommonGroundBudgetStance {
+  const value = searchParamValue(params, `stance_${campaignId}`, index === 0 ? "weak" : "abstain");
+
+  if (value === "strong" || value === "dissent" || value === "abstain") {
+    return value;
+  }
+
+  return "weak";
 }
 
 function workflowState({
@@ -118,9 +191,10 @@ export async function generateMetadata({ params }: MpgfRoundPageProps): Promise<
 
 export const dynamic = "force-dynamic";
 
-export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
-  const { roundId } = await params;
-  const [viewer, realMoneyReadiness] = await Promise.all([
+export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundPageProps) {
+  const [{ roundId }, resolvedSearchParams, viewer, realMoneyReadiness] = await Promise.all([
+    params,
+    searchParams ?? Promise.resolve({}),
     getViewer(),
     loadMpgfRealMoneyReadiness(),
   ]);
@@ -142,6 +216,47 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
   const payableCampaigns = allocation.rows.filter((row) => row.status === "payable");
   const sponsorPoolCents = round.sponsorPool.baseMatchBudgetCents + round.sponsorPool.qfBonusBudgetCents;
   const perDonorCapCents = Number(round.sponsorPool.perDonorQfCapCents);
+  const budgetPeriod = budgetPeriodFromParams(resolvedSearchParams);
+  const monthlyBudgetCents = searchParamNumber(resolvedSearchParams, "monthlyBudgetCents", 2_500);
+  const roundBudgetCents = searchParamNumber(resolvedSearchParams, "roundBudgetCents", 2_500);
+  const participantSurplusConfirmed =
+    searchParamValue(resolvedSearchParams, "participantSurplusConfirmed") === "on";
+  const commonGroundBudgetPreview = buildMpgfCommonGroundBudgetPreview({
+    roundId: round.id,
+    roundLockTime: round.closesAt,
+    projects: campaignResult.campaigns.map((campaign) => ({
+      id: campaign.campaignId,
+      title: campaign.title,
+      thresholdAmountCents: campaign.thresholdAmountCents,
+      thresholdSupporters: campaign.thresholdDonors,
+    })),
+    coalitionRouting,
+    budgetPeriod,
+    monthlyBudgetCents,
+    roundBudgetCents,
+    defaultAllocationBaseline: searchParamValue(
+      resolvedSearchParams,
+      "defaultAllocationBaseline",
+      "I would otherwise hold this budget or donate through my usual default allocation.",
+    ),
+    baselineConfidenceLevel: baselineConfidenceFromParams(resolvedSearchParams),
+    baselineConfidenceRationale: searchParamValue(
+      resolvedSearchParams,
+      "baselineConfidenceRationale",
+      "Self-attested preview only; review is required before reliance.",
+    ),
+    participantSurplusConfirmed,
+    fallbackRule: fallbackRuleFromParams(resolvedSearchParams),
+    unroutableBudgetPolicy: unroutablePolicyFromParams(resolvedSearchParams),
+    stances: campaignResult.campaigns.map((campaign, index) => ({
+      campaignId: campaign.campaignId,
+      stance: stanceFromParams(resolvedSearchParams, campaign.campaignId, index),
+      maxAllocCents: searchParamNumber(resolvedSearchParams, `maxAllocCents_${campaign.campaignId}`, index === 0 ? 2_500 : 0),
+      maxAllocPctBps: searchParamNumber(resolvedSearchParams, `maxAllocPctBps_${campaign.campaignId}`, index === 0 ? 10_000 : 0),
+      rankOrder: index + 1,
+      redactedNote: searchParamValue(resolvedSearchParams, `redactedNote_${campaign.campaignId}`),
+    })),
+  });
   const contributionModalCampaigns = campaignResult.campaigns.map((campaign) => ({
     campaignId: campaign.campaignId,
     countedForMatchCents: campaign.countedForMatchCents,
@@ -370,6 +485,230 @@ export default async function MpgfRoundPage({ params }: MpgfRoundPageProps) {
               </dd>
             </div>
           </dl>
+        </article>
+
+        <article className="mpgf-panel">
+          <p className="eyebrow">Common Ground Budget preview</p>
+          <h2>Set a no-capture budget for this round</h2>
+          <p>
+            Preview a monthly or round-limited budget, freeze the eligible project set, and confirm
+            that the routing is acceptable relative to your stated default allocation. This preview
+            does not authorize payment capture or create a reliance-bearing agreement.
+          </p>
+          {!viewer ? (
+            <div className="notice-card">
+              <strong>Sign in required.</strong>
+              <p>Budget previews are participant-specific because they include baseline and confirmation terms.</p>
+              <Link className="button button-primary" href={`/login?next=/mpgf/rounds/${round.id}`}>
+                Sign in to preview a budget
+              </Link>
+            </div>
+          ) : (
+            <>
+              <form className="stacked-form" method="get" aria-label="Common Ground Budget setup">
+                <div className="form-grid">
+                  <label className="field">
+                    <span>Budget period</span>
+                    <select name="budgetPeriod" defaultValue={commonGroundBudgetPreview.budgetPeriod}>
+                      <option value="monthly">Monthly</option>
+                      <option value="round_limited">Round-limited</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Monthly budget, cents</span>
+                    <input
+                      min="0"
+                      name="monthlyBudgetCents"
+                      type="number"
+                      defaultValue={monthlyBudgetCents}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Round budget, cents</span>
+                    <input
+                      min="0"
+                      name="roundBudgetCents"
+                      type="number"
+                      defaultValue={roundBudgetCents}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Baseline confidence</span>
+                    <select
+                      name="baselineConfidenceLevel"
+                      defaultValue={commonGroundBudgetPreview.baselineConfidenceLevel}
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Fallback rule</span>
+                    <select name="fallbackRule" defaultValue={commonGroundBudgetPreview.fallbackRule}>
+                      <option value="carry_forward">Carry forward</option>
+                      <option value="reroute">Reroute inside eligible set</option>
+                      <option value="release_hold">Release hold</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Unroutable budget</span>
+                    <select
+                      name="unroutableBudgetPolicy"
+                      defaultValue={commonGroundBudgetPreview.unroutableBudgetPolicy}
+                    >
+                      <option value="carry_forward">Carry forward</option>
+                      <option value="release_hold">Release hold</option>
+                      <option value="manual_review">Manual review</option>
+                    </select>
+                  </label>
+                </div>
+                <label className="field">
+                  <span>Your default allocation baseline</span>
+                  <textarea
+                    name="defaultAllocationBaseline"
+                    defaultValue={commonGroundBudgetPreview.defaultAllocationBaseline}
+                    rows={3}
+                  />
+                </label>
+                <label className="field">
+                  <span>Baseline confidence rationale</span>
+                  <textarea
+                    name="baselineConfidenceRationale"
+                    defaultValue={commonGroundBudgetPreview.baselineConfidenceRationale}
+                    rows={3}
+                  />
+                </label>
+                <div className="mpgf-table-wrap">
+                  <table className="mpgf-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Project</th>
+                        <th scope="col">Stance</th>
+                        <th scope="col">Cap, cents</th>
+                        <th scope="col">Cap, pct bps</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {commonGroundBudgetPreview.rows.map((row) => (
+                        <tr key={`budget-input-${row.campaignId}`}>
+                          <th scope="row">{row.title}</th>
+                          <td>
+                            <select name={`stance_${row.campaignId}`} defaultValue={row.stance}>
+                              <option value="strong">Strong support</option>
+                              <option value="weak">Weak common-ground</option>
+                              <option value="dissent">Dissent</option>
+                              <option value="abstain">Abstain</option>
+                            </select>
+                          </td>
+                          <td>
+                            <input
+                              min="0"
+                              name={`maxAllocCents_${row.campaignId}`}
+                              type="number"
+                              defaultValue={row.maxAllocCents}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              max="10000"
+                              min="0"
+                              name={`maxAllocPctBps_${row.campaignId}`}
+                              type="number"
+                              defaultValue={row.maxAllocPctBps}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <label className="checkbox-row">
+                  <input
+                    name="participantSurplusConfirmed"
+                    type="checkbox"
+                    defaultChecked={commonGroundBudgetPreview.participantSurplusConfirmed}
+                  />
+                  <span>This routing is acceptable to me relative to my stated default.</span>
+                </label>
+                <button className="button button-primary" type="submit">
+                  Preview budget routing
+                </button>
+              </form>
+
+              <dl className="mpgf-summary-grid" aria-label="Common Ground Budget preview summary">
+                <div>
+                  <dt>Release stage</dt>
+                  <dd>{commonGroundBudgetPreview.releaseStage.replaceAll("_", " ")}</dd>
+                </div>
+                <div>
+                  <dt>Maximum budget</dt>
+                  <dd>{formatUsd(commonGroundBudgetPreview.maximumBudgetCents)}</dd>
+                </div>
+                <div>
+                  <dt>Projected routed</dt>
+                  <dd>{formatUsd(commonGroundBudgetPreview.routedAllocationCents)}</dd>
+                </div>
+                <div>
+                  <dt>Pending threshold</dt>
+                  <dd>{formatUsd(commonGroundBudgetPreview.pendingThresholdAllocationCents)}</dd>
+                </div>
+                <div>
+                  <dt>Unroutable policy</dt>
+                  <dd>{commonGroundBudgetPreview.unroutableBudgetPolicy.replaceAll("_", " ")}</dd>
+                </div>
+                <div>
+                  <dt>Eligible set hash</dt>
+                  <dd>{commonGroundBudgetPreview.eligibleProjectSetHash.slice(0, 19)}...</dd>
+                </div>
+                <div>
+                  <dt>Payment capture</dt>
+                  <dd>{commonGroundBudgetPreview.paymentCaptureAllowed ? "enabled" : "disabled"}</dd>
+                </div>
+                <div>
+                  <dt>Confirmation state</dt>
+                  <dd>{commonGroundBudgetPreview.activationState.replaceAll("_", " ")}</dd>
+                </div>
+              </dl>
+              {commonGroundBudgetPreview.userFacingBlockers.length ? (
+                <div className="notice-card" aria-label="Common Ground Budget blockers">
+                  <strong>Next action</strong>
+                  {commonGroundBudgetPreview.userFacingBlockers.map((blocker) => (
+                    <p key={`${blocker.reasonCategory}-${blocker.nextAction}`}>
+                      {blocker.nextAction}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              <div className="mpgf-pool-directory">
+                {commonGroundBudgetPreview.rows.map((row) => (
+                  <article className="mpgf-panel" key={`budget-preview-${row.campaignId}`}>
+                    <p className="eyebrow">{row.allocationState.replaceAll("_", " ")}</p>
+                    <h3>{row.title}</h3>
+                    <dl className="mpgf-headline-metrics">
+                      <div>
+                        <dt>Your stance</dt>
+                        <dd>{row.stance.replaceAll("_", " ")}</dd>
+                      </div>
+                      <div>
+                        <dt>Projected allocation</dt>
+                        <dd>{formatUsd(row.projectedAllocationCents)}</dd>
+                      </div>
+                      <div>
+                        <dt>Supporters</dt>
+                        <dd>{row.activeSupporterCount}</dd>
+                      </div>
+                      <div>
+                        <dt>Clusters</dt>
+                        <dd>{row.activeClusterCount}</dd>
+                      </div>
+                    </dl>
+                    <p>{row.pivotalAction}</p>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
         </article>
 
         <article className="mpgf-panel">

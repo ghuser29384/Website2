@@ -199,6 +199,12 @@ import {
   supportSignalFromMpgfPublicGoodsStorageRow,
 } from "./mpgf/public-goods-cg-vqaf";
 import {
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CHOICE_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY,
+  buildMpgfCommonGroundBudgetPreview,
+} from "./mpgf/public-goods-common-ground-budget";
+import {
   MPGF_PUBLIC_GOODS_COALITION_ROUTING_FAILURE_POLICY,
   MPGF_PUBLIC_GOODS_COALITION_ROUTING_POLICY,
   MPGF_PUBLIC_GOODS_COALITION_ROUTING_PRIVACY_POLICY,
@@ -1139,6 +1145,20 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
   assert.equal(round.round.coalitionRouting.moralReputationAffectsAllocationPower, false);
   assert.equal(round.round.coalitionRouting.publicAggregationOnly, true);
   assert.ok(round.round.coalitionRouting.weakSupportBudgetCents > 0);
+  assert.equal(round.round.commonGroundBudget.policy, MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY);
+  assert.equal(round.round.commonGroundBudget.choiceArchitecturePolicy, MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CHOICE_POLICY);
+  assert.equal(round.round.commonGroundBudget.fallbackPolicy, MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY);
+  assert.equal(
+    round.round.commonGroundBudget.previewPath,
+    `/api/mpgf/rounds/${demoMpgfAssuranceRound.id}/common-ground-budget-preview`,
+  );
+  assert.equal(round.round.commonGroundBudget.releaseStage, "sandbox_calculation");
+  assert.equal(round.round.commonGroundBudget.paymentCaptureAllowed, false);
+  assert.equal(round.round.commonGroundBudget.stateMutation, "none_preview_only");
+  assert.equal(round.round.commonGroundBudget.participantSurplusConfirmationRequired, true);
+  assert.equal(round.round.commonGroundBudget.eligibleProjectSetHashRequired, true);
+  assert.equal(round.round.commonGroundBudget.fallbackRerouteLimitedToFrozenEligibleSet, true);
+  assert.equal(round.round.commonGroundBudget.noGlobalMoralRanking, true);
   assert.equal(round.round.identityIntegrity?.policy, MPGF_PUBLIC_GOODS_IDENTITY_INTEGRITY_POLICY);
   assert.equal(
     round.round.identityIntegrity?.reportPath,
@@ -1361,6 +1381,7 @@ test("MPGF public-goods public API surfaces aggregate rounds, campaigns, matchin
     ["src/app/api/mpgf/rounds/[roundId]/rulebook/route.ts", /getMpgfPublicGoodsEcmRulebookReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/cg-vqaf/route.ts", /getMpgfPublicGoodsCgVqafReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/coalition-routing/route.ts", /getMpgfPublicGoodsCoalitionRoutingReportApi/],
+    ["src/app/api/mpgf/rounds/[roundId]/common-ground-budget-preview/route.ts", /buildMpgfCommonGroundBudgetPreview/],
     ["src/app/api/mpgf/rounds/[roundId]/identity-integrity/route.ts", /getMpgfPublicGoodsIdentityIntegrityReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/threshold-calibration/route.ts", /getMpgfPublicGoodsThresholdCalibrationReportApi/],
     ["src/app/api/mpgf/rounds/[roundId]/postmortem/route.ts", /getMpgfPublicGoodsPostmortemReportApi/],
@@ -2710,7 +2731,34 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
     supportSignals: persistedSupportSignals,
   });
   const persistedRow = persistedReport.rows[0];
+  const budgetPreview = buildMpgfCommonGroundBudgetPreview({
+    roundId: persistedRound.id,
+    roundLockTime: persistedRound.endsAt,
+    projects: [{
+      id: persistedCampaign.id,
+      title: persistedCampaign.title,
+      thresholdAmountCents: persistedCampaign.thresholdAmountCents,
+      thresholdSupporters: persistedCampaign.thresholdSupporters,
+    }],
+    coalitionRouting: persistedReport,
+    budgetPeriod: "round_limited",
+    roundBudgetCents: 7_500,
+    defaultAllocationBaseline: "I would otherwise donate this to my usual preferred charity.",
+    baselineConfidenceLevel: "medium",
+    baselineConfidenceRationale: "Self-attested default for sandbox calculation.",
+    participantSurplusConfirmed: true,
+    fallbackRule: "reroute",
+    unroutableBudgetPolicy: "manual_review",
+    stances: [{
+      campaignId: persistedCampaign.id,
+      stance: "weak",
+      maxAllocCents: 7_500,
+      maxAllocPctBps: 10_000,
+      rankOrder: 1,
+    }],
+  });
   const route = readFileSync("src/app/api/mpgf/rounds/[roundId]/coalition-routing/route.ts", "utf8");
+  const budgetPreviewRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/common-ground-budget-preview/route.ts", "utf8");
   const roundRoute = readFileSync("src/app/api/mpgf/rounds/[roundId]/route.ts", "utf8");
   const publicApi = readFileSync("src/lib/mpgf/public-goods-api.ts", "utf8");
   const supportSignalContract = buildMpgfPublicGoodsSupportSignalContractApi(persistedRound.id);
@@ -2752,6 +2800,24 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.equal(persistedRow.activeClusterCount, 3);
   assert.equal(persistedRow.weakCommonGroundSignalCount, 2);
   assert.equal(persistedRow.routedWeakBudgetCents, 5_000);
+  assert.equal(budgetPreview.policy, MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY);
+  assert.equal(budgetPreview.releaseStage, "sandbox_calculation");
+  assert.equal(budgetPreview.paymentCaptureAllowed, false);
+  assert.equal(budgetPreview.stateMutation, "none_preview_only");
+  assert.equal(budgetPreview.participantSurplusConfirmationRequired, true);
+  assert.equal(budgetPreview.participantSurplusConfirmed, true);
+  assert.equal(budgetPreview.activationState, "ready_for_confirmation");
+  assert.equal(budgetPreview.tradeClassification, "moral_public_good_coalition");
+  assert.equal(budgetPreview.noGlobalMoralRanking, true);
+  assert.equal(budgetPreview.moralReputationAffectsAllocationPower, false);
+  assert.equal(budgetPreview.eligibleProjectCount, 1);
+  assert.equal(budgetPreview.routedAllocationCents, 7_500);
+  assert.equal(budgetPreview.unroutableBudgetPolicy, "manual_review");
+  assert.match(budgetPreview.eligibleProjectSetHash, /^sha256:/);
+  assert.match(budgetPreview.termsSnapshotHash, /^sha256:/);
+  assert.match(budgetPreview.participantConfirmationHash ?? "", /^sha256:/);
+  assert.equal(budgetPreview.rows[0]?.stance, "weak");
+  assert.equal(budgetPreview.rows[0]?.allocationState, "currently_routed");
   assert.equal(supportSignalContract.coalitionRoutingPath, `/api/mpgf/rounds/${persistedRound.id}/coalition-routing`);
   assert.match(route, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(route, /getMpgfPublicGoodsCoalitionRoutingReportApi/);
@@ -2765,9 +2831,19 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   assert.match(route, /supportSignalSource/);
   assert.match(route, /Could not load persisted MPGF coalition-routing state/);
   assert.match(roundRoute, /supportSignalSource/);
+  assert.match(budgetPreviewRoute, /Sign in to preview a Common Ground Budget/);
+  assert.match(budgetPreviewRoute, /stateMutation/);
+  assert.match(budgetPreviewRoute, /paymentCaptureAllowed/);
+  assert.match(budgetPreviewRoute, /loadMpgfPublicGoodsAllocationContext/);
   assert.match(publicApi, /coalitionRouting/);
+  assert.match(publicApi, /commonGroundBudget/);
+  assert.match(publicApi, /common-ground-budget-preview/);
   assert.match(publicApi, /routedWeakSupportBudgetCents/);
   assert.match(roundPage, /Coalition-routed common-ground budget/);
+  assert.match(roundPage, /Common Ground Budget preview/);
+  assert.match(roundPage, /Your default allocation baseline/);
+  assert.match(roundPage, /This routing is acceptable to me relative to my stated default/);
+  assert.match(roundPage, /paymentCaptureAllowed/);
   assert.match(roundPage, /coalition-routing report/);
 
   for (const table of [
@@ -2782,10 +2858,30 @@ test("MPGF coalition routing converts weak common-ground support into threshold-
   }
 
   assert.match(migration, /stance in \('strong', 'weak', 'dissent', 'abstain'\)/);
+  assert.match(migration, /budget_period text not null default 'monthly'/);
+  assert.match(migration, /default_allocation_baseline text not null/);
+  assert.match(migration, /participant_surplus_confirmation_required boolean not null default true/);
+  assert.match(migration, /eligible_project_set_hash text not null/);
+  assert.match(migration, /fallback_eligible_project_set_hash text not null/);
+  assert.match(migration, /unroutable_budget_policy text not null default 'carry_forward'/);
+  assert.match(migration, /round_lock_confirmation_required boolean not null default true/);
+  assert.match(migration, /participant_confirmation_hash text/);
+  assert.match(migration, /rank_order integer/);
+  assert.match(migration, /redacted_note_hash text/);
   assert.match(migration, /threshold_feasible_flag boolean not null default false/);
   assert.match(migration, /failure_bonus_or_carry_forward_eligible boolean not null default false/);
   assert.match(migration, /mpgf_user_budgets_write_own/);
   assert.match(migration, /mpgf_support_stances_write_own/);
+  assert.match(schemaSql, /budget_period text not null default 'monthly'/);
+  assert.match(schemaSql, /default_allocation_baseline text not null/);
+  assert.match(schemaSql, /participant_surplus_confirmation_required boolean not null default true/);
+  assert.match(schemaSql, /eligible_project_set_hash text not null/);
+  assert.match(schemaSql, /fallback_eligible_project_set_hash text not null/);
+  assert.match(schemaSql, /unroutable_budget_policy text not null default 'carry_forward'/);
+  assert.match(schemaSql, /round_lock_confirmation_required boolean not null default true/);
+  assert.match(schemaSql, /participant_confirmation_hash text/);
+  assert.match(schemaSql, /rank_order integer/);
+  assert.match(schemaSql, /redacted_note_hash text/);
   assert.match(schemaSql, /mpgf_coalition_candidates_public_select/);
   assert.match(schemaSql, /mpgf_user_budgets_write_own/);
   assert.match(schemaSql, /mpgf_support_stances_write_own/);

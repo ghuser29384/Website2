@@ -23,6 +23,11 @@ import {
   type MpgfPublicGoodsSupportSignal,
 } from "./public-goods-cg-vqaf";
 import {
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CHOICE_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY,
+  MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY,
+} from "./public-goods-common-ground-budget";
+import {
   MPGF_PUBLIC_GOODS_COALITION_ROUTING_POLICY,
   buildMpgfPublicGoodsCoalitionRoutingReport,
 } from "./public-goods-coalition-routing";
@@ -456,6 +461,21 @@ export function buildMpgfPublicGoodsRoundApi({
         noGlobalMoralRanking: coalitionRouting.noGlobalMoralRanking,
         moralReputationAffectsAllocationPower: coalitionRouting.moralReputationAffectsAllocationPower,
         publicAggregationOnly: coalitionRouting.publicAggregationOnly,
+      },
+      commonGroundBudget: {
+        policy: MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_PREVIEW_POLICY,
+        choiceArchitecturePolicy: MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_CHOICE_POLICY,
+        fallbackPolicy: MPGF_PUBLIC_GOODS_COMMON_GROUND_BUDGET_FALLBACK_POLICY,
+        previewPath: `/api/mpgf/rounds/${round.id}/common-ground-budget-preview`,
+        releaseStage: "sandbox_calculation",
+        paymentCaptureAllowed: false,
+        stateMutation: "none_preview_only",
+        budgetPeriodOptions: ["monthly", "round_limited"],
+        stanceOptions: ["strong", "weak", "dissent", "abstain"],
+        participantSurplusConfirmationRequired: true,
+        eligibleProjectSetHashRequired: true,
+        fallbackRerouteLimitedToFrozenEligibleSet: true,
+        noGlobalMoralRanking: true,
       },
       thresholdCalibration: thresholdCalibration
         ? {
