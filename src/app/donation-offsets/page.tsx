@@ -7,6 +7,7 @@ import { Breadcrumbs, MetricCard, PageHero, SectionHeader, StepCard } from "@/co
 import { getDonationOffsetOverview, getViewer, type DonationOffsetOverview } from "@/lib/app-data";
 import {
   buildDemoDonationOffsetDonorOfRecordPreview,
+  buildDemoDonationOffsetAuthorityFairnessPreview,
   buildDemoDonationOffsetExternalityEvidencePreview,
   buildDemoDonationOffsetParticipantConfirmationPreview,
   buildDemoDonationOffsetPaymentDestinationPreview,
@@ -148,6 +149,7 @@ export default async function DonationOffsetsPage() {
   const externalityEvidencePreview = buildDemoDonationOffsetExternalityEvidencePreview();
   const participantConfirmationPreview = buildDemoDonationOffsetParticipantConfirmationPreview();
   const safetyAuthenticityPreview = buildDemoDonationOffsetSafetyAuthenticityPreview();
+  const authorityFairnessPreview = buildDemoDonationOffsetAuthorityFairnessPreview();
   const createOffsetHref = viewer
     ? "/offers/new?mode=offset"
     : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
@@ -708,6 +710,102 @@ export default async function DonationOffsetsPage() {
 
             <ol className="protocol-provenance-list">
               {safetyAuthenticityPreview.gates.map((gate) => (
+                <li
+                  className={`protocol-provenance-item protocol-provenance-item-${donorGateStatusClass(
+                    gate.status,
+                  )}`}
+                  key={gate.key}
+                >
+                  <span className="protocol-step-status">
+                    {formatDonorGateStatus(gate.status)}
+                  </span>
+                  <div>
+                    <strong>{gate.label}</strong>
+                    <p>{gate.detail}</p>
+                    <small>{gate.nextAction}</small>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="offset-authority-fairness-heading">
+          <SectionHeader
+            eyebrow="Authority and fairness"
+            id="offset-authority-fairness-heading"
+            title="Participants may bind only themselves by default."
+          >
+            Donation offsets must keep baseline integrity, third-party obligations,
+            representative authority, reporting integrity, civil rights, and autonomy/coercion
+            review non-blocking before any lock, release, reliance, or completed-trade claim.
+          </SectionHeader>
+          <div className="protocol-review-panel protocol-review-panel-needs_human_review">
+            <div className="protocol-review-head">
+              <div>
+                <p className="eyebrow">Preview-only authority bundle</p>
+                <h3>Coerced consent is not participant surplus.</h3>
+                <p>
+                  Clearing allowed: {String(authorityFairnessPreview.clearingAllowed)}.
+                  Participant may bind only self by default:{" "}
+                  {String(authorityFairnessPreview.participantMayBindOnlySelfByDefault)}.
+                  Reporting suppression blocked:{" "}
+                  {String(authorityFairnessPreview.reportingSuppressionBlocked)}.
+                </p>
+              </div>
+              <span className="protocol-review-status">
+                {authorityFairnessPreview.releaseStage.replaceAll("_", " ")}
+              </span>
+            </div>
+
+            <div className="protocol-review-grid">
+              <div>
+                <strong>Baseline and authority</strong>
+                <ul className="clean-list">
+                  <li>
+                    Baseline integrity:{" "}
+                    {authorityFairnessPreview.baselineIntegrityStatus.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Representative authority:{" "}
+                    {authorityFairnessPreview.representativeAuthorityStatus.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Third-party obligation:{" "}
+                    {authorityFairnessPreview.thirdPartyObligationStatus.replaceAll("_", " ")}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <strong>Rights and autonomy</strong>
+                <ul className="clean-list">
+                  <li>
+                    Reporting integrity:{" "}
+                    {authorityFairnessPreview.reportingIntegrity.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Civil rights: {authorityFairnessPreview.civilRights.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Participant autonomy:{" "}
+                    {authorityFairnessPreview.participantAutonomy.replaceAll("_", " ")}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <strong>Legal posture</strong>
+                <p>
+                  Jurisdiction review:{" "}
+                  {authorityFairnessPreview.jurisdictionReviewStatus.replaceAll("_", " ")}.
+                  Baseline manufacturing blocked:{" "}
+                  {String(authorityFairnessPreview.baselineManufacturingBlocked)}. Civil-rights
+                  review required: {String(authorityFairnessPreview.civilRightsReviewRequired)}.
+                </p>
+              </div>
+            </div>
+
+            <ol className="protocol-provenance-list">
+              {authorityFairnessPreview.gates.map((gate) => (
                 <li
                   className={`protocol-provenance-item protocol-provenance-item-${donorGateStatusClass(
                     gate.status,

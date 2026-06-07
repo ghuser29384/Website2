@@ -27,6 +27,7 @@ import {
 } from "@/lib/performance-bonds";
 import {
   buildDonationOffsetDonorOfRecordPreview,
+  buildDonationOffsetAuthorityFairnessPreview,
   buildDonationOffsetExternalityEvidencePreview,
   buildDonationOffsetParticipantConfirmationPreview,
   buildDonationOffsetPaymentDestinationPreview,
@@ -44,6 +45,7 @@ import {
   getSelectableRegisteredCharities,
   findRegisteredCharityById,
   validateDonationOffsetDonorOfRecordInput,
+  validateDonationOffsetAuthorityFairnessInput,
   validateDonationOffsetExternalityEvidenceInput,
   validateDonationOffsetParticipantConfirmationInput,
   validateDonationOffsetPaymentDestinationInput,
@@ -64,6 +66,8 @@ import {
   type DonationOffsetExternalityEvidenceInput,
   type DonationOffsetFallbackPolicy,
   type DonationOffsetAmendmentStatus,
+  type DonationOffsetAuthorityFairnessInput,
+  type DonationOffsetBaselineIntegrityStatus,
   type DonationOffsetBinarySafetyAssertion,
   type DonationOffsetConfirmationScope,
   type DonationOffsetConsentQualityStatus,
@@ -76,8 +80,11 @@ import {
   type DonationOffsetParticipantConfirmationInput,
   type DonationOffsetParticipantConfirmationRecordStatus,
   type DonationOffsetPrivacyGrantStatus,
+  type DonationOffsetJurisdictionReviewStatus,
+  type DonationOffsetRepresentativeAuthorityStatus,
   type DonationOffsetRecipientIdentityStatus,
   type DonationOffsetSafetyAuthenticityInput,
+  type DonationOffsetThirdPartyObligationStatus,
   type DonationOffsetTaxReceiptTreatment,
 } from "@/lib/donation-offsets";
 import {
@@ -309,6 +316,10 @@ const defaultOffsetSafetyPaymentPatternSummary =
   "External donors pay the registered charity directly without refund side channels or private compensation.";
 const defaultOffsetSafetySideAgreementSummary =
   "No assignment, resale, tokenization, hazardous activity, cyber activity, or process-integrity side agreement is proposed.";
+const defaultOffsetAuthoritySummary =
+  "Each participant controls only their own donation, evidence, receipt treatment, and disclosures.";
+const defaultOffsetAuthoritySideAgreementSummary =
+  "No reporting suppression, discrimination, coercion, representative claim, or third-party duty conflict is proposed.";
 const defaultPledgeReciprocalReleaseRule =
   "If one side exits under the stated rule, both sides are released from future obligations while completed or disputed past obligations remain reviewable.";
 const defaultPledgeWithdrawalBeforeLockRule =
@@ -1199,6 +1210,35 @@ export function OfferCreateForm({
     useState(false);
   const [offsetNonTransferabilityAcknowledged, setOffsetNonTransferabilityAcknowledged] =
     useState(false);
+  const [offsetAuthoritySummary, setOffsetAuthoritySummary] = useState(
+    defaultOffsetAuthoritySummary,
+  );
+  const [offsetAuthoritySideAgreementSummary, setOffsetAuthoritySideAgreementSummary] = useState(
+    defaultOffsetAuthoritySideAgreementSummary,
+  );
+  const [offsetBaselineIntegrityStatus, setOffsetBaselineIntegrityStatus] =
+    useState<DonationOffsetBaselineIntegrityStatus>("non_blocking_review");
+  const [offsetThirdPartyObligationStatus, setOffsetThirdPartyObligationStatus] =
+    useState<DonationOffsetThirdPartyObligationStatus>("none_known");
+  const [offsetRepresentativeAuthorityStatus, setOffsetRepresentativeAuthorityStatus] =
+    useState<DonationOffsetRepresentativeAuthorityStatus>("self_only");
+  const [offsetAuthorityReportingIntegrity, setOffsetAuthorityReportingIntegrity] =
+    useState<DonationOffsetBinarySafetyAssertion>("clear");
+  const [offsetAuthorityCivilRights, setOffsetAuthorityCivilRights] =
+    useState<DonationOffsetBinarySafetyAssertion>("clear");
+  const [offsetAuthorityParticipantAutonomy, setOffsetAuthorityParticipantAutonomy] =
+    useState<DonationOffsetBinarySafetyAssertion>("clear");
+  const [offsetAuthorityJurisdictionReviewStatus, setOffsetAuthorityJurisdictionReviewStatus] =
+    useState<DonationOffsetJurisdictionReviewStatus>("non_blocking_review");
+  const [offsetOwnResourcesOnlyAcknowledged, setOffsetOwnResourcesOnlyAcknowledged] =
+    useState(false);
+  const [
+    offsetNoReportingSuppressionAcknowledged,
+    setOffsetNoReportingSuppressionAcknowledged,
+  ] = useState(false);
+  const [offsetNoDiscriminationAcknowledged, setOffsetNoDiscriminationAcknowledged] =
+    useState(false);
+  const [offsetNoCoercionAcknowledged, setOffsetNoCoercionAcknowledged] = useState(false);
   const [offerImpact, setOfferImpact] = useState(initialTemplate?.offerImpact ?? "7");
   const [minCounterpartyImpact, setMinCounterpartyImpact] = useState(initialTemplate?.minCounterpartyImpact ?? "6");
   const [verificationPreference, setVerificationPreference] = useState(initialTemplate?.verification ?? "Annual receipts");
@@ -1579,6 +1619,55 @@ export function OfferCreateForm({
         : [],
     [donationOffsetSafetyAuthenticityInput, isOffset],
   );
+  const donationOffsetAuthorityFairnessInput = useMemo<DonationOffsetAuthorityFairnessInput>(
+    () => ({
+      publicDescription: normalizedOffsetFields.description,
+      baselineStatement,
+      authoritySummary: offsetAuthoritySummary,
+      sideAgreementSummary: offsetAuthoritySideAgreementSummary,
+      baselineIntegrityStatus: offsetBaselineIntegrityStatus,
+      thirdPartyObligationStatus: offsetThirdPartyObligationStatus,
+      representativeAuthorityStatus: offsetRepresentativeAuthorityStatus,
+      reportingIntegrity: offsetAuthorityReportingIntegrity,
+      civilRights: offsetAuthorityCivilRights,
+      participantAutonomy: offsetAuthorityParticipantAutonomy,
+      jurisdictionReviewStatus: offsetAuthorityJurisdictionReviewStatus,
+      lockOrRelianceRequested: offsetLockOrRelianceRequested,
+      participantAcknowledgedOwnResourcesOnly: offsetOwnResourcesOnlyAcknowledged,
+      participantAcknowledgedNoReportingSuppression: offsetNoReportingSuppressionAcknowledged,
+      participantAcknowledgedNoDiscrimination: offsetNoDiscriminationAcknowledged,
+      participantAcknowledgedNoCoercion: offsetNoCoercionAcknowledged,
+    }),
+    [
+      baselineStatement,
+      normalizedOffsetFields.description,
+      offsetAuthorityCivilRights,
+      offsetAuthorityJurisdictionReviewStatus,
+      offsetAuthorityParticipantAutonomy,
+      offsetAuthorityReportingIntegrity,
+      offsetAuthoritySideAgreementSummary,
+      offsetAuthoritySummary,
+      offsetBaselineIntegrityStatus,
+      offsetLockOrRelianceRequested,
+      offsetNoCoercionAcknowledged,
+      offsetNoDiscriminationAcknowledged,
+      offsetNoReportingSuppressionAcknowledged,
+      offsetOwnResourcesOnlyAcknowledged,
+      offsetRepresentativeAuthorityStatus,
+      offsetThirdPartyObligationStatus,
+    ],
+  );
+  const donationOffsetAuthorityFairnessPreview = useMemo(
+    () => buildDonationOffsetAuthorityFairnessPreview(donationOffsetAuthorityFairnessInput),
+    [donationOffsetAuthorityFairnessInput],
+  );
+  const donationOffsetAuthorityFairnessErrors = useMemo(
+    () =>
+      isOffset
+        ? validateDonationOffsetAuthorityFairnessInput(donationOffsetAuthorityFairnessInput)
+        : [],
+    [donationOffsetAuthorityFairnessInput, isOffset],
+  );
   const baselineAmountCents = Math.round((Number(baselineAmountUsd) || 0) * 100);
   const baselineBondCapCents = calculatePilotBaselineBondCapCents(baselineAmountCents);
   const baselineBondValidation = useMemo(
@@ -1802,11 +1891,13 @@ export function OfferCreateForm({
             ...donationOffsetExternalityEvidenceErrors,
             ...donationOffsetParticipantConfirmationErrors,
             ...donationOffsetSafetyAuthenticityErrors,
+            ...donationOffsetAuthorityFairnessErrors,
           ]
         : [],
     [
       antiThreatCertified,
       baselineBondValidation.errors,
+      donationOffsetAuthorityFairnessErrors,
       donationOffsetDonorOfRecordErrors,
       donationOffsetExternalityEvidenceErrors,
       donationOffsetParticipantConfirmationErrors,
@@ -2184,6 +2275,19 @@ export function OfferCreateForm({
       setOffsetNoUnauthorizedPrivateDisclosureAcknowledged(false);
       setOffsetClaimTypedEvidenceAcknowledged(false);
       setOffsetNonTransferabilityAcknowledged(false);
+      setOffsetAuthoritySummary(defaultOffsetAuthoritySummary);
+      setOffsetAuthoritySideAgreementSummary(defaultOffsetAuthoritySideAgreementSummary);
+      setOffsetBaselineIntegrityStatus("non_blocking_review");
+      setOffsetThirdPartyObligationStatus("none_known");
+      setOffsetRepresentativeAuthorityStatus("self_only");
+      setOffsetAuthorityReportingIntegrity("clear");
+      setOffsetAuthorityCivilRights("clear");
+      setOffsetAuthorityParticipantAutonomy("clear");
+      setOffsetAuthorityJurisdictionReviewStatus("non_blocking_review");
+      setOffsetOwnResourcesOnlyAcknowledged(false);
+      setOffsetNoReportingSuppressionAcknowledged(false);
+      setOffsetNoDiscriminationAcknowledged(false);
+      setOffsetNoCoercionAcknowledged(false);
     }
   }
 
@@ -5178,6 +5282,283 @@ export function OfferCreateForm({
                   </div>
                   <ol className="protocol-provenance-list">
                     {donationOffsetSafetyAuthenticityPreview.gates.map((gate) => (
+                      <li
+                        className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
+                          gate.status,
+                        )}`}
+                        key={gate.key}
+                      >
+                        <span className="protocol-step-status">
+                          {formatOffsetDonorGateStatus(gate.status)}
+                        </span>
+                        <div>
+                          <strong>{gate.label}</strong>
+                          <p>{gate.detail}</p>
+                          <small>{gate.nextAction}</small>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="field">
+              <legend>Authority and fairness</legend>
+              <div className="panel subtle-panel">
+                <div className="panel-head">
+                  <div>
+                    <p className="eyebrow">Before any final lock</p>
+                    <h3>Confirm self-binding, baseline integrity, rights, and autonomy</h3>
+                  </div>
+                  <span className="badge badge-warning">
+                    {donationOffsetAuthorityFairnessPreview.releaseStage.replaceAll("_", " ")}
+                  </span>
+                </div>
+                <p className="panel-note">
+                  A donation offset cannot rely on manufactured baselines, third-party rights,
+                  claimed authority over others, reporting suppression, discrimination, or coerced
+                  consent. These checks stay separate from moral ranking.
+                </p>
+
+                <label className="field">
+                  <span>Authority summary</span>
+                  <textarea
+                    name="offset_authority_summary"
+                    required={isOffset}
+                    rows={3}
+                    value={offsetAuthoritySummary}
+                    onChange={(event) => setOffsetAuthoritySummary(readFormControlValue(event))}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Authority and fairness side-agreement summary</span>
+                  <textarea
+                    name="offset_authority_side_agreement_summary"
+                    required={isOffset}
+                    rows={3}
+                    value={offsetAuthoritySideAgreementSummary}
+                    onChange={(event) =>
+                      setOffsetAuthoritySideAgreementSummary(readFormControlValue(event))
+                    }
+                  />
+                </label>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Baseline integrity</span>
+                    <select
+                      name="offset_baseline_integrity_status"
+                      required={isOffset}
+                      value={offsetBaselineIntegrityStatus}
+                      onChange={(event) =>
+                        setOffsetBaselineIntegrityStatus(
+                          readFormControlValue(event) as DonationOffsetBaselineIntegrityStatus,
+                        )
+                      }
+                    >
+                      <option value="non_blocking_review">Non-blocking review</option>
+                      <option value="needs_review">Needs review</option>
+                      <option value="manufactured_or_escalated">Manufactured or escalated - block</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Third-party obligation</span>
+                    <select
+                      name="offset_third_party_obligation_status"
+                      required={isOffset}
+                      value={offsetThirdPartyObligationStatus}
+                      onChange={(event) =>
+                        setOffsetThirdPartyObligationStatus(
+                          readFormControlValue(event) as DonationOffsetThirdPartyObligationStatus,
+                        )
+                      }
+                    >
+                      <option value="none_known">None known</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="conflict_declared">Conflict declared - block</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Representative authority</span>
+                    <select
+                      name="offset_representative_authority_status"
+                      required={isOffset}
+                      value={offsetRepresentativeAuthorityStatus}
+                      onChange={(event) =>
+                        setOffsetRepresentativeAuthorityStatus(
+                          readFormControlValue(event) as DonationOffsetRepresentativeAuthorityStatus,
+                        )
+                      }
+                    >
+                      <option value="self_only">Self only</option>
+                      <option value="verified_authority">Verified authority</option>
+                      <option value="claims_representative_authority">Claims representative authority</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Reporting integrity</span>
+                    <select
+                      name="offset_reporting_integrity_status"
+                      required={isOffset}
+                      value={offsetAuthorityReportingIntegrity}
+                      onChange={(event) =>
+                        setOffsetAuthorityReportingIntegrity(
+                          readFormControlValue(event) as DonationOffsetBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Clear</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="triggered">Triggered - block</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Civil rights/discrimination</span>
+                    <select
+                      name="offset_civil_rights_status"
+                      required={isOffset}
+                      value={offsetAuthorityCivilRights}
+                      onChange={(event) =>
+                        setOffsetAuthorityCivilRights(
+                          readFormControlValue(event) as DonationOffsetBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Clear</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="triggered">Triggered - block</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Participant autonomy/coercion</span>
+                    <select
+                      name="offset_participant_autonomy_status"
+                      required={isOffset}
+                      value={offsetAuthorityParticipantAutonomy}
+                      onChange={(event) =>
+                        setOffsetAuthorityParticipantAutonomy(
+                          readFormControlValue(event) as DonationOffsetBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Clear</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="triggered">Triggered - block</option>
+                    </select>
+                  </label>
+                </div>
+
+                <label className="field">
+                  <span>Jurisdiction/legal review</span>
+                  <select
+                    name="offset_jurisdiction_legal_review_status"
+                    required={isOffset}
+                    value={offsetAuthorityJurisdictionReviewStatus}
+                    onChange={(event) =>
+                      setOffsetAuthorityJurisdictionReviewStatus(
+                        readFormControlValue(event) as DonationOffsetJurisdictionReviewStatus,
+                      )
+                    }
+                  >
+                    <option value="not_needed">Not needed</option>
+                    <option value="non_blocking_review">Non-blocking review</option>
+                    <option value="needs_review">Needs review</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="unknown">Unknown - needs input</option>
+                  </select>
+                </label>
+
+                <div className="field-grid">
+                  <label className="radio-row">
+                    <input
+                      checked={offsetOwnResourcesOnlyAcknowledged}
+                      name="offset_own_resources_only_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetOwnResourcesOnlyAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Participants may bind only their own resources by default.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNoReportingSuppressionAcknowledged}
+                      name="offset_no_reporting_suppression_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNoReportingSuppressionAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Donation offsets cannot suppress truthful reporting or evidence.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNoDiscriminationAcknowledged}
+                      name="offset_no_discrimination_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNoDiscriminationAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Donation offsets cannot require or reward unlawful discrimination.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNoCoercionAcknowledged}
+                      name="offset_no_coercion_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNoCoercionAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Coerced or dependency-based consent is not participant surplus confirmation.</span>
+                  </label>
+                </div>
+
+                <div className="protocol-provenance-preflight" aria-live="polite">
+                  <div className="protocol-provenance-head">
+                    <div>
+                      <strong>Authority and fairness preview</strong>
+                      <p>
+                        Participant may bind only self:{" "}
+                        {donationOffsetAuthorityFairnessPreview.participantMayBindOnlySelfByDefault
+                          ? "yes"
+                          : "no"}
+                        . Coercive consent sufficient:{" "}
+                        {donationOffsetAuthorityFairnessPreview.coerciveConsentNotSufficient
+                          ? "no"
+                          : "yes"}
+                        .
+                      </p>
+                    </div>
+                    <span className="protocol-review-status">
+                      {donationOffsetAuthorityFairnessPreview.humanReviewGateCount} review item
+                      {donationOffsetAuthorityFairnessPreview.humanReviewGateCount === 1
+                        ? ""
+                        : "s"}
+                    </span>
+                  </div>
+                  <ol className="protocol-provenance-list">
+                    {donationOffsetAuthorityFairnessPreview.gates.map((gate) => (
                       <li
                         className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
                           gate.status,

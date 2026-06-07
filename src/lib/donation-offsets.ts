@@ -109,6 +109,26 @@ export type DonationOffsetPrivacyGrantStatus =
   | "approved"
   | "missing"
   | "unknown";
+export type DonationOffsetBaselineIntegrityStatus =
+  | "non_blocking_review"
+  | "needs_review"
+  | "manufactured_or_escalated"
+  | "unknown";
+export type DonationOffsetThirdPartyObligationStatus =
+  | "none_known"
+  | "possible_or_unknown"
+  | "conflict_declared";
+export type DonationOffsetRepresentativeAuthorityStatus =
+  | "self_only"
+  | "verified_authority"
+  | "claims_representative_authority"
+  | "unknown";
+export type DonationOffsetJurisdictionReviewStatus =
+  | "not_needed"
+  | "non_blocking_review"
+  | "needs_review"
+  | "blocked"
+  | "unknown";
 export type DonationOffsetDonorOfRecordGateStatus =
   | "pass"
   | "needs_input"
@@ -121,6 +141,8 @@ export type DonationOffsetExternalityEvidenceGateStatus =
 export type DonationOffsetParticipantConfirmationGateStatus =
   DonationOffsetDonorOfRecordGateStatus;
 export type DonationOffsetSafetyAuthenticityGateStatus =
+  DonationOffsetDonorOfRecordGateStatus;
+export type DonationOffsetAuthorityFairnessGateStatus =
   DonationOffsetDonorOfRecordGateStatus;
 
 export interface RegisteredCharity {
@@ -523,6 +545,58 @@ export interface DonationOffsetSafetyAuthenticityPreview {
   blockedGateCount: number;
   humanReviewGateCount: number;
   readyForSafetyReview: boolean;
+}
+
+export interface DonationOffsetAuthorityFairnessInput {
+  publicDescription: string;
+  baselineStatement: string;
+  authoritySummary: string;
+  sideAgreementSummary: string;
+  baselineIntegrityStatus: DonationOffsetBaselineIntegrityStatus;
+  thirdPartyObligationStatus: DonationOffsetThirdPartyObligationStatus;
+  representativeAuthorityStatus: DonationOffsetRepresentativeAuthorityStatus;
+  reportingIntegrity: DonationOffsetBinarySafetyAssertion;
+  civilRights: DonationOffsetBinarySafetyAssertion;
+  participantAutonomy: DonationOffsetBinarySafetyAssertion;
+  jurisdictionReviewStatus: DonationOffsetJurisdictionReviewStatus;
+  lockOrRelianceRequested: boolean;
+  participantAcknowledgedOwnResourcesOnly: boolean;
+  participantAcknowledgedNoReportingSuppression: boolean;
+  participantAcknowledgedNoDiscrimination: boolean;
+  participantAcknowledgedNoCoercion: boolean;
+}
+
+export interface DonationOffsetAuthorityFairnessGate {
+  key: string;
+  label: string;
+  status: DonationOffsetAuthorityFairnessGateStatus;
+  detail: string;
+  nextAction: string;
+  blockerCodes: string[];
+}
+
+export interface DonationOffsetAuthorityFairnessPreview {
+  schemaVersion: "donation-offset-authority-fairness-preview-v1";
+  releaseStage: "donation_offset_preview_no_capture";
+  captureAllowed: false;
+  clearingAllowed: false;
+  relianceBearing: false;
+  participantMayBindOnlySelfByDefault: true;
+  baselineManufacturingBlocked: true;
+  reportingSuppressionBlocked: true;
+  coerciveConsentNotSufficient: true;
+  civilRightsReviewRequired: true;
+  baselineIntegrityStatus: DonationOffsetBaselineIntegrityStatus;
+  thirdPartyObligationStatus: DonationOffsetThirdPartyObligationStatus;
+  representativeAuthorityStatus: DonationOffsetRepresentativeAuthorityStatus;
+  jurisdictionReviewStatus: DonationOffsetJurisdictionReviewStatus;
+  reportingIntegrity: DonationOffsetBinarySafetyAssertion;
+  civilRights: DonationOffsetBinarySafetyAssertion;
+  participantAutonomy: DonationOffsetBinarySafetyAssertion;
+  gates: DonationOffsetAuthorityFairnessGate[];
+  blockedGateCount: number;
+  humanReviewGateCount: number;
+  readyForAuthorityReview: boolean;
 }
 
 export interface DonationOffsetModerationAssessment {
@@ -1071,6 +1145,66 @@ export function normalizeDonationOffsetPrivacyGrantStatus(
   return "unknown";
 }
 
+export function normalizeDonationOffsetBaselineIntegrityStatus(
+  value: string | null | undefined,
+): DonationOffsetBaselineIntegrityStatus {
+  if (
+    value === "non_blocking_review" ||
+    value === "needs_review" ||
+    value === "manufactured_or_escalated" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetThirdPartyObligationStatus(
+  value: string | null | undefined,
+): DonationOffsetThirdPartyObligationStatus {
+  if (
+    value === "none_known" ||
+    value === "possible_or_unknown" ||
+    value === "conflict_declared"
+  ) {
+    return value;
+  }
+
+  return "possible_or_unknown";
+}
+
+export function normalizeDonationOffsetRepresentativeAuthorityStatus(
+  value: string | null | undefined,
+): DonationOffsetRepresentativeAuthorityStatus {
+  if (
+    value === "self_only" ||
+    value === "verified_authority" ||
+    value === "claims_representative_authority" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
+export function normalizeDonationOffsetJurisdictionReviewStatus(
+  value: string | null | undefined,
+): DonationOffsetJurisdictionReviewStatus {
+  if (
+    value === "not_needed" ||
+    value === "non_blocking_review" ||
+    value === "needs_review" ||
+    value === "blocked" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
 function donorGate({
   key,
   label,
@@ -1180,6 +1314,71 @@ const donationOffsetSafetyKeywordGroups = {
   ],
 };
 
+const donationOffsetAuthorityKeywordGroups = {
+  baselineManufacturing: [
+    "i will donate to",
+    "or i will donate to",
+    "unless you match",
+    "unless someone pays",
+    "increase my donation if",
+    "threaten",
+    "blackmail",
+    "extort",
+  ],
+  thirdPartyObligation: [
+    "employment duty",
+    "fiduciary duty",
+    "contract requires",
+    "court order",
+    "confidentiality duty",
+    "donor restriction",
+    "school rule",
+    "professional obligation",
+  ],
+  representativeAuthority: [
+    "on behalf of",
+    "for my company",
+    "for my employer",
+    "client funds",
+    "family member",
+    "donor-advised fund",
+    "fiscal host",
+    "account holder",
+  ],
+  reportingIntegrity: [
+    "do not report",
+    "don't report",
+    "not report",
+    "withdraw complaint",
+    "drop complaint",
+    "stay silent",
+    "keep silent",
+    "hide misconduct",
+    "false statement",
+    "suppress evidence",
+  ],
+  civilRights: [
+    "discriminate",
+    "exclude people based on",
+    "protected trait",
+    "retaliate",
+    "segregate",
+    "refuse service",
+    "protected activity",
+  ],
+  participantAutonomy: [
+    "must accept",
+    "under pressure",
+    "dependent on me",
+    "immigration status",
+    "housing crisis",
+    "medical crisis",
+    "caregiver",
+    "employer power",
+    "urgent cash",
+  ],
+};
+
 function hasDonationOffsetSafetyKeyword(text: string, keywords: readonly string[]) {
   return keywords.some((keyword) => text.includes(keyword));
 }
@@ -1226,6 +1425,48 @@ function blockIfSafetyLockOrRelianceRequested(
 
 function donationOffsetSafetyDetail(
   status: DonationOffsetSafetyAuthenticityGateStatus,
+  passDetail: string,
+  reviewDetail: string,
+  blockedDetail: string,
+) {
+  if (status === "blocked") {
+    return blockedDetail;
+  }
+
+  if (status === "human_review" || status === "needs_input") {
+    return reviewDetail;
+  }
+
+  return passDetail;
+}
+
+function donationOffsetAuthorityGate({
+  key,
+  label,
+  status,
+  detail,
+  nextAction,
+  blockerCodes = [],
+}: DonationOffsetAuthorityFairnessGate) {
+  return {
+    key,
+    label,
+    status,
+    detail,
+    nextAction,
+    blockerCodes,
+  };
+}
+
+function blockIfAuthorityLockOrRelianceRequested(
+  status: DonationOffsetAuthorityFairnessGateStatus,
+  lockOrRelianceRequested: boolean,
+) {
+  return lockOrRelianceRequested && status !== "pass" ? "blocked" : status;
+}
+
+function donationOffsetAuthorityDetail(
+  status: DonationOffsetAuthorityFairnessGateStatus,
   passDetail: string,
   reviewDetail: string,
   blockedDetail: string,
@@ -2825,6 +3066,402 @@ export function buildDemoDonationOffsetSafetyAuthenticityPreview() {
     participantAcknowledgedNoUnauthorizedPrivateDisclosure: true,
     participantAcknowledgedClaimTypedEvidence: true,
     participantAcknowledgedNonTransferability: true,
+  });
+}
+
+export function buildDonationOffsetAuthorityFairnessPreview(
+  input: DonationOffsetAuthorityFairnessInput,
+): DonationOffsetAuthorityFairnessPreview {
+  const fullText = [
+    input.publicDescription,
+    input.baselineStatement,
+    input.authoritySummary,
+    input.sideAgreementSummary,
+  ]
+    .join(" ")
+    .toLowerCase();
+  const baselineIntegrityStatus = blockIfAuthorityLockOrRelianceRequested(
+    input.baselineIntegrityStatus === "non_blocking_review" &&
+      !hasDonationOffsetSafetyKeyword(
+        fullText,
+        donationOffsetAuthorityKeywordGroups.baselineManufacturing,
+      )
+      ? "pass"
+      : input.baselineIntegrityStatus === "manufactured_or_escalated" ||
+          hasDonationOffsetSafetyKeyword(
+            fullText,
+            donationOffsetAuthorityKeywordGroups.baselineManufacturing,
+          )
+        ? "blocked"
+        : "human_review",
+    input.lockOrRelianceRequested,
+  );
+  const thirdPartyObligationStatus = blockIfAuthorityLockOrRelianceRequested(
+    input.thirdPartyObligationStatus === "none_known" &&
+      !hasDonationOffsetSafetyKeyword(
+        fullText,
+        donationOffsetAuthorityKeywordGroups.thirdPartyObligation,
+      )
+      ? "pass"
+      : input.thirdPartyObligationStatus === "conflict_declared" ||
+          hasDonationOffsetSafetyKeyword(
+            fullText,
+            donationOffsetAuthorityKeywordGroups.thirdPartyObligation,
+          )
+        ? "blocked"
+        : "human_review",
+    input.lockOrRelianceRequested,
+  );
+  const representativeAuthorityStatus = blockIfAuthorityLockOrRelianceRequested(
+    (input.representativeAuthorityStatus === "self_only" ||
+      input.representativeAuthorityStatus === "verified_authority") &&
+      input.participantAcknowledgedOwnResourcesOnly &&
+      !hasDonationOffsetSafetyKeyword(
+        fullText,
+        donationOffsetAuthorityKeywordGroups.representativeAuthority,
+      )
+      ? "pass"
+      : input.representativeAuthorityStatus === "claims_representative_authority" ||
+          hasDonationOffsetSafetyKeyword(
+            fullText,
+            donationOffsetAuthorityKeywordGroups.representativeAuthority,
+          )
+        ? "human_review"
+        : "needs_input",
+    input.lockOrRelianceRequested,
+  );
+  const reportingIntegrityStatus = blockIfAuthorityLockOrRelianceRequested(
+    donationOffsetBinarySafetyStatus(
+      input.reportingIntegrity,
+      hasDonationOffsetSafetyKeyword(
+        fullText,
+        donationOffsetAuthorityKeywordGroups.reportingIntegrity,
+      ),
+    ) === "pass" && input.participantAcknowledgedNoReportingSuppression
+      ? "pass"
+      : donationOffsetBinarySafetyStatus(
+          input.reportingIntegrity,
+          hasDonationOffsetSafetyKeyword(
+            fullText,
+            donationOffsetAuthorityKeywordGroups.reportingIntegrity,
+          ),
+        ) === "blocked"
+        ? "blocked"
+        : "needs_input",
+    input.lockOrRelianceRequested,
+  );
+  const civilRightsStatus = blockIfAuthorityLockOrRelianceRequested(
+    donationOffsetBinarySafetyStatus(
+      input.civilRights,
+      hasDonationOffsetSafetyKeyword(fullText, donationOffsetAuthorityKeywordGroups.civilRights),
+    ) === "pass" && input.participantAcknowledgedNoDiscrimination
+      ? "pass"
+      : donationOffsetBinarySafetyStatus(
+          input.civilRights,
+          hasDonationOffsetSafetyKeyword(fullText, donationOffsetAuthorityKeywordGroups.civilRights),
+        ) === "blocked"
+        ? "blocked"
+        : "needs_input",
+    input.lockOrRelianceRequested,
+  );
+  const participantAutonomyStatus = blockIfAuthorityLockOrRelianceRequested(
+    donationOffsetBinarySafetyStatus(
+      input.participantAutonomy,
+      hasDonationOffsetSafetyKeyword(
+        fullText,
+        donationOffsetAuthorityKeywordGroups.participantAutonomy,
+      ),
+    ) === "pass" && input.participantAcknowledgedNoCoercion
+      ? "pass"
+      : donationOffsetBinarySafetyStatus(
+          input.participantAutonomy,
+          hasDonationOffsetSafetyKeyword(
+            fullText,
+            donationOffsetAuthorityKeywordGroups.participantAutonomy,
+          ),
+        ) === "blocked"
+        ? "blocked"
+        : "needs_input",
+    input.lockOrRelianceRequested,
+  );
+  const jurisdictionStatus = blockIfAuthorityLockOrRelianceRequested(
+    input.jurisdictionReviewStatus === "not_needed" ||
+      input.jurisdictionReviewStatus === "non_blocking_review"
+      ? "pass"
+      : input.jurisdictionReviewStatus === "blocked"
+        ? "blocked"
+        : "human_review",
+    input.lockOrRelianceRequested,
+  );
+  const lockBoundaryStatus = input.lockOrRelianceRequested ? "blocked" : "pass";
+
+  const gates = [
+    donationOffsetAuthorityGate({
+      key: "baseline-integrity",
+      label: "Baseline integrity",
+      status: baselineIntegrityStatus,
+      detail: donationOffsetAuthorityDetail(
+        baselineIntegrityStatus,
+        "The no-trade baseline has a non-blocking baseline-integrity review.",
+        "Baseline timing, credibility, or escalation needs neutral review before lock.",
+        "Manufactured, escalated, threat-like, or coercive baselines cannot authorize clearing.",
+      ),
+      nextAction:
+        baselineIntegrityStatus === "blocked"
+          ? "Remove manufactured or threat-like baseline terms before the offset can proceed."
+          : "Keep baseline-integrity review separate from moral ranking and participant consent.",
+      blockerCodes:
+        baselineIntegrityStatus === "pass" ? [] : ["baseline_integrity_review_required"],
+    }),
+    donationOffsetAuthorityGate({
+      key: "third-party-obligation",
+      label: "Third-party obligation",
+      status: thirdPartyObligationStatus,
+      detail: donationOffsetAuthorityDetail(
+        thirdPartyObligationStatus,
+        "No third-party duty, donor restriction, court order, contract, or professional obligation conflict is declared or detected.",
+        "Possible third-party obligation conflict needs bounded review.",
+        "A participant cannot trade away obligations or rights held by another person or institution.",
+      ),
+      nextAction:
+        thirdPartyObligationStatus === "blocked"
+          ? "Remove terms that conflict with third-party obligations or rights."
+          : "Document why the participant controls the relevant donation, evidence, and disclosure duties.",
+      blockerCodes:
+        thirdPartyObligationStatus === "pass" ? [] : ["third_party_obligation_review_required"],
+    }),
+    donationOffsetAuthorityGate({
+      key: "representative-authority",
+      label: "Representative authority",
+      status: representativeAuthorityStatus,
+      detail: donationOffsetAuthorityDetail(
+        representativeAuthorityStatus,
+        "The participant binds only their own resources, or verified authority covers the exact action.",
+        "Claimed authority for another person, fund, account, employer, fiscal host, or organization needs review.",
+        "Missing or disputed authority blocks lock, payment, evidence disclosure, and completed status.",
+      ),
+      nextAction:
+        representativeAuthorityStatus === "pass"
+          ? "Keep authority scoped to the exact donation, evidence, receipt, and time window."
+          : "Verify representative authority or limit the offset to the participant's own resources.",
+      blockerCodes:
+        representativeAuthorityStatus === "pass"
+          ? []
+          : ["representative_authority_review_required"],
+    }),
+    donationOffsetAuthorityGate({
+      key: "reporting-integrity",
+      label: "Reporting integrity",
+      status: reportingIntegrityStatus,
+      detail: donationOffsetAuthorityDetail(
+        reportingIntegrityStatus,
+        "The offset does not suppress truthful reporting, complaints, investigations, or evidence submission.",
+        "Reporting-integrity acknowledgements or review are incomplete.",
+        "Donation offsets cannot buy silence, false statements, complaint withdrawal, or noncooperation.",
+      ),
+      nextAction:
+        reportingIntegrityStatus === "blocked"
+          ? "Remove silence, suppression, false-statement, complaint-withdrawal, or noncooperation terms."
+          : "Keep truthful reporting and safety/legal cooperation outside the trade.",
+      blockerCodes:
+        reportingIntegrityStatus === "pass" ? [] : ["reporting_integrity_review_required"],
+    }),
+    donationOffsetAuthorityGate({
+      key: "civil-rights-discrimination",
+      label: "Civil rights and discrimination",
+      status: civilRightsStatus,
+      detail: donationOffsetAuthorityDetail(
+        civilRightsStatus,
+        "No protected-trait discrimination, protected-activity retaliation, exclusion, harassment, or segregation term is declared or detected.",
+        "Civil-rights acknowledgement or review is incomplete.",
+        "Donation offsets cannot require, reward, or route around unlawful discrimination or retaliation.",
+      ),
+      nextAction:
+        civilRightsStatus === "blocked"
+          ? "Remove protected-trait discrimination, exclusion, retaliation, or protected-activity terms."
+          : "Keep recipient choice and evidence terms separate from civil-rights violations.",
+      blockerCodes: civilRightsStatus === "pass" ? [] : ["civil_rights_review_required"],
+    }),
+    donationOffsetAuthorityGate({
+      key: "participant-autonomy-coercion",
+      label: "Participant autonomy and coercion",
+      status: participantAutonomyStatus,
+      detail: donationOffsetAuthorityDetail(
+        participantAutonomyStatus,
+        "No duress, dependency, acute vulnerability, crisis, or authority-pressure term is declared or detected.",
+        "Participant-autonomy acknowledgement or coercion review is incomplete.",
+        "Consent extracted through dependency, crisis, authority pressure, or undue inducement is not participant surplus confirmation.",
+      ),
+      nextAction:
+        participantAutonomyStatus === "blocked"
+          ? "Remove coercive, exploitative, dependency-based, or vulnerability-targeting terms."
+          : "Keep confirmations voluntary and separate from dependency or authority pressure.",
+      blockerCodes:
+        participantAutonomyStatus === "pass"
+          ? []
+          : ["participant_autonomy_coercion_review_required"],
+    }),
+    donationOffsetAuthorityGate({
+      key: "jurisdiction-review",
+      label: "Jurisdiction and legal review",
+      status: jurisdictionStatus,
+      detail: donationOffsetAuthorityDetail(
+        jurisdictionStatus,
+        "Jurisdiction review is either not needed for this preview or is non-blocking.",
+        "Legal or jurisdiction review is still needed before lock or reliance.",
+        "A blocked jurisdiction/legal review prevents lock, capture, release, or completed status.",
+      ),
+      nextAction:
+        jurisdictionStatus === "blocked"
+          ? "Resolve or remove the blocked legal/jurisdiction issue."
+          : "Keep jurisdiction/legal review tied to authority, receipt, disclosure, and payment terms.",
+      blockerCodes: jurisdictionStatus === "pass" ? [] : ["jurisdiction_review_required"],
+    }),
+    donationOffsetAuthorityGate({
+      key: "lock-reliance-boundary",
+      label: "Lock and reliance boundary",
+      status: lockBoundaryStatus,
+      detail:
+        lockBoundaryStatus === "pass"
+          ? "This authority bundle is preview-only and does not request lock, capture, release, or reliance."
+          : "This draft requested lock or reliance before authority and fairness gates are non-blocking.",
+      nextAction:
+        lockBoundaryStatus === "pass"
+          ? "Keep lock and reliance disabled until authority, baseline, legal, and fairness gates pass."
+          : "Remove premature lock, capture, release, or reliance requests.",
+      blockerCodes: lockBoundaryStatus === "pass" ? [] : ["lock_reliance_boundary_required"],
+    }),
+  ];
+  const blockedGateCount = gates.filter((gate) => gate.status === "blocked").length;
+  const humanReviewGateCount = gates.filter(
+    (gate) => gate.status === "human_review" || gate.status === "needs_input",
+  ).length;
+
+  return {
+    schemaVersion: "donation-offset-authority-fairness-preview-v1",
+    releaseStage: "donation_offset_preview_no_capture",
+    captureAllowed: false,
+    clearingAllowed: false,
+    relianceBearing: false,
+    participantMayBindOnlySelfByDefault: true,
+    baselineManufacturingBlocked: true,
+    reportingSuppressionBlocked: true,
+    coerciveConsentNotSufficient: true,
+    civilRightsReviewRequired: true,
+    baselineIntegrityStatus: input.baselineIntegrityStatus,
+    thirdPartyObligationStatus: input.thirdPartyObligationStatus,
+    representativeAuthorityStatus: input.representativeAuthorityStatus,
+    jurisdictionReviewStatus: input.jurisdictionReviewStatus,
+    reportingIntegrity: input.reportingIntegrity,
+    civilRights: input.civilRights,
+    participantAutonomy: input.participantAutonomy,
+    gates,
+    blockedGateCount,
+    humanReviewGateCount,
+    readyForAuthorityReview:
+      blockedGateCount === 0 && gates.every((gate) => gate.status !== "needs_input"),
+  };
+}
+
+export function validateDonationOffsetAuthorityFairnessInput(
+  input: DonationOffsetAuthorityFairnessInput,
+) {
+  const errors: string[] = [];
+  const preview = buildDonationOffsetAuthorityFairnessPreview(input);
+
+  if (!hasMeaningfulText(input.publicDescription)) {
+    errors.push("Describe the donation-offset authority and fairness context before review.");
+  }
+
+  if (!hasMeaningfulText(input.baselineStatement)) {
+    errors.push("Describe the no-trade baseline before baseline-integrity review.");
+  }
+
+  if (!hasMeaningfulText(input.authoritySummary)) {
+    errors.push("Describe who controls the donation, evidence, receipt, and disclosure duties.");
+  }
+
+  if (!input.participantAcknowledgedOwnResourcesOnly) {
+    errors.push("Acknowledge that participants may bind only their own resources by default.");
+  }
+
+  if (!input.participantAcknowledgedNoReportingSuppression) {
+    errors.push("Acknowledge that donation offsets cannot suppress truthful reporting or evidence.");
+  }
+
+  if (!input.participantAcknowledgedNoDiscrimination) {
+    errors.push("Acknowledge that donation offsets cannot require or reward unlawful discrimination.");
+  }
+
+  if (!input.participantAcknowledgedNoCoercion) {
+    errors.push("Acknowledge that coerced or dependency-based consent is not participant surplus confirmation.");
+  }
+
+  if (input.lockOrRelianceRequested) {
+    errors.push("Donation-offset authority previews cannot request lock, capture, release, or reliance.");
+  }
+
+  for (const gate of preview.gates) {
+    if (gate.status === "blocked") {
+      errors.push(`${gate.label}: ${gate.nextAction}`);
+    }
+  }
+
+  return errors;
+}
+
+export function summarizeDonationOffsetAuthorityFairnessForNotes(
+  preview: DonationOffsetAuthorityFairnessPreview,
+) {
+  const gateSummary = preview.gates
+    .map((gate) => `${gate.label}: ${formatDonationOffsetDonorGateStatus(gate.status)}`)
+    .join("; ");
+
+  return [
+    "Donation-offset authority and fairness preview:",
+    `Schema version: ${preview.schemaVersion}`,
+    `Release stage: ${preview.releaseStage}`,
+    `Baseline integrity: ${preview.baselineIntegrityStatus.replaceAll("_", " ")}`,
+    `Third-party obligation: ${preview.thirdPartyObligationStatus.replaceAll("_", " ")}`,
+    `Representative authority: ${preview.representativeAuthorityStatus.replaceAll("_", " ")}`,
+    `Jurisdiction review: ${preview.jurisdictionReviewStatus.replaceAll("_", " ")}`,
+    `Reporting integrity: ${preview.reportingIntegrity.replaceAll("_", " ")}`,
+    `Civil rights: ${preview.civilRights.replaceAll("_", " ")}`,
+    `Participant autonomy: ${preview.participantAutonomy.replaceAll("_", " ")}`,
+    "Capture allowed from this preview: no",
+    "Clearing allowed from this preview: no",
+    "Reliance-bearing from this preview: no",
+    "Participant may bind only self by default: yes",
+    "Baseline manufacturing blocked: yes",
+    "Reporting suppression blocked: yes",
+    "Coercive consent sufficient: no",
+    "Civil-rights review required: yes",
+    `Manual-review gates: ${gateSummary}`,
+  ].join("\n");
+}
+
+export function buildDemoDonationOffsetAuthorityFairnessPreview() {
+  return buildDonationOffsetAuthorityFairnessPreview({
+    publicDescription:
+      "Participants redirect their own opposed donations to a registered compromise recipient.",
+    baselineStatement:
+      "The baseline is a pre-existing planned donation by the participant, not an escalated threat.",
+    authoritySummary:
+      "Each participant controls only their own donation, evidence, receipt treatment, and disclosures.",
+    sideAgreementSummary:
+      "No reporting suppression, discrimination, coercion, representative claim, or third-party duty conflict is proposed.",
+    baselineIntegrityStatus: "non_blocking_review",
+    thirdPartyObligationStatus: "none_known",
+    representativeAuthorityStatus: "self_only",
+    reportingIntegrity: "clear",
+    civilRights: "clear",
+    participantAutonomy: "clear",
+    jurisdictionReviewStatus: "non_blocking_review",
+    lockOrRelianceRequested: false,
+    participantAcknowledgedOwnResourcesOnly: true,
+    participantAcknowledgedNoReportingSuppression: true,
+    participantAcknowledgedNoDiscrimination: true,
+    participantAcknowledgedNoCoercion: true,
   });
 }
 

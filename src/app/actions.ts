@@ -147,6 +147,7 @@ import {
 } from "@/lib/growth";
 import {
   assessDonationOffsetModeration,
+  buildDonationOffsetAuthorityFairnessPreview,
   buildDonationOffsetDonorOfRecordPreview,
   buildDonationOffsetExternalityEvidencePreview,
   buildDonationOffsetParticipantConfirmationPreview,
@@ -161,6 +162,7 @@ import {
   normalizeDonationOffsetEvidenceBurden,
   normalizeDonationOffsetFallbackPolicy,
   normalizeDonationOffsetAmendmentStatus,
+  normalizeDonationOffsetBaselineIntegrityStatus,
   normalizeDonationOffsetBinarySafetyAssertion,
   normalizeDonationOffsetConfirmationScope,
   normalizeDonationOffsetConsentQualityStatus,
@@ -171,13 +173,18 @@ import {
   normalizeDonationOffsetPaymentDestinationReviewStatus,
   normalizeDonationOffsetParticipantConfirmationRecordStatus,
   normalizeDonationOffsetPrivacyGrantStatus,
+  normalizeDonationOffsetRepresentativeAuthorityStatus,
   normalizeDonationOffsetRecipientIdentityStatus,
   normalizeDonationOffsetTaxReceiptTreatment,
+  normalizeDonationOffsetThirdPartyObligationStatus,
+  normalizeDonationOffsetJurisdictionReviewStatus,
+  summarizeDonationOffsetAuthorityFairnessForNotes,
   summarizeDonationOffsetDonorOfRecordForNotes,
   summarizeDonationOffsetExternalityEvidenceForNotes,
   summarizeDonationOffsetParticipantConfirmationForNotes,
   summarizeDonationOffsetPaymentDestinationForNotes,
   summarizeDonationOffsetSafetyAuthenticityForNotes,
+  validateDonationOffsetAuthorityFairnessInput,
   validateDonationOffsetDonorOfRecordInput,
   validateDonationOffsetExternalityEvidenceInput,
   validateDonationOffsetParticipantConfirmationInput,
@@ -186,6 +193,7 @@ import {
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
   type DonationOffsetFields,
+  type DonationOffsetAuthorityFairnessInput,
   type DonationOffsetDonorOfRecordInput,
   type DonationOffsetExternalityEvidenceInput,
   type DonationOffsetParticipationMode,
@@ -3752,6 +3760,61 @@ export async function createOfferAction(formData: FormData) {
   const donationOffsetSafetyAuthenticityPreview = donationOffsetSafetyAuthenticityInput
     ? buildDonationOffsetSafetyAuthenticityPreview(donationOffsetSafetyAuthenticityInput)
     : null;
+  const donationOffsetAuthorityFairnessInput: DonationOffsetAuthorityFairnessInput | null =
+    normalizedMode === "offset"
+      ? {
+          publicDescription: [offerAction, requestAction, baselineStatement, exitCondition, notes]
+            .filter(Boolean)
+            .join("\n"),
+          baselineStatement,
+          authoritySummary: readRequired(formData, "offset_authority_summary"),
+          sideAgreementSummary: readRequired(
+            formData,
+            "offset_authority_side_agreement_summary",
+          ),
+          baselineIntegrityStatus: normalizeDonationOffsetBaselineIntegrityStatus(
+            readOptional(formData, "offset_baseline_integrity_status"),
+          ),
+          thirdPartyObligationStatus: normalizeDonationOffsetThirdPartyObligationStatus(
+            readOptional(formData, "offset_third_party_obligation_status"),
+          ),
+          representativeAuthorityStatus: normalizeDonationOffsetRepresentativeAuthorityStatus(
+            readOptional(formData, "offset_representative_authority_status"),
+          ),
+          reportingIntegrity: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_reporting_integrity_status"),
+          ),
+          civilRights: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_civil_rights_status"),
+          ),
+          participantAutonomy: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_participant_autonomy_status"),
+          ),
+          jurisdictionReviewStatus: normalizeDonationOffsetJurisdictionReviewStatus(
+            readOptional(formData, "offset_jurisdiction_legal_review_status"),
+          ),
+          lockOrRelianceRequested: readBoolean(formData, "offset_lock_or_reliance_requested"),
+          participantAcknowledgedOwnResourcesOnly: readBoolean(
+            formData,
+            "offset_own_resources_only_acknowledgement",
+          ),
+          participantAcknowledgedNoReportingSuppression: readBoolean(
+            formData,
+            "offset_no_reporting_suppression_acknowledgement",
+          ),
+          participantAcknowledgedNoDiscrimination: readBoolean(
+            formData,
+            "offset_no_discrimination_acknowledgement",
+          ),
+          participantAcknowledgedNoCoercion: readBoolean(
+            formData,
+            "offset_no_coercion_acknowledgement",
+          ),
+        }
+      : null;
+  const donationOffsetAuthorityFairnessPreview = donationOffsetAuthorityFairnessInput
+    ? buildDonationOffsetAuthorityFairnessPreview(donationOffsetAuthorityFairnessInput)
+    : null;
   const donationOffsetParticipantConfirmationInput: DonationOffsetParticipantConfirmationInput | null =
     normalizedMode === "offset"
       ? {
@@ -3992,6 +4055,21 @@ export async function createOfferAction(formData: FormData) {
     }
   }
 
+  if (donationOffsetAuthorityFairnessInput) {
+    const authorityFairnessErrors = validateDonationOffsetAuthorityFairnessInput(
+      donationOffsetAuthorityFairnessInput,
+    );
+
+    if (authorityFairnessErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        authorityFairnessErrors[0] ??
+          "Complete the donation offset authority and fairness terms.",
+      );
+    }
+  }
+
   if (donationOffsetParticipantConfirmationInput) {
     const participantConfirmationErrors = validateDonationOffsetParticipantConfirmationInput(
       donationOffsetParticipantConfirmationInput,
@@ -4092,6 +4170,9 @@ export async function createOfferAction(formData: FormData) {
       : "",
     donationOffsetSafetyAuthenticityPreview
       ? summarizeDonationOffsetSafetyAuthenticityForNotes(donationOffsetSafetyAuthenticityPreview)
+      : "",
+    donationOffsetAuthorityFairnessPreview
+      ? summarizeDonationOffsetAuthorityFairnessForNotes(donationOffsetAuthorityFairnessPreview)
       : "",
     donationOffsetParticipantConfirmationPreview
       ? summarizeDonationOffsetParticipantConfirmationForNotes(
@@ -4582,6 +4663,9 @@ export async function createOfferAction(formData: FormData) {
       : "",
     donationOffsetSafetyAuthenticityPreview
       ? summarizeDonationOffsetSafetyAuthenticityForNotes(donationOffsetSafetyAuthenticityPreview)
+      : "",
+    donationOffsetAuthorityFairnessPreview
+      ? summarizeDonationOffsetAuthorityFairnessForNotes(donationOffsetAuthorityFairnessPreview)
       : "",
     donationOffsetParticipantConfirmationPreview
       ? summarizeDonationOffsetParticipantConfirmationForNotes(

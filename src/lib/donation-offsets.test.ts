@@ -5,12 +5,14 @@ import { readFileSync } from "node:fs";
 import {
   assessDonationOffsetModeration,
   buildDemoDonationOffsetDonorOfRecordPreview,
+  buildDemoDonationOffsetAuthorityFairnessPreview,
   buildDemoDonationOffsetExternalityEvidencePreview,
   buildDemoDonationOffsetParticipantConfirmationPreview,
   buildDemoDonationOffsetPaymentDestinationPreview,
   buildDemoDonationOffsetSafetyAuthenticityPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
+  buildDonationOffsetAuthorityFairnessPreview,
   buildDonationOffsetDonorOfRecordPreview,
   buildDonationOffsetExternalityEvidencePreview,
   buildDonationOffsetParticipantConfirmationPreview,
@@ -20,11 +22,13 @@ import {
   calculateDonationOffsetPoolProgress,
   createDefaultDonationOffsetFields,
   summarizeDonationOffsetDonorOfRecordForNotes,
+  summarizeDonationOffsetAuthorityFairnessForNotes,
   summarizeDonationOffsetExternalityEvidenceForNotes,
   summarizeDonationOffsetParticipantConfirmationForNotes,
   summarizeDonationOffsetPaymentDestinationForNotes,
   summarizeDonationOffsetSafetyAuthenticityForNotes,
   validateDonationOffsetDonorOfRecordInput,
+  validateDonationOffsetAuthorityFairnessInput,
   validateDonationOffsetExternalityEvidenceInput,
   validateDonationOffsetParticipantConfirmationInput,
   validateDonationOffsetPaymentDestinationInput,
@@ -829,6 +833,157 @@ test("donation offset safety authenticity summary records non-reliance boundarie
   assert.match(summary, /Non-transferable by default: yes/);
 });
 
+test("donation offset authority fairness preview is no-capture and self-binding", () => {
+  const preview = buildDemoDonationOffsetAuthorityFairnessPreview();
+
+  assert.equal(preview.schemaVersion, "donation-offset-authority-fairness-preview-v1");
+  assert.equal(preview.releaseStage, "donation_offset_preview_no_capture");
+  assert.equal(preview.captureAllowed, false);
+  assert.equal(preview.clearingAllowed, false);
+  assert.equal(preview.relianceBearing, false);
+  assert.equal(preview.participantMayBindOnlySelfByDefault, true);
+  assert.equal(preview.baselineManufacturingBlocked, true);
+  assert.equal(preview.reportingSuppressionBlocked, true);
+  assert.equal(preview.coerciveConsentNotSufficient, true);
+  assert.equal(preview.civilRightsReviewRequired, true);
+  assert.equal(preview.readyForAuthorityReview, true);
+  assert.equal(preview.gates.some((gate) => gate.key === "baseline-integrity"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "third-party-obligation"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "representative-authority"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "reporting-integrity"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "civil-rights-discrimination"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "participant-autonomy-coercion"), true);
+});
+
+test("donation offset authority fairness validation rejects missing acknowledgements", () => {
+  const errors = validateDonationOffsetAuthorityFairnessInput({
+    publicDescription: "",
+    baselineStatement: "",
+    authoritySummary: "",
+    sideAgreementSummary: "",
+    baselineIntegrityStatus: "unknown",
+    thirdPartyObligationStatus: "possible_or_unknown",
+    representativeAuthorityStatus: "unknown",
+    reportingIntegrity: "possible_or_unknown",
+    civilRights: "possible_or_unknown",
+    participantAutonomy: "possible_or_unknown",
+    jurisdictionReviewStatus: "unknown",
+    lockOrRelianceRequested: false,
+    participantAcknowledgedOwnResourcesOnly: false,
+    participantAcknowledgedNoReportingSuppression: false,
+    participantAcknowledgedNoDiscrimination: false,
+    participantAcknowledgedNoCoercion: false,
+  });
+
+  assert.ok(errors.some((error) => /authority and fairness context/i.test(error)));
+  assert.ok(errors.some((error) => /no-trade baseline/i.test(error)));
+  assert.ok(errors.some((error) => /controls the donation/i.test(error)));
+  assert.ok(errors.some((error) => /own resources/i.test(error)));
+  assert.ok(errors.some((error) => /truthful reporting/i.test(error)));
+  assert.ok(errors.some((error) => /unlawful discrimination/i.test(error)));
+  assert.ok(errors.some((error) => /coerced or dependency-based consent/i.test(error)));
+});
+
+test("donation offset authority fairness blocks manufactured baselines and reporting suppression", () => {
+  const preview = buildDonationOffsetAuthorityFairnessPreview({
+    publicDescription:
+      "I will donate to an opposed cause unless someone matches me and agrees to stay silent.",
+    baselineStatement:
+      "The baseline was increased after entering the marketplace unless a counterparty pays.",
+    authoritySummary:
+      "The participant controls only their own direct donation.",
+    sideAgreementSummary:
+      "The counterparty must withdraw complaint records and not report misconduct.",
+    baselineIntegrityStatus: "needs_review",
+    thirdPartyObligationStatus: "none_known",
+    representativeAuthorityStatus: "self_only",
+    reportingIntegrity: "clear",
+    civilRights: "clear",
+    participantAutonomy: "clear",
+    jurisdictionReviewStatus: "non_blocking_review",
+    lockOrRelianceRequested: false,
+    participantAcknowledgedOwnResourcesOnly: true,
+    participantAcknowledgedNoReportingSuppression: true,
+    participantAcknowledgedNoDiscrimination: true,
+    participantAcknowledgedNoCoercion: true,
+  });
+
+  assert.equal(preview.gates.find((gate) => gate.key === "baseline-integrity")?.status, "blocked");
+  assert.equal(preview.gates.find((gate) => gate.key === "reporting-integrity")?.status, "blocked");
+});
+
+test("donation offset authority fairness flags representative claims and coercion", () => {
+  const preview = buildDonationOffsetAuthorityFairnessPreview({
+    publicDescription:
+      "A donor wants to redirect funds on behalf of a donor-advised fund while a participant is under pressure.",
+    baselineStatement:
+      "The baseline is a pre-existing direct donation plan.",
+    authoritySummary:
+      "The participant claims representative authority for a donor-advised fund account holder.",
+    sideAgreementSummary:
+      "No reporting or discrimination side agreement is proposed.",
+    baselineIntegrityStatus: "non_blocking_review",
+    thirdPartyObligationStatus: "none_known",
+    representativeAuthorityStatus: "claims_representative_authority",
+    reportingIntegrity: "clear",
+    civilRights: "clear",
+    participantAutonomy: "clear",
+    jurisdictionReviewStatus: "needs_review",
+    lockOrRelianceRequested: false,
+    participantAcknowledgedOwnResourcesOnly: true,
+    participantAcknowledgedNoReportingSuppression: true,
+    participantAcknowledgedNoDiscrimination: true,
+    participantAcknowledgedNoCoercion: true,
+  });
+
+  assert.equal(
+    preview.gates.find((gate) => gate.key === "representative-authority")?.status,
+    "human_review",
+  );
+  assert.equal(preview.gates.find((gate) => gate.key === "participant-autonomy-coercion")?.status, "blocked");
+  assert.equal(preview.gates.find((gate) => gate.key === "jurisdiction-review")?.status, "human_review");
+});
+
+test("donation offset authority fairness fails closed on premature reliance", () => {
+  const input: Parameters<typeof buildDonationOffsetAuthorityFairnessPreview>[0] = {
+    publicDescription: "Participants redirect their own opposed donations to a registered charity.",
+    baselineStatement: "The baseline is a pre-existing donation plan.",
+    authoritySummary: "Each participant controls only their own donation and evidence.",
+    sideAgreementSummary: "No side agreement is proposed.",
+    baselineIntegrityStatus: "non_blocking_review",
+    thirdPartyObligationStatus: "none_known",
+    representativeAuthorityStatus: "self_only",
+    reportingIntegrity: "clear",
+    civilRights: "clear",
+    participantAutonomy: "clear",
+    jurisdictionReviewStatus: "non_blocking_review",
+    lockOrRelianceRequested: true,
+    participantAcknowledgedOwnResourcesOnly: true,
+    participantAcknowledgedNoReportingSuppression: true,
+    participantAcknowledgedNoDiscrimination: true,
+    participantAcknowledgedNoCoercion: true,
+  };
+  const preview = buildDonationOffsetAuthorityFairnessPreview(input);
+  const errors = validateDonationOffsetAuthorityFairnessInput(input);
+
+  assert.equal(preview.captureAllowed, false);
+  assert.equal(preview.clearingAllowed, false);
+  assert.equal(preview.gates.find((gate) => gate.key === "lock-reliance-boundary")?.status, "blocked");
+  assert.ok(errors.some((error) => /cannot request lock, capture, release, or reliance/i.test(error)));
+});
+
+test("donation offset authority fairness summary records self-binding boundaries", () => {
+  const summary = summarizeDonationOffsetAuthorityFairnessForNotes(
+    buildDemoDonationOffsetAuthorityFairnessPreview(),
+  );
+
+  assert.match(summary, /Participant may bind only self by default: yes/);
+  assert.match(summary, /Baseline manufacturing blocked: yes/);
+  assert.match(summary, /Reporting suppression blocked: yes/);
+  assert.match(summary, /Coercive consent sufficient: no/);
+  assert.match(summary, /Civil-rights review required: yes/);
+});
+
 test("donation offset page renders the moraltrade60 batch-clearing preview surface", () => {
   const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
   const helper = readFileSync("src/lib/donation-offsets.ts", "utf8");
@@ -910,6 +1065,21 @@ test("donation offset safety-authenticity UI and server action are wired", () =>
   assert.match(form, /offset_claim_typed_evidence_acknowledgement/);
   assert.match(action, /validateDonationOffsetSafetyAuthenticityInput/);
   assert.match(action, /summarizeDonationOffsetSafetyAuthenticityForNotes/);
+});
+
+test("donation offset authority-fairness UI and server action are wired", () => {
+  const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
+  const form = readFileSync("src/components/offers/offer-create-form.tsx", "utf8");
+  const action = readFileSync("src/app/actions.ts", "utf8");
+
+  assert.match(page, /Authority and fairness/);
+  assert.match(page, /Coerced consent is not participant surplus/);
+  assert.match(page, /buildDemoDonationOffsetAuthorityFairnessPreview/);
+  assert.match(form, /offset_baseline_integrity_status/);
+  assert.match(form, /offset_representative_authority_status/);
+  assert.match(form, /offset_no_reporting_suppression_acknowledgement/);
+  assert.match(action, /validateDonationOffsetAuthorityFairnessInput/);
+  assert.match(action, /summarizeDonationOffsetAuthorityFairnessForNotes/);
 });
 
 test("pool moderation flags missing deadline when pool mode is selected", () => {
