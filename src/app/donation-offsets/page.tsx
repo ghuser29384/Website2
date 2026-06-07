@@ -10,6 +10,7 @@ import {
   buildDemoDonationOffsetExternalityEvidencePreview,
   buildDemoDonationOffsetParticipantConfirmationPreview,
   buildDemoDonationOffsetPaymentDestinationPreview,
+  buildDemoDonationOffsetSafetyAuthenticityPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
   getConsensusCharities,
@@ -146,6 +147,7 @@ export default async function DonationOffsetsPage() {
   const paymentDestinationPreview = buildDemoDonationOffsetPaymentDestinationPreview();
   const externalityEvidencePreview = buildDemoDonationOffsetExternalityEvidencePreview();
   const participantConfirmationPreview = buildDemoDonationOffsetParticipantConfirmationPreview();
+  const safetyAuthenticityPreview = buildDemoDonationOffsetSafetyAuthenticityPreview();
   const createOffsetHref = viewer
     ? "/offers/new?mode=offset"
     : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
@@ -609,6 +611,103 @@ export default async function DonationOffsetsPage() {
 
             <ol className="protocol-provenance-list">
               {externalityEvidencePreview.gates.map((gate) => (
+                <li
+                  className={`protocol-provenance-item protocol-provenance-item-${donorGateStatusClass(
+                    gate.status,
+                  )}`}
+                  key={gate.key}
+                >
+                  <span className="protocol-step-status">
+                    {formatDonorGateStatus(gate.status)}
+                  </span>
+                  <div>
+                    <strong>{gate.label}</strong>
+                    <p>{gate.detail}</p>
+                    <small>{gate.nextAction}</small>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="offset-safety-authenticity-heading">
+          <SectionHeader
+            eyebrow="Safety and evidence authenticity"
+            id="offset-safety-authenticity-heading"
+            title="Evidence uploads do not create obligations."
+          >
+            Donation-offset evidence must remain claim-typed, source-authenticated, privacy-safe,
+            non-transferable, and screened for financial crime, hazardous activity, cyber abuse,
+            and process-integrity risks before any lock, release, or public completion claim.
+          </SectionHeader>
+          <div className="protocol-review-panel protocol-review-panel-needs_human_review">
+            <div className="protocol-review-head">
+              <div>
+                <p className="eyebrow">Preview-only safety bundle</p>
+                <h3>Hash storage is not authenticity review.</h3>
+                <p>
+                  Clearing allowed: {String(safetyAuthenticityPreview.clearingAllowed)}.
+                  Evidence upload creates reliance:{" "}
+                  {String(safetyAuthenticityPreview.evidenceUploadCreatesReliance)}. Hash storage
+                  proves authenticity:{" "}
+                  {String(safetyAuthenticityPreview.hashStorageProvesAuthenticity)}.
+                </p>
+              </div>
+              <span className="protocol-review-status">
+                {safetyAuthenticityPreview.releaseStage.replaceAll("_", " ")}
+              </span>
+            </div>
+
+            <div className="protocol-review-grid">
+              <div>
+                <strong>Evidence and privacy</strong>
+                <ul className="clean-list">
+                  <li>
+                    Privacy grant: {safetyAuthenticityPreview.privacyGrantStatus.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Confidentiality/privacy:{" "}
+                    {safetyAuthenticityPreview.confidentialityPrivacy.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Evidence authenticity:{" "}
+                    {safetyAuthenticityPreview.evidenceAuthenticity.replaceAll("_", " ")}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <strong>Payment and transfer</strong>
+                <ul className="clean-list">
+                  <li>
+                    Financial crime:{" "}
+                    {safetyAuthenticityPreview.financialCrime.replaceAll("_", " ")}
+                  </li>
+                  <li>
+                    Non-transferable by default:{" "}
+                    {String(safetyAuthenticityPreview.nonTransferableByDefault)}
+                  </li>
+                  <li>
+                    Transferability:{" "}
+                    {safetyAuthenticityPreview.nonTransferability.replaceAll("_", " ")}
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <strong>Prohibited channels</strong>
+                <p>
+                  Regulated goods:{" "}
+                  {safetyAuthenticityPreview.regulatedGoodsHazardousActivity.replaceAll("_", " ")}.
+                  Cyber abuse:{" "}
+                  {safetyAuthenticityPreview.cyberAbuseDigitalIntegrity.replaceAll("_", " ")}.
+                  Anti-corruption:{" "}
+                  {safetyAuthenticityPreview.antiCorruptionProcessIntegrity.replaceAll("_", " ")}.
+                </p>
+              </div>
+            </div>
+
+            <ol className="protocol-provenance-list">
+              {safetyAuthenticityPreview.gates.map((gate) => (
                 <li
                   className={`protocol-provenance-item protocol-provenance-item-${donorGateStatusClass(
                     gate.status,

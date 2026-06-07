@@ -8,12 +8,14 @@ import {
   buildDemoDonationOffsetExternalityEvidencePreview,
   buildDemoDonationOffsetParticipantConfirmationPreview,
   buildDemoDonationOffsetPaymentDestinationPreview,
+  buildDemoDonationOffsetSafetyAuthenticityPreview,
   buildDemoDonationOffsetBatchClearingDryRun,
   buildDonationOffsetBatchClearingDryRun,
   buildDonationOffsetDonorOfRecordPreview,
   buildDonationOffsetExternalityEvidencePreview,
   buildDonationOffsetParticipantConfirmationPreview,
   buildDonationOffsetPaymentDestinationPreview,
+  buildDonationOffsetSafetyAuthenticityPreview,
   calculateDonationOffsetPreview,
   calculateDonationOffsetPoolProgress,
   createDefaultDonationOffsetFields,
@@ -21,10 +23,12 @@ import {
   summarizeDonationOffsetExternalityEvidenceForNotes,
   summarizeDonationOffsetParticipantConfirmationForNotes,
   summarizeDonationOffsetPaymentDestinationForNotes,
+  summarizeDonationOffsetSafetyAuthenticityForNotes,
   validateDonationOffsetDonorOfRecordInput,
   validateDonationOffsetExternalityEvidenceInput,
   validateDonationOffsetParticipantConfirmationInput,
   validateDonationOffsetPaymentDestinationInput,
+  validateDonationOffsetSafetyAuthenticityInput,
   validateDonationOffsetSubmissionGuards,
   validateDonationOffsetFields,
 } from "@/lib/donation-offsets";
@@ -693,6 +697,138 @@ test("donation offset participant confirmation summary records consent boundarie
   assert.match(summary, /Requires consent-quality record: yes/);
 });
 
+test("donation offset safety authenticity preview is no-capture and claim-typed", () => {
+  const preview = buildDemoDonationOffsetSafetyAuthenticityPreview();
+
+  assert.equal(preview.schemaVersion, "donation-offset-safety-authenticity-preview-v1");
+  assert.equal(preview.releaseStage, "donation_offset_preview_no_capture");
+  assert.equal(preview.captureAllowed, false);
+  assert.equal(preview.clearingAllowed, false);
+  assert.equal(preview.relianceBearing, false);
+  assert.equal(preview.evidenceUploadCreatesReliance, false);
+  assert.equal(preview.hashStorageProvesAuthenticity, false);
+  assert.equal(preview.privacyGrantRequiredBeforeDisclosure, true);
+  assert.equal(preview.evidenceAuthenticityReviewRequired, true);
+  assert.equal(preview.financialCrimeReviewRequired, true);
+  assert.equal(preview.nonTransferableByDefault, true);
+  assert.equal(preview.readyForSafetyReview, true);
+  assert.equal(preview.gates.some((gate) => gate.key === "confidentiality-privacy-rights"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "evidence-authenticity-synthetic-media"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "financial-crime-fraud-source-of-funds"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "agreement-transferability-non-assignment"), true);
+  assert.equal(preview.gates.some((gate) => gate.key === "cyber-abuse-digital-integrity"), true);
+});
+
+test("donation offset safety authenticity validation rejects missing review acknowledgements", () => {
+  const errors = validateDonationOffsetSafetyAuthenticityInput({
+    publicDescription: "",
+    evidencePlanSummary: "",
+    paymentPatternSummary: "",
+    sideAgreementSummary: "",
+    privacyGrantStatus: "missing",
+    confidentialityPrivacy: "possible_or_unknown",
+    evidenceAuthenticity: "possible_or_unknown",
+    financialCrime: "possible_or_unknown",
+    nonTransferability: "possible_or_unknown",
+    regulatedGoodsHazardousActivity: "possible_or_unknown",
+    cyberAbuseDigitalIntegrity: "possible_or_unknown",
+    antiCorruptionProcessIntegrity: "possible_or_unknown",
+    privacySensitiveEvidenceRequested: true,
+    sourceAuthenticationReviewed: false,
+    lockOrRelianceRequested: false,
+    participantAcknowledgedNoUnauthorizedPrivateDisclosure: false,
+    participantAcknowledgedClaimTypedEvidence: false,
+    participantAcknowledgedNonTransferability: false,
+  });
+
+  assert.ok(errors.some((error) => /safety context/i.test(error)));
+  assert.ok(errors.some((error) => /claim-typed evidence/i.test(error)));
+  assert.ok(errors.some((error) => /payment, receipt, refund/i.test(error)));
+  assert.ok(errors.some((error) => /privacy grant/i.test(error)));
+  assert.ok(errors.some((error) => /source-authentication/i.test(error)));
+  assert.ok(errors.some((error) => /private or third-party data/i.test(error)));
+  assert.ok(errors.some((error) => /non-transferable/i.test(error)));
+});
+
+test("donation offset safety authenticity blocks forged evidence and unauthorized digital terms", () => {
+  const preview = buildDonationOffsetSafetyAuthenticityPreview({
+    publicDescription:
+      "This offset uses a fake receipt and asks a counterparty to hack a private donor portal.",
+    evidencePlanSummary:
+      "The evidence plan relies on a selectively edited receipt detached from source records.",
+    paymentPatternSummary:
+      "External charity payment with no ordinary public confirmation available.",
+    sideAgreementSummary:
+      "No separate side agreement is proposed.",
+    privacyGrantStatus: "not_needed",
+    confidentialityPrivacy: "clear",
+    evidenceAuthenticity: "clear",
+    financialCrime: "clear",
+    nonTransferability: "clear",
+    regulatedGoodsHazardousActivity: "clear",
+    cyberAbuseDigitalIntegrity: "clear",
+    antiCorruptionProcessIntegrity: "clear",
+    privacySensitiveEvidenceRequested: false,
+    sourceAuthenticationReviewed: true,
+    lockOrRelianceRequested: false,
+    participantAcknowledgedNoUnauthorizedPrivateDisclosure: true,
+    participantAcknowledgedClaimTypedEvidence: true,
+    participantAcknowledgedNonTransferability: true,
+  });
+
+  assert.equal(
+    preview.gates.find((gate) => gate.key === "evidence-authenticity-synthetic-media")?.status,
+    "blocked",
+  );
+  assert.equal(
+    preview.gates.find((gate) => gate.key === "cyber-abuse-digital-integrity")?.status,
+    "blocked",
+  );
+});
+
+test("donation offset safety authenticity fails closed on premature reliance", () => {
+  const input: Parameters<typeof buildDonationOffsetSafetyAuthenticityPreview>[0] = {
+    publicDescription: "Participants redirect opposed donations to a registered charity.",
+    evidencePlanSummary: "Use a source-traceable public receipt for the payment claim only.",
+    paymentPatternSummary: "External donors pay the charity directly with no refund side channel.",
+    sideAgreementSummary: "No side agreement, assignment, resale, or private compensation.",
+    privacyGrantStatus: "not_needed",
+    confidentialityPrivacy: "clear",
+    evidenceAuthenticity: "clear",
+    financialCrime: "clear",
+    nonTransferability: "clear",
+    regulatedGoodsHazardousActivity: "clear",
+    cyberAbuseDigitalIntegrity: "clear",
+    antiCorruptionProcessIntegrity: "clear",
+    privacySensitiveEvidenceRequested: false,
+    sourceAuthenticationReviewed: true,
+    lockOrRelianceRequested: true,
+    participantAcknowledgedNoUnauthorizedPrivateDisclosure: true,
+    participantAcknowledgedClaimTypedEvidence: true,
+    participantAcknowledgedNonTransferability: true,
+  };
+  const preview = buildDonationOffsetSafetyAuthenticityPreview(input);
+  const errors = validateDonationOffsetSafetyAuthenticityInput(input);
+
+  assert.equal(preview.captureAllowed, false);
+  assert.equal(preview.clearingAllowed, false);
+  assert.equal(preview.gates.find((gate) => gate.key === "lock-reliance-boundary")?.status, "blocked");
+  assert.ok(errors.some((error) => /cannot request lock, capture, release, or reliance/i.test(error)));
+});
+
+test("donation offset safety authenticity summary records non-reliance boundaries", () => {
+  const summary = summarizeDonationOffsetSafetyAuthenticityForNotes(
+    buildDemoDonationOffsetSafetyAuthenticityPreview(),
+  );
+
+  assert.match(summary, /Evidence upload creates reliance: no/);
+  assert.match(summary, /Hash storage proves authenticity: no/);
+  assert.match(summary, /Privacy grant required before disclosure: yes/);
+  assert.match(summary, /Evidence authenticity review required: yes/);
+  assert.match(summary, /Financial-crime review required: yes/);
+  assert.match(summary, /Non-transferable by default: yes/);
+});
+
 test("donation offset page renders the moraltrade60 batch-clearing preview surface", () => {
   const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
   const helper = readFileSync("src/lib/donation-offsets.ts", "utf8");
@@ -759,6 +895,21 @@ test("donation offset participant-confirmation UI and server action are wired", 
   assert.match(form, /offset_lock_or_capture_requested/);
   assert.match(action, /validateDonationOffsetParticipantConfirmationInput/);
   assert.match(action, /summarizeDonationOffsetParticipantConfirmationForNotes/);
+});
+
+test("donation offset safety-authenticity UI and server action are wired", () => {
+  const page = readFileSync("src/app/donation-offsets/page.tsx", "utf8");
+  const form = readFileSync("src/components/offers/offer-create-form.tsx", "utf8");
+  const action = readFileSync("src/app/actions.ts", "utf8");
+
+  assert.match(page, /Safety and evidence authenticity/);
+  assert.match(page, /Hash storage is not authenticity review/);
+  assert.match(page, /buildDemoDonationOffsetSafetyAuthenticityPreview/);
+  assert.match(form, /offset_evidence_authenticity_status/);
+  assert.match(form, /offset_no_unauthorized_private_disclosure_acknowledgement/);
+  assert.match(form, /offset_claim_typed_evidence_acknowledgement/);
+  assert.match(action, /validateDonationOffsetSafetyAuthenticityInput/);
+  assert.match(action, /summarizeDonationOffsetSafetyAuthenticityForNotes/);
 });
 
 test("pool moderation flags missing deadline when pool mode is selected", () => {

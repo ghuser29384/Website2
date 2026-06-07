@@ -30,6 +30,7 @@ import {
   buildDonationOffsetExternalityEvidencePreview,
   buildDonationOffsetParticipantConfirmationPreview,
   buildDonationOffsetPaymentDestinationPreview,
+  buildDonationOffsetSafetyAuthenticityPreview,
   calculateDonationOffsetPoolProgress,
   calculateDonationOffsetPreview,
   createDefaultDonationOffsetFields,
@@ -46,6 +47,7 @@ import {
   validateDonationOffsetExternalityEvidenceInput,
   validateDonationOffsetParticipantConfirmationInput,
   validateDonationOffsetPaymentDestinationInput,
+  validateDonationOffsetSafetyAuthenticityInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
   DONATION_OFFSET_PARTICIPATION_MODE_OPTIONS,
@@ -62,6 +64,7 @@ import {
   type DonationOffsetExternalityEvidenceInput,
   type DonationOffsetFallbackPolicy,
   type DonationOffsetAmendmentStatus,
+  type DonationOffsetBinarySafetyAssertion,
   type DonationOffsetConfirmationScope,
   type DonationOffsetConsentQualityStatus,
   type DonationOffsetNonparticipantExternalityStatus,
@@ -72,7 +75,9 @@ import {
   type DonationOffsetPaymentDestinationReviewStatus,
   type DonationOffsetParticipantConfirmationInput,
   type DonationOffsetParticipantConfirmationRecordStatus,
+  type DonationOffsetPrivacyGrantStatus,
   type DonationOffsetRecipientIdentityStatus,
+  type DonationOffsetSafetyAuthenticityInput,
   type DonationOffsetTaxReceiptTreatment,
 } from "@/lib/donation-offsets";
 import {
@@ -300,6 +305,10 @@ const defaultOffsetTermsSnapshotId = "terms-snapshot:donation-offset-draft";
 const defaultOffsetPolicySnapshotId = "policy-snapshot:donation-offset-no-capture";
 const defaultOffsetParticipantSurplusStatement =
   "I confirm this frozen donation-offset agreement is preferable or acceptable relative to my no-trade baseline.";
+const defaultOffsetSafetyPaymentPatternSummary =
+  "External donors pay the registered charity directly without refund side channels or private compensation.";
+const defaultOffsetSafetySideAgreementSummary =
+  "No assignment, resale, tokenization, hazardous activity, cyber activity, or process-integrity side agreement is proposed.";
 const defaultPledgeReciprocalReleaseRule =
   "If one side exits under the stated rule, both sides are released from future obligations while completed or disputed past obligations remain reviewable.";
 const defaultPledgeWithdrawalBeforeLockRule =
@@ -1158,6 +1167,38 @@ export function OfferCreateForm({
     setOffsetNoPreselectedPaidCommitmentAcknowledged,
   ] = useState(false);
   const [offsetNoDarkPatternAcknowledged, setOffsetNoDarkPatternAcknowledged] = useState(false);
+  const [offsetSafetyPaymentPatternSummary, setOffsetSafetyPaymentPatternSummary] = useState(
+    defaultOffsetSafetyPaymentPatternSummary,
+  );
+  const [offsetSafetySideAgreementSummary, setOffsetSafetySideAgreementSummary] = useState(
+    defaultOffsetSafetySideAgreementSummary,
+  );
+  const [offsetPrivacyGrantStatus, setOffsetPrivacyGrantStatus] =
+    useState<DonationOffsetPrivacyGrantStatus>("not_needed");
+  const [offsetConfidentialityPrivacy, setOffsetConfidentialityPrivacy] =
+    useState<DonationOffsetBinarySafetyAssertion>("clear");
+  const [offsetEvidenceAuthenticity, setOffsetEvidenceAuthenticity] =
+    useState<DonationOffsetBinarySafetyAssertion>("clear");
+  const [offsetFinancialCrime, setOffsetFinancialCrime] =
+    useState<DonationOffsetBinarySafetyAssertion>("clear");
+  const [offsetNonTransferability, setOffsetNonTransferability] =
+    useState<DonationOffsetBinarySafetyAssertion>("clear");
+  const [offsetRegulatedGoodsHazardousActivity, setOffsetRegulatedGoodsHazardousActivity] =
+    useState<DonationOffsetBinarySafetyAssertion>("clear");
+  const [offsetCyberAbuseDigitalIntegrity, setOffsetCyberAbuseDigitalIntegrity] =
+    useState<DonationOffsetBinarySafetyAssertion>("clear");
+  const [offsetAntiCorruptionProcessIntegrity, setOffsetAntiCorruptionProcessIntegrity] =
+    useState<DonationOffsetBinarySafetyAssertion>("clear");
+  const [offsetSourceAuthenticationReviewed, setOffsetSourceAuthenticationReviewed] =
+    useState(false);
+  const [
+    offsetNoUnauthorizedPrivateDisclosureAcknowledged,
+    setOffsetNoUnauthorizedPrivateDisclosureAcknowledged,
+  ] = useState(false);
+  const [offsetClaimTypedEvidenceAcknowledged, setOffsetClaimTypedEvidenceAcknowledged] =
+    useState(false);
+  const [offsetNonTransferabilityAcknowledged, setOffsetNonTransferabilityAcknowledged] =
+    useState(false);
   const [offerImpact, setOfferImpact] = useState(initialTemplate?.offerImpact ?? "7");
   const [minCounterpartyImpact, setMinCounterpartyImpact] = useState(initialTemplate?.minCounterpartyImpact ?? "6");
   const [verificationPreference, setVerificationPreference] = useState(initialTemplate?.verification ?? "Annual receipts");
@@ -1484,6 +1525,60 @@ export function OfferCreateForm({
         : [],
     [donationOffsetParticipantConfirmationInput, isOffset],
   );
+  const donationOffsetSafetyAuthenticityInput = useMemo<DonationOffsetSafetyAuthenticityInput>(
+    () => ({
+      publicDescription: normalizedOffsetFields.description,
+      evidencePlanSummary: offsetEvidencePlanSummary,
+      paymentPatternSummary: offsetSafetyPaymentPatternSummary,
+      sideAgreementSummary: offsetSafetySideAgreementSummary,
+      privacyGrantStatus: offsetPrivacyGrantStatus,
+      confidentialityPrivacy: offsetConfidentialityPrivacy,
+      evidenceAuthenticity: offsetEvidenceAuthenticity,
+      financialCrime: offsetFinancialCrime,
+      nonTransferability: offsetNonTransferability,
+      regulatedGoodsHazardousActivity: offsetRegulatedGoodsHazardousActivity,
+      cyberAbuseDigitalIntegrity: offsetCyberAbuseDigitalIntegrity,
+      antiCorruptionProcessIntegrity: offsetAntiCorruptionProcessIntegrity,
+      privacySensitiveEvidenceRequested: offsetPrivacySensitiveEvidenceRequested,
+      sourceAuthenticationReviewed: offsetSourceAuthenticationReviewed,
+      lockOrRelianceRequested: offsetLockOrRelianceRequested,
+      participantAcknowledgedNoUnauthorizedPrivateDisclosure:
+        offsetNoUnauthorizedPrivateDisclosureAcknowledged,
+      participantAcknowledgedClaimTypedEvidence: offsetClaimTypedEvidenceAcknowledged,
+      participantAcknowledgedNonTransferability: offsetNonTransferabilityAcknowledged,
+    }),
+    [
+      normalizedOffsetFields.description,
+      offsetAntiCorruptionProcessIntegrity,
+      offsetClaimTypedEvidenceAcknowledged,
+      offsetConfidentialityPrivacy,
+      offsetCyberAbuseDigitalIntegrity,
+      offsetEvidenceAuthenticity,
+      offsetEvidencePlanSummary,
+      offsetFinancialCrime,
+      offsetLockOrRelianceRequested,
+      offsetNoUnauthorizedPrivateDisclosureAcknowledged,
+      offsetNonTransferability,
+      offsetNonTransferabilityAcknowledged,
+      offsetPrivacyGrantStatus,
+      offsetPrivacySensitiveEvidenceRequested,
+      offsetRegulatedGoodsHazardousActivity,
+      offsetSafetyPaymentPatternSummary,
+      offsetSafetySideAgreementSummary,
+      offsetSourceAuthenticationReviewed,
+    ],
+  );
+  const donationOffsetSafetyAuthenticityPreview = useMemo(
+    () => buildDonationOffsetSafetyAuthenticityPreview(donationOffsetSafetyAuthenticityInput),
+    [donationOffsetSafetyAuthenticityInput],
+  );
+  const donationOffsetSafetyAuthenticityErrors = useMemo(
+    () =>
+      isOffset
+        ? validateDonationOffsetSafetyAuthenticityInput(donationOffsetSafetyAuthenticityInput)
+        : [],
+    [donationOffsetSafetyAuthenticityInput, isOffset],
+  );
   const baselineAmountCents = Math.round((Number(baselineAmountUsd) || 0) * 100);
   const baselineBondCapCents = calculatePilotBaselineBondCapCents(baselineAmountCents);
   const baselineBondValidation = useMemo(
@@ -1706,6 +1801,7 @@ export function OfferCreateForm({
             ...donationOffsetPaymentDestinationErrors,
             ...donationOffsetExternalityEvidenceErrors,
             ...donationOffsetParticipantConfirmationErrors,
+            ...donationOffsetSafetyAuthenticityErrors,
           ]
         : [],
     [
@@ -1715,6 +1811,7 @@ export function OfferCreateForm({
       donationOffsetExternalityEvidenceErrors,
       donationOffsetParticipantConfirmationErrors,
       donationOffsetPaymentDestinationErrors,
+      donationOffsetSafetyAuthenticityErrors,
       evidenceUrl,
       isOffset,
       normalizedOffsetFields,
@@ -2053,6 +2150,40 @@ export function OfferCreateForm({
       setOffsetReceiptReassignmentProhibited(true);
       setOffsetLockTermsFrozenBeforeConfirmation(true);
       setOffsetDestinationVerificationStatus("registered_destination_selected");
+      setOffsetBaselineSnapshotId(defaultOffsetBaselineSnapshotId);
+      setOffsetTermsSnapshotId(defaultOffsetTermsSnapshotId);
+      setOffsetPolicySnapshotId(defaultOffsetPolicySnapshotId);
+      setOffsetMaximumExposureUsd("1000");
+      setOffsetMatchedLockProposalStatus("drafted");
+      setOffsetParticipantConfirmationRecordStatus("draft_only");
+      setOffsetConsentQualityStatus("needs_review");
+      setOffsetNoticeRecordStatus("recorded");
+      setOffsetConfirmationScope("final_lock");
+      setOffsetAmendmentStatus("none");
+      setOffsetAffectedParticipantCount("2");
+      setOffsetFreshConfirmationCount("0");
+      setOffsetParticipantSurplusConfirmed(false);
+      setOffsetParticipantSurplusStatement(defaultOffsetParticipantSurplusStatement);
+      setOffsetMaterialChangePending(false);
+      setOffsetLockOrCaptureRequested(false);
+      setOffsetBaselineComparisonAcknowledged(false);
+      setOffsetFreshConfirmationRequiredAcknowledged(false);
+      setOffsetNoPreselectedPaidCommitmentAcknowledged(false);
+      setOffsetNoDarkPatternAcknowledged(false);
+      setOffsetSafetyPaymentPatternSummary(defaultOffsetSafetyPaymentPatternSummary);
+      setOffsetSafetySideAgreementSummary(defaultOffsetSafetySideAgreementSummary);
+      setOffsetPrivacyGrantStatus("not_needed");
+      setOffsetConfidentialityPrivacy("clear");
+      setOffsetEvidenceAuthenticity("clear");
+      setOffsetFinancialCrime("clear");
+      setOffsetNonTransferability("clear");
+      setOffsetRegulatedGoodsHazardousActivity("clear");
+      setOffsetCyberAbuseDigitalIntegrity("clear");
+      setOffsetAntiCorruptionProcessIntegrity("clear");
+      setOffsetSourceAuthenticationReviewed(false);
+      setOffsetNoUnauthorizedPrivateDisclosureAcknowledged(false);
+      setOffsetClaimTypedEvidenceAcknowledged(false);
+      setOffsetNonTransferabilityAcknowledged(false);
     }
   }
 
@@ -4751,6 +4882,302 @@ export function OfferCreateForm({
                   </div>
                   <ol className="protocol-provenance-list">
                     {donationOffsetExternalityEvidencePreview.gates.map((gate) => (
+                      <li
+                        className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
+                          gate.status,
+                        )}`}
+                        key={gate.key}
+                      >
+                        <span className="protocol-step-status">
+                          {formatOffsetDonorGateStatus(gate.status)}
+                        </span>
+                        <div>
+                          <strong>{gate.label}</strong>
+                          <p>{gate.detail}</p>
+                          <small>{gate.nextAction}</small>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="field">
+              <legend>Safety and evidence authenticity</legend>
+              <div className="panel subtle-panel">
+                <div className="panel-head">
+                  <div>
+                    <p className="eyebrow">Before evidence can satisfy a claim</p>
+                    <h3>Screen privacy, authenticity, payment, transfer, and abuse risks</h3>
+                  </div>
+                  <span className="badge badge-warning">
+                    {donationOffsetSafetyAuthenticityPreview.releaseStage.replaceAll("_", " ")}
+                  </span>
+                </div>
+                <p className="panel-note">
+                  Uploaded receipts and hash records do not create reliance by themselves.
+                  Donation-offset evidence must be source-authenticated, claim-typed, privacy-safe,
+                  non-transferable, and screened before lock or public completion.
+                </p>
+
+                <label className="field">
+                  <span>Payment, receipt, refund, and source-of-funds pattern</span>
+                  <textarea
+                    name="offset_safety_payment_pattern_summary"
+                    required={isOffset}
+                    rows={3}
+                    value={offsetSafetyPaymentPatternSummary}
+                    onChange={(event) =>
+                      setOffsetSafetyPaymentPatternSummary(readFormControlValue(event))
+                    }
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Side-agreement and prohibited-channel summary</span>
+                  <textarea
+                    name="offset_safety_side_agreement_summary"
+                    required={isOffset}
+                    rows={3}
+                    value={offsetSafetySideAgreementSummary}
+                    onChange={(event) =>
+                      setOffsetSafetySideAgreementSummary(readFormControlValue(event))
+                    }
+                  />
+                </label>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Privacy grant</span>
+                    <select
+                      name="offset_privacy_grant_status"
+                      required={isOffset}
+                      value={offsetPrivacyGrantStatus}
+                      onChange={(event) =>
+                        setOffsetPrivacyGrantStatus(
+                          readFormControlValue(event) as DonationOffsetPrivacyGrantStatus,
+                        )
+                      }
+                    >
+                      <option value="not_needed">Not needed</option>
+                      <option value="drafted">Drafted - review needed</option>
+                      <option value="approved">Approved</option>
+                      <option value="missing">Missing</option>
+                      <option value="unknown">Unknown - needs input</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Confidentiality/privacy rights</span>
+                    <select
+                      name="offset_confidentiality_privacy_status"
+                      required={isOffset}
+                      value={offsetConfidentialityPrivacy}
+                      onChange={(event) =>
+                        setOffsetConfidentialityPrivacy(
+                          readFormControlValue(event) as DonationOffsetBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Clear</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="triggered">Triggered - block</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Evidence authenticity</span>
+                    <select
+                      name="offset_evidence_authenticity_status"
+                      required={isOffset}
+                      value={offsetEvidenceAuthenticity}
+                      onChange={(event) =>
+                        setOffsetEvidenceAuthenticity(
+                          readFormControlValue(event) as DonationOffsetBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Clear</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="triggered">Triggered - block</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Financial crime/fraud</span>
+                    <select
+                      name="offset_financial_crime_status"
+                      required={isOffset}
+                      value={offsetFinancialCrime}
+                      onChange={(event) =>
+                        setOffsetFinancialCrime(
+                          readFormControlValue(event) as DonationOffsetBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Clear</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="triggered">Triggered - block</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Non-transferability</span>
+                    <select
+                      name="offset_non_transferability_status"
+                      required={isOffset}
+                      value={offsetNonTransferability}
+                      onChange={(event) =>
+                        setOffsetNonTransferability(
+                          readFormControlValue(event) as DonationOffsetBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Clear</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="triggered">Triggered - block</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Regulated goods/hazardous activity</span>
+                    <select
+                      name="offset_regulated_goods_hazardous_activity_status"
+                      required={isOffset}
+                      value={offsetRegulatedGoodsHazardousActivity}
+                      onChange={(event) =>
+                        setOffsetRegulatedGoodsHazardousActivity(
+                          readFormControlValue(event) as DonationOffsetBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Clear</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="triggered">Triggered - block</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="field">
+                    <span>Cyber abuse/digital integrity</span>
+                    <select
+                      name="offset_cyber_abuse_digital_integrity_status"
+                      required={isOffset}
+                      value={offsetCyberAbuseDigitalIntegrity}
+                      onChange={(event) =>
+                        setOffsetCyberAbuseDigitalIntegrity(
+                          readFormControlValue(event) as DonationOffsetBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Clear</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="triggered">Triggered - block</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Anti-corruption/process integrity</span>
+                    <select
+                      name="offset_anti_corruption_process_integrity_status"
+                      required={isOffset}
+                      value={offsetAntiCorruptionProcessIntegrity}
+                      onChange={(event) =>
+                        setOffsetAntiCorruptionProcessIntegrity(
+                          readFormControlValue(event) as DonationOffsetBinarySafetyAssertion,
+                        )
+                      }
+                    >
+                      <option value="clear">Clear</option>
+                      <option value="possible_or_unknown">Possible or unknown</option>
+                      <option value="triggered">Triggered - block</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="field-grid">
+                  <label className="radio-row">
+                    <input
+                      checked={offsetSourceAuthenticationReviewed}
+                      name="offset_source_authentication_reviewed"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetSourceAuthenticationReviewed(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Source-authentication review is complete for claim-satisfying evidence.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNoUnauthorizedPrivateDisclosureAcknowledged}
+                      name="offset_no_unauthorized_private_disclosure_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNoUnauthorizedPrivateDisclosureAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>No private or third-party data can be disclosed without authority and review.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetClaimTypedEvidenceAcknowledged}
+                      name="offset_claim_typed_evidence_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetClaimTypedEvidenceAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Evidence must be claim-typed and authenticity-reviewed.</span>
+                  </label>
+                  <label className="radio-row">
+                    <input
+                      checked={offsetNonTransferabilityAcknowledged}
+                      name="offset_non_transferability_acknowledgement"
+                      required={isOffset}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setOffsetNonTransferabilityAcknowledged(
+                          (event.currentTarget as HTMLInputElement).checked,
+                        )
+                      }
+                    />
+                    <span>Donation-offset obligations are non-transferable by default.</span>
+                  </label>
+                </div>
+
+                <div className="protocol-provenance-preflight" aria-live="polite">
+                  <div className="protocol-provenance-head">
+                    <div>
+                      <strong>Safety and evidence-authenticity preview</strong>
+                      <p>
+                        Evidence upload creates reliance:{" "}
+                        {donationOffsetSafetyAuthenticityPreview.evidenceUploadCreatesReliance
+                          ? "yes"
+                          : "no"}
+                        . Hash storage proves authenticity:{" "}
+                        {donationOffsetSafetyAuthenticityPreview.hashStorageProvesAuthenticity
+                          ? "yes"
+                          : "no"}
+                        .
+                      </p>
+                    </div>
+                    <span className="protocol-review-status">
+                      {donationOffsetSafetyAuthenticityPreview.humanReviewGateCount} review item
+                      {donationOffsetSafetyAuthenticityPreview.humanReviewGateCount === 1
+                        ? ""
+                        : "s"}
+                    </span>
+                  </div>
+                  <ol className="protocol-provenance-list">
+                    {donationOffsetSafetyAuthenticityPreview.gates.map((gate) => (
                       <li
                         className={`protocol-provenance-item protocol-provenance-item-${offsetDonorGateStatusClass(
                           gate.status,

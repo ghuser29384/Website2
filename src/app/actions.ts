@@ -151,6 +151,7 @@ import {
   buildDonationOffsetExternalityEvidencePreview,
   buildDonationOffsetParticipantConfirmationPreview,
   buildDonationOffsetPaymentDestinationPreview,
+  buildDonationOffsetSafetyAuthenticityPreview,
   calculateDonationOffsetPreview,
   findRegisteredCharityById,
   formatDonationOffsetUnmatchedRule,
@@ -160,6 +161,7 @@ import {
   normalizeDonationOffsetEvidenceBurden,
   normalizeDonationOffsetFallbackPolicy,
   normalizeDonationOffsetAmendmentStatus,
+  normalizeDonationOffsetBinarySafetyAssertion,
   normalizeDonationOffsetConfirmationScope,
   normalizeDonationOffsetConsentQualityStatus,
   normalizeDonationOffsetMatchedLockProposalStatus,
@@ -168,16 +170,19 @@ import {
   normalizeDonationOffsetPaymentDestinationKind,
   normalizeDonationOffsetPaymentDestinationReviewStatus,
   normalizeDonationOffsetParticipantConfirmationRecordStatus,
+  normalizeDonationOffsetPrivacyGrantStatus,
   normalizeDonationOffsetRecipientIdentityStatus,
   normalizeDonationOffsetTaxReceiptTreatment,
   summarizeDonationOffsetDonorOfRecordForNotes,
   summarizeDonationOffsetExternalityEvidenceForNotes,
   summarizeDonationOffsetParticipantConfirmationForNotes,
   summarizeDonationOffsetPaymentDestinationForNotes,
+  summarizeDonationOffsetSafetyAuthenticityForNotes,
   validateDonationOffsetDonorOfRecordInput,
   validateDonationOffsetExternalityEvidenceInput,
   validateDonationOffsetParticipantConfirmationInput,
   validateDonationOffsetPaymentDestinationInput,
+  validateDonationOffsetSafetyAuthenticityInput,
   validateDonationOffsetFields,
   validateDonationOffsetSubmissionGuards,
   type DonationOffsetFields,
@@ -186,6 +191,7 @@ import {
   type DonationOffsetParticipationMode,
   type DonationOffsetParticipantConfirmationInput,
   type DonationOffsetPaymentDestinationInput,
+  type DonationOffsetSafetyAuthenticityInput,
   type DonationOffsetPoolSide,
   type DonationOffsetTimeHorizon,
   type DonationOffsetUnmatchedSurplusRule,
@@ -3681,6 +3687,71 @@ export async function createOfferAction(formData: FormData) {
   const donationOffsetExternalityEvidencePreview = donationOffsetExternalityEvidenceInput
     ? buildDonationOffsetExternalityEvidencePreview(donationOffsetExternalityEvidenceInput)
     : null;
+  const donationOffsetSafetyAuthenticityInput: DonationOffsetSafetyAuthenticityInput | null =
+    normalizedMode === "offset"
+      ? {
+          publicDescription: [offerAction, requestAction, baselineStatement, exitCondition, notes]
+            .filter(Boolean)
+            .join("\n"),
+          evidencePlanSummary: readRequired(formData, "offset_evidence_plan_summary"),
+          paymentPatternSummary: readRequired(
+            formData,
+            "offset_safety_payment_pattern_summary",
+          ),
+          sideAgreementSummary: readRequired(
+            formData,
+            "offset_safety_side_agreement_summary",
+          ),
+          privacyGrantStatus: normalizeDonationOffsetPrivacyGrantStatus(
+            readOptional(formData, "offset_privacy_grant_status"),
+          ),
+          confidentialityPrivacy: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_confidentiality_privacy_status"),
+          ),
+          evidenceAuthenticity: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_evidence_authenticity_status"),
+          ),
+          financialCrime: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_financial_crime_status"),
+          ),
+          nonTransferability: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_non_transferability_status"),
+          ),
+          regulatedGoodsHazardousActivity: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_regulated_goods_hazardous_activity_status"),
+          ),
+          cyberAbuseDigitalIntegrity: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_cyber_abuse_digital_integrity_status"),
+          ),
+          antiCorruptionProcessIntegrity: normalizeDonationOffsetBinarySafetyAssertion(
+            readOptional(formData, "offset_anti_corruption_process_integrity_status"),
+          ),
+          privacySensitiveEvidenceRequested: readBoolean(
+            formData,
+            "offset_privacy_sensitive_evidence_requested",
+          ),
+          sourceAuthenticationReviewed: readBoolean(
+            formData,
+            "offset_source_authentication_reviewed",
+          ),
+          lockOrRelianceRequested: readBoolean(formData, "offset_lock_or_reliance_requested"),
+          participantAcknowledgedNoUnauthorizedPrivateDisclosure: readBoolean(
+            formData,
+            "offset_no_unauthorized_private_disclosure_acknowledgement",
+          ),
+          participantAcknowledgedClaimTypedEvidence: readBoolean(
+            formData,
+            "offset_claim_typed_evidence_acknowledgement",
+          ),
+          participantAcknowledgedNonTransferability: readBoolean(
+            formData,
+            "offset_non_transferability_acknowledgement",
+          ),
+        }
+      : null;
+  const donationOffsetSafetyAuthenticityPreview = donationOffsetSafetyAuthenticityInput
+    ? buildDonationOffsetSafetyAuthenticityPreview(donationOffsetSafetyAuthenticityInput)
+    : null;
   const donationOffsetParticipantConfirmationInput: DonationOffsetParticipantConfirmationInput | null =
     normalizedMode === "offset"
       ? {
@@ -3906,6 +3977,21 @@ export async function createOfferAction(formData: FormData) {
     }
   }
 
+  if (donationOffsetSafetyAuthenticityInput) {
+    const safetyAuthenticityErrors = validateDonationOffsetSafetyAuthenticityInput(
+      donationOffsetSafetyAuthenticityInput,
+    );
+
+    if (safetyAuthenticityErrors.length) {
+      redirectWithMessage(
+        newOfferReturnPath,
+        "error",
+        safetyAuthenticityErrors[0] ??
+          "Complete the donation offset safety and evidence-authenticity terms.",
+      );
+    }
+  }
+
   if (donationOffsetParticipantConfirmationInput) {
     const participantConfirmationErrors = validateDonationOffsetParticipantConfirmationInput(
       donationOffsetParticipantConfirmationInput,
@@ -4003,6 +4089,9 @@ export async function createOfferAction(formData: FormData) {
       : "",
     donationOffsetExternalityEvidencePreview
       ? summarizeDonationOffsetExternalityEvidenceForNotes(donationOffsetExternalityEvidencePreview)
+      : "",
+    donationOffsetSafetyAuthenticityPreview
+      ? summarizeDonationOffsetSafetyAuthenticityForNotes(donationOffsetSafetyAuthenticityPreview)
       : "",
     donationOffsetParticipantConfirmationPreview
       ? summarizeDonationOffsetParticipantConfirmationForNotes(
@@ -4490,6 +4579,9 @@ export async function createOfferAction(formData: FormData) {
       : "",
     donationOffsetExternalityEvidencePreview
       ? summarizeDonationOffsetExternalityEvidenceForNotes(donationOffsetExternalityEvidencePreview)
+      : "",
+    donationOffsetSafetyAuthenticityPreview
+      ? summarizeDonationOffsetSafetyAuthenticityForNotes(donationOffsetSafetyAuthenticityPreview)
       : "",
     donationOffsetParticipantConfirmationPreview
       ? summarizeDonationOffsetParticipantConfirmationForNotes(

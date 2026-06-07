@@ -99,6 +99,16 @@ export type DonationOffsetAmendmentStatus =
   | "drafted_needs_confirmation"
   | "confirmed"
   | "unknown";
+export type DonationOffsetBinarySafetyAssertion =
+  | "clear"
+  | "possible_or_unknown"
+  | "triggered";
+export type DonationOffsetPrivacyGrantStatus =
+  | "not_needed"
+  | "drafted"
+  | "approved"
+  | "missing"
+  | "unknown";
 export type DonationOffsetDonorOfRecordGateStatus =
   | "pass"
   | "needs_input"
@@ -109,6 +119,8 @@ export type DonationOffsetPaymentDestinationGateStatus =
 export type DonationOffsetExternalityEvidenceGateStatus =
   DonationOffsetDonorOfRecordGateStatus;
 export type DonationOffsetParticipantConfirmationGateStatus =
+  DonationOffsetDonorOfRecordGateStatus;
+export type DonationOffsetSafetyAuthenticityGateStatus =
   DonationOffsetDonorOfRecordGateStatus;
 
 export interface RegisteredCharity {
@@ -453,6 +465,64 @@ export interface DonationOffsetParticipantConfirmationPreview {
   blockedGateCount: number;
   humanReviewGateCount: number;
   readyForFinalLockReview: boolean;
+}
+
+export interface DonationOffsetSafetyAuthenticityInput {
+  publicDescription: string;
+  evidencePlanSummary: string;
+  paymentPatternSummary: string;
+  sideAgreementSummary: string;
+  privacyGrantStatus: DonationOffsetPrivacyGrantStatus;
+  confidentialityPrivacy: DonationOffsetBinarySafetyAssertion;
+  evidenceAuthenticity: DonationOffsetBinarySafetyAssertion;
+  financialCrime: DonationOffsetBinarySafetyAssertion;
+  nonTransferability: DonationOffsetBinarySafetyAssertion;
+  regulatedGoodsHazardousActivity: DonationOffsetBinarySafetyAssertion;
+  cyberAbuseDigitalIntegrity: DonationOffsetBinarySafetyAssertion;
+  antiCorruptionProcessIntegrity: DonationOffsetBinarySafetyAssertion;
+  privacySensitiveEvidenceRequested: boolean;
+  sourceAuthenticationReviewed: boolean;
+  lockOrRelianceRequested: boolean;
+  participantAcknowledgedNoUnauthorizedPrivateDisclosure: boolean;
+  participantAcknowledgedClaimTypedEvidence: boolean;
+  participantAcknowledgedNonTransferability: boolean;
+}
+
+export interface DonationOffsetSafetyAuthenticityGate {
+  key: string;
+  label: string;
+  status: DonationOffsetSafetyAuthenticityGateStatus;
+  detail: string;
+  nextAction: string;
+  blockerCodes: string[];
+}
+
+export interface DonationOffsetSafetyAuthenticityPreview {
+  schemaVersion: "donation-offset-safety-authenticity-preview-v1";
+  releaseStage: "donation_offset_preview_no_capture";
+  captureAllowed: false;
+  clearingAllowed: false;
+  relianceBearing: false;
+  evidenceUploadCreatesReliance: false;
+  hashStorageProvesAuthenticity: false;
+  privacyGrantRequiredBeforeDisclosure: true;
+  evidenceAuthenticityReviewRequired: true;
+  financialCrimeReviewRequired: true;
+  nonTransferableByDefault: true;
+  privacyGrantStatus: DonationOffsetPrivacyGrantStatus;
+  confidentialityPrivacy: DonationOffsetBinarySafetyAssertion;
+  evidenceAuthenticity: DonationOffsetBinarySafetyAssertion;
+  financialCrime: DonationOffsetBinarySafetyAssertion;
+  nonTransferability: DonationOffsetBinarySafetyAssertion;
+  regulatedGoodsHazardousActivity: DonationOffsetBinarySafetyAssertion;
+  cyberAbuseDigitalIntegrity: DonationOffsetBinarySafetyAssertion;
+  antiCorruptionProcessIntegrity: DonationOffsetBinarySafetyAssertion;
+  privacySensitiveEvidenceRequested: boolean;
+  sourceAuthenticationReviewed: boolean;
+  gates: DonationOffsetSafetyAuthenticityGate[];
+  blockedGateCount: number;
+  humanReviewGateCount: number;
+  readyForSafetyReview: boolean;
 }
 
 export interface DonationOffsetModerationAssessment {
@@ -975,6 +1045,32 @@ export function normalizeDonationOffsetAmendmentStatus(
   return "unknown";
 }
 
+export function normalizeDonationOffsetBinarySafetyAssertion(
+  value: string | null | undefined,
+): DonationOffsetBinarySafetyAssertion {
+  if (value === "clear" || value === "possible_or_unknown" || value === "triggered") {
+    return value;
+  }
+
+  return "possible_or_unknown";
+}
+
+export function normalizeDonationOffsetPrivacyGrantStatus(
+  value: string | null | undefined,
+): DonationOffsetPrivacyGrantStatus {
+  if (
+    value === "not_needed" ||
+    value === "drafted" ||
+    value === "approved" ||
+    value === "missing" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+
+  return "unknown";
+}
+
 function donorGate({
   key,
   label,
@@ -999,6 +1095,150 @@ function hasMeaningfulText(value: string) {
 
 function formatDonationOffsetDonorGateStatus(status: DonationOffsetDonorOfRecordGateStatus) {
   return status.replaceAll("_", " ");
+}
+
+const donationOffsetSafetyKeywordGroups = {
+  confidentialityPrivacy: [
+    "password",
+    "access token",
+    "private message",
+    "dox",
+    "doxx",
+    "location log",
+    "medical record",
+    "immigration record",
+    "employee record",
+    "client record",
+    "patient record",
+    "student record",
+    "trade secret",
+    "private key",
+  ],
+  evidenceAuthenticity: [
+    "fake receipt",
+    "synthetic receipt",
+    "ai-generated receipt",
+    "ai generated receipt",
+    "edited receipt",
+    "replayed receipt",
+    "selectively edited",
+    "source detached",
+    "forged",
+    "fabricated",
+  ],
+  financialCrime: [
+    "money laundering",
+    "sanctions",
+    "stolen funds",
+    "stolen card",
+    "fake receipt",
+    "chargeback",
+    "refund abuse",
+    "card testing",
+    "circular routing",
+    "disguised compensation",
+  ],
+  transferability: [
+    "assign this agreement",
+    "sell this agreement",
+    "resell",
+    "tokenize",
+    "securitize",
+    "secondary market",
+    "moral trade credit",
+    "transfer rights",
+  ],
+  regulatedGoods: [
+    "weapon",
+    "firearm",
+    "explosive",
+    "controlled substance",
+    "hazardous chemical",
+    "unsafe medical",
+    "biosecurity",
+  ],
+  cyberAbuse: [
+    "hack",
+    "malware",
+    "phishing",
+    "ddos",
+    "denial of service",
+    "unauthorized access",
+    "scrape private",
+    "data exfiltration",
+    "botting",
+  ],
+  antiCorruption: [
+    "bribe",
+    "kickback",
+    "improper payment",
+    "vote buying",
+    "pay for testimony",
+    "procurement decision",
+    "official favor",
+    "undisclosed conflict",
+  ],
+};
+
+function hasDonationOffsetSafetyKeyword(text: string, keywords: readonly string[]) {
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+function donationOffsetSafetyGate({
+  key,
+  label,
+  status,
+  detail,
+  nextAction,
+  blockerCodes = [],
+}: DonationOffsetSafetyAuthenticityGate) {
+  return {
+    key,
+    label,
+    status,
+    detail,
+    nextAction,
+    blockerCodes,
+  };
+}
+
+function donationOffsetBinarySafetyStatus(
+  assertion: DonationOffsetBinarySafetyAssertion,
+  textTriggered: boolean,
+) {
+  if (assertion === "triggered" || textTriggered) {
+    return "blocked" as const;
+  }
+
+  if (assertion === "possible_or_unknown") {
+    return "human_review" as const;
+  }
+
+  return "pass" as const;
+}
+
+function blockIfSafetyLockOrRelianceRequested(
+  status: DonationOffsetSafetyAuthenticityGateStatus,
+  lockOrRelianceRequested: boolean,
+) {
+  return lockOrRelianceRequested && status !== "pass" ? "blocked" : status;
+}
+
+function donationOffsetSafetyDetail(
+  status: DonationOffsetSafetyAuthenticityGateStatus,
+  passDetail: string,
+  reviewDetail: string,
+  blockedDetail: string,
+) {
+  if (status === "blocked") {
+    return blockedDetail;
+  }
+
+  if (status === "human_review" || status === "needs_input") {
+    return reviewDetail;
+  }
+
+  return passDetail;
 }
 
 function paymentDestinationGate({
@@ -2204,6 +2444,387 @@ export function buildDemoDonationOffsetParticipantConfirmationPreview() {
     participantAcknowledgedFreshConfirmationRequired: true,
     participantAcknowledgedNoPreselectedPaidCommitment: true,
     participantAcknowledgedNoDarkPattern: true,
+  });
+}
+
+export function buildDonationOffsetSafetyAuthenticityPreview(
+  input: DonationOffsetSafetyAuthenticityInput,
+): DonationOffsetSafetyAuthenticityPreview {
+  const fullText = [
+    input.publicDescription,
+    input.evidencePlanSummary,
+    input.paymentPatternSummary,
+    input.sideAgreementSummary,
+  ]
+    .join(" ")
+    .toLowerCase();
+  const privacyGrantNeeded =
+    input.privacySensitiveEvidenceRequested ||
+    input.confidentialityPrivacy !== "clear" ||
+    hasDonationOffsetSafetyKeyword(
+      fullText,
+      donationOffsetSafetyKeywordGroups.confidentialityPrivacy,
+    );
+  const privacyStatus = blockIfSafetyLockOrRelianceRequested(
+    input.confidentialityPrivacy === "triggered" ||
+      hasDonationOffsetSafetyKeyword(
+        fullText,
+        donationOffsetSafetyKeywordGroups.confidentialityPrivacy,
+      )
+      ? "blocked"
+      : !input.participantAcknowledgedNoUnauthorizedPrivateDisclosure
+        ? "needs_input"
+        : privacyGrantNeeded && input.privacyGrantStatus !== "approved"
+          ? input.privacyGrantStatus === "drafted"
+            ? "human_review"
+            : "needs_input"
+          : "pass",
+    input.lockOrRelianceRequested,
+  );
+  const evidenceAuthenticityStatus = blockIfSafetyLockOrRelianceRequested(
+    input.evidenceAuthenticity === "triggered" ||
+      hasDonationOffsetSafetyKeyword(
+        fullText,
+        donationOffsetSafetyKeywordGroups.evidenceAuthenticity,
+      )
+      ? "blocked"
+      : !input.sourceAuthenticationReviewed ||
+          !input.participantAcknowledgedClaimTypedEvidence
+        ? "needs_input"
+        : input.evidenceAuthenticity === "possible_or_unknown"
+          ? "human_review"
+          : "pass",
+    input.lockOrRelianceRequested,
+  );
+  const financialCrimeStatus = blockIfSafetyLockOrRelianceRequested(
+    donationOffsetBinarySafetyStatus(
+      input.financialCrime,
+      hasDonationOffsetSafetyKeyword(fullText, donationOffsetSafetyKeywordGroups.financialCrime),
+    ),
+    input.lockOrRelianceRequested,
+  );
+  const transferabilityStatus = blockIfSafetyLockOrRelianceRequested(
+    input.nonTransferability === "triggered" ||
+      hasDonationOffsetSafetyKeyword(fullText, donationOffsetSafetyKeywordGroups.transferability)
+      ? "blocked"
+      : !input.participantAcknowledgedNonTransferability
+        ? "needs_input"
+        : input.nonTransferability === "possible_or_unknown"
+          ? "human_review"
+          : "pass",
+    input.lockOrRelianceRequested,
+  );
+  const regulatedGoodsStatus = blockIfSafetyLockOrRelianceRequested(
+    donationOffsetBinarySafetyStatus(
+      input.regulatedGoodsHazardousActivity,
+      hasDonationOffsetSafetyKeyword(fullText, donationOffsetSafetyKeywordGroups.regulatedGoods),
+    ),
+    input.lockOrRelianceRequested,
+  );
+  const cyberStatus = blockIfSafetyLockOrRelianceRequested(
+    donationOffsetBinarySafetyStatus(
+      input.cyberAbuseDigitalIntegrity,
+      hasDonationOffsetSafetyKeyword(fullText, donationOffsetSafetyKeywordGroups.cyberAbuse),
+    ),
+    input.lockOrRelianceRequested,
+  );
+  const antiCorruptionStatus = blockIfSafetyLockOrRelianceRequested(
+    donationOffsetBinarySafetyStatus(
+      input.antiCorruptionProcessIntegrity,
+      hasDonationOffsetSafetyKeyword(fullText, donationOffsetSafetyKeywordGroups.antiCorruption),
+    ),
+    input.lockOrRelianceRequested,
+  );
+  const lockBoundaryStatus = input.lockOrRelianceRequested ? "blocked" : "pass";
+
+  const gates = [
+    donationOffsetSafetyGate({
+      key: "confidentiality-privacy-rights",
+      label: "Confidentiality and privacy rights",
+      status: privacyStatus,
+      detail: donationOffsetSafetyDetail(
+        privacyStatus,
+        "No unauthorized private-data disclosure is declared or detected.",
+        "Private, confidential, or third-party evidence needs a narrow privacy grant and review.",
+        "Unauthorized disclosure, doxxing, credentials, private records, or sensitive third-party data are blocked.",
+      ),
+      nextAction:
+        privacyStatus === "blocked"
+          ? "Remove private-data disclosure, credential, doxxing, or third-party record terms."
+          : privacyGrantNeeded
+            ? "Attach a narrow privacy grant and reviewer approval before any disclosure or reliance."
+            : "Keep evidence scoped to non-private, claim-relevant proof.",
+      blockerCodes:
+        privacyStatus === "pass" ? [] : ["confidentiality_privacy_rights_review_required"],
+    }),
+    donationOffsetSafetyGate({
+      key: "evidence-authenticity-synthetic-media",
+      label: "Evidence authenticity and synthetic media",
+      status: evidenceAuthenticityStatus,
+      detail: donationOffsetSafetyDetail(
+        evidenceAuthenticityStatus,
+        "Evidence authenticity is reviewed separately from the payment or impact claim.",
+        "Evidence that could be forged, edited, replayed, AI-generated, or detached from source needs review.",
+        "Fabricated, replayed, selectively edited, source-detached, or synthetic evidence cannot create obligations.",
+      ),
+      nextAction:
+        evidenceAuthenticityStatus === "blocked"
+          ? "Remove fabricated, replayed, edited, synthetic, or unauthenticated evidence claims."
+          : "Keep evidence source-traceable and claim-typed before it satisfies any lock or release gate.",
+      blockerCodes:
+        evidenceAuthenticityStatus === "pass"
+          ? []
+          : ["evidence_authenticity_synthetic_media_review_required"],
+    }),
+    donationOffsetSafetyGate({
+      key: "financial-crime-fraud-source-of-funds",
+      label: "Financial crime, fraud, and source of funds",
+      status: financialCrimeStatus,
+      detail: donationOffsetSafetyDetail(
+        financialCrimeStatus,
+        "No sanctions, stolen-funds, fabricated-receipt, refund-abuse, or circular-routing signal is declared or detected.",
+        "Possible financial-crime or payment-fraud indicators need manual review.",
+        "Financial crime, sanctions evasion, stolen funds, fabricated receipts, or refund abuse are blocked.",
+      ),
+      nextAction:
+        financialCrimeStatus === "blocked"
+          ? "Remove suspicious funds, receipt, refund, sanctions-evasion, or disguised-compensation terms."
+          : "Keep source-of-funds and receipt facts reviewable before payment reliance.",
+      blockerCodes:
+        financialCrimeStatus === "blocked" ? ["financial_crime_fraud_blocked"] : [],
+    }),
+    donationOffsetSafetyGate({
+      key: "agreement-transferability-non-assignment",
+      label: "Agreement transferability and non-assignment",
+      status: transferabilityStatus,
+      detail: donationOffsetSafetyDetail(
+        transferabilityStatus,
+        "Donation-offset obligations are participant-specific and non-transferable by default.",
+        "Possible assignment, resale, tokenization, claims purchase, or moral-trade credit issuance needs review.",
+        "Transferable moral-trade credits, secondary markets, assignment, or securitization are blocked.",
+      ),
+      nextAction:
+        transferabilityStatus === "blocked"
+          ? "Remove transfer, resale, tokenization, credit, assignment, or third-party-assumption terms."
+          : "Keep the proposal tied to the original participants and confirmations.",
+      blockerCodes:
+        transferabilityStatus === "pass" ? [] : ["agreement_non_transferability_required"],
+    }),
+    donationOffsetSafetyGate({
+      key: "regulated-goods-hazardous-activity",
+      label: "Regulated goods and hazardous activity",
+      status: regulatedGoodsStatus,
+      detail: donationOffsetSafetyDetail(
+        regulatedGoodsStatus,
+        "No regulated goods or hazardous physical-world activity is declared or detected.",
+        "Possible regulated or hazardous activity needs legal, externality, autonomy, and anti-threat review.",
+        "Weapons, controlled substances, unsafe medical activity, explosives, and comparable hazards are blocked.",
+      ),
+      nextAction:
+        regulatedGoodsStatus === "blocked"
+          ? "Remove regulated goods or hazardous activity terms."
+          : "Keep donation-offset terms away from dangerous physical-world activity.",
+      blockerCodes:
+        regulatedGoodsStatus === "blocked"
+          ? ["regulated_goods_hazardous_activity_blocked"]
+          : [],
+    }),
+    donationOffsetSafetyGate({
+      key: "cyber-abuse-digital-integrity",
+      label: "Cyber abuse and digital integrity",
+      status: cyberStatus,
+      detail: donationOffsetSafetyDetail(
+        cyberStatus,
+        "No unauthorized access, malware, botting, spam, phishing, scraping, or platform manipulation is declared or detected.",
+        "Possible digital-system integrity issues need legal, privacy, user-safety, content, and anti-threat review.",
+        "Unauthorized access, malware, phishing, denial-of-service, botting, or data exfiltration are blocked.",
+      ),
+      nextAction:
+        cyberStatus === "blocked"
+          ? "Remove unauthorized digital-system, platform-manipulation, or data-exfiltration terms."
+          : "Keep the offset away from unauthorized digital-system activity.",
+      blockerCodes: cyberStatus === "blocked" ? ["cyber_abuse_blocked"] : [],
+    }),
+    donationOffsetSafetyGate({
+      key: "anti-corruption-process-integrity",
+      label: "Anti-corruption and process integrity",
+      status: antiCorruptionStatus,
+      detail: donationOffsetSafetyDetail(
+        antiCorruptionStatus,
+        "No bribe, kickback, vote-buying, improper-inducement, or process-integrity term is declared or detected.",
+        "Possible process-integrity issue needs anti-corruption and legal review.",
+        "Bribes, kickbacks, vote buying, pay-for-testimony, improper official favors, and process manipulation are blocked.",
+      ),
+      nextAction:
+        antiCorruptionStatus === "blocked"
+          ? "Remove bribery, kickback, vote-buying, pay-for-testimony, or improper process terms."
+          : "Keep recipient, payment, and evidence terms separate from entrusted decision-making.",
+      blockerCodes:
+        antiCorruptionStatus === "blocked"
+          ? ["anti_corruption_process_integrity_blocked"]
+          : [],
+    }),
+    donationOffsetSafetyGate({
+      key: "lock-reliance-boundary",
+      label: "Lock and reliance boundary",
+      status: lockBoundaryStatus,
+      detail:
+        lockBoundaryStatus === "pass"
+          ? "This safety bundle is preview-only and does not request lock, capture, release, or reliance."
+          : "This draft requested lock or reliance before safety and authenticity gates are non-blocking.",
+      nextAction:
+        lockBoundaryStatus === "pass"
+          ? "Keep capture and reliance disabled until final lock, payment, evidence, and safety gates pass."
+          : "Remove premature lock, capture, release, or reliance requests.",
+      blockerCodes: lockBoundaryStatus === "pass" ? [] : ["lock_reliance_boundary_required"],
+    }),
+  ];
+  const blockedGateCount = gates.filter((gate) => gate.status === "blocked").length;
+  const humanReviewGateCount = gates.filter(
+    (gate) => gate.status === "human_review" || gate.status === "needs_input",
+  ).length;
+
+  return {
+    schemaVersion: "donation-offset-safety-authenticity-preview-v1",
+    releaseStage: "donation_offset_preview_no_capture",
+    captureAllowed: false,
+    clearingAllowed: false,
+    relianceBearing: false,
+    evidenceUploadCreatesReliance: false,
+    hashStorageProvesAuthenticity: false,
+    privacyGrantRequiredBeforeDisclosure: true,
+    evidenceAuthenticityReviewRequired: true,
+    financialCrimeReviewRequired: true,
+    nonTransferableByDefault: true,
+    privacyGrantStatus: input.privacyGrantStatus,
+    confidentialityPrivacy: input.confidentialityPrivacy,
+    evidenceAuthenticity: input.evidenceAuthenticity,
+    financialCrime: input.financialCrime,
+    nonTransferability: input.nonTransferability,
+    regulatedGoodsHazardousActivity: input.regulatedGoodsHazardousActivity,
+    cyberAbuseDigitalIntegrity: input.cyberAbuseDigitalIntegrity,
+    antiCorruptionProcessIntegrity: input.antiCorruptionProcessIntegrity,
+    privacySensitiveEvidenceRequested: input.privacySensitiveEvidenceRequested,
+    sourceAuthenticationReviewed: input.sourceAuthenticationReviewed,
+    gates,
+    blockedGateCount,
+    humanReviewGateCount,
+    readyForSafetyReview:
+      blockedGateCount === 0 && gates.every((gate) => gate.status !== "needs_input"),
+  };
+}
+
+export function validateDonationOffsetSafetyAuthenticityInput(
+  input: DonationOffsetSafetyAuthenticityInput,
+) {
+  const errors: string[] = [];
+  const preview = buildDonationOffsetSafetyAuthenticityPreview(input);
+
+  if (!hasMeaningfulText(input.publicDescription)) {
+    errors.push("Describe the donation-offset safety context before review.");
+  }
+
+  if (!hasMeaningfulText(input.evidencePlanSummary)) {
+    errors.push("Describe the claim-typed evidence plan before review.");
+  }
+
+  if (!hasMeaningfulText(input.paymentPatternSummary)) {
+    errors.push("Describe the payment, receipt, refund, and source-of-funds pattern.");
+  }
+
+  if (
+    input.privacySensitiveEvidenceRequested &&
+    input.privacyGrantStatus !== "drafted" &&
+    input.privacyGrantStatus !== "approved"
+  ) {
+    errors.push("Attach a narrow privacy grant before requesting privacy-sensitive evidence.");
+  }
+
+  if (!input.sourceAuthenticationReviewed) {
+    errors.push("Confirm source-authentication review before evidence can satisfy a claim.");
+  }
+
+  if (!input.participantAcknowledgedNoUnauthorizedPrivateDisclosure) {
+    errors.push("Acknowledge that private or third-party data cannot be disclosed without authority and review.");
+  }
+
+  if (!input.participantAcknowledgedClaimTypedEvidence) {
+    errors.push("Acknowledge that evidence must be claim-typed and authenticity-reviewed.");
+  }
+
+  if (!input.participantAcknowledgedNonTransferability) {
+    errors.push("Acknowledge that donation-offset obligations are non-transferable by default.");
+  }
+
+  if (input.lockOrRelianceRequested) {
+    errors.push("Donation-offset safety previews cannot request lock, capture, release, or reliance.");
+  }
+
+  for (const gate of preview.gates) {
+    if (gate.status === "blocked") {
+      errors.push(`${gate.label}: ${gate.nextAction}`);
+    }
+  }
+
+  return errors;
+}
+
+export function summarizeDonationOffsetSafetyAuthenticityForNotes(
+  preview: DonationOffsetSafetyAuthenticityPreview,
+) {
+  const gateSummary = preview.gates
+    .map((gate) => `${gate.label}: ${formatDonationOffsetDonorGateStatus(gate.status)}`)
+    .join("; ");
+
+  return [
+    "Donation-offset safety and evidence-authenticity preview:",
+    `Schema version: ${preview.schemaVersion}`,
+    `Release stage: ${preview.releaseStage}`,
+    `Privacy grant status: ${preview.privacyGrantStatus.replaceAll("_", " ")}`,
+    `Confidentiality/privacy status: ${preview.confidentialityPrivacy.replaceAll("_", " ")}`,
+    `Evidence-authenticity status: ${preview.evidenceAuthenticity.replaceAll("_", " ")}`,
+    `Financial-crime status: ${preview.financialCrime.replaceAll("_", " ")}`,
+    `Non-transferability status: ${preview.nonTransferability.replaceAll("_", " ")}`,
+    `Regulated-goods status: ${preview.regulatedGoodsHazardousActivity.replaceAll("_", " ")}`,
+    `Cyber-abuse status: ${preview.cyberAbuseDigitalIntegrity.replaceAll("_", " ")}`,
+    `Anti-corruption status: ${preview.antiCorruptionProcessIntegrity.replaceAll("_", " ")}`,
+    "Capture allowed from this preview: no",
+    "Clearing allowed from this preview: no",
+    "Reliance-bearing from this preview: no",
+    "Evidence upload creates reliance: no",
+    "Hash storage proves authenticity: no",
+    "Privacy grant required before disclosure: yes",
+    "Evidence authenticity review required: yes",
+    "Financial-crime review required: yes",
+    "Non-transferable by default: yes",
+    `Manual-review gates: ${gateSummary}`,
+  ].join("\n");
+}
+
+export function buildDemoDonationOffsetSafetyAuthenticityPreview() {
+  return buildDonationOffsetSafetyAuthenticityPreview({
+    publicDescription:
+      "Participants redirect opposed donations to a registered public-good recipient using external payment evidence.",
+    evidencePlanSummary:
+      "Use a source-traceable receipt or public charity confirmation for the payment claim only.",
+    paymentPatternSummary:
+      "External donors pay the registered charity directly without refund side channels or private compensation.",
+    sideAgreementSummary:
+      "No assignment, resale, tokenization, hazardous activity, cyber activity, or process-integrity side agreement is proposed.",
+    privacyGrantStatus: "not_needed",
+    confidentialityPrivacy: "clear",
+    evidenceAuthenticity: "clear",
+    financialCrime: "clear",
+    nonTransferability: "clear",
+    regulatedGoodsHazardousActivity: "clear",
+    cyberAbuseDigitalIntegrity: "clear",
+    antiCorruptionProcessIntegrity: "clear",
+    privacySensitiveEvidenceRequested: false,
+    sourceAuthenticationReviewed: true,
+    lockOrRelianceRequested: false,
+    participantAcknowledgedNoUnauthorizedPrivateDisclosure: true,
+    participantAcknowledgedClaimTypedEvidence: true,
+    participantAcknowledgedNonTransferability: true,
   });
 }
 
