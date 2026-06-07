@@ -32,6 +32,10 @@ import {
   validateMoralTradeAccountSecurityContract,
 } from "@/lib/moral-trade/account-security";
 import {
+  getMoralTradeReviewerQualityContract,
+  validateMoralTradeReviewerQualityContract,
+} from "@/lib/moral-trade/reviewer-quality";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -157,6 +161,9 @@ export async function GET(request: Request) {
   const accountSecurityContract = getMoralTradeAccountSecurityContract();
   const accountSecurityValidation =
     validateMoralTradeAccountSecurityContract(accountSecurityContract);
+  const reviewerQualityContract = getMoralTradeReviewerQualityContract();
+  const reviewerQualityValidation =
+    validateMoralTradeReviewerQualityContract(reviewerQualityContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -249,6 +256,7 @@ export async function GET(request: Request) {
       participantConfirmationValidation.status === "pass" &&
       participantEligibilityValidation.status === "pass" &&
       accountSecurityValidation.status === "pass" &&
+      reviewerQualityValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
@@ -281,6 +289,7 @@ export async function GET(request: Request) {
     participantConfirmationValidation,
     participantEligibilityValidation,
     accountSecurityValidation,
+    reviewerQualityValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -403,6 +412,24 @@ export async function GET(request: Request) {
       ),
       accountSecurityContractTests:
         accountSecurityContract.contractTests,
+      reviewerQualityContractVersion:
+        reviewerQualityContract.version,
+      reviewerQualityReviewTypes:
+        reviewerQualityContract.reviewTypes,
+      reviewerQualityFailClosedStatuses:
+        reviewerQualityContract.failClosedStatuses,
+      reviewerQualityFirstClassRecordTables:
+        reviewerQualityContract.firstClassRecordTables,
+      reviewerQualityPolicySnapshotSubjects:
+        reviewerQualityContract.policySnapshotSubjects,
+      reviewerQualitySampleEvaluationStatuses: Object.fromEntries(
+        reviewerQualityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.reviewType,
+          evaluation.status,
+        ]),
+      ),
+      reviewerQualityContractTests:
+        reviewerQualityContract.contractTests,
       productionReadinessContractVersion:
         productionReadinessContract.version,
       productionReadinessControlKeys:

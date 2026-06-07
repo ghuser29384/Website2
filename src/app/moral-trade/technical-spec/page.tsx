@@ -55,6 +55,10 @@ import {
   validateMoralTradeAccountSecurityContract,
 } from "@/lib/moral-trade/account-security";
 import {
+  getMoralTradeReviewerQualityContract,
+  validateMoralTradeReviewerQualityContract,
+} from "@/lib/moral-trade/reviewer-quality";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -169,6 +173,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const accountSecurityContract = getMoralTradeAccountSecurityContract();
   const accountSecurityValidation =
     validateMoralTradeAccountSecurityContract(accountSecurityContract);
+  const reviewerQualityContract = getMoralTradeReviewerQualityContract();
+  const reviewerQualityValidation =
+    validateMoralTradeReviewerQualityContract(reviewerQualityContract);
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -265,6 +272,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     participantConfirmationValidation,
     participantEligibilityValidation,
     accountSecurityValidation,
+    reviewerQualityValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -367,6 +375,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Account security",
       status: accountSecurityValidation.status,
       summary: `${accountSecurityContract.highRiskActions.length} high-risk action(s), ${accountSecurityContract.eventTypes.length} event type(s).`,
+    },
+    {
+      blockers: reviewerQualityValidation.blockers.length,
+      family: "Policy inputs",
+      href: "/api/moral-trade/reviewer-quality/contract",
+      label: "Reviewer quality",
+      status: reviewerQualityValidation.status,
+      summary: `${reviewerQualityContract.reviewTypes.length} review type(s), ${reviewerQualityContract.failClosedStatuses.length} fail-closed status(es).`,
     },
     {
       blockers: productionReadinessValidation.blockers.length,
@@ -1261,6 +1277,73 @@ export default async function MoralTradeTechnicalSpecPage() {
               <ul className="clean-list">
                 {accountSecurityContract.failClosedStatuses.map((status) => (
                   <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="reviewer-quality-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Reviewer quality contract</p>
+            <h2 id="reviewer-quality-contract-heading">
+              Reviewer decisions are authorized, scoped, conflict-checked, and audit-sampled before reliance.
+            </h2>
+            <p>
+              Moraltrade60 treats reviewer judgment as a governed input, not an implicit approval
+              source. This contract requires frozen reviewer-quality policy snapshots,
+              type-specific authorization, conflict checks, calibration, second review where
+              required, audit sampling, and explicit rejection of default approvals or speed-driven
+              private-data disclosure.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Reviewer quality {reviewerQualityContract.version}
+              </p>
+              <h3>Status {reviewerQualityValidation.status}</h3>
+              <p>
+                {reviewerQualityValidation.checks.length} check(s),{" "}
+                {reviewerQualityValidation.blockers.length} blocker(s),{" "}
+                {reviewerQualityContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/reviewer-quality/contract">
+              Open reviewer-quality JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Review types</h3>
+              <ul className="clean-list">
+                {reviewerQualityContract.reviewTypes.map((reviewType) => (
+                  <li key={reviewType}>{reviewType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {reviewerQualityContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {reviewerQualityContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Policy subjects</h3>
+              <ul className="clean-list">
+                {reviewerQualityContract.policySnapshotSubjects.map((subject) => (
+                  <li key={subject}>{subject.replaceAll("_", " ")}</li>
                 ))}
               </ul>
             </article>

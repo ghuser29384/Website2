@@ -2107,6 +2107,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const accountSecuritySource = readRepoFile(
     "src/lib/moral-trade/account-security.ts",
   );
+  const reviewerQualitySource = readRepoFile(
+    "src/lib/moral-trade/reviewer-quality.ts",
+  );
   const productionReadinessSource = readRepoFile(
     "src/lib/moral-trade/production-readiness.ts",
   );
@@ -2175,6 +2178,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const accountSecurityMigration = readRepoFile(
     "supabase/migrations/20260607_zzzzzz_moral_trade_account_security_policy_events.sql",
   );
+  const reviewerQualityMigration = readRepoFile(
+    "supabase/migrations/20260607_zzzzzzz_moral_trade_reviewer_quality_records.sql",
+  );
   const recipientDestinationMigration = readRepoFile(
     "supabase/migrations/20260607_zzzz_moral_trade_recipient_destination_records.sql",
   );
@@ -2211,6 +2217,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const accountSecurityContractRoute = readRepoFile(
     "src/app/api/moral-trade/account-security/contract/route.ts",
+  );
+  const reviewerQualityContractRoute = readRepoFile(
+    "src/app/api/moral-trade/reviewer-quality/contract/route.ts",
   );
   const productionReadinessContractRoute = readRepoFile(
     "src/app/api/moral-trade/production-readiness/contract/route.ts",
@@ -2447,6 +2456,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(accountSecuritySource, /step_up_required/);
   assert.match(accountSecuritySource, /cooldown_active/);
   assert.match(accountSecuritySource, /manual_review_required/);
+  assert.match(reviewerQualitySource, /getMoralTradeReviewerQualityContract/);
+  assert.match(reviewerQualitySource, /evaluateMoralTradeReviewerQuality/);
+  assert.match(reviewerQualitySource, /moral_trade_reviewer_quality_policies/);
+  assert.match(reviewerQualitySource, /moral_trade_review_quality_audits/);
+  assert.match(reviewerQualitySource, /Reviewer judgment is not an ungoverned primitive/);
+  assert.match(reviewerQualitySource, /second_review_missing/);
+  assert.match(reviewerQualitySource, /default_approval_detected/);
   assert.match(productionReadinessSource, /getMoralTradeProductionReadinessContract/);
   assert.match(productionReadinessSource, /evaluateMoralTradeProductionReadiness/);
   assert.match(productionReadinessSource, /moral_trade_account_security_events/);
@@ -2482,6 +2498,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(accountSecurityMigration, /account_security_policy_ref/);
   assert.match(accountSecurityMigration, /step_up_passed/);
   assert.match(accountSecurityMigration, /cooldown_hours/);
+  assert.match(reviewerQualityMigration, /moral_trade_reviewer_quality_policies/);
+  assert.match(reviewerQualityMigration, /moral_trade_review_quality_audits/);
+  assert.match(reviewerQualityMigration, /reviewer_quality_policy_ref/);
+  assert.match(reviewerQualityMigration, /conflict_of_interest_state/);
+  assert.match(reviewerQualityMigration, /default_approval_prohibited_bool/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_registry_entries/);
   assert.match(recipientDestinationMigration, /moral_trade_payment_destinations/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_destination_reviews/);
@@ -2496,6 +2517,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /account_security_policy_ref/);
   assert.match(schemaSource, /risk_state text not null/);
   assert.match(schemaSource, /trusted_device_status/);
+  assert.match(schemaSource, /moral_trade_reviewer_quality_policies/);
+  assert.match(schemaSource, /moral_trade_review_quality_audits/);
+  assert.match(schemaSource, /reviewer_quality_policy_ref/);
+  assert.match(schemaSource, /conflict_of_interest_state/);
   assert.match(schemaSource, /moral_trade_recipient_registry_entries/);
   assert.match(schemaSource, /moral_trade_payment_destinations/);
   assert.match(schemaSource, /moral_trade_recipient_destination_reviews/);
@@ -2894,6 +2919,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /policy-bundle-contract-route/);
   assert.match(apiContractSource, /moral_trade_participant_eligibility_contract/);
   assert.match(apiContractSource, /moral_trade_account_security_contract/);
+  assert.match(apiContractSource, /moral_trade_reviewer_quality_contract/);
   assert.match(apiContractSource, /moral_trade_production_readiness_contract/);
   assert.match(apiContractSource, /provenance-schema-validator/);
   assert.match(apiContractSource, /moral_trade_schema_registry/);
@@ -2945,6 +2971,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /account_security_contract_response/);
   assert.match(apiContractProfile, /moral_trade_account_security_contract/);
   assert.match(apiContractProfile, /device fingerprints, session anomalies/);
+  assert.match(apiContractProfile, /reviewer_quality_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_reviewer_quality_contract/);
+  assert.match(apiContractProfile, /reviewer identities, private reviewer notes, conflict facts/);
   assert.match(apiContractProfile, /production_readiness_contract_response/);
   assert.match(apiContractProfile, /moral_trade_production_readiness_contract/);
   assert.match(apiContractProfile, /account-security events, backup contents, configuration values/);
@@ -3112,6 +3141,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /accountSecurityContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /accountSecurityContract\.highRiskActions/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/account-security\/contract/);
+  assert.match(technicalSpecPage, /Reviewer quality contract/);
+  assert.match(technicalSpecPage, /reviewerQualityContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /reviewerQualityContract\.reviewTypes/);
+  assert.match(technicalSpecPage, /\/api\/moral-trade\/reviewer-quality\/contract/);
   assert.match(technicalSpecPage, /Production readiness contract/);
   assert.match(technicalSpecPage, /productionReadinessContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/production-readiness\/contract/);
@@ -3267,6 +3300,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /accountSecurityValidation/);
   assert.match(healthRoute, /accountSecurityHighRiskActions/);
   assert.match(healthRoute, /accountSecurityFirstClassRecordTables/);
+  assert.match(healthRoute, /reviewerQualityValidation/);
+  assert.match(healthRoute, /reviewerQualityReviewTypes/);
+  assert.match(healthRoute, /reviewerQualityFirstClassRecordTables/);
   assert.match(healthRoute, /productionReadinessValidation/);
   assert.match(healthRoute, /productionReadinessControlKeys/);
   assert.match(healthRoute, /productionReadinessFirstClassRecordTables/);
@@ -3375,6 +3411,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(accountSecurityContractRoute, /validateMoralTradeAccountSecurityContract/);
   assert.match(accountSecurityContractRoute, /highRiskActions/);
   assert.match(accountSecurityContractRoute, /accountSecuritySampleEvaluationStatuses/);
+  assert.match(reviewerQualityContractRoute, /validateMoralTradeReviewerQualityContract/);
+  assert.match(reviewerQualityContractRoute, /reviewTypes/);
+  assert.match(reviewerQualityContractRoute, /reviewerQualitySampleEvaluationStatuses/);
   assert.match(productionReadinessContractRoute, /validateMoralTradeProductionReadinessContract/);
   assert.match(productionReadinessContractRoute, /firstClassRecordTables/);
   assert.match(productionReadinessContractRoute, /productionReadinessSampleEvaluationStatuses/);

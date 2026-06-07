@@ -6462,6 +6462,195 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_reviewer_quality_policies: {
+        Row: {
+          id: string;
+          policy_snapshot_id: string;
+          policy_version: string;
+          review_type:
+            | "matching_clearing"
+            | "release_gate_approval"
+            | "recipient_destination_verification"
+            | "privacy_grant_approval"
+            | "evidence_acceptance"
+            | "impact_claim_publication"
+            | "appeal_resolution"
+            | "incident_closure"
+            | "payout_release"
+            | "blocker_override";
+          status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          authorization_required_bool: boolean;
+          conflict_check_required_bool: boolean;
+          calibration_required_bool: boolean;
+          second_review_required_bool: boolean;
+          audit_sampling_required_bool: boolean;
+          default_approval_prohibited_bool: boolean;
+          review_speed_target_creates_default_bool: boolean;
+          max_decision_age_days: number;
+          policy_hash: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          policy_snapshot_id: string;
+          policy_version?: string;
+          review_type:
+            | "matching_clearing"
+            | "release_gate_approval"
+            | "recipient_destination_verification"
+            | "privacy_grant_approval"
+            | "evidence_acceptance"
+            | "impact_claim_publication"
+            | "appeal_resolution"
+            | "incident_closure"
+            | "payout_release"
+            | "blocker_override";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          authorization_required_bool?: boolean;
+          conflict_check_required_bool?: boolean;
+          calibration_required_bool?: boolean;
+          second_review_required_bool?: boolean;
+          audit_sampling_required_bool?: boolean;
+          default_approval_prohibited_bool?: boolean;
+          review_speed_target_creates_default_bool?: boolean;
+          max_decision_age_days?: number;
+          policy_hash: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          policy_snapshot_id?: string;
+          policy_version?: string;
+          review_type?:
+            | "matching_clearing"
+            | "release_gate_approval"
+            | "recipient_destination_verification"
+            | "privacy_grant_approval"
+            | "evidence_acceptance"
+            | "impact_claim_publication"
+            | "appeal_resolution"
+            | "incident_closure"
+            | "payout_release"
+            | "blocker_override";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          authorization_required_bool?: boolean;
+          conflict_check_required_bool?: boolean;
+          calibration_required_bool?: boolean;
+          second_review_required_bool?: boolean;
+          audit_sampling_required_bool?: boolean;
+          default_approval_prohibited_bool?: boolean;
+          review_speed_target_creates_default_bool?: boolean;
+          max_decision_age_days?: number;
+          policy_hash?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_review_quality_audits: {
+        Row: {
+          id: string;
+          reviewer_id_hash: string;
+          review_type:
+            | "matching_clearing"
+            | "release_gate_approval"
+            | "recipient_destination_verification"
+            | "privacy_grant_approval"
+            | "evidence_acceptance"
+            | "impact_claim_publication"
+            | "appeal_resolution"
+            | "incident_closure"
+            | "payout_release"
+            | "blocker_override";
+          reviewer_quality_policy_id: string;
+          audit_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          sampled_decision_count: number;
+          overturn_count: number;
+          calibration_failure_count: number;
+          unresolved_conflict_count: number;
+          out_of_scope_decision_count: number;
+          default_approval_detected: boolean;
+          audit_hash: string;
+          auditor_decision_id: string | null;
+          audited_at: string | null;
+          expires_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          reviewer_id_hash: string;
+          review_type:
+            | "matching_clearing"
+            | "release_gate_approval"
+            | "recipient_destination_verification"
+            | "privacy_grant_approval"
+            | "evidence_acceptance"
+            | "impact_claim_publication"
+            | "appeal_resolution"
+            | "incident_closure"
+            | "payout_release"
+            | "blocker_override";
+          reviewer_quality_policy_id: string;
+          audit_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          sampled_decision_count?: number;
+          overturn_count?: number;
+          calibration_failure_count?: number;
+          unresolved_conflict_count?: number;
+          out_of_scope_decision_count?: number;
+          default_approval_detected?: boolean;
+          audit_hash: string;
+          auditor_decision_id?: string | null;
+          audited_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          reviewer_id_hash?: string;
+          review_type?:
+            | "matching_clearing"
+            | "release_gate_approval"
+            | "recipient_destination_verification"
+            | "privacy_grant_approval"
+            | "evidence_acceptance"
+            | "impact_claim_publication"
+            | "appeal_resolution"
+            | "incident_closure"
+            | "payout_release"
+            | "blocker_override";
+          reviewer_quality_policy_id?: string;
+          audit_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          sampled_decision_count?: number;
+          overturn_count?: number;
+          calibration_failure_count?: number;
+          unresolved_conflict_count?: number;
+          out_of_scope_decision_count?: number;
+          default_approval_detected?: boolean;
+          audit_hash?: string;
+          auditor_decision_id?: string | null;
+          audited_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       moral_trade_backup_recovery_policies: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
