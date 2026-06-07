@@ -4,6 +4,7 @@ import {
   validateMoralTradeJsonSchemaSubset,
   type MoralTradeJsonSchemaDocument,
 } from "@/lib/moral-trade/json-schema-subset";
+import { demoMpgfAssuranceRound, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
 import { formatMode, type OfferMode } from "@/lib/offers";
 import {
   getActionEvidenceSummary,
@@ -16,7 +17,7 @@ import { getAbsoluteUrl, truncateDescription } from "@/lib/seo";
 import publicOfferListingSchemaJson from "../../config/moral-trade/public-offer-listing.schema.json";
 
 export const PUBLIC_OFFERS_API_CONTRACT_VERSION =
-  "public-offers-api-v0.1-2026-05";
+  "public-offers-api-v0.2-2026-06";
 export const PUBLIC_OFFERS_API_VALIDATOR_VERSION =
   "public-offers-api-validator-v0.2";
 
@@ -31,7 +32,8 @@ export type PublicOfferReviewState =
   | "manual-review-required"
   | "reviewed"
   | "disputed";
-export type PublicOffersTab = "live" | "examples" | "all";
+export type PublicMarketplaceTab = "live" | "rounds" | "worked_examples" | "demo";
+export type PublicOffersTab = PublicMarketplaceTab | "all";
 export type PublicOffersSort =
   | "newest"
   | "reviewed"
@@ -83,6 +85,20 @@ export interface PublicOfferFacet {
   count: number;
 }
 
+export interface PublicOffersTabSummary {
+  value: PublicMarketplaceTab;
+  label: string;
+  count: number;
+  href: string;
+  source:
+    | "live_offer_directory"
+    | "public_good_rounds"
+    | "worked_example_directory"
+    | "demo_records";
+  noLiveAgreementCount: boolean;
+  description: string;
+}
+
 export interface PublicOffersMeta {
   tab: PublicOffersTab;
   defaultTab: PublicOffersTab;
@@ -95,6 +111,7 @@ export interface PublicOffersMeta {
   workedExampleCount: number;
   defaultedToWorkedExamples: boolean;
   hiddenZeroCountFacets: boolean;
+  availableTabs: PublicOffersTabSummary[];
   availableFacets: {
     cause: PublicOfferFacet[];
     format: PublicOfferFacet[];
@@ -150,6 +167,7 @@ export interface PublicOffersFacetsPayload {
     | "workedExampleCount"
     | "defaultedToWorkedExamples"
     | "hiddenZeroCountFacets"
+    | "availableTabs"
   >;
   publicContract: PublicOffersContract;
   availableFacets: PublicOffersMeta["availableFacets"];
@@ -200,6 +218,12 @@ const PUBLIC_OFFER_NON_CLAIMS = [
   "Worked examples are not live liquidity and require manual review before reliance.",
   "The collection response must not expose private wishes, contact details, raw source notes, raw evidence artifacts, or personalized saved-offer state.",
 ] as const;
+const PUBLIC_MARKETPLACE_TAB_ORDER = [
+  "live",
+  "rounds",
+  "worked_examples",
+  "demo",
+] as const satisfies readonly PublicMarketplaceTab[];
 const PUBLIC_OFFER_DETAIL_NON_CLAIMS = [
   ...PUBLIC_OFFER_NON_CLAIMS,
   "The detail response is a public display record only; it does not grant contact access, create a saved search, or form an agreement.",
@@ -276,8 +300,12 @@ function clampPageSize(value: string) {
 function parseTab(searchParams: URLSearchParams, defaultTab: PublicOffersTab) {
   const value = readFirst(searchParams, "tab", "view");
 
-  if (value === "live" || value === "examples" || value === "all") {
+  if (value === "live" || value === "rounds" || value === "demo" || value === "all") {
     return value;
+  }
+
+  if (value === "examples" || value === "worked-examples" || value === "worked_examples") {
+    return "worked_examples";
   }
 
   return defaultTab;
@@ -395,6 +423,61 @@ function buildPublicOffersContract({
     supportedFilters,
     nonClaims,
   };
+}
+
+function getPublicMarketplaceRoundCount() {
+  return demoMpgfAssuranceRound.id ? 1 : 0;
+}
+
+function getPublicMarketplaceDemoCount() {
+  return demoMpgfPublicGoodsCampaigns.filter((campaign) => campaign.reviewStatus === "approved").length;
+}
+
+function buildPublicOffersTabSummaries({
+  liveOfferCount,
+  workedExampleCount,
+}: {
+  liveOfferCount: number;
+  workedExampleCount: number;
+}): PublicOffersTabSummary[] {
+  return [
+    {
+      value: "live",
+      label: "Live",
+      count: liveOfferCount,
+      href: "/offers?tab=live",
+      source: "live_offer_directory",
+      noLiveAgreementCount: false,
+      description: "Public offers remain review-gated before reliance, agreement creation, or payment.",
+    },
+    {
+      value: "rounds",
+      label: "Rounds",
+      count: getPublicMarketplaceRoundCount(),
+      href: "/offers?tab=rounds",
+      source: "public_good_rounds",
+      noLiveAgreementCount: true,
+      description: "Common Ground Budget rounds are no-capture public-good previews, not offer listings.",
+    },
+    {
+      value: "worked_examples",
+      label: "Worked examples",
+      count: workedExampleCount,
+      href: "/offers?tab=worked_examples",
+      source: "worked_example_directory",
+      noLiveAgreementCount: true,
+      description: "Worked examples show reviewed structures without creating live liquidity or agreements.",
+    },
+    {
+      value: "demo",
+      label: "Demo",
+      count: getPublicMarketplaceDemoCount(),
+      href: "/offers?tab=demo",
+      source: "demo_records",
+      noLiveAgreementCount: true,
+      description: "Demo records stay labeled as sandbox data and cannot inflate live offer metrics.",
+    },
+  ];
 }
 
 function workedExampleToPublicListing(
@@ -770,7 +853,7 @@ export function buildPublicOffersCollectionPayload({
   const allListings = [...liveListings, ...workedExampleListings];
   const liveOfferCount = liveListings.length;
   const workedExampleCount = workedExampleListings.length;
-  const defaultTab: PublicOffersTab = liveOfferCount > 0 ? "live" : "examples";
+  const defaultTab: PublicOffersTab = liveOfferCount > 0 ? "live" : "worked_examples";
   const requestedTab = readFirst(searchParams, "tab", "view");
   const tab = parseTab(searchParams, defaultTab);
   const query = readFirst(searchParams, "q", "search").trim().slice(0, 120);
@@ -785,7 +868,8 @@ export function buildPublicOffersCollectionPayload({
 
   const tabListings = allListings.filter((listing) => {
     if (tab === "live") return listing.source === "live";
-    if (tab === "examples") return listing.source === "worked_example";
+    if (tab === "worked_examples") return listing.source === "worked_example";
+    if (tab === "rounds" || tab === "demo") return false;
     return true;
   });
   const facetScope = tabListings.filter((listing) => listingMatchesSearch(listing, query));
@@ -825,8 +909,12 @@ export function buildPublicOffersCollectionPayload({
       query,
       liveOfferCount,
       workedExampleCount,
-      defaultedToWorkedExamples: !requestedTab && defaultTab === "examples",
+      defaultedToWorkedExamples: !requestedTab && defaultTab === "worked_examples",
       hiddenZeroCountFacets: true,
+      availableTabs: buildPublicOffersTabSummaries({
+        liveOfferCount,
+        workedExampleCount,
+      }),
       availableFacets: {
         cause: buildFacet(facetScope, (listing) => [
           listing.primaryCause,
@@ -870,6 +958,7 @@ export function buildPublicOffersFacetsPayload({
       workedExampleCount: collection.meta.workedExampleCount,
       defaultedToWorkedExamples: collection.meta.defaultedToWorkedExamples,
       hiddenZeroCountFacets: collection.meta.hiddenZeroCountFacets,
+      availableTabs: collection.meta.availableTabs,
     },
     publicContract: buildPublicOffersContract({
       publicApiRoute: "/api/offers/facets",
@@ -945,6 +1034,16 @@ function visibleFacetsHavePositiveCounts(
     .every((facet) => facet.count > 0);
 }
 
+function marketplaceTabsAreSeparated(tabs: readonly PublicOffersTabSummary[]) {
+  return (
+    tabs.length === PUBLIC_MARKETPLACE_TAB_ORDER.length &&
+    PUBLIC_MARKETPLACE_TAB_ORDER.every((tab, index) => tabs[index]?.value === tab) &&
+    tabs
+      .filter((tab) => tab.value !== "live")
+      .every((tab) => tab.noLiveAgreementCount && tab.count >= 0)
+  );
+}
+
 export function validatePublicOffersCollectionPayload(
   payload: PublicOffersCollectionPayload,
 ): PublicOffersValidation {
@@ -968,8 +1067,14 @@ export function validatePublicOffersCollectionPayload(
       "zero-live-default",
       "Zero live inventory defaults to worked examples",
       payload.meta.liveOfferCount > 0 ||
-        payload.meta.defaultTab === "examples",
+        payload.meta.defaultTab === "worked_examples",
       `live=${payload.meta.liveOfferCount}; default=${payload.meta.defaultTab}`,
+    ),
+    validationCheck(
+      "marketplace-tab-separation",
+      "Public marketplace separates live, rounds, worked examples, and demo lanes",
+      marketplaceTabsAreSeparated(payload.meta.availableTabs),
+      payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),
     validationCheck(
       "listing-field-shape",
@@ -1117,8 +1222,14 @@ export function validatePublicOffersFacetsPayload(
       "zero-live-default",
       "Zero live inventory defaults facets to worked examples",
       payload.meta.liveOfferCount > 0 ||
-        payload.meta.defaultTab === "examples",
+        payload.meta.defaultTab === "worked_examples",
       `live=${payload.meta.liveOfferCount}; default=${payload.meta.defaultTab}`,
+    ),
+    validationCheck(
+      "marketplace-tab-separation",
+      "Facet metadata separates live, rounds, worked examples, and demo lanes",
+      marketplaceTabsAreSeparated(payload.meta.availableTabs),
+      payload.meta.availableTabs.map((tab) => `${tab.value}:${tab.count}`).join(" | "),
     ),
     validationCheck(
       "privacy-and-nonclaims",

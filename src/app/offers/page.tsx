@@ -86,17 +86,17 @@ const SORT_FILTER_CHIPS = [
 ] as const;
 
 const DIRECTORY_TABS = [
-  { label: "Live offers", value: "live" },
-  { label: "Worked examples", value: "examples" },
-  { label: "All", value: "all" },
+  { label: "Live", value: "live" },
+  { label: "Rounds", value: "rounds" },
+  { label: "Worked examples", value: "worked_examples" },
+  { label: "Demo", value: "demo" },
 ] as const;
 
 const MARKETPLACE_BOOTSTRAP_TABS = [
-  "Live rounds",
-  "Live offers",
-  "Create from template",
-  "Worked examples",
-  "Demo data",
+  "live",
+  "rounds",
+  "worked_examples",
+  "demo",
 ] as const;
 
 const FORMAT_FILTERS = [
@@ -122,7 +122,8 @@ const CAUSE_GROUPS = [
   { id: "public-health", label: "Public health" },
 ] as const;
 
-type DirectoryView = (typeof DIRECTORY_TABS)[number]["value"];
+type PublicDirectoryView = (typeof DIRECTORY_TABS)[number]["value"];
+type DirectoryView = PublicDirectoryView | "all";
 type DirectorySort = (typeof SORT_FILTER_CHIPS)[number]["value"];
 type ListingFormat = (typeof FORMAT_FILTERS)[number]["value"];
 type ReviewStatusFilter = (typeof REVIEW_STATUS_FILTERS)[number]["value"];
@@ -157,6 +158,14 @@ interface MarketplaceListing {
   summary: string;
 }
 
+const DIRECTORY_VIEW_LABELS: Record<DirectoryView, string> = {
+  all: "All listings",
+  demo: "Demo",
+  live: "Live",
+  rounds: "Rounds",
+  worked_examples: "Worked examples",
+};
+
 function readParam(searchParams: Record<string, string | string[] | undefined>, key: string) {
   const value = searchParams[key];
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
@@ -179,8 +188,12 @@ function parsePage(value: string | string[] | undefined) {
 }
 
 function parseDirectoryView(value: string, fallback: DirectoryView = "live"): DirectoryView {
-  if (value === "live" || value === "examples" || value === "all") {
+  if (value === "live" || value === "rounds" || value === "demo" || value === "all") {
     return value;
+  }
+
+  if (value === "examples" || value === "worked-examples" || value === "worked_examples") {
+    return "worked_examples";
   }
 
   return fallback;
@@ -384,7 +397,11 @@ function listingMatchesFilters(
     return false;
   }
 
-  if (filters.view === "examples" && listing.source !== "example") {
+  if (filters.view === "worked_examples" && listing.source !== "example") {
+    return false;
+  }
+
+  if (filters.view === "rounds" || filters.view === "demo") {
     return false;
   }
 
@@ -472,7 +489,7 @@ function buildOffersHref(params: {
 }) {
   const query = new URLSearchParams();
 
-  if (params.view) query.set("view", params.view);
+  if (params.view) query.set("tab", params.view);
   params.formats?.forEach((format) => query.append("mode", format));
   if (params.searchQuery) query.set("search", params.searchQuery);
   params.causes?.forEach((cause) => query.append("cause", cause));
@@ -514,13 +531,7 @@ function buildActiveFilterLabels(filters: {
   const labels: string[] = [];
 
   if (filters.view !== filters.defaultView) {
-    labels.push(
-      filters.view === "examples"
-        ? "Worked examples"
-        : filters.view === "live"
-          ? "Live offers"
-          : "All listings",
-    );
+    labels.push(DIRECTORY_VIEW_LABELS[filters.view]);
   }
 
   if (filters.searchQuery) {
@@ -640,6 +651,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const seedRoundProjects = demoMpgfPublicGoodsCampaigns
     .filter((campaign) => campaign.reviewStatus === "approved")
     .slice(0, 7);
+  const seedRoundCount = demoMpgfAssuranceRound.id ? 1 : 0;
   const seedRoundHref = `/mpgf/rounds/${demoMpgfAssuranceRound.id}#common-ground-budget-preview`;
   const createTemplateHref = viewer ? "/offers/new" : "/signup?returnTo=/offers/new";
   const createDonationOffsetTemplateHref = viewer
@@ -648,15 +660,16 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const createPledgeSwapTemplateHref = viewer
     ? "/offers/new?mode=pledge"
     : "/signup?returnTo=/offers/new%3Fmode%3Dpledge";
-  const defaultView = liveOfferCount > 0 ? "live" : "examples";
+  const defaultView: DirectoryView = liveOfferCount > 0 ? "live" : "worked_examples";
   const view = parseDirectoryView(
     readParam(resolvedSearchParams, "tab") || readParam(resolvedSearchParams, "view"),
     defaultView,
   );
-  const tabCounts: Record<DirectoryView, number> = {
-    all: allListings.length,
-    examples: workedExampleCount,
+  const tabCounts: Record<PublicDirectoryView, number> = {
+    demo: seedRoundProjects.length,
     live: liveOfferCount,
+    rounds: seedRoundCount,
+    worked_examples: workedExampleCount,
   };
   const activeFilters = {
     causes,
@@ -703,10 +716,17 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     verification,
     view,
   });
-  const activeViewLabel = DIRECTORY_TABS.find((tab) => tab.value === view)?.label ?? "Listings";
+  const activeViewLabel = DIRECTORY_VIEW_LABELS[view];
+  const resultCountLabel =
+    view === "rounds"
+      ? `${seedRoundCount} ${seedRoundCount === 1 ? "round" : "rounds"}`
+      : view === "demo"
+        ? `${seedRoundProjects.length} demo ${seedRoundProjects.length === 1 ? "record" : "records"}`
+        : `${filteredListings.length} ${filteredListings.length === 1 ? "listing" : "listings"}`;
   const countScope = allListings.filter((listing) => {
     if (view === "live" && listing.source !== "live") return false;
-    if (view === "examples" && listing.source !== "example") return false;
+    if (view === "worked_examples" && listing.source !== "example") return false;
+    if (view === "rounds" || view === "demo") return false;
     return listingMatchesSearch(listing, searchQuery);
   });
   const formatCounts = FORMAT_FILTERS.map((option) => ({
@@ -769,8 +789,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       label: "Bounded pledge swaps",
     },
     {
-      active: view === "examples",
-      href: createTabHref(view === "examples" ? "live" : "examples", filterHrefParams),
+      active: view === "worked_examples",
+      href: createTabHref(view === "worked_examples" ? "live" : "worked_examples", filterHrefParams),
       label: "Worked examples",
     },
     {
@@ -784,15 +804,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   ];
   const bootstrapLanes = [
     {
-      label: "Live rounds",
-      href: seedRoundHref,
-      count: "1",
-      status: "Sandbox calculation",
-      description:
-        "Join the Public Goods Fund seed round by previewing a small no-capture Common Ground Budget.",
-    },
-    {
-      label: "Live offers",
+      value: "live",
+      label: "Live",
       href: createTabHref("live", filterHrefParams),
       count: String(liveOfferCount),
       status: liveOfferCount ? "Review-gated directory" : "None public yet",
@@ -800,31 +813,35 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         "Live offers remain separated from worked examples and still require review before reliance.",
     },
     {
-      label: "Create from template",
-      href: createTemplateHref,
-      count: "4",
-      status: "Offset and pledge-swap templates",
+      value: "rounds",
+      label: "Rounds",
+      href: createTabHref("rounds", filterHrefParams),
+      count: String(seedRoundCount),
+      status: "Live rounds, no capture",
       description:
-        "Start from structured donation-offset or pledge-swap terms, then keep the draft review-bound.",
+        "Join the Public Goods Fund seed round by previewing a small no-capture Common Ground Budget.",
     },
     {
+      value: "worked_examples",
       label: "Worked examples",
-      href: createTabHref("examples", filterHrefParams),
+      href: createTabHref("worked_examples", filterHrefParams),
       count: String(workedExampleCount),
       status: "Examples only",
       description:
         "Inspect complete example structures without treating them as live liquidity or completed trades.",
     },
     {
-      label: "Demo data",
-      href: "/mpgf",
+      value: "demo",
+      label: "Demo",
+      href: createTabHref("demo", filterHrefParams),
       count: String(seedRoundProjects.length),
       status: "Labeled sandbox records",
       description:
         "Demo rounds and seed projects stay clearly labeled and cannot inflate live offer or agreement counts.",
     },
   ] satisfies Array<{
-    label: (typeof MARKETPLACE_BOOTSTRAP_TABS)[number];
+    value: (typeof MARKETPLACE_BOOTSTRAP_TABS)[number];
+    label: string;
     href: string;
     count: string;
     status: string;
@@ -938,14 +955,21 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <strong>{workedExampleCount}</strong> worked{" "}
                 {workedExampleCount === 1 ? "example" : "examples"}
               </span>
+              <span>
+                <strong>{seedRoundCount}</strong> {seedRoundCount === 1 ? "round" : "rounds"}
+              </span>
+              <span>
+                <strong>{seedRoundProjects.length}</strong> demo{" "}
+                {seedRoundProjects.length === 1 ? "record" : "records"}
+              </span>
             </div>
           </section>
 
           <aside className="collection-action-panel panel" aria-label="Collection actions">
             <div className="collection-action-copy">
-              <strong>{defaultView === "examples" ? "Examples are first today." : "Live offers are ready."}</strong>
+              <strong>{defaultView === "worked_examples" ? "Examples are first today." : "Live offers are ready."}</strong>
               <p>
-                {defaultView === "examples"
+                {defaultView === "worked_examples"
                   ? "The live directory has no public offers yet, so this page opens on reviewed examples that show the expected structure."
                   : "Start with live offers, then inspect examples when you want to understand the evidence model."}
               </p>
@@ -1062,6 +1086,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 preview-only until review and later release gates approve reliance.
               </p>
               <div className="marketplace-bootstrap-actions">
+                <Link className="button button-primary button-mini" href={createTemplateHref}>
+                  Start template
+                </Link>
                 <Link className="button button-secondary button-mini" href={createDonationOffsetTemplateHref}>
                   Donation offset
                 </Link>
@@ -1082,7 +1109,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 <Link className="button button-secondary button-mini" href={createTabHref("live", filterHrefParams)}>
                   Live offers
                 </Link>
-                <Link className="button button-secondary button-mini" href={createTabHref("examples", filterHrefParams)}>
+                <Link className="button button-secondary button-mini" href={createTabHref("worked_examples", filterHrefParams)}>
                   Worked examples
                 </Link>
               </div>
@@ -1157,7 +1184,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 ))}
               </select>
             </label>
-            <input name="view" type="hidden" value={view} />
+            <input name="tab" type="hidden" value={view} />
             {formats.slice(1).map((selectedFormat) => (
               <input key={selectedFormat} name="mode" type="hidden" value={selectedFormat} />
             ))}
@@ -1261,7 +1288,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                 </div>
 
                 <form action="/offers" className="filter-form" id="offer-filter-form">
-                  <input name="view" type="hidden" value={view} />
+                  <input name="tab" type="hidden" value={view} />
                   {searchQuery ? <input name="search" type="hidden" value={searchQuery} /> : null}
                   {layout !== "grid" ? <input name="layout" type="hidden" value={layout} /> : null}
 
@@ -1386,10 +1413,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             <section className="marketplace-results" aria-labelledby="results-heading">
               <div className="marketplace-results-head">
                 <div>
-                  <p className="eyebrow">Directory</p>
-                  <h2 id="results-heading">
-                    {filteredListings.length} {filteredListings.length === 1 ? "listing" : "listings"}
-                  </h2>
+                  <p className="eyebrow">{view === "rounds" || view === "demo" ? "Marketplace lane" : "Directory"}</p>
+                  <h2 id="results-heading">{resultCountLabel}</h2>
                 </div>
                 <p className="results-sort-note">Sorted by {findLabel(SORT_FILTER_CHIPS, directorySort).toLowerCase()}.</p>
               </div>
@@ -1405,7 +1430,84 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               ) : null}
 
               <div className="listing-groups">
-                {filteredListings.length ? (
+                {view === "rounds" ? (
+                  <section
+                    aria-labelledby="marketplace-rounds-heading"
+                    className="listing-group marketplace-lane-results"
+                    id="marketplace-rounds-lane"
+                  >
+                    <div className="listing-group-head">
+                      <h3 id="marketplace-rounds-heading">Common Ground Budget rounds</h3>
+                      <span>{seedRoundCount} no-capture round</span>
+                    </div>
+                    <article className="marketplace-bootstrap-card marketplace-bootstrap-card-primary">
+                      <p className="eyebrow">Rounds lane</p>
+                      <h4>{demoMpgfAssuranceRound.name}</h4>
+                      <p>
+                        This live round is a sandbox allocation preview. It can collect a Common
+                        Ground Budget preference, but payment capture and clearing stay disabled
+                        until capped-real-money release gates pass.
+                      </p>
+                      <dl className="mpgf-summary-grid" aria-label="Rounds lane snapshot">
+                        <div>
+                          <dt>Reviewed projects</dt>
+                          <dd>{seedRoundProjects.length}</dd>
+                        </div>
+                        <div>
+                          <dt>Payment capture</dt>
+                          <dd>disabled</dd>
+                        </div>
+                        <div>
+                          <dt>Public offer count</dt>
+                          <dd>not counted</dd>
+                        </div>
+                      </dl>
+                      <div className="marketplace-bootstrap-actions">
+                        <Link className="button button-primary" href={seedRoundHref}>
+                          Preview budget
+                        </Link>
+                        <Link className="button button-secondary" href="/mpgf">
+                          View fund
+                        </Link>
+                      </div>
+                    </article>
+                  </section>
+                ) : view === "demo" ? (
+                  <section
+                    aria-labelledby="marketplace-demo-heading"
+                    className="listing-group marketplace-lane-results"
+                    id="marketplace-demo-lane"
+                  >
+                    <div className="listing-group-head">
+                      <h3 id="marketplace-demo-heading">Demo records</h3>
+                      <span>{seedRoundProjects.length} sandbox projects</span>
+                    </div>
+                    <article className="marketplace-bootstrap-card">
+                      <p className="eyebrow">Demo lane</p>
+                      <h4>Reviewed seed projects stay labeled as demo data.</h4>
+                      <p>
+                        These records support inspection of allocation previews and cannot count as
+                        live offers, completed agreements, payment volume, or verified liquidity.
+                      </p>
+                      <ul className="marketplace-bootstrap-projects" aria-label="Demo seed projects">
+                        {seedRoundProjects.map((campaign) => (
+                          <li key={campaign.id}>
+                            <span>{campaign.title}</span>
+                            <strong>{formatUsd(campaign.thresholdAmountCents)} threshold</strong>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="marketplace-bootstrap-actions">
+                        <Link className="button button-secondary" href="/mpgf">
+                          Open demo fund
+                        </Link>
+                        <Link className="button button-primary" href={seedRoundHref}>
+                          Preview round
+                        </Link>
+                      </div>
+                    </article>
+                  </section>
+                ) : filteredListings.length ? (
                   groupedListings.map((group) => (
                     <section className="listing-group" id={group.id} key={group.id} aria-labelledby={`${group.id}-heading`}>
                       <div className="listing-group-head">

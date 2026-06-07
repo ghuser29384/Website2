@@ -25,11 +25,20 @@ test("public offers collection defaults to worked examples when live inventory i
 
   assert.equal(validation.status, "pass");
   assert.ok(validation.checks.some((check) => check.id === "listing-json-schema"));
-  assert.equal(payload.meta.defaultTab, "examples");
-  assert.equal(payload.meta.tab, "examples");
+  assert.equal(payload.meta.defaultTab, "worked_examples");
+  assert.equal(payload.meta.tab, "worked_examples");
   assert.equal(payload.meta.defaultedToWorkedExamples, true);
   assert.equal(payload.meta.liveOfferCount, 0);
   assert.equal(payload.meta.workedExampleCount, 8);
+  assert.deepEqual(
+    payload.meta.availableTabs.map((tab) => tab.value),
+    ["live", "rounds", "worked_examples", "demo"],
+  );
+  assert.ok(
+    payload.meta.availableTabs
+      .filter((tab) => tab.value !== "live")
+      .every((tab) => tab.noLiveAgreementCount),
+  );
   assert.equal(payload.items.length, 8);
   assert.ok(payload.items.every((item) => item.isWorkedExample));
   assert.ok(payload.items.every((item) => item.reviewState === "manual-review-required"));
@@ -45,7 +54,7 @@ test("public offers collection filters by query, cause, format, review state, an
     q: "vegetarian",
     reviewState: "manual-review-required",
     sort: "best-fit",
-    tab: "examples",
+    tab: "worked_examples",
   });
   const payload = buildPublicOffersCollectionPayload({
     liveOffers: [],
@@ -54,7 +63,7 @@ test("public offers collection filters by query, cause, format, review state, an
   const validation = validatePublicOffersCollectionPayload(payload);
 
   assert.equal(validation.status, "pass");
-  assert.equal(payload.meta.tab, "examples");
+  assert.equal(payload.meta.tab, "worked_examples");
   assert.equal(payload.meta.pageSize, 2);
   assert.equal(payload.items.length, 2);
   assert.ok(
@@ -67,10 +76,26 @@ test("public offers collection filters by query, cause, format, review state, an
   assert.ok(payload.items.some((item) => item.offeredAction.toLowerCase().includes("vegetarian")));
 });
 
-test("public offers collection validation fails when listings drift from the public schema", () => {
+test("public offers collection accepts legacy examples tab aliases", () => {
   const payload = buildPublicOffersCollectionPayload({
     liveOffers: [],
     searchParams: new URLSearchParams("tab=examples&pageSize=1"),
+  });
+  const dashedPayload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("view=worked-examples&pageSize=1"),
+  });
+
+  assert.equal(payload.meta.tab, "worked_examples");
+  assert.equal(dashedPayload.meta.tab, "worked_examples");
+  assert.equal(payload.items.length, 1);
+  assert.equal(dashedPayload.items.length, 1);
+});
+
+test("public offers collection validation fails when listings drift from the public schema", () => {
+  const payload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("tab=worked_examples&pageSize=1"),
   });
   const driftedPayload = {
     ...payload,
@@ -117,6 +142,32 @@ test("public offers live-mode parser maps public formats to internal offer modes
   );
 });
 
+test("public offers collection separates rounds and demo lanes from offer listings", () => {
+  const roundsPayload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("tab=rounds"),
+  });
+  const demoPayload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("tab=demo"),
+  });
+
+  assert.equal(validatePublicOffersCollectionPayload(roundsPayload).status, "pass");
+  assert.equal(validatePublicOffersCollectionPayload(demoPayload).status, "pass");
+  assert.equal(roundsPayload.meta.tab, "rounds");
+  assert.equal(demoPayload.meta.tab, "demo");
+  assert.equal(roundsPayload.items.length, 0);
+  assert.equal(demoPayload.items.length, 0);
+  assert.equal(roundsPayload.meta.availableTabs.find((tab) => tab.value === "rounds")?.count, 1);
+  assert.ok(
+    (demoPayload.meta.availableTabs.find((tab) => tab.value === "demo")?.count ?? 0) > 0,
+  );
+  assert.equal(
+    roundsPayload.meta.availableTabs.find((tab) => tab.value === "rounds")?.noLiveAgreementCount,
+    true,
+  );
+});
+
 test("public offer detail resolves worked-example slugs and keeps actions consent gated", () => {
   const slug = getPublicOfferSlugFromSegments(["examples", "seed-victoria"]);
   const payload = buildPublicOfferDetailPayload({
@@ -138,29 +189,37 @@ test("public offer detail resolves worked-example slugs and keeps actions consen
 test("public offer facets endpoint payload hides zero-count options", () => {
   const payload = buildPublicOffersFacetsPayload({
     liveOffers: [],
-    searchParams: new URLSearchParams("tab=examples&q=vegetarian"),
+    searchParams: new URLSearchParams("tab=worked_examples&q=vegetarian"),
   });
   const validation = validatePublicOffersFacetsPayload(payload);
   const allFacets = Object.values(payload.availableFacets).flat();
 
   assert.equal(validation.status, "pass");
   assert.equal(payload.publicContract.publicApiRoute, "/api/offers/facets");
-  assert.equal(payload.meta.tab, "examples");
+  assert.equal(payload.meta.tab, "worked_examples");
+  assert.deepEqual(
+    payload.meta.availableTabs.map((tab) => tab.value),
+    ["live", "rounds", "worked_examples", "demo"],
+  );
   assert.ok(allFacets.length > 0);
   assert.ok(allFacets.every((facet) => facet.count > 0));
 });
 
 test("public offers API route returns validator-backed collection JSON", async () => {
   const response = await publicOffersRoute(
-    new Request("http://localhost/api/offers?tab=examples&pageSize=3"),
+    new Request("http://localhost/api/offers?tab=worked_examples&pageSize=3"),
   );
   const body = await response.json();
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   assert.equal(body.ok, true);
-  assert.equal(body.meta.tab, "examples");
+  assert.equal(body.meta.tab, "worked_examples");
   assert.equal(body.items.length, 3);
+  assert.deepEqual(
+    body.meta.availableTabs.map((tab: { value: string }) => tab.value),
+    ["live", "rounds", "worked_examples", "demo"],
+  );
   assert.equal(body.publicContract.publicApiRoute, "/api/offers");
   assert.equal(
     body.publicContract.listingSchemaId,
@@ -211,14 +270,18 @@ test("public offer detail API route returns 404 blockers for non-public slugs", 
 
 test("public offer facets API route returns validator-backed facets JSON", async () => {
   const response = await publicOffersFacetsRoute(
-    new Request("http://localhost/api/offers/facets?tab=examples&q=vegetarian"),
+    new Request("http://localhost/api/offers/facets?tab=worked_examples&q=vegetarian"),
   );
   const body = await response.json();
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
   assert.equal(body.ok, true);
-  assert.equal(body.meta.tab, "examples");
+  assert.equal(body.meta.tab, "worked_examples");
+  assert.deepEqual(
+    body.meta.availableTabs.map((tab: { value: string }) => tab.value),
+    ["live", "rounds", "worked_examples", "demo"],
+  );
   assert.equal(body.publicContract.publicApiRoute, "/api/offers/facets");
   assert.equal(body.validation.status, "pass");
   assert.deepEqual(body.blockers, []);
