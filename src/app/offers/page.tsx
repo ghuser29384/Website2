@@ -17,6 +17,8 @@ import {
 } from "@/lib/baseline-bonds";
 import { getFormMessage } from "@/lib/form-state";
 import { getViewer, listOpenOffersPage, OFFERS_PAGE_SIZE, type OfferRecord } from "@/lib/app-data";
+import { demoMpgfAssuranceRound, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
+import { formatUsd } from "@/lib/mpgf/mechanism";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import {
@@ -87,6 +89,14 @@ const DIRECTORY_TABS = [
   { label: "Live offers", value: "live" },
   { label: "Worked examples", value: "examples" },
   { label: "All", value: "all" },
+] as const;
+
+const MARKETPLACE_BOOTSTRAP_TABS = [
+  "Live rounds",
+  "Live offers",
+  "Create from template",
+  "Worked examples",
+  "Demo data",
 ] as const;
 
 const FORMAT_FILTERS = [
@@ -627,6 +637,17 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const allListings = [...liveListings, ...workedExampleListings];
   const liveOfferCount = liveListings.length;
   const workedExampleCount = workedExampleListings.length;
+  const seedRoundProjects = demoMpgfPublicGoodsCampaigns
+    .filter((campaign) => campaign.reviewStatus === "approved")
+    .slice(0, 7);
+  const seedRoundHref = `/mpgf/rounds/${demoMpgfAssuranceRound.id}#common-ground-budget-preview`;
+  const createTemplateHref = viewer ? "/offers/new" : "/signup?returnTo=/offers/new";
+  const createDonationOffsetTemplateHref = viewer
+    ? "/offers/new?mode=offset"
+    : "/signup?returnTo=/offers/new%3Fmode%3Doffset";
+  const createPledgeSwapTemplateHref = viewer
+    ? "/offers/new?mode=pledge"
+    : "/signup?returnTo=/offers/new%3Fmode%3Dpledge";
   const defaultView = liveOfferCount > 0 ? "live" : "examples";
   const view = parseDirectoryView(
     readParam(resolvedSearchParams, "tab") || readParam(resolvedSearchParams, "view"),
@@ -761,6 +782,54 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       label: "Manual review required",
     },
   ];
+  const bootstrapLanes = [
+    {
+      label: "Live rounds",
+      href: seedRoundHref,
+      count: "1",
+      status: "Sandbox calculation",
+      description:
+        "Join the Public Goods Fund seed round by previewing a small no-capture Common Ground Budget.",
+    },
+    {
+      label: "Live offers",
+      href: createTabHref("live", filterHrefParams),
+      count: String(liveOfferCount),
+      status: liveOfferCount ? "Review-gated directory" : "None public yet",
+      description:
+        "Live offers remain separated from worked examples and still require review before reliance.",
+    },
+    {
+      label: "Create from template",
+      href: createTemplateHref,
+      count: "4",
+      status: "Offset and pledge-swap templates",
+      description:
+        "Start from structured donation-offset or pledge-swap terms, then keep the draft review-bound.",
+    },
+    {
+      label: "Worked examples",
+      href: createTabHref("examples", filterHrefParams),
+      count: String(workedExampleCount),
+      status: "Examples only",
+      description:
+        "Inspect complete example structures without treating them as live liquidity or completed trades.",
+    },
+    {
+      label: "Demo data",
+      href: "/mpgf",
+      count: String(seedRoundProjects.length),
+      status: "Labeled sandbox records",
+      description:
+        "Demo rounds and seed projects stay clearly labeled and cannot inflate live offer or agreement counts.",
+    },
+  ] satisfies Array<{
+    label: (typeof MARKETPLACE_BOOTSTRAP_TABS)[number];
+    href: string;
+    count: string;
+    status: string;
+    description: string;
+  }>;
   const groupedListings = filteredListings.reduce<
     Array<{ id: string; label: string; listings: MarketplaceListing[] }>
   >((groups, listing) => {
@@ -920,6 +989,106 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
             {formMessage.text}
           </div>
         ) : null}
+
+        <section className="marketplace-bootstrap panel" aria-labelledby="marketplace-bootstrap-heading">
+          <div className="marketplace-bootstrap-head">
+            <div>
+              <p className="eyebrow">Common Ground Marketplace</p>
+              <h2 id="marketplace-bootstrap-heading">Start from a live round, a template, or a worked example.</h2>
+              <p>
+                Live and demo surfaces are separated so the marketplace can build liquidity without
+                implying custody, escrow, completed trades, or automated clearing.
+              </p>
+            </div>
+            <Link className="button button-primary" href={seedRoundHref}>
+              Set Common Ground Budget
+            </Link>
+          </div>
+
+          <nav className="marketplace-tabs marketplace-bootstrap-tabs" aria-label="Marketplace lanes" role="tablist">
+            {bootstrapLanes.map((lane) => (
+              <Link className="marketplace-tab" href={lane.href} key={lane.label}>
+                <span>{lane.label}</span>
+                <strong>{lane.count}</strong>
+              </Link>
+            ))}
+          </nav>
+
+          <div className="marketplace-bootstrap-grid">
+            <article className="marketplace-bootstrap-card marketplace-bootstrap-card-primary">
+              <p className="eyebrow">Seed round</p>
+              <h3>{demoMpgfAssuranceRound.name}</h3>
+              <p>
+                {seedRoundProjects.length} admin-reviewed public-good projects are available for
+                no-capture budget preview. Settlement remains sandboxed until later release gates pass.
+              </p>
+              <dl className="mpgf-summary-grid" aria-label="Seed round snapshot">
+                <div>
+                  <dt>Round closes</dt>
+                  <dd>{new Date(demoMpgfAssuranceRound.endsAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</dd>
+                </div>
+                <div>
+                  <dt>Small starter budget</dt>
+                  <dd>{formatUsd(2_500)}</dd>
+                </div>
+                <div>
+                  <dt>Payment capture</dt>
+                  <dd>disabled</dd>
+                </div>
+              </dl>
+              <ul className="marketplace-bootstrap-projects" aria-label="Seed round projects">
+                {seedRoundProjects.slice(0, 3).map((campaign) => (
+                  <li key={campaign.id}>
+                    <span>{campaign.title}</span>
+                    <strong>{formatUsd(campaign.thresholdAmountCents)} threshold</strong>
+                  </li>
+                ))}
+              </ul>
+              <div className="marketplace-bootstrap-actions">
+                <Link className="button button-primary" href={seedRoundHref}>
+                  Preview budget
+                </Link>
+                <Link className="button button-secondary" href="/mpgf">
+                  View fund
+                </Link>
+              </div>
+            </article>
+
+            <article className="marketplace-bootstrap-card">
+              <p className="eyebrow">Template lane</p>
+              <h3>Create from template</h3>
+              <p>
+                Donation-offset and bounded pledge-swap templates are visible, but remain draft or
+                preview-only until review and later release gates approve reliance.
+              </p>
+              <div className="marketplace-bootstrap-actions">
+                <Link className="button button-secondary button-mini" href={createDonationOffsetTemplateHref}>
+                  Donation offset
+                </Link>
+                <Link className="button button-secondary button-mini" href={createPledgeSwapTemplateHref}>
+                  Pledge swap
+                </Link>
+              </div>
+            </article>
+
+            <article className="marketplace-bootstrap-card">
+              <p className="eyebrow">Directory state</p>
+              <h3>Live offers are separate from examples</h3>
+              <p>
+                The live directory currently has {liveOfferCount} public {liveOfferCount === 1 ? "offer" : "offers"}.
+                Worked examples stay in their own lane and do not count as agreements.
+              </p>
+              <div className="marketplace-bootstrap-actions">
+                <Link className="button button-secondary button-mini" href={createTabHref("live", filterHrefParams)}>
+                  Live offers
+                </Link>
+                <Link className="button button-secondary button-mini" href={createTabHref("examples", filterHrefParams)}>
+                  Worked examples
+                </Link>
+              </div>
+            </article>
+          </div>
+        </section>
 
         <section className="marketplace-shell" aria-label="Offer marketplace">
           <div className="marketplace-tabs" role="tablist" aria-label="Directory view">

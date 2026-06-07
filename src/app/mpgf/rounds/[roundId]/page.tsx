@@ -488,7 +488,7 @@ export default async function MpgfRoundPage({ params, searchParams }: MpgfRoundP
           </dl>
         </article>
 
-        <article className="mpgf-panel">
+        <article className="mpgf-panel" id="common-ground-budget-preview">
           <p className="eyebrow">Common Ground Budget preview</p>
           <h2>Set a no-capture budget for this round</h2>
           <p>

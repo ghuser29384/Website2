@@ -7865,6 +7865,92 @@ output {
   padding-bottom: 0.15rem;
 }
 
+.marketplace-bootstrap {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+  padding: 1.15rem;
+}
+
+.marketplace-bootstrap-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: end;
+}
+
+.marketplace-bootstrap-head h2,
+.marketplace-bootstrap-card h3 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.marketplace-bootstrap-head p,
+.marketplace-bootstrap-card p {
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+}
+
+.marketplace-bootstrap-tabs {
+  margin-top: 0.15rem;
+}
+
+.marketplace-bootstrap-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 0.72fr));
+  gap: 1rem;
+}
+
+.marketplace-bootstrap-card {
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+  min-height: 13rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.marketplace-bootstrap-card-primary {
+  background: var(--surface-muted);
+}
+
+.marketplace-bootstrap-projects {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.marketplace-bootstrap-projects li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.marketplace-bootstrap-projects span {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.marketplace-bootstrap-projects strong {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  text-align: right;
+}
+
+.marketplace-bootstrap-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
 .marketplace-tab,
 .hub-tabs a {
   display: inline-flex;
@@ -9785,6 +9871,8 @@ strong {
   .cart-grid,
   .offer-template-grid,
   .profile-stats,
+  .marketplace-bootstrap-grid,
+  .marketplace-bootstrap-head,
   .detail-grid {
     grid-template-columns: 1fr;
   }

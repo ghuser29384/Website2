@@ -3617,9 +3617,23 @@ test("create trade route family has stable signed-out entry points", () => {
 
 test("marketplace pilot copy separates live offers from worked examples", () => {
   const offersPage = readRepoFile("src/app/offers/page.tsx");
+  const globalCss = readRepoFile("src/app/globals.css");
+  const roundPage = readRepoFile("src/app/mpgf/rounds/[roundId]/page.tsx");
 
   assert.match(offersPage, /Live offers/);
   assert.match(offersPage, /Worked examples/);
+  assert.match(offersPage, /MARKETPLACE_BOOTSTRAP_TABS/);
+  assert.match(offersPage, /Live rounds/);
+  assert.match(offersPage, /Create from template/);
+  assert.match(offersPage, /Demo data/);
+  assert.match(offersPage, /Common Ground Marketplace/);
+  assert.match(offersPage, /Set Common Ground Budget/);
+  assert.match(offersPage, /demoMpgfAssuranceRound/);
+  assert.match(offersPage, /seedRoundProjects/);
+  assert.match(offersPage, /common-ground-budget-preview/);
+  assert.match(offersPage, /createDonationOffsetTemplateHref/);
+  assert.match(offersPage, /createPledgeSwapTemplateHref/);
+  assert.match(offersPage, /Demo rounds and seed projects stay clearly labeled/);
   assert.match(offersPage, /<h1>Browse offers<\/h1>/);
   assert.match(offersPage, /Explore live offers and worked examples/);
   assert.match(offersPage, /Create an offer/);
@@ -3633,6 +3647,9 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Baseline confidence is separate from action evidence/);
   assert.match(offersPage, /visibleFormatCounts/);
   assert.match(offersPage, /collection-trust-panel/);
+  assert.match(roundPage, /id="common-ground-budget-preview"/);
+  assert.match(globalCss, /\.marketplace-bootstrap-grid/);
+  assert.match(globalCss, /\.marketplace-bootstrap-projects/);
   assert.equal(offersPage.includes("Browse the narrow pilot wedge"), false);
   assert.equal(offersPage.includes("worked example s"), false);
   assert.equal(offersPage.includes("Live participant offers will appear here"), false);
