@@ -43,6 +43,10 @@ import {
   validateMoralTradeReleaseGateContract,
 } from "@/lib/moral-trade/release-gates";
 import {
+  getMoralTradeParticipantConfirmationContract,
+  validateMoralTradeParticipantConfirmationContract,
+} from "@/lib/moral-trade/participant-confirmations";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -134,6 +138,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const releaseGateContract = getMoralTradeReleaseGateContract();
   const releaseGateValidation =
     validateMoralTradeReleaseGateContract(releaseGateContract);
+  const participantConfirmationContract =
+    getMoralTradeParticipantConfirmationContract();
+  const participantConfirmationValidation =
+    validateMoralTradeParticipantConfirmationContract(
+      participantConfirmationContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -215,6 +225,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     dataModelValidation,
     policyBundleValidation,
     releaseGateValidation,
+    participantConfirmationValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -291,6 +302,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Release gates",
       status: releaseGateValidation.status,
       summary: `${releaseGateContract.stages.length} stage(s), ${releaseGateContract.requirementDefinitions.length} fail-closed requirement(s).`,
+    },
+    {
+      blockers: participantConfirmationValidation.blockers.length,
+      family: "Policy inputs",
+      href: "/api/moral-trade/participant-confirmations/contract",
+      label: "Participant confirmations",
+      status: participantConfirmationValidation.status,
+      summary: `${participantConfirmationContract.confirmationScopes.length} scope(s), ${participantConfirmationContract.failClosedStatuses.length} fail-closed status(es).`,
     },
     {
       blockers: copilotValidation.blockers.length,
@@ -971,6 +990,73 @@ export default async function MoralTradeTechnicalSpecPage() {
                 <p>{requirement.description}</p>
               </article>
             ))}
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="participant-confirmation-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Participant confirmation contract</p>
+            <h2 id="participant-confirmation-contract-heading">
+              Confirmations are first-class, hash-backed records before reliance or money movement.
+            </h2>
+            <p>
+              Moraltrade60 treats checkboxes and parent-object summaries as insufficient. This
+              contract binds each confirmation to a participant, frozen baseline, terms snapshot,
+              policy snapshot bundle, maximum exposure, notice state, consent-quality state, and
+              exact scope before routing, clearing, capture, payout release, privacy disclosure, or
+              material-term changes can proceed.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Participant confirmations {participantConfirmationContract.version}
+              </p>
+              <h3>Status {participantConfirmationValidation.status}</h3>
+              <p>
+                {participantConfirmationValidation.checks.length} check(s),{" "}
+                {participantConfirmationValidation.blockers.length} blocker(s),{" "}
+                {participantConfirmationContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/participant-confirmations/contract">
+              Open confirmation JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Confirmation scopes</h3>
+              <ul className="clean-list">
+                {participantConfirmationContract.confirmationScopes.map((scope) => (
+                  <li key={scope}>{scope.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {participantConfirmationContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {participantConfirmationContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Required hashes</h3>
+              <ul className="clean-list">
+                {participantConfirmationContract.requiredHashFields.map((field) => (
+                  <li key={field}>{field}</li>
+                ))}
+              </ul>
+            </article>
           </div>
         </section>
 

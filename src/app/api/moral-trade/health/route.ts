@@ -20,6 +20,10 @@ import {
   validateMoralTradeReleaseGateContract,
 } from "@/lib/moral-trade/release-gates";
 import {
+  getMoralTradeParticipantConfirmationContract,
+  validateMoralTradeParticipantConfirmationContract,
+} from "@/lib/moral-trade/participant-confirmations";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -122,6 +126,12 @@ export async function GET(request: Request) {
   const releaseGateContract = getMoralTradeReleaseGateContract();
   const releaseGateValidation =
     validateMoralTradeReleaseGateContract(releaseGateContract);
+  const participantConfirmationContract =
+    getMoralTradeParticipantConfirmationContract();
+  const participantConfirmationValidation =
+    validateMoralTradeParticipantConfirmationContract(
+      participantConfirmationContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -199,6 +209,7 @@ export async function GET(request: Request) {
       dataModelValidation.status === "pass" &&
       policyBundleValidation.status === "pass" &&
       releaseGateValidation.status === "pass" &&
+      participantConfirmationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -226,6 +237,7 @@ export async function GET(request: Request) {
     dataModelValidation,
     policyBundleValidation,
     releaseGateValidation,
+    participantConfirmationValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -283,6 +295,27 @@ export async function GET(request: Request) {
         ]),
       ),
       releaseGateContractTests: releaseGateContract.contractTests,
+      participantConfirmationContractVersion:
+        participantConfirmationContract.version,
+      participantConfirmationSubjectTypes:
+        participantConfirmationContract.subjectTypes,
+      participantConfirmationScopes:
+        participantConfirmationContract.confirmationScopes,
+      participantConfirmationFailClosedStatuses:
+        participantConfirmationContract.failClosedStatuses,
+      participantConfirmationFirstClassRecordTables:
+        participantConfirmationContract.firstClassRecordTables,
+      participantConfirmationRequiredHashFields:
+        participantConfirmationContract.requiredHashFields,
+      participantConfirmationHighRiskConsentQualityScopes:
+        participantConfirmationContract.highRiskScopesRequiringConsentQuality,
+      participantConfirmationSampleEvaluationStatuses:
+        participantConfirmationContract.sampleEvaluations.map((evaluation) => ({
+          scope: evaluation.confirmationScope,
+          status: evaluation.status,
+        })),
+      participantConfirmationContractTests:
+        participantConfirmationContract.contractTests,
       statusValues: profile.statusValues,
       decisionPipeline: profile.decisionPipeline.map((step) => ({
         key: step.key,
@@ -527,6 +560,7 @@ export async function GET(request: Request) {
       ...dataModelValidation.blockers,
       ...policyBundleValidation.blockers,
       ...releaseGateValidation.blockers,
+      ...participantConfirmationValidation.blockers,
       ...provenanceValidation.blockers,
       ...schemaRegistryValidation.blockers,
       ...copilotValidation.blockers,

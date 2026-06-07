@@ -22,6 +22,7 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 - reviewed seed templates for donation offsets and pledge swaps so the marketplace has safe starting points without fabricating live liquidity
 - privacy-safe marketplace measurement events and aggregate KPI definitions
 - fail-closed release-gate contract, public route, and first-class policy-snapshot / requirement-result records for payable, reliance-bearing, and public-metric stages
+- first-class participant-confirmation and consent-quality contracts/records for routing, clearing, capture, payout release, privacy disclosure, exposure increases, and material-term changes
 - route-baseline verification for the public routes listed in `moraltrade60.md`
 
 ### Migration Summary
@@ -35,6 +36,9 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 - `supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql`
   - Adds first-class `moral_trade_policy_snapshots`, `moral_trade_state_interpretation_policies`, `moral_trade_release_gates`, `moral_trade_release_gate_requirement_results`, and `moral_trade_privileged_action_records` tables.
   - Keeps missing, stale, unknown, under-review, mutable, or unreviewed gate evidence fail-closed before payable, reliance-bearing, public-metric, manual-capture, manual-payout, private-grant, or emergency-unpause behavior.
+- `supabase/migrations/20260607_zz_moral_trade_participant_confirmation_records.sql`
+  - Adds first-class `moral_trade_participant_confirmation_records` and `moral_trade_consent_quality_records` tables.
+  - Binds confirmations to frozen baseline, terms snapshot, policy snapshot bundle, maximum exposure, notice state, consent-quality state, eligible-set/fallback hashes where relevant, expiry, supersession, and exact confirmation scope.
 
 ### Route Screenshots
 
@@ -47,8 +51,10 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 ```bash
 node --import tsx --test src/lib/marketplace-measurement.test.ts src/lib/growth.test.ts src/lib/public-offers.test.ts src/lib/public-route-smoke.test.ts
 node --import tsx --test src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
+node --import tsx --test src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 npm run lint -- src/lib/marketplace-measurement.ts src/lib/marketplace-measurement.test.ts src/lib/growth.ts src/lib/growth.test.ts src/components/analytics/funnel-tracker.tsx src/lib/measurement-plan.ts src/app/measurement/page.tsx src/app/api/moral-trade/health/route.ts src/lib/public-route-smoke.test.ts scripts/check-public-route-baseline.mjs
 npm run lint -- src/lib/moral-trade/release-gates.ts src/lib/moral-trade/release-gates.test.ts src/app/api/moral-trade/release-gates/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
+npm run lint -- src/lib/moral-trade/participant-confirmations.ts src/lib/moral-trade/participant-confirmations.test.ts src/app/api/moral-trade/participant-confirmations/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 git diff --check
 npm run build
 MORALTRADE_BASE_URL=http://127.0.0.1:3000 npm run measure:routes
@@ -58,6 +64,7 @@ Observed results:
 
 - focused test bundle: `71` tests passed
 - release-gate/API/source-smoke bundle: `60` tests passed
+- participant-confirmation/release-gate/API/source-smoke bundle: `67` tests passed
 - lint: passed
 - whitespace check: passed
 - production build: passed
@@ -123,6 +130,20 @@ Release-gate contract sample:
 }
 ```
 
+Participant-confirmation contract sample:
+
+```json
+{
+  "status": "pass",
+  "validatorName": "moral-trade-participant-confirmation-contract",
+  "validatorVersion": "moral-trade-participant-confirmation-validator-v0.1",
+  "sampleEvaluations": {
+    "final_lock": "pass",
+    "payment_capture": "blocked"
+  }
+}
+```
+
 Route baseline summary:
 
 ```json
@@ -148,7 +169,8 @@ Route baseline summary:
 - Seed templates, worked examples, demo records, and rounds are explicitly excluded from live offer, completed-agreement, sponsor-leverage, and moral-trade volume metrics.
 - Public KPI snapshots use small-cell suppression with a minimum public count of `3`.
 - The release-gate route publishes static stage, requirement, policy-snapshot, and privileged-action contract metadata; it does not expose private gate records, participant confirmations, payment records, or reviewer notes.
-- The health, measurement, and release-gate surfaces publish validator status and aggregate contract metadata, not private participant records.
+- The participant-confirmation route publishes static subject/scope/status/hash-field contract metadata; it does not expose private participant confirmation rows, notice records, baselines, payment records, or reviewer notes.
+- The health, measurement, release-gate, and participant-confirmation surfaces publish validator status and aggregate contract metadata, not private participant records.
 
 ### Remaining Blockers And Non-Claims
 

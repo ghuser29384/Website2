@@ -151,6 +151,8 @@ const FIRST_CLASS_RECORD_TABLES = [
   "moral_trade_release_gates",
   "moral_trade_release_gate_requirement_results",
   "moral_trade_privileged_action_records",
+  "moral_trade_participant_confirmation_records",
+  "moral_trade_consent_quality_records",
 ] as const;
 
 const POLICY_SNAPSHOT_SUBJECTS = [

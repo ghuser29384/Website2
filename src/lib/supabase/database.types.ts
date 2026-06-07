@@ -5947,6 +5947,233 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_consent_quality_records: {
+        Row: {
+          id: string;
+          participant_id: string;
+          subject_type:
+            | "common_ground_budget"
+            | "marketplace_round"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement"
+            | "agreement_amendment_record"
+            | "project_set_change"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_grant"
+            | "exposure_increase";
+          subject_id: string;
+          choice_architecture_policy_snapshot_id: string | null;
+          status: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          required_disclosures_shown: boolean;
+          comprehension_check_status: "passed" | "not_required_for_stage" | "missing" | "failed";
+          preselected_paid_commitment: boolean;
+          countdown_pressure_present: boolean;
+          misleading_default_routing_present: boolean;
+          dark_pattern_review_notes: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          subject_type:
+            | "common_ground_budget"
+            | "marketplace_round"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement"
+            | "agreement_amendment_record"
+            | "project_set_change"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_grant"
+            | "exposure_increase";
+          subject_id: string;
+          choice_architecture_policy_snapshot_id?: string | null;
+          status?: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          required_disclosures_shown?: boolean;
+          comprehension_check_status?: "passed" | "not_required_for_stage" | "missing" | "failed";
+          preselected_paid_commitment?: boolean;
+          countdown_pressure_present?: boolean;
+          misleading_default_routing_present?: boolean;
+          dark_pattern_review_notes?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          participant_id?: string;
+          subject_type?:
+            | "common_ground_budget"
+            | "marketplace_round"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement"
+            | "agreement_amendment_record"
+            | "project_set_change"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_grant"
+            | "exposure_increase";
+          subject_id?: string;
+          choice_architecture_policy_snapshot_id?: string | null;
+          status?: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          required_disclosures_shown?: boolean;
+          comprehension_check_status?: "passed" | "not_required_for_stage" | "missing" | "failed";
+          preselected_paid_commitment?: boolean;
+          countdown_pressure_present?: boolean;
+          misleading_default_routing_present?: boolean;
+          dark_pattern_review_notes?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+        };
+        Relationships: [];
+      };
+      moral_trade_participant_confirmation_records: {
+        Row: {
+          id: string;
+          participant_id: string;
+          subject_type:
+            | "common_ground_budget"
+            | "marketplace_round"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement"
+            | "agreement_amendment_record"
+            | "project_set_change"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_grant"
+            | "exposure_increase";
+          subject_id: string;
+          confirmation_scope:
+            | "budget_activation"
+            | "round_lock"
+            | "final_lock"
+            | "cleared_agreement"
+            | "renewed_material_change"
+            | "project_set_change_approval"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_disclosure"
+            | "exposure_increase";
+          status: "recorded" | "draft" | "missing" | "expired" | "revoked" | "superseded" | "stale";
+          confirmation_hash: string;
+          baseline_hash: string;
+          terms_snapshot_hash: string;
+          policy_snapshot_bundle_hash: string;
+          maximum_exposure_cents: number;
+          currency: string;
+          notice_record_status: "delivered" | "not_required_for_stage" | "missing" | "failed" | "stale";
+          consent_quality_record_id: string | null;
+          consent_quality_status: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          consent_quality_required: boolean;
+          eligible_set_hash: string | null;
+          fallback_policy_hash: string | null;
+          supersedes_confirmation_hash: string | null;
+          material_terms_changed_after_confirmation: boolean;
+          recorded_at: string;
+          expires_at: string | null;
+          revoked_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          subject_type:
+            | "common_ground_budget"
+            | "marketplace_round"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement"
+            | "agreement_amendment_record"
+            | "project_set_change"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_grant"
+            | "exposure_increase";
+          subject_id: string;
+          confirmation_scope:
+            | "budget_activation"
+            | "round_lock"
+            | "final_lock"
+            | "cleared_agreement"
+            | "renewed_material_change"
+            | "project_set_change_approval"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_disclosure"
+            | "exposure_increase";
+          status?: "recorded" | "draft" | "missing" | "expired" | "revoked" | "superseded" | "stale";
+          confirmation_hash: string;
+          baseline_hash: string;
+          terms_snapshot_hash: string;
+          policy_snapshot_bundle_hash: string;
+          maximum_exposure_cents: number;
+          currency?: string;
+          notice_record_status?: "delivered" | "not_required_for_stage" | "missing" | "failed" | "stale";
+          consent_quality_record_id?: string | null;
+          consent_quality_status?: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          consent_quality_required?: boolean;
+          eligible_set_hash?: string | null;
+          fallback_policy_hash?: string | null;
+          supersedes_confirmation_hash?: string | null;
+          material_terms_changed_after_confirmation?: boolean;
+          recorded_at?: string;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          participant_id?: string;
+          subject_type?:
+            | "common_ground_budget"
+            | "marketplace_round"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement"
+            | "agreement_amendment_record"
+            | "project_set_change"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_grant"
+            | "exposure_increase";
+          subject_id?: string;
+          confirmation_scope?:
+            | "budget_activation"
+            | "round_lock"
+            | "final_lock"
+            | "cleared_agreement"
+            | "renewed_material_change"
+            | "project_set_change_approval"
+            | "payment_capture"
+            | "payout_release"
+            | "privacy_disclosure"
+            | "exposure_increase";
+          status?: "recorded" | "draft" | "missing" | "expired" | "revoked" | "superseded" | "stale";
+          confirmation_hash?: string;
+          baseline_hash?: string;
+          terms_snapshot_hash?: string;
+          policy_snapshot_bundle_hash?: string;
+          maximum_exposure_cents?: number;
+          currency?: string;
+          notice_record_status?: "delivered" | "not_required_for_stage" | "missing" | "failed" | "stale";
+          consent_quality_record_id?: string | null;
+          consent_quality_status?: "passed" | "not_required_for_stage" | "missing" | "failed" | "stale" | "under_review";
+          consent_quality_required?: boolean;
+          eligible_set_hash?: string | null;
+          fallback_policy_hash?: string | null;
+          supersedes_confirmation_hash?: string | null;
+          material_terms_changed_after_confirmation?: boolean;
+          recorded_at?: string;
+          expires_at?: string | null;
+          revoked_at?: string | null;
+          superseded_by?: string | null;
+        };
+        Relationships: [];
+      };
     Views: {
       wish_profile_previews: {
         Row: {
