@@ -52,6 +52,10 @@ import {
   validateMoralTradeMatchingClearingContract,
 } from "@/lib/moral-trade/matching-clearing";
 import {
+  getMoralTradeBaselineIntegrityContract,
+  validateMoralTradeBaselineIntegrityContract,
+} from "@/lib/moral-trade/baseline-integrity";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -192,6 +196,12 @@ export async function GET(request: Request) {
   const matchingClearingContract = getMoralTradeMatchingClearingContract();
   const matchingClearingValidation =
     validateMoralTradeMatchingClearingContract(matchingClearingContract);
+  const baselineIntegrityContract =
+    getMoralTradeBaselineIntegrityContract();
+  const baselineIntegrityValidation =
+    validateMoralTradeBaselineIntegrityContract(
+      baselineIntegrityContract,
+    );
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -289,6 +299,7 @@ export async function GET(request: Request) {
       privacyGovernanceValidation.status === "pass" &&
       impactClaimValidation.status === "pass" &&
       matchingClearingValidation.status === "pass" &&
+      baselineIntegrityValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
@@ -326,6 +337,7 @@ export async function GET(request: Request) {
     privacyGovernanceValidation,
     impactClaimValidation,
     matchingClearingValidation,
+    baselineIntegrityValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -554,6 +566,30 @@ export async function GET(request: Request) {
       ),
       matchingClearingContractTests:
         matchingClearingContract.contractTests,
+      baselineIntegrityContractVersion:
+        baselineIntegrityContract.version,
+      baselineIntegrityTransitionKeys:
+        baselineIntegrityContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      baselineIntegritySubjectTypes:
+        baselineIntegrityContract.subjectTypes,
+      baselineIntegrityAssessmentStates:
+        baselineIntegrityContract.assessmentStates,
+      baselineIntegrityFailClosedStatuses:
+        baselineIntegrityContract.failClosedStatuses,
+      baselineIntegrityFirstClassRecordTables:
+        baselineIntegrityContract.firstClassRecordTables,
+      baselineIntegrityPolicySnapshotSubjects:
+        baselineIntegrityContract.policySnapshotSubjects,
+      baselineIntegritySampleEvaluationStatuses: Object.fromEntries(
+        baselineIntegrityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      baselineIntegrityContractTests:
+        baselineIntegrityContract.contractTests,
       productionReadinessContractVersion:
         productionReadinessContract.version,
       productionReadinessControlKeys:
@@ -848,6 +884,7 @@ export async function GET(request: Request) {
       ...privacyGovernanceValidation.blockers,
       ...impactClaimValidation.blockers,
       ...matchingClearingValidation.blockers,
+      ...baselineIntegrityValidation.blockers,
       ...productionReadinessValidation.blockers,
       ...recipientDestinationValidation.blockers,
       ...provenanceValidation.blockers,

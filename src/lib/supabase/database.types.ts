@@ -5106,6 +5106,226 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_baseline_integrity_policies: {
+        Row: {
+          id: string;
+          policy_snapshot_id: string;
+          policy_version: string;
+          subject_type:
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          predates_offer_required_bool: boolean;
+          independent_reason_required_bool: boolean;
+          history_evidence_required_bool: boolean;
+          additionality_review_required_bool: boolean;
+          externality_review_required_bool: boolean;
+          reviewer_quality_required_bool: boolean;
+          participant_confirmation_required_bool: boolean;
+          good_faith_confidence_separation_required_bool: boolean;
+          private_evidence_publication_prohibited_bool: boolean;
+          max_assessment_age_days: number;
+          policy_hash: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          policy_snapshot_id: string;
+          policy_version?: string;
+          subject_type:
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          predates_offer_required_bool?: boolean;
+          independent_reason_required_bool?: boolean;
+          history_evidence_required_bool?: boolean;
+          additionality_review_required_bool?: boolean;
+          externality_review_required_bool?: boolean;
+          reviewer_quality_required_bool?: boolean;
+          participant_confirmation_required_bool?: boolean;
+          good_faith_confidence_separation_required_bool?: boolean;
+          private_evidence_publication_prohibited_bool?: boolean;
+          max_assessment_age_days?: number;
+          policy_hash: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          policy_snapshot_id?: string;
+          policy_version?: string;
+          subject_type?:
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          predates_offer_required_bool?: boolean;
+          independent_reason_required_bool?: boolean;
+          history_evidence_required_bool?: boolean;
+          additionality_review_required_bool?: boolean;
+          externality_review_required_bool?: boolean;
+          reviewer_quality_required_bool?: boolean;
+          participant_confirmation_required_bool?: boolean;
+          good_faith_confidence_separation_required_bool?: boolean;
+          private_evidence_publication_prohibited_bool?: boolean;
+          max_assessment_age_days?: number;
+          policy_hash?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_baseline_integrity_assessments: {
+        Row: {
+          id: string;
+          baseline_integrity_policy_ref: string;
+          subject_type:
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          subject_ref: string;
+          assessment_state: "not_required" | "under_review" | "non_blocking" | "blocked" | "superseded" | "stale";
+          launch_classification:
+            | "clearable_moral_trade"
+            | "preview_only"
+            | "rejected_threat_externality"
+            | "manual_review_required";
+          baseline_source_kind:
+            | "pre_existing_behavior"
+            | "independent_obligation"
+            | "historical_pattern"
+            | "marketplace_created"
+            | "marketplace_escalated"
+            | "counterparty_triggered"
+            | "unknown";
+          baseline_snapshot_hash: string;
+          predates_offer_bool: boolean;
+          independent_reason_present_bool: boolean;
+          history_evidence_present_bool: boolean;
+          marketplace_created_bool: boolean;
+          marketplace_escalated_bool: boolean;
+          counterparty_triggered_escalation_bool: boolean;
+          harmful_baseline_escalated_bool: boolean;
+          good_faith_confidence_separated_bool: boolean;
+          additionality_review_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          externality_review_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          participant_confirmation_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          private_evidence_public_bool: boolean;
+          assessment_hash: string;
+          review_decision_id: string | null;
+          reviewed_at: string | null;
+          expires_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          baseline_integrity_policy_ref: string;
+          subject_type:
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          subject_ref?: string;
+          assessment_state?: "not_required" | "under_review" | "non_blocking" | "blocked" | "superseded" | "stale";
+          launch_classification?:
+            | "clearable_moral_trade"
+            | "preview_only"
+            | "rejected_threat_externality"
+            | "manual_review_required";
+          baseline_source_kind?:
+            | "pre_existing_behavior"
+            | "independent_obligation"
+            | "historical_pattern"
+            | "marketplace_created"
+            | "marketplace_escalated"
+            | "counterparty_triggered"
+            | "unknown";
+          baseline_snapshot_hash: string;
+          predates_offer_bool?: boolean;
+          independent_reason_present_bool?: boolean;
+          history_evidence_present_bool?: boolean;
+          marketplace_created_bool?: boolean;
+          marketplace_escalated_bool?: boolean;
+          counterparty_triggered_escalation_bool?: boolean;
+          harmful_baseline_escalated_bool?: boolean;
+          good_faith_confidence_separated_bool?: boolean;
+          additionality_review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          externality_review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          participant_confirmation_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          private_evidence_public_bool?: boolean;
+          assessment_hash: string;
+          review_decision_id?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          baseline_integrity_policy_ref?: string;
+          subject_type?:
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          subject_ref?: string;
+          assessment_state?: "not_required" | "under_review" | "non_blocking" | "blocked" | "superseded" | "stale";
+          launch_classification?:
+            | "clearable_moral_trade"
+            | "preview_only"
+            | "rejected_threat_externality"
+            | "manual_review_required";
+          baseline_source_kind?:
+            | "pre_existing_behavior"
+            | "independent_obligation"
+            | "historical_pattern"
+            | "marketplace_created"
+            | "marketplace_escalated"
+            | "counterparty_triggered"
+            | "unknown";
+          baseline_snapshot_hash?: string;
+          predates_offer_bool?: boolean;
+          independent_reason_present_bool?: boolean;
+          history_evidence_present_bool?: boolean;
+          marketplace_created_bool?: boolean;
+          marketplace_escalated_bool?: boolean;
+          counterparty_triggered_escalation_bool?: boolean;
+          harmful_baseline_escalated_bool?: boolean;
+          good_faith_confidence_separated_bool?: boolean;
+          additionality_review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          externality_review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          reviewer_quality_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          participant_confirmation_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          private_evidence_public_bool?: boolean;
+          assessment_hash?: string;
+          review_decision_id?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       risk_signals: {
         Row: {
           id: string;
@@ -6433,6 +6653,8 @@ export interface Database {
             | "impact_claim_methodology"
             | "matching_clearing"
             | "matched_trade_lock"
+            | "baseline_integrity"
+            | "baseline_manufacturing"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -6476,6 +6698,8 @@ export interface Database {
             | "impact_claim_methodology"
             | "matching_clearing"
             | "matched_trade_lock"
+            | "baseline_integrity"
+            | "baseline_manufacturing"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -6518,6 +6742,8 @@ export interface Database {
             | "impact_claim_methodology"
             | "matching_clearing"
             | "matched_trade_lock"
+            | "baseline_integrity"
+            | "baseline_manufacturing"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"

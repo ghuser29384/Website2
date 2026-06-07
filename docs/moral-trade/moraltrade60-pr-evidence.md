@@ -30,6 +30,7 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 - first-class privacy-governance contract/records for revocable privacy grants, purpose- and role-limited access logs, disclosure reviews, redaction controls, and fail-closed private-data access
 - first-class impact-claim contract/records for frozen methodology policies, claim-typed evidence, uncertainty disclosure, transfer-vs-impact separation, content moderation, reviewer quality, privileged publication approval, audit integrity, and public-metric suppression
 - first-class matching-clearing contract/records for deterministic frozen runs, input-bundle hashes, reproducibility checks, matched-trade lock proposals, final confirmation state, ratio bounds, baseline snapshots, destination verification, commitment reservation, and atomic settlement blockers
+- first-class baseline-integrity/manufacturing contract/records for non-blocking baseline assessments before donation offsets, pledge swaps, broad match candidates, public-goods rounds, and post-lock amendments become clearable, reliance-bearing, payable, or publicly counted
 - fail-closed production-readiness contract and records for account security, backup recovery, deployment/config provenance, schema migration safety, environment isolation, financial reconciliation, audit integrity, and data-security/key-management controls
 - first-class recipient-registry and payment-destination contract/records that prevent free-text names, copied donation links, wallet addresses, bank details, or fiscal-host notes from authorizing lock, capture, payout, reuse, or public money claims
 - route-baseline verification for the public routes listed in `moraltrade60.md`
@@ -80,6 +81,10 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
   - Adds first-class `moral_trade_matching_clearing_runs`, `moral_trade_matched_trade_lock_proposals`, and `moral_trade_matching_clearing_reproducibility_checks` tables.
   - Extends policy-snapshot subject support for `matching_clearing` and `matched_trade_lock`.
   - Keeps missing, ad hoc, database-order, hidden-reasoning, unreproducible, stale, superseded, unreviewed, private-data-public, missing-lock-proposal, stale-confirmation, ratio-bound, baseline, destination, reservation, atomic-settlement, fallback-term, evidence-standard, and invalid-hash evidence fail-closed before payable or reliance-bearing clearing.
+- `supabase/migrations/20260607_zzzzzzzzzzzz_moral_trade_baseline_integrity_records.sql`
+  - Adds first-class `moral_trade_baseline_integrity_policies` and `moral_trade_baseline_integrity_assessments` tables.
+  - Extends policy-snapshot subject support for `baseline_integrity` and `baseline_manufacturing`.
+  - Keeps missing, stale, under-review, blocked, superseded, non-clearable, marketplace-created, marketplace-escalated, counterparty-triggered, harmful-escalated, good-faith/confidence-conflated, additionality, externality, reviewer-quality, participant-confirmation, private-evidence, and invalid-hash baseline evidence fail-closed before clearable or reliance-bearing launch.
 - `supabase/migrations/20260607_zzzz_moral_trade_recipient_destination_records.sql`
   - Adds first-class `moral_trade_recipient_registry_entries`, `moral_trade_payment_destinations`, and `moral_trade_recipient_destination_reviews` tables.
   - Requires immutable recipient/destination policy snapshots, privileged-action approval, hash-backed evidence, anti-impersonation review, jurisdiction review, prohibited-use review, payment-rail review, authority review, and source-authentication review before verified records can support money movement.
@@ -106,6 +111,7 @@ node --import tsx --test src/lib/moral-trade/anti-enumeration.test.ts src/lib/mo
 node --import tsx --test src/lib/moral-trade/privacy-governance.test.ts src/lib/moral-trade/anti-enumeration.test.ts src/lib/moral-trade/reviewer-quality.test.ts src/lib/moral-trade/account-security.test.ts src/lib/moral-trade/participant-eligibility.test.ts src/lib/moral-trade/recipient-destination.test.ts src/lib/moral-trade/production-readiness.test.ts src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 node --import tsx --test src/lib/moral-trade/impact-claims.test.ts src/lib/moral-trade/privacy-governance.test.ts src/lib/moral-trade/anti-enumeration.test.ts src/lib/moral-trade/reviewer-quality.test.ts src/lib/moral-trade/account-security.test.ts src/lib/moral-trade/participant-eligibility.test.ts src/lib/moral-trade/recipient-destination.test.ts src/lib/moral-trade/production-readiness.test.ts src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 node --import tsx --test src/lib/moral-trade/matching-clearing.test.ts src/lib/moral-trade/impact-claims.test.ts src/lib/moral-trade/privacy-governance.test.ts src/lib/moral-trade/anti-enumeration.test.ts src/lib/moral-trade/reviewer-quality.test.ts src/lib/moral-trade/account-security.test.ts src/lib/moral-trade/participant-eligibility.test.ts src/lib/moral-trade/recipient-destination.test.ts src/lib/moral-trade/production-readiness.test.ts src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
+node --import tsx --test src/lib/moral-trade/baseline-integrity.test.ts src/lib/moral-trade/matching-clearing.test.ts src/lib/moral-trade/impact-claims.test.ts src/lib/moral-trade/privacy-governance.test.ts src/lib/moral-trade/anti-enumeration.test.ts src/lib/moral-trade/reviewer-quality.test.ts src/lib/moral-trade/account-security.test.ts src/lib/moral-trade/participant-eligibility.test.ts src/lib/moral-trade/recipient-destination.test.ts src/lib/moral-trade/production-readiness.test.ts src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 npm run lint -- src/lib/marketplace-measurement.ts src/lib/marketplace-measurement.test.ts src/lib/growth.ts src/lib/growth.test.ts src/components/analytics/funnel-tracker.tsx src/lib/measurement-plan.ts src/app/measurement/page.tsx src/app/api/moral-trade/health/route.ts src/lib/public-route-smoke.test.ts scripts/check-public-route-baseline.mjs
 npm run lint -- src/lib/moral-trade/release-gates.ts src/lib/moral-trade/release-gates.test.ts src/app/api/moral-trade/release-gates/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 npm run lint -- src/lib/moral-trade/participant-confirmations.ts src/lib/moral-trade/participant-confirmations.test.ts src/app/api/moral-trade/participant-confirmations/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
@@ -118,6 +124,7 @@ npm run lint -- src/lib/moral-trade/matching-clearing.ts src/lib/moral-trade/mat
 npm run lint -- src/lib/moral-trade/anti-enumeration.ts src/lib/moral-trade/anti-enumeration.test.ts src/app/api/moral-trade/anti-enumeration/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 npm run lint -- src/lib/moral-trade/privacy-governance.ts src/lib/moral-trade/privacy-governance.test.ts src/app/api/moral-trade/privacy-governance/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 npm run lint -- src/lib/moral-trade/impact-claims.ts src/lib/moral-trade/impact-claims.test.ts src/app/api/moral-trade/impact-claims/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
+npm run lint -- src/lib/moral-trade/baseline-integrity.ts src/lib/moral-trade/baseline-integrity.test.ts src/app/api/moral-trade/baseline-integrity/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 git diff --check
 npm run build
 MORALTRADE_BASE_URL=http://127.0.0.1:3000 npm run measure:routes
@@ -140,6 +147,10 @@ Observed results:
 - matching-clearing/API/source-smoke bundle: `60` tests passed
 - matching-clearing/impact-claims/privacy-governance/anti-enumeration/reviewer-quality/account-security/participant-eligibility/recipient-destination/production-readiness/participant-confirmation/release-gate/API/source-smoke bundle: `118` tests passed
 - direct matching-clearing validator probe: `status: pass`, `blockers: []`, sample evaluations `donation_offset_batch: pass`, `pledge_swap_preview: blocked`
+- focused baseline-integrity contract bundle: `5` tests passed
+- baseline-integrity/API/source-smoke bundle: `59` tests passed
+- baseline-integrity/matching-clearing/impact-claims/privacy-governance/anti-enumeration/reviewer-quality/account-security/participant-eligibility/recipient-destination/production-readiness/participant-confirmation/release-gate/API/source-smoke bundle: `123` tests passed
+- direct baseline-integrity validator probe: `status: pass`, `blockers: []`, sample evaluations `donation_offset_lock: pass`, `pledge_swap_lock: blocked`
 - lint: passed
 - whitespace check: passed
 - production build: passed
@@ -349,6 +360,20 @@ Matching-clearing contract sample:
 }
 ```
 
+Baseline-integrity contract sample:
+
+```json
+{
+  "status": "pass",
+  "validatorName": "moral-trade-baseline-integrity-contract",
+  "validatorVersion": "moral-trade-baseline-integrity-validator-v0.1",
+  "sampleEvaluations": {
+    "donation_offset_lock": "pass",
+    "pledge_swap_lock": "blocked"
+  }
+}
+```
+
 Route baseline summary:
 
 ```json
@@ -382,13 +407,14 @@ Route baseline summary:
 - The privacy-governance route publishes static surface/table/status/stage/access-level/sample-status contract metadata; it does not expose raw private artifacts, exact wishes, contact details, source notes, private evidence, access paths, reviewer notes, or participant-specific privacy access logs.
 - The impact-claim route publishes static surface/table/status/claim-type/evidence-type/sample-status contract metadata; it does not expose private evidence, reviewer notes, methodology payloads, recipient-sensitive outcome details, or participant-specific impact-claim records.
 - The matching-clearing route publishes static flow/table/status/sample-status contract metadata; it does not expose raw input bundles, private counterparty data, exact private constraints, private wishes, hidden match reasoning, reviewer notes, or participant-specific final confirmations.
+- The baseline-integrity route publishes static transition/table/status/source-kind/launch-classification/sample-status contract metadata; it does not expose raw baseline narratives, private evidence, exact private constraints, counterparty-specific timing, reviewer notes, or participant-specific assessments.
 - The production-readiness route publishes static control/gate/table/status contract metadata; it does not expose account-security event details, backup contents, configuration values, provider payloads, reconciliation line items, audit rows, private access logs, or key material.
-- The health, measurement, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, and production-readiness surfaces publish validator status and aggregate contract metadata, not private participant records, participant-specific discovery records, participant-specific impact-claim records, raw matching bundles, participant-specific final confirmations, or private operational evidence.
+- The health, measurement, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, and production-readiness surfaces publish validator status and aggregate contract metadata, not private participant records, participant-specific discovery records, participant-specific impact-claim records, raw matching bundles, participant-specific final confirmations, participant-specific baseline assessments, or private operational evidence.
 
 ### Remaining Blockers And Non-Claims
 
 - There are still `0` live public offers and `0` completed agreements in the local public-offer sample; reviewed examples and seed templates are scaffolding, not evidence of real liquidity.
 - Real-money capture and payout remain blocked until capped-real-money release gates, live provider reconciliation runs, privileged-action approvals, current backup/restore checkpoints, deployment/configuration snapshots, audit-integrity checkpoints, and reviewer approvals are complete.
 - Donation offsets and pledge swaps remain preview/manual-review oriented unless later release gates explicitly promote them.
-- `moraltrade60.md` includes broader long-tail requirements beyond this PR slice, including live operational execution for the new production-readiness, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, and recipient/destination records, live matching-clearing execution and replay jobs, live endpoint enforcement for privacy access logs, live endpoint enforcement for impact-claim publication records, live endpoint enforcement for anti-enumeration logs/probe audits, reviewer audit sampling execution, appeal records, and full donation-offset/pledge-swap clearing previews.
+- `moraltrade60.md` includes broader long-tail requirements beyond this PR slice, including live operational execution for the new production-readiness, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, and recipient/destination records, live matching-clearing execution and replay jobs, live endpoint enforcement for baseline-integrity assessments before clearing, live endpoint enforcement for privacy access logs, live endpoint enforcement for impact-claim publication records, live endpoint enforcement for anti-enumeration logs/probe audits, reviewer audit sampling execution, appeal records, and full donation-offset/pledge-swap clearing previews.
 - Local `gh` is unavailable, so this package provides a PR-ready body and artifacts but does not prove that a GitHub PR object was created.

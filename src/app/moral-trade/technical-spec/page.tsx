@@ -75,6 +75,10 @@ import {
   validateMoralTradeMatchingClearingContract,
 } from "@/lib/moral-trade/matching-clearing";
 import {
+  getMoralTradeBaselineIntegrityContract,
+  validateMoralTradeBaselineIntegrityContract,
+} from "@/lib/moral-trade/baseline-integrity";
+import {
   getMoralTradeProductionReadinessContract,
   validateMoralTradeProductionReadinessContract,
 } from "@/lib/moral-trade/production-readiness";
@@ -204,6 +208,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const matchingClearingContract = getMoralTradeMatchingClearingContract();
   const matchingClearingValidation =
     validateMoralTradeMatchingClearingContract(matchingClearingContract);
+  const baselineIntegrityContract =
+    getMoralTradeBaselineIntegrityContract();
+  const baselineIntegrityValidation =
+    validateMoralTradeBaselineIntegrityContract(
+      baselineIntegrityContract,
+    );
   const productionReadinessContract =
     getMoralTradeProductionReadinessContract();
   const productionReadinessValidation =
@@ -305,6 +315,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     privacyGovernanceValidation,
     impactClaimValidation,
     matchingClearingValidation,
+    baselineIntegrityValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
     provenanceValidation,
@@ -447,6 +458,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Matching clearing",
       status: matchingClearingValidation.status,
       summary: `${matchingClearingContract.flowTypes.length} flow type(s), ${matchingClearingContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: baselineIntegrityValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/baseline-integrity/contract",
+      label: "Baseline integrity",
+      status: baselineIntegrityValidation.status,
+      summary: `${baselineIntegrityContract.transitions.length} transition(s), ${baselineIntegrityContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: productionReadinessValidation.blockers.length,
@@ -652,6 +671,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/matching-clearing/contract">
                 View clearing contract
+              </Link>
+              <Link className="button button-secondary" href="/api/moral-trade/baseline-integrity/contract">
+                View baseline contract
               </Link>
               <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
                 View appeal contract
@@ -1688,6 +1710,74 @@ export default async function MoralTradeTechnicalSpecPage() {
               <h3>Fail-closed statuses</h3>
               <ul className="clean-list">
                 {matchingClearingContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="baseline-integrity-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Baseline-integrity contract</p>
+            <h2 id="baseline-integrity-contract-heading">
+              Manufactured or escalated baselines stay preview-only until review is non-blocking.
+            </h2>
+            <p>
+              Moraltrade60 requires donation offsets, pledge swaps, broad match candidates,
+              public-goods rounds, and post-lock amendments to separate action evidence,
+              baseline good faith, confidence, baseline integrity, additionality, and
+              externality review. This contract blocks clearable or reliance-bearing launch
+              when a baseline was marketplace-created, marketplace-escalated, or triggered by
+              counterparties after entering the marketplace.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Baseline integrity {baselineIntegrityContract.version}
+              </p>
+              <h3>Status {baselineIntegrityValidation.status}</h3>
+              <p>
+                {baselineIntegrityValidation.checks.length} check(s),{" "}
+                {baselineIntegrityValidation.blockers.length} blocker(s),{" "}
+                {baselineIntegrityContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/baseline-integrity/contract">
+              Open baseline-integrity JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Transitions</h3>
+              <ul className="clean-list">
+                {baselineIntegrityContract.transitions.map((transition) => (
+                  <li key={transition}>{transition.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {baselineIntegrityContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Assessment states</h3>
+              <ul className="clean-list">
+                {baselineIntegrityContract.assessmentStates.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Fail-closed statuses</h3>
+              <ul className="clean-list">
+                {baselineIntegrityContract.failClosedStatuses.map((status) => (
                   <li key={status}>{status.replaceAll("_", " ")}</li>
                 ))}
               </ul>
