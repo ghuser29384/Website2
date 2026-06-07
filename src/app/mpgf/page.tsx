@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
+import { MpgfRoundBoard } from "@/components/mpgf/mpgf-round-board";
 import { getViewer } from "@/lib/app-data";
 import {
   demoAlternatives,
@@ -18,6 +19,7 @@ import {
   getMpgfCampaignAssuranceStatus,
   summarizeMpgfAssuranceRound,
 } from "@/lib/mpgf/mechanism";
+import { buildMpgfRoundBoardCards } from "@/lib/mpgf/public-goods-round-board";
 import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
 
@@ -45,6 +47,11 @@ export default async function MpgfPage() {
   const publicSummary = buildPublicSummary({ allocation });
   const assuranceAllocation = allocateMpgfAssuranceRound();
   const assuranceSummary = summarizeMpgfAssuranceRound(assuranceAllocation);
+  const roundBoardCards = buildMpgfRoundBoardCards({
+    allocation: assuranceAllocation,
+    campaigns: demoMpgfPublicGoodsCampaigns,
+    viewerPresent: Boolean(viewer),
+  });
   const manualEvidenceReadiness = await loadMpgfManualEvidenceReadiness();
   const realMoneyReadiness = await loadMpgfRealMoneyReadiness();
 
@@ -80,6 +87,7 @@ export default async function MpgfPage() {
         <a href="#why-this-matters">Why this matters</a>
         <a href="#why-this-is-hard">Why this is hard</a>
         <a href="#what-this-pilot-tests">What this pilot tests</a>
+        <a href="#round-board">Round board</a>
         <a href="#assurance-matching">Assurance matching</a>
         <Link href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>Public round</Link>
         <Link href="/mpgf/governance">Governance</Link>
@@ -204,6 +212,12 @@ export default async function MpgfPage() {
           <strong>{manualEvidenceReadiness.ready ? "Open" : "Persistence check"}</strong>
         </div>
       </section>
+
+      <MpgfRoundBoard
+        cards={roundBoardCards}
+        roundHref={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}
+        roundName={demoMpgfAssuranceRound.name}
+      />
 
       <section className="section section-white" id="assurance-matching">
         <div className="section-head section-head-compact">

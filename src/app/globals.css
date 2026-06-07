@@ -476,6 +476,29 @@
   margin-bottom: 2rem;
 }
 
+.mpgf-round-board-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.mpgf-round-board-header div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.mpgf-round-board-header span {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.mpgf-round-board-header strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
 .mpgf-pool-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -862,6 +885,10 @@
 
   .mpgf-table-row {
     min-width: 680px;
+  }
+
+  .mpgf-round-board-header {
+    grid-template-columns: 1fr;
   }
 }
 
