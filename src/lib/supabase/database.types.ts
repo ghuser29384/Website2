@@ -5856,6 +5856,116 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_agreement_amendment_enforcement_records: {
+        Row: {
+          id: string;
+          owner_profile_id: string;
+          transition:
+            | "donation_offset_material_change"
+            | "pledge_swap_material_change"
+            | "post_lock_correction"
+            | "pause_or_early_termination"
+            | "evidence_standard_change"
+            | "destination_change";
+          subject_type:
+            | "locked_donation_offset"
+            | "locked_pledge_swap"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          amendment_type:
+            | "correction"
+            | "mutual_modification"
+            | "pause"
+            | "early_termination"
+            | "evidence_standard_change"
+            | "schedule_change"
+            | "compensation_change"
+            | "destination_change"
+            | "baseline_correction"
+            | "privacy_change"
+            | "other";
+          enforcement_status: "pass" | "blocked";
+          requires_amendment_bool: boolean;
+          requires_applied_amendment_bool: boolean;
+          requires_reliance_bearing_transition_bool: boolean;
+          requires_renewed_confirmations_bool: boolean;
+          requires_neutral_review_bool: boolean;
+          policy_count: number;
+          amendment_count: number;
+          enforcement_input_json: Json;
+          evaluation_result_json: Json;
+          blocker_codes: string[];
+          user_facing_blocker_categories: string[];
+          contract_version: string;
+          validator_version: string;
+          evaluation_hash: string;
+          idempotency_key: string;
+          applies_amendment_bool: false;
+          material_change_allowed_bool: false;
+          parent_record_mutation_allowed_bool: false;
+          payment_transition_allowed_bool: false;
+          reliance_bearing_transition_allowed_bool: false;
+          public_metric_allowed_bool: false;
+          superseded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_profile_id: string;
+          transition:
+            | "donation_offset_material_change"
+            | "pledge_swap_material_change"
+            | "post_lock_correction"
+            | "pause_or_early_termination"
+            | "evidence_standard_change"
+            | "destination_change";
+          subject_type:
+            | "locked_donation_offset"
+            | "locked_pledge_swap"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          amendment_type:
+            | "correction"
+            | "mutual_modification"
+            | "pause"
+            | "early_termination"
+            | "evidence_standard_change"
+            | "schedule_change"
+            | "compensation_change"
+            | "destination_change"
+            | "baseline_correction"
+            | "privacy_change"
+            | "other";
+          enforcement_status: "pass" | "blocked";
+          requires_amendment_bool?: boolean;
+          requires_applied_amendment_bool?: boolean;
+          requires_reliance_bearing_transition_bool?: boolean;
+          requires_renewed_confirmations_bool?: boolean;
+          requires_neutral_review_bool?: boolean;
+          policy_count?: number;
+          amendment_count?: number;
+          enforcement_input_json: Json;
+          evaluation_result_json: Json;
+          blocker_codes?: string[];
+          user_facing_blocker_categories?: string[];
+          contract_version: string;
+          validator_version: string;
+          evaluation_hash: string;
+          idempotency_key: string;
+          applies_amendment_bool?: false;
+          material_change_allowed_bool?: false;
+          parent_record_mutation_allowed_bool?: false;
+          payment_transition_allowed_bool?: false;
+          reliance_bearing_transition_allowed_bool?: false;
+          public_metric_allowed_bool?: false;
+          superseded_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          superseded_by?: string | null;
+        };
+        Relationships: [];
+      };
       moral_trade_appeal_policies: {
         Row: {
           id: string;

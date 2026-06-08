@@ -120,6 +120,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_baseline_integrity_contract",
   "moral_trade_baseline_integrity_enforce",
   "moral_trade_agreement_amendment_contract",
+  "moral_trade_agreement_amendment_enforce",
   "moral_trade_production_readiness_contract",
   "moral_trade_recipient_destination_contract",
   "moral_trade_side_agreement_contract",

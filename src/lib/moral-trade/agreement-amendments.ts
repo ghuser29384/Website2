@@ -200,7 +200,15 @@ export interface MoralTradeAgreementAmendmentContract {
   purpose: string;
   privacyRule: string;
   failClosedRule: string;
+  enforcementRule: string;
   firstClassRecordTables: string[];
+  enforcementRecordTables: string[];
+  enforcementRoute: {
+    method: "POST";
+    path: "/api/moral-trade/agreement-amendments/enforce";
+    auth: "authenticated";
+    stateMutation: "append_only_enforcement_record";
+  };
   policySnapshotSubjects: string[];
   transitions: MoralTradeAgreementAmendmentTransition[];
   subjectTypes: MoralTradeAgreementAmendmentSubjectType[];
@@ -219,6 +227,10 @@ const DEFAULT_MAX_AMENDMENT_AGE_DAYS = 45;
 const FIRST_CLASS_RECORD_TABLES = [
   "moral_trade_agreement_amendment_policies",
   "moral_trade_agreement_amendment_records",
+] as const;
+
+const ENFORCEMENT_RECORD_TABLES = [
+  "moral_trade_agreement_amendment_enforcement_records",
 ] as const;
 
 const POLICY_SNAPSHOT_SUBJECTS = ["agreement_amendment"] as const;
@@ -364,7 +376,9 @@ const CONTRACT_TESTS = [
   "agreement_amendment_contract_validator",
   "agreement_amendment_evaluator_fail_closed",
   "agreement_amendment_route_contract",
+  "agreement_amendment_enforce_route_contract",
   "agreement_amendment_schema_contract",
+  "agreement_amendment_enforcement_record_schema_contract",
   "agreement_amendment_health_contract",
 ] as const;
 
@@ -905,7 +919,16 @@ export function getMoralTradeAgreementAmendmentContract(): MoralTradeAgreementAm
       "Public agreement-amendment contract responses expose only static table names, transition names, amendment types, state codes, validation blockers, and sample pass/block states; they never expose private amendment narratives, participant identities, confirmation payloads, reviewer notes, payment details, private baselines, or counterparty-specific terms.",
     failClosedRule:
       "Parent-record edits are not amendments: missing, stale, unapproved, unapplied, rejected, withdrawn, or superseded amendment records; retroactive performance changes; evidence-claim retyping; exposure increases; fund redirects; compensation changes; cancellation-right narrowing; privacy, donor-of-record, or third-party-obligation changes without renewed confirmation; missing neutral review; missing notice; missing reviewer-quality or baseline-integrity checks; missing before/after terms hashes; missing policy snapshot bundle; or invalid hashes block material post-lock changes.",
+    enforcementRule:
+      "Authenticated agreement-amendment enforcement writes only owner-scoped append-only enforcement records. Enforcement records can prove pass or blocked gate status, but they cannot apply amendments, edit parent records, authorize material changes, authorize payment, authorize reliance, or publish public metrics.",
     firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
+    enforcementRecordTables: [...ENFORCEMENT_RECORD_TABLES],
+    enforcementRoute: {
+      method: "POST",
+      path: "/api/moral-trade/agreement-amendments/enforce",
+      auth: "authenticated",
+      stateMutation: "append_only_enforcement_record",
+    },
     policySnapshotSubjects: [...POLICY_SNAPSHOT_SUBJECTS],
     transitions: [...TRANSITIONS],
     subjectTypes: [...SUBJECT_TYPES],
@@ -928,6 +951,23 @@ export function validateMoralTradeAgreementAmendmentContract(
       "Agreement amendments have first-class policy and amendment records",
       hasAll(contract.firstClassRecordTables, FIRST_CLASS_RECORD_TABLES),
       contract.firstClassRecordTables.join(", "),
+    ),
+    check(
+      "enforcement-record-table-coverage",
+      "Agreement amendments have append-only enforcement records",
+      hasAll(contract.enforcementRecordTables, ENFORCEMENT_RECORD_TABLES),
+      contract.enforcementRecordTables.join(", "),
+    ),
+    check(
+      "enforcement-route-coverage",
+      "Agreement amendments expose authenticated append-only enforcement",
+      contract.enforcementRoute.method === "POST" &&
+        contract.enforcementRoute.path ===
+          "/api/moral-trade/agreement-amendments/enforce" &&
+        contract.enforcementRoute.auth === "authenticated" &&
+        contract.enforcementRoute.stateMutation ===
+          "append_only_enforcement_record",
+      `${contract.enforcementRoute.method} ${contract.enforcementRoute.path} ${contract.enforcementRoute.auth}`,
     ),
     check(
       "policy-subject-coverage",

@@ -2061,6 +2061,7 @@ export default async function MoralTradeTechnicalSpecPage() {
                 {agreementAmendmentValidation.checks.length} check(s),{" "}
                 {agreementAmendmentValidation.blockers.length} blocker(s),{" "}
                 {agreementAmendmentContract.firstClassRecordTables.length} first-class record
+                table(s), {agreementAmendmentContract.enforcementRecordTables.length} enforcement
                 table(s).
               </p>
             </div>
@@ -2068,6 +2069,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               Open agreement-amendment JSON
             </Link>
           </div>
+          <p className="lede lede-tight">
+            {agreementAmendmentContract.enforcementRule}
+          </p>
           <div className="protocol-contract-grid">
             <article className="panel protocol-contract-card">
               <h3>Transitions</h3>
@@ -2083,6 +2087,18 @@ export default async function MoralTradeTechnicalSpecPage() {
                 {agreementAmendmentContract.firstClassRecordTables.map((table) => (
                   <li key={table}>{table}</li>
                 ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Enforcement</h3>
+              <ul className="clean-list">
+                {agreementAmendmentContract.enforcementRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+                <li>
+                  {agreementAmendmentContract.enforcementRoute.method}{" "}
+                  {agreementAmendmentContract.enforcementRoute.path}
+                </li>
               </ul>
             </article>
             <article className="panel protocol-contract-card">

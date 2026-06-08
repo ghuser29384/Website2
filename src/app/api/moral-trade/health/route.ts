@@ -721,6 +721,12 @@ export async function GET(request: Request) {
         agreementAmendmentContract.failClosedStatuses,
       agreementAmendmentFirstClassRecordTables:
         agreementAmendmentContract.firstClassRecordTables,
+      agreementAmendmentEnforcementRule:
+        agreementAmendmentContract.enforcementRule,
+      agreementAmendmentEnforcementRecordTables:
+        agreementAmendmentContract.enforcementRecordTables,
+      agreementAmendmentEnforcementRoute:
+        agreementAmendmentContract.enforcementRoute,
       agreementAmendmentPolicySnapshotSubjects:
         agreementAmendmentContract.policySnapshotSubjects,
       agreementAmendmentSampleEvaluationStatuses: Object.fromEntries(

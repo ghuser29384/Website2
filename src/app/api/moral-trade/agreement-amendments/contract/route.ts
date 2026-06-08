@@ -32,7 +32,10 @@ export async function GET(request: Request) {
     publicContract: {
       privacyRule: contract.privacyRule,
       failClosedRule: contract.failClosedRule,
+      enforcementRule: contract.enforcementRule,
       firstClassRecordTables: contract.firstClassRecordTables,
+      enforcementRecordTables: contract.enforcementRecordTables,
+      enforcementRoute: contract.enforcementRoute,
       policySnapshotSubjects: contract.policySnapshotSubjects,
       transitions: contract.transitions,
       subjectTypes: contract.subjectTypes,

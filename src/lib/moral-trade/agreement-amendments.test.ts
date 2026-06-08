@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforceAgreementAmendment } from "@/app/api/moral-trade/agreement-amendments/enforce/route";
 import {
   evaluateMoralTradeAgreementAmendment,
   getMoralTradeAgreementAmendmentContract,
@@ -101,6 +102,21 @@ test("agreement-amendment contract validates first-class append-only records", (
       "moral_trade_agreement_amendment_records",
     ),
   );
+  assert.ok(
+    contract.enforcementRecordTables.includes(
+      "moral_trade_agreement_amendment_enforcement_records",
+    ),
+  );
+  assert.equal(
+    contract.enforcementRoute.path,
+    "/api/moral-trade/agreement-amendments/enforce",
+  );
+  assert.equal(contract.enforcementRoute.auth, "authenticated");
+  assert.equal(
+    contract.enforcementRoute.stateMutation,
+    "append_only_enforcement_record",
+  );
+  assert.match(contract.enforcementRule, /cannot apply amendments/i);
   assert.ok(contract.policySnapshotSubjects.includes("agreement_amendment"));
   assert.ok(contract.transitions.includes("donation_offset_material_change"));
   assert.ok(contract.transitions.includes("pledge_swap_material_change"));
@@ -315,10 +331,41 @@ test("approved append-only amendment with renewed confirmations can pass", () =>
   assert.deepEqual(passed.blockers, []);
 });
 
+test("agreement-amendment enforce route is fail-closed before persistence on invalid input", async () => {
+  const response = await enforceAgreementAmendment(
+    new Request("http://localhost/api/moral-trade/agreement-amendments/enforce", {
+      body: "not-json",
+      method: "POST",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.agreementAmendmentGateStatus, "blocked");
+  assert.equal(body.appliesAmendment, false);
+  assert.equal(body.materialChangeAllowed, false);
+  assert.equal(body.parentRecordMutationAllowed, false);
+  assert.equal(body.paymentTransitionAllowed, false);
+  assert.equal(body.relianceBearingTransitionAllowed, false);
+  assert.equal(body.publicMetricAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.persistence.status, "not_recorded");
+  assert.equal(
+    body.persistence.table,
+    "moral_trade_agreement_amendment_enforcement_records",
+  );
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+});
+
 test("agreement-amendment route, health, spec, API contract, and schema are wired", () => {
   const source = readRepoFile("src/lib/moral-trade/agreement-amendments.ts");
   const route = readRepoFile(
     "src/app/api/moral-trade/agreement-amendments/contract/route.ts",
+  );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/agreement-amendments/enforce/route.ts",
   );
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const technicalSpec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
@@ -327,28 +374,73 @@ test("agreement-amendment route, health, spec, API contract, and schema are wire
   const migration = readRepoFile(
     "supabase/migrations/20260607_zzzzzzzzzzzzz_moral_trade_agreement_amendment_records.sql",
   );
+  const enforcementMigration = readRepoFile(
+    "supabase/migrations/20260608_moral_trade_agreement_amendment_enforcement_records.sql",
+  );
   const schema = readRepoFile("supabase/schema.sql");
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
 
   assert.match(source, /getMoralTradeAgreementAmendmentContract/);
   assert.match(source, /evaluateMoralTradeAgreementAmendment/);
   assert.match(source, /Parent-record edits are not amendments/);
+  assert.match(source, /moral_trade_agreement_amendment_enforcement_records/);
   assert.match(route, /public_contract_read/);
   assert.match(route, /agreementAmendmentSampleEvaluationStatuses/);
+  assert.match(route, /enforcementRecordTables/);
+  assert.match(route, /enforcementRoute/);
+  assert.match(enforceRoute, /agreement_amendment_enforce/);
+  assert.match(enforceRoute, /moral_trade_agreement_amendment_enforcement_records/);
+  assert.match(enforceRoute, /auth\.getUser/);
+  assert.match(enforceRoute, /appliesAmendment:\s*false/);
+  assert.match(enforceRoute, /materialChangeAllowed:\s*false/);
+  assert.match(enforceRoute, /parentRecordMutationAllowed:\s*false/);
+  assert.match(enforceRoute, /paymentTransitionAllowed:\s*false/);
+  assert.match(enforceRoute, /relianceBearingTransitionAllowed:\s*false/);
+  assert.match(enforceRoute, /publicMetricAllowed:\s*false/);
+  assert.match(enforceRoute, /stateMutation:\s*false/);
+  assert.match(enforceRoute, /evaluation_hash/);
+  assert.match(enforceRoute, /idempotency_key/);
   assert.match(healthRoute, /agreementAmendmentValidation/);
   assert.match(healthRoute, /agreementAmendmentTransitionKeys/);
+  assert.match(healthRoute, /agreementAmendmentEnforcementRoute/);
+  assert.match(healthRoute, /agreementAmendmentEnforcementRecordTables/);
   assert.match(technicalSpec, /Agreement-amendment contract/);
   assert.match(technicalSpec, /Open agreement-amendment JSON/);
+  assert.match(technicalSpec, /agreementAmendmentContract\.enforcementRoute/);
+  assert.match(technicalSpec, /agreementAmendmentContract\.enforcementRecordTables/);
   assert.match(apiContractSource, /moral_trade_agreement_amendment_contract/);
+  assert.match(apiContractSource, /moral_trade_agreement_amendment_enforce/);
   assert.match(apiContractProfile, /agreement_amendment_contract_response/);
+  assert.match(apiContractProfile, /agreement_amendment_enforce_request/);
+  assert.match(apiContractProfile, /agreement_amendment_enforce_response/);
   assert.match(apiContractProfile, /moral_trade_agreement_amendment_contract/);
+  assert.match(apiContractProfile, /moral_trade_agreement_amendment_enforce/);
   assert.match(migration, /moral_trade_agreement_amendment_policies/);
   assert.match(migration, /moral_trade_agreement_amendment_records/);
   assert.match(migration, /agreement_amendment/);
   assert.match(migration, /parent_record_edit_detected_bool/);
+  for (const tableSource of [enforcementMigration, schema]) {
+    assert.match(
+      tableSource,
+      /create table if not exists public\.moral_trade_agreement_amendment_enforcement_records/,
+    );
+    assert.match(tableSource, /applies_amendment_bool boolean not null default false/);
+    assert.match(tableSource, /material_change_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /parent_record_mutation_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /payment_transition_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /reliance_bearing_transition_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /public_metric_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /unique \(owner_profile_id, idempotency_key\)/);
+    assert.match(tableSource, /enable row level security/);
+    assert.match(tableSource, /moral_trade_agreement_amendment_enforcement_records_select_owner/);
+    assert.match(tableSource, /moral_trade_agreement_amendment_enforcement_records_insert_owner/);
+  }
   assert.match(schema, /moral_trade_agreement_amendment_policies/);
   assert.match(schema, /moral_trade_agreement_amendment_records/);
   assert.match(schema, /agreement_amendment/);
   assert.match(databaseTypes, /moral_trade_agreement_amendment_policies/);
   assert.match(databaseTypes, /moral_trade_agreement_amendment_records/);
+  assert.match(databaseTypes, /moral_trade_agreement_amendment_enforcement_records/);
+  assert.match(databaseTypes, /applies_amendment_bool: false/);
+  assert.match(databaseTypes, /public_metric_allowed_bool: false/);
 });
