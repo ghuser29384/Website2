@@ -1976,6 +1976,7 @@ export default async function MoralTradeTechnicalSpecPage() {
                 {baselineIntegrityValidation.checks.length} check(s),{" "}
                 {baselineIntegrityValidation.blockers.length} blocker(s),{" "}
                 {baselineIntegrityContract.firstClassRecordTables.length} first-class record
+                table(s), {baselineIntegrityContract.enforcementRecordTables.length} enforcement
                 table(s).
               </p>
             </div>
@@ -1983,6 +1984,9 @@ export default async function MoralTradeTechnicalSpecPage() {
               Open baseline-integrity JSON
             </Link>
           </div>
+          <p className="lede lede-tight">
+            {baselineIntegrityContract.enforcementRule}
+          </p>
           <div className="protocol-contract-grid">
             <article className="panel protocol-contract-card">
               <h3>Transitions</h3>
@@ -1998,6 +2002,18 @@ export default async function MoralTradeTechnicalSpecPage() {
                 {baselineIntegrityContract.firstClassRecordTables.map((table) => (
                   <li key={table}>{table}</li>
                 ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Enforcement</h3>
+              <ul className="clean-list">
+                {baselineIntegrityContract.enforcementRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+                <li>
+                  {baselineIntegrityContract.enforcementRoute.method}{" "}
+                  {baselineIntegrityContract.enforcementRoute.path}
+                </li>
               </ul>
             </article>
             <article className="panel protocol-contract-card">

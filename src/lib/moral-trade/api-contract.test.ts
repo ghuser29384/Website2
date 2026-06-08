@@ -113,6 +113,18 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "moral_trade_baseline_integrity_enforce" &&
+        route.path === "/api/moral-trade/baseline-integrity/enforce" &&
+        route.auth === "authenticated" &&
+        route.cacheControl === "private_no_store" &&
+        route.rateLimitSurface === "baseline_integrity_enforce" &&
+        route.requestSchema === "baseline_integrity_enforce_request" &&
+        route.responseSchema === "baseline_integrity_enforce_response",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "moral_trade_agreement_amendment_contract" &&
         route.path === "/api/moral-trade/agreement-amendments/contract" &&
         route.responseSchema === "agreement_amendment_contract_response",
@@ -706,6 +718,8 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "impact_claim_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "matching_clearing_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "baseline_integrity_contract_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "baseline_integrity_enforce_request"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "baseline_integrity_enforce_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "production_readiness_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "recipient_destination_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "schema_registry_response"));

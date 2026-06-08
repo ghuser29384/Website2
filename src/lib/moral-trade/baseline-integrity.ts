@@ -175,7 +175,15 @@ export interface MoralTradeBaselineIntegrityContract {
   purpose: string;
   privacyRule: string;
   failClosedRule: string;
+  enforcementRule: string;
   firstClassRecordTables: string[];
+  enforcementRecordTables: string[];
+  enforcementRoute: {
+    method: "POST";
+    path: "/api/moral-trade/baseline-integrity/enforce";
+    auth: "authenticated";
+    stateMutation: "append_only_enforcement_record";
+  };
   policySnapshotSubjects: string[];
   transitions: MoralTradeBaselineIntegrityTransition[];
   subjectTypes: MoralTradeBaselineIntegritySubjectType[];
@@ -194,6 +202,10 @@ const DEFAULT_MAX_ASSESSMENT_AGE_DAYS = 90;
 const FIRST_CLASS_RECORD_TABLES = [
   "moral_trade_baseline_integrity_policies",
   "moral_trade_baseline_integrity_assessments",
+] as const;
+
+const ENFORCEMENT_RECORD_TABLES = [
+  "moral_trade_baseline_integrity_enforcement_records",
 ] as const;
 
 const POLICY_SNAPSHOT_SUBJECTS = [
@@ -318,7 +330,9 @@ const CONTRACT_TESTS = [
   "baseline_integrity_contract_validator",
   "baseline_integrity_evaluator_fail_closed",
   "baseline_integrity_route_contract",
+  "baseline_integrity_enforce_route_contract",
   "baseline_integrity_schema_contract",
+  "baseline_integrity_enforcement_record_schema_contract",
   "baseline_integrity_health_contract",
 ] as const;
 
@@ -794,7 +808,16 @@ export function getMoralTradeBaselineIntegrityContract(): MoralTradeBaselineInte
       "Public baseline-integrity contract responses expose only static table names, status codes, transition names, launch classifications, validation blockers, and sample pass/block states; they never expose raw baseline narratives, private evidence, exact private constraints, counterparty-specific timing, reviewer notes, or participant-specific assessments.",
     failClosedRule:
       "Manufactured baselines are not moral trade: missing, stale, under-review, blocked, or superseded baseline-integrity assessments; marketplace-created or marketplace-escalated baselines; counterparty-triggered escalation; conflated good-faith/confidence; missing additionality, externality, reviewer-quality, or participant-confirmation review; and public private-evidence exposure keep donation offsets and pledge swaps preview-only or rejected-threat/externality until non-blocking.",
+    enforcementRule:
+      "Authenticated baseline-integrity enforcement writes only owner-scoped append-only enforcement records. Enforcement records can prove pass or blocked gate status, but they cannot create clearable transitions, authorize payment, authorize reliance, or publish public metrics.",
     firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
+    enforcementRecordTables: [...ENFORCEMENT_RECORD_TABLES],
+    enforcementRoute: {
+      method: "POST",
+      path: "/api/moral-trade/baseline-integrity/enforce",
+      auth: "authenticated",
+      stateMutation: "append_only_enforcement_record",
+    },
     policySnapshotSubjects: [...POLICY_SNAPSHOT_SUBJECTS],
     transitions: [...TRANSITIONS],
     subjectTypes: [...SUBJECT_TYPES],
@@ -817,6 +840,23 @@ export function validateMoralTradeBaselineIntegrityContract(
       "Baseline integrity has first-class policy and assessment records",
       hasAll(contract.firstClassRecordTables, FIRST_CLASS_RECORD_TABLES),
       contract.firstClassRecordTables.join(", "),
+    ),
+    check(
+      "enforcement-record-table-coverage",
+      "Baseline integrity has append-only enforcement records",
+      hasAll(contract.enforcementRecordTables, ENFORCEMENT_RECORD_TABLES),
+      contract.enforcementRecordTables.join(", "),
+    ),
+    check(
+      "enforcement-route-coverage",
+      "Baseline integrity exposes authenticated append-only enforcement",
+      contract.enforcementRoute.method === "POST" &&
+        contract.enforcementRoute.path ===
+          "/api/moral-trade/baseline-integrity/enforce" &&
+        contract.enforcementRoute.auth === "authenticated" &&
+        contract.enforcementRoute.stateMutation ===
+          "append_only_enforcement_record",
+      `${contract.enforcementRoute.method} ${contract.enforcementRoute.path} ${contract.enforcementRoute.auth}`,
     ),
     check(
       "policy-subject-coverage",

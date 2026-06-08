@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforceBaselineIntegrity } from "@/app/api/moral-trade/baseline-integrity/enforce/route";
 import {
   evaluateMoralTradeBaselineIntegrity,
   getMoralTradeBaselineIntegrityContract,
@@ -92,6 +93,21 @@ test("baseline-integrity contract validates first-class records and states", () 
   );
   assert.ok(contract.policySnapshotSubjects.includes("baseline_integrity"));
   assert.ok(contract.policySnapshotSubjects.includes("baseline_manufacturing"));
+  assert.ok(
+    contract.enforcementRecordTables.includes(
+      "moral_trade_baseline_integrity_enforcement_records",
+    ),
+  );
+  assert.equal(
+    contract.enforcementRoute.path,
+    "/api/moral-trade/baseline-integrity/enforce",
+  );
+  assert.equal(contract.enforcementRoute.auth, "authenticated");
+  assert.equal(
+    contract.enforcementRoute.stateMutation,
+    "append_only_enforcement_record",
+  );
+  assert.match(contract.enforcementRule, /cannot create clearable transitions/i);
   assert.ok(contract.transitions.includes("donation_offset_lock"));
   assert.ok(contract.transitions.includes("pledge_swap_lock"));
   assert.ok(contract.subjectTypes.includes("offset_offer"));
@@ -252,10 +268,39 @@ test("non-blocking reviewed baseline assessment can pass", () => {
   assert.deepEqual(passed.blockers, []);
 });
 
+test("baseline-integrity enforce route is fail-closed before persistence on invalid input", async () => {
+  const response = await enforceBaselineIntegrity(
+    new Request("http://localhost/api/moral-trade/baseline-integrity/enforce", {
+      body: "not-json",
+      method: "POST",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.baselineIntegrityGateStatus, "blocked");
+  assert.equal(body.createsClearableTransition, false);
+  assert.equal(body.payableTransitionAllowed, false);
+  assert.equal(body.relianceBearingTransitionAllowed, false);
+  assert.equal(body.publicMetricAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.persistence.status, "not_recorded");
+  assert.equal(
+    body.persistence.table,
+    "moral_trade_baseline_integrity_enforcement_records",
+  );
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+});
+
 test("baseline-integrity route, health, spec, API contract, and schema are wired", () => {
   const source = readRepoFile("src/lib/moral-trade/baseline-integrity.ts");
   const route = readRepoFile(
     "src/app/api/moral-trade/baseline-integrity/contract/route.ts",
+  );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/baseline-integrity/enforce/route.ts",
   );
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const technicalSpec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
@@ -264,28 +309,69 @@ test("baseline-integrity route, health, spec, API contract, and schema are wired
   const migration = readRepoFile(
     "supabase/migrations/20260607_zzzzzzzzzzzz_moral_trade_baseline_integrity_records.sql",
   );
+  const enforcementMigration = readRepoFile(
+    "supabase/migrations/20260608_moral_trade_baseline_integrity_enforcement_records.sql",
+  );
   const schema = readRepoFile("supabase/schema.sql");
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
 
   assert.match(source, /getMoralTradeBaselineIntegrityContract/);
   assert.match(source, /evaluateMoralTradeBaselineIntegrity/);
   assert.match(source, /Manufactured baselines are not moral trade/);
+  assert.match(source, /moral_trade_baseline_integrity_enforcement_records/);
   assert.match(route, /public_contract_read/);
   assert.match(route, /baselineIntegritySampleEvaluationStatuses/);
+  assert.match(route, /enforcementRecordTables/);
+  assert.match(route, /enforcementRoute/);
+  assert.match(enforceRoute, /baseline_integrity_enforce/);
+  assert.match(enforceRoute, /moral_trade_baseline_integrity_enforcement_records/);
+  assert.match(enforceRoute, /auth\.getUser/);
+  assert.match(enforceRoute, /createsClearableTransition:\s*false/);
+  assert.match(enforceRoute, /payableTransitionAllowed:\s*false/);
+  assert.match(enforceRoute, /relianceBearingTransitionAllowed:\s*false/);
+  assert.match(enforceRoute, /publicMetricAllowed:\s*false/);
+  assert.match(enforceRoute, /stateMutation:\s*false/);
+  assert.match(enforceRoute, /evaluation_hash/);
+  assert.match(enforceRoute, /idempotency_key/);
   assert.match(healthRoute, /baselineIntegrityValidation/);
   assert.match(healthRoute, /baselineIntegrityTransitionKeys/);
+  assert.match(healthRoute, /baselineIntegrityEnforcementRoute/);
+  assert.match(healthRoute, /baselineIntegrityEnforcementRecordTables/);
   assert.match(technicalSpec, /Baseline-integrity contract/);
   assert.match(technicalSpec, /Open baseline-integrity JSON/);
+  assert.match(technicalSpec, /baselineIntegrityContract\.enforcementRoute/);
+  assert.match(technicalSpec, /baselineIntegrityContract\.enforcementRecordTables/);
   assert.match(apiContractSource, /moral_trade_baseline_integrity_contract/);
+  assert.match(apiContractSource, /moral_trade_baseline_integrity_enforce/);
   assert.match(apiContractProfile, /baseline_integrity_contract_response/);
+  assert.match(apiContractProfile, /baseline_integrity_enforce_request/);
+  assert.match(apiContractProfile, /baseline_integrity_enforce_response/);
   assert.match(apiContractProfile, /moral_trade_baseline_integrity_contract/);
+  assert.match(apiContractProfile, /moral_trade_baseline_integrity_enforce/);
   assert.match(migration, /moral_trade_baseline_integrity_policies/);
   assert.match(migration, /moral_trade_baseline_integrity_assessments/);
   assert.match(migration, /baseline_manufacturing/);
   assert.match(migration, /marketplace_created/);
+  for (const tableSource of [enforcementMigration, schema]) {
+    assert.match(
+      tableSource,
+      /create table if not exists public\.moral_trade_baseline_integrity_enforcement_records/,
+    );
+    assert.match(tableSource, /creates_clearable_transition_bool boolean not null default false/);
+    assert.match(tableSource, /payable_transition_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /reliance_bearing_transition_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /public_metric_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /unique \(owner_profile_id, idempotency_key\)/);
+    assert.match(tableSource, /enable row level security/);
+    assert.match(tableSource, /moral_trade_baseline_integrity_enforcement_records_select_owner/);
+    assert.match(tableSource, /moral_trade_baseline_integrity_enforcement_records_insert_owner/);
+  }
   assert.match(schema, /moral_trade_baseline_integrity_policies/);
   assert.match(schema, /moral_trade_baseline_integrity_assessments/);
   assert.match(schema, /baseline_manufacturing/);
   assert.match(databaseTypes, /moral_trade_baseline_integrity_policies/);
   assert.match(databaseTypes, /moral_trade_baseline_integrity_assessments/);
+  assert.match(databaseTypes, /moral_trade_baseline_integrity_enforcement_records/);
+  assert.match(databaseTypes, /creates_clearable_transition_bool: false/);
+  assert.match(databaseTypes, /public_metric_allowed_bool: false/);
 });

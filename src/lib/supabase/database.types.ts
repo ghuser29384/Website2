@@ -5250,6 +5250,94 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_baseline_integrity_enforcement_records: {
+        Row: {
+          id: string;
+          owner_profile_id: string;
+          transition:
+            | "donation_offset_lock"
+            | "pledge_swap_lock"
+            | "broad_match_candidate"
+            | "public_goods_round"
+            | "post_lock_amendment";
+          subject_type:
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          enforcement_status: "pass" | "blocked";
+          launch_classification:
+            | "clearable_moral_trade"
+            | "preview_only"
+            | "rejected_threat_externality"
+            | "manual_review_required"
+            | "unclassified";
+          requires_clearable_transition_bool: boolean;
+          requires_reliance_bearing_transition_bool: boolean;
+          requires_assessment_bool: boolean;
+          policy_count: number;
+          assessment_count: number;
+          enforcement_input_json: Json;
+          evaluation_result_json: Json;
+          blocker_codes: string[];
+          user_facing_blocker_categories: string[];
+          contract_version: string;
+          validator_version: string;
+          evaluation_hash: string;
+          idempotency_key: string;
+          creates_clearable_transition_bool: false;
+          payable_transition_allowed_bool: false;
+          reliance_bearing_transition_allowed_bool: false;
+          public_metric_allowed_bool: false;
+          superseded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_profile_id: string;
+          transition:
+            | "donation_offset_lock"
+            | "pledge_swap_lock"
+            | "broad_match_candidate"
+            | "public_goods_round"
+            | "post_lock_amendment";
+          subject_type:
+            | "offset_offer"
+            | "pledge_swap_offer"
+            | "matched_trade_lock_proposal"
+            | "cleared_trade_agreement";
+          enforcement_status: "pass" | "blocked";
+          launch_classification:
+            | "clearable_moral_trade"
+            | "preview_only"
+            | "rejected_threat_externality"
+            | "manual_review_required"
+            | "unclassified";
+          requires_clearable_transition_bool?: boolean;
+          requires_reliance_bearing_transition_bool?: boolean;
+          requires_assessment_bool?: boolean;
+          policy_count?: number;
+          assessment_count?: number;
+          enforcement_input_json: Json;
+          evaluation_result_json: Json;
+          blocker_codes?: string[];
+          user_facing_blocker_categories?: string[];
+          contract_version: string;
+          validator_version: string;
+          evaluation_hash: string;
+          idempotency_key: string;
+          creates_clearable_transition_bool?: false;
+          payable_transition_allowed_bool?: false;
+          reliance_bearing_transition_allowed_bool?: false;
+          public_metric_allowed_bool?: false;
+          superseded_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          superseded_by?: string | null;
+        };
+        Relationships: [];
+      };
       moral_trade_baseline_integrity_policies: {
         Row: {
           id: string;

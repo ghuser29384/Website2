@@ -689,6 +689,12 @@ export async function GET(request: Request) {
         baselineIntegrityContract.failClosedStatuses,
       baselineIntegrityFirstClassRecordTables:
         baselineIntegrityContract.firstClassRecordTables,
+      baselineIntegrityEnforcementRule:
+        baselineIntegrityContract.enforcementRule,
+      baselineIntegrityEnforcementRecordTables:
+        baselineIntegrityContract.enforcementRecordTables,
+      baselineIntegrityEnforcementRoute:
+        baselineIntegrityContract.enforcementRoute,
       baselineIntegrityPolicySnapshotSubjects:
         baselineIntegrityContract.policySnapshotSubjects,
       baselineIntegritySampleEvaluationStatuses: Object.fromEntries(

@@ -18,6 +18,7 @@ export type MoralTradeApiRateLimitSurface =
   | "match_signal_evaluate"
   | "matching_clearing_execute"
   | "clearing_preview_execute"
+  | "baseline_integrity_enforce"
   | "challenge_appeal_evaluate"
   | "disclosure_evaluate"
   | "review_workflow_evaluate"
@@ -49,6 +50,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   match_signal_evaluate: { limit: 60, windowMs: 60_000 },
   matching_clearing_execute: { limit: 20, windowMs: 60_000 },
   clearing_preview_execute: { limit: 30, windowMs: 60_000 },
+  baseline_integrity_enforce: { limit: 20, windowMs: 60_000 },
   challenge_appeal_evaluate: { limit: 30, windowMs: 60_000 },
   disclosure_evaluate: { limit: 30, windowMs: 60_000 },
   review_workflow_evaluate: { limit: 60, windowMs: 60_000 },
