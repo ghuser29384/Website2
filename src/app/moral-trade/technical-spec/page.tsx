@@ -91,6 +91,10 @@ import {
   validateMoralTradeRecipientDestinationContract,
 } from "@/lib/moral-trade/recipient-destination";
 import {
+  getMoralTradeSideAgreementContract,
+  validateMoralTradeSideAgreementContract,
+} from "@/lib/moral-trade/side-agreements";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -236,6 +240,9 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeRecipientDestinationContract(
       recipientDestinationContract,
     );
+  const sideAgreementContract = getMoralTradeSideAgreementContract();
+  const sideAgreementValidation =
+    validateMoralTradeSideAgreementContract(sideAgreementContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -501,6 +508,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Recipient destinations",
       status: recipientDestinationValidation.status,
       summary: `${recipientDestinationContract.reviewDimensions.length} review dimension(s), ${recipientDestinationContract.transitionDefinitions.length} gated transition(s).`,
+    },
+    {
+      blockers: sideAgreementValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/side-agreements/contract",
+      label: "Side agreements",
+      status: sideAgreementValidation.status,
+      summary: `${sideAgreementContract.reviewDimensions.length} review dimension(s), ${sideAgreementContract.subjectTypes.length} subject type(s).`,
     },
     {
       blockers: copilotValidation.blockers.length,
@@ -2013,6 +2028,73 @@ export default async function MoralTradeTechnicalSpecPage() {
               <ul className="clean-list">
                 {recipientDestinationContract.failClosedStatuses.map((status) => (
                   <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="side-agreement-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Side-agreement disclosure contract</p>
+            <h2 id="side-agreement-contract-heading">
+              Off-platform side arrangements must be disclosed and reviewed before reliance.
+            </h2>
+            <p>
+              Moraltrade60 requires side agreements, compensation, reciprocal favors,
+              authority claims, reporting restrictions, and collusion-relevant terms to be
+              structured records rather than hidden notes. This contract publishes the subject
+              types, review dimensions, fail-closed statuses, and privacy-safe public summary
+              boundaries while keeping raw private details out of public surfaces.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Side agreements {sideAgreementContract.version}
+              </p>
+              <h3>Status {sideAgreementValidation.status}</h3>
+              <p>
+                {sideAgreementValidation.checks.length} check(s),{" "}
+                {sideAgreementValidation.blockers.length} blocker(s),{" "}
+                {sideAgreementContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/side-agreements/contract">
+              Open side-agreement JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {sideAgreementContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Review dimensions</h3>
+              <ul className="clean-list">
+                {sideAgreementContract.reviewDimensions.map((dimension) => (
+                  <li key={dimension}>{dimension.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {sideAgreementContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Public summary boundary</h3>
+              <ul className="clean-list">
+                {sideAgreementContract.forbiddenPublicSummaryTerms.map((term) => (
+                  <li key={term}>{term}</li>
                 ))}
               </ul>
             </article>

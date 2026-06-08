@@ -68,6 +68,10 @@ import {
   validateMoralTradeRecipientDestinationContract,
 } from "@/lib/moral-trade/recipient-destination";
 import {
+  getMoralTradeSideAgreementContract,
+  validateMoralTradeSideAgreementContract,
+} from "@/lib/moral-trade/side-agreements";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -224,6 +228,9 @@ export async function GET(request: Request) {
     validateMoralTradeRecipientDestinationContract(
       recipientDestinationContract,
     );
+  const sideAgreementContract = getMoralTradeSideAgreementContract();
+  const sideAgreementValidation =
+    validateMoralTradeSideAgreementContract(sideAgreementContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -313,6 +320,7 @@ export async function GET(request: Request) {
       agreementAmendmentValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
+      sideAgreementValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -352,6 +360,7 @@ export async function GET(request: Request) {
     agreementAmendmentValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
+    sideAgreementValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -670,6 +679,28 @@ export async function GET(request: Request) {
       ),
       recipientDestinationContractTests:
         recipientDestinationContract.contractTests,
+      sideAgreementContractVersion: sideAgreementContract.version,
+      sideAgreementTransitionKeys:
+        sideAgreementContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      sideAgreementSubjectTypes: sideAgreementContract.subjectTypes,
+      sideAgreementReviewDimensions: sideAgreementContract.reviewDimensions,
+      sideAgreementFailClosedStatuses:
+        sideAgreementContract.failClosedStatuses,
+      sideAgreementFirstClassRecordTables:
+        sideAgreementContract.firstClassRecordTables,
+      sideAgreementPolicySnapshotSubjects:
+        sideAgreementContract.policySnapshotSubjects,
+      sideAgreementForbiddenPublicSummaryTerms:
+        sideAgreementContract.forbiddenPublicSummaryTerms,
+      sideAgreementSampleEvaluationStatuses: Object.fromEntries(
+        sideAgreementContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      sideAgreementContractTests: sideAgreementContract.contractTests,
       statusValues: profile.statusValues,
       decisionPipeline: profile.decisionPipeline.map((step) => ({
         key: step.key,
@@ -952,6 +983,7 @@ export async function GET(request: Request) {
       ...agreementAmendmentValidation.blockers,
       ...productionReadinessValidation.blockers,
       ...recipientDestinationValidation.blockers,
+      ...sideAgreementValidation.blockers,
       ...provenanceValidation.blockers,
       ...schemaRegistryValidation.blockers,
       ...copilotValidation.blockers,
