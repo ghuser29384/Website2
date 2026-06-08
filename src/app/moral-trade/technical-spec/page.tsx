@@ -95,6 +95,10 @@ import {
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
 import {
+  getMoralTradeTradeClassificationContract,
+  validateMoralTradeTradeClassificationContract,
+} from "@/lib/moral-trade/trade-classification";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -243,6 +247,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
+  const tradeClassificationContract =
+    getMoralTradeTradeClassificationContract();
+  const tradeClassificationValidation =
+    validateMoralTradeTradeClassificationContract(
+      tradeClassificationContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -516,6 +526,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Side agreements",
       status: sideAgreementValidation.status,
       summary: `${sideAgreementContract.reviewDimensions.length} review dimension(s), ${sideAgreementContract.subjectTypes.length} subject type(s).`,
+    },
+    {
+      blockers: tradeClassificationValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/trade-classification/contract",
+      label: "Trade classification",
+      status: tradeClassificationValidation.status,
+      summary: `${tradeClassificationContract.classifications.length} classification value(s), ${tradeClassificationContract.reviewDimensions.length} review dimension(s).`,
     },
     {
       blockers: copilotValidation.blockers.length,
@@ -2097,6 +2115,69 @@ export default async function MoralTradeTechnicalSpecPage() {
                   <li key={term}>{term}</li>
                 ))}
               </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="trade-classification-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Trade-classification contract</p>
+            <h2 id="trade-classification-contract-heading">
+              Classification is an implementation guard, not a public moral status badge.
+            </h2>
+            <p>
+              Moraltrade60 requires compensated moral-action agreements to be counted as
+              mixed moral trade only when moral/prudential asymmetry explains the bargain,
+              terms are frozen, and ordinary-service/procurement review is non-blocking.
+              Ordinary donations, same-view matching, and ordinary procurement stay excluded
+              from moral-trade-specific metrics.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Trade classification {tradeClassificationContract.version}
+              </p>
+              <h3>Status {tradeClassificationValidation.status}</h3>
+              <p>
+                {tradeClassificationValidation.checks.length} check(s),{" "}
+                {tradeClassificationValidation.blockers.length} blocker(s),{" "}
+                {tradeClassificationContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/trade-classification/contract">
+              Open classification JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Classifications</h3>
+              <ul className="clean-list">
+                {tradeClassificationContract.classifications.map((classification) => (
+                  <li key={classification}>{classification.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Review dimensions</h3>
+              <ul className="clean-list">
+                {tradeClassificationContract.reviewDimensions.map((dimension) => (
+                  <li key={dimension}>{dimension.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {tradeClassificationContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Public non-claim</h3>
+              <p>{tradeClassificationContract.publicNonClaim}</p>
             </article>
           </div>
         </section>

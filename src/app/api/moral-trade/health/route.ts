@@ -72,6 +72,10 @@ import {
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
 import {
+  getMoralTradeTradeClassificationContract,
+  validateMoralTradeTradeClassificationContract,
+} from "@/lib/moral-trade/trade-classification";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -231,6 +235,10 @@ export async function GET(request: Request) {
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
+  const tradeClassificationContract =
+    getMoralTradeTradeClassificationContract();
+  const tradeClassificationValidation =
+    validateMoralTradeTradeClassificationContract(tradeClassificationContract);
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -321,6 +329,7 @@ export async function GET(request: Request) {
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
+      tradeClassificationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -361,6 +370,7 @@ export async function GET(request: Request) {
     productionReadinessValidation,
     recipientDestinationValidation,
     sideAgreementValidation,
+    tradeClassificationValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -701,6 +711,34 @@ export async function GET(request: Request) {
         ]),
       ),
       sideAgreementContractTests: sideAgreementContract.contractTests,
+      tradeClassificationContractVersion:
+        tradeClassificationContract.version,
+      tradeClassificationTransitionKeys:
+        tradeClassificationContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      tradeClassificationClassifications:
+        tradeClassificationContract.classifications,
+      tradeClassificationSubjectTypes:
+        tradeClassificationContract.subjectTypes,
+      tradeClassificationReviewDimensions:
+        tradeClassificationContract.reviewDimensions,
+      tradeClassificationFailClosedStatuses:
+        tradeClassificationContract.failClosedStatuses,
+      tradeClassificationFirstClassRecordTables:
+        tradeClassificationContract.firstClassRecordTables,
+      tradeClassificationPolicySnapshotSubjects:
+        tradeClassificationContract.policySnapshotSubjects,
+      tradeClassificationPublicNonClaim:
+        tradeClassificationContract.publicNonClaim,
+      tradeClassificationSampleEvaluationStatuses: Object.fromEntries(
+        tradeClassificationContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      tradeClassificationContractTests:
+        tradeClassificationContract.contractTests,
       statusValues: profile.statusValues,
       decisionPipeline: profile.decisionPipeline.map((step) => ({
         key: step.key,
@@ -984,6 +1022,7 @@ export async function GET(request: Request) {
       ...productionReadinessValidation.blockers,
       ...recipientDestinationValidation.blockers,
       ...sideAgreementValidation.blockers,
+      ...tradeClassificationValidation.blockers,
       ...provenanceValidation.blockers,
       ...schemaRegistryValidation.blockers,
       ...copilotValidation.blockers,
