@@ -84,6 +84,10 @@ import {
   validateMoralTradeUserSafetyContentModerationContract,
 } from "@/lib/moral-trade/user-safety-content-moderation";
 import {
+  getMoralTradeFinancialSettlementControlsContract,
+  validateMoralTradeFinancialSettlementControlsContract,
+} from "@/lib/moral-trade/financial-settlement-controls";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -259,6 +263,12 @@ export async function GET(request: Request) {
     validateMoralTradeUserSafetyContentModerationContract(
       userSafetyContentModerationContract,
     );
+  const financialSettlementControlsContract =
+    getMoralTradeFinancialSettlementControlsContract();
+  const financialSettlementControlsValidation =
+    validateMoralTradeFinancialSettlementControlsContract(
+      financialSettlementControlsContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -352,6 +362,7 @@ export async function GET(request: Request) {
       tradeClassificationValidation.status === "pass" &&
       protectiveAssessmentValidation.status === "pass" &&
       userSafetyContentModerationValidation.status === "pass" &&
+      financialSettlementControlsValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -395,6 +406,7 @@ export async function GET(request: Request) {
     tradeClassificationValidation,
     protectiveAssessmentValidation,
     userSafetyContentModerationValidation,
+    financialSettlementControlsValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -820,6 +832,29 @@ export async function GET(request: Request) {
       ),
       userSafetyContentModerationContractTests:
         userSafetyContentModerationContract.contractTests,
+      financialSettlementControlsContractVersion:
+        financialSettlementControlsContract.version,
+      financialSettlementControlsTransitionKeys:
+        financialSettlementControlsContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      financialSettlementControlsControlKeys:
+        financialSettlementControlsContract.controlKeys,
+      financialSettlementControlsFirstClassRecordTables:
+        financialSettlementControlsContract.firstClassRecordTables,
+      financialSettlementControlsPolicySnapshotSubjects:
+        financialSettlementControlsContract.policySnapshotSubjects,
+      financialSettlementControlsFailClosedStatuses:
+        financialSettlementControlsContract.failClosedStatuses,
+      financialSettlementControlsPrivacyBoundary:
+        financialSettlementControlsContract.privacyBoundary,
+      financialSettlementControlsSampleEvaluationStatuses: Object.fromEntries(
+        financialSettlementControlsContract.sampleEvaluations.map(
+          (evaluation) => [evaluation.transition, evaluation.status],
+        ),
+      ),
+      financialSettlementControlsContractTests:
+        financialSettlementControlsContract.contractTests,
       statusValues: profile.statusValues,
       decisionPipeline: profile.decisionPipeline.map((step) => ({
         key: step.key,
@@ -1105,6 +1140,8 @@ export async function GET(request: Request) {
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...protectiveAssessmentValidation.blockers,
+      ...userSafetyContentModerationValidation.blockers,
+      ...financialSettlementControlsValidation.blockers,
       ...provenanceValidation.blockers,
       ...schemaRegistryValidation.blockers,
       ...copilotValidation.blockers,

@@ -107,6 +107,10 @@ import {
   validateMoralTradeUserSafetyContentModerationContract,
 } from "@/lib/moral-trade/user-safety-content-moderation";
 import {
+  getMoralTradeFinancialSettlementControlsContract,
+  validateMoralTradeFinancialSettlementControlsContract,
+} from "@/lib/moral-trade/financial-settlement-controls";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -273,6 +277,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeUserSafetyContentModerationContract(
       userSafetyContentModerationContract,
     );
+  const financialSettlementControlsContract =
+    getMoralTradeFinancialSettlementControlsContract();
+  const financialSettlementControlsValidation =
+    validateMoralTradeFinancialSettlementControlsContract(
+      financialSettlementControlsContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -370,6 +380,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     tradeClassificationValidation,
     protectiveAssessmentValidation,
     userSafetyContentModerationValidation,
+    financialSettlementControlsValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -574,6 +585,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "User safety and moderation",
       status: userSafetyContentModerationValidation.status,
       summary: `${userSafetyContentModerationContract.moderationDimensions.length} moderation dimension(s), ${userSafetyContentModerationContract.userSafetyDimensions.length} user-safety dimension(s).`,
+    },
+    {
+      blockers: financialSettlementControlsValidation.blockers.length,
+      family: "Money movement",
+      href: "/api/moral-trade/financial-settlement-controls/contract",
+      label: "Financial settlement controls",
+      status: financialSettlementControlsValidation.status,
+      summary: `${financialSettlementControlsContract.controlKeys.length} control(s), ${financialSettlementControlsContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: copilotValidation.blockers.length,
@@ -2357,6 +2376,74 @@ export default async function MoralTradeTechnicalSpecPage() {
             <article className="panel protocol-contract-card">
               <h3>Privacy boundary</h3>
               <p>{userSafetyContentModerationContract.privacyBoundary}</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="financial-settlement-controls-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Financial settlement controls</p>
+            <h2 id="financial-settlement-controls-heading">
+              Fees, FX, notices, deadlines, challenges, and payout milestones are first-class gates.
+            </h2>
+            <p>
+              Moraltrade60 requires real-money amounts to use explicit or frozen settlement
+              currency, FX quotes to be snapshot-backed before previews and locks, and
+              platform fees, FX spreads, and conversion fees to stay separate from
+              moral-trade volume, threshold progress, QF signal, and recipient-impact
+              claims. The contract also requires recorded material notices and
+              server-time deadline records before a participant can lose rights, default
+              out of a challenge window, or release a payout milestone.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Financial settlement {financialSettlementControlsContract.version}
+              </p>
+              <h3>Status {financialSettlementControlsValidation.status}</h3>
+              <p>
+                {financialSettlementControlsValidation.checks.length} check(s),{" "}
+                {financialSettlementControlsValidation.blockers.length} blocker(s),{" "}
+                {financialSettlementControlsContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link
+              className="button button-secondary"
+              href="/api/moral-trade/financial-settlement-controls/contract"
+            >
+              Open financial-settlement JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Control keys</h3>
+              <ul className="clean-list">
+                {financialSettlementControlsContract.controlKeys.map((controlKey) => (
+                  <li key={controlKey}>{controlKey.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {financialSettlementControlsContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {financialSettlementControlsContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Privacy boundary</h3>
+              <p>{financialSettlementControlsContract.privacyBoundary}</p>
             </article>
           </div>
         </section>

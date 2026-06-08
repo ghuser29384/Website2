@@ -7248,7 +7248,9 @@ export interface Database {
             | "environment_data_isolation"
             | "financial_reconciliation"
             | "audit_integrity"
-            | "data_security";
+            | "data_security"
+            | "challenge_window"
+            | "payout_milestone";
           subject_key: string;
           version_label: string;
           status: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7295,7 +7297,9 @@ export interface Database {
             | "environment_data_isolation"
             | "financial_reconciliation"
             | "audit_integrity"
-            | "data_security";
+            | "data_security"
+            | "challenge_window"
+            | "payout_milestone";
           subject_key: string;
           version_label: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7341,7 +7345,9 @@ export interface Database {
             | "environment_data_isolation"
             | "financial_reconciliation"
             | "audit_integrity"
-            | "data_security";
+            | "data_security"
+            | "challenge_window"
+            | "payout_milestone";
           subject_key?: string;
           version_label?: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -8756,6 +8762,66 @@ export interface Database {
         Relationships: [];
       };
       moral_trade_content_moderation_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_platform_fee_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_platform_fee_disclosures: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_fx_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_fx_rate_snapshots: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_notification_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_material_notice_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_time_authority_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_deadline_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_challenge_window_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_payout_milestone_records: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
         Update: SupabaseMoralTradeOperationalUpdate;
