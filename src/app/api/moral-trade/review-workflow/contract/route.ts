@@ -36,6 +36,11 @@ export async function GET(request: Request) {
       reviewStateOutcomes: contract.reviewStateOutcomes,
       marketplaceFactorPriority: contract.marketplaceFactorPriority,
       participantCopyTemplates: contract.participantCopyTemplates,
+      userFacingBlockerExplanations: contract.userFacingBlockerExplanations,
+      sampleUserFacingBlockerExplanations:
+        contract.sampleUserFacingBlockerExplanations,
+      forbiddenUserFacingExplanationTerms:
+        contract.forbiddenUserFacingExplanationTerms,
       invariants: contract.invariants,
       sampleDetailCardKeys: contract.sampleDetailCards.map((card) => card.key),
       sampleDetailCardStatusReasons: contract.sampleDetailCards.map((card) => ({

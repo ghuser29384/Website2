@@ -2373,6 +2373,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(proposalReviewSource, /contact_email_in_public_draft/);
   assert.match(proposalReviewSource, /getOfferReviewWorkflowContract/);
   assert.match(proposalReviewSource, /validateOfferReviewWorkflowContract/);
+  assert.match(proposalReviewSource, /getMoralTradeUserFacingBlockerExplanations/);
+  assert.match(proposalReviewSource, /explainMoralTradeUserFacingBlocker/);
+  assert.match(proposalReviewSource, /userFacingBlockerExplanations/);
+  assert.match(proposalReviewSource, /moneyEffect/);
+  assert.match(proposalReviewSource, /obligationEffect/);
+  assert.match(proposalReviewSource, /appealOrCorrectionPath/);
+  assert.match(proposalReviewSource, /forbiddenUserFacingExplanationTerms/);
+  assert.match(proposalReviewSource, /review_blocker/);
   assert.match(proposalReviewSource, /MARKETPLACE_REVIEW_FACTOR_PRIORITY/);
   assert.match(proposalReviewSource, /REVIEW_WORKFLOW_PARTICIPANT_COPY/);
   assert.match(proposalReviewSource, /What would you do if this trade did not happen/);
@@ -3244,6 +3252,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.42-2026-06/);
+  assert.match(apiContractProfile, /user-facing blocker explanation governance/);
+  assert.match(apiContractProfile, /privacy-safe blocker explanations/);
+  assert.match(apiContractProfile, /money and obligation effects/);
   assert.match(apiContractProfile, /review_workflow_evaluate_request/);
   assert.match(apiContractProfile, /review_workflow_evaluate_response/);
   assert.match(apiContractProfile, /reasoning_packets_response/);
@@ -3433,6 +3445,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /reviewWorkflowContract\.policyEnforcedWorkflow/);
   assert.match(technicalSpecPage, /reviewWorkflowContract\.reviewStateOutcomes/);
   assert.match(technicalSpecPage, /reviewWorkflowContract\.marketplaceFactorPriority/);
+  assert.match(technicalSpecPage, /reviewWorkflowContract\.userFacingBlockerExplanations/);
+  assert.match(
+    technicalSpecPage,
+    /reviewWorkflowContract\.sampleUserFacingBlockerExplanations/,
+  );
+  assert.match(technicalSpecPage, /User-facing blockers/);
   assert.match(technicalSpecPage, /Participant copy/);
   assert.match(technicalSpecPage, /reviewWorkflowContract\.participantCopyTemplates/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/review-workflow\/contract/);
@@ -3599,6 +3617,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /reviewWorkflowCardKeys/);
   assert.match(healthRoute, /reviewWorkflowMarketplaceFactorPriority/);
   assert.match(healthRoute, /reviewWorkflowParticipantCopyKeys/);
+  assert.match(healthRoute, /reviewWorkflowUserFacingBlockerCategories/);
+  assert.match(healthRoute, /reviewWorkflowSampleBlockerExplanationKeys/);
+  assert.match(healthRoute, /reviewWorkflowForbiddenExplanationTerms/);
   assert.match(healthRoute, /reasoningPacketValidation/);
   assert.match(healthRoute, /reasoningPacketFilters/);
   assert.match(healthRoute, /reasoningPacketFilterCounts/);
@@ -3748,6 +3769,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(reviewWorkflowContractRoute, /reviewStateOutcomes/);
   assert.match(reviewWorkflowContractRoute, /marketplaceFactorPriority/);
   assert.match(reviewWorkflowContractRoute, /participantCopyTemplates/);
+  assert.match(reviewWorkflowContractRoute, /userFacingBlockerExplanations/);
+  assert.match(reviewWorkflowContractRoute, /sampleUserFacingBlockerExplanations/);
+  assert.match(reviewWorkflowContractRoute, /forbiddenUserFacingExplanationTerms/);
   assert.match(reviewWorkflowEvaluateRoute, /getOfferReviewWorkflowCards/);
   assert.match(reviewWorkflowEvaluateRoute, /getOfferReviewCardInstrumentation/);
   assert.match(reviewWorkflowEvaluateRoute, /stateMutation: false/);
@@ -4098,6 +4122,9 @@ test("offer creation form exposes a guided reviewable-trade wizard", () => {
   assert.match(offerForm, /evaluateMoralTradeProtocolDraft/);
   assert.match(offerForm, /formatProtocolReviewStatus/);
   assert.match(offerForm, /Evidence to request/);
+  assert.match(offerForm, /protocolReview\.userFacingBlockerExplanations/);
+  assert.match(offerForm, /Review blockers/);
+  assert.doesNotMatch(offerForm, /Policy conflicts:/);
   assert.match(offerForm, /Reviewer scope/);
   assert.match(offerForm, /Clarification questions/);
   assert.match(offerForm, /Cited evidence table/);

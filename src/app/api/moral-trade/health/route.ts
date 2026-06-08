@@ -771,6 +771,16 @@ export async function GET(request: Request) {
       reviewWorkflowParticipantCopyKeys: Object.keys(
         reviewWorkflowContract.participantCopyTemplates,
       ),
+      reviewWorkflowUserFacingBlockerCategories:
+        reviewWorkflowContract.userFacingBlockerExplanations.map(
+          (entry) => entry.reasonCategory,
+        ),
+      reviewWorkflowSampleBlockerExplanationKeys:
+        reviewWorkflowContract.sampleUserFacingBlockerExplanations.map(
+          (entry) => entry.key,
+        ),
+      reviewWorkflowForbiddenExplanationTerms:
+        reviewWorkflowContract.forbiddenUserFacingExplanationTerms,
       reviewWorkflowContractTests: reviewWorkflowContract.contractTests,
       reasoningPacketContractVersion: reasoningPacketContract.version,
       reasoningPacketCount: reasoningPacketContract.packetCount,

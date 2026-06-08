@@ -2507,9 +2507,19 @@ export function OfferCreateForm({
           </div>
         </div>
 
-        {protocolReview.policyConflicts.length ? (
+        {protocolReview.userFacingBlockerExplanations.length ? (
           <div className="protocol-conflict-note">
-            <strong>Policy conflicts:</strong> {protocolReview.policyConflicts.join(", ")}
+            <strong>Review blockers</strong>
+            <ul className="clean-list">
+              {protocolReview.userFacingBlockerExplanations.map((explanation) => (
+                <li key={explanation.key}>
+                  <span>{explanation.reasonCategory}:</span>{" "}
+                  {explanation.plainLanguageStatus} {explanation.nextAction}{" "}
+                  {explanation.moneyEffect} {explanation.obligationEffect}{" "}
+                  {explanation.appealOrCorrectionPath}
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
 

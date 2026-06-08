@@ -33,6 +33,7 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 - first-class baseline-integrity/manufacturing contract/records for non-blocking baseline assessments before donation offsets, pledge swaps, broad match candidates, public-goods rounds, and post-lock amendments become clearable, reliance-bearing, payable, or publicly counted
 - first-class agreement-amendment contract/records for append-only post-lock amendments, before/after terms hashes, renewed confirmations, non-retroactivity checks, neutral review, notice, reviewer quality, and baseline integrity before material locked donation-offset or pledge-swap changes
 - first-class appeal-case contract/records for bounded adverse-decision correction paths, notice, deadlines, neutral review, evidence scope, non-retaliation, redaction, and safety/settled-obligation non-waiver controls
+- privacy-safe user-facing blocker explanations for review states, including plain-language reason categories, next actions, money effects, obligation effects, and bounded appeal/correction paths without raw reviewer signals
 - fail-closed production-readiness contract and records for account security, backup recovery, deployment/config provenance, schema migration safety, environment isolation, financial reconciliation, audit integrity, and data-security/key-management controls
 - first-class recipient-registry and payment-destination contract/records that prevent free-text names, copied donation links, wallet addresses, bank details, or fiscal-host notes from authorizing lock, capture, payout, reuse, or public money claims
 - route-baseline verification for the public routes listed in `moraltrade60.md`
@@ -128,6 +129,10 @@ node --import tsx --test src/lib/moral-trade/agreement-amendments.test.ts src/li
 node --import tsx --test src/lib/moral-trade/challenge-appeal.test.ts
 node --import tsx --test src/lib/moral-trade/challenge-appeal.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 node --import tsx --test src/lib/moral-trade/challenge-appeal.test.ts src/lib/moral-trade/agreement-amendments.test.ts src/lib/moral-trade/baseline-integrity.test.ts src/lib/moral-trade/matching-clearing.test.ts src/lib/moral-trade/impact-claims.test.ts src/lib/moral-trade/privacy-governance.test.ts src/lib/moral-trade/anti-enumeration.test.ts src/lib/moral-trade/reviewer-quality.test.ts src/lib/moral-trade/account-security.test.ts src/lib/moral-trade/participant-eligibility.test.ts src/lib/moral-trade/recipient-destination.test.ts src/lib/moral-trade/production-readiness.test.ts src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
+node --import tsx --test src/lib/proposal-review.test.ts
+node --import tsx --test src/lib/proposal-review.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
+node --import tsx --test src/lib/proposal-review.test.ts src/lib/moral-trade/challenge-appeal.test.ts src/lib/moral-trade/agreement-amendments.test.ts src/lib/moral-trade/baseline-integrity.test.ts src/lib/moral-trade/matching-clearing.test.ts src/lib/moral-trade/impact-claims.test.ts src/lib/moral-trade/privacy-governance.test.ts src/lib/moral-trade/anti-enumeration.test.ts src/lib/moral-trade/reviewer-quality.test.ts src/lib/moral-trade/account-security.test.ts src/lib/moral-trade/participant-eligibility.test.ts src/lib/moral-trade/recipient-destination.test.ts src/lib/moral-trade/production-readiness.test.ts src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
+node --import tsx -e 'const { createRequire } = await import("node:module"); const require = createRequire(import.meta.url); const m = require("./src/lib/proposal-review.ts"); const contract = m.getOfferReviewWorkflowContract(); const validation = m.validateOfferReviewWorkflowContract(contract); console.log(JSON.stringify({ status: validation.status, blockers: validation.blockers, sampleUserFacingBlockerExplanations: contract.sampleUserFacingBlockerExplanations.map((entry) => ({ key: entry.key, reasonCategory: entry.reasonCategory, nextAction: entry.nextAction })) }, null, 2));'
 npm run lint -- src/lib/marketplace-measurement.ts src/lib/marketplace-measurement.test.ts src/lib/growth.ts src/lib/growth.test.ts src/components/analytics/funnel-tracker.tsx src/lib/measurement-plan.ts src/app/measurement/page.tsx src/app/api/moral-trade/health/route.ts src/lib/public-route-smoke.test.ts scripts/check-public-route-baseline.mjs
 npm run lint -- src/lib/moral-trade/release-gates.ts src/lib/moral-trade/release-gates.test.ts src/app/api/moral-trade/release-gates/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 npm run lint -- src/lib/moral-trade/participant-confirmations.ts src/lib/moral-trade/participant-confirmations.test.ts src/app/api/moral-trade/participant-confirmations/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
@@ -143,6 +148,7 @@ npm run lint -- src/lib/moral-trade/impact-claims.ts src/lib/moral-trade/impact-
 npm run lint -- src/lib/moral-trade/baseline-integrity.ts src/lib/moral-trade/baseline-integrity.test.ts src/app/api/moral-trade/baseline-integrity/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 npm run lint -- src/lib/moral-trade/agreement-amendments.ts src/lib/moral-trade/agreement-amendments.test.ts src/app/api/moral-trade/agreement-amendments/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 npm run lint -- src/lib/moral-trade/challenge-appeal.ts src/lib/moral-trade/challenge-appeal.test.ts src/app/api/moral-trade/challenge-appeal/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
+npm run lint -- src/lib/proposal-review.ts src/lib/proposal-review.test.ts src/components/offers/offer-create-form.tsx src/app/api/moral-trade/review-workflow/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/public-route-smoke.test.ts config/moral-trade/api-contract-profile.json
 git diff --check
 npm run build
 MORALTRADE_BASE_URL=http://127.0.0.1:3000 npm run measure:routes
@@ -177,6 +183,10 @@ Observed results:
 - challenge-appeal/API/source-smoke bundle: `65` tests passed
 - challenge-appeal/agreement-amendment/baseline-integrity/matching-clearing/impact-claims/privacy-governance/anti-enumeration/reviewer-quality/account-security/participant-eligibility/recipient-destination/production-readiness/participant-confirmation/release-gate/API/source-smoke bundle: `139` tests passed
 - direct challenge-appeal validator probe: `status: pass`, `blockers: []`, sample appeal-case evaluations `evidence_row:wrong_scope_evidence:pass`, `evidence_row:wrong_scope_evidence:blocked`
+- focused proposal-review/user-facing blocker bundle: `17` tests passed
+- proposal-review/API/source-smoke bundle: `71` tests passed
+- proposal-review/challenge-appeal/agreement-amendment/baseline-integrity/matching-clearing/impact-claims/privacy-governance/anti-enumeration/reviewer-quality/account-security/participant-eligibility/recipient-destination/production-readiness/participant-confirmation/release-gate/API/source-smoke bundle: `156` tests passed
+- direct review-workflow validator probe: `status: pass`, `blockers: []`, sample blocker explanations `safety_review`, `needs_evidence`, `production_payout`
 - lint: passed
 - whitespace check: passed
 - production build: passed
@@ -441,6 +451,32 @@ Challenge-appeal contract sample:
 }
 ```
 
+Review-workflow blocker explanation sample:
+
+```json
+{
+  "status": "pass",
+  "blockers": [],
+  "sampleUserFacingBlockerExplanations": [
+    {
+      "key": "safety_review",
+      "reasonCategory": "Safety or legality review is needed",
+      "nextAction": "Pause publication and ask for a narrow safety review of the reviewed issue."
+    },
+    {
+      "key": "needs_evidence",
+      "reasonCategory": "Evidence is incomplete",
+      "nextAction": "Attach or request one scoped artifact for the claim being reviewed."
+    },
+    {
+      "key": "production_payout",
+      "reasonCategory": "Production or payout gate is not ready",
+      "nextAction": "Wait for the required operational review before publishing money or impact claims."
+    }
+  ]
+}
+```
+
 Route baseline summary:
 
 ```json
@@ -477,6 +513,7 @@ Route baseline summary:
 - The baseline-integrity route publishes static transition/table/status/source-kind/launch-classification/sample-status contract metadata; it does not expose raw baseline narratives, private evidence, exact private constraints, counterparty-specific timing, reviewer notes, or participant-specific assessments.
 - The agreement-amendment route publishes static transition/table/type/state/status/sample-status contract metadata; it does not expose private amendment narratives, participant identities, confirmation payloads, reviewer notes, payment details, private baselines, or counterparty-specific terms.
 - The challenge-appeal route publishes static subject/standing/table/state/status/sample-status contract metadata; it does not expose private appeal narratives, appellant identities, raw evidence, reviewer notes, safety-sensitive details, or counterparty-specific dispute facts.
+- The review-workflow contract route publishes safe blocker categories, next actions, money/obligation effects, and appeal/correction paths; it does not expose source hashes, provider payloads, raw reviewer notes, account-security signals, or sensitive counterparty data.
 - The production-readiness route publishes static control/gate/table/status contract metadata; it does not expose account-security event details, backup contents, configuration values, provider payloads, reconciliation line items, audit rows, private access logs, or key material.
 - The health, measurement, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, challenge-appeal, and production-readiness surfaces publish validator status and aggregate contract metadata, not private participant records, participant-specific discovery records, participant-specific impact-claim records, raw matching bundles, participant-specific final confirmations, participant-specific baseline assessments, participant-specific amendment records, participant-specific appeal records, or private operational evidence.
 

@@ -2395,6 +2395,34 @@ export default async function MoralTradeTechnicalSpecPage() {
               <h3>Participant copy</h3>
               <p>{reviewWorkflowContract.participantCopyTemplates.baselineHelperText}</p>
             </article>
+            <article className="panel protocol-contract-card">
+              <h3>User-facing blockers</h3>
+              <p>
+                Public blocker explanations publish reason categories, next actions,
+                money and obligation effects, and bounded appeal or correction paths
+                without raw review evidence.
+              </p>
+              <ul className="clean-list">
+                {reviewWorkflowContract.userFacingBlockerExplanations
+                  .slice(0, 5)
+                  .map((explanation) => (
+                    <li key={explanation.key}>{explanation.reasonCategory}</li>
+                  ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Sample explanation paths</h3>
+              <ul className="clean-list">
+                {reviewWorkflowContract.sampleUserFacingBlockerExplanations.map(
+                  (explanation) => (
+                    <li key={explanation.key}>
+                      {explanation.reasonCategory}: {explanation.moneyEffect}{" "}
+                      {explanation.obligationEffect} {explanation.appealOrCorrectionPath}
+                    </li>
+                  ),
+                )}
+              </ul>
+            </article>
           </div>
           <div className="data-grid">
             {reviewWorkflowContract.detailWorkflowCards.map((card) => (
