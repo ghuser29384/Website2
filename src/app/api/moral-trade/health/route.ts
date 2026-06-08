@@ -52,6 +52,10 @@ import {
   validateMoralTradeMatchingClearingContract,
 } from "@/lib/moral-trade/matching-clearing";
 import {
+  getMoralTradeClearingPreviewContract,
+  validateMoralTradeClearingPreviewContract,
+} from "@/lib/moral-trade/clearing-previews";
+import {
   getMoralTradeBaselineIntegrityContract,
   validateMoralTradeBaselineIntegrityContract,
 } from "@/lib/moral-trade/baseline-integrity";
@@ -220,6 +224,9 @@ export async function GET(request: Request) {
   const matchingClearingContract = getMoralTradeMatchingClearingContract();
   const matchingClearingValidation =
     validateMoralTradeMatchingClearingContract(matchingClearingContract);
+  const clearingPreviewContract = getMoralTradeClearingPreviewContract();
+  const clearingPreviewValidation =
+    validateMoralTradeClearingPreviewContract(clearingPreviewContract);
   const baselineIntegrityContract =
     getMoralTradeBaselineIntegrityContract();
   const baselineIntegrityValidation =
@@ -354,6 +361,7 @@ export async function GET(request: Request) {
       privacyGovernanceValidation.status === "pass" &&
       impactClaimValidation.status === "pass" &&
       matchingClearingValidation.status === "pass" &&
+      clearingPreviewValidation.status === "pass" &&
       baselineIntegrityValidation.status === "pass" &&
       agreementAmendmentValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
@@ -398,6 +406,7 @@ export async function GET(request: Request) {
     privacyGovernanceValidation,
     impactClaimValidation,
     matchingClearingValidation,
+    clearingPreviewValidation,
     baselineIntegrityValidation,
     agreementAmendmentValidation,
     productionReadinessValidation,
@@ -633,6 +642,27 @@ export async function GET(request: Request) {
       ),
       matchingClearingContractTests:
         matchingClearingContract.contractTests,
+      clearingPreviewContractVersion:
+        clearingPreviewContract.version,
+      clearingPreviewTracks:
+        clearingPreviewContract.tracks,
+      clearingPreviewModes:
+        clearingPreviewContract.modes,
+      clearingPreviewReleaseStages:
+        clearingPreviewContract.releaseStages,
+      clearingPreviewRequiredSections:
+        clearingPreviewContract.requiredSections,
+      clearingPreviewRequiredControlStatuses:
+        clearingPreviewContract.requiredControlStatuses,
+      clearingPreviewSampleStatuses:
+        clearingPreviewContract.samplePreviews.map((preview) => ({
+          track: preview.track,
+          status: preview.status,
+          captureAllowed: preview.captureAllowed,
+          relianceBearing: preview.relianceBearing,
+        })),
+      clearingPreviewContractTests:
+        clearingPreviewContract.contractTests,
       baselineIntegrityContractVersion:
         baselineIntegrityContract.version,
       baselineIntegrityTransitionKeys:

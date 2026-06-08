@@ -99,6 +99,11 @@ import {
 } from "@/lib/offers";
 import { REVIEWED_MARKETPLACE_SEED_TEMPLATES } from "@/lib/marketplace-seed-templates";
 import {
+  buildMoralTradeClearingPreview,
+  type MoralTradeClearingPreview,
+  type MoralTradeClearingPreviewGateStatus,
+} from "@/lib/moral-trade/clearing-previews";
+import {
   evaluateMoralTradeProtocolDraft,
   formatProtocolReviewStatus,
   getOfferReviewWorkflowCards,
@@ -450,6 +455,147 @@ function formatUsd(amount: number) {
     currency: "USD",
     maximumFractionDigits: 2,
   }).format(amount);
+}
+
+function formatClearingPreviewStatus(status: MoralTradeClearingPreviewGateStatus) {
+  return status.replaceAll("_", " ");
+}
+
+function clearingPreviewStatusClass(status: MoralTradeClearingPreviewGateStatus) {
+  if (status === "passed" || status === "not_required_for_stage") {
+    return "pass";
+  }
+
+  if (status === "blocked" || status === "out_of_bounds") {
+    return "block";
+  }
+
+  if (status === "missing" || status === "stale" || status === "superseded") {
+    return "input";
+  }
+
+  return "human";
+}
+
+function clearingPreviewStatusFromGateCounts({
+  blockedGateCount,
+  humanReviewGateCount,
+}: {
+  blockedGateCount: number;
+  humanReviewGateCount: number;
+}): MoralTradeClearingPreviewGateStatus {
+  if (blockedGateCount > 0) {
+    return "blocked";
+  }
+
+  if (humanReviewGateCount > 0) {
+    return "needs_review";
+  }
+
+  return "passed";
+}
+
+function clearingPreviewStatusFromPledgeGate(
+  status: PledgeSwapGateStatus | undefined,
+): MoralTradeClearingPreviewGateStatus {
+  if (status === "pass") return "passed";
+  if (status === "not_required_for_stage") return "not_required_for_stage";
+  if (status === "blocked") return "blocked";
+  if (status === "needs_input") return "missing";
+
+  return "needs_review";
+}
+
+function clearingPreviewStatusFromOffsetBaselineIntegrity(
+  status: DonationOffsetBaselineIntegrityStatus,
+): MoralTradeClearingPreviewGateStatus {
+  if (status === "non_blocking_review") return "passed";
+  if (status === "manufactured_or_escalated") return "blocked";
+  if (status === "unknown") return "missing";
+
+  return "needs_review";
+}
+
+function clearingPreviewStatusFromOffsetConfirmation(
+  status: DonationOffsetParticipantConfirmationRecordStatus,
+): MoralTradeClearingPreviewGateStatus {
+  if (status === "recorded_non_stale") return "passed";
+  if (status === "stale") return "stale";
+  if (status === "superseded") return "superseded";
+  if (status === "missing" || status === "unknown") return "missing";
+
+  return "needs_review";
+}
+
+function clearingPreviewStatusFromOffsetLock(
+  status: DonationOffsetMatchedLockProposalStatus,
+): MoralTradeClearingPreviewGateStatus {
+  if (status === "drafted") return "needs_review";
+  if (status === "stale") return "stale";
+  if (status === "superseded") return "superseded";
+  if (status === "not_created" || status === "unknown") return "missing";
+
+  return "needs_review";
+}
+
+function ClearingPreviewSummary({
+  clearingPreview,
+}: {
+  clearingPreview: MoralTradeClearingPreview;
+}) {
+  const visibleSections = clearingPreview.sections.slice(0, 6);
+  const visibleBlockers = clearingPreview.userFacingBlockers.slice(0, 4);
+
+  return (
+    <div className="protocol-provenance-preflight panel subtle-panel" aria-live="polite">
+      <div className="protocol-provenance-head">
+        <div>
+          <strong>Match candidate is not a locked deal</strong>
+          <p>
+            Status: {clearingPreview.status.replaceAll("_", " ")}. Capture allowed:{" "}
+            {clearingPreview.captureAllowed ? "yes" : "no"}. Reliance-bearing:{" "}
+            {clearingPreview.relianceBearing ? "yes" : "no"}.
+          </p>
+        </div>
+        <span className="protocol-review-status">
+          {clearingPreview.freshConfirmationCount}/
+          {clearingPreview.requiredFreshConfirmations} confirmations
+        </span>
+      </div>
+      <p className="panel-note">
+        Matched counterparty volume:{" "}
+        {formatUsd(clearingPreview.matchedTerms.matchedCounterpartyVolumeCents / 100)}.
+        Unmatched residual:{" "}
+        {formatUsd(clearingPreview.matchedTerms.unmatchedResidualCents / 100)}.
+      </p>
+      {visibleBlockers.length ? (
+        <ul className="clean-list">
+          {visibleBlockers.map((blocker) => (
+            <li key={blocker}>{blocker}</li>
+          ))}
+        </ul>
+      ) : null}
+      <ol className="protocol-provenance-list">
+        {visibleSections.map((section) => (
+          <li
+            className={`protocol-provenance-item protocol-provenance-item-${clearingPreviewStatusClass(
+              section.status,
+            )}`}
+            key={section.key}
+          >
+            <span className="protocol-step-status">
+              {formatClearingPreviewStatus(section.status)}
+            </span>
+            <div>
+              <strong>{section.label}</strong>
+              <p>{section.userMessage}</p>
+              <small>{section.nextAction}</small>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
 function toDateInputValue(value: string | null) {
@@ -2060,6 +2206,173 @@ export function OfferCreateForm({
     poolSide,
     selectedPool,
   ]);
+  const pledgeGateStatus = (key: string) =>
+    clearingPreviewStatusFromPledgeGate(
+      pledgeSwapManualReviewPreview.gates.find((gate) => gate.key === key)?.status,
+    );
+  const clearingPreview = isOffset
+    ? buildMoralTradeClearingPreview({
+        track: "donation_offset",
+        mode: "match_candidate",
+        releaseStage: "donation_offset_preview_no_capture",
+        matchingClearingRunRef: selectedPool
+          ? `matching-clearing-run-preview:${selectedPool.id}`
+          : "",
+        matchingClearingRunStatus: selectedPool ? "needs_review" : "missing",
+        matchingClearingRunHash: null,
+        inputBundleHash: null,
+        resultHash: null,
+        reproducibilityStatus: "missing",
+        finalLockProposalRef:
+          offsetMatchedLockProposalStatus === "drafted"
+            ? `matched-trade-lock-proposal-preview:${poolId || "draft-offset"}`
+            : "",
+        finalLockProposalStatus: clearingPreviewStatusFromOffsetLock(
+          offsetMatchedLockProposalStatus,
+        ),
+        requiredFreshConfirmations: Number(offsetAffectedParticipantCount) || 2,
+        freshConfirmationCount: Number(offsetFreshConfirmationCount) || 0,
+        participantConfirmationStatus: clearingPreviewStatusFromOffsetConfirmation(
+          offsetParticipantConfirmationRecordStatus,
+        ),
+        noTradeBaseline: baselineStatement,
+        baselineVersion: offsetBaselineSnapshotId,
+        baselineSnapshotHash: offsetBaselineSnapshotId,
+        baselineConfidenceLevel: evidenceUrl ? "medium" : "unknown",
+        baselineIntegrityStatus: clearingPreviewStatusFromOffsetBaselineIntegrity(
+          offsetBaselineIntegrityStatus,
+        ),
+        participantSurplusConfirmed: offsetParticipantSurplusConfirmed,
+        matchedCounterpartyVolumeCents: Math.round(
+          (offsetPreview.matchedCounterpartyUsd || 0) * 100,
+        ),
+        clearingRatioBps: Math.round((Number(effectiveOffsetRatio) || 0) * 10_000),
+        participantRatioMinBps: 1,
+        participantRatioMaxBps: 100_000,
+        ratioBoundsStatus: "needs_review",
+        unmatchedResidualCents: Math.round(
+          ((offsetPreview.unmatchedBaselineUsd || 0) +
+            (offsetPreview.unmatchedCounterpartyUsd || 0)) *
+            100,
+        ),
+        residualNoTradeAction: offsetPreview.unmatchedRuleLabel,
+        fallbackRule: offsetFallbackExplanation,
+        commitmentReservationStatus:
+          participationMode === "pool" && joinedPoolProgress?.assuranceReached
+            ? "needs_review"
+            : "missing",
+        doubleCountStatus: "needs_review",
+        atomicSettlementStatus: "missing",
+        destinationVerificationStatus: clearingPreviewStatusFromGateCounts(
+          donationOffsetPaymentDestinationPreview,
+        ),
+        verifiedPaymentDestinationStatus: clearingPreviewStatusFromGateCounts(
+          donationOffsetPaymentDestinationPreview,
+        ),
+        donorOfRecordTaxStatus: clearingPreviewStatusFromGateCounts(
+          donationOffsetDonorOfRecordPreview,
+        ),
+        nonparticipantExternalityStatus: clearingPreviewStatusFromGateCounts(
+          donationOffsetExternalityEvidencePreview,
+        ),
+        antiThreatStatus: offsetAntiThreatExternalityReviewed ? "passed" : "needs_review",
+        evidenceAuthenticityStatus: clearingPreviewStatusFromGateCounts(
+          donationOffsetSafetyAuthenticityPreview,
+        ),
+        financialCrimeStatus: clearingPreviewStatusFromGateCounts(
+          donationOffsetSafetyAuthenticityPreview,
+        ),
+        sideAgreementStatus: clearingPreviewStatusFromGateCounts(
+          donationOffsetSafetyAuthenticityPreview,
+        ),
+        tradeClassificationStatus: "needs_review",
+        protectiveAssessmentStatus: clearingPreviewStatusFromGateCounts(
+          donationOffsetAuthorityFairnessPreview,
+        ),
+        userSafetyStatus: antiThreatCertified ? "passed" : "needs_review",
+        privacyDisclosureStatus: clearingPreviewStatusFromGateCounts(
+          donationOffsetSafetyAuthenticityPreview,
+        ),
+        policySnapshotRef: offsetPolicySnapshotId,
+        stateInterpretationPolicyRef: "state-policy:donation-offset-draft-preview",
+      })
+    : isPledge
+      ? buildMoralTradeClearingPreview({
+          track: "pledge_swap",
+          mode: "match_candidate",
+          releaseStage: "pledge_swap_preview_manual_review_only",
+          matchingClearingRunRef: "",
+          matchingClearingRunStatus: "missing",
+          matchingClearingRunHash: null,
+          inputBundleHash: null,
+          resultHash: null,
+          reproducibilityStatus: "missing",
+          finalLockProposalRef: "",
+          finalLockProposalStatus: "missing",
+          requiredFreshConfirmations: 2,
+          freshConfirmationCount: 0,
+          participantConfirmationStatus: "missing",
+          noTradeBaseline: baselineStatement,
+          baselineVersion: "baseline-snapshot:pledge-draft",
+          baselineSnapshotHash: null,
+          baselineConfidenceLevel: pledgeBaselineConfidence,
+          baselineIntegrityStatus: pledgeGateStatus("baseline-integrity"),
+          participantSurplusConfirmed: false,
+          matchedCounterpartyVolumeCents: 0,
+          clearingRatioBps: 10_000,
+          participantRatioMinBps: 10_000,
+          participantRatioMaxBps: 10_000,
+          ratioBoundsStatus: "not_required_for_stage",
+          unmatchedResidualCents: 0,
+          residualNoTradeAction:
+            "No pledged action starts until a final lock proposal is confirmed.",
+          fallbackRule: pledgeWithdrawalBeforeLockRule,
+          commitmentReservationStatus: "needs_review",
+          doubleCountStatus: "needs_review",
+          atomicSettlementStatus: "needs_review",
+          destinationVerificationStatus: "not_required_for_stage",
+          verifiedPaymentDestinationStatus: "not_required_for_stage",
+          donorOfRecordTaxStatus: pledgeCompensatedMoralAction
+            ? "needs_review"
+            : "not_required_for_stage",
+          nonparticipantExternalityStatus: pledgeSwapManualReviewPreview.readyForManualReview
+            ? "passed"
+            : "needs_review",
+          antiThreatStatus: pledgeSwapManualReviewPreview.blockedGateCount
+            ? "blocked"
+            : "needs_review",
+          evidenceAuthenticityStatus: pledgeGateStatus("evidence-authenticity"),
+          financialCrimeStatus: pledgeGateStatus("financial-crime"),
+          sideAgreementStatus: pledgeCompensatedMoralAction ? "needs_review" : "passed",
+          tradeClassificationStatus:
+            pledgeOrdinaryServiceClassification === "not_ordinary_service_market"
+              ? "passed"
+              : "needs_review",
+          protectiveAssessmentStatus: pledgeSwapManualReviewPreview.readyForManualReview
+            ? "passed"
+            : "needs_review",
+          userSafetyStatus: pledgeSwapManualReviewPreview.blockedGateCount
+            ? "blocked"
+            : "needs_review",
+          privacyDisclosureStatus: pledgeGateStatus("confidentiality-privacy"),
+          policySnapshotRef: "policy-snapshot:pledge-swap-draft-preview",
+          stateInterpretationPolicyRef: "state-policy:pledge-swap-draft-preview",
+          performanceTerms: {
+            maxObligationDays: pledgeSwapManualReviewPreview.maxObligationDays,
+            reciprocalReleaseRule: pledgeReciprocalReleaseRule,
+            withdrawalBeforeLockRule: pledgeWithdrawalBeforeLockRule,
+            challengeWindowDays: pledgeSwapManualReviewPreview.challengeWindowDays,
+            neutralReviewRequired: pledgeNeutralReviewRequired,
+            evidencePlan: pledgeEvidencePlan,
+            leastIntrusiveAlternative: pledgeLeastIntrusiveAlternative,
+            scheduleStatus: pledgeSwapManualReviewPreview.readyForManualReview
+              ? "passed"
+              : "needs_review",
+            performanceTermsStatus: pledgeGateStatus("performance-terms"),
+            compensationTermsStatus: pledgeGateStatus("compensated-moral-action"),
+          },
+        })
+      : null;
 
   function applyOfferTemplate(template: OfferTemplate) {
     setMode(template.mode);
@@ -6146,6 +6459,8 @@ export function OfferCreateForm({
             </div>
           </div>
         ) : null}
+
+        {clearingPreview ? <ClearingPreviewSummary clearingPreview={clearingPreview} /> : null}
 
         <div className="field-grid">
           <label className="field">

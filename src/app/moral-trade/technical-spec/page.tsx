@@ -75,6 +75,10 @@ import {
   validateMoralTradeMatchingClearingContract,
 } from "@/lib/moral-trade/matching-clearing";
 import {
+  getMoralTradeClearingPreviewContract,
+  validateMoralTradeClearingPreviewContract,
+} from "@/lib/moral-trade/clearing-previews";
+import {
   getMoralTradeBaselineIntegrityContract,
   validateMoralTradeBaselineIntegrityContract,
 } from "@/lib/moral-trade/baseline-integrity";
@@ -232,6 +236,9 @@ export default async function MoralTradeTechnicalSpecPage() {
   const matchingClearingContract = getMoralTradeMatchingClearingContract();
   const matchingClearingValidation =
     validateMoralTradeMatchingClearingContract(matchingClearingContract);
+  const clearingPreviewContract = getMoralTradeClearingPreviewContract();
+  const clearingPreviewValidation =
+    validateMoralTradeClearingPreviewContract(clearingPreviewContract);
   const baselineIntegrityContract =
     getMoralTradeBaselineIntegrityContract();
   const baselineIntegrityValidation =
@@ -521,6 +528,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Matching clearing",
       status: matchingClearingValidation.status,
       summary: `${matchingClearingContract.flowTypes.length} flow type(s), ${matchingClearingContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: clearingPreviewValidation.blockers.length,
+      family: "Clearing",
+      href: "#clearing-preview-contract-heading",
+      label: "Clearing previews",
+      status: clearingPreviewValidation.status,
+      summary: `${clearingPreviewContract.tracks.length} track(s), ${clearingPreviewContract.requiredSections.length} user-facing preview section(s).`,
     },
     {
       blockers: baselineIntegrityValidation.blockers.length,
@@ -1825,6 +1840,73 @@ export default async function MoralTradeTechnicalSpecPage() {
               <ul className="clean-list">
                 {matchingClearingContract.failClosedStatuses.map((status) => (
                   <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="clearing-preview-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Clearing preview contract</p>
+            <h2 id="clearing-preview-contract-heading">
+              Donation-offset and pledge-swap previews show why a match candidate is not yet a deal.
+            </h2>
+            <p>
+              Moraltrade60 requires offset and pledge-swap previews to show the no-trade comparison,
+              matched volume, ratio bounds, residual handling, commitment reservation, atomic
+              settlement, destination verification, safety reviews, policy snapshots, final-lock
+              confirmation state, and pledge performance terms where relevant. This contract keeps
+              those previews non-capture and non-reliance-bearing until every required control is
+              frozen and non-blocking.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Clearing previews {clearingPreviewContract.version}
+              </p>
+              <h3>Status {clearingPreviewValidation.status}</h3>
+              <p>
+                {clearingPreviewValidation.checks.length} check(s),{" "}
+                {clearingPreviewValidation.blockers.length} blocker(s),{" "}
+                {clearingPreviewContract.requiredSections.length} preview section(s).
+              </p>
+            </div>
+            <span className="badge badge-warning">No capture, no reliance</span>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Tracks</h3>
+              <ul className="clean-list">
+                {clearingPreviewContract.tracks.map((track) => (
+                  <li key={track}>{track.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Preview sections</h3>
+              <ul className="clean-list">
+                {clearingPreviewContract.requiredSections.map((section) => (
+                  <li key={section}>{section.replaceAll("-", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Control statuses</h3>
+              <ul className="clean-list">
+                {clearingPreviewContract.requiredControlStatuses.slice(0, 12).map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Sample previews</h3>
+              <ul className="clean-list">
+                {clearingPreviewContract.samplePreviews.map((preview) => (
+                  <li key={preview.track}>
+                    {preview.track.replaceAll("_", " ")}: {preview.status.replaceAll("_", " ")}
+                  </li>
                 ))}
               </ul>
             </article>
