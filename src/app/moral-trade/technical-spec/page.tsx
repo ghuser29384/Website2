@@ -99,6 +99,10 @@ import {
   validateMoralTradeTradeClassificationContract,
 } from "@/lib/moral-trade/trade-classification";
 import {
+  getMoralTradeProtectiveAssessmentContract,
+  validateMoralTradeProtectiveAssessmentContract,
+} from "@/lib/moral-trade/protective-assessments";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -252,6 +256,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const tradeClassificationValidation =
     validateMoralTradeTradeClassificationContract(
       tradeClassificationContract,
+    );
+  const protectiveAssessmentContract =
+    getMoralTradeProtectiveAssessmentContract();
+  const protectiveAssessmentValidation =
+    validateMoralTradeProtectiveAssessmentContract(
+      protectiveAssessmentContract,
     );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
@@ -534,6 +544,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Trade classification",
       status: tradeClassificationValidation.status,
       summary: `${tradeClassificationContract.classifications.length} classification value(s), ${tradeClassificationContract.reviewDimensions.length} review dimension(s).`,
+    },
+    {
+      blockers: protectiveAssessmentValidation.blockers.length,
+      family: "Safety",
+      href: "/api/moral-trade/protective-assessments/contract",
+      label: "Protective assessments",
+      status: protectiveAssessmentValidation.status,
+      summary: `${protectiveAssessmentContract.assessmentDimensions.length} assessment dimension(s), ${protectiveAssessmentContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: copilotValidation.blockers.length,
@@ -2178,6 +2196,71 @@ export default async function MoralTradeTechnicalSpecPage() {
             <article className="panel protocol-contract-card">
               <h3>Public non-claim</h3>
               <p>{tradeClassificationContract.publicNonClaim}</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="protective-assessment-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Protective assessments</p>
+            <h2 id="protective-assessment-contract-heading">
+              Safety, authority, privacy, and fraud assessments are first-class lock gates.
+            </h2>
+            <p>
+              Moraltrade60 requires donation offsets, pledge swaps, compensated moral actions,
+              performance bonds, and side agreements to stay preview-only until protective
+              assessment records are non-blocking, not required under a frozen policy, or
+              explicitly neutral-review waived. The public contract publishes dimensions and
+              statuses without revealing protected-trait facts, authority documents, private
+              reports, credentials, source-of-funds evidence, reviewer notes, or participant
+              records.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Protective assessments {protectiveAssessmentContract.version}
+              </p>
+              <h3>Status {protectiveAssessmentValidation.status}</h3>
+              <p>
+                {protectiveAssessmentValidation.checks.length} check(s),{" "}
+                {protectiveAssessmentValidation.blockers.length} blocker(s),{" "}
+                {protectiveAssessmentContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/protective-assessments/contract">
+              Open protective-assessment JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Assessment dimensions</h3>
+              <ul className="clean-list">
+                {protectiveAssessmentContract.assessmentDimensions.map((dimension) => (
+                  <li key={dimension}>{dimension.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {protectiveAssessmentContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {protectiveAssessmentContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Privacy boundary</h3>
+              <p>{protectiveAssessmentContract.privacyBoundary}</p>
             </article>
           </div>
         </section>

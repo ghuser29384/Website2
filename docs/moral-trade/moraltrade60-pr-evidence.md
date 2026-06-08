@@ -38,6 +38,7 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 - first-class recipient-registry and payment-destination contract/records that prevent free-text names, copied donation links, wallet addresses, bank details, or fiscal-host notes from authorizing lock, capture, payout, reuse, or public money claims
 - first-class side-agreement disclosure contract/records for off-platform compensation, reciprocal favors, reporting suppression, threats, collusion, externalities, authority claims, privacy/confidentiality, fraud, anti-corruption, and participant-autonomy review before reliance-bearing transitions
 - first-class trade-classification contract/records for compensated moral-action classification, ordinary-service/procurement exclusion, frozen compensation terms, non-blocking review dimensions, metric eligibility, and no public moral-status badge claims
+- first-class protective-assessment contract/records for negative commitments, action reversibility, donor/tax treatment, third-party obligations, representative authority, reporting integrity, civil rights, participant autonomy, confidentiality, evidence authenticity, financial crime, non-transferability, regulated goods, cyber abuse, anti-corruption, least-intrusive evidence, and neutral-review performance-bond controls before lock, payment, payout, public completion, or release promotion
 - route-baseline verification for the public routes listed in `moraltrade60.md`
 
 ### Migration Summary
@@ -110,6 +111,10 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
   - Adds first-class `moral_trade_trade_classification_records`, `moral_trade_compensated_action_terms`, and `moral_trade_ordinary_service_procurement_reviews` tables.
   - Extends policy-snapshot subject support for `trade_classification`, `compensated_moral_action`, and `ordinary_service_procurement`.
   - Keeps missing, draft, blocked, stale, superseded, public-badge-exposed, invalid-hash, mutable-policy, unfrozen-compensation-term, missing-payer-moral-reason, unsupported-performer-counterfactual, ordinary-service-blocking, under-review, failed-review, or metric-inclusion evidence fail-closed before moral-trade lock, payment capture, payout release, public metric publication, or release-gate promotion.
+- `supabase/migrations/20260608_moral_trade_protective_assessments.sql`
+  - Adds first-class `moral_trade_protective_assessment_records`, `moral_trade_negative_commitment_scopes`, `moral_trade_action_reversibility_assessments`, `moral_trade_donor_of_record_tax_reviews`, and `moral_trade_authority_obligation_assessments` tables.
+  - Extends policy-snapshot subject support for protective assessments, negative-commitment scope, action-reversibility, donor-of-record/tax receipt, third-party obligation, representative authority, reporting-integrity, civil-rights/discrimination, autonomy, confidentiality/privacy, evidence-authenticity, financial-crime/fraud, transferability, regulated-goods, cyber-abuse, anti-corruption, least-intrusive evidence, and performance-bond neutral review.
+  - Keeps missing, required, under-review, blocked, stale, superseded, mutable-policy, invalid-hash, invasive-evidence, conflicted/counterparty-benefiting neutral review, out-of-scope reviewer quality, failed notice, or missing appeal evidence fail-closed before lock, payment capture, payout release, public completion, or release-gate promotion.
 
 ### Route Screenshots
 
@@ -146,9 +151,12 @@ node --import tsx --test src/lib/moral-trade/side-agreements.test.ts
 node --import tsx --test src/lib/moral-trade/side-agreements.test.ts src/lib/proposal-review.test.ts src/lib/moral-trade/challenge-appeal.test.ts src/lib/moral-trade/agreement-amendments.test.ts src/lib/moral-trade/baseline-integrity.test.ts src/lib/moral-trade/matching-clearing.test.ts src/lib/moral-trade/impact-claims.test.ts src/lib/moral-trade/privacy-governance.test.ts src/lib/moral-trade/anti-enumeration.test.ts src/lib/moral-trade/reviewer-quality.test.ts src/lib/moral-trade/account-security.test.ts src/lib/moral-trade/participant-eligibility.test.ts src/lib/moral-trade/recipient-destination.test.ts src/lib/moral-trade/production-readiness.test.ts src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 node --import tsx --test src/lib/moral-trade/trade-classification.test.ts
 node --import tsx --test src/lib/moral-trade/trade-classification.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
+node --import tsx --test src/lib/moral-trade/protective-assessments.test.ts
+node --import tsx --test src/lib/moral-trade/protective-assessments.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 node --import tsx -e 'const { createRequire } = await import("node:module"); const require = createRequire(import.meta.url); const m = require("./src/lib/proposal-review.ts"); const contract = m.getOfferReviewWorkflowContract(); const validation = m.validateOfferReviewWorkflowContract(contract); console.log(JSON.stringify({ status: validation.status, blockers: validation.blockers, sampleUserFacingBlockerExplanations: contract.sampleUserFacingBlockerExplanations.map((entry) => ({ key: entry.key, reasonCategory: entry.reasonCategory, nextAction: entry.nextAction })) }, null, 2));'
 node --import tsx -e 'const m = await import("./src/lib/moral-trade/side-agreements"); const api = m.default ?? m; const contract = api.getMoralTradeSideAgreementContract(); const validation = api.validateMoralTradeSideAgreementContract(contract); console.log(JSON.stringify({ status: validation.status, blockers: validation.blockers, sampleEvaluations: contract.sampleEvaluations.map((entry) => ({ transition: entry.transition, status: entry.status, blockers: entry.blockers.slice(0, 3) })) }, null, 2));'
 node --import tsx -e 'const m = await import("./src/lib/moral-trade/trade-classification"); const api = m.default ?? m; const contract = api.getMoralTradeTradeClassificationContract(); const validation = api.validateMoralTradeTradeClassificationContract(contract); console.log(JSON.stringify({ status: validation.status, blockers: validation.blockers, sampleEvaluations: contract.sampleEvaluations.map((entry) => ({ transition: entry.transition, status: entry.status, metricEligibleRecordCount: entry.metricEligibleRecordCount, blockers: entry.blockers.slice(0, 4) })) }, null, 2));'
+node --import tsx -e 'const m = await import("./src/lib/moral-trade/protective-assessments"); const api = m.default ?? m; const contract = api.getMoralTradeProtectiveAssessmentContract(); const validation = api.validateMoralTradeProtectiveAssessmentContract(contract); console.log(JSON.stringify({ status: validation.status, blockers: validation.blockers, sampleEvaluations: contract.sampleEvaluations.map((entry) => ({ transition: entry.transition, status: entry.status, requiredDimensionCount: entry.requiredDimensionCount, blockers: entry.blockers.slice(0, 5) })) }, null, 2));'
 npm run lint -- src/lib/marketplace-measurement.ts src/lib/marketplace-measurement.test.ts src/lib/growth.ts src/lib/growth.test.ts src/components/analytics/funnel-tracker.tsx src/lib/measurement-plan.ts src/app/measurement/page.tsx src/app/api/moral-trade/health/route.ts src/lib/public-route-smoke.test.ts scripts/check-public-route-baseline.mjs
 npm run lint -- src/lib/moral-trade/release-gates.ts src/lib/moral-trade/release-gates.test.ts src/app/api/moral-trade/release-gates/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
 npm run lint -- src/lib/moral-trade/participant-confirmations.ts src/lib/moral-trade/participant-confirmations.test.ts src/app/api/moral-trade/participant-confirmations/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts
@@ -167,6 +175,7 @@ npm run lint -- src/lib/moral-trade/challenge-appeal.ts src/lib/moral-trade/chal
 npm run lint -- src/lib/proposal-review.ts src/lib/proposal-review.test.ts src/components/offers/offer-create-form.tsx src/app/api/moral-trade/review-workflow/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/public-route-smoke.test.ts config/moral-trade/api-contract-profile.json
 npm run lint -- src/lib/moral-trade/side-agreements.ts src/lib/moral-trade/side-agreements.test.ts src/app/api/moral-trade/side-agreements/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts config/moral-trade/api-contract-profile.json
 npm run lint -- src/lib/moral-trade/trade-classification.ts src/lib/moral-trade/trade-classification.test.ts src/app/api/moral-trade/trade-classification/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts config/moral-trade/api-contract-profile.json
+npm run lint -- src/lib/moral-trade/protective-assessments.ts src/lib/moral-trade/protective-assessments.test.ts src/app/api/moral-trade/protective-assessments/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts config/moral-trade/api-contract-profile.json
 git diff --check
 npm run build
 MORALTRADE_BASE_URL=http://127.0.0.1:3000 npm run measure:routes
@@ -211,6 +220,10 @@ Observed results:
 - focused trade-classification contract bundle: `6` tests passed
 - trade-classification/API/source-smoke bundle: `60` tests passed
 - direct trade-classification validator probe: `status: pass`, `blockers: []`, sample evaluations `draft_preview: pass`, `matched_trade_lock: pass`, `public_metric_publication: pass` with `0` metric-eligible records, `payment_capture: blocked`
+- focused protective-assessment contract bundle: `6` tests passed
+- protective-assessment/API/source-smoke bundle: `60` tests passed
+- protective-assessment broad governance bundle: `174` tests passed
+- direct protective-assessment validator probe: `status: pass`, `blockers: []`, sample evaluations `draft_preview: pass`, `matched_trade_lock: pass` with `17` required dimensions, `payment_capture: blocked`
 - lint: passed
 - lint note: ESLint ignored `config/moral-trade/api-contract-profile.json` because no JSON lint configuration is supplied.
 - whitespace check: passed
@@ -572,6 +585,41 @@ Trade-classification contract sample:
 }
 ```
 
+Protective-assessment contract sample:
+
+```json
+{
+  "status": "pass",
+  "blockers": [],
+  "sampleEvaluations": [
+    {
+      "transition": "draft_preview",
+      "status": "pass",
+      "requiredDimensionCount": 0,
+      "blockers": []
+    },
+    {
+      "transition": "matched_trade_lock",
+      "status": "pass",
+      "requiredDimensionCount": 17,
+      "blockers": []
+    },
+    {
+      "transition": "payment_capture",
+      "status": "blocked",
+      "requiredDimensionCount": 17,
+      "blockers": [
+        "protective_assessment_not_non_blocking:reporting_integrity_non_suppression:blocked",
+        "confirmed_risk_not_non_blocking:reporting_integrity_non_suppression:protective-assessment:reporting_integrity_non_suppression",
+        "invasive_evidence_plan_without_review:confidentiality_privacy_rights:protective-assessment:confidentiality_privacy_rights",
+        "evidence_plan_not_approved:confidentiality_privacy_rights:invasive_without_review",
+        "protective_assessment_policy_not_immutable:evidence_authenticity_synthetic_media:mutable"
+      ]
+    }
+  ]
+}
+```
+
 Route baseline summary:
 
 ```json
@@ -613,7 +661,8 @@ Route baseline summary:
 - The recipient-destination route publishes static transition/table/status/review-dimension/sample-status contract metadata; it does not expose copied donation links, wallet addresses, bank details, fiscal-host notes, provider payout payloads, reviewer notes, or participant-specific destination records.
 - The side-agreement route publishes static transition/table/status/review-dimension/sample-status contract metadata; it does not expose private side-arrangement narratives, reviewer notes, raw evidence, source hashes, provider payloads, contact details, payment credentials, or exact counterparties.
 - The trade-classification route publishes static transition/table/status/classification/review-dimension/sample-status contract metadata; it does not expose private moral-reason narratives, performer rationale, raw compensation terms, reviewer notes, source hashes, provider payloads, contact details, payment credentials, or participant-specific classification records.
-- The health, measurement, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, challenge-appeal, production-readiness, recipient-destination, side-agreement, and trade-classification surfaces publish validator status and aggregate contract metadata, not private participant records, participant-specific discovery records, participant-specific impact-claim records, raw matching bundles, participant-specific final confirmations, participant-specific baseline assessments, participant-specific amendment records, participant-specific appeal records, participant-specific destination records, participant-specific side-agreement records, participant-specific classification records, or private operational evidence.
+- The protective-assessment route publishes static transition/table/status/dimension/sample-status contract metadata; it does not expose protected-trait facts, authority documents, private reports, credentials, source-of-funds evidence, reviewer notes, raw evidence, or participant-specific assessment records.
+- The health, measurement, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, challenge-appeal, production-readiness, recipient-destination, side-agreement, trade-classification, and protective-assessment surfaces publish validator status and aggregate contract metadata, not private participant records, participant-specific discovery records, participant-specific impact-claim records, raw matching bundles, participant-specific final confirmations, participant-specific baseline assessments, participant-specific amendment records, participant-specific appeal records, participant-specific destination records, participant-specific side-agreement records, participant-specific classification records, participant-specific assessment records, or private operational evidence.
 
 ### Remaining Blockers And Non-Claims
 

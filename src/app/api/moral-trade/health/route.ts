@@ -76,6 +76,10 @@ import {
   validateMoralTradeTradeClassificationContract,
 } from "@/lib/moral-trade/trade-classification";
 import {
+  getMoralTradeProtectiveAssessmentContract,
+  validateMoralTradeProtectiveAssessmentContract,
+} from "@/lib/moral-trade/protective-assessments";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -239,6 +243,12 @@ export async function GET(request: Request) {
     getMoralTradeTradeClassificationContract();
   const tradeClassificationValidation =
     validateMoralTradeTradeClassificationContract(tradeClassificationContract);
+  const protectiveAssessmentContract =
+    getMoralTradeProtectiveAssessmentContract();
+  const protectiveAssessmentValidation =
+    validateMoralTradeProtectiveAssessmentContract(
+      protectiveAssessmentContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -330,6 +340,7 @@ export async function GET(request: Request) {
       recipientDestinationValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
+      protectiveAssessmentValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -371,6 +382,7 @@ export async function GET(request: Request) {
     recipientDestinationValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
+    protectiveAssessmentValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -739,6 +751,32 @@ export async function GET(request: Request) {
       ),
       tradeClassificationContractTests:
         tradeClassificationContract.contractTests,
+      protectiveAssessmentContractVersion:
+        protectiveAssessmentContract.version,
+      protectiveAssessmentTransitionKeys:
+        protectiveAssessmentContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      protectiveAssessmentSubjectTypes:
+        protectiveAssessmentContract.subjectTypes,
+      protectiveAssessmentDimensions:
+        protectiveAssessmentContract.assessmentDimensions,
+      protectiveAssessmentFailClosedStatuses:
+        protectiveAssessmentContract.failClosedStatuses,
+      protectiveAssessmentFirstClassRecordTables:
+        protectiveAssessmentContract.firstClassRecordTables,
+      protectiveAssessmentPolicySnapshotSubjects:
+        protectiveAssessmentContract.policySnapshotSubjects,
+      protectiveAssessmentPrivacyBoundary:
+        protectiveAssessmentContract.privacyBoundary,
+      protectiveAssessmentSampleEvaluationStatuses: Object.fromEntries(
+        protectiveAssessmentContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      protectiveAssessmentContractTests:
+        protectiveAssessmentContract.contractTests,
       statusValues: profile.statusValues,
       decisionPipeline: profile.decisionPipeline.map((step) => ({
         key: step.key,
@@ -1023,6 +1061,7 @@ export async function GET(request: Request) {
       ...recipientDestinationValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
+      ...protectiveAssessmentValidation.blockers,
       ...provenanceValidation.blockers,
       ...schemaRegistryValidation.blockers,
       ...copilotValidation.blockers,
