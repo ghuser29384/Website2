@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  evaluateMoralTradeAppealCase,
   evaluateMoralTradeChallengeAppeal,
   getMoralTradeChallengeAppealContract,
   validateMoralTradeChallengeAppealContract,
   validateMoralTradeChallengeAppealDecision,
+  type MoralTradeAppealCaseRecord,
+  type MoralTradeAppealPolicyRecord,
   type MoralTradeChallengeAppealContract,
   type MoralTradeChallengeAppealDecision,
   type MoralTradeChallengeAppealInput,
@@ -26,6 +29,60 @@ const baseAppeal = {
     "The public summary names a community affected by the challenged externality review.",
   remedyRequested: "Pause the completion badge and separate factual proof from baseline confidence.",
 } satisfies MoralTradeChallengeAppealInput;
+
+function appealPolicy(
+  overrides: Partial<MoralTradeAppealPolicyRecord> = {},
+): MoralTradeAppealPolicyRecord {
+  return {
+    policyId: "appeal-policy-evidence-row",
+    subject: "evidence_row",
+    status: "passed",
+    noticeRequired: true,
+    deadlineRequired: true,
+    neutralReviewRequired: true,
+    nonRetaliationRequired: true,
+    safetyBlockerWaiverProhibited: true,
+    settledObligationReopenProhibited: true,
+    maxAppealAgeDays: 30,
+    policyHash:
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    reviewedAt: "2026-06-01T00:00:00.000Z",
+    supersededBy: null,
+    ...overrides,
+  };
+}
+
+function appealCase(
+  overrides: Partial<MoralTradeAppealCaseRecord> = {},
+): MoralTradeAppealCaseRecord {
+  return {
+    appealCaseId: "appeal-case-evidence-row",
+    policyRef: "appeal-policy-evidence-row",
+    subject: "evidence_row",
+    standing: "affected_party",
+    trigger: "wrong_scope_evidence",
+    outcome: "open_challenge_window",
+    status: "under_neutral_review",
+    noticeState: "delivered",
+    deadlineAt: "2026-06-20T00:00:00.000Z",
+    filedAt: "2026-06-02T00:00:00.000Z",
+    reviewedAt: null,
+    expiresAt: "2026-06-25T00:00:00.000Z",
+    neutralReviewStatus: "passed",
+    standingStatus: "passed",
+    scopeHash:
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    evidenceScopeRefs: ["evidence-row-001", "review-decision-001"],
+    privateDetailsRedacted: true,
+    safetyBlockerWaiverAttempted: false,
+    settledObligationReopenAttempted: false,
+    nonRetaliationNoticeSent: true,
+    caseHash:
+      "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    supersededBy: null,
+    ...overrides,
+  };
+}
 
 test("challenge appeal evaluation scopes wrong-scope evidence for human review", () => {
   const decision = evaluateMoralTradeChallengeAppeal(baseAppeal);
@@ -102,6 +159,96 @@ test("challenge appeal evaluation honors compatible requested outcomes without s
   assert.equal(validateMoralTradeChallengeAppealDecision(decision).status, "pass");
 });
 
+test("appeal cases fail closed when policy or first-class case records are missing", () => {
+  const missing = evaluateMoralTradeAppealCase({
+    subject: "evidence_row",
+    trigger: "wrong_scope_evidence",
+    requiresAppealCase: true,
+    requiresNeutralReview: true,
+    checkedAt: "2026-06-03T00:00:00.000Z",
+    policies: [],
+    appealCases: [],
+  });
+
+  assert.equal(missing.status, "blocked");
+  assert.ok(missing.blockers.includes("appeal_policy_missing:evidence_row"));
+  assert.ok(
+    missing.blockers.includes(
+      "appeal_case_missing:evidence_row:wrong_scope_evidence",
+    ),
+  );
+});
+
+test("appeal cases block missing notice, deadlines, neutral review, scope, redaction, and safety controls", () => {
+  const blocked = evaluateMoralTradeAppealCase({
+    subject: "evidence_row",
+    trigger: "wrong_scope_evidence",
+    requiresAppealCase: true,
+    requiresNeutralReview: true,
+    checkedAt: "2026-06-03T00:00:00.000Z",
+    policies: [appealPolicy()],
+    appealCases: [
+      appealCase({
+        noticeState: "missing",
+        deadlineAt: null,
+        neutralReviewStatus: "missing",
+        standingStatus: "missing",
+        scopeHash: null,
+        evidenceScopeRefs: [],
+        privateDetailsRedacted: false,
+        safetyBlockerWaiverAttempted: true,
+        settledObligationReopenAttempted: true,
+        nonRetaliationNoticeSent: false,
+        caseHash: "invalid-hash",
+      }),
+    ],
+  });
+
+  assert.equal(blocked.status, "blocked");
+  assert.ok(blocked.blockers.includes("standing_missing:appeal-case-evidence-row"));
+  assert.ok(blocked.blockers.includes("notice_missing:appeal-case-evidence-row"));
+  assert.ok(blocked.blockers.includes("deadline_missing:appeal-case-evidence-row"));
+  assert.ok(
+    blocked.blockers.includes("neutral_review_missing:appeal-case-evidence-row"),
+  );
+  assert.ok(blocked.blockers.includes("scope_missing:appeal-case-evidence-row"));
+  assert.ok(
+    blocked.blockers.includes("evidence_scope_missing:appeal-case-evidence-row"),
+  );
+  assert.ok(
+    blocked.blockers.includes("private_details_unredacted:appeal-case-evidence-row"),
+  );
+  assert.ok(
+    blocked.blockers.includes(
+      "safety_blocker_waiver_attempted:appeal-case-evidence-row",
+    ),
+  );
+  assert.ok(
+    blocked.blockers.includes(
+      "settled_obligation_reopen_attempted:appeal-case-evidence-row",
+    ),
+  );
+  assert.ok(
+    blocked.blockers.includes("non_retaliation_missing:appeal-case-evidence-row"),
+  );
+  assert.ok(blocked.blockers.includes("invalid_case_hash:appeal-case-evidence-row"));
+});
+
+test("current appeal cases pass with notice, deadline, scope, neutral review, and non-retaliation evidence", () => {
+  const current = evaluateMoralTradeAppealCase({
+    subject: "evidence_row",
+    trigger: "wrong_scope_evidence",
+    requiresAppealCase: true,
+    requiresNeutralReview: true,
+    checkedAt: "2026-06-03T00:00:00.000Z",
+    policies: [appealPolicy()],
+    appealCases: [appealCase()],
+  });
+
+  assert.equal(current.status, "pass");
+  assert.deepEqual(current.blockers, []);
+});
+
 test("challenge appeal evaluation rejects incompatible requested outcomes", () => {
   const decision = evaluateMoralTradeChallengeAppeal({
     ...baseAppeal,
@@ -147,8 +294,25 @@ test("challenge appeal contract validates scope, standing, privacy, provenance, 
   assert.ok(contract.standingCategories.includes("affected_party"));
   assert.ok(contract.appealTriggers.includes("privacy_disclosure_error"));
   assert.ok(contract.allowedOutcomes.includes("record_remedy"));
+  assert.ok(contract.firstClassRecordTables.includes("moral_trade_appeal_policies"));
+  assert.ok(contract.firstClassRecordTables.includes("moral_trade_appeal_cases"));
+  assert.ok(contract.policySnapshotSubjects.includes("appeal_case"));
+  assert.ok(contract.appealCaseStatuses.includes("under_neutral_review"));
+  assert.ok(contract.noticeStates.includes("delivered"));
+  assert.ok(contract.failClosedStatuses.includes("notice_missing"));
+  assert.ok(contract.failClosedStatuses.includes("neutral_review_missing"));
+  assert.ok(contract.failClosedStatuses.includes("settled_obligation_reopen_attempted"));
   assert.ok(contract.approvedFactorCodes.includes("no_unrelated_moral_disagreement"));
   assert.ok(contract.approvedFactorCodes.includes("provenance_activity_required"));
+  assert.ok(
+    contract.sampleAppealCaseEvaluations.some((evaluation) => evaluation.status === "pass"),
+  );
+  assert.ok(
+    contract.sampleAppealCaseEvaluations.some((evaluation) =>
+      evaluation.blockers.includes("notice_missing:appeal-case-blocked"),
+    ),
+  );
+  assert.ok(contract.contractTests.includes("appeal_case_record_contract"));
   assert.ok(contract.contractTests.includes("challenge_appeal_evaluate_route_contract"));
 });
 

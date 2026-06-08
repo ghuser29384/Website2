@@ -2217,6 +2217,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const agreementAmendmentMigration = readRepoFile(
     "supabase/migrations/20260607_zzzzzzzzzzzzz_moral_trade_agreement_amendment_records.sql",
   );
+  const appealCaseMigration = readRepoFile(
+    "supabase/migrations/20260607_zzzzzzzzzzzzzz_moral_trade_appeal_case_records.sql",
+  );
   const recipientDestinationMigration = readRepoFile(
     "supabase/migrations/20260607_zzzz_moral_trade_recipient_destination_records.sql",
   );
@@ -2645,6 +2648,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(agreementAmendmentMigration, /agreement_amendment/);
   assert.match(agreementAmendmentMigration, /parent_record_edit_detected_bool/);
   assert.match(agreementAmendmentMigration, /renewed_confirmation_refs/);
+  assert.match(appealCaseMigration, /moral_trade_appeal_policies/);
+  assert.match(appealCaseMigration, /moral_trade_appeal_cases/);
+  assert.match(appealCaseMigration, /appeal_case/);
+  assert.match(appealCaseMigration, /notice_state/);
+  assert.match(appealCaseMigration, /deadline_at/);
+  assert.match(appealCaseMigration, /non_retaliation_notice_sent_bool/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_registry_entries/);
   assert.match(recipientDestinationMigration, /moral_trade_payment_destinations/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_destination_reviews/);
@@ -2687,6 +2696,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /moral_trade_agreement_amendment_policies/);
   assert.match(schemaSource, /moral_trade_agreement_amendment_records/);
   assert.match(schemaSource, /agreement_amendment/);
+  assert.match(schemaSource, /moral_trade_appeal_policies/);
+  assert.match(schemaSource, /moral_trade_appeal_cases/);
+  assert.match(schemaSource, /appeal_case/);
   assert.match(schemaSource, /moral_trade_recipient_registry_entries/);
   assert.match(schemaSource, /moral_trade_payment_destinations/);
   assert.match(schemaSource, /moral_trade_recipient_destination_reviews/);
@@ -2864,7 +2876,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(dashboardPage, /compatibility signal/);
   assert.equal(dashboardPage.includes("Fit score"), false);
   assert.match(challengeAppealSource, /evaluateMoralTradeChallengeAppeal/);
+  assert.match(challengeAppealSource, /evaluateMoralTradeAppealCase/);
   assert.match(challengeAppealSource, /validateMoralTradeChallengeAppealContract/);
+  assert.match(challengeAppealSource, /moral_trade_appeal_policies/);
+  assert.match(challengeAppealSource, /moral_trade_appeal_cases/);
+  assert.match(challengeAppealSource, /appeal_case/);
   assert.match(challengeAppealSource, /affected_party_standing/);
   assert.match(challengeAppealSource, /wrong_scope_evidence_review/);
   assert.match(challengeAppealSource, /privacy_disclosure_review/);
@@ -2872,6 +2888,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(challengeAppealSource, /no_unrelated_moral_disagreement/);
   assert.match(challengeAppealSource, /provenance_activity_required/);
   assert.match(challengeAppealSource, /deterministic_challenge_appeal_scope_only/);
+  assert.match(challengeAppealSource, /notice_missing/);
+  assert.match(challengeAppealSource, /deadline_expired/);
+  assert.match(challengeAppealSource, /neutral_review_missing/);
+  assert.match(challengeAppealSource, /settled_obligation_reopen_attempted/);
   assert.match(challengeAppealSource, /challenge_appeal_evaluate_route_contract/);
   assert.match(disclosureSource, /getMoralTradeDisclosureContract/);
   assert.match(disclosureSource, /validateMoralTradeDisclosureContract/);
@@ -3209,6 +3229,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /never store submitted redacted profiles/);
   assert.match(apiContractProfile, /rank moral value/);
   assert.match(apiContractProfile, /challenge_appeal_contract_response/);
+  assert.match(apiContractProfile, /first-class appeal-case record metadata/);
+  assert.match(apiContractProfile, /appeal-case record contract/);
   assert.match(apiContractProfile, /challenge_appeal_evaluate_request/);
   assert.match(apiContractProfile, /challenge_appeal_evaluate_response/);
   assert.match(apiContractProfile, /deterministic_challenge_appeal_scope_only/);
@@ -3393,6 +3415,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Challenge appeal contract/);
   assert.match(technicalSpecPage, /Appeals are scoped to reviewed claims, standing, and remedy paths/);
   assert.match(technicalSpecPage, /challengeAppealContract\.standingCategories/);
+  assert.match(technicalSpecPage, /challengeAppealContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /challengeAppealContract\.appealCaseStatuses/);
+  assert.match(technicalSpecPage, /challengeAppealContract\.failClosedStatuses/);
   assert.match(technicalSpecPage, /\/api\/moral-trade\/challenge-appeal\/contract/);
   assert.match(technicalSpecPage, /POST \/api\/moral-trade\/challenge-appeal\/evaluate/);
   assert.match(technicalSpecPage, /Requested outcomes are advisory/);
@@ -3563,6 +3588,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /challengeAppealValidation/);
   assert.match(healthRoute, /challengeAppealStandingCategories/);
   assert.match(healthRoute, /challengeAppealAllowedOutcomes/);
+  assert.match(healthRoute, /challengeAppealFirstClassRecordTables/);
+  assert.match(healthRoute, /challengeAppealCaseStatuses/);
+  assert.match(healthRoute, /challengeAppealFailClosedStatuses/);
   assert.match(healthRoute, /disclosureValidation/);
   assert.match(healthRoute, /disclosureAudienceStages/);
   assert.match(healthRoute, /disclosureRedactedFields/);
@@ -3701,6 +3729,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(matchSignalEvaluateRoute, /private, no-store/);
   assert.match(challengeAppealContractRoute, /validateMoralTradeChallengeAppealContract/);
   assert.match(challengeAppealContractRoute, /standingCategories/);
+  assert.match(challengeAppealContractRoute, /firstClassRecordTables/);
+  assert.match(challengeAppealContractRoute, /appealCaseSampleEvaluationStatuses/);
   assert.match(challengeAppealEvaluateRoute, /evaluateMoralTradeChallengeAppeal/);
   assert.match(challengeAppealEvaluateRoute, /challenge_appeal_packet/);
   assert.match(challengeAppealEvaluateRoute, /stateMutation: false/);

@@ -733,6 +733,22 @@ export async function GET(request: Request) {
       challengeAppealStandingCategories: challengeAppealContract.standingCategories,
       challengeAppealTriggers: challengeAppealContract.appealTriggers,
       challengeAppealAllowedOutcomes: challengeAppealContract.allowedOutcomes,
+      challengeAppealFirstClassRecordTables:
+        challengeAppealContract.firstClassRecordTables,
+      challengeAppealPolicySnapshotSubjects:
+        challengeAppealContract.policySnapshotSubjects,
+      challengeAppealCaseStatuses:
+        challengeAppealContract.appealCaseStatuses,
+      challengeAppealNoticeStates:
+        challengeAppealContract.noticeStates,
+      challengeAppealFailClosedStatuses:
+        challengeAppealContract.failClosedStatuses,
+      challengeAppealCaseSampleEvaluationStatuses: Object.fromEntries(
+        challengeAppealContract.sampleAppealCaseEvaluations.map((evaluation) => [
+          `${evaluation.subject}:${evaluation.trigger}:${evaluation.status}`,
+          evaluation.status,
+        ]),
+      ),
       challengeAppealFactorCodes: challengeAppealContract.approvedFactorCodes,
       challengeAppealContractTests: challengeAppealContract.contractTests,
       disclosureContractVersion: disclosureContract.version,

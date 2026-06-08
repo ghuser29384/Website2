@@ -5624,6 +5624,292 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_appeal_policies: {
+        Row: {
+          id: string;
+          policy_snapshot_id: string;
+          policy_version: string;
+          subject:
+            | "claim"
+            | "evidence_row"
+            | "baseline_concern"
+            | "disclosure_decision"
+            | "externality_trigger"
+            | "completion_state"
+            | "policy_flag";
+          status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          notice_required_bool: boolean;
+          deadline_required_bool: boolean;
+          neutral_review_required_bool: boolean;
+          non_retaliation_required_bool: boolean;
+          safety_blocker_waiver_prohibited_bool: boolean;
+          settled_obligation_reopen_prohibited_bool: boolean;
+          max_appeal_age_days: number;
+          policy_hash: string;
+          reviewed_by: string | null;
+          reviewed_at: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          policy_snapshot_id: string;
+          policy_version?: string;
+          subject:
+            | "claim"
+            | "evidence_row"
+            | "baseline_concern"
+            | "disclosure_decision"
+            | "externality_trigger"
+            | "completion_state"
+            | "policy_flag";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          notice_required_bool?: boolean;
+          deadline_required_bool?: boolean;
+          neutral_review_required_bool?: boolean;
+          non_retaliation_required_bool?: boolean;
+          safety_blocker_waiver_prohibited_bool?: boolean;
+          settled_obligation_reopen_prohibited_bool?: boolean;
+          max_appeal_age_days?: number;
+          policy_hash: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          policy_snapshot_id?: string;
+          policy_version?: string;
+          subject?:
+            | "claim"
+            | "evidence_row"
+            | "baseline_concern"
+            | "disclosure_decision"
+            | "externality_trigger"
+            | "completion_state"
+            | "policy_flag";
+          status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          notice_required_bool?: boolean;
+          deadline_required_bool?: boolean;
+          neutral_review_required_bool?: boolean;
+          non_retaliation_required_bool?: boolean;
+          safety_blocker_waiver_prohibited_bool?: boolean;
+          settled_obligation_reopen_prohibited_bool?: boolean;
+          max_appeal_age_days?: number;
+          policy_hash?: string;
+          reviewed_by?: string | null;
+          reviewed_at?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      moral_trade_appeal_cases: {
+        Row: {
+          id: string;
+          appeal_policy_ref: string;
+          subject:
+            | "claim"
+            | "evidence_row"
+            | "baseline_concern"
+            | "disclosure_decision"
+            | "externality_trigger"
+            | "completion_state"
+            | "policy_flag";
+          standing:
+            | "participant"
+            | "counterparty"
+            | "affected_party"
+            | "reviewer"
+            | "admin_safety"
+            | "external_verifier";
+          trigger:
+            | "duplicate_proof"
+            | "coercive_baseline"
+            | "wrong_scope_evidence"
+            | "material_factual_error"
+            | "privacy_disclosure_error"
+            | "externality_remedy_gap"
+            | "reviewer_conflict"
+            | "policy_misapplied";
+          outcome:
+            | "uphold_decision"
+            | "request_evidence"
+            | "route_human_review"
+            | "open_challenge_window"
+            | "block_reliance"
+            | "record_remedy"
+            | "close_unresolved"
+            | "correct_record";
+          status:
+            | "draft"
+            | "filed"
+            | "noticed"
+            | "under_neutral_review"
+            | "correction_requested"
+            | "upheld"
+            | "corrected"
+            | "dismissed"
+            | "closed_unresolved"
+            | "superseded"
+            | "stale";
+          notice_state: "missing" | "queued" | "delivered" | "failed" | "not_required_for_stage";
+          deadline_at: string | null;
+          filed_at: string | null;
+          reviewed_at: string | null;
+          expires_at: string | null;
+          neutral_review_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          standing_status: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          scope_hash: string;
+          evidence_scope_refs: string[];
+          private_details_redacted_bool: boolean;
+          safety_blocker_waiver_attempted_bool: boolean;
+          settled_obligation_reopen_attempted_bool: boolean;
+          non_retaliation_notice_sent_bool: boolean;
+          case_hash: string;
+          review_decision_id: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          appeal_policy_ref: string;
+          subject:
+            | "claim"
+            | "evidence_row"
+            | "baseline_concern"
+            | "disclosure_decision"
+            | "externality_trigger"
+            | "completion_state"
+            | "policy_flag";
+          standing:
+            | "participant"
+            | "counterparty"
+            | "affected_party"
+            | "reviewer"
+            | "admin_safety"
+            | "external_verifier";
+          trigger:
+            | "duplicate_proof"
+            | "coercive_baseline"
+            | "wrong_scope_evidence"
+            | "material_factual_error"
+            | "privacy_disclosure_error"
+            | "externality_remedy_gap"
+            | "reviewer_conflict"
+            | "policy_misapplied";
+          outcome:
+            | "uphold_decision"
+            | "request_evidence"
+            | "route_human_review"
+            | "open_challenge_window"
+            | "block_reliance"
+            | "record_remedy"
+            | "close_unresolved"
+            | "correct_record";
+          status?:
+            | "draft"
+            | "filed"
+            | "noticed"
+            | "under_neutral_review"
+            | "correction_requested"
+            | "upheld"
+            | "corrected"
+            | "dismissed"
+            | "closed_unresolved"
+            | "superseded"
+            | "stale";
+          notice_state?: "missing" | "queued" | "delivered" | "failed" | "not_required_for_stage";
+          deadline_at?: string | null;
+          filed_at?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          neutral_review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          standing_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          scope_hash: string;
+          evidence_scope_refs?: string[];
+          private_details_redacted_bool?: boolean;
+          safety_blocker_waiver_attempted_bool?: boolean;
+          settled_obligation_reopen_attempted_bool?: boolean;
+          non_retaliation_notice_sent_bool?: boolean;
+          case_hash: string;
+          review_decision_id?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          appeal_policy_ref?: string;
+          subject?:
+            | "claim"
+            | "evidence_row"
+            | "baseline_concern"
+            | "disclosure_decision"
+            | "externality_trigger"
+            | "completion_state"
+            | "policy_flag";
+          standing?:
+            | "participant"
+            | "counterparty"
+            | "affected_party"
+            | "reviewer"
+            | "admin_safety"
+            | "external_verifier";
+          trigger?:
+            | "duplicate_proof"
+            | "coercive_baseline"
+            | "wrong_scope_evidence"
+            | "material_factual_error"
+            | "privacy_disclosure_error"
+            | "externality_remedy_gap"
+            | "reviewer_conflict"
+            | "policy_misapplied";
+          outcome?:
+            | "uphold_decision"
+            | "request_evidence"
+            | "route_human_review"
+            | "open_challenge_window"
+            | "block_reliance"
+            | "record_remedy"
+            | "close_unresolved"
+            | "correct_record";
+          status?:
+            | "draft"
+            | "filed"
+            | "noticed"
+            | "under_neutral_review"
+            | "correction_requested"
+            | "upheld"
+            | "corrected"
+            | "dismissed"
+            | "closed_unresolved"
+            | "superseded"
+            | "stale";
+          notice_state?: "missing" | "queued" | "delivered" | "failed" | "not_required_for_stage";
+          deadline_at?: string | null;
+          filed_at?: string | null;
+          reviewed_at?: string | null;
+          expires_at?: string | null;
+          neutral_review_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          standing_status?: "passed" | "not_required_for_stage" | "missing" | "under_review" | "failed" | "stale" | "superseded";
+          scope_hash?: string;
+          evidence_scope_refs?: string[];
+          private_details_redacted_bool?: boolean;
+          safety_blocker_waiver_attempted_bool?: boolean;
+          settled_obligation_reopen_attempted_bool?: boolean;
+          non_retaliation_notice_sent_bool?: boolean;
+          case_hash?: string;
+          review_decision_id?: string | null;
+          superseded_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       risk_signals: {
         Row: {
           id: string;
@@ -6954,6 +7240,7 @@ export interface Database {
             | "baseline_integrity"
             | "baseline_manufacturing"
             | "agreement_amendment"
+            | "appeal_case"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -7000,6 +7287,7 @@ export interface Database {
             | "baseline_integrity"
             | "baseline_manufacturing"
             | "agreement_amendment"
+            | "appeal_case"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"
@@ -7045,6 +7333,7 @@ export interface Database {
             | "baseline_integrity"
             | "baseline_manufacturing"
             | "agreement_amendment"
+            | "appeal_case"
             | "backup_recovery"
             | "deployment_release"
             | "configuration_snapshot"

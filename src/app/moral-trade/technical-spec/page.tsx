@@ -564,7 +564,7 @@ export default async function MoralTradeTechnicalSpecPage() {
       href: "/api/moral-trade/challenge-appeal/contract",
       label: "Challenge appeal",
       status: challengeAppealValidation.status,
-      summary: `${challengeAppealContract.appealTriggers.length} appeal trigger(s), ${challengeAppealContract.standingCategories.length} standing category/categories.`,
+      summary: `${challengeAppealContract.appealTriggers.length} appeal trigger(s), ${challengeAppealContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: externalityValidation.blockers.length,
@@ -2158,7 +2158,8 @@ export default async function MoralTradeTechnicalSpecPage() {
               <p>
                 {challengeAppealValidation.checks.length} check(s),{" "}
                 {challengeAppealValidation.blockers.length} blocker(s),{" "}
-                {challengeAppealContract.appealTriggers.length} trigger(s).
+                {challengeAppealContract.firstClassRecordTables.length} first-class record
+                table(s).
               </p>
             </div>
             <Link className="button button-secondary" href="/api/moral-trade/challenge-appeal/contract">
@@ -2183,6 +2184,22 @@ export default async function MoralTradeTechnicalSpecPage() {
               </ul>
             </article>
             <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {challengeAppealContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Appeal case states</h3>
+              <ul className="clean-list">
+                {challengeAppealContract.appealCaseStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
               <h3>Evaluation route</h3>
               <p>
                 POST /api/moral-trade/challenge-appeal/evaluate returns scoped factor codes,
@@ -2192,10 +2209,10 @@ export default async function MoralTradeTechnicalSpecPage() {
               </p>
             </article>
             <article className="panel protocol-contract-card">
-              <h3>Contract tests</h3>
+              <h3>Fail-closed statuses</h3>
               <ul className="clean-list">
-                {challengeAppealContract.contractTests.map((hook) => (
-                  <li key={hook}>{hook.replaceAll("_", " ")}</li>
+                {challengeAppealContract.failClosedStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
                 ))}
               </ul>
             </article>
