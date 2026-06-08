@@ -1,5 +1,5 @@
 {
-  "version": "moral-trade-api-contract-v0.45-2026-06",
+  "version": "moral-trade-api-contract-v0.46-2026-06",
   "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, baseline-integrity/manufacturing governance, agreement-amendment governance, challenge-appeal and appeal-case governance, side-agreement disclosure governance, trade-classification governance, protective-assessment governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
@@ -313,6 +313,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return protective-assessment validation blockers and fail-closed sample evaluations; never expose protected-trait facts, authority documents, private reports, credentials, source-of-funds evidence, reviewer notes, raw evidence, or participant-specific assessment records."
+    },
+    {
+      "key": "moral_trade_user_safety_content_moderation_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/user-safety-content-moderation/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "user_safety_content_moderation_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return user-safety and content-moderation validation blockers and fail-closed sample evaluations; never expose raw reports, private messages, reporter identities, target identities, reviewer notes, contact details, protected-trait facts, raw evidence, exact rare-view clusters, or participant-specific safety/moderation records."
     },
     {
       "key": "moral_trade_provenance_schema",
@@ -1528,6 +1540,19 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class assessment records, immutable policy snapshots, assessment dimensions, fail-closed statuses, gated transitions, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, privacy boundary, first-class table names, policy subjects, subject types, assessment dimensions, transition requirements, sample statuses, and test hooks without protected-trait facts, authority documents, private reports, credentials, source-of-funds evidence, reviewer notes, raw evidence, or participant-specific assessment records." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Protective-assessment blockers that prevent relying on lock, payment capture, payout release, public completion, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "user_safety_content_moderation_contract_response",
+      "purpose": "Public validator-backed user-safety and content-moderation contract for contact attempts, invite links, blocking, decline handling, abuse reporting, retaliation prevention, prohibited-use moderation, and viewpoint-neutral handling before public, reviewer-actionable, reliance-bearing, payable, profile-amplifying, contact-enabling, or release-gate transitions.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the user-safety/content-moderation contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the user-safety/content-moderation validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "User-safety/content-moderation contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class safety and moderation records, immutable policy snapshots, moderation dimensions, user-safety dimensions, fail-closed statuses, gated transitions, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, privacy boundary, first-class table names, policy subjects, content types, moderation dimensions, user-safety dimensions, transition requirements, sample statuses, and test hooks without raw reports, private messages, reporter identities, target identities, reviewer notes, contact details, protected-trait facts, raw evidence, exact rare-view clusters, or participant-specific safety/moderation records." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "User-safety/content-moderation blockers that prevent public display, reviewer actionability, reliance-bearing previews, payment capture, contact introduction, profile amplification, or release-gate promotion." }
       ]
     },
     {

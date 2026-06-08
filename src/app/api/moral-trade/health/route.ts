@@ -80,6 +80,10 @@ import {
   validateMoralTradeProtectiveAssessmentContract,
 } from "@/lib/moral-trade/protective-assessments";
 import {
+  getMoralTradeUserSafetyContentModerationContract,
+  validateMoralTradeUserSafetyContentModerationContract,
+} from "@/lib/moral-trade/user-safety-content-moderation";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -249,6 +253,12 @@ export async function GET(request: Request) {
     validateMoralTradeProtectiveAssessmentContract(
       protectiveAssessmentContract,
     );
+  const userSafetyContentModerationContract =
+    getMoralTradeUserSafetyContentModerationContract();
+  const userSafetyContentModerationValidation =
+    validateMoralTradeUserSafetyContentModerationContract(
+      userSafetyContentModerationContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -341,6 +351,7 @@ export async function GET(request: Request) {
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       protectiveAssessmentValidation.status === "pass" &&
+      userSafetyContentModerationValidation.status === "pass" &&
       provenanceValidation.status === "pass" &&
       schemaRegistryValidation.status === "pass" &&
       copilotValidation.status === "pass" &&
@@ -383,6 +394,7 @@ export async function GET(request: Request) {
     sideAgreementValidation,
     tradeClassificationValidation,
     protectiveAssessmentValidation,
+    userSafetyContentModerationValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -777,6 +789,37 @@ export async function GET(request: Request) {
       ),
       protectiveAssessmentContractTests:
         protectiveAssessmentContract.contractTests,
+      userSafetyContentModerationContractVersion:
+        userSafetyContentModerationContract.version,
+      userSafetyContentModerationTransitionKeys:
+        userSafetyContentModerationContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      userSafetyContentModerationContentTypes:
+        userSafetyContentModerationContract.contentTypes,
+      userSafetyContentModerationModerationDimensions:
+        userSafetyContentModerationContract.moderationDimensions,
+      userSafetyContentModerationUserSafetyDimensions:
+        userSafetyContentModerationContract.userSafetyDimensions,
+      userSafetyContentModerationFailClosedStatuses: {
+        moderation:
+          userSafetyContentModerationContract.moderationFailClosedStatuses,
+        userSafety:
+          userSafetyContentModerationContract.userSafetyFailClosedStatuses,
+      },
+      userSafetyContentModerationFirstClassRecordTables:
+        userSafetyContentModerationContract.firstClassRecordTables,
+      userSafetyContentModerationPolicySnapshotSubjects:
+        userSafetyContentModerationContract.policySnapshotSubjects,
+      userSafetyContentModerationPrivacyBoundary:
+        userSafetyContentModerationContract.privacyBoundary,
+      userSafetyContentModerationSampleEvaluationStatuses: Object.fromEntries(
+        userSafetyContentModerationContract.sampleEvaluations.map(
+          (evaluation) => [evaluation.transition, evaluation.status],
+        ),
+      ),
+      userSafetyContentModerationContractTests:
+        userSafetyContentModerationContract.contractTests,
       statusValues: profile.statusValues,
       decisionPipeline: profile.decisionPipeline.map((step) => ({
         key: step.key,

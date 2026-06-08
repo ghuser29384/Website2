@@ -2141,6 +2141,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const protectiveAssessmentSource = readRepoFile(
     "src/lib/moral-trade/protective-assessments.ts",
   );
+  const userSafetyContentModerationSource = readRepoFile(
+    "src/lib/moral-trade/user-safety-content-moderation.ts",
+  );
   const proposalReviewSource = readRepoFile("src/lib/proposal-review.ts");
   const offerWritePathSource = readRepoFile("src/lib/moral-trade/offer-write-path.ts");
   const agreementWritePathSource = readRepoFile("src/lib/moral-trade/agreement-write-path.ts");
@@ -2239,6 +2242,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const protectiveAssessmentMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_protective_assessments.sql",
   );
+  const userSafetyContentModerationMigration = readRepoFile(
+    "supabase/migrations/20260608_moral_trade_user_safety_content_moderation.sql",
+  );
   const schemaSource = readRepoFile("supabase/schema.sql");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
@@ -2308,6 +2314,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const protectiveAssessmentContractRoute = readRepoFile(
     "src/app/api/moral-trade/protective-assessments/contract/route.ts",
+  );
+  const userSafetyContentModerationContractRoute = readRepoFile(
+    "src/app/api/moral-trade/user-safety-content-moderation/contract/route.ts",
   );
   const copilotContractRoute = readRepoFile("src/app/api/moral-trade/copilot/contract/route.ts");
   const copilotReviewRoute = readRepoFile("src/app/api/moral-trade/copilot/review/route.ts");
@@ -2650,6 +2659,30 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(protectiveAssessmentSource, /reporting_integrity_non_suppression/);
   assert.match(protectiveAssessmentSource, /regulated_goods_hazardous_activity/);
   assert.match(protectiveAssessmentSource, /cyber_abuse_digital_systems_integrity/);
+  assert.match(
+    userSafetyContentModerationSource,
+    /getMoralTradeUserSafetyContentModerationContract/,
+  );
+  assert.match(
+    userSafetyContentModerationSource,
+    /evaluateMoralTradeUserSafetyContentModeration/,
+  );
+  assert.match(
+    userSafetyContentModerationSource,
+    /moral_trade_contact_interaction_records/,
+  );
+  assert.match(
+    userSafetyContentModerationSource,
+    /moral_trade_abuse_report_records/,
+  );
+  assert.match(
+    userSafetyContentModerationSource,
+    /moral_trade_content_moderation_records/,
+  );
+  assert.match(userSafetyContentModerationSource, /viewpoint_neutrality/);
+  assert.match(userSafetyContentModerationSource, /unpopular_moral_view/);
+  assert.match(userSafetyContentModerationSource, /contact_consent/);
+  assert.match(userSafetyContentModerationSource, /serious_unresolved/);
   assert.match(productionReadinessMigration, /moral_trade_account_security_events/);
   assert.match(productionReadinessMigration, /moral_trade_backup_recovery_checkpoints/);
   assert.match(productionReadinessMigration, /moral_trade_financial_reconciliation_runs/);
@@ -2747,6 +2780,29 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
     protectiveAssessmentMigration,
     /cyber_abuse_digital_integrity_assessment/,
   );
+  assert.match(
+    userSafetyContentModerationMigration,
+    /moral_trade_user_safety_policies/,
+  );
+  assert.match(
+    userSafetyContentModerationMigration,
+    /moral_trade_contact_interaction_records/,
+  );
+  assert.match(
+    userSafetyContentModerationMigration,
+    /moral_trade_abuse_report_records/,
+  );
+  assert.match(
+    userSafetyContentModerationMigration,
+    /moral_trade_content_moderation_policies/,
+  );
+  assert.match(
+    userSafetyContentModerationMigration,
+    /moral_trade_content_moderation_records/,
+  );
+  assert.match(userSafetyContentModerationMigration, /user_safety/);
+  assert.match(userSafetyContentModerationMigration, /content_moderation/);
+  assert.match(userSafetyContentModerationMigration, /prohibited_use/);
   assert.match(schemaSource, /moral_trade_account_security_events/);
   assert.match(schemaSource, /moral_trade_backup_recovery_checkpoints/);
   assert.match(schemaSource, /moral_trade_financial_reconciliation_runs/);
@@ -2803,6 +2859,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /moral_trade_authority_obligation_assessments/);
   assert.match(schemaSource, /reporting_integrity_assessment/);
   assert.match(schemaSource, /regulated_goods_hazardous_activity_assessment/);
+  assert.match(schemaSource, /moral_trade_user_safety_policies/);
+  assert.match(schemaSource, /moral_trade_contact_interaction_records/);
+  assert.match(schemaSource, /moral_trade_abuse_report_records/);
+  assert.match(schemaSource, /moral_trade_content_moderation_policies/);
+  assert.match(schemaSource, /moral_trade_content_moderation_records/);
+  assert.match(schemaSource, /user_safety/);
+  assert.match(schemaSource, /content_moderation/);
   assert.match(provenanceSource, /validateMoralTradeProvenanceBundle/);
   assert.match(provenanceSource, /getMoralTradeProvenanceContract/);
   assert.match(provenanceSource, /validateMoralTradeProvenanceContract/);
@@ -3217,6 +3280,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_side_agreement_contract/);
   assert.match(apiContractSource, /moral_trade_trade_classification_contract/);
   assert.match(apiContractSource, /moral_trade_protective_assessment_contract/);
+  assert.match(
+    apiContractSource,
+    /moral_trade_user_safety_content_moderation_contract/,
+  );
   assert.match(apiContractSource, /provenance-schema-validator/);
   assert.match(apiContractSource, /moral_trade_schema_registry/);
   assert.match(apiContractSource, /schema-registry-route/);
@@ -3306,6 +3373,16 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /moral_trade_protective_assessment_contract/);
   assert.match(apiContractProfile, /protective-assessment governance/);
   assert.match(apiContractProfile, /protected-trait facts, authority documents/);
+  assert.match(
+    apiContractProfile,
+    /user_safety_content_moderation_contract_response/,
+  );
+  assert.match(
+    apiContractProfile,
+    /moral_trade_user_safety_content_moderation_contract/,
+  );
+  assert.match(apiContractProfile, /content-moderation contract/);
+  assert.match(apiContractProfile, /private messages, reporter identities/);
   assert.match(apiContractProfile, /schema_registry_response/);
   assert.match(apiContractProfile, /moral_trade_schema_registry/);
   assert.match(apiContractProfile, /data-model schema/);
@@ -3360,7 +3437,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.45-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.46-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -3520,6 +3597,19 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /protectiveAssessmentContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /protectiveAssessmentContract\.assessmentDimensions/);
   assert.match(technicalSpecPage, /protective-assessments\/contract/);
+  assert.match(technicalSpecPage, /User safety and content moderation/);
+  assert.match(
+    technicalSpecPage,
+    /userSafetyContentModerationContract\.firstClassRecordTables/,
+  );
+  assert.match(
+    technicalSpecPage,
+    /userSafetyContentModerationContract\.moderationDimensions/,
+  );
+  assert.match(
+    technicalSpecPage,
+    /user-safety-content-moderation\/contract/,
+  );
   assert.match(technicalSpecPage, /\/api\/moral-trade\/recipient-destinations\/contract/);
   assert.match(technicalSpecPage, /Evidence object contract/);
   assert.match(technicalSpecPage, /traceability events/);
@@ -3877,6 +3967,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
     /protectiveAssessmentSampleEvaluationStatuses/,
   );
   assert.match(protectiveAssessmentContractRoute, /privacyBoundary/);
+  assert.match(
+    userSafetyContentModerationContractRoute,
+    /validateMoralTradeUserSafetyContentModerationContract/,
+  );
+  assert.match(userSafetyContentModerationContractRoute, /moderationDimensions/);
+  assert.match(userSafetyContentModerationContractRoute, /userSafetyDimensions/);
+  assert.match(userSafetyContentModerationContractRoute, /sampleEvaluationStatuses/);
+  assert.match(userSafetyContentModerationContractRoute, /privacyBoundary/);
   assert.match(copilotContractRoute, /validateMoralTradeCopilotContract/);
   assert.match(copilotContractRoute, /getMoralTradeCopilotRolloutReadinessAudits/);
   assert.match(copilotContractRoute, /promptTemplates/);

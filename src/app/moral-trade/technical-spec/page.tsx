@@ -103,6 +103,10 @@ import {
   validateMoralTradeProtectiveAssessmentContract,
 } from "@/lib/moral-trade/protective-assessments";
 import {
+  getMoralTradeUserSafetyContentModerationContract,
+  validateMoralTradeUserSafetyContentModerationContract,
+} from "@/lib/moral-trade/user-safety-content-moderation";
+import {
   getMoralTradeProvenanceContract,
   validateMoralTradeProvenanceContract,
 } from "@/lib/moral-trade/provenance";
@@ -263,6 +267,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeProtectiveAssessmentContract(
       protectiveAssessmentContract,
     );
+  const userSafetyContentModerationContract =
+    getMoralTradeUserSafetyContentModerationContract();
+  const userSafetyContentModerationValidation =
+    validateMoralTradeUserSafetyContentModerationContract(
+      userSafetyContentModerationContract,
+    );
   const provenanceContract = getMoralTradeProvenanceContract();
   const provenanceValidation = validateMoralTradeProvenanceContract(provenanceContract);
   const schemaRegistry = getMoralTradeSchemaRegistry();
@@ -356,6 +366,10 @@ export default async function MoralTradeTechnicalSpecPage() {
     agreementAmendmentValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
+    sideAgreementValidation,
+    tradeClassificationValidation,
+    protectiveAssessmentValidation,
+    userSafetyContentModerationValidation,
     provenanceValidation,
     schemaRegistryValidation,
     copilotValidation,
@@ -552,6 +566,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Protective assessments",
       status: protectiveAssessmentValidation.status,
       summary: `${protectiveAssessmentContract.assessmentDimensions.length} assessment dimension(s), ${protectiveAssessmentContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: userSafetyContentModerationValidation.blockers.length,
+      family: "Safety",
+      href: "/api/moral-trade/user-safety-content-moderation/contract",
+      label: "User safety and moderation",
+      status: userSafetyContentModerationValidation.status,
+      summary: `${userSafetyContentModerationContract.moderationDimensions.length} moderation dimension(s), ${userSafetyContentModerationContract.userSafetyDimensions.length} user-safety dimension(s).`,
     },
     {
       blockers: copilotValidation.blockers.length,
@@ -2261,6 +2283,80 @@ export default async function MoralTradeTechnicalSpecPage() {
             <article className="panel protocol-contract-card">
               <h3>Privacy boundary</h3>
               <p>{protectiveAssessmentContract.privacyBoundary}</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="user-safety-moderation-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">User safety and content moderation</p>
+            <h2 id="user-safety-moderation-contract-heading">
+              Contact, abuse-report, and prohibited-use checks are first-class gates.
+            </h2>
+            <p>
+              Moraltrade60 requires user-initiated contact, invite links, support
+              messages, discussion surfaces, reviewer-visible notes, public copy, and
+              impact-claim copy to resolve frozen user-safety and content-moderation
+              policies before they can become public, reliance-bearing, payable,
+              reviewer-actionable, profile-amplifying, or release-promoting. The
+              contract separates prohibited-use moderation from moral ranking: it
+              blocks illegal, coercive, deceptive, harassing, doxxing, cyber-abusive,
+              exploitative, extremist-finance, spam, or otherwise prohibited use, not
+              unpopular moral views.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Safety and moderation {userSafetyContentModerationContract.version}
+              </p>
+              <h3>Status {userSafetyContentModerationValidation.status}</h3>
+              <p>
+                {userSafetyContentModerationValidation.checks.length} check(s),{" "}
+                {userSafetyContentModerationValidation.blockers.length} blocker(s),{" "}
+                {userSafetyContentModerationContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link
+              className="button button-secondary"
+              href="/api/moral-trade/user-safety-content-moderation/contract"
+            >
+              Open safety-moderation JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Moderation dimensions</h3>
+              <ul className="clean-list">
+                {userSafetyContentModerationContract.moderationDimensions.map(
+                  (dimension) => (
+                    <li key={dimension}>{dimension.replaceAll("_", " ")}</li>
+                  ),
+                )}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>User-safety dimensions</h3>
+              <ul className="clean-list">
+                {userSafetyContentModerationContract.userSafetyDimensions.map(
+                  (dimension) => (
+                    <li key={dimension}>{dimension.replaceAll("_", " ")}</li>
+                  ),
+                )}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {userSafetyContentModerationContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Privacy boundary</h3>
+              <p>{userSafetyContentModerationContract.privacyBoundary}</p>
             </article>
           </div>
         </section>
