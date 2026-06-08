@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { POST as executeClearingPreview } from "@/app/api/moral-trade/clearing-previews/execute/route";
 import {
   buildDemoDonationOffsetClearingPreview,
   buildDemoPledgeSwapClearingPreview,
@@ -83,6 +84,14 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredControlStatuses.includes("matching_clearing_run"));
   assert.ok(contract.requiredControlStatuses.includes("destination_verification"));
   assert.ok(contract.requiredControlStatuses.includes("policy_snapshot"));
+  assert.ok(contract.firstClassRecordTables.includes("moral_trade_clearing_preview_records"));
+  assert.equal(
+    contract.executionRoute.path,
+    "/api/moral-trade/clearing-previews/execute",
+  );
+  assert.equal(contract.executionRoute.auth, "authenticated");
+  assert.equal(contract.executionRoute.stateMutation, "append_only_preview_record");
+  assert.match(contract.persistenceRule, /append-only moral_trade_clearing_preview_records/i);
   assert.match(contract.failClosedRule, /match candidate is not a deal/i);
   assert.ok(contract.samplePreviews.every((preview) => !preview.captureAllowed));
   assert.ok(contract.samplePreviews.every((preview) => !preview.relianceBearing));
@@ -196,6 +205,78 @@ test("pledge-swap preview blocks missing reciprocal release and least-intrusive 
   assert.ok(preview.blockerCodes.includes("pledge_schedule_not_passed"));
 });
 
+test("clearing preview execute route is fail-closed before persistence on invalid input", async () => {
+  const response = await executeClearingPreview(
+    new Request("http://localhost/api/moral-trade/clearing-previews/execute", {
+      body: "not-json",
+      method: "POST",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.captureAllowed, false);
+  assert.equal(body.relianceBearing, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.persistence.status, "not_recorded");
+  assert.equal(body.persistence.table, "moral_trade_clearing_preview_records");
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+});
+
+test("clearing preview execution persistence is wired through contract, route, schema, and RLS", () => {
+  const routeSource = readFileSync(
+    "src/app/api/moral-trade/clearing-previews/execute/route.ts",
+    "utf8",
+  );
+  const migrationSource = readFileSync(
+    "supabase/migrations/20260608_moral_trade_clearing_preview_records.sql",
+    "utf8",
+  );
+  const schemaSource = readFileSync("supabase/schema.sql", "utf8");
+  const databaseTypesSource = readFileSync(
+    "src/lib/supabase/database.types.ts",
+    "utf8",
+  );
+  const apiProfileSource = readFileSync(
+    "config/moral-trade/api-contract-profile.json",
+    "utf8",
+  );
+
+  assert.match(routeSource, /clearing_preview_execute/);
+  assert.match(routeSource, /createClient/);
+  assert.match(routeSource, /auth\.getUser/);
+  assert.match(routeSource, /moral_trade_clearing_preview_records/);
+  assert.match(routeSource, /stateMutation:\s*false/);
+  assert.match(routeSource, /captureAllowed:\s*false/);
+  assert.match(routeSource, /relianceBearing:\s*false/);
+  assert.match(routeSource, /idempotency_key/);
+  assert.match(routeSource, /preview_hash/);
+
+  for (const source of [migrationSource, schemaSource]) {
+    assert.match(source, /create table if not exists public\.moral_trade_clearing_preview_records/);
+    assert.match(source, /capture_allowed_bool boolean not null default false/);
+    assert.match(source, /reliance_bearing_bool boolean not null default false/);
+    assert.match(source, /match_candidate_creates_deal_bool boolean not null default false/);
+    assert.match(source, /requires_final_lock_proposal_bool boolean not null default true/);
+    assert.match(source, /requires_fresh_confirmations_bool boolean not null default true/);
+    assert.match(source, /unique \(owner_profile_id, idempotency_key\)/);
+    assert.match(source, /enable row level security/);
+    assert.match(source, /moral_trade_clearing_preview_records_select_owner/);
+    assert.match(source, /moral_trade_clearing_preview_records_insert_owner/);
+  }
+
+  assert.match(databaseTypesSource, /moral_trade_clearing_preview_records/);
+  assert.match(databaseTypesSource, /capture_allowed_bool: false/);
+  assert.match(databaseTypesSource, /reliance_bearing_bool: false/);
+  assert.match(databaseTypesSource, /preview_input_json: Json/);
+  assert.match(apiProfileSource, /moral_trade_clearing_preview_execute/);
+  assert.match(apiProfileSource, /clearing_preview_execute_request/);
+  assert.match(apiProfileSource, /clearing_preview_execute_response/);
+  assert.match(apiProfileSource, /clearing_preview_execute_route_contract/);
+});
+
 test("offer creation UI and technical spec are wired to clearing previews", () => {
   const formSource = readFileSync("src/components/offers/offer-create-form.tsx", "utf8");
   const specSource = readFileSync("src/app/moral-trade/technical-spec/page.tsx", "utf8");
@@ -205,4 +286,6 @@ test("offer creation UI and technical spec are wired to clearing previews", () =
   assert.match(formSource, /Match candidate is not a locked deal/);
   assert.match(specSource, /getMoralTradeClearingPreviewContract/);
   assert.match(specSource, /Clearing preview contract/);
+  assert.match(specSource, /clearingPreviewContract\.executionRoute/);
+  assert.match(specSource, /clearingPreviewContract\.firstClassRecordTables/);
 });

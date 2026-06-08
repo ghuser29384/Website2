@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-api-contract-v0.47-2026-06",
-  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, baseline-integrity/manufacturing governance, agreement-amendment governance, challenge-appeal and appeal-case governance, side-agreement disclosure governance, trade-classification governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
+  "version": "moral-trade-api-contract-v0.48-2026-06",
+  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, agreement-amendment governance, challenge-appeal and appeal-case governance, side-agreement disclosure governance, trade-classification governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
       "key": "moral_trade_health",
@@ -229,6 +229,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return matching-clearing validation blockers and fail-closed sample evaluations; never expose raw input bundles, private counterparty data, exact private constraints, private wishes, hidden match reasoning, reviewer notes, or participant-specific final confirmations."
+    },
+    {
+      "key": "moral_trade_clearing_preview_execute",
+      "method": "POST",
+      "path": "/api/moral-trade/clearing-previews/execute",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "clearing_preview_execute_request",
+      "responseSchema": "clearing_preview_execute_response",
+      "rateLimitSurface": "clearing_preview_execute",
+      "cacheControl": "private_no_store",
+      "fallback": "Require authentication before writing an append-only clearing-preview record; invalid, duplicate, rate-limited, unconfigured, or unauthenticated requests create no state change and never authorize capture, reliance, lock, completion, or metric inclusion."
     },
     {
       "key": "moral_trade_baseline_integrity_contract",
@@ -1465,6 +1477,34 @@
       ]
     },
     {
+      "key": "clearing_preview_execute_request",
+      "purpose": "Authenticated clearing-preview execution packet for recording a normalized donation-offset or pledge-swap preview without capture, reliance, lock, completion, or metric authorization.",
+      "fields": [
+        { "key": "previewInput", "type": "clearing_preview_input", "required": true, "privacy": "private_request", "description": "Strict clearing-preview input fields only; unsupported wrapper or preview fields fail closed before any record is written." },
+        { "key": "sourceOfferId", "type": "uuid", "required": false, "privacy": "private_request", "description": "Optional viewer-owned draft/live offer id associated with the preview record." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Optional bounded idempotency key; repeated keys return the existing owner-scoped record without appending another row." }
+      ]
+    },
+    {
+      "key": "clearing_preview_execute_response",
+      "purpose": "Authenticated clearing-preview execution response with normalized preview, append-only persistence result, contract validation, blockers, and explicit no-capture/no-reliance flags.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private_response", "description": "True only when the contract validates and the preview execution request was handled without route-level blockers." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private_response", "description": "Server time for the clearing-preview execution." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public_contract", "description": "Clearing-preview contract version used for the execution." },
+        { "key": "captureAllowed", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false for clearing-preview execution records." },
+        { "key": "relianceBearing", "type": "boolean", "required": true, "privacy": "public_contract", "description": "Always false for clearing-preview execution records." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private_response", "description": "True only when an append-only moral_trade_clearing_preview_records row is newly inserted; false for invalid, unauthenticated, unconfigured, duplicate, rate-limited, or failed requests." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private_response", "description": "Owner-scoped persistence status, record id where available, preview hash, and table name." },
+        { "key": "inputBlockers", "type": "string_array", "required": true, "privacy": "private_response", "description": "Strict request/input normalization blockers that do not authorize capture, reliance, lock, completion, or metric inclusion." },
+        { "key": "preview", "type": "clearing_preview", "required": false, "privacy": "private_response", "description": "Normalized user-facing clearing preview with section statuses, matched terms, blocker codes, and no-capture/no-reliance flags." },
+        { "key": "previewHash", "type": "sha256", "required": false, "privacy": "private_response", "description": "Hash of the normalized input, contract version, and preview result." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "public_contract", "description": "Validation result for the clearing-preview contract itself." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "public_contract", "description": "Safe fallback reason for no-state-change execution failure modes." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private_response", "description": "Request, contract, persistence, or route blockers that prevent relying on the execution." }
+      ]
+    },
+    {
       "key": "baseline_integrity_contract_response",
       "purpose": "Public validator-backed baseline-integrity and baseline-manufacturing contract for fail-closed non-blocking assessments before donation offsets, pledge swaps, broad match candidates, public-goods rounds, or post-lock amendments become clearable, reliance-bearing, payable, or publicly counted.",
       "fields": [
@@ -2528,6 +2568,7 @@
     "challenge_appeal_route_contract",
     "disclosure_grant_route_contract",
     "financial_settlement_controls_route_contract",
+    "clearing_preview_execute_route_contract",
     "copilot_review_route_contract",
     "profile_portability_route_contract",
     "wish_registry_rate_limit_contract",

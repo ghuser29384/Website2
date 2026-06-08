@@ -650,6 +650,12 @@ export async function GET(request: Request) {
         clearingPreviewContract.modes,
       clearingPreviewReleaseStages:
         clearingPreviewContract.releaseStages,
+      clearingPreviewPersistenceRule:
+        clearingPreviewContract.persistenceRule,
+      clearingPreviewFirstClassRecordTables:
+        clearingPreviewContract.firstClassRecordTables,
+      clearingPreviewExecutionRoute:
+        clearingPreviewContract.executionRoute,
       clearingPreviewRequiredSections:
         clearingPreviewContract.requiredSections,
       clearingPreviewRequiredControlStatuses:

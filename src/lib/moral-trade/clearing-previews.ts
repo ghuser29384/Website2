@@ -140,7 +140,15 @@ export interface MoralTradeClearingPreviewContract {
   version: string;
   purpose: string;
   failClosedRule: string;
+  persistenceRule: string;
   privacyRule: string;
+  firstClassRecordTables: string[];
+  executionRoute: {
+    method: "POST";
+    path: string;
+    auth: "authenticated";
+    stateMutation: "append_only_preview_record";
+  };
   tracks: MoralTradeClearingPreviewTrack[];
   modes: MoralTradeClearingPreviewMode[];
   releaseStages: MoralTradeClearingPreviewReleaseStage[];
@@ -214,10 +222,16 @@ const REQUIRED_CONTROL_STATUSES = [
   "state_interpretation_policy",
 ] as const;
 
+const FIRST_CLASS_RECORD_TABLES = [
+  "moral_trade_clearing_preview_records",
+] as const;
+
 const CONTRACT_TESTS = [
   "clearing_preview_contract_validator",
   "donation_offset_clearing_preview_fail_closed",
   "pledge_swap_clearing_preview_performance_terms",
+  "clearing_preview_execute_route_contract",
+  "clearing_preview_record_schema_contract",
   "offer_create_form_clearing_preview_wiring",
 ] as const;
 
@@ -634,8 +648,17 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
       "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, destination, safety, and policy controls are non-blocking.",
     failClosedRule:
       "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility.",
+    persistenceRule:
+      "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
       "Preview sections expose only coarse statuses, user actions, and safe reason categories; exact wishes, private notes, payment credentials, raw evidence, hidden counterparty terms, and reviewer notes stay out of the preview.",
+    firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
+    executionRoute: {
+      method: "POST",
+      path: "/api/moral-trade/clearing-previews/execute",
+      auth: "authenticated",
+      stateMutation: "append_only_preview_record",
+    },
     tracks: ["donation_offset", "pledge_swap"],
     modes: ["match_candidate", "final_lock_proposal"],
     releaseStages: [
@@ -656,6 +679,23 @@ export function validateMoralTradeClearingPreviewContract(
   contract = getMoralTradeClearingPreviewContract(),
 ): MoralTradeClearingPreviewValidation {
   const checks = [
+    check(
+      "first_class_record_tables",
+      "Clearing preview executions are first-class records",
+      FIRST_CLASS_RECORD_TABLES.every((table) =>
+        contract.firstClassRecordTables.includes(table),
+      ),
+      contract.firstClassRecordTables.join(", "),
+    ),
+    check(
+      "execution_route",
+      "Execution route is authenticated and append-only",
+      contract.executionRoute.method === "POST" &&
+        contract.executionRoute.path === "/api/moral-trade/clearing-previews/execute" &&
+        contract.executionRoute.auth === "authenticated" &&
+        contract.executionRoute.stateMutation === "append_only_preview_record",
+      `${contract.executionRoute.method} ${contract.executionRoute.path} ${contract.executionRoute.auth} ${contract.executionRoute.stateMutation}`,
+    ),
     check(
       "tracks",
       "Contract covers donation-offset and pledge-swap tracks",

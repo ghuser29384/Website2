@@ -535,7 +535,7 @@ export default async function MoralTradeTechnicalSpecPage() {
       href: "#clearing-preview-contract-heading",
       label: "Clearing previews",
       status: clearingPreviewValidation.status,
-      summary: `${clearingPreviewContract.tracks.length} track(s), ${clearingPreviewContract.requiredSections.length} user-facing preview section(s).`,
+      summary: `${clearingPreviewContract.tracks.length} track(s), ${clearingPreviewContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: baselineIntegrityValidation.blockers.length,
@@ -1870,7 +1870,7 @@ export default async function MoralTradeTechnicalSpecPage() {
               <p>
                 {clearingPreviewValidation.checks.length} check(s),{" "}
                 {clearingPreviewValidation.blockers.length} blocker(s),{" "}
-                {clearingPreviewContract.requiredSections.length} preview section(s).
+                {clearingPreviewContract.firstClassRecordTables.length} first-class record table(s).
               </p>
             </div>
             <span className="badge badge-warning">No capture, no reliance</span>
@@ -1897,6 +1897,25 @@ export default async function MoralTradeTechnicalSpecPage() {
               <ul className="clean-list">
                 {clearingPreviewContract.requiredControlStatuses.slice(0, 12).map((status) => (
                   <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Execution route</h3>
+              <ul className="clean-list">
+                <li>
+                  {clearingPreviewContract.executionRoute.method}{" "}
+                  {clearingPreviewContract.executionRoute.path}
+                </li>
+                <li>{clearingPreviewContract.executionRoute.auth}</li>
+                <li>{clearingPreviewContract.executionRoute.stateMutation.replaceAll("_", " ")}</li>
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {clearingPreviewContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
                 ))}
               </ul>
             </article>
