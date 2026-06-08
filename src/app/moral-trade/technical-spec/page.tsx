@@ -527,7 +527,7 @@ export default async function MoralTradeTechnicalSpecPage() {
       href: "/api/moral-trade/matching-clearing/contract",
       label: "Matching clearing",
       status: matchingClearingValidation.status,
-      summary: `${matchingClearingContract.flowTypes.length} flow type(s), ${matchingClearingContract.firstClassRecordTables.length} first-class table(s).`,
+      summary: `${matchingClearingContract.flowTypes.length} flow type(s), ${matchingClearingContract.executionRecordTables.length} execution table(s).`,
     },
     {
       blockers: clearingPreviewValidation.blockers.length,
@@ -1797,7 +1797,7 @@ export default async function MoralTradeTechnicalSpecPage() {
               <p>
                 {matchingClearingValidation.checks.length} check(s),{" "}
                 {matchingClearingValidation.blockers.length} blocker(s),{" "}
-                {matchingClearingContract.firstClassRecordTables.length} first-class record
+                {matchingClearingContract.executionRecordTables.length} execution record
                 table(s).
               </p>
             </div>
@@ -1832,6 +1832,25 @@ export default async function MoralTradeTechnicalSpecPage() {
                   <li key={`proposal-${status}`}>
                     proposal: {status.replaceAll("_", " ")}
                   </li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Execution route</h3>
+              <ul className="clean-list">
+                <li>
+                  {matchingClearingContract.executionRoute.method}{" "}
+                  {matchingClearingContract.executionRoute.path}
+                </li>
+                <li>{matchingClearingContract.executionRoute.auth}</li>
+                <li>{matchingClearingContract.executionRoute.stateMutation.replaceAll("_", " ")}</li>
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Execution records</h3>
+              <ul className="clean-list">
+                {matchingClearingContract.executionRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
                 ))}
               </ul>
             </article>

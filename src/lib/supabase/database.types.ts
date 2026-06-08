@@ -4824,6 +4824,76 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_matching_clearing_execution_records: {
+        Row: {
+          id: string;
+          owner_profile_id: string;
+          execution_kind: "evaluation" | "replay_check";
+          flow_type:
+            | "donation_offset_batch"
+            | "pledge_swap_preview"
+            | "broad_match_candidate"
+            | "public_goods_round";
+          execution_status: "pass" | "blocked";
+          requires_payable_transition_bool: boolean;
+          requires_reliance_bearing_transition_bool: boolean;
+          requires_lock_proposal_bool: boolean;
+          run_count: number;
+          lock_proposal_count: number;
+          execution_input_json: Json;
+          evaluation_result_json: Json;
+          replay_input_hash: string | null;
+          replay_result_hash: string | null;
+          deterministic_replay_bool: boolean;
+          blocker_codes: string[];
+          user_facing_blocker_categories: string[];
+          contract_version: string;
+          validator_version: string;
+          evaluation_hash: string;
+          idempotency_key: string;
+          creates_lock_proposal_bool: false;
+          payable_transition_allowed_bool: false;
+          reliance_bearing_transition_allowed_bool: false;
+          superseded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_profile_id: string;
+          execution_kind: "evaluation" | "replay_check";
+          flow_type:
+            | "donation_offset_batch"
+            | "pledge_swap_preview"
+            | "broad_match_candidate"
+            | "public_goods_round";
+          execution_status: "pass" | "blocked";
+          requires_payable_transition_bool?: boolean;
+          requires_reliance_bearing_transition_bool?: boolean;
+          requires_lock_proposal_bool?: boolean;
+          run_count?: number;
+          lock_proposal_count?: number;
+          execution_input_json: Json;
+          evaluation_result_json: Json;
+          replay_input_hash?: string | null;
+          replay_result_hash?: string | null;
+          deterministic_replay_bool?: boolean;
+          blocker_codes?: string[];
+          user_facing_blocker_categories?: string[];
+          contract_version: string;
+          validator_version: string;
+          evaluation_hash: string;
+          idempotency_key: string;
+          creates_lock_proposal_bool?: false;
+          payable_transition_allowed_bool?: false;
+          reliance_bearing_transition_allowed_bool?: false;
+          superseded_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          superseded_by?: string | null;
+        };
+        Relationships: [];
+      };
       moral_trade_matching_clearing_runs: {
         Row: {
           id: string;

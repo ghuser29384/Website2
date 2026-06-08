@@ -203,7 +203,15 @@ export interface MoralTradeMatchingClearingContract {
   purpose: string;
   privacyRule: string;
   failClosedRule: string;
+  replayRule: string;
   firstClassRecordTables: string[];
+  executionRecordTables: string[];
+  executionRoute: {
+    method: "POST";
+    path: string;
+    auth: "authenticated";
+    stateMutation: "append_only_execution_record";
+  };
   policySnapshotSubjects: string[];
   flowTypes: MoralTradeMatchingClearingFlowType[];
   runStatuses: MoralTradeMatchingClearingRunStatus[];
@@ -223,6 +231,10 @@ const FIRST_CLASS_RECORD_TABLES = [
   "moral_trade_matching_clearing_runs",
   "moral_trade_matched_trade_lock_proposals",
   "moral_trade_matching_clearing_reproducibility_checks",
+] as const;
+
+const EXECUTION_RECORD_TABLES = [
+  "moral_trade_matching_clearing_execution_records",
 ] as const;
 
 const POLICY_SNAPSHOT_SUBJECTS = [
@@ -349,6 +361,8 @@ const FLOW_DEFINITIONS: MoralTradeMatchingClearingFlowDefinition[] = [
 const CONTRACT_TESTS = [
   "matching_clearing_contract_validator",
   "matching_clearing_evaluator_fail_closed",
+  "matching_clearing_execute_route_contract",
+  "matching_clearing_execution_record_schema_contract",
   "matching_clearing_route_contract",
   "matching_clearing_schema_contract",
   "matching_clearing_health_contract",
@@ -842,7 +856,16 @@ export function getMoralTradeMatchingClearingContract(): MoralTradeMatchingClear
       "Public matching-clearing contract responses expose only static flow names, table names, statuses, validation blockers, and sample pass/block states; they never expose raw input bundles, private counterparty data, exact private constraints, hidden match reasoning, reviewer notes, or participant-specific final confirmations.",
     failClosedRule:
       "Ad hoc matching is not clearing: missing matching_clearing_run, mutable or unreproducible inputs, database-order matching, hidden match reasoning, missing privacy or state policy, missing reproducibility check, missing matched_trade_lock_proposal, stale final confirmations, failed ratio bounds, missing baseline snapshots, unverified destination, missing commitment reservation, or missing atomic settlement blocks payable and reliance-bearing clearing.",
+    replayRule:
+      "Authenticated matching-clearing execution records only the deterministic evaluation or replay packet. It writes an append-only moral_trade_matching_clearing_execution_records row and cannot create a lock proposal, authorize payment, authorize reliance, or publish public metrics by itself.",
     firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
+    executionRecordTables: [...EXECUTION_RECORD_TABLES],
+    executionRoute: {
+      method: "POST",
+      path: "/api/moral-trade/matching-clearing/execute",
+      auth: "authenticated",
+      stateMutation: "append_only_execution_record",
+    },
     policySnapshotSubjects: [...POLICY_SNAPSHOT_SUBJECTS],
     flowTypes: [...FLOW_TYPES],
     runStatuses: [...RUN_STATUSES],
@@ -864,6 +887,21 @@ export function validateMoralTradeMatchingClearingContract(
       "Matching-clearing has first-class run, lock proposal, and reproducibility check tables",
       hasAll(contract.firstClassRecordTables, FIRST_CLASS_RECORD_TABLES),
       contract.firstClassRecordTables.join(", "),
+    ),
+    check(
+      "execution-record-table-coverage",
+      "Matching-clearing execution and replay packets have append-only execution records",
+      hasAll(contract.executionRecordTables, EXECUTION_RECORD_TABLES),
+      contract.executionRecordTables.join(", "),
+    ),
+    check(
+      "execution-route-coverage",
+      "Matching-clearing execution route is authenticated and append-only",
+      contract.executionRoute.method === "POST" &&
+        contract.executionRoute.path === "/api/moral-trade/matching-clearing/execute" &&
+        contract.executionRoute.auth === "authenticated" &&
+        contract.executionRoute.stateMutation === "append_only_execution_record",
+      `${contract.executionRoute.method} ${contract.executionRoute.path} ${contract.executionRoute.auth} ${contract.executionRoute.stateMutation}`,
     ),
     check(
       "policy-subject-coverage",

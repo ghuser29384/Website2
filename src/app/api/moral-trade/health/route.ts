@@ -632,6 +632,12 @@ export async function GET(request: Request) {
         matchingClearingContract.failClosedStatuses,
       matchingClearingFirstClassRecordTables:
         matchingClearingContract.firstClassRecordTables,
+      matchingClearingExecutionRecordTables:
+        matchingClearingContract.executionRecordTables,
+      matchingClearingExecutionRoute:
+        matchingClearingContract.executionRoute,
+      matchingClearingReplayRule:
+        matchingClearingContract.replayRule,
       matchingClearingPolicySnapshotSubjects:
         matchingClearingContract.policySnapshotSubjects,
       matchingClearingSampleEvaluationStatuses: Object.fromEntries(

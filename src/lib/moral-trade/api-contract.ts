@@ -115,6 +115,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_privacy_governance_contract",
   "moral_trade_impact_claim_contract",
   "moral_trade_matching_clearing_contract",
+  "moral_trade_matching_clearing_execute",
   "moral_trade_clearing_preview_execute",
   "moral_trade_baseline_integrity_contract",
   "moral_trade_agreement_amendment_contract",

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as executeMatchingClearing } from "@/app/api/moral-trade/matching-clearing/execute/route";
 import {
   evaluateMoralTradeMatchingClearing,
   getMoralTradeMatchingClearingContract,
@@ -112,6 +113,18 @@ test("matching-clearing contract validates frozen runs and lock proposals", () =
   assert.ok(contract.failClosedStatuses.includes("database_order_matching"));
   assert.ok(contract.failClosedStatuses.includes("lock_proposal_missing"));
   assert.ok(contract.failClosedStatuses.includes("atomic_settlement_missing"));
+  assert.ok(
+    contract.executionRecordTables.includes(
+      "moral_trade_matching_clearing_execution_records",
+    ),
+  );
+  assert.equal(
+    contract.executionRoute.path,
+    "/api/moral-trade/matching-clearing/execute",
+  );
+  assert.equal(contract.executionRoute.auth, "authenticated");
+  assert.equal(contract.executionRoute.stateMutation, "append_only_execution_record");
+  assert.match(contract.replayRule, /append-only moral_trade_matching_clearing_execution_records/i);
   assert.match(contract.failClosedRule, /Ad hoc matching is not clearing/i);
 });
 
@@ -245,10 +258,34 @@ test("reviewed reproducible run and current lock proposal can pass", () => {
   assert.deepEqual(passed.blockers, []);
 });
 
+test("matching-clearing execute route is fail-closed before persistence on invalid input", async () => {
+  const response = await executeMatchingClearing(
+    new Request("http://localhost/api/moral-trade/matching-clearing/execute", {
+      body: "not-json",
+      method: "POST",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.createsLockProposal, false);
+  assert.equal(body.payableTransitionAllowed, false);
+  assert.equal(body.relianceBearingTransitionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.persistence.status, "not_recorded");
+  assert.equal(body.persistence.table, "moral_trade_matching_clearing_execution_records");
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+});
+
 test("matching-clearing route, health, spec, API contract, and schema are wired", () => {
   const source = readRepoFile("src/lib/moral-trade/matching-clearing.ts");
   const route = readRepoFile(
     "src/app/api/moral-trade/matching-clearing/contract/route.ts",
+  );
+  const executeRoute = readRepoFile(
+    "src/app/api/moral-trade/matching-clearing/execute/route.ts",
   );
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const technicalSpec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
@@ -257,28 +294,63 @@ test("matching-clearing route, health, spec, API contract, and schema are wired"
   const migration = readRepoFile(
     "supabase/migrations/20260607_zzzzzzzzzzz_moral_trade_matching_clearing_records.sql",
   );
+  const executionMigration = readRepoFile(
+    "supabase/migrations/20260608_moral_trade_matching_clearing_execution_records.sql",
+  );
   const schema = readRepoFile("supabase/schema.sql");
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
 
   assert.match(source, /getMoralTradeMatchingClearingContract/);
   assert.match(source, /evaluateMoralTradeMatchingClearing/);
   assert.match(source, /Ad hoc matching is not clearing/);
+  assert.match(source, /moral_trade_matching_clearing_execution_records/);
   assert.match(route, /public_contract_read/);
   assert.match(route, /matchingClearingSampleEvaluationStatuses/);
+  assert.match(route, /executionRecordTables/);
+  assert.match(executeRoute, /matching_clearing_execute/);
+  assert.match(executeRoute, /moral_trade_matching_clearing_execution_records/);
+  assert.match(executeRoute, /auth\.getUser/);
+  assert.match(executeRoute, /createsLockProposal:\s*false/);
+  assert.match(executeRoute, /payableTransitionAllowed:\s*false/);
+  assert.match(executeRoute, /relianceBearingTransitionAllowed:\s*false/);
+  assert.match(executeRoute, /stateMutation:\s*false/);
+  assert.match(executeRoute, /evaluation_hash/);
+  assert.match(executeRoute, /idempotency_key/);
   assert.match(healthRoute, /matchingClearingValidation/);
   assert.match(healthRoute, /matchingClearingFlowTypes/);
+  assert.match(healthRoute, /matchingClearingExecutionRoute/);
+  assert.match(healthRoute, /matchingClearingExecutionRecordTables/);
   assert.match(technicalSpec, /Matching-clearing contract/);
   assert.match(technicalSpec, /Open matching-clearing JSON/);
+  assert.match(technicalSpec, /matchingClearingContract\.executionRoute/);
+  assert.match(technicalSpec, /matchingClearingContract\.executionRecordTables/);
   assert.match(apiContractSource, /moral_trade_matching_clearing_contract/);
+  assert.match(apiContractSource, /moral_trade_matching_clearing_execute/);
   assert.match(apiContractProfile, /matching_clearing_contract_response/);
   assert.match(apiContractProfile, /moral_trade_matching_clearing_contract/);
+  assert.match(apiContractProfile, /moral_trade_matching_clearing_execute/);
+  assert.match(apiContractProfile, /matching_clearing_execute_request/);
+  assert.match(apiContractProfile, /matching_clearing_execute_response/);
+  assert.match(apiContractProfile, /matching_clearing_execute_route_contract/);
   assert.match(migration, /moral_trade_matching_clearing_runs/);
   assert.match(migration, /moral_trade_matched_trade_lock_proposals/);
   assert.match(migration, /moral_trade_matching_clearing_reproducibility_checks/);
   assert.match(migration, /matched_trade_lock/);
+  assert.match(executionMigration, /moral_trade_matching_clearing_execution_records/);
+  assert.match(executionMigration, /creates_lock_proposal_bool = false/);
+  assert.match(executionMigration, /payable_transition_allowed_bool = false/);
+  assert.match(executionMigration, /reliance_bearing_transition_allowed_bool = false/);
+  assert.match(executionMigration, /enable row level security/);
+  assert.match(executionMigration, /moral_trade_matching_clearing_execution_records_select_owner/);
+  assert.match(executionMigration, /moral_trade_matching_clearing_execution_records_insert_owner/);
   assert.match(schema, /moral_trade_matching_clearing_runs/);
   assert.match(schema, /atomic_settlement_group_ref/);
+  assert.match(schema, /moral_trade_matching_clearing_execution_records/);
   assert.match(databaseTypes, /moral_trade_matching_clearing_runs/);
   assert.match(databaseTypes, /moral_trade_matched_trade_lock_proposals/);
   assert.match(databaseTypes, /moral_trade_matching_clearing_reproducibility_checks/);
+  assert.match(databaseTypes, /moral_trade_matching_clearing_execution_records/);
+  assert.match(databaseTypes, /creates_lock_proposal_bool: false/);
+  assert.match(databaseTypes, /payable_transition_allowed_bool: false/);
+  assert.match(databaseTypes, /reliance_bearing_transition_allowed_bool: false/);
 });

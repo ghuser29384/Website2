@@ -16,6 +16,7 @@ export type MoralTradeApiRateLimitSurface =
   | "saved_search_write"
   | "copilot_draft_review"
   | "match_signal_evaluate"
+  | "matching_clearing_execute"
   | "clearing_preview_execute"
   | "challenge_appeal_evaluate"
   | "disclosure_evaluate"
@@ -46,6 +47,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   saved_search_write: { limit: 30, windowMs: 60_000 },
   copilot_draft_review: { limit: 30, windowMs: 60_000 },
   match_signal_evaluate: { limit: 60, windowMs: 60_000 },
+  matching_clearing_execute: { limit: 20, windowMs: 60_000 },
   clearing_preview_execute: { limit: 30, windowMs: 60_000 },
   challenge_appeal_evaluate: { limit: 30, windowMs: 60_000 },
   disclosure_evaluate: { limit: 30, windowMs: 60_000 },
