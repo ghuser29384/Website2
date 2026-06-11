@@ -2134,6 +2134,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const recipientDestinationSource = readRepoFile(
     "src/lib/moral-trade/recipient-destination.ts",
   );
+  const recipientAcceptanceSource = readRepoFile(
+    "src/lib/moral-trade/recipient-acceptance.ts",
+  );
   const sideAgreementSource = readRepoFile("src/lib/moral-trade/side-agreements.ts");
   const tradeClassificationSource = readRepoFile(
     "src/lib/moral-trade/trade-classification.ts",
@@ -2245,6 +2248,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const recipientDestinationMigration = readRepoFile(
     "supabase/migrations/20260607_zzzz_moral_trade_recipient_destination_records.sql",
   );
+  const recipientAcceptanceMigration = readRepoFile(
+    "supabase/migrations/20260611_moral_trade_recipient_acceptance_records.sql",
+  );
   const sideAgreementMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_side_agreement_disclosures.sql",
   );
@@ -2329,6 +2335,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const recipientDestinationContractRoute = readRepoFile(
     "src/app/api/moral-trade/recipient-destinations/contract/route.ts",
+  );
+  const recipientAcceptanceContractRoute = readRepoFile(
+    "src/app/api/moral-trade/recipient-acceptance/contract/route.ts",
   );
   const sideAgreementContractRoute = readRepoFile(
     "src/app/api/moral-trade/side-agreements/contract/route.ts",
@@ -2670,6 +2679,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(recipientDestinationSource, /recipient_destination_record_required/);
   assert.match(recipientDestinationSource, /impersonation_risk/);
   assert.match(recipientDestinationSource, /prohibited_use_blocked/);
+  assert.match(recipientAcceptanceSource, /getMoralTradeRecipientAcceptanceContract/);
+  assert.match(recipientAcceptanceSource, /evaluateMoralTradeRecipientAcceptance/);
+  assert.match(recipientAcceptanceSource, /moral_trade_recipient_acceptance_policies/);
+  assert.match(recipientAcceptanceSource, /moral_trade_recipient_acceptance_records/);
+  assert.match(recipientAcceptanceSource, /moral_trade_adverse_association_reviews/);
+  assert.match(recipientAcceptanceSource, /recipient_acceptance_record_required/);
+  assert.match(recipientAcceptanceSource, /adverse_association_review_required/);
+  assert.match(recipientAcceptanceSource, /adverse_association_severe/);
   assert.match(sideAgreementSource, /getMoralTradeSideAgreementContract/);
   assert.match(sideAgreementSource, /evaluateMoralTradeSideAgreementDisclosure/);
   assert.match(sideAgreementSource, /moral_trade_side_agreement_disclosures/);
@@ -2828,6 +2845,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(recipientDestinationMigration, /moral_trade_payment_destinations/);
   assert.match(recipientDestinationMigration, /moral_trade_recipient_destination_reviews/);
   assert.match(recipientDestinationMigration, /verification_action_record_id/);
+  assert.match(recipientAcceptanceMigration, /moral_trade_recipient_acceptance_policies/);
+  assert.match(recipientAcceptanceMigration, /moral_trade_recipient_acceptance_records/);
+  assert.match(recipientAcceptanceMigration, /moral_trade_adverse_association_reviews/);
+  assert.match(recipientAcceptanceMigration, /recipient_acceptance/);
+  assert.match(recipientAcceptanceMigration, /adverse_association/);
+  assert.match(recipientAcceptanceMigration, /recipient_private_notes_public_bool/);
+  assert.match(recipientAcceptanceMigration, /raw_association_evidence_public_bool/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_disclosures/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_reviews/);
   assert.match(sideAgreementMigration, /side_agreement_disclosure/);
@@ -2964,6 +2988,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /moral_trade_recipient_registry_entries/);
   assert.match(schemaSource, /moral_trade_payment_destinations/);
   assert.match(schemaSource, /moral_trade_recipient_destination_reviews/);
+  assert.match(schemaSource, /moral_trade_recipient_acceptance_policies/);
+  assert.match(schemaSource, /moral_trade_recipient_acceptance_records/);
+  assert.match(schemaSource, /moral_trade_adverse_association_reviews/);
+  assert.match(schemaSource, /recipient_acceptance/);
+  assert.match(schemaSource, /adverse_association/);
+  assert.match(schemaSource, /raw_association_evidence_public_bool/);
   assert.match(schemaSource, /moral_trade_side_agreement_disclosures/);
   assert.match(schemaSource, /moral_trade_side_agreement_reviews/);
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
@@ -3507,6 +3537,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /recipient_destination_contract_response/);
   assert.match(apiContractProfile, /moral_trade_recipient_destination_contract/);
   assert.match(apiContractProfile, /bank details, wallet addresses, raw donation links/);
+  assert.match(apiContractProfile, /recipient_acceptance_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_recipient_acceptance_contract/);
+  assert.match(apiContractProfile, /recipient-acceptance and adverse-association governance/);
+  assert.match(apiContractProfile, /raw adverse-association evidence/);
   assert.match(apiContractProfile, /side_agreement_contract_response/);
   assert.match(apiContractProfile, /moral_trade_side_agreement_contract/);
   assert.match(apiContractProfile, /side-agreement disclosure/);
@@ -3600,7 +3634,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.55-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.56-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -3748,6 +3782,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /Recipient and destination contract/);
   assert.match(technicalSpecPage, /recipientDestinationContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /recipientDestinationContract\.reviewDimensions/);
+  assert.match(technicalSpecPage, /Recipient acceptance/);
+  assert.match(technicalSpecPage, /recipientAcceptanceContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /recipientAcceptanceContract\.visibleRecipientStatuses/);
+  assert.match(technicalSpecPage, /recipient-acceptance\/contract/);
   assert.match(technicalSpecPage, /Side-agreement disclosure contract/);
   assert.match(technicalSpecPage, /sideAgreementContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /sideAgreementContract\.reviewDimensions/);
@@ -3977,6 +4015,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /recipientDestinationValidation/);
   assert.match(healthRoute, /recipientDestinationTransitionKeys/);
   assert.match(healthRoute, /recipientDestinationFirstClassRecordTables/);
+  assert.match(healthRoute, /recipientAcceptanceValidation/);
+  assert.match(healthRoute, /recipientAcceptanceTransitionKeys/);
+  assert.match(healthRoute, /recipientAcceptanceFirstClassRecordTables/);
+  assert.match(healthRoute, /recipientAcceptancePrivacyBoundary/);
   assert.match(healthRoute, /sideAgreementValidation/);
   assert.match(healthRoute, /sideAgreementTransitionKeys/);
   assert.match(healthRoute, /sideAgreementFirstClassRecordTables/);
@@ -4142,6 +4184,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(recipientDestinationContractRoute, /validateMoralTradeRecipientDestinationContract/);
   assert.match(recipientDestinationContractRoute, /reviewDimensions/);
   assert.match(recipientDestinationContractRoute, /recipientDestinationSampleEvaluationStatuses/);
+  assert.match(recipientAcceptanceContractRoute, /validateMoralTradeRecipientAcceptanceContract/);
+  assert.match(recipientAcceptanceContractRoute, /visibleRecipientStatuses/);
+  assert.match(recipientAcceptanceContractRoute, /firstClassRecordTables/);
+  assert.match(recipientAcceptanceContractRoute, /recipientAcceptanceSampleEvaluationStatuses/);
   assert.match(sideAgreementContractRoute, /validateMoralTradeSideAgreementContract/);
   assert.match(sideAgreementContractRoute, /reviewDimensions/);
   assert.match(sideAgreementContractRoute, /sideAgreementSampleEvaluationStatuses/);

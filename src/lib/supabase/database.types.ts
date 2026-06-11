@@ -6110,6 +6110,24 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_recipient_acceptance_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_recipient_acceptance_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_adverse_association_reviews: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_appeal_policies: {
         Row: {
           id: string;
@@ -7743,7 +7761,9 @@ export interface Database {
             | "review_queue_admission"
             | "participant_term_sheet"
             | "counterparty_blinding"
-            | "staged_counterparty_disclosure";
+            | "staged_counterparty_disclosure"
+            | "recipient_acceptance"
+            | "adverse_association";
           subject_key: string;
           version_label: string;
           status: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7799,7 +7819,9 @@ export interface Database {
             | "review_queue_admission"
             | "participant_term_sheet"
             | "counterparty_blinding"
-            | "staged_counterparty_disclosure";
+            | "staged_counterparty_disclosure"
+            | "recipient_acceptance"
+            | "adverse_association";
           subject_key: string;
           version_label: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7854,7 +7876,9 @@ export interface Database {
             | "review_queue_admission"
             | "participant_term_sheet"
             | "counterparty_blinding"
-            | "staged_counterparty_disclosure";
+            | "staged_counterparty_disclosure"
+            | "recipient_acceptance"
+            | "adverse_association";
           subject_key?: string;
           version_label?: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";

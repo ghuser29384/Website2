@@ -291,7 +291,7 @@ test("financial settlement controls are wired through API, health, spec, migrati
   assert.match(technicalSpec, /financialSettlementControlsContract\.controlKeys/);
   assert.match(technicalSpec, /financial-settlement-controls\/contract/);
   assert.match(apiContract, /moral_trade_financial_settlement_controls_contract/);
-  assert.match(apiProfile, /moral-trade-api-contract-v0\.55-2026-06/);
+  assert.match(apiProfile, /moral-trade-api-contract-v0\.56-2026-06/);
   assert.match(apiProfile, /financial_settlement_controls_contract_response/);
   assert.match(apiProfile, /raw FX provider payloads/);
 

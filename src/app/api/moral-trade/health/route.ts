@@ -72,6 +72,10 @@ import {
   validateMoralTradeRecipientDestinationContract,
 } from "@/lib/moral-trade/recipient-destination";
 import {
+  getMoralTradeRecipientAcceptanceContract,
+  validateMoralTradeRecipientAcceptanceContract,
+} from "@/lib/moral-trade/recipient-acceptance";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -263,6 +267,12 @@ export async function GET(request: Request) {
     validateMoralTradeRecipientDestinationContract(
       recipientDestinationContract,
     );
+  const recipientAcceptanceContract =
+    getMoralTradeRecipientAcceptanceContract();
+  const recipientAcceptanceValidation =
+    validateMoralTradeRecipientAcceptanceContract(
+      recipientAcceptanceContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -391,6 +401,7 @@ export async function GET(request: Request) {
       agreementAmendmentValidation.status === "pass" &&
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
+      recipientAcceptanceValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -439,6 +450,7 @@ export async function GET(request: Request) {
     agreementAmendmentValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
+    recipientAcceptanceValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -810,6 +822,36 @@ export async function GET(request: Request) {
       ),
       recipientDestinationContractTests:
         recipientDestinationContract.contractTests,
+      recipientAcceptanceContractVersion:
+        recipientAcceptanceContract.version,
+      recipientAcceptanceTransitionKeys:
+        recipientAcceptanceContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      recipientAcceptanceSubjectTypes:
+        recipientAcceptanceContract.subjectTypes,
+      recipientAcceptanceStatuses:
+        recipientAcceptanceContract.acceptanceStatuses,
+      recipientAcceptanceAdverseAssociationStatuses:
+        recipientAcceptanceContract.adverseAssociationStatuses,
+      recipientAcceptanceVisibleStatuses:
+        recipientAcceptanceContract.visibleRecipientStatuses,
+      recipientAcceptanceRiskClasses:
+        recipientAcceptanceContract.riskClasses,
+      recipientAcceptanceFirstClassRecordTables:
+        recipientAcceptanceContract.firstClassRecordTables,
+      recipientAcceptancePolicySnapshotSubjects:
+        recipientAcceptanceContract.policySnapshotSubjects,
+      recipientAcceptancePrivacyBoundary:
+        recipientAcceptanceContract.privacyBoundary,
+      recipientAcceptanceSampleEvaluationStatuses: Object.fromEntries(
+        recipientAcceptanceContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      recipientAcceptanceContractTests:
+        recipientAcceptanceContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1308,6 +1350,7 @@ export async function GET(request: Request) {
       ...agreementAmendmentValidation.blockers,
       ...productionReadinessValidation.blockers,
       ...recipientDestinationValidation.blockers,
+      ...recipientAcceptanceValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

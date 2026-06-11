@@ -95,6 +95,10 @@ import {
   validateMoralTradeRecipientDestinationContract,
 } from "@/lib/moral-trade/recipient-destination";
 import {
+  getMoralTradeRecipientAcceptanceContract,
+  validateMoralTradeRecipientAcceptanceContract,
+} from "@/lib/moral-trade/recipient-acceptance";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -275,6 +279,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeRecipientDestinationContract(
       recipientDestinationContract,
     );
+  const recipientAcceptanceContract =
+    getMoralTradeRecipientAcceptanceContract();
+  const recipientAcceptanceValidation =
+    validateMoralTradeRecipientAcceptanceContract(
+      recipientAcceptanceContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -410,6 +420,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     agreementAmendmentValidation,
     productionReadinessValidation,
     recipientDestinationValidation,
+    recipientAcceptanceValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -598,6 +609,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Recipient destinations",
       status: recipientDestinationValidation.status,
       summary: `${recipientDestinationContract.reviewDimensions.length} review dimension(s), ${recipientDestinationContract.transitionDefinitions.length} gated transition(s).`,
+    },
+    {
+      blockers: recipientAcceptanceValidation.blockers.length,
+      family: "Money movement",
+      href: "/api/moral-trade/recipient-acceptance/contract",
+      label: "Recipient acceptance",
+      status: recipientAcceptanceValidation.status,
+      summary: `${recipientAcceptanceContract.transitionDefinitions.length} gated transition(s), ${recipientAcceptanceContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -2314,6 +2333,77 @@ export default async function MoralTradeTechnicalSpecPage() {
                 ))}
               </ul>
             </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="recipient-acceptance-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Recipient acceptance</p>
+            <h2 id="recipient-acceptance-contract-heading">
+              Recipient acceptance and adverse-association reviews gate locks, money movement, public metrics, and release promotion.
+            </h2>
+            <p>
+              Moraltrade68 requires recipient acceptance and adverse-association blocking before
+              clearing previews become reliance-bearing. This contract publishes transition
+              gates, visible recipient statuses, risk classes, and table names while excluding
+              recipient private notes, donor private terms, raw adverse-association evidence,
+              expanded recipient identities, private donor reasons, and reviewer notes.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Recipient acceptance {recipientAcceptanceContract.version}
+              </p>
+              <h3>Status {recipientAcceptanceValidation.status}</h3>
+              <p>
+                {recipientAcceptanceValidation.checks.length} check(s),{" "}
+                {recipientAcceptanceValidation.blockers.length} blocker(s),{" "}
+                {recipientAcceptanceContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/recipient-acceptance/contract">
+              Open acceptance JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {recipientAcceptanceContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Visible statuses</h3>
+              <ul className="clean-list">
+                {recipientAcceptanceContract.visibleRecipientStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Adverse association</h3>
+              <ul className="clean-list">
+                {recipientAcceptanceContract.adverseAssociationStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {recipientAcceptanceContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Privacy boundary</p>
+            <p>{recipientAcceptanceContract.privacyBoundary}</p>
           </div>
         </section>
 

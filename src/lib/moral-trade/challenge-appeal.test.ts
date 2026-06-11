@@ -412,7 +412,7 @@ test("challenge-appeal route, health, spec, API contract, and schema are wired",
   assert.match(technicalSpec, /challengeAppealContract\.enforcementRoute/);
   assert.match(technicalSpec, /challengeAppealContract\.enforcementRecordTables/);
   assert.match(apiContractSource, /moral_trade_challenge_appeal_enforce/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.55-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.56-2026-06/);
   assert.match(apiContractProfile, /challenge_appeal_enforce_request/);
   assert.match(apiContractProfile, /challenge_appeal_enforce_response/);
   assert.match(apiContractProfile, /moral_trade_challenge_appeal_enforce/);
