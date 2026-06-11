@@ -211,6 +211,15 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_match_signal_evaluate"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_challenge_appeal_contract"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_challenge_appeal_evaluate"));
+  assert.ok(
+    profile.routes.some(
+      (route) =>
+        route.key === "moral_trade_challenge_appeal_enforce" &&
+        route.path === "/api/moral-trade/challenge-appeal/enforce" &&
+        route.auth === "authenticated" &&
+        route.responseSchema === "challenge_appeal_enforce_response",
+    ),
+  );
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_disclosure_contract"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_disclosure_evaluate"));
   assert.ok(profile.routes.some((route) => route.key === "moral_trade_review_workflow_evaluate"));
@@ -917,6 +926,26 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
       ),
   );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_evaluate_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_enforce_request"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "challenge_appeal_enforce_request")
+      ?.fields.some(
+        (field) =>
+          field.key === "evaluationInput" &&
+          /appeal-case keys fail closed/i.test(field.description),
+      ),
+  );
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "challenge_appeal_enforce_response"));
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "challenge_appeal_enforce_response")
+      ?.fields.some(
+        (field) =>
+          field.key === "safetyBlockerWaiverAllowed" &&
+          /Always false/i.test(field.description),
+      ),
+  );
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_evaluate_request"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "disclosure_evaluate_response"));

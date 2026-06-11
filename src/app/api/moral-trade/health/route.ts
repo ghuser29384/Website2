@@ -976,6 +976,12 @@ export async function GET(request: Request) {
         challengeAppealContract.firstClassRecordTables,
       challengeAppealPolicySnapshotSubjects:
         challengeAppealContract.policySnapshotSubjects,
+      challengeAppealEnforcementRule:
+        challengeAppealContract.enforcementRule,
+      challengeAppealEnforcementRecordTables:
+        challengeAppealContract.enforcementRecordTables,
+      challengeAppealEnforcementRoute:
+        challengeAppealContract.enforcementRoute,
       challengeAppealCaseStatuses:
         challengeAppealContract.appealCaseStatuses,
       challengeAppealNoticeStates:

@@ -245,6 +245,14 @@ export interface MoralTradeChallengeAppealContract {
   allowedOutcomes: MoralTradeChallengeAppealOutcome[];
   firstClassRecordTables: string[];
   policySnapshotSubjects: string[];
+  enforcementRule: string;
+  enforcementRecordTables: string[];
+  enforcementRoute: {
+    method: "POST";
+    path: "/api/moral-trade/challenge-appeal/enforce";
+    auth: "authenticated";
+    stateMutation: "append_only_enforcement_record";
+  };
   appealCaseStatuses: MoralTradeAppealCaseStatus[];
   noticeStates: MoralTradeAppealNoticeState[];
   failClosedStatuses: MoralTradeAppealFailClosedStatus[];
@@ -300,6 +308,10 @@ const ALLOWED_OUTCOMES = [
 const FIRST_CLASS_RECORD_TABLES = [
   "moral_trade_appeal_policies",
   "moral_trade_appeal_cases",
+] as const;
+
+const ENFORCEMENT_RECORD_TABLES = [
+  "moral_trade_challenge_appeal_enforcement_records",
 ] as const;
 
 const POLICY_SNAPSHOT_SUBJECTS = ["appeal_case"] as const;
@@ -437,6 +449,8 @@ const REQUESTED_OUTCOME_TRIGGER_COMPATIBILITY: Record<
 const CONTRACT_TESTS = [
   "challenge_appeal_contract_validator",
   "challenge_appeal_evaluate_route_contract",
+  "challenge_appeal_enforce_route_contract",
+  "challenge_appeal_enforcement_record_schema_contract",
   "appeal_case_record_contract",
   "appeal_case_fail_closed_evaluator",
   "challenge_appeal_scope_smoke",
@@ -1131,6 +1145,15 @@ export function getMoralTradeChallengeAppealContract(): MoralTradeChallengeAppea
     allowedOutcomes: [...ALLOWED_OUTCOMES],
     firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
     policySnapshotSubjects: [...POLICY_SNAPSHOT_SUBJECTS],
+    enforcementRule:
+      "Adverse-decision correction reliance requires an authenticated append-only challenge-appeal enforcement record that evaluates frozen appeal policies and appeal cases; enforcement records cannot open appeals, correct records, allow reliance, waive safety blockers, reopen settled obligations, or publish public metrics.",
+    enforcementRecordTables: [...ENFORCEMENT_RECORD_TABLES],
+    enforcementRoute: {
+      method: "POST",
+      path: "/api/moral-trade/challenge-appeal/enforce",
+      auth: "authenticated",
+      stateMutation: "append_only_enforcement_record",
+    },
     appealCaseStatuses: [...APPEAL_CASE_STATUSES],
     noticeStates: [...NOTICE_STATES],
     failClosedStatuses: [...FAIL_CLOSED_STATUSES],
@@ -1187,6 +1210,18 @@ export function validateMoralTradeChallengeAppealContract(
       hasAll(contract.firstClassRecordTables, FIRST_CLASS_RECORD_TABLES) &&
         hasAll(contract.policySnapshotSubjects, POLICY_SNAPSHOT_SUBJECTS),
       `${contract.firstClassRecordTables.join(", ")}; ${contract.policySnapshotSubjects.join(", ")}`,
+    ),
+    check(
+      "enforcement-record-coverage",
+      "Appeal-case enforcement has an authenticated append-only record route",
+      hasAll(contract.enforcementRecordTables, ENFORCEMENT_RECORD_TABLES) &&
+        contract.enforcementRoute.method === "POST" &&
+        contract.enforcementRoute.path === "/api/moral-trade/challenge-appeal/enforce" &&
+        contract.enforcementRoute.auth === "authenticated" &&
+        /cannot open appeals, correct records, allow reliance, waive safety blockers/i.test(
+          contract.enforcementRule,
+        ),
+      `${contract.enforcementRoute.method} ${contract.enforcementRoute.path}; ${contract.enforcementRecordTables.join(", ")}`,
     ),
     check(
       "appeal-case-state-coverage",

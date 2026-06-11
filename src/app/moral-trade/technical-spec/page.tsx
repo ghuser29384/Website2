@@ -2740,6 +2740,7 @@ export default async function MoralTradeTechnicalSpecPage() {
                 {challengeAppealValidation.checks.length} check(s),{" "}
                 {challengeAppealValidation.blockers.length} blocker(s),{" "}
                 {challengeAppealContract.firstClassRecordTables.length} first-class record
+                table(s), {challengeAppealContract.enforcementRecordTables.length} enforcement
                 table(s).
               </p>
             </div>
@@ -2788,6 +2789,19 @@ export default async function MoralTradeTechnicalSpecPage() {
                 stateMutation false. Requested outcomes are advisory and must match the appeal
                 trigger before reviewers can route them.
               </p>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Enforcement route</h3>
+              <p>{challengeAppealContract.enforcementRule}</p>
+              <ul className="clean-list">
+                {challengeAppealContract.enforcementRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+                <li>
+                  {challengeAppealContract.enforcementRoute.method}{" "}
+                  {challengeAppealContract.enforcementRoute.path}
+                </li>
+              </ul>
             </article>
             <article className="panel protocol-contract-card">
               <h3>Fail-closed statuses</h3>

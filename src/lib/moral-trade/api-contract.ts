@@ -136,6 +136,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_match_signal_evaluate",
   "moral_trade_challenge_appeal_contract",
   "moral_trade_challenge_appeal_evaluate",
+  "moral_trade_challenge_appeal_enforce",
   "moral_trade_disclosure_contract",
   "moral_trade_disclosure_evaluate",
   "moral_trade_review_workflow_contract",
@@ -534,11 +535,20 @@ export function validateMoralTradeApiContractProfile(
   const challengeAppealEvaluateRoute = profile.routes.find(
     (route) => route.key === "moral_trade_challenge_appeal_evaluate",
   );
+  const challengeAppealEnforceRoute = profile.routes.find(
+    (route) => route.key === "moral_trade_challenge_appeal_enforce",
+  );
   const challengeAppealContractResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "challenge_appeal_contract_response",
   );
   const challengeAppealEvaluateResponse = profile.schemaDefinitions.find(
     (schema) => schema.key === "challenge_appeal_evaluate_response",
+  );
+  const challengeAppealEnforceRequest = profile.schemaDefinitions.find(
+    (schema) => schema.key === "challenge_appeal_enforce_request",
+  );
+  const challengeAppealEnforceResponse = profile.schemaDefinitions.find(
+    (schema) => schema.key === "challenge_appeal_enforce_response",
   );
   const disclosureContractRoute = profile.routes.find(
     (route) => route.key === "moral_trade_disclosure_contract",
@@ -1139,7 +1149,7 @@ export function validateMoralTradeApiContractProfile(
     ),
     check(
       "challenge-appeal-routes",
-      "Challenge appeal contract and evaluate routes are validator-backed, scoped, and non-mutating",
+      "Challenge appeal contract, evaluate, and enforcement routes are validator-backed, scoped, and fail-closed",
       challengeAppealContractRoute?.method === "GET" &&
         challengeAppealContractRoute.cacheControl === "no_store_dynamic" &&
         /validation blockers|unrelated moral disagreements|human review/i.test(
@@ -1151,6 +1161,13 @@ export function validateMoralTradeApiContractProfile(
         /never store|private details|broaden appeal scope|resolve disputes without human review/i.test(
           challengeAppealEvaluateRoute.fallback,
         ) &&
+        challengeAppealEnforceRoute?.method === "POST" &&
+        challengeAppealEnforceRoute.auth === "authenticated" &&
+        challengeAppealEnforceRoute.cacheControl === "private_no_store" &&
+        challengeAppealEnforceRoute.rateLimitSurface === "challenge_appeal_enforce" &&
+        /append-only challenge-appeal enforcement record|never open appeals|correct records|authorize reliance|waive safety blockers|reopen settled obligations|publish public metrics/i.test(
+          challengeAppealEnforceRoute.fallback,
+        ) &&
         Boolean(
           challengeAppealContractResponse?.fields.some(
             (field) => field.key === "validation" && field.type === "validator_result",
@@ -1160,9 +1177,34 @@ export function validateMoralTradeApiContractProfile(
           challengeAppealEvaluateResponse?.fields.some(
             (field) => field.key === "stateMutation" && /Always false/i.test(field.description),
           ),
+        ) &&
+        Boolean(
+          challengeAppealEnforceRequest?.fields.some(
+            (field) =>
+              field.key === "evaluationInput" &&
+              /unsupported wrapper, evaluation, policy, or appeal-case keys fail closed/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          challengeAppealEnforceResponse?.fields.some(
+            (field) =>
+              field.key === "stateMutation" &&
+              /moral_trade_challenge_appeal_enforcement_records/i.test(
+                field.description,
+              ),
+          ),
+        ) &&
+        Boolean(
+          challengeAppealEnforceResponse?.fields.some(
+            (field) =>
+              field.key === "safetyBlockerWaiverAllowed" &&
+              /Always false/i.test(field.description),
+          ),
         ),
-      challengeAppealEvaluateRoute
-        ? `${challengeAppealEvaluateRoute.key}:${challengeAppealEvaluateRoute.cacheControl}:${challengeAppealEvaluateRoute.rateLimitSurface}`
+      challengeAppealEnforceRoute
+        ? `${challengeAppealEvaluateRoute?.key}:${challengeAppealEnforceRoute.key}:${challengeAppealEnforceRoute.cacheControl}:${challengeAppealEnforceRoute.rateLimitSurface}`
         : "missing",
     ),
     check(

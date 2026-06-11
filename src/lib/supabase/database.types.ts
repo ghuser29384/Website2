@@ -5966,6 +5966,96 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_challenge_appeal_enforcement_records: {
+        Row: {
+          id: string;
+          owner_profile_id: string;
+          subject:
+            | "claim"
+            | "evidence_row"
+            | "baseline_concern"
+            | "disclosure_decision"
+            | "externality_trigger"
+            | "completion_state"
+            | "policy_flag";
+          trigger:
+            | "duplicate_proof"
+            | "coercive_baseline"
+            | "wrong_scope_evidence"
+            | "material_factual_error"
+            | "privacy_disclosure_error"
+            | "externality_remedy_gap"
+            | "reviewer_conflict"
+            | "policy_misapplied";
+          enforcement_status: "pass" | "blocked";
+          requires_appeal_case_bool: boolean;
+          requires_neutral_review_bool: boolean;
+          policy_count: number;
+          appeal_case_count: number;
+          enforcement_input_json: Json;
+          evaluation_result_json: Json;
+          blocker_codes: string[];
+          user_facing_blocker_categories: string[];
+          contract_version: string;
+          validator_version: string;
+          evaluation_hash: string;
+          idempotency_key: string;
+          opens_appeal_bool: false;
+          corrects_record_bool: false;
+          reliance_bearing_transition_allowed_bool: false;
+          safety_blocker_waiver_allowed_bool: false;
+          settled_obligation_reopen_allowed_bool: false;
+          public_metric_allowed_bool: false;
+          superseded_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          owner_profile_id: string;
+          subject:
+            | "claim"
+            | "evidence_row"
+            | "baseline_concern"
+            | "disclosure_decision"
+            | "externality_trigger"
+            | "completion_state"
+            | "policy_flag";
+          trigger:
+            | "duplicate_proof"
+            | "coercive_baseline"
+            | "wrong_scope_evidence"
+            | "material_factual_error"
+            | "privacy_disclosure_error"
+            | "externality_remedy_gap"
+            | "reviewer_conflict"
+            | "policy_misapplied";
+          enforcement_status: "pass" | "blocked";
+          requires_appeal_case_bool?: boolean;
+          requires_neutral_review_bool?: boolean;
+          policy_count?: number;
+          appeal_case_count?: number;
+          enforcement_input_json: Json;
+          evaluation_result_json: Json;
+          blocker_codes?: string[];
+          user_facing_blocker_categories?: string[];
+          contract_version: string;
+          validator_version: string;
+          evaluation_hash: string;
+          idempotency_key: string;
+          opens_appeal_bool?: false;
+          corrects_record_bool?: false;
+          reliance_bearing_transition_allowed_bool?: false;
+          safety_blocker_waiver_allowed_bool?: false;
+          settled_obligation_reopen_allowed_bool?: false;
+          public_metric_allowed_bool?: false;
+          superseded_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          superseded_by?: string | null;
+        };
+        Relationships: [];
+      };
       moral_trade_appeal_policies: {
         Row: {
           id: string;

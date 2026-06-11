@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforceChallengeAppeal } from "@/app/api/moral-trade/challenge-appeal/enforce/route";
 import {
   evaluateMoralTradeAppealCase,
   evaluateMoralTradeChallengeAppeal,
@@ -13,6 +16,10 @@ import {
   type MoralTradeChallengeAppealDecision,
   type MoralTradeChallengeAppealInput,
 } from "./challenge-appeal";
+
+function readRepoFile(path: string) {
+  return readFileSync(join(process.cwd(), path), "utf8");
+}
 
 const baseAppeal = {
   requestId: "appeal-001",
@@ -297,6 +304,18 @@ test("challenge appeal contract validates scope, standing, privacy, provenance, 
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_appeal_policies"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_appeal_cases"));
   assert.ok(contract.policySnapshotSubjects.includes("appeal_case"));
+  assert.match(contract.enforcementRule, /cannot open appeals, correct records, allow reliance/);
+  assert.ok(
+    contract.enforcementRecordTables.includes(
+      "moral_trade_challenge_appeal_enforcement_records",
+    ),
+  );
+  assert.equal(contract.enforcementRoute.method, "POST");
+  assert.equal(
+    contract.enforcementRoute.path,
+    "/api/moral-trade/challenge-appeal/enforce",
+  );
+  assert.equal(contract.enforcementRoute.auth, "authenticated");
   assert.ok(contract.appealCaseStatuses.includes("under_neutral_review"));
   assert.ok(contract.noticeStates.includes("delivered"));
   assert.ok(contract.failClosedStatuses.includes("notice_missing"));
@@ -314,6 +333,119 @@ test("challenge appeal contract validates scope, standing, privacy, provenance, 
   );
   assert.ok(contract.contractTests.includes("appeal_case_record_contract"));
   assert.ok(contract.contractTests.includes("challenge_appeal_evaluate_route_contract"));
+  assert.ok(contract.contractTests.includes("challenge_appeal_enforce_route_contract"));
+  assert.ok(
+    contract.contractTests.includes(
+      "challenge_appeal_enforcement_record_schema_contract",
+    ),
+  );
+});
+
+test("challenge-appeal enforce route is fail-closed before persistence on invalid input", async () => {
+  const response = await enforceChallengeAppeal(
+    new Request("http://localhost/api/moral-trade/challenge-appeal/enforce", {
+      body: "not-json",
+      method: "POST",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.challengeAppealGateStatus, "blocked");
+  assert.equal(body.opensAppeal, false);
+  assert.equal(body.correctsRecord, false);
+  assert.equal(body.relianceBearingTransitionAllowed, false);
+  assert.equal(body.safetyBlockerWaiverAllowed, false);
+  assert.equal(body.settledObligationReopenAllowed, false);
+  assert.equal(body.publicMetricAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.persistence.status, "not_recorded");
+  assert.equal(
+    body.persistence.table,
+    "moral_trade_challenge_appeal_enforcement_records",
+  );
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+});
+
+test("challenge-appeal route, health, spec, API contract, and schema are wired", () => {
+  const source = readRepoFile("src/lib/moral-trade/challenge-appeal.ts");
+  const contractRoute = readRepoFile(
+    "src/app/api/moral-trade/challenge-appeal/contract/route.ts",
+  );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/challenge-appeal/enforce/route.ts",
+  );
+  const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
+  const technicalSpec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
+  const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
+  const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
+  const migration = readRepoFile(
+    "supabase/migrations/20260607_zzzzzzzzzzzzzz_moral_trade_appeal_case_records.sql",
+  );
+  const enforcementMigration = readRepoFile(
+    "supabase/migrations/20260611_moral_trade_challenge_appeal_enforcement_records.sql",
+  );
+  const schema = readRepoFile("supabase/schema.sql");
+  const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
+
+  assert.match(source, /moral_trade_challenge_appeal_enforcement_records/);
+  assert.match(source, /challenge_appeal_enforce_route_contract/);
+  assert.match(contractRoute, /enforcementRecordTables/);
+  assert.match(contractRoute, /enforcementRoute/);
+  assert.match(enforceRoute, /challenge_appeal_enforce/);
+  assert.match(enforceRoute, /moral_trade_challenge_appeal_enforcement_records/);
+  assert.match(enforceRoute, /auth\.getUser/);
+  assert.match(enforceRoute, /opensAppeal:\s*false/);
+  assert.match(enforceRoute, /correctsRecord:\s*false/);
+  assert.match(enforceRoute, /relianceBearingTransitionAllowed:\s*false/);
+  assert.match(enforceRoute, /safetyBlockerWaiverAllowed:\s*false/);
+  assert.match(enforceRoute, /settledObligationReopenAllowed:\s*false/);
+  assert.match(enforceRoute, /publicMetricAllowed:\s*false/);
+  assert.match(enforceRoute, /stateMutation:\s*false/);
+  assert.match(enforceRoute, /evaluation_hash/);
+  assert.match(enforceRoute, /idempotency_key/);
+  assert.match(healthRoute, /challengeAppealEnforcementRoute/);
+  assert.match(healthRoute, /challengeAppealEnforcementRecordTables/);
+  assert.match(technicalSpec, /Challenge appeal contract/);
+  assert.match(technicalSpec, /challengeAppealContract\.enforcementRoute/);
+  assert.match(technicalSpec, /challengeAppealContract\.enforcementRecordTables/);
+  assert.match(apiContractSource, /moral_trade_challenge_appeal_enforce/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.52-2026-06/);
+  assert.match(apiContractProfile, /challenge_appeal_enforce_request/);
+  assert.match(apiContractProfile, /challenge_appeal_enforce_response/);
+  assert.match(apiContractProfile, /moral_trade_challenge_appeal_enforce/);
+  assert.match(migration, /moral_trade_appeal_policies/);
+  assert.match(migration, /moral_trade_appeal_cases/);
+  for (const tableSource of [enforcementMigration, schema]) {
+    assert.match(
+      tableSource,
+      /create table if not exists public\.moral_trade_challenge_appeal_enforcement_records/,
+    );
+    assert.match(tableSource, /opens_appeal_bool boolean not null default false/);
+    assert.match(tableSource, /corrects_record_bool boolean not null default false/);
+    assert.match(
+      tableSource,
+      /reliance_bearing_transition_allowed_bool boolean not null default false/,
+    );
+    assert.match(
+      tableSource,
+      /safety_blocker_waiver_allowed_bool boolean not null default false/,
+    );
+    assert.match(
+      tableSource,
+      /settled_obligation_reopen_allowed_bool boolean not null default false/,
+    );
+    assert.match(tableSource, /public_metric_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /unique \(owner_profile_id, idempotency_key\)/);
+    assert.match(tableSource, /enable row level security/);
+    assert.match(tableSource, /moral_trade_challenge_appeal_enforcement_records_select_owner/);
+    assert.match(tableSource, /moral_trade_challenge_appeal_enforcement_records_insert_owner/);
+  }
+  assert.match(databaseTypes, /moral_trade_challenge_appeal_enforcement_records/);
+  assert.match(databaseTypes, /opens_appeal_bool: false/);
+  assert.match(databaseTypes, /public_metric_allowed_bool: false/);
 });
 
 test("challenge appeal contract validation fails when safeguards are weakened", () => {
