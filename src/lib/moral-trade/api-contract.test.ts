@@ -169,6 +169,14 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "moral_trade_ai_preference_elicitation_contract" &&
+        route.path === "/api/moral-trade/ai-preference-elicitation/contract" &&
+        route.responseSchema === "ai_preference_elicitation_contract_response",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "moral_trade_side_agreement_contract" &&
         route.path === "/api/moral-trade/side-agreements/contract" &&
         route.responseSchema === "side_agreement_contract_response",
@@ -754,6 +762,7 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "production_readiness_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "recipient_destination_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "recipient_acceptance_contract_response"));
+  assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "ai_preference_elicitation_contract_response"));
   assert.ok(profile.schemaDefinitions.some((schema) => schema.key === "schema_registry_response"));
   assert.ok(
     profile.schemaDefinitions
@@ -819,6 +828,11 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
     profile.schemaDefinitions
       .find((schema) => schema.key === "moral_trade_aggregate_health_response")
       ?.fields.some((field) => field.key === "recipientAcceptanceValidation"),
+  );
+  assert.ok(
+    profile.schemaDefinitions
+      .find((schema) => schema.key === "moral_trade_aggregate_health_response")
+      ?.fields.some((field) => field.key === "aiPreferenceElicitationValidation"),
   );
   assert.ok(
     profile.schemaDefinitions

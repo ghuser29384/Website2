@@ -1,5 +1,5 @@
 export const MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION =
-  "moral-trade-clearing-preview-v0.1-2026-06";
+  "moral-trade-clearing-preview-v0.2-2026-06";
 export const MORAL_TRADE_CLEARING_PREVIEW_VALIDATOR_VERSION =
   "moral-trade-clearing-preview-validator-v0.1";
 
@@ -86,6 +86,9 @@ export interface MoralTradeClearingPreviewInput {
   tradeClassificationStatus: MoralTradeClearingPreviewGateStatus;
   protectiveAssessmentStatus: MoralTradeClearingPreviewGateStatus;
   userSafetyStatus: MoralTradeClearingPreviewGateStatus;
+  recipientAcceptanceStatus: MoralTradeClearingPreviewGateStatus;
+  adverseAssociationStatus: MoralTradeClearingPreviewGateStatus;
+  aiPreferenceElicitationStatus: MoralTradeClearingPreviewGateStatus;
   privacyDisclosureStatus: MoralTradeClearingPreviewGateStatus;
   policySnapshotRef: string;
   stateInterpretationPolicyRef: string;
@@ -130,6 +133,11 @@ export interface MoralTradeClearingPreview {
     unmatchedResidualCents: number;
     residualNoTradeAction: string;
     fallbackRule: string;
+  };
+  boundaryStatuses: {
+    recipientAcceptanceStatus: MoralTradeClearingPreviewGateStatus;
+    adverseAssociationStatus: MoralTradeClearingPreviewGateStatus;
+    aiPreferenceElicitationStatus: MoralTradeClearingPreviewGateStatus;
   };
   sections: MoralTradeClearingPreviewSection[];
   userFacingBlockers: string[];
@@ -190,6 +198,7 @@ const REQUIRED_SECTIONS = [
   "destination-and-tax",
   "externality-and-safety",
   "classification-and-assessments",
+  "recipient-ai-boundaries",
   "privacy-and-policy",
   "pledge-performance-terms",
 ] as const;
@@ -217,6 +226,9 @@ const REQUIRED_CONTROL_STATUSES = [
   "trade_classification",
   "protective_assessment",
   "user_safety",
+  "recipient_acceptance",
+  "adverse_association",
+  "ai_preference_elicitation",
   "privacy_disclosure",
   "policy_snapshot",
   "state_interpretation_policy",
@@ -375,6 +387,14 @@ export function buildMoralTradeClearingPreview(
     ...statusBlocker(input.protectiveAssessmentStatus, "protective_assessment_not_passed"),
     ...statusBlocker(input.userSafetyStatus, "user_safety_not_passed"),
   ];
+  const boundaryBlockers = [
+    ...statusBlocker(input.recipientAcceptanceStatus, "recipient_acceptance_not_passed"),
+    ...statusBlocker(input.adverseAssociationStatus, "adverse_association_not_passed"),
+    ...statusBlocker(
+      input.aiPreferenceElicitationStatus,
+      "ai_preference_elicitation_not_passed",
+    ),
+  ];
   const privacyPolicyBlockers = [
     ...statusBlocker(input.privacyDisclosureStatus, "privacy_disclosure_not_passed"),
     ...(input.policySnapshotRef.trim() ? [] : ["policy_snapshot_missing"]),
@@ -433,6 +453,7 @@ export function buildMoralTradeClearingPreview(
     ...destinationBlockers,
     ...safetyBlockers,
     ...classificationBlockers,
+    ...boundaryBlockers,
     ...privacyPolicyBlockers,
     ...pledgeBlockers,
   ];
@@ -466,6 +487,11 @@ export function buildMoralTradeClearingPreview(
       unmatchedResidualCents: cents(input.unmatchedResidualCents),
       residualNoTradeAction: input.residualNoTradeAction,
       fallbackRule: input.fallbackRule,
+    },
+    boundaryStatuses: {
+      recipientAcceptanceStatus: input.recipientAcceptanceStatus,
+      adverseAssociationStatus: input.adverseAssociationStatus,
+      aiPreferenceElicitationStatus: input.aiPreferenceElicitationStatus,
     },
     sections: [
       makeSection({
@@ -589,6 +615,18 @@ export function buildMoralTradeClearingPreview(
           "Resolve immutable policy snapshots and privacy disclosure records before private details are shown or relied on.",
       }),
       makeSection({
+        key: "recipient-ai-boundaries",
+        label: "Recipient and AI boundaries",
+        status: boundaryBlockers.length ? "blocked" : "passed",
+        blockerCodes: boundaryBlockers,
+        passedMessage:
+          "Recipient acceptance, adverse-association review, and AI preference-elicitation boundary statuses are non-blocking.",
+        blockedMessage:
+          "Recipient acceptance, adverse-association review, or AI preference-elicitation conversion still blocks reliance.",
+        nextAction:
+          "Resolve recipient acceptance, adverse-association review, and any AI-shaped preference input before final lock, disclosure, payment, or public metrics.",
+      }),
+      makeSection({
         key: "pledge-performance-terms",
         label: "Pledge performance terms",
         status:
@@ -630,6 +668,12 @@ export function buildMoralTradeClearingPreview(
         case "destination_verification_not_passed":
         case "payment_destination_not_verified":
           return "Recipient and payment destination verification must be non-blocking.";
+        case "recipient_acceptance_not_passed":
+          return "Recipient acceptance must be non-blocking before lock, money movement, or public metrics.";
+        case "adverse_association_not_passed":
+          return "Adverse-association review must be non-blocking before reliance.";
+        case "ai_preference_elicitation_not_passed":
+          return "AI-shaped preferences must be converted into user-edited structured input and confirmed or reviewed.";
         case "baseline_integrity_not_non_blocking":
         case "baseline_confidence_low":
           return "The baseline needs stronger review before it can support clearing.";
@@ -645,13 +689,13 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
   return {
     version: MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION,
     purpose:
-      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, destination, safety, and policy controls are non-blocking.",
+      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, safety, and policy controls are non-blocking.",
     failClosedRule:
-      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility.",
+      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including recipient-acceptance, adverse-association, and AI-preference-elicitation boundary controls.",
     persistenceRule:
       "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
-      "Preview sections expose only coarse statuses, user actions, and safe reason categories; exact wishes, private notes, payment credentials, raw evidence, hidden counterparty terms, and reviewer notes stay out of the preview.",
+      "Preview sections expose only coarse statuses, user actions, and safe reason categories; exact wishes, private notes, payment credentials, raw evidence, hidden counterparty terms, raw AI outputs, hidden willingness-to-pay estimates, and reviewer notes stay out of the preview.",
     firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
     executionRoute: {
       method: "POST",
@@ -797,6 +841,9 @@ export function buildDemoDonationOffsetClearingPreview() {
     tradeClassificationStatus: "passed",
     protectiveAssessmentStatus: "passed",
     userSafetyStatus: "passed",
+    recipientAcceptanceStatus: "passed",
+    adverseAssociationStatus: "passed",
+    aiPreferenceElicitationStatus: "not_required_for_stage",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:donation-offset-preview-v1",
     stateInterpretationPolicyRef: "state-policy:donation-offset-preview-v1",
@@ -853,6 +900,9 @@ export function buildDemoPledgeSwapClearingPreview() {
     tradeClassificationStatus: "passed",
     protectiveAssessmentStatus: "passed",
     userSafetyStatus: "passed",
+    recipientAcceptanceStatus: "not_required_for_stage",
+    adverseAssociationStatus: "not_required_for_stage",
+    aiPreferenceElicitationStatus: "not_required_for_stage",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:pledge-swap-preview-v1",
     stateInterpretationPolicyRef: "state-policy:pledge-swap-preview-v1",

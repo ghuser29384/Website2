@@ -6128,6 +6128,18 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_ai_preference_elicitation_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_ai_preference_elicitation_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_appeal_policies: {
         Row: {
           id: string;
@@ -7763,7 +7775,8 @@ export interface Database {
             | "counterparty_blinding"
             | "staged_counterparty_disclosure"
             | "recipient_acceptance"
-            | "adverse_association";
+            | "adverse_association"
+            | "ai_preference_elicitation";
           subject_key: string;
           version_label: string;
           status: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7821,7 +7834,8 @@ export interface Database {
             | "counterparty_blinding"
             | "staged_counterparty_disclosure"
             | "recipient_acceptance"
-            | "adverse_association";
+            | "adverse_association"
+            | "ai_preference_elicitation";
           subject_key: string;
           version_label: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7878,7 +7892,8 @@ export interface Database {
             | "counterparty_blinding"
             | "staged_counterparty_disclosure"
             | "recipient_acceptance"
-            | "adverse_association";
+            | "adverse_association"
+            | "ai_preference_elicitation";
           subject_key?: string;
           version_label?: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";

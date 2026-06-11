@@ -76,6 +76,10 @@ import {
   validateMoralTradeRecipientAcceptanceContract,
 } from "@/lib/moral-trade/recipient-acceptance";
 import {
+  getMoralTradeAiPreferenceElicitationContract,
+  validateMoralTradeAiPreferenceElicitationContract,
+} from "@/lib/moral-trade/ai-preference-elicitation";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -273,6 +277,12 @@ export async function GET(request: Request) {
     validateMoralTradeRecipientAcceptanceContract(
       recipientAcceptanceContract,
     );
+  const aiPreferenceElicitationContract =
+    getMoralTradeAiPreferenceElicitationContract();
+  const aiPreferenceElicitationValidation =
+    validateMoralTradeAiPreferenceElicitationContract(
+      aiPreferenceElicitationContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -402,6 +412,7 @@ export async function GET(request: Request) {
       productionReadinessValidation.status === "pass" &&
       recipientDestinationValidation.status === "pass" &&
       recipientAcceptanceValidation.status === "pass" &&
+      aiPreferenceElicitationValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -451,6 +462,7 @@ export async function GET(request: Request) {
     productionReadinessValidation,
     recipientDestinationValidation,
     recipientAcceptanceValidation,
+    aiPreferenceElicitationValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -852,6 +864,36 @@ export async function GET(request: Request) {
       ),
       recipientAcceptanceContractTests:
         recipientAcceptanceContract.contractTests,
+      aiPreferenceElicitationContractVersion:
+        aiPreferenceElicitationContract.version,
+      aiPreferenceElicitationTransitionKeys:
+        aiPreferenceElicitationContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      aiPreferenceElicitationSubjectTypes:
+        aiPreferenceElicitationContract.subjectTypes,
+      aiPreferenceElicitationScopes:
+        aiPreferenceElicitationContract.scopes,
+      aiPreferenceElicitationStates:
+        aiPreferenceElicitationContract.elicitationStates,
+      aiPreferenceElicitationPolicyStatuses:
+        aiPreferenceElicitationContract.policyStatuses,
+      aiPreferenceElicitationProhibitedUseBlockers:
+        aiPreferenceElicitationContract.prohibitedUseBlockers,
+      aiPreferenceElicitationFirstClassRecordTables:
+        aiPreferenceElicitationContract.firstClassRecordTables,
+      aiPreferenceElicitationPolicySnapshotSubjects:
+        aiPreferenceElicitationContract.policySnapshotSubjects,
+      aiPreferenceElicitationPrivacyBoundary:
+        aiPreferenceElicitationContract.privacyBoundary,
+      aiPreferenceElicitationSampleEvaluationStatuses: Object.fromEntries(
+        aiPreferenceElicitationContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      aiPreferenceElicitationContractTests:
+        aiPreferenceElicitationContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1351,6 +1393,7 @@ export async function GET(request: Request) {
       ...productionReadinessValidation.blockers,
       ...recipientDestinationValidation.blockers,
       ...recipientAcceptanceValidation.blockers,
+      ...aiPreferenceElicitationValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

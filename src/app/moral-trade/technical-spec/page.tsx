@@ -99,6 +99,10 @@ import {
   validateMoralTradeRecipientAcceptanceContract,
 } from "@/lib/moral-trade/recipient-acceptance";
 import {
+  getMoralTradeAiPreferenceElicitationContract,
+  validateMoralTradeAiPreferenceElicitationContract,
+} from "@/lib/moral-trade/ai-preference-elicitation";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -285,6 +289,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeRecipientAcceptanceContract(
       recipientAcceptanceContract,
     );
+  const aiPreferenceElicitationContract =
+    getMoralTradeAiPreferenceElicitationContract();
+  const aiPreferenceElicitationValidation =
+    validateMoralTradeAiPreferenceElicitationContract(
+      aiPreferenceElicitationContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -421,6 +431,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     productionReadinessValidation,
     recipientDestinationValidation,
     recipientAcceptanceValidation,
+    aiPreferenceElicitationValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -617,6 +628,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Recipient acceptance",
       status: recipientAcceptanceValidation.status,
       summary: `${recipientAcceptanceContract.transitionDefinitions.length} gated transition(s), ${recipientAcceptanceContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: aiPreferenceElicitationValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/ai-preference-elicitation/contract",
+      label: "AI preference elicitation",
+      status: aiPreferenceElicitationValidation.status,
+      summary: `${aiPreferenceElicitationContract.scopes.length} scope(s), ${aiPreferenceElicitationContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -2404,6 +2423,77 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Privacy boundary</p>
             <p>{recipientAcceptanceContract.privacyBoundary}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="ai-preference-elicitation-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">AI preference elicitation</p>
+            <h2 id="ai-preference-elicitation-contract-heading">
+              AI can draft preference structure, but cannot authorize matching, disclosure, payment, public metrics, or state changes.
+            </h2>
+            <p>
+              Moraltrade68 allows AI assistance for baselines, caps, side constraints,
+              empirical assumptions, cause buckets, evidence preferences, fallback rules,
+              and manual-review structure. The output must become user-edited structured
+              input and be confirmed by a participant or reviewer before it can affect
+              matching, clearing, disclosure, payment, public metrics, or release promotion.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                AI preference elicitation {aiPreferenceElicitationContract.version}
+              </p>
+              <h3>Status {aiPreferenceElicitationValidation.status}</h3>
+              <p>
+                {aiPreferenceElicitationValidation.checks.length} check(s),{" "}
+                {aiPreferenceElicitationValidation.blockers.length} blocker(s),{" "}
+                {aiPreferenceElicitationContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/ai-preference-elicitation/contract">
+              Open AI boundary JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {aiPreferenceElicitationContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Scopes</h3>
+              <ul className="clean-list">
+                {aiPreferenceElicitationContract.scopes.map((scope) => (
+                  <li key={scope}>{scope.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Elicitation states</h3>
+              <ul className="clean-list">
+                {aiPreferenceElicitationContract.elicitationStates.map((state) => (
+                  <li key={state}>{state.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {aiPreferenceElicitationContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Privacy boundary</p>
+            <p>{aiPreferenceElicitationContract.privacyBoundary}</p>
           </div>
         </section>
 

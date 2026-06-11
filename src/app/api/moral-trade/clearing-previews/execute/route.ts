@@ -57,6 +57,8 @@ const REQUEST_KEYS = new Set([
 ]);
 const PREVIEW_INPUT_KEYS = new Set([
   "antiThreatStatus",
+  "adverseAssociationStatus",
+  "aiPreferenceElicitationStatus",
   "atomicSettlementStatus",
   "baselineConfidenceLevel",
   "baselineIntegrityStatus",
@@ -90,6 +92,7 @@ const PREVIEW_INPUT_KEYS = new Set([
   "privacyDisclosureStatus",
   "protectiveAssessmentStatus",
   "ratioBoundsStatus",
+  "recipientAcceptanceStatus",
   "releaseStage",
   "reproducibilityStatus",
   "requiredFreshConfirmations",
@@ -283,6 +286,16 @@ function normalizePreviewInput(value: unknown) {
   const performanceTerms = normalizePerformanceTerms(value.performanceTerms, blockers);
   const input: MoralTradeClearingPreviewInput = {
     antiThreatStatus: gateStatus(value.antiThreatStatus, "previewInput.antiThreatStatus", blockers),
+    adverseAssociationStatus: gateStatus(
+      value.adverseAssociationStatus,
+      "previewInput.adverseAssociationStatus",
+      blockers,
+    ),
+    aiPreferenceElicitationStatus: gateStatus(
+      value.aiPreferenceElicitationStatus,
+      "previewInput.aiPreferenceElicitationStatus",
+      blockers,
+    ),
     atomicSettlementStatus: gateStatus(
       value.atomicSettlementStatus,
       "previewInput.atomicSettlementStatus",
@@ -380,6 +393,11 @@ function normalizePreviewInput(value: unknown) {
       blockers,
     ),
     ratioBoundsStatus: gateStatus(value.ratioBoundsStatus, "previewInput.ratioBoundsStatus", blockers),
+    recipientAcceptanceStatus: gateStatus(
+      value.recipientAcceptanceStatus,
+      "previewInput.recipientAcceptanceStatus",
+      blockers,
+    ),
     releaseStage,
     reproducibilityStatus: gateStatus(
       value.reproducibilityStatus,

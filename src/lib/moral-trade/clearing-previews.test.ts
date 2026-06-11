@@ -63,6 +63,9 @@ function baseInput(
     tradeClassificationStatus: "passed",
     protectiveAssessmentStatus: "passed",
     userSafetyStatus: "passed",
+    recipientAcceptanceStatus: "passed",
+    adverseAssociationStatus: "passed",
+    aiPreferenceElicitationStatus: "not_required_for_stage",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:test",
     stateInterpretationPolicyRef: "state-policy:test",
@@ -80,9 +83,13 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredSections.includes("ratio-and-residual"));
   assert.ok(contract.requiredSections.includes("commitment-reservation"));
   assert.ok(contract.requiredSections.includes("atomic-settlement"));
+  assert.ok(contract.requiredSections.includes("recipient-ai-boundaries"));
   assert.ok(contract.requiredSections.includes("pledge-performance-terms"));
   assert.ok(contract.requiredControlStatuses.includes("matching_clearing_run"));
   assert.ok(contract.requiredControlStatuses.includes("destination_verification"));
+  assert.ok(contract.requiredControlStatuses.includes("recipient_acceptance"));
+  assert.ok(contract.requiredControlStatuses.includes("adverse_association"));
+  assert.ok(contract.requiredControlStatuses.includes("ai_preference_elicitation"));
   assert.ok(contract.requiredControlStatuses.includes("policy_snapshot"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_clearing_preview_records"));
   assert.equal(
@@ -110,6 +117,12 @@ test("donation-offset clearing preview can pass as non-capture final-lock previe
   assert.deepEqual(preview.blockerCodes, []);
   assert.equal(preview.sections.find((section) => section.key === "final-lock")?.status, "passed");
   assert.equal(
+    preview.sections.find((section) => section.key === "recipient-ai-boundaries")?.status,
+    "passed",
+  );
+  assert.equal(preview.boundaryStatuses.recipientAcceptanceStatus, "passed");
+  assert.equal(preview.boundaryStatuses.aiPreferenceElicitationStatus, "not_required_for_stage");
+  assert.equal(
     preview.sections.find((section) => section.key === "pledge-performance-terms")?.status,
     "not_required_for_stage",
   );
@@ -135,6 +148,9 @@ test("clearing preview fails closed when run, ratio, reservation, and confirmati
       commitmentReservationStatus: "missing",
       doubleCountStatus: "needs_review",
       atomicSettlementStatus: "missing",
+      recipientAcceptanceStatus: "missing",
+      adverseAssociationStatus: "needs_review",
+      aiPreferenceElicitationStatus: "needs_review",
     }),
   );
 
@@ -146,6 +162,9 @@ test("clearing preview fails closed when run, ratio, reservation, and confirmati
   assert.ok(preview.blockerCodes.includes("clearing_ratio_outside_participant_bounds"));
   assert.ok(preview.blockerCodes.includes("commitment_reservation_not_passed"));
   assert.ok(preview.blockerCodes.includes("atomic_settlement_not_passed"));
+  assert.ok(preview.blockerCodes.includes("recipient_acceptance_not_passed"));
+  assert.ok(preview.blockerCodes.includes("adverse_association_not_passed"));
+  assert.ok(preview.blockerCodes.includes("ai_preference_elicitation_not_passed"));
   assert.ok(
     preview.userFacingBlockers.some((blocker) =>
       /reviewed deterministic clearing run/i.test(blocker),
