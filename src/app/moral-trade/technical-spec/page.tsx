@@ -107,6 +107,10 @@ import {
   validateMoralTradeTemplateConformanceContract,
 } from "@/lib/moral-trade/template-conformance";
 import {
+  getMoralTradeReviewCapacityContract,
+  validateMoralTradeReviewCapacityContract,
+} from "@/lib/moral-trade/review-capacity";
+import {
   getMoralTradeProtectiveAssessmentContract,
   validateMoralTradeProtectiveAssessmentContract,
 } from "@/lib/moral-trade/protective-assessments";
@@ -282,6 +286,9 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeTemplateConformanceContract(
       templateConformanceContract,
     );
+  const reviewCapacityContract = getMoralTradeReviewCapacityContract();
+  const reviewCapacityValidation =
+    validateMoralTradeReviewCapacityContract(reviewCapacityContract);
   const protectiveAssessmentContract =
     getMoralTradeProtectiveAssessmentContract();
   const protectiveAssessmentValidation =
@@ -396,6 +403,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
+    reviewCapacityValidation,
     protectiveAssessmentValidation,
     userSafetyContentModerationValidation,
     financialSettlementControlsValidation,
@@ -603,6 +611,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Template conformance",
       status: templateConformanceValidation.status,
       summary: `${templateConformanceContract.tradeTypes.length} trade type(s), ${templateConformanceContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: reviewCapacityValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/review-capacity/contract",
+      label: "Review capacity",
+      status: reviewCapacityValidation.status,
+      summary: `${reviewCapacityContract.transitionDefinitions.length} gated transition(s), ${reviewCapacityContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: protectiveAssessmentValidation.blockers.length,
@@ -2474,6 +2490,70 @@ export default async function MoralTradeTechnicalSpecPage() {
             <article className="panel protocol-contract-card">
               <h3>Privacy boundary</h3>
               <p>{templateConformanceContract.privacyBoundary}</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="review-capacity-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Review-capacity contract</p>
+            <h2 id="review-capacity-contract-heading">
+              Review attention is a first-class live, matchable, payable, and reliance gate.
+            </h2>
+            <p>
+              Moraltrade68 requires non-public-goods offers to stay preview-only, waitlisted, or
+              expired when reviewer capacity is beyond policy, eligible reviewers or neutral
+              panels are unavailable, visible user queue status is missing, or review delay would
+              make baselines or payment authorizations stale.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Review capacity {reviewCapacityContract.version}
+              </p>
+              <h3>Status {reviewCapacityValidation.status}</h3>
+              <p>
+                {reviewCapacityValidation.checks.length} check(s),{" "}
+                {reviewCapacityValidation.blockers.length} blocker(s),{" "}
+                {reviewCapacityContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/review-capacity/contract">
+              Open review-capacity JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Queue statuses</h3>
+              <ul className="clean-list">
+                {reviewCapacityContract.visibleQueueStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {reviewCapacityContract.transitionDefinitions
+                  .filter((transition) => transition.requiresQueueAdmission)
+                  .map((transition) => (
+                    <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                  ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {reviewCapacityContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Privacy boundary</h3>
+              <p>{reviewCapacityContract.privacyBoundary}</p>
             </article>
           </div>
         </section>

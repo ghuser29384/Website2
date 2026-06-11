@@ -42,6 +42,7 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
 - first-class recipient-registry and payment-destination contract/records that prevent free-text names, copied donation links, wallet addresses, bank details, or fiscal-host notes from authorizing lock, capture, payout, reuse, or public money claims
 - first-class side-agreement disclosure contract/records for off-platform compensation, reciprocal favors, reporting suppression, threats, collusion, externalities, authority claims, privacy/confidentiality, fraud, anti-corruption, and participant-autonomy review before reliance-bearing transitions
 - first-class trade-classification contract/records for compensated moral-action classification, ordinary-service/procurement exclusion, frozen compensation terms, non-blocking review dimensions, metric eligibility, and no public moral-status badge claims
+- first-class review-capacity and queue-admission contract/records for non-public-goods offers before live, matchable, payable, reliance-bearing, public-metric, or release-gate transitions, including queue overflow, visible user-facing queue status, eligible reviewer/panel assignment, neutral-panel availability, baseline freshness, and payment-authorization freshness gates
 - first-class protective-assessment contract/records for negative commitments, action reversibility, donor/tax treatment, third-party obligations, representative authority, reporting integrity, civil rights, participant autonomy, confidentiality, evidence authenticity, financial crime, non-transferability, regulated goods, cyber abuse, anti-corruption, least-intrusive evidence, and neutral-review performance-bond controls before lock, payment, payout, public completion, or release promotion
 - first-class user-safety/content-moderation contract/records for contact consent, invite-link rate limits, block/decline/withdrawal handling, abuse-report resolution, retaliation prevention, prohibited-use moderation, and viewpoint-neutral content handling before public, reviewer-actionable, reliance-bearing, payable, contact-enabling, profile-amplifying, or release-gate transitions
 - first-class financial settlement controls contract/records for platform fees, FX policies/rate snapshots, material notices, server-time deadlines, challenge windows, and payout milestones before real-money previews, locks, authorizations, captures, defaults, payout releases, public metrics, or release promotion
@@ -147,6 +148,10 @@ This branch implements the next MoralTrade60 release slice for a trust-first mar
   - Adds first-class `moral_trade_platform_fee_policies`, `moral_trade_platform_fee_disclosures`, `moral_trade_fx_policies`, `moral_trade_fx_rate_snapshots`, `moral_trade_notification_policies`, `moral_trade_material_notice_records`, `moral_trade_time_authority_policies`, `moral_trade_deadline_records`, `moral_trade_challenge_window_records`, and `moral_trade_payout_milestone_records` tables.
   - Extends policy-snapshot subject support for `challenge_window` and `payout_milestone` alongside existing platform-fee, FX, notification, and time-authority subjects.
   - Keeps missing, mutable, stale, superseded, hidden-fee, stale-FX, metric-inclusion, failed-notice, client-clock, unresolved-challenge, missing-evidence, changed-destination, unverified-destination, or unreleasable milestone evidence fail-closed before money movement, payout release, public metrics, or release-gate promotion.
+- `supabase/migrations/20260611_moral_trade_review_capacity_records.sql`
+  - Adds first-class `moral_trade_review_capacity_policies`, `moral_trade_review_queue_records`, and `moral_trade_reviewer_panel_assignments` tables.
+  - Extends policy-snapshot subject support for `review_capacity` and `review_queue_admission`.
+  - Keeps missing, mutable, stale, superseded, overflowing, waitlisted, expired, hidden-status, reviewer-unavailable, neutral-panel-unavailable, baseline-stale, or payment-authorization-stale evidence fail-closed before non-public-goods offers become live, matchable, payable, reliance-bearing, publicly counted, or release-promoted.
 - `supabase/migrations/20260608_moral_trade_clearing_preview_records.sql`
   - Adds append-only owner-scoped `moral_trade_clearing_preview_records` for donation-offset and pledge-swap preview execution packets, normalized preview input/result JSON, section statuses, blocker copy, blocker codes, preview hashes, and idempotency keys.
   - Enables RLS with owner select/insert policies and hard checks that force `capture_allowed_bool = false`, `reliance_bearing_bool = false`, `match_candidate_creates_deal_bool = false`, `requires_final_lock_proposal_bool = true`, and `requires_fresh_confirmations_bool = true`.
@@ -201,6 +206,7 @@ node --import tsx --test src/lib/moral-trade/user-safety-content-moderation.test
 node --import tsx --test src/lib/moral-trade/financial-settlement-controls.test.ts
 node --import tsx --test src/lib/moral-trade/financial-settlement-controls.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 node --import tsx --test src/lib/moral-trade/template-conformance.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/moral-trade/challenge-appeal.test.ts src/lib/moral-trade/financial-settlement-controls.test.ts
+node --import tsx --test src/lib/moral-trade/review-capacity.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
 node --import tsx --test src/lib/moral-trade/clearing-previews.test.ts
 node --import tsx --test src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/moral-trade/clearing-previews.test.ts
 node --import tsx --test src/lib/moral-trade/clearing-previews.test.ts src/lib/moral-trade/financial-settlement-controls.test.ts src/lib/moral-trade/user-safety-content-moderation.test.ts src/lib/moral-trade/protective-assessments.test.ts src/lib/moral-trade/trade-classification.test.ts src/lib/moral-trade/side-agreements.test.ts src/lib/proposal-review.test.ts src/lib/moral-trade/challenge-appeal.test.ts src/lib/moral-trade/agreement-amendments.test.ts src/lib/moral-trade/baseline-integrity.test.ts src/lib/moral-trade/matching-clearing.test.ts src/lib/moral-trade/impact-claims.test.ts src/lib/moral-trade/privacy-governance.test.ts src/lib/moral-trade/anti-enumeration.test.ts src/lib/moral-trade/reviewer-quality.test.ts src/lib/moral-trade/account-security.test.ts src/lib/moral-trade/participant-eligibility.test.ts src/lib/moral-trade/recipient-destination.test.ts src/lib/moral-trade/production-readiness.test.ts src/lib/moral-trade/participant-confirmations.test.ts src/lib/moral-trade/release-gates.test.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts
@@ -242,6 +248,7 @@ npm run lint -- src/lib/moral-trade/protective-assessments.ts src/lib/moral-trad
 npm run lint -- src/lib/moral-trade/user-safety-content-moderation.ts src/lib/moral-trade/user-safety-content-moderation.test.ts src/app/api/moral-trade/user-safety-content-moderation/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts config/moral-trade/api-contract-profile.json
 npm run lint -- src/lib/moral-trade/financial-settlement-controls.ts src/lib/moral-trade/financial-settlement-controls.test.ts src/app/api/moral-trade/financial-settlement-controls/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts config/moral-trade/api-contract-profile.json
 npm run lint -- src/lib/moral-trade/template-conformance.ts src/lib/moral-trade/template-conformance.test.ts src/app/api/moral-trade/template-conformance/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/moral-trade/challenge-appeal.test.ts src/lib/moral-trade/financial-settlement-controls.test.ts src/lib/supabase/database.types.ts config/moral-trade/api-contract-profile.json
+npm run lint -- src/lib/moral-trade/review-capacity.ts src/lib/moral-trade/review-capacity.test.ts src/app/api/moral-trade/review-capacity/contract/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/public-route-smoke.test.ts src/lib/supabase/database.types.ts config/moral-trade/api-contract-profile.json
 npm run lint -- src/lib/moral-trade/clearing-previews.ts src/lib/moral-trade/clearing-previews.test.ts src/app/api/moral-trade/clearing-previews/execute/route.ts src/app/api/moral-trade/health/route.ts src/app/moral-trade/technical-spec/page.tsx src/lib/moral-trade/api-contract.ts src/lib/moral-trade/api-contract.test.ts src/lib/moral-trade/api-rate-limit.ts src/lib/public-route-smoke.test.ts src/lib/moral-trade/financial-settlement-controls.test.ts src/lib/supabase/database.types.ts
 git diff --check
 npm run build
@@ -304,6 +311,9 @@ Observed results:
 - financial-settlement-controls API/source-smoke bundle: `61` tests passed
 - financial-settlement-controls broad governance bundle: `187` tests passed
 - direct financial-settlement-controls validator probe: `status: pass`, `blockers: []`, sample evaluations `draft_preview: pass`, `matched_trade_lock: pass`, `payout_milestone_release: blocked`
+- focused review-capacity/API/source-smoke bundle: `62` tests passed
+- review-capacity broad governance bundle: `208` tests passed
+- direct review-capacity validator probe: `status: pass`, `blockers: []`, sample evaluations cover `draft_preview: pass`, `matchable_publication: pass`, waitlisted overflow blocking, payment-authorization staleness blocking, and neutral-panel blocking
 - focused clearing-preview contract/execution bundle: `8` tests passed
 - clearing-preview API/source-smoke bundle: `62` tests passed
 - clearing-preview broad governance bundle: `195` tests passed
@@ -745,6 +755,46 @@ Template-conformance contract sample:
 }
 ```
 
+Review-capacity contract sample:
+
+```json
+{
+  "status": "pass",
+  "blockers": [],
+  "sampleEvaluations": [
+    {
+      "transition": "draft_preview",
+      "status": "pass",
+      "blockers": []
+    },
+    {
+      "transition": "matchable_publication",
+      "status": "pass",
+      "admittedQueueCount": 1,
+      "eligiblePanelCount": 1,
+      "blockers": []
+    },
+    {
+      "transition": "live_offer_publication",
+      "status": "blocked",
+      "blockers": [
+        "review_queue_not_admitted:review-queue:offset-offer-demo:waitlisted",
+        "review_queue_over_policy_depth:review-queue:offset-offer-demo",
+        "review_queue_visible_status_not_live:review-queue:offset-offer-demo:waitlisted_capacity"
+      ]
+    },
+    {
+      "transition": "payment_capture",
+      "status": "blocked",
+      "blockers": [
+        "estimated_review_after_baseline_expiry:review-queue:offset-offer-demo",
+        "estimated_review_after_payment_authorization_expiry:review-queue:offset-offer-demo"
+      ]
+    }
+  ]
+}
+```
+
 Route baseline summary:
 
 ```json
@@ -791,14 +841,15 @@ Route baseline summary:
 - The side-agreement route publishes static transition/table/status/review-dimension/sample-status contract metadata; it does not expose private side-arrangement narratives, reviewer notes, raw evidence, source hashes, provider payloads, contact details, payment credentials, or exact counterparties.
 - The trade-classification route publishes static transition/table/status/classification/review-dimension/sample-status contract metadata; it does not expose private moral-reason narratives, performer rationale, raw compensation terms, reviewer notes, source hashes, provider payloads, contact details, payment credentials, or participant-specific classification records.
 - The template-conformance route publishes static transition/table/status/trade-type/sample-status contract metadata; it does not expose private terms, exact caps, free-text narratives, hidden counterparty data, reviewer notes, private wishes, payment details, or participant-specific template instance records.
+- The review-capacity route publishes static transition/table/status/queue-status/panel-state/sample-status contract metadata; it does not expose reviewer identities, conflict facts, private queue reasons, participant-specific queue records, baseline details, payment authorization details, reviewer notes, source evidence, contact details, or raw internal status copies.
 - The protective-assessment route publishes static transition/table/status/dimension/sample-status contract metadata; it does not expose protected-trait facts, authority documents, private reports, credentials, source-of-funds evidence, reviewer notes, raw evidence, or participant-specific assessment records.
 - The clearing-preview execute route is authenticated and private no-store; invalid or unauthenticated requests do not write records, and successful records remain owner-scoped append-only preview records that do not expose private counterparty records, raw input bundles, hidden match reasoning, payment credentials, reviewer notes, or participant-specific final confirmations.
-- The health, measurement, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, clearing-preview, baseline-integrity, agreement-amendment, challenge-appeal, production-readiness, recipient-destination, side-agreement, trade-classification, template-conformance, and protective-assessment surfaces publish validator status and aggregate contract metadata, not private participant records, participant-specific discovery records, participant-specific impact-claim records, raw matching bundles, participant-specific final confirmations, participant-specific baseline assessments, participant-specific baseline enforcement rows, participant-specific amendment records, participant-specific amendment enforcement rows, participant-specific appeal records, participant-specific appeal enforcement rows, participant-specific destination records, participant-specific side-agreement records, participant-specific classification records, participant-specific template instance records, participant-specific assessment records, or private operational evidence.
+- The health, measurement, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, clearing-preview, baseline-integrity, agreement-amendment, challenge-appeal, production-readiness, recipient-destination, side-agreement, trade-classification, template-conformance, review-capacity, and protective-assessment surfaces publish validator status and aggregate contract metadata, not private participant records, participant-specific discovery records, participant-specific impact-claim records, raw matching bundles, participant-specific final confirmations, participant-specific baseline assessments, participant-specific baseline enforcement rows, participant-specific amendment records, participant-specific amendment enforcement rows, participant-specific appeal records, participant-specific appeal enforcement rows, participant-specific destination records, participant-specific side-agreement records, participant-specific classification records, participant-specific template instance records, participant-specific queue records, participant-specific assessment records, or private operational evidence.
 
 ### Remaining Blockers And Non-Claims
 
 - There are still `0` live public offers and `0` completed agreements in the local public-offer sample; reviewed examples and seed templates are scaffolding, not evidence of real liquidity.
 - Real-money capture and payout remain blocked until capped-real-money release gates, live provider reconciliation runs, privileged-action approvals, current backup/restore checkpoints, deployment/configuration snapshots, audit-integrity checkpoints, and reviewer approvals are complete.
 - Donation offsets and pledge swaps remain preview/manual-review oriented unless later release gates explicitly promote them.
-- `moraltrade60.md` and `moraltrade68.md` include broader long-tail requirements beyond this PR slice, including live operational execution for the new production-readiness, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, challenge-appeal, recipient/destination, side-agreement, trade-classification, and template-conformance records, live lock-proposal creation jobs, live endpoint enforcement for privacy access logs, live endpoint enforcement for impact-claim publication records, live endpoint enforcement for anti-enumeration logs/probe audits, live endpoint enforcement for side-agreement disclosure/review records before reliance-bearing transitions, live endpoint enforcement for trade-classification and compensated-action-term records before moral-trade metric publication or payable/reliance-bearing transitions, live endpoint enforcement for template-instance records before live publication, lock, payment, reliance, or public metrics, reviewer audit sampling execution, and live deployment exercise of matching-clearing, clearing-preview, baseline-integrity, agreement-amendment, and challenge-appeal enforcement against production Supabase/authenticated traffic.
+- `moraltrade60.md` and `moraltrade68.md` include broader long-tail requirements beyond this PR slice, including live operational execution for the new production-readiness, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, challenge-appeal, recipient/destination, side-agreement, trade-classification, template-conformance, and review-capacity records, live lock-proposal creation jobs, live endpoint enforcement for privacy access logs, live endpoint enforcement for impact-claim publication records, live endpoint enforcement for anti-enumeration logs/probe audits, live endpoint enforcement for side-agreement disclosure/review records before reliance-bearing transitions, live endpoint enforcement for trade-classification and compensated-action-term records before moral-trade metric publication or payable/reliance-bearing transitions, live endpoint enforcement for template-instance records before live publication, lock, payment, reliance, or public metrics, live endpoint enforcement for queue-admission records before live/matchable/payable/reliance-bearing transitions, reviewer audit sampling execution, and live deployment exercise of matching-clearing, clearing-preview, baseline-integrity, agreement-amendment, and challenge-appeal enforcement against production Supabase/authenticated traffic.
 - Local `gh` is unavailable, so this package provides a PR-ready body and artifacts but does not prove that a GitHub PR object was created.

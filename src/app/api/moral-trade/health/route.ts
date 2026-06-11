@@ -84,6 +84,10 @@ import {
   validateMoralTradeTemplateConformanceContract,
 } from "@/lib/moral-trade/template-conformance";
 import {
+  getMoralTradeReviewCapacityContract,
+  validateMoralTradeReviewCapacityContract,
+} from "@/lib/moral-trade/review-capacity";
+import {
   getMoralTradeProtectiveAssessmentContract,
   validateMoralTradeProtectiveAssessmentContract,
 } from "@/lib/moral-trade/protective-assessments";
@@ -266,6 +270,9 @@ export async function GET(request: Request) {
     getMoralTradeTemplateConformanceContract();
   const templateConformanceValidation =
     validateMoralTradeTemplateConformanceContract(templateConformanceContract);
+  const reviewCapacityContract = getMoralTradeReviewCapacityContract();
+  const reviewCapacityValidation =
+    validateMoralTradeReviewCapacityContract(reviewCapacityContract);
   const protectiveAssessmentContract =
     getMoralTradeProtectiveAssessmentContract();
   const protectiveAssessmentValidation =
@@ -377,6 +384,7 @@ export async function GET(request: Request) {
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
+      reviewCapacityValidation.status === "pass" &&
       protectiveAssessmentValidation.status === "pass" &&
       userSafetyContentModerationValidation.status === "pass" &&
       financialSettlementControlsValidation.status === "pass" &&
@@ -423,6 +431,7 @@ export async function GET(request: Request) {
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
+    reviewCapacityValidation,
     protectiveAssessmentValidation,
     userSafetyContentModerationValidation,
     financialSettlementControlsValidation,
@@ -865,6 +874,32 @@ export async function GET(request: Request) {
       ),
       templateConformanceContractTests:
         templateConformanceContract.contractTests,
+      reviewCapacityContractVersion:
+        reviewCapacityContract.version,
+      reviewCapacityTransitionKeys:
+        reviewCapacityContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      reviewCapacitySubjectTypes:
+        reviewCapacityContract.subjectTypes,
+      reviewCapacityQueueStates:
+        reviewCapacityContract.queueStates,
+      reviewCapacityPanelStates:
+        reviewCapacityContract.panelStates,
+      reviewCapacityFirstClassRecordTables:
+        reviewCapacityContract.firstClassRecordTables,
+      reviewCapacityPolicySnapshotSubjects:
+        reviewCapacityContract.policySnapshotSubjects,
+      reviewCapacityPrivacyBoundary:
+        reviewCapacityContract.privacyBoundary,
+      reviewCapacitySampleEvaluationStatuses: Object.fromEntries(
+        reviewCapacityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      reviewCapacityContractTests:
+        reviewCapacityContract.contractTests,
       protectiveAssessmentContractVersion:
         protectiveAssessmentContract.version,
       protectiveAssessmentTransitionKeys:

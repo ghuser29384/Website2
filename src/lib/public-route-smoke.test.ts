@@ -2141,6 +2141,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const templateConformanceSource = readRepoFile(
     "src/lib/moral-trade/template-conformance.ts",
   );
+  const reviewCapacitySource = readRepoFile(
+    "src/lib/moral-trade/review-capacity.ts",
+  );
   const protectiveAssessmentSource = readRepoFile(
     "src/lib/moral-trade/protective-assessments.ts",
   );
@@ -2248,6 +2251,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const templateConformanceMigration = readRepoFile(
     "supabase/migrations/20260611_moral_trade_template_conformance_records.sql",
   );
+  const reviewCapacityMigration = readRepoFile(
+    "supabase/migrations/20260611_moral_trade_review_capacity_records.sql",
+  );
   const protectiveAssessmentMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_protective_assessments.sql",
   );
@@ -2326,6 +2332,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const templateConformanceContractRoute = readRepoFile(
     "src/app/api/moral-trade/template-conformance/contract/route.ts",
+  );
+  const reviewCapacityContractRoute = readRepoFile(
+    "src/app/api/moral-trade/review-capacity/contract/route.ts",
   );
   const protectiveAssessmentContractRoute = readRepoFile(
     "src/app/api/moral-trade/protective-assessments/contract/route.ts",
@@ -2674,6 +2683,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(templateConformanceSource, /moral_trade_template_instance_records/);
   assert.match(templateConformanceSource, /off_template_manual_review/);
   assert.match(templateConformanceSource, /free_text_creates_new_obligations/);
+  assert.match(reviewCapacitySource, /getMoralTradeReviewCapacityContract/);
+  assert.match(reviewCapacitySource, /evaluateMoralTradeReviewCapacity/);
+  assert.match(reviewCapacitySource, /moral_trade_review_capacity_policies/);
+  assert.match(reviewCapacitySource, /moral_trade_review_queue_records/);
+  assert.match(reviewCapacitySource, /moral_trade_reviewer_panel_assignments/);
+  assert.match(reviewCapacitySource, /waitlisted_capacity/);
+  assert.match(reviewCapacitySource, /estimated_review_after_payment_authorization_expiry/);
   assert.match(protectiveAssessmentSource, /getMoralTradeProtectiveAssessmentContract/);
   assert.match(protectiveAssessmentSource, /evaluateMoralTradeProtectiveAssessments/);
   assert.match(protectiveAssessmentSource, /moral_trade_protective_assessment_records/);
@@ -2812,6 +2828,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(templateConformanceMigration, /approved_trade_template/);
   assert.match(templateConformanceMigration, /template_parameter/);
   assert.match(templateConformanceMigration, /free_text_creates_new_obligations_bool/);
+  assert.match(reviewCapacityMigration, /moral_trade_review_capacity_policies/);
+  assert.match(reviewCapacityMigration, /moral_trade_review_queue_records/);
+  assert.match(reviewCapacityMigration, /moral_trade_reviewer_panel_assignments/);
+  assert.match(reviewCapacityMigration, /review_capacity/);
+  assert.match(reviewCapacityMigration, /review_queue_admission/);
+  assert.match(reviewCapacityMigration, /visible_user_queue_status/);
+  assert.match(reviewCapacityMigration, /payment_authorization_expires_at/);
   assert.match(protectiveAssessmentMigration, /moral_trade_protective_assessment_records/);
   assert.match(protectiveAssessmentMigration, /moral_trade_negative_commitment_scopes/);
   assert.match(
@@ -2915,6 +2938,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
   assert.match(schemaSource, /moral_trade_compensated_action_terms/);
   assert.match(schemaSource, /moral_trade_ordinary_service_procurement_reviews/);
+  assert.match(schemaSource, /moral_trade_review_capacity_policies/);
+  assert.match(schemaSource, /moral_trade_review_queue_records/);
+  assert.match(schemaSource, /moral_trade_reviewer_panel_assignments/);
+  assert.match(schemaSource, /visible_user_queue_status/);
+  assert.match(schemaSource, /payment_authorization_expires_at/);
   assert.match(schemaSource, /moral_trade_protective_assessment_records/);
   assert.match(schemaSource, /moral_trade_negative_commitment_scopes/);
   assert.match(schemaSource, /moral_trade_action_reversibility_assessments/);
@@ -3355,6 +3383,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_side_agreement_contract/);
   assert.match(apiContractSource, /moral_trade_trade_classification_contract/);
   assert.match(apiContractSource, /moral_trade_template_conformance_contract/);
+  assert.match(apiContractSource, /moral_trade_review_capacity_contract/);
   assert.match(apiContractSource, /moral_trade_protective_assessment_contract/);
   assert.match(
     apiContractSource,
@@ -3453,6 +3482,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /moral_trade_template_conformance_contract/);
   assert.match(apiContractProfile, /template-conformance governance/);
   assert.match(apiContractProfile, /participant-specific template instance records/);
+  assert.match(apiContractProfile, /review_capacity_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_review_capacity_contract/);
+  assert.match(apiContractProfile, /review-capacity and queue-admission governance/);
+  assert.match(apiContractProfile, /participant-specific queue records/);
   assert.match(apiContractProfile, /protective_assessment_contract_response/);
   assert.match(apiContractProfile, /moral_trade_protective_assessment_contract/);
   assert.match(apiContractProfile, /protective-assessment governance/);
@@ -3525,7 +3558,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.53-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.54-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -3685,6 +3718,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /templateConformanceContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /templateConformanceContract\.tradeTypes/);
   assert.match(technicalSpecPage, /template-conformance\/contract/);
+  assert.match(technicalSpecPage, /Review-capacity contract/);
+  assert.match(technicalSpecPage, /reviewCapacityContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /reviewCapacityContract\.visibleQueueStatuses/);
+  assert.match(technicalSpecPage, /review-capacity\/contract/);
   assert.match(technicalSpecPage, /Protective assessments/);
   assert.match(technicalSpecPage, /protectiveAssessmentContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /protectiveAssessmentContract\.assessmentDimensions/);
@@ -3906,6 +3943,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /templateConformanceTransitionKeys/);
   assert.match(healthRoute, /templateConformanceFirstClassRecordTables/);
   assert.match(healthRoute, /templateConformancePrivacyBoundary/);
+  assert.match(healthRoute, /reviewCapacityValidation/);
+  assert.match(healthRoute, /reviewCapacityTransitionKeys/);
+  assert.match(healthRoute, /reviewCapacityFirstClassRecordTables/);
+  assert.match(healthRoute, /reviewCapacityPrivacyBoundary/);
   assert.match(healthRoute, /protectiveAssessmentValidation/);
   assert.match(healthRoute, /protectiveAssessmentTransitionKeys/);
   assert.match(healthRoute, /protectiveAssessmentDimensions/);
@@ -4074,6 +4115,16 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(
     templateConformanceContractRoute,
     /templateConformanceSampleEvaluationStatuses/,
+  );
+  assert.match(
+    reviewCapacityContractRoute,
+    /validateMoralTradeReviewCapacityContract/,
+  );
+  assert.match(reviewCapacityContractRoute, /visibleQueueStatuses/);
+  assert.match(reviewCapacityContractRoute, /firstClassRecordTables/);
+  assert.match(
+    reviewCapacityContractRoute,
+    /reviewCapacitySampleEvaluationStatuses/,
   );
   assert.match(
     protectiveAssessmentContractRoute,
