@@ -88,6 +88,10 @@ import {
   validateMoralTradeReviewCapacityContract,
 } from "@/lib/moral-trade/review-capacity";
 import {
+  getMoralTradeParticipantTermSheetContract,
+  validateMoralTradeParticipantTermSheetContract,
+} from "@/lib/moral-trade/participant-term-sheet";
+import {
   getMoralTradeProtectiveAssessmentContract,
   validateMoralTradeProtectiveAssessmentContract,
 } from "@/lib/moral-trade/protective-assessments";
@@ -273,6 +277,12 @@ export async function GET(request: Request) {
   const reviewCapacityContract = getMoralTradeReviewCapacityContract();
   const reviewCapacityValidation =
     validateMoralTradeReviewCapacityContract(reviewCapacityContract);
+  const participantTermSheetContract =
+    getMoralTradeParticipantTermSheetContract();
+  const participantTermSheetValidation =
+    validateMoralTradeParticipantTermSheetContract(
+      participantTermSheetContract,
+    );
   const protectiveAssessmentContract =
     getMoralTradeProtectiveAssessmentContract();
   const protectiveAssessmentValidation =
@@ -385,6 +395,7 @@ export async function GET(request: Request) {
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
       reviewCapacityValidation.status === "pass" &&
+      participantTermSheetValidation.status === "pass" &&
       protectiveAssessmentValidation.status === "pass" &&
       userSafetyContentModerationValidation.status === "pass" &&
       financialSettlementControlsValidation.status === "pass" &&
@@ -432,6 +443,7 @@ export async function GET(request: Request) {
     tradeClassificationValidation,
     templateConformanceValidation,
     reviewCapacityValidation,
+    participantTermSheetValidation,
     protectiveAssessmentValidation,
     userSafetyContentModerationValidation,
     financialSettlementControlsValidation,
@@ -900,6 +912,34 @@ export async function GET(request: Request) {
       ),
       reviewCapacityContractTests:
         reviewCapacityContract.contractTests,
+      participantTermSheetContractVersion:
+        participantTermSheetContract.version,
+      participantTermSheetTransitionKeys:
+        participantTermSheetContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      participantTermSheetSubjectTypes:
+        participantTermSheetContract.subjectTypes,
+      participantTermSheetStates:
+        participantTermSheetContract.termSheetStates,
+      participantTermSheetDisclosureStates:
+        participantTermSheetContract.disclosureStates,
+      participantTermSheetVisibleDisclosureStatuses:
+        participantTermSheetContract.visibleDisclosureStatuses,
+      participantTermSheetFirstClassRecordTables:
+        participantTermSheetContract.firstClassRecordTables,
+      participantTermSheetPolicySnapshotSubjects:
+        participantTermSheetContract.policySnapshotSubjects,
+      participantTermSheetPrivacyBoundary:
+        participantTermSheetContract.privacyBoundary,
+      participantTermSheetSampleEvaluationStatuses: Object.fromEntries(
+        participantTermSheetContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      participantTermSheetContractTests:
+        participantTermSheetContract.contractTests,
       protectiveAssessmentContractVersion:
         protectiveAssessmentContract.version,
       protectiveAssessmentTransitionKeys:
@@ -1270,6 +1310,9 @@ export async function GET(request: Request) {
       ...recipientDestinationValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
+      ...templateConformanceValidation.blockers,
+      ...reviewCapacityValidation.blockers,
+      ...participantTermSheetValidation.blockers,
       ...protectiveAssessmentValidation.blockers,
       ...userSafetyContentModerationValidation.blockers,
       ...financialSettlementControlsValidation.blockers,

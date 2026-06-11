@@ -111,6 +111,10 @@ import {
   validateMoralTradeReviewCapacityContract,
 } from "@/lib/moral-trade/review-capacity";
 import {
+  getMoralTradeParticipantTermSheetContract,
+  validateMoralTradeParticipantTermSheetContract,
+} from "@/lib/moral-trade/participant-term-sheet";
+import {
   getMoralTradeProtectiveAssessmentContract,
   validateMoralTradeProtectiveAssessmentContract,
 } from "@/lib/moral-trade/protective-assessments";
@@ -289,6 +293,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const reviewCapacityContract = getMoralTradeReviewCapacityContract();
   const reviewCapacityValidation =
     validateMoralTradeReviewCapacityContract(reviewCapacityContract);
+  const participantTermSheetContract =
+    getMoralTradeParticipantTermSheetContract();
+  const participantTermSheetValidation =
+    validateMoralTradeParticipantTermSheetContract(
+      participantTermSheetContract,
+    );
   const protectiveAssessmentContract =
     getMoralTradeProtectiveAssessmentContract();
   const protectiveAssessmentValidation =
@@ -404,6 +414,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     tradeClassificationValidation,
     templateConformanceValidation,
     reviewCapacityValidation,
+    participantTermSheetValidation,
     protectiveAssessmentValidation,
     userSafetyContentModerationValidation,
     financialSettlementControlsValidation,
@@ -619,6 +630,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Review capacity",
       status: reviewCapacityValidation.status,
       summary: `${reviewCapacityContract.transitionDefinitions.length} gated transition(s), ${reviewCapacityContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: participantTermSheetValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/participant-term-sheet/contract",
+      label: "Participant term sheets",
+      status: participantTermSheetValidation.status,
+      summary: `${participantTermSheetContract.transitionDefinitions.length} gated transition(s), ${participantTermSheetContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: protectiveAssessmentValidation.blockers.length,
@@ -2554,6 +2573,71 @@ export default async function MoralTradeTechnicalSpecPage() {
             <article className="panel protocol-contract-card">
               <h3>Privacy boundary</h3>
               <p>{reviewCapacityContract.privacyBoundary}</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="participant-term-sheet-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Participant term-sheet contract</p>
+            <h2 id="participant-term-sheet-contract-heading">
+              Term sheets and counterparty disclosure are first-class lock and payment gates.
+            </h2>
+            <p>
+              Moraltrade68 requires participant-term-sheet mismatch blocking,
+              counterparty-disclosure-policy blocking, and clearing previews that surface
+              participant term-sheet hashes, counterparty volume buckets, and staged-disclosure
+              status without exposing raw counterparty identity, contact details, private wishes,
+              exact constraints, hidden match reasoning, or reviewer notes.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Participant term sheets {participantTermSheetContract.version}
+              </p>
+              <h3>Status {participantTermSheetValidation.status}</h3>
+              <p>
+                {participantTermSheetValidation.checks.length} check(s),{" "}
+                {participantTermSheetValidation.blockers.length} blocker(s),{" "}
+                {participantTermSheetContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/participant-term-sheet/contract">
+              Open term-sheet JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Disclosure statuses</h3>
+              <ul className="clean-list">
+                {participantTermSheetContract.visibleDisclosureStatuses.map((status) => (
+                  <li key={status}>{status.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {participantTermSheetContract.transitionDefinitions
+                  .filter((transition) => transition.requiresParticipantTermSheet)
+                  .map((transition) => (
+                    <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                  ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {participantTermSheetContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Privacy boundary</h3>
+              <p>{participantTermSheetContract.privacyBoundary}</p>
             </article>
           </div>
         </section>

@@ -6092,6 +6092,24 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_counterparty_blinding_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_participant_term_sheet_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_staged_counterparty_disclosure_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_appeal_policies: {
         Row: {
           id: string;
@@ -7722,7 +7740,10 @@ export interface Database {
             | "approved_trade_template"
             | "template_parameter"
             | "review_capacity"
-            | "review_queue_admission";
+            | "review_queue_admission"
+            | "participant_term_sheet"
+            | "counterparty_blinding"
+            | "staged_counterparty_disclosure";
           subject_key: string;
           version_label: string;
           status: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7775,7 +7796,10 @@ export interface Database {
             | "approved_trade_template"
             | "template_parameter"
             | "review_capacity"
-            | "review_queue_admission";
+            | "review_queue_admission"
+            | "participant_term_sheet"
+            | "counterparty_blinding"
+            | "staged_counterparty_disclosure";
           subject_key: string;
           version_label: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7827,7 +7851,10 @@ export interface Database {
             | "approved_trade_template"
             | "template_parameter"
             | "review_capacity"
-            | "review_queue_admission";
+            | "review_queue_admission"
+            | "participant_term_sheet"
+            | "counterparty_blinding"
+            | "staged_counterparty_disclosure";
           subject_key?: string;
           version_label?: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
