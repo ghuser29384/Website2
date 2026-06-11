@@ -80,6 +80,10 @@ import {
   validateMoralTradeAiPreferenceElicitationContract,
 } from "@/lib/moral-trade/ai-preference-elicitation";
 import {
+  getMoralTradePostClearAuditContract,
+  validateMoralTradePostClearAuditContract,
+} from "@/lib/moral-trade/post-clear-audit";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -283,6 +287,9 @@ export async function GET(request: Request) {
     validateMoralTradeAiPreferenceElicitationContract(
       aiPreferenceElicitationContract,
     );
+  const postClearAuditContract = getMoralTradePostClearAuditContract();
+  const postClearAuditValidation =
+    validateMoralTradePostClearAuditContract(postClearAuditContract);
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -413,6 +420,7 @@ export async function GET(request: Request) {
       recipientDestinationValidation.status === "pass" &&
       recipientAcceptanceValidation.status === "pass" &&
       aiPreferenceElicitationValidation.status === "pass" &&
+      postClearAuditValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -463,6 +471,7 @@ export async function GET(request: Request) {
     recipientDestinationValidation,
     recipientAcceptanceValidation,
     aiPreferenceElicitationValidation,
+    postClearAuditValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -894,6 +903,38 @@ export async function GET(request: Request) {
       ),
       aiPreferenceElicitationContractTests:
         aiPreferenceElicitationContract.contractTests,
+      postClearAuditContractVersion:
+        postClearAuditContract.version,
+      postClearAuditTransitionKeys:
+        postClearAuditContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      postClearAuditSubjectTypes:
+        postClearAuditContract.subjectTypes,
+      postClearAuditAuditTypes:
+        postClearAuditContract.auditTypes,
+      postClearAuditMatchStates:
+        postClearAuditContract.matchStates,
+      postClearAuditAuditStates:
+        postClearAuditContract.auditStates,
+      postClearAuditPolicyStatuses:
+        postClearAuditContract.policyStatuses,
+      postClearAuditCorrectionBoundaries:
+        postClearAuditContract.correctionBoundaries,
+      postClearAuditFirstClassRecordTables:
+        postClearAuditContract.firstClassRecordTables,
+      postClearAuditPolicySnapshotSubjects:
+        postClearAuditContract.policySnapshotSubjects,
+      postClearAuditPrivacyBoundary:
+        postClearAuditContract.privacyBoundary,
+      postClearAuditSampleEvaluationStatuses: Object.fromEntries(
+        postClearAuditContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      postClearAuditContractTests:
+        postClearAuditContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1394,6 +1435,7 @@ export async function GET(request: Request) {
       ...recipientDestinationValidation.blockers,
       ...recipientAcceptanceValidation.blockers,
       ...aiPreferenceElicitationValidation.blockers,
+      ...postClearAuditValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

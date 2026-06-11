@@ -6140,6 +6140,18 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_post_clear_audit_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_post_clear_audit_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_appeal_policies: {
         Row: {
           id: string;
@@ -7776,7 +7788,8 @@ export interface Database {
             | "staged_counterparty_disclosure"
             | "recipient_acceptance"
             | "adverse_association"
-            | "ai_preference_elicitation";
+            | "ai_preference_elicitation"
+            | "post_clear_audit";
           subject_key: string;
           version_label: string;
           status: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7835,7 +7848,8 @@ export interface Database {
             | "staged_counterparty_disclosure"
             | "recipient_acceptance"
             | "adverse_association"
-            | "ai_preference_elicitation";
+            | "ai_preference_elicitation"
+            | "post_clear_audit";
           subject_key: string;
           version_label: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7893,7 +7907,8 @@ export interface Database {
             | "staged_counterparty_disclosure"
             | "recipient_acceptance"
             | "adverse_association"
-            | "ai_preference_elicitation";
+            | "ai_preference_elicitation"
+            | "post_clear_audit";
           subject_key?: string;
           version_label?: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";

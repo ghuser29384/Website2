@@ -103,6 +103,10 @@ import {
   validateMoralTradeAiPreferenceElicitationContract,
 } from "@/lib/moral-trade/ai-preference-elicitation";
 import {
+  getMoralTradePostClearAuditContract,
+  validateMoralTradePostClearAuditContract,
+} from "@/lib/moral-trade/post-clear-audit";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -295,6 +299,9 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeAiPreferenceElicitationContract(
       aiPreferenceElicitationContract,
     );
+  const postClearAuditContract = getMoralTradePostClearAuditContract();
+  const postClearAuditValidation =
+    validateMoralTradePostClearAuditContract(postClearAuditContract);
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -432,6 +439,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     recipientDestinationValidation,
     recipientAcceptanceValidation,
     aiPreferenceElicitationValidation,
+    postClearAuditValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -636,6 +644,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "AI preference elicitation",
       status: aiPreferenceElicitationValidation.status,
       summary: `${aiPreferenceElicitationContract.scopes.length} scope(s), ${aiPreferenceElicitationContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: postClearAuditValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/post-clear-audit/contract",
+      label: "Post-clear audit",
+      status: postClearAuditValidation.status,
+      summary: `${postClearAuditContract.auditTypes.length} audit type(s), ${postClearAuditContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -2494,6 +2510,77 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Privacy boundary</p>
             <p>{aiPreferenceElicitationContract.privacyBoundary}</p>
+          </div>
+        </section>
+
+        <section className="section section-subtle" aria-labelledby="post-clear-audit-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Post-clear audit</p>
+            <h2 id="post-clear-audit-contract-heading">
+              Public metrics and release promotion require current post-clear audit status when sampling is required.
+            </h2>
+            <p>
+              Moraltrade68 requires privacy-safe post-clear audit sampling after completed
+              non-public-goods pilots. The audit checks baselines, evidence, recipient
+              acceptance, disclosure, payment state, classification, and term sheets against
+              the frozen record without creating public moral reputation or retroactive
+              obligations outside the locked term sheet.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Post-clear audit {postClearAuditContract.version}
+              </p>
+              <h3>Status {postClearAuditValidation.status}</h3>
+              <p>
+                {postClearAuditValidation.checks.length} check(s),{" "}
+                {postClearAuditValidation.blockers.length} blocker(s),{" "}
+                {postClearAuditContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/post-clear-audit/contract">
+              Open audit JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {postClearAuditContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Audit types</h3>
+              <ul className="clean-list">
+                {postClearAuditContract.auditTypes.map((auditType) => (
+                  <li key={auditType}>{auditType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Audit states</h3>
+              <ul className="clean-list">
+                {postClearAuditContract.auditStates.map((state) => (
+                  <li key={state}>{state.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {postClearAuditContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Privacy boundary</p>
+            <p>{postClearAuditContract.privacyBoundary}</p>
           </div>
         </section>
 

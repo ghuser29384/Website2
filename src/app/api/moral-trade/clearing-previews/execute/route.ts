@@ -89,6 +89,7 @@ const PREVIEW_INPUT_KEYS = new Set([
   "participantSurplusConfirmed",
   "performanceTerms",
   "policySnapshotRef",
+  "postClearAuditSamplingStatus",
   "privacyDisclosureStatus",
   "protectiveAssessmentStatus",
   "ratioBoundsStatus",
@@ -382,6 +383,11 @@ function normalizePreviewInput(value: unknown) {
     participantSurplusConfirmed: booleanField(value.participantSurplusConfirmed),
     performanceTerms,
     policySnapshotRef: stringField(value.policySnapshotRef),
+    postClearAuditSamplingStatus: gateStatus(
+      value.postClearAuditSamplingStatus,
+      "previewInput.postClearAuditSamplingStatus",
+      blockers,
+    ),
     privacyDisclosureStatus: gateStatus(
       value.privacyDisclosureStatus,
       "previewInput.privacyDisclosureStatus",

@@ -2293,6 +2293,7 @@ export function OfferCreateForm({
         recipientAcceptanceStatus: "needs_review",
         adverseAssociationStatus: "needs_review",
         aiPreferenceElicitationStatus: "not_required_for_stage",
+        postClearAuditSamplingStatus: "not_required_for_stage",
         privacyDisclosureStatus: clearingPreviewStatusFromGateCounts(
           donationOffsetSafetyAuthenticityPreview,
         ),
@@ -2360,6 +2361,7 @@ export function OfferCreateForm({
           recipientAcceptanceStatus: "not_required_for_stage",
           adverseAssociationStatus: "not_required_for_stage",
           aiPreferenceElicitationStatus: "not_required_for_stage",
+          postClearAuditSamplingStatus: "not_required_for_stage",
           privacyDisclosureStatus: pledgeGateStatus("confidentiality-privacy"),
           policySnapshotRef: "policy-snapshot:pledge-swap-draft-preview",
           stateInterpretationPolicyRef: "state-policy:pledge-swap-draft-preview",

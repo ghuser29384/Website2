@@ -2140,6 +2140,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const aiPreferenceElicitationSource = readRepoFile(
     "src/lib/moral-trade/ai-preference-elicitation.ts",
   );
+  const postClearAuditSource = readRepoFile(
+    "src/lib/moral-trade/post-clear-audit.ts",
+  );
   const sideAgreementSource = readRepoFile("src/lib/moral-trade/side-agreements.ts");
   const tradeClassificationSource = readRepoFile(
     "src/lib/moral-trade/trade-classification.ts",
@@ -2257,6 +2260,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const aiPreferenceElicitationMigration = readRepoFile(
     "supabase/migrations/20260611_moral_trade_ai_preference_elicitation_records.sql",
   );
+  const postClearAuditMigration = readRepoFile(
+    "supabase/migrations/20260611_moral_trade_post_clear_audit_records.sql",
+  );
   const sideAgreementMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_side_agreement_disclosures.sql",
   );
@@ -2347,6 +2353,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const aiPreferenceElicitationContractRoute = readRepoFile(
     "src/app/api/moral-trade/ai-preference-elicitation/contract/route.ts",
+  );
+  const postClearAuditContractRoute = readRepoFile(
+    "src/app/api/moral-trade/post-clear-audit/contract/route.ts",
   );
   const sideAgreementContractRoute = readRepoFile(
     "src/app/api/moral-trade/side-agreements/contract/route.ts",
@@ -2704,6 +2713,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiPreferenceElicitationSource, /autonomous_counteroffer_or_acceptance_attempted/);
   assert.match(aiPreferenceElicitationSource, /ai_output_state_change_allowed/);
   assert.match(aiPreferenceElicitationSource, /user-edited structured input/);
+  assert.match(postClearAuditSource, /getMoralTradePostClearAuditContract/);
+  assert.match(postClearAuditSource, /evaluateMoralTradePostClearAudit/);
+  assert.match(postClearAuditSource, /moral_trade_post_clear_audit_policies/);
+  assert.match(postClearAuditSource, /moral_trade_post_clear_audit_records/);
+  assert.match(postClearAuditSource, /post_clear_audit_record_required/);
+  assert.match(postClearAuditSource, /post_clear_audit_non_blocking_record_required/);
+  assert.match(postClearAuditSource, /no_public_moral_reputation_or_retroactive_obligation/);
+  assert.match(postClearAuditSource, /raw payment evidence/);
   assert.match(sideAgreementSource, /getMoralTradeSideAgreementContract/);
   assert.match(sideAgreementSource, /evaluateMoralTradeSideAgreementDisclosure/);
   assert.match(sideAgreementSource, /moral_trade_side_agreement_disclosures/);
@@ -2876,6 +2893,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiPreferenceElicitationMigration, /autonomous_counteroffer_or_acceptance_bool/);
   assert.match(aiPreferenceElicitationMigration, /state_change_allowed_bool/);
   assert.match(aiPreferenceElicitationMigration, /raw_ai_output_public_bool/);
+  assert.match(postClearAuditMigration, /moral_trade_post_clear_audit_policies/);
+  assert.match(postClearAuditMigration, /moral_trade_post_clear_audit_records/);
+  assert.match(postClearAuditMigration, /post_clear_audit/);
+  assert.match(postClearAuditMigration, /public_reputation_effect_prohibited_bool/);
+  assert.match(postClearAuditMigration, /raw_payment_evidence_public_bool/);
+  assert.match(postClearAuditMigration, /participant_specific_rows_public_bool/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_disclosures/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_reviews/);
   assert.match(sideAgreementMigration, /side_agreement_disclosure/);
@@ -3023,6 +3046,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /ai_preference_elicitation/);
   assert.match(schemaSource, /hidden_wtp_estimate_public_bool/);
   assert.match(schemaSource, /hidden_negotiation_moves_public_bool/);
+  assert.match(schemaSource, /moral_trade_post_clear_audit_policies/);
+  assert.match(schemaSource, /moral_trade_post_clear_audit_records/);
+  assert.match(schemaSource, /post_clear_audit/);
+  assert.match(schemaSource, /raw_payment_evidence_public_bool/);
+  assert.match(schemaSource, /participant_specific_rows_public_bool/);
   assert.match(schemaSource, /moral_trade_side_agreement_disclosures/);
   assert.match(schemaSource, /moral_trade_side_agreement_reviews/);
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
@@ -3477,6 +3505,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractSource, /moral_trade_agreement_amendment_contract/);
   assert.match(apiContractSource, /moral_trade_production_readiness_contract/);
   assert.match(apiContractSource, /moral_trade_side_agreement_contract/);
+  assert.match(apiContractSource, /moral_trade_post_clear_audit_contract/);
   assert.match(apiContractSource, /moral_trade_trade_classification_contract/);
   assert.match(apiContractSource, /moral_trade_template_conformance_contract/);
   assert.match(apiContractSource, /moral_trade_review_capacity_contract/);
@@ -3575,6 +3604,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /AI-preference-elicitation governance/);
   assert.match(apiContractProfile, /hidden willingness-to-pay estimates/);
   assert.match(apiContractProfile, /participant-specific elicitation records/);
+  assert.match(apiContractProfile, /post_clear_audit_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_post_clear_audit_contract/);
+  assert.match(apiContractProfile, /post-clear audit sampling governance/);
+  assert.match(apiContractProfile, /raw payment evidence/);
+  assert.match(apiContractProfile, /public moral reputation scores/);
   assert.match(apiContractProfile, /side_agreement_contract_response/);
   assert.match(apiContractProfile, /moral_trade_side_agreement_contract/);
   assert.match(apiContractProfile, /side-agreement disclosure/);
@@ -3668,7 +3702,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.57-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.58-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -3824,6 +3858,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /aiPreferenceElicitationContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /aiPreferenceElicitationContract\.scopes/);
   assert.match(technicalSpecPage, /ai-preference-elicitation\/contract/);
+  assert.match(technicalSpecPage, /Post-clear audit/);
+  assert.match(technicalSpecPage, /postClearAuditContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /postClearAuditContract\.auditTypes/);
+  assert.match(technicalSpecPage, /post-clear-audit\/contract/);
   assert.match(technicalSpecPage, /Side-agreement disclosure contract/);
   assert.match(technicalSpecPage, /sideAgreementContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /sideAgreementContract\.reviewDimensions/);
@@ -4235,6 +4273,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(aiPreferenceElicitationContractRoute, /scopes/);
   assert.match(aiPreferenceElicitationContractRoute, /firstClassRecordTables/);
   assert.match(aiPreferenceElicitationContractRoute, /aiPreferenceElicitationSampleEvaluationStatuses/);
+  assert.match(postClearAuditContractRoute, /validateMoralTradePostClearAuditContract/);
+  assert.match(postClearAuditContractRoute, /auditTypes/);
+  assert.match(postClearAuditContractRoute, /firstClassRecordTables/);
+  assert.match(postClearAuditContractRoute, /postClearAuditSampleEvaluationStatuses/);
   assert.match(sideAgreementContractRoute, /validateMoralTradeSideAgreementContract/);
   assert.match(sideAgreementContractRoute, /reviewDimensions/);
   assert.match(sideAgreementContractRoute, /sideAgreementSampleEvaluationStatuses/);
