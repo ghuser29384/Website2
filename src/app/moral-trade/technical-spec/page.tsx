@@ -103,6 +103,10 @@ import {
   validateMoralTradeTradeClassificationContract,
 } from "@/lib/moral-trade/trade-classification";
 import {
+  getMoralTradeTemplateConformanceContract,
+  validateMoralTradeTemplateConformanceContract,
+} from "@/lib/moral-trade/template-conformance";
+import {
   getMoralTradeProtectiveAssessmentContract,
   validateMoralTradeProtectiveAssessmentContract,
 } from "@/lib/moral-trade/protective-assessments";
@@ -272,6 +276,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeTradeClassificationContract(
       tradeClassificationContract,
     );
+  const templateConformanceContract =
+    getMoralTradeTemplateConformanceContract();
+  const templateConformanceValidation =
+    validateMoralTradeTemplateConformanceContract(
+      templateConformanceContract,
+    );
   const protectiveAssessmentContract =
     getMoralTradeProtectiveAssessmentContract();
   const protectiveAssessmentValidation =
@@ -385,6 +395,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     recipientDestinationValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
+    templateConformanceValidation,
     protectiveAssessmentValidation,
     userSafetyContentModerationValidation,
     financialSettlementControlsValidation,
@@ -584,6 +595,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Trade classification",
       status: tradeClassificationValidation.status,
       summary: `${tradeClassificationContract.classifications.length} classification value(s), ${tradeClassificationContract.reviewDimensions.length} review dimension(s).`,
+    },
+    {
+      blockers: templateConformanceValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/template-conformance/contract",
+      label: "Template conformance",
+      status: templateConformanceValidation.status,
+      summary: `${templateConformanceContract.tradeTypes.length} trade type(s), ${templateConformanceContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: protectiveAssessmentValidation.blockers.length,
@@ -2389,6 +2408,72 @@ export default async function MoralTradeTechnicalSpecPage() {
             <article className="panel protocol-contract-card">
               <h3>Public non-claim</h3>
               <p>{tradeClassificationContract.publicNonClaim}</p>
+            </article>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="template-conformance-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Template-conformance contract</p>
+            <h2 id="template-conformance-contract-heading">
+              Live Moral Trade offers must conform to approved templates or reviewed exceptions.
+            </h2>
+            <p>
+              Moraltrade68 requires donation offsets, pledge swaps, compensated moral-action
+              agreements, performance-bond conditions, and side agreements to stay
+              template-bounded before lock, payment, reliance, or public metrics. The
+              contract publishes table names and transition rules without exposing private
+              terms, exact caps, free-text narratives, reviewer notes, payment details, or
+              participant-specific template instance records.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Template conformance {templateConformanceContract.version}
+              </p>
+              <h3>Status {templateConformanceValidation.status}</h3>
+              <p>
+                {templateConformanceValidation.checks.length} check(s),{" "}
+                {templateConformanceValidation.blockers.length} blocker(s),{" "}
+                {templateConformanceContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/template-conformance/contract">
+              Open template JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Trade types</h3>
+              <ul className="clean-list">
+                {templateConformanceContract.tradeTypes.map((tradeType) => (
+                  <li key={tradeType}>{tradeType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {templateConformanceContract.transitionDefinitions
+                  .filter((transition) => transition.requiresTemplateInstance)
+                  .map((transition) => (
+                    <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                  ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {templateConformanceContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Privacy boundary</h3>
+              <p>{templateConformanceContract.privacyBoundary}</p>
             </article>
           </div>
         </section>

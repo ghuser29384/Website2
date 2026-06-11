@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-api-contract-v0.52-2026-06",
-  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed matching-clearing execution/replay records, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, baseline-integrity endpoint enforcement, agreement-amendment governance, agreement-amendment endpoint enforcement, challenge-appeal and appeal-case governance, challenge-appeal endpoint enforcement, side-agreement disclosure governance, trade-classification governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
+  "version": "moral-trade-api-contract-v0.53-2026-06",
+  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed matching-clearing execution/replay records, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, baseline-integrity endpoint enforcement, agreement-amendment governance, agreement-amendment endpoint enforcement, challenge-appeal and appeal-case governance, challenge-appeal endpoint enforcement, side-agreement disclosure governance, trade-classification governance, approved-template and template-conformance governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
       "key": "moral_trade_health",
@@ -349,6 +349,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return trade-classification validation blockers and fail-closed sample evaluations; never expose private moral-reason narratives, performer rationale, reviewer notes, raw compensation terms, source hashes, provider payloads, contact details, or payment credentials."
+    },
+    {
+      "key": "moral_trade_template_conformance_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/template-conformance/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "template_conformance_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return approved-template and parameter-conformance validation blockers, first-class template/policy/instance record metadata, and sample evaluations; never expose private terms, exact caps, free-text narratives, hidden counterparty data, reviewer notes, private wishes, payment details, or participant-specific template instance records."
     },
     {
       "key": "moral_trade_protective_assessment_contract",
@@ -1322,7 +1334,7 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, production-readiness, recipient-destination, side-agreement disclosure, trade-classification governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, review-workflow blocker explanation, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, production-readiness, recipient-destination, side-agreement disclosure, trade-classification governance, template-conformance governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, review-workflow blocker explanation, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
@@ -1344,6 +1356,7 @@
         { "key": "recipientDestinationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Recipient/destination validator result for first-class recipient registry entries, payment destinations, review dimensions, immutable policy snapshots, privileged-action approvals, and fail-closed stale or unverified records." },
         { "key": "sideAgreementValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Side-agreement disclosure validator result for first-class disclosure records, review dimensions, immutable policy snapshots, privacy-safe public summaries, and fail-closed unreviewed side arrangements." },
         { "key": "tradeClassificationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Trade-classification validator result for first-class classification records, compensated moral-action terms, ordinary-service/procurement review, immutable policy snapshots, metric exclusion, and fail-closed public-badge exposure." },
+        { "key": "templateConformanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Template-conformance validator result for approved trade templates, immutable parameter policies, subject-specific template instances, neutral-review off-template exceptions, renewed participant confirmation, and fail-closed free-text boundaries." },
         { "key": "financialSettlementControlsValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Financial-settlement-controls validator result for first-class platform-fee, FX, notice, server-time, challenge-window, and payout-milestone records; immutable policy snapshots; metric exclusions; and fail-closed money movement." },
         { "key": "provenanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Provenance object contract validator result." },
         { "key": "schemaRegistryValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Public JSON Schema registry validator result, including the data-model profile schema and schema-document route coverage." },
@@ -1718,6 +1731,19 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class classification records, compensated-action terms, ordinary-service/procurement review, immutable policy snapshots, metric exclusion, public non-claim, fail-closed statuses, gated transitions, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, public non-claim, first-class table names, policy subjects, classification values, subject types, review dimensions, transition requirements, sample statuses, and test hooks without private moral-reason narratives, performer rationale, reviewer notes, raw compensation terms, source hashes, provider payloads, contact details, or payment credentials." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Trade-classification blockers that prevent relying on lock, payment capture, payout release, public metric publication, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "template_conformance_contract_response",
+      "purpose": "Public validator-backed approved-template and parameter-conformance contract for non-public-goods offers, matched-trade locks, payment, reliance, and public metrics.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the template-conformance contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the template-conformance validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Template-conformance contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class approved template records, immutable parameter policy snapshots, template instance records, off-template exception controls, free-text boundaries, gated transitions, privacy boundary, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, privacy boundary, first-class table names, policy subjects, trade types, subject types, template states, conformance states, off-template behaviors, transition requirements, sample statuses, and test hooks without private terms, exact caps, free-text narratives, hidden counterparty data, reviewer notes, private wishes, payment details, or participant-specific template instance records." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Template-conformance blockers that prevent relying on live publication, lock, payment, reliance, public metric publication, or release-gate promotion." }
       ]
     },
     {
@@ -2736,6 +2762,7 @@
     "match_signal_route_contract",
     "challenge_appeal_route_contract",
     "challenge_appeal_enforce_route_contract",
+    "template_conformance_contract_route",
     "disclosure_grant_route_contract",
     "financial_settlement_controls_route_contract",
     "matching_clearing_execute_route_contract",

@@ -6056,6 +6056,24 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_template_parameter_policies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_approved_trade_templates: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_template_instance_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_appeal_policies: {
         Row: {
           id: string;
@@ -7682,7 +7700,9 @@ export interface Database {
             | "audit_integrity"
             | "data_security"
             | "challenge_window"
-            | "payout_milestone";
+            | "payout_milestone"
+            | "approved_trade_template"
+            | "template_parameter";
           subject_key: string;
           version_label: string;
           status: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7731,7 +7751,9 @@ export interface Database {
             | "audit_integrity"
             | "data_security"
             | "challenge_window"
-            | "payout_milestone";
+            | "payout_milestone"
+            | "approved_trade_template"
+            | "template_parameter";
           subject_key: string;
           version_label: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7779,7 +7801,9 @@ export interface Database {
             | "audit_integrity"
             | "data_security"
             | "challenge_window"
-            | "payout_milestone";
+            | "payout_milestone"
+            | "approved_trade_template"
+            | "template_parameter";
           subject_key?: string;
           version_label?: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";

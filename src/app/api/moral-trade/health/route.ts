@@ -80,6 +80,10 @@ import {
   validateMoralTradeTradeClassificationContract,
 } from "@/lib/moral-trade/trade-classification";
 import {
+  getMoralTradeTemplateConformanceContract,
+  validateMoralTradeTemplateConformanceContract,
+} from "@/lib/moral-trade/template-conformance";
+import {
   getMoralTradeProtectiveAssessmentContract,
   validateMoralTradeProtectiveAssessmentContract,
 } from "@/lib/moral-trade/protective-assessments";
@@ -258,6 +262,10 @@ export async function GET(request: Request) {
     getMoralTradeTradeClassificationContract();
   const tradeClassificationValidation =
     validateMoralTradeTradeClassificationContract(tradeClassificationContract);
+  const templateConformanceContract =
+    getMoralTradeTemplateConformanceContract();
+  const templateConformanceValidation =
+    validateMoralTradeTemplateConformanceContract(templateConformanceContract);
   const protectiveAssessmentContract =
     getMoralTradeProtectiveAssessmentContract();
   const protectiveAssessmentValidation =
@@ -368,6 +376,7 @@ export async function GET(request: Request) {
       recipientDestinationValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
+      templateConformanceValidation.status === "pass" &&
       protectiveAssessmentValidation.status === "pass" &&
       userSafetyContentModerationValidation.status === "pass" &&
       financialSettlementControlsValidation.status === "pass" &&
@@ -413,6 +422,7 @@ export async function GET(request: Request) {
     recipientDestinationValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
+    templateConformanceValidation,
     protectiveAssessmentValidation,
     userSafetyContentModerationValidation,
     financialSettlementControlsValidation,
@@ -829,6 +839,32 @@ export async function GET(request: Request) {
       ),
       tradeClassificationContractTests:
         tradeClassificationContract.contractTests,
+      templateConformanceContractVersion:
+        templateConformanceContract.version,
+      templateConformanceTransitionKeys:
+        templateConformanceContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      templateConformanceTradeTypes:
+        templateConformanceContract.tradeTypes,
+      templateConformanceSubjectTypes:
+        templateConformanceContract.subjectTypes,
+      templateConformanceConformanceStates:
+        templateConformanceContract.conformanceStates,
+      templateConformanceFirstClassRecordTables:
+        templateConformanceContract.firstClassRecordTables,
+      templateConformancePolicySnapshotSubjects:
+        templateConformanceContract.policySnapshotSubjects,
+      templateConformancePrivacyBoundary:
+        templateConformanceContract.privacyBoundary,
+      templateConformanceSampleEvaluationStatuses: Object.fromEntries(
+        templateConformanceContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      templateConformanceContractTests:
+        templateConformanceContract.contractTests,
       protectiveAssessmentContractVersion:
         protectiveAssessmentContract.version,
       protectiveAssessmentTransitionKeys:
