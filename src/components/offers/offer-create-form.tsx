@@ -2233,6 +2233,7 @@ export function OfferCreateForm({
         clearingMode: "batch",
         directPairClearingStatus: "not_required_for_stage",
         causeBucketTaxonomyStatus: "needs_review",
+        resourceCompatibilityStatus: "needs_review",
         requiredFreshConfirmations: Number(offsetAffectedParticipantCount) || 2,
         freshConfirmationCount: Number(offsetFreshConfirmationCount) || 0,
         participantConfirmationStatus: clearingPreviewStatusFromOffsetConfirmation(
@@ -2320,6 +2321,7 @@ export function OfferCreateForm({
           clearingMode: "preview_only",
           directPairClearingStatus: "not_required_for_stage",
           causeBucketTaxonomyStatus: "needs_review",
+          resourceCompatibilityStatus: "needs_review",
           requiredFreshConfirmations: 2,
           freshConfirmationCount: 0,
           participantConfirmationStatus: "missing",

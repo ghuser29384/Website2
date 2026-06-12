@@ -92,6 +92,7 @@ const PREVIEW_INPUT_KEYS = new Set([
   "mode",
   "noTradeBaseline",
   "causeBucketTaxonomyStatus",
+  "resourceCompatibilityStatus",
   "nonPublicGoodsSubsidyStatus",
   "nonparticipantExternalityStatus",
   "participantConfirmationStatus",
@@ -316,6 +317,11 @@ function normalizePreviewInput(value: unknown) {
     causeBucketTaxonomyStatus: gateStatus(
       value.causeBucketTaxonomyStatus,
       "previewInput.causeBucketTaxonomyStatus",
+      blockers,
+    ),
+    resourceCompatibilityStatus: gateStatus(
+      value.resourceCompatibilityStatus,
+      "previewInput.resourceCompatibilityStatus",
       blockers,
     ),
     baselineConfidenceLevel: enumField(

@@ -96,6 +96,10 @@ import {
   validateMoralTradeCauseBucketTaxonomyContract,
 } from "@/lib/moral-trade/cause-bucket-taxonomy";
 import {
+  getMoralTradeResourceCompatibilityContract,
+  validateMoralTradeResourceCompatibilityContract,
+} from "@/lib/moral-trade/resource-compatibility";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -317,6 +321,12 @@ export async function GET(request: Request) {
     validateMoralTradeCauseBucketTaxonomyContract(
       causeBucketTaxonomyContract,
     );
+  const resourceCompatibilityContract =
+    getMoralTradeResourceCompatibilityContract();
+  const resourceCompatibilityValidation =
+    validateMoralTradeResourceCompatibilityContract(
+      resourceCompatibilityContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -451,6 +461,7 @@ export async function GET(request: Request) {
       nonPublicGoodsSubsidyValidation.status === "pass" &&
       directPairClearingValidation.status === "pass" &&
       causeBucketTaxonomyValidation.status === "pass" &&
+      resourceCompatibilityValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -505,6 +516,7 @@ export async function GET(request: Request) {
     nonPublicGoodsSubsidyValidation,
     directPairClearingValidation,
     causeBucketTaxonomyValidation,
+    resourceCompatibilityValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -1078,6 +1090,40 @@ export async function GET(request: Request) {
       ),
       causeBucketTaxonomyContractTests:
         causeBucketTaxonomyContract.contractTests,
+      resourceCompatibilityContractVersion:
+        resourceCompatibilityContract.version,
+      resourceCompatibilityTransitionKeys:
+        resourceCompatibilityContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      resourceCompatibilitySubjectTypes:
+        resourceCompatibilityContract.subjectTypes,
+      resourceCompatibilityConflictTypes:
+        resourceCompatibilityContract.conflictTypes,
+      resourceCompatibilityJointFeasibilityStates:
+        resourceCompatibilityContract.jointFeasibilityStates,
+      resourceCompatibilityHybridOrCompromiseGoodStates:
+        resourceCompatibilityContract.hybridOrCompromiseGoodStates,
+      resourceCompatibilityReviewStates:
+        resourceCompatibilityContract.reviewStates,
+      resourceCompatibilityPolicyStatuses:
+        resourceCompatibilityContract.policyStatuses,
+      resourceCompatibilityFirstClassRecordTables:
+        resourceCompatibilityContract.firstClassRecordTables,
+      resourceCompatibilityPolicySnapshotSubjects:
+        resourceCompatibilityContract.policySnapshotSubjects,
+      resourceCompatibilityPrivacyBoundary:
+        resourceCompatibilityContract.privacyBoundary,
+      resourceCompatibilityZeroSumConflictRule:
+        resourceCompatibilityContract.zeroSumConflictRule,
+      resourceCompatibilitySampleEvaluationStatuses: Object.fromEntries(
+        resourceCompatibilityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      resourceCompatibilityContractTests:
+        resourceCompatibilityContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1582,6 +1628,7 @@ export async function GET(request: Request) {
       ...nonPublicGoodsSubsidyValidation.blockers,
       ...directPairClearingValidation.blockers,
       ...causeBucketTaxonomyValidation.blockers,
+      ...resourceCompatibilityValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

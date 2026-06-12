@@ -1,5 +1,5 @@
 export const MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION =
-  "moral-trade-clearing-preview-v0.6-2026-06";
+  "moral-trade-clearing-preview-v0.7-2026-06";
 export const MORAL_TRADE_CLEARING_PREVIEW_VALIDATOR_VERSION =
   "moral-trade-clearing-preview-validator-v0.1";
 
@@ -100,6 +100,7 @@ export interface MoralTradeClearingPreviewInput {
   postClearAuditSamplingStatus: MoralTradeClearingPreviewGateStatus;
   nonPublicGoodsSubsidyStatus: MoralTradeClearingPreviewGateStatus;
   causeBucketTaxonomyStatus: MoralTradeClearingPreviewGateStatus;
+  resourceCompatibilityStatus: MoralTradeClearingPreviewGateStatus;
   privacyDisclosureStatus: MoralTradeClearingPreviewGateStatus;
   policySnapshotRef: string;
   stateInterpretationPolicyRef: string;
@@ -154,6 +155,7 @@ export interface MoralTradeClearingPreview {
     postClearAuditSamplingStatus: MoralTradeClearingPreviewGateStatus;
     nonPublicGoodsSubsidyStatus: MoralTradeClearingPreviewGateStatus;
     causeBucketTaxonomyStatus: MoralTradeClearingPreviewGateStatus;
+    resourceCompatibilityStatus: MoralTradeClearingPreviewGateStatus;
   };
   sections: MoralTradeClearingPreviewSection[];
   userFacingBlockers: string[];
@@ -212,6 +214,7 @@ const REQUIRED_SECTIONS = [
   "atomic-settlement",
   "direct-pair-or-batch-mode",
   "cause-bucket-taxonomy",
+  "resource-compatibility",
   "final-lock",
   "destination-and-tax",
   "externality-and-safety",
@@ -237,6 +240,7 @@ const REQUIRED_CONTROL_STATUSES = [
   "atomic_settlement",
   "direct_pair_clearing",
   "cause_bucket_taxonomy",
+  "resource_compatibility",
   "destination_verification",
   "donor_of_record_tax",
   "nonparticipant_externality",
@@ -392,6 +396,10 @@ export function buildMoralTradeClearingPreview(
     input.causeBucketTaxonomyStatus,
     "cause_bucket_taxonomy_not_passed",
   );
+  const resourceCompatibilityBlockers = statusBlocker(
+    input.resourceCompatibilityStatus,
+    "resource_compatibility_not_passed",
+  );
   const finalLockBlockers = [
     ...statusBlocker(input.finalLockProposalStatus, "final_lock_proposal_not_current"),
     ...(input.finalLockProposalRef.trim() ? [] : ["final_lock_proposal_missing"]),
@@ -494,6 +502,7 @@ export function buildMoralTradeClearingPreview(
     ...atomicBlockers,
     ...directPairBlockers,
     ...causeBucketBlockers,
+    ...resourceCompatibilityBlockers,
     ...finalLockBlockers,
     ...destinationBlockers,
     ...safetyBlockers,
@@ -543,6 +552,7 @@ export function buildMoralTradeClearingPreview(
       postClearAuditSamplingStatus: input.postClearAuditSamplingStatus,
       nonPublicGoodsSubsidyStatus: input.nonPublicGoodsSubsidyStatus,
       causeBucketTaxonomyStatus: input.causeBucketTaxonomyStatus,
+      resourceCompatibilityStatus: input.resourceCompatibilityStatus,
     },
     sections: [
       makeSection({
@@ -635,6 +645,18 @@ export function buildMoralTradeClearingPreview(
           "Cause-bucket taxonomy review still blocks bucket-dependent distinctness, classification, clearing, or public metrics.",
         nextAction:
           "Use a versioned plural-reviewed taxonomy and reviewed privacy-safe assignments before bucket labels affect matching, clearing, lock, or metrics.",
+      }),
+      makeSection({
+        key: "resource-compatibility",
+        label: "Resource compatibility",
+        status: resourceCompatibilityBlockers.length ? "blocked" : "passed",
+        blockerCodes: resourceCompatibilityBlockers,
+        passedMessage:
+          "Joint-feasibility review is non-blocking for actions, donations, abstentions, destinations, timing, duties, and control claims.",
+        blockedMessage:
+          "Resource-compatibility review still blocks lock, clearing, capture, public metrics, or release promotion for this non-public-goods trade.",
+        nextAction:
+          "Record a first-class resource-compatibility assessment and block mutually exclusive resources, mutually exclusive actions, incompatible destination or timing, third-party-control conflicts, and zero-sum control claims.",
       }),
       makeSection({
         key: "final-lock",
@@ -765,6 +787,8 @@ export function buildMoralTradeClearingPreview(
           return "Direct-pair status must match the selected clearing mode.";
         case "cause_bucket_taxonomy_not_passed":
           return "Cause-bucket assignments need versioned plural-reviewed taxonomy approval before they affect distinctness, classification, clearing, or public metrics.";
+        case "resource_compatibility_not_passed":
+          return "Resource-compatibility review must show the proposed actions, destinations, timing, duties, and control claims are jointly feasible rather than a zero-sum or mutually exclusive conflict.";
         case "destination_verification_not_passed":
         case "payment_destination_not_verified":
           return "Recipient and payment destination verification must be non-blocking.";
@@ -793,9 +817,9 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
   return {
     version: MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION,
     purpose:
-      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, cause-bucket taxonomy, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
+      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, cause-bucket taxonomy, resource-compatibility, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
     failClosedRule:
-      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, cause-bucket taxonomy, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
+      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, cause-bucket taxonomy, resource-compatibility, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
     persistenceRule:
       "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
@@ -953,6 +977,7 @@ export function buildDemoDonationOffsetClearingPreview() {
     postClearAuditSamplingStatus: "not_required_for_stage",
     nonPublicGoodsSubsidyStatus: "not_required_for_stage",
     causeBucketTaxonomyStatus: "passed",
+    resourceCompatibilityStatus: "passed",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:donation-offset-preview-v1",
     stateInterpretationPolicyRef: "state-policy:donation-offset-preview-v1",
@@ -1017,6 +1042,7 @@ export function buildDemoPledgeSwapClearingPreview() {
     postClearAuditSamplingStatus: "not_required_for_stage",
     nonPublicGoodsSubsidyStatus: "not_required_for_stage",
     causeBucketTaxonomyStatus: "passed",
+    resourceCompatibilityStatus: "passed",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:pledge-swap-preview-v1",
     stateInterpretationPolicyRef: "state-policy:pledge-swap-preview-v1",

@@ -6176,6 +6176,12 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_resource_compatibility_assessments: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_direct_pair_clearing_records: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
@@ -7823,6 +7829,7 @@ export interface Database {
             | "non_public_goods_subsidy"
             | "subsidy_schedule"
             | "cause_bucket_taxonomy"
+            | "resource_compatibility"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7887,6 +7894,7 @@ export interface Database {
             | "non_public_goods_subsidy"
             | "subsidy_schedule"
             | "cause_bucket_taxonomy"
+            | "resource_compatibility"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7950,6 +7958,7 @@ export interface Database {
             | "non_public_goods_subsidy"
             | "subsidy_schedule"
             | "cause_bucket_taxonomy"
+            | "resource_compatibility"
             | "direct_pair_clearing";
           subject_key?: string;
           version_label?: string;

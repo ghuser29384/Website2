@@ -330,6 +330,15 @@ export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequire
     description:
       "Versioned, plural-reviewed, privacy-safe, non-ranking cause-bucket taxonomy and assignment records pass before bucket labels affect distinctness, classification, clearing, public metrics, or release promotion.",
   },
+  {
+    key: "resource_compatibility_assessment_test",
+    label: "Resource-compatibility assessment test",
+    category: "review",
+    policySnapshotRequired: true,
+    privilegedActionRequired: false,
+    description:
+      "First-class joint-feasibility assessments pass before non-public-goods trades with actions, donations, abstentions, destinations, timing, duties, or control claims can lock, clear, capture, count publicly, or promote release gates.",
+  },
 ] as const satisfies MoralTradeReleaseGateRequirementDefinition[];
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
@@ -353,6 +362,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "audit_integrity_checkpoint",
       "public_metric_suppression",
       "cause_bucket_taxonomy_review_test",
+      "resource_compatibility_assessment_test",
     ],
     hardBlockerSummary:
       "Preview can render only when route, privacy, and anti-threat evidence pass; later controls must be explicit not-required decisions.",
@@ -379,6 +389,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "financial_reconciliation",
       "audit_integrity_checkpoint",
       "cause_bucket_taxonomy_review_test",
+      "resource_compatibility_assessment_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -403,6 +414,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "participant_eligibility_records",
       "audit_integrity_checkpoint",
       "cause_bucket_taxonomy_review_test",
+      "resource_compatibility_assessment_test",
     ],
     inactiveRequirementKeys: [
       "provider_event_replay_tests",
@@ -435,6 +447,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "financial_reconciliation",
       "audit_integrity_checkpoint",
       "cause_bucket_taxonomy_review_test",
+      "resource_compatibility_assessment_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -453,6 +466,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "audit_integrity_checkpoint",
       "public_metric_suppression",
       "cause_bucket_taxonomy_review_test",
+      "resource_compatibility_assessment_test",
     ],
     inactiveRequirementKeys: [
       "dry_run_calculation",
@@ -575,6 +589,7 @@ function samplePayableEvaluation() {
       makeResult("financial_reconciliation", "passed"),
       makeResult("audit_integrity_checkpoint", "passed"),
       makeResult("cause_bucket_taxonomy_review_test", "passed"),
+      makeResult("resource_compatibility_assessment_test", "passed"),
       makeResult("public_metric_suppression", "not_required_for_stage"),
     ],
   });
@@ -762,7 +777,8 @@ export function validateMoralTradeReleaseGateContract(
         requirementKeys.includes("participant_confirmation_records") &&
         requirementKeys.includes("recipient_destination_verification") &&
         requirementKeys.includes("audit_integrity_checkpoint") &&
-        requirementKeys.includes("cause_bucket_taxonomy_review_test"),
+        requirementKeys.includes("cause_bucket_taxonomy_review_test") &&
+        requirementKeys.includes("resource_compatibility_assessment_test"),
       requirementKeys.join(", "),
     ),
     check(

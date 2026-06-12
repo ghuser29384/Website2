@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-api-contract-v0.61-2026-06",
-  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed matching-clearing execution/replay records, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, baseline-integrity endpoint enforcement, agreement-amendment governance, agreement-amendment endpoint enforcement, challenge-appeal and appeal-case governance, challenge-appeal endpoint enforcement, side-agreement disclosure governance, trade-classification governance, approved-template and template-conformance governance, review-capacity and queue-admission governance, participant-term-sheet and counterparty-disclosure governance, recipient-acceptance and adverse-association governance, AI-preference-elicitation governance, post-clear audit sampling governance, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
+  "version": "moral-trade-api-contract-v0.62-2026-06",
+  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed matching-clearing execution/replay records, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, baseline-integrity endpoint enforcement, agreement-amendment governance, agreement-amendment endpoint enforcement, challenge-appeal and appeal-case governance, challenge-appeal endpoint enforcement, side-agreement disclosure governance, trade-classification governance, approved-template and template-conformance governance, review-capacity and queue-admission governance, participant-term-sheet and counterparty-disclosure governance, recipient-acceptance and adverse-association governance, AI-preference-elicitation governance, post-clear audit sampling governance, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, resource-compatibility governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
       "key": "moral_trade_health",
@@ -397,6 +397,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return cause-bucket taxonomy blockers, first-class taxonomy and assignment record metadata, non-ranking rule, material-change rule, privacy boundary, and sample evaluations; never expose participant identity hashes, raw private cause narratives, protected-trait facts, inferred ideology, inferred psychology, reviewer notes, or participant-specific assignment rows."
+    },
+    {
+      "key": "moral_trade_resource_compatibility_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/resource-compatibility/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "resource_compatibility_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return resource-compatibility blockers, first-class assessment metadata, zero-sum conflict rule, privacy boundary, and sample evaluations; never expose participant identity hashes, private duties, private resource claims, reviewer notes, third-party control facts, raw side agreements, or participant-specific assessment rows."
     },
     {
       "key": "moral_trade_side_agreement_contract",
@@ -1430,7 +1442,7 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, production-readiness, recipient-destination, recipient-acceptance/adverse-association, AI-preference-elicitation, post-clear audit sampling, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, side-agreement disclosure, trade-classification governance, template-conformance governance, review-capacity governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, review-workflow blocker explanation, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, production-readiness, recipient-destination, recipient-acceptance/adverse-association, AI-preference-elicitation, post-clear audit sampling, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, resource-compatibility governance, side-agreement disclosure, trade-classification governance, template-conformance governance, review-capacity governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, review-workflow blocker explanation, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
@@ -1456,6 +1468,7 @@
         { "key": "nonPublicGoodsSubsidyValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Non-public-goods subsidy validator result for first-class subsidy pools, subsidy schedule records, frozen source/cap/disclosure/refund policies, source-of-funds review, conflict review, low-risk tier scope, and fail-closed metric-exclusion blockers." },
         { "key": "directPairClearingValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Direct-pair clearing validator result for first-class direct-pair records, known or invite-linked counterparty scope, no-background-networking proof, both-party confirmations, privacy grants, user-safety review, ordinary gate status, and fail-closed autonomous-outreach or private-detail blockers." },
         { "key": "causeBucketTaxonomyValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Cause-bucket taxonomy validator result for first-class taxonomy and assignment records, plural review, taxonomy-version hashes, protected-trait proxy review, non-ranking invariants, material-change renewal, and fail-closed stale/disputed/inferred-ideology blockers." },
+        { "key": "resourceCompatibilityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Resource-compatibility validator result for first-class joint-feasibility assessments, immutable policy, mutually exclusive action/resource blocking, incompatible destination or timing blocking, zero-sum control-claim blocking, third-party-control conflict blocking, and privacy-safe assessment surfaces." },
         { "key": "sideAgreementValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Side-agreement disclosure validator result for first-class disclosure records, review dimensions, immutable policy snapshots, privacy-safe public summaries, and fail-closed unreviewed side arrangements." },
         { "key": "tradeClassificationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Trade-classification validator result for first-class classification records, compensated moral-action terms, ordinary-service/procurement review, immutable policy snapshots, metric exclusion, and fail-closed public-badge exposure." },
         { "key": "templateConformanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Template-conformance validator result for approved trade templates, immutable parameter policies, subject-specific template instances, neutral-review off-template exceptions, renewed participant confirmation, and fail-closed free-text boundaries." },
@@ -1887,6 +1900,19 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class taxonomy records, assignment records, taxonomy type scope, protected-trait proxy review, plural review, non-ranking rule, material-change renewal, privacy boundary, transition requirements, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, privacy boundary, non-ranking rule, material-change rule, first-class table names, policy subjects, taxonomy types, assignment states, transition requirements, sample statuses, and test hooks without participant identity hashes, raw private cause narratives, protected-trait facts, inferred ideology, inferred psychology, reviewer notes, or participant-specific assignment rows." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Cause-bucket taxonomy blockers that prevent relying on counterparty distinctness, trade classification, clearing eligibility, clearing ratio, public metric publication, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "resource_compatibility_contract_response",
+      "purpose": "Public validator-backed resource-compatibility governance contract for first-class joint-feasibility assessments before proposed actions, donations, abstentions, destinations, timing, duties, or control claims can lock, clear, capture, count publicly, or promote release gates.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the resource-compatibility contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the resource-compatibility validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Resource-compatibility contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class assessment records, policy snapshots, subject coverage, conflict types, joint-feasibility states, hybrid/compromise-good states, review states, transition requirements, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, privacy boundary, zero-sum conflict rule, first-class table names, policy subjects, subject types, conflict types, feasibility states, transition requirements, sample statuses, and test hooks without participant identity hashes, private duties, private resource claims, reviewer notes, third-party control facts, raw side agreements, or participant-specific assessment rows." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Resource-compatibility blockers that prevent relying on lock, clearing, payment capture, public metric publication, or release-gate promotion." }
       ]
     },
     {

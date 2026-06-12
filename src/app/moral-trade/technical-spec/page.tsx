@@ -119,6 +119,10 @@ import {
   validateMoralTradeCauseBucketTaxonomyContract,
 } from "@/lib/moral-trade/cause-bucket-taxonomy";
 import {
+  getMoralTradeResourceCompatibilityContract,
+  validateMoralTradeResourceCompatibilityContract,
+} from "@/lib/moral-trade/resource-compatibility";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -329,6 +333,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeCauseBucketTaxonomyContract(
       causeBucketTaxonomyContract,
     );
+  const resourceCompatibilityContract =
+    getMoralTradeResourceCompatibilityContract();
+  const resourceCompatibilityValidation =
+    validateMoralTradeResourceCompatibilityContract(
+      resourceCompatibilityContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -470,6 +480,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     nonPublicGoodsSubsidyValidation,
     directPairClearingValidation,
     causeBucketTaxonomyValidation,
+    resourceCompatibilityValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -706,6 +717,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Cause-bucket taxonomy",
       status: causeBucketTaxonomyValidation.status,
       summary: `${causeBucketTaxonomyContract.taxonomyTypes.length} taxonomy type(s), ${causeBucketTaxonomyContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: resourceCompatibilityValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/resource-compatibility/contract",
+      label: "Resource compatibility",
+      status: resourceCompatibilityValidation.status,
+      summary: `${resourceCompatibilityContract.conflictTypes.length} conflict type(s), ${resourceCompatibilityContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -2864,6 +2883,81 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Privacy boundary</p>
             <p>{causeBucketTaxonomyContract.privacyBoundary}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="resource-compatibility-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Resource compatibility</p>
+            <h2 id="resource-compatibility-contract-heading">
+              Joint feasibility blocks trades that only repackage conflicts.
+            </h2>
+            <p>
+              Moraltrade68 requires a resource-compatibility assessment before non-public-goods
+              trades can lock, clear, capture, count publicly, or promote release gates. The
+              assessment checks actions, donations, abstentions, destinations, timing, duties, and
+              control claims for mutual feasibility, zero-sum relabeling, and third-party control
+              conflicts.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Resource compatibility {resourceCompatibilityContract.version}
+              </p>
+              <h3>Status {resourceCompatibilityValidation.status}</h3>
+              <p>
+                {resourceCompatibilityValidation.checks.length} check(s),{" "}
+                {resourceCompatibilityValidation.blockers.length} blocker(s),{" "}
+                {resourceCompatibilityContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/resource-compatibility/contract">
+              Open compatibility JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {resourceCompatibilityContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Conflict types</h3>
+              <ul className="clean-list">
+                {resourceCompatibilityContract.conflictTypes.map((conflictType) => (
+                  <li key={conflictType}>{conflictType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Feasibility states</h3>
+              <ul className="clean-list">
+                {resourceCompatibilityContract.jointFeasibilityStates.map((state) => (
+                  <li key={state}>{state.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {resourceCompatibilityContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Zero-sum conflict rule</p>
+            <p>{resourceCompatibilityContract.zeroSumConflictRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Privacy boundary</p>
+            <p>{resourceCompatibilityContract.privacyBoundary}</p>
           </div>
         </section>
 
