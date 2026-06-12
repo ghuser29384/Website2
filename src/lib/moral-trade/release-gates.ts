@@ -180,6 +180,7 @@ const POLICY_SNAPSHOT_SUBJECTS = [
   "audit_integrity",
   "data_security",
   "noncompensable_blocker",
+  "batch_clearing_objective",
 ] as const;
 
 const PRIVILEGED_ACTION_KEYS = [
@@ -376,6 +377,15 @@ export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequire
     description:
       "Noncompensable blocker assessments prove safety, legal, privacy, third-party-rights, reporting-integrity, civil-rights, confidentiality, regulated-goods, cyber-abuse, financial-crime, anti-threat, and process-integrity blockers are constraints that side payments, higher donations, performance bonds, reciprocal favors, private agreements, and private waivers cannot clear by themselves.",
   },
+  {
+    key: "batch_clearing_objective_result_test",
+    label: "Batch-clearing objective result test",
+    category: "calculation",
+    policySnapshotRequired: true,
+    privilegedActionRequired: false,
+    description:
+      "Donation-offset batch clearing records a frozen objective, deterministic tie-break fairness rule, reproducible objective result, and prohibited-driver counters before scarce matches can allocate, lock, capture, rely, publish metrics, or promote release gates.",
+  },
 ] as const satisfies MoralTradeReleaseGateRequirementDefinition[];
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
@@ -404,6 +414,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "offer_validity_record_test",
       "private_exchange_rate_quote_test",
       "noncompensable_safety_blocker_test",
+      "batch_clearing_objective_result_test",
     ],
     hardBlockerSummary:
       "Preview can render only when route, privacy, and anti-threat evidence pass; later controls must be explicit not-required decisions.",
@@ -435,6 +446,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "offer_validity_record_test",
       "private_exchange_rate_quote_test",
       "noncompensable_safety_blocker_test",
+      "batch_clearing_objective_result_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -470,6 +482,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "public_metric_suppression",
       "net_offset_accounting_test",
       "offer_validity_record_test",
+      "batch_clearing_objective_result_test",
     ],
     hardBlockerSummary:
       "Reliance-bearing swaps require deterministic lock evidence, participant eligibility, challenge evidence, neutral review, and audit gates.",
@@ -501,6 +514,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "offer_validity_record_test",
       "private_exchange_rate_quote_test",
       "noncompensable_safety_blocker_test",
+      "batch_clearing_objective_result_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -524,6 +538,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "offer_validity_record_test",
       "private_exchange_rate_quote_test",
       "noncompensable_safety_blocker_test",
+      "batch_clearing_objective_result_test",
     ],
     inactiveRequirementKeys: [
       "dry_run_calculation",
@@ -651,6 +666,7 @@ function samplePayableEvaluation() {
       makeResult("offer_validity_record_test", "passed"),
       makeResult("private_exchange_rate_quote_test", "passed"),
       makeResult("noncompensable_safety_blocker_test", "passed"),
+      makeResult("batch_clearing_objective_result_test", "passed"),
       makeResult("public_metric_suppression", "not_required_for_stage"),
     ],
   });
@@ -843,7 +859,8 @@ export function validateMoralTradeReleaseGateContract(
         requirementKeys.includes("net_offset_accounting_test") &&
         requirementKeys.includes("offer_validity_record_test") &&
         requirementKeys.includes("private_exchange_rate_quote_test") &&
-        requirementKeys.includes("noncompensable_safety_blocker_test"),
+        requirementKeys.includes("noncompensable_safety_blocker_test") &&
+        requirementKeys.includes("batch_clearing_objective_result_test"),
       requirementKeys.join(", "),
     ),
     check(

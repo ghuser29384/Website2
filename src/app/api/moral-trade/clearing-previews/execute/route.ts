@@ -71,6 +71,7 @@ const PREVIEW_INPUT_KEYS = new Set([
   "baselineIntegrityStatus",
   "baselineSnapshotHash",
   "baselineVersion",
+  "batchClearingObjectiveStatus",
   "clearingRatioBps",
   "clearingMode",
   "commitmentReservationStatus",
@@ -316,6 +317,11 @@ function normalizePreviewInput(value: unknown) {
     atomicSettlementStatus: gateStatus(
       value.atomicSettlementStatus,
       "previewInput.atomicSettlementStatus",
+      blockers,
+    ),
+    batchClearingObjectiveStatus: gateStatus(
+      value.batchClearingObjectiveStatus,
+      "previewInput.batchClearingObjectiveStatus",
       blockers,
     ),
     causeBucketTaxonomyStatus: gateStatus(

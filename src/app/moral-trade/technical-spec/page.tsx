@@ -139,6 +139,10 @@ import {
   validateMoralTradeNoncompensableBlockerContract,
 } from "@/lib/moral-trade/noncompensable-blockers";
 import {
+  getMoralTradeBatchClearingObjectiveContract,
+  validateMoralTradeBatchClearingObjectiveContract,
+} from "@/lib/moral-trade/batch-clearing-objective";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -375,6 +379,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const noncompensableBlockerValidation =
     validateMoralTradeNoncompensableBlockerContract(
       noncompensableBlockerContract,
+    );
+  const batchClearingObjectiveContract =
+    getMoralTradeBatchClearingObjectiveContract();
+  const batchClearingObjectiveValidation =
+    validateMoralTradeBatchClearingObjectiveContract(
+      batchClearingObjectiveContract,
     );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
@@ -798,6 +808,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Noncompensable blockers",
       status: noncompensableBlockerValidation.status,
       summary: `${noncompensableBlockerContract.protectedInterestTypes.length} protected interest type(s), ${noncompensableBlockerContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: batchClearingObjectiveValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/batch-clearing-objective/contract",
+      label: "Batch-clearing objective",
+      status: batchClearingObjectiveValidation.status,
+      summary: `${batchClearingObjectiveContract.objectiveTypes.length} objective type(s), ${batchClearingObjectiveContract.prohibitedAllocationDrivers.length} prohibited driver(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -3251,6 +3269,80 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Privacy boundary</p>
             <p>{privateExchangeRateContract.privacyBoundary}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="batch-clearing-objective-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Batch-clearing objective</p>
+            <h2 id="batch-clearing-objective-contract-heading">
+              Scarce donation-offset matches are allocated by frozen objective results.
+            </h2>
+            <p>
+              Moraltrade68 requires donation-offset batch clearing to have a frozen objective,
+              deterministic tie-break and fairness rule, and reproducible objective result.
+              Scarce matches cannot be allocated by moral score, operator preference, public
+              pressure, timestamp races, private-cap leakage, or database order.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Batch-clearing objective {batchClearingObjectiveContract.version}
+              </p>
+              <h3>Status {batchClearingObjectiveValidation.status}</h3>
+              <p>
+                {batchClearingObjectiveValidation.checks.length} check(s),{" "}
+                {batchClearingObjectiveValidation.blockers.length} blocker(s),{" "}
+                {batchClearingObjectiveContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/batch-clearing-objective/contract">
+              Open objective JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Objective types</h3>
+              <ul className="clean-list">
+                {batchClearingObjectiveContract.objectiveTypes.map((objectiveType) => (
+                  <li key={objectiveType}>{objectiveType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Tie-break rules</h3>
+              <ul className="clean-list">
+                {batchClearingObjectiveContract.tieBreakFairnessRuleTypes.map((rule) => (
+                  <li key={rule}>{rule.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Prohibited drivers</h3>
+              <ul className="clean-list">
+                {batchClearingObjectiveContract.prohibitedAllocationDrivers.map((driver) => (
+                  <li key={driver}>{driver.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {batchClearingObjectiveContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Deterministic tie-break rule</p>
+            <p>{batchClearingObjectiveContract.deterministicTieBreakRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Prohibited allocation rule</p>
+            <p>{batchClearingObjectiveContract.prohibitedAllocationRule}</p>
           </div>
         </section>
 

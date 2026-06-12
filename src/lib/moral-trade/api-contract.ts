@@ -134,6 +134,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_offer_validity_contract",
   "moral_trade_private_exchange_rate_contract",
   "moral_trade_noncompensable_blocker_contract",
+  "moral_trade_batch_clearing_objective_contract",
   "moral_trade_side_agreement_contract",
   "moral_trade_trade_classification_contract",
   "moral_trade_template_conformance_contract",

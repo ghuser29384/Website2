@@ -1,5 +1,5 @@
 export const MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION =
-  "moral-trade-clearing-preview-v0.11-2026-06";
+  "moral-trade-clearing-preview-v0.12-2026-06";
 export const MORAL_TRADE_CLEARING_PREVIEW_VALIDATOR_VERSION =
   "moral-trade-clearing-preview-validator-v0.1";
 
@@ -59,6 +59,7 @@ export interface MoralTradeClearingPreviewInput {
   inputBundleHash: string | null;
   resultHash: string | null;
   reproducibilityStatus: MoralTradeClearingPreviewGateStatus;
+  batchClearingObjectiveStatus: MoralTradeClearingPreviewGateStatus;
   finalLockProposalRef: string;
   finalLockProposalStatus: MoralTradeClearingPreviewGateStatus;
   clearingMode: MoralTradeClearingPreviewClearingMode;
@@ -161,6 +162,7 @@ export interface MoralTradeClearingPreview {
     causeBucketTaxonomyStatus: MoralTradeClearingPreviewGateStatus;
     resourceCompatibilityStatus: MoralTradeClearingPreviewGateStatus;
     netOffsetAccountingStatus: MoralTradeClearingPreviewGateStatus;
+    batchClearingObjectiveStatus: MoralTradeClearingPreviewGateStatus;
     offerValidityStatus: MoralTradeClearingPreviewGateStatus;
     privateExchangeRateStatus: MoralTradeClearingPreviewGateStatus;
     noncompensableBlockerStatus: MoralTradeClearingPreviewGateStatus;
@@ -216,6 +218,7 @@ const NON_BLOCKING_STATUSES = new Set<MoralTradeClearingPreviewGateStatus>([
 
 const REQUIRED_SECTIONS = [
   "matching-run",
+  "batch-clearing-objective",
   "baseline-comparison",
   "ratio-and-residual",
   "commitment-reservation",
@@ -242,6 +245,7 @@ const REQUIRED_CONTROL_STATUSES = [
   "input_bundle_hash",
   "result_hash",
   "reproducibility_check",
+  "batch_clearing_objective",
   "final_lock_proposal",
   "participant_confirmation",
   "baseline_snapshot",
@@ -381,6 +385,15 @@ export function buildMoralTradeClearingPreview(
     ...(hasValidHash(input.inputBundleHash) ? [] : ["input_bundle_hash_missing"]),
     ...(hasValidHash(input.resultHash) ? [] : ["result_hash_missing"]),
   ];
+  const batchObjectiveBlockers =
+    input.clearingMode === "batch"
+      ? statusBlocker(
+          input.batchClearingObjectiveStatus,
+          "batch_clearing_objective_not_passed",
+        )
+      : input.batchClearingObjectiveStatus === "passed"
+        ? ["batch_clearing_objective_passed_for_non_batch_mode"]
+        : [];
   const baselineBlockers = [
     ...(hasMeaningfulText(input.noTradeBaseline) ? [] : ["no_trade_baseline_missing"]),
     ...(input.baselineVersion.trim() ? [] : ["baseline_version_missing"]),
@@ -532,6 +545,7 @@ export function buildMoralTradeClearingPreview(
     ...ratioBlockers,
     ...reservationBlockers,
     ...atomicBlockers,
+    ...batchObjectiveBlockers,
     ...directPairBlockers,
     ...causeBucketBlockers,
     ...resourceCompatibilityBlockers,
@@ -590,6 +604,7 @@ export function buildMoralTradeClearingPreview(
       causeBucketTaxonomyStatus: input.causeBucketTaxonomyStatus,
       resourceCompatibilityStatus: input.resourceCompatibilityStatus,
       netOffsetAccountingStatus: input.netOffsetAccountingStatus,
+      batchClearingObjectiveStatus: input.batchClearingObjectiveStatus,
       offerValidityStatus: input.offerValidityStatus,
       privateExchangeRateStatus: input.privateExchangeRateStatus,
       noncompensableBlockerStatus: input.noncompensableBlockerStatus,
@@ -606,6 +621,25 @@ export function buildMoralTradeClearingPreview(
           "This preview cannot support lock, capture, or reliance until a reviewed matching-clearing run is frozen.",
         nextAction:
           "Run deterministic clearing and record input, exclusion, result, and reproducibility hashes.",
+      }),
+      makeSection({
+        key: "batch-clearing-objective",
+        label: "Batch-clearing objective",
+        status:
+          input.clearingMode === "batch"
+            ? batchObjectiveBlockers.length
+              ? "blocked"
+              : "passed"
+            : "not_required_for_stage",
+        blockerCodes: batchObjectiveBlockers,
+        passedMessage:
+          input.clearingMode === "batch"
+            ? "The batch has a frozen objective, deterministic fairness rule, and reproducible objective result."
+            : "This preview does not use batch clearing; batch-objective evidence is not required for this stage.",
+        blockedMessage:
+          "Batch clearing still needs a frozen objective, deterministic tie-break fairness rule, and reproducible objective result.",
+        nextAction:
+          "Record the batch-clearing objective result; do not allocate scarce matches by moral score, operator preference, public pressure, timestamp races, private-cap leakage, or database order.",
       }),
       makeSection({
         key: "baseline-comparison",
@@ -873,6 +907,10 @@ export function buildMoralTradeClearingPreview(
           return "Direct-pair mode requires a confirmed two-party record and cannot bypass ordinary review, privacy, payment, or lock gates.";
         case "direct_pair_status_passed_for_non_direct_pair_mode":
           return "Direct-pair status must match the selected clearing mode.";
+        case "batch_clearing_objective_not_passed":
+          return "Donation-offset batch clearing needs a frozen objective, deterministic tie-break fairness rule, and reproducible objective result; scarce matches cannot be allocated by moral score, operator preference, public pressure, timestamp races, private-cap leakage, or database order.";
+        case "batch_clearing_objective_passed_for_non_batch_mode":
+          return "Batch-clearing objective status must match the selected clearing mode.";
         case "cause_bucket_taxonomy_not_passed":
           return "Cause-bucket assignments need versioned plural-reviewed taxonomy approval before they affect distinctness, classification, clearing, or public metrics.";
         case "resource_compatibility_not_passed":
@@ -913,9 +951,9 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
   return {
     version: MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION,
     purpose:
-      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote handling, noncompensable blocker review, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
+      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, batch-clearing objective, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote handling, noncompensable blocker review, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
     failClosedRule:
-      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote, noncompensable blocker, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
+      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, batch-clearing objective, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote, noncompensable blocker, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
     persistenceRule:
       "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
@@ -1031,6 +1069,7 @@ export function buildDemoDonationOffsetClearingPreview() {
     resultHash:
       "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     reproducibilityStatus: "passed",
+    batchClearingObjectiveStatus: "passed",
     finalLockProposalRef: "matched-trade-lock-proposal:demo-offset-v1",
     finalLockProposalStatus: "passed",
     clearingMode: "batch",
@@ -1098,6 +1137,7 @@ export function buildDemoPledgeSwapClearingPreview() {
     resultHash:
       "sha256:1111111111111111111111111111111111111111111111111111111111111111",
     reproducibilityStatus: "passed",
+    batchClearingObjectiveStatus: "not_required_for_stage",
     finalLockProposalRef: "",
     finalLockProposalStatus: "preview_only",
     clearingMode: "preview_only",

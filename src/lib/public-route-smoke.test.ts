@@ -2171,6 +2171,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const noncompensableBlockerSource = readRepoFile(
     "src/lib/moral-trade/noncompensable-blockers.ts",
   );
+  const batchClearingObjectiveSource = readRepoFile(
+    "src/lib/moral-trade/batch-clearing-objective.ts",
+  );
   const sideAgreementSource = readRepoFile("src/lib/moral-trade/side-agreements.ts");
   const tradeClassificationSource = readRepoFile(
     "src/lib/moral-trade/trade-classification.ts",
@@ -2315,6 +2318,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const noncompensableBlockerMigration = readRepoFile(
     "supabase/migrations/20260612_z_moral_trade_noncompensable_blocker_assessments.sql",
   );
+  const batchClearingObjectiveMigration = readRepoFile(
+    "supabase/migrations/20260612_zz_moral_trade_batch_clearing_objective_records.sql",
+  );
   const sideAgreementMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_side_agreement_disclosures.sql",
   );
@@ -2432,6 +2438,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const noncompensableBlockerContractRoute = readRepoFile(
     "src/app/api/moral-trade/noncompensable-blockers/contract/route.ts",
+  );
+  const batchClearingObjectiveContractRoute = readRepoFile(
+    "src/app/api/moral-trade/batch-clearing-objective/contract/route.ts",
   );
   const sideAgreementContractRoute = readRepoFile(
     "src/app/api/moral-trade/side-agreements/contract/route.ts",
@@ -2849,6 +2858,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(noncompensableBlockerSource, /noncompensable_blocker_compensation_attempt_for_nonwaivable_interest/);
   assert.match(noncompensableBlockerSource, /constraints rather than prices/i);
   assert.match(noncompensableBlockerSource, /performance bond/i);
+  assert.match(batchClearingObjectiveSource, /getMoralTradeBatchClearingObjectiveContract/);
+  assert.match(batchClearingObjectiveSource, /evaluateMoralTradeBatchClearingObjective/);
+  assert.match(batchClearingObjectiveSource, /moral_trade_batch_clearing_objective_records/);
+  assert.match(batchClearingObjectiveSource, /batch_clearing_objective_prohibited_allocation_driver/);
+  assert.match(batchClearingObjectiveSource, /matched volume alone/i);
+  assert.match(batchClearingObjectiveSource, /database order/i);
   assert.match(sideAgreementSource, /getMoralTradeSideAgreementContract/);
   assert.match(sideAgreementSource, /evaluateMoralTradeSideAgreementDisclosure/);
   assert.match(sideAgreementSource, /moral_trade_side_agreement_disclosures/);
@@ -3072,6 +3087,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(noncompensableBlockerMigration, /attempted_compensation_or_waiver_state/);
   assert.match(noncompensableBlockerMigration, /renewed_confirmation_record_refs/);
   assert.match(noncompensableBlockerMigration, /constraints, not prices/i);
+  assert.match(batchClearingObjectiveMigration, /moral_trade_batch_clearing_objective_records/);
+  assert.match(batchClearingObjectiveMigration, /batch_clearing_objective/);
+  assert.match(batchClearingObjectiveMigration, /tie_break_fairness_rule_type/);
+  assert.match(batchClearingObjectiveMigration, /allocation_drivers_json/);
+  assert.match(batchClearingObjectiveMigration, /prohibited allocation drivers/i);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_disclosures/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_reviews/);
   assert.match(sideAgreementMigration, /side_agreement_disclosure/);
@@ -3263,6 +3283,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /noncompensable_blocker/);
   assert.match(schemaSource, /protected_interest_type/);
   assert.match(schemaSource, /attempted_compensation_or_waiver_state/);
+  assert.match(schemaSource, /moral_trade_batch_clearing_objective_records/);
+  assert.match(schemaSource, /batch_clearing_objective/);
+  assert.match(schemaSource, /tie_break_fairness_rule_type/);
+  assert.match(schemaSource, /allocation_drivers_json/);
   assert.match(schemaSource, /moral_trade_side_agreement_disclosures/);
   assert.match(schemaSource, /moral_trade_side_agreement_reviews/);
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
@@ -3861,6 +3885,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /noncompensable blocker governance/);
   assert.match(apiContractProfile, /protected-interest categories/);
   assert.match(apiContractProfile, /exact protected-interest facts/);
+  assert.match(apiContractProfile, /batch_clearing_objective_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_batch_clearing_objective_contract/);
+  assert.match(apiContractProfile, /batch-clearing objective governance/);
+  assert.match(apiContractProfile, /prohibited allocation drivers/);
   assert.match(apiContractProfile, /side_agreement_contract_response/);
   assert.match(apiContractProfile, /moral_trade_side_agreement_contract/);
   assert.match(apiContractProfile, /side-agreement disclosure/);
@@ -3954,7 +3982,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.66-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.67-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -4319,6 +4347,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /noncompensableBlockerContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /noncompensableBlockerContract\.protectedInterestTypes/);
   assert.match(technicalSpecPage, /noncompensable-blockers\/contract/);
+  assert.match(technicalSpecPage, /Batch-clearing objective/);
+  assert.match(technicalSpecPage, /batchClearingObjectiveContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /batchClearingObjectiveContract\.prohibitedAllocationDrivers/);
+  assert.match(technicalSpecPage, /batch-clearing-objective\/contract/);
   assert.match(technicalSpecPage, /resource-compatibility\/contract/);
   assert.match(technicalSpecPage, /Field-level schema/);
   assert.match(technicalSpecPage, /State transitions/);
@@ -4395,6 +4427,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /noncompensableBlockerValidation/);
   assert.match(healthRoute, /noncompensableBlockerFirstClassRecordTables/);
   assert.match(healthRoute, /noncompensableBlockerCompensationAttemptRule/);
+  assert.match(healthRoute, /batchClearingObjectiveValidation/);
+  assert.match(healthRoute, /batchClearingObjectiveFirstClassRecordTables/);
+  assert.match(healthRoute, /batchClearingObjectiveProhibitedAllocationRule/);
   assert.match(healthRoute, /aiPreferenceElicitationValidation/);
   assert.match(healthRoute, /aiPreferenceElicitationTransitionKeys/);
   assert.match(healthRoute, /aiPreferenceElicitationFirstClassRecordTables/);
@@ -4609,6 +4644,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(noncompensableBlockerContractRoute, /protectedInterestTypes/);
   assert.match(noncompensableBlockerContractRoute, /compensationAttemptRule/);
   assert.match(noncompensableBlockerContractRoute, /noncompensableBlockerSampleEvaluationStatuses/);
+  assert.match(batchClearingObjectiveContractRoute, /validateMoralTradeBatchClearingObjectiveContract/);
+  assert.match(batchClearingObjectiveContractRoute, /prohibitedAllocationDrivers/);
+  assert.match(batchClearingObjectiveContractRoute, /deterministicTieBreakRule/);
+  assert.match(batchClearingObjectiveContractRoute, /batchClearingObjectiveSampleEvaluationStatuses/);
   assert.match(sideAgreementContractRoute, /validateMoralTradeSideAgreementContract/);
   assert.match(sideAgreementContractRoute, /reviewDimensions/);
   assert.match(sideAgreementContractRoute, /sideAgreementSampleEvaluationStatuses/);

@@ -116,6 +116,10 @@ import {
   validateMoralTradeNoncompensableBlockerContract,
 } from "@/lib/moral-trade/noncompensable-blockers";
 import {
+  getMoralTradeBatchClearingObjectiveContract,
+  validateMoralTradeBatchClearingObjectiveContract,
+} from "@/lib/moral-trade/batch-clearing-objective";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -364,6 +368,12 @@ export async function GET(request: Request) {
     validateMoralTradeNoncompensableBlockerContract(
       noncompensableBlockerContract,
     );
+  const batchClearingObjectiveContract =
+    getMoralTradeBatchClearingObjectiveContract();
+  const batchClearingObjectiveValidation =
+    validateMoralTradeBatchClearingObjectiveContract(
+      batchClearingObjectiveContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -503,6 +513,7 @@ export async function GET(request: Request) {
       offerValidityValidation.status === "pass" &&
       privateExchangeRateValidation.status === "pass" &&
       noncompensableBlockerValidation.status === "pass" &&
+      batchClearingObjectiveValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -562,6 +573,7 @@ export async function GET(request: Request) {
     offerValidityValidation,
     privateExchangeRateValidation,
     noncompensableBlockerValidation,
+    batchClearingObjectiveValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -1299,6 +1311,44 @@ export async function GET(request: Request) {
       ),
       noncompensableBlockerContractTests:
         noncompensableBlockerContract.contractTests,
+      batchClearingObjectiveContractVersion:
+        batchClearingObjectiveContract.version,
+      batchClearingObjectiveTransitionKeys:
+        batchClearingObjectiveContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      batchClearingObjectiveSubjectTypes:
+        batchClearingObjectiveContract.subjectTypes,
+      batchClearingObjectiveTypes:
+        batchClearingObjectiveContract.objectiveTypes,
+      batchClearingObjectiveTieBreakFairnessRuleTypes:
+        batchClearingObjectiveContract.tieBreakFairnessRuleTypes,
+      batchClearingObjectiveAllocationDrivers:
+        batchClearingObjectiveContract.allocationDrivers,
+      batchClearingObjectiveProhibitedAllocationDrivers:
+        batchClearingObjectiveContract.prohibitedAllocationDrivers,
+      batchClearingObjectiveResultStates:
+        batchClearingObjectiveContract.resultStates,
+      batchClearingObjectivePolicyStatuses:
+        batchClearingObjectiveContract.policyStatuses,
+      batchClearingObjectiveFirstClassRecordTables:
+        batchClearingObjectiveContract.firstClassRecordTables,
+      batchClearingObjectivePolicySnapshotSubjects:
+        batchClearingObjectiveContract.policySnapshotSubjects,
+      batchClearingObjectiveDeterministicTieBreakRule:
+        batchClearingObjectiveContract.deterministicTieBreakRule,
+      batchClearingObjectiveProhibitedAllocationRule:
+        batchClearingObjectiveContract.prohibitedAllocationRule,
+      batchClearingObjectiveReproducibilityRule:
+        batchClearingObjectiveContract.reproducibilityRule,
+      batchClearingObjectiveSampleEvaluationStatuses: Object.fromEntries(
+        batchClearingObjectiveContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      batchClearingObjectiveContractTests:
+        batchClearingObjectiveContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1808,6 +1858,7 @@ export async function GET(request: Request) {
       ...offerValidityValidation.blockers,
       ...privateExchangeRateValidation.blockers,
       ...noncompensableBlockerValidation.blockers,
+      ...batchClearingObjectiveValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

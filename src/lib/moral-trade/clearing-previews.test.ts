@@ -30,6 +30,7 @@ function baseInput(
     inputBundleHash: HASH_B,
     resultHash: HASH_C,
     reproducibilityStatus: "passed",
+    batchClearingObjectiveStatus: "passed",
     finalLockProposalRef: "matched-trade-lock-proposal:test",
     finalLockProposalStatus: "passed",
     clearingMode: "batch",
@@ -91,6 +92,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.tracks.includes("donation_offset"));
   assert.ok(contract.tracks.includes("pledge_swap"));
   assert.ok(contract.requiredSections.includes("ratio-and-residual"));
+  assert.ok(contract.requiredSections.includes("batch-clearing-objective"));
   assert.ok(contract.requiredSections.includes("commitment-reservation"));
   assert.ok(contract.requiredSections.includes("atomic-settlement"));
   assert.ok(contract.requiredSections.includes("direct-pair-or-batch-mode"));
@@ -103,6 +105,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredSections.includes("recipient-ai-boundaries"));
   assert.ok(contract.requiredSections.includes("pledge-performance-terms"));
   assert.ok(contract.requiredControlStatuses.includes("matching_clearing_run"));
+  assert.ok(contract.requiredControlStatuses.includes("batch_clearing_objective"));
   assert.ok(contract.requiredControlStatuses.includes("destination_verification"));
   assert.ok(contract.requiredControlStatuses.includes("recipient_acceptance"));
   assert.ok(contract.requiredControlStatuses.includes("adverse_association"));
@@ -154,6 +157,7 @@ test("donation-offset clearing preview can pass as non-capture final-lock previe
   assert.equal(preview.boundaryStatuses.causeBucketTaxonomyStatus, "passed");
   assert.equal(preview.boundaryStatuses.resourceCompatibilityStatus, "passed");
   assert.equal(preview.boundaryStatuses.netOffsetAccountingStatus, "passed");
+  assert.equal(preview.boundaryStatuses.batchClearingObjectiveStatus, "passed");
   assert.equal(preview.boundaryStatuses.offerValidityStatus, "passed");
   assert.equal(preview.boundaryStatuses.privateExchangeRateStatus, "passed");
   assert.equal(preview.boundaryStatuses.noncompensableBlockerStatus, "passed");
@@ -164,6 +168,31 @@ test("donation-offset clearing preview can pass as non-capture final-lock previe
   assert.equal(
     preview.sections.find((section) => section.key === "direct-pair-or-batch-mode")?.status,
     "not_required_for_stage",
+  );
+  assert.equal(
+    preview.sections.find((section) => section.key === "batch-clearing-objective")?.status,
+    "passed",
+  );
+});
+
+test("clearing preview fails closed when batch-clearing objective is missing", () => {
+  const preview = buildMoralTradeClearingPreview(
+    baseInput({
+      batchClearingObjectiveStatus: "missing",
+    }),
+  );
+
+  assert.equal(preview.status, "blocked_preview_only");
+  assert.equal(preview.boundaryStatuses.batchClearingObjectiveStatus, "missing");
+  assert.ok(preview.blockerCodes.includes("batch_clearing_objective_not_passed"));
+  assert.equal(
+    preview.sections.find((section) => section.key === "batch-clearing-objective")?.status,
+    "blocked",
+  );
+  assert.ok(
+    preview.userFacingBlockers.some((blocker) =>
+      /frozen objective, deterministic tie-break/i.test(blocker),
+    ),
   );
 });
 
@@ -342,6 +371,7 @@ test("clearing preview fails closed when run, ratio, reservation, and confirmati
       postClearAuditSamplingStatus: "missing",
       nonPublicGoodsSubsidyStatus: "missing",
       noncompensableBlockerStatus: "missing",
+      batchClearingObjectiveStatus: "missing",
     }),
   );
 
@@ -359,6 +389,7 @@ test("clearing preview fails closed when run, ratio, reservation, and confirmati
   assert.ok(preview.blockerCodes.includes("post_clear_audit_sampling_not_passed"));
   assert.ok(preview.blockerCodes.includes("non_public_goods_subsidy_not_passed"));
   assert.ok(preview.blockerCodes.includes("noncompensable_blocker_not_passed"));
+  assert.ok(preview.blockerCodes.includes("batch_clearing_objective_not_passed"));
   assert.ok(
     preview.userFacingBlockers.some((blocker) =>
       /reviewed deterministic clearing run/i.test(blocker),
@@ -496,6 +527,7 @@ test("offer creation UI and technical spec are wired to clearing previews", () =
 
   assert.match(formSource, /buildMoralTradeClearingPreview/);
   assert.match(formSource, /clearingPreview/);
+  assert.match(formSource, /batchClearingObjectiveStatus/);
   assert.match(formSource, /privateExchangeRateStatus/);
   assert.match(formSource, /noncompensableBlockerStatus/);
   assert.match(formSource, /Match candidate is not a locked deal/);
