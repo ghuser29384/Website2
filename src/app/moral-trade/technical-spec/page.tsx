@@ -115,6 +115,10 @@ import {
   validateMoralTradeDirectPairClearingContract,
 } from "@/lib/moral-trade/direct-pair-clearing";
 import {
+  getMoralTradeCauseBucketTaxonomyContract,
+  validateMoralTradeCauseBucketTaxonomyContract,
+} from "@/lib/moral-trade/cause-bucket-taxonomy";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -319,6 +323,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const directPairClearingContract = getMoralTradeDirectPairClearingContract();
   const directPairClearingValidation =
     validateMoralTradeDirectPairClearingContract(directPairClearingContract);
+  const causeBucketTaxonomyContract =
+    getMoralTradeCauseBucketTaxonomyContract();
+  const causeBucketTaxonomyValidation =
+    validateMoralTradeCauseBucketTaxonomyContract(
+      causeBucketTaxonomyContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -459,6 +469,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     postClearAuditValidation,
     nonPublicGoodsSubsidyValidation,
     directPairClearingValidation,
+    causeBucketTaxonomyValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -687,6 +698,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Direct-pair clearing",
       status: directPairClearingValidation.status,
       summary: `${directPairClearingContract.allowedLaunchTradeTypes.length} launch trade type(s), ${directPairClearingContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: causeBucketTaxonomyValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/cause-bucket-taxonomy/contract",
+      label: "Cause-bucket taxonomy",
+      status: causeBucketTaxonomyValidation.status,
+      summary: `${causeBucketTaxonomyContract.taxonomyTypes.length} taxonomy type(s), ${causeBucketTaxonomyContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -2766,6 +2785,85 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Privacy boundary</p>
             <p>{directPairClearingContract.privacyBoundary}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="cause-bucket-taxonomy-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Cause-bucket taxonomy</p>
+            <h2 id="cause-bucket-taxonomy-contract-heading">
+              Cause buckets are reviewed coordination labels, not moral rankings.
+            </h2>
+            <p>
+              Moraltrade68 requires versioned, plural-reviewed buckets for offered causes,
+              opposed causes, compromise destinations, action buckets, and counterparty buckets.
+              Assignments cannot affect counterparty distinctness, classification, clearing, public
+              metrics, or release gates when they are stale, disputed, protected-trait proxies, or
+              inferred ideology or psychology labels.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Cause-bucket taxonomy {causeBucketTaxonomyContract.version}
+              </p>
+              <h3>Status {causeBucketTaxonomyValidation.status}</h3>
+              <p>
+                {causeBucketTaxonomyValidation.checks.length} check(s),{" "}
+                {causeBucketTaxonomyValidation.blockers.length} blocker(s),{" "}
+                {causeBucketTaxonomyContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/cause-bucket-taxonomy/contract">
+              Open cause-bucket JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {causeBucketTaxonomyContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Taxonomy types</h3>
+              <ul className="clean-list">
+                {causeBucketTaxonomyContract.taxonomyTypes.map((taxonomyType) => (
+                  <li key={taxonomyType}>{taxonomyType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Assignment states</h3>
+              <ul className="clean-list">
+                {causeBucketTaxonomyContract.assignmentStates.map((state) => (
+                  <li key={state}>{state.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {causeBucketTaxonomyContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Non-ranking rule</p>
+            <p>{causeBucketTaxonomyContract.nonRankingRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Material change</p>
+            <p>{causeBucketTaxonomyContract.materialChangeRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Privacy boundary</p>
+            <p>{causeBucketTaxonomyContract.privacyBoundary}</p>
           </div>
         </section>
 

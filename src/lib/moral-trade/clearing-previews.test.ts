@@ -70,6 +70,7 @@ function baseInput(
     aiPreferenceElicitationStatus: "not_required_for_stage",
     postClearAuditSamplingStatus: "not_required_for_stage",
     nonPublicGoodsSubsidyStatus: "not_required_for_stage",
+    causeBucketTaxonomyStatus: "passed",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:test",
     stateInterpretationPolicyRef: "state-policy:test",
@@ -88,6 +89,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredSections.includes("commitment-reservation"));
   assert.ok(contract.requiredSections.includes("atomic-settlement"));
   assert.ok(contract.requiredSections.includes("direct-pair-or-batch-mode"));
+  assert.ok(contract.requiredSections.includes("cause-bucket-taxonomy"));
   assert.ok(contract.requiredSections.includes("recipient-ai-boundaries"));
   assert.ok(contract.requiredSections.includes("pledge-performance-terms"));
   assert.ok(contract.requiredControlStatuses.includes("matching_clearing_run"));
@@ -98,6 +100,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredControlStatuses.includes("post_clear_audit_sampling"));
   assert.ok(contract.requiredControlStatuses.includes("non_public_goods_subsidy"));
   assert.ok(contract.requiredControlStatuses.includes("direct_pair_clearing"));
+  assert.ok(contract.requiredControlStatuses.includes("cause_bucket_taxonomy"));
   assert.ok(contract.requiredControlStatuses.includes("policy_snapshot"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_clearing_preview_records"));
   assert.equal(
@@ -133,6 +136,7 @@ test("donation-offset clearing preview can pass as non-capture final-lock previe
   assert.equal(preview.boundaryStatuses.aiPreferenceElicitationStatus, "not_required_for_stage");
   assert.equal(preview.boundaryStatuses.postClearAuditSamplingStatus, "not_required_for_stage");
   assert.equal(preview.boundaryStatuses.nonPublicGoodsSubsidyStatus, "not_required_for_stage");
+  assert.equal(preview.boundaryStatuses.causeBucketTaxonomyStatus, "passed");
   assert.equal(
     preview.sections.find((section) => section.key === "pledge-performance-terms")?.status,
     "not_required_for_stage",
@@ -140,6 +144,27 @@ test("donation-offset clearing preview can pass as non-capture final-lock previe
   assert.equal(
     preview.sections.find((section) => section.key === "direct-pair-or-batch-mode")?.status,
     "not_required_for_stage",
+  );
+});
+
+test("clearing preview fails closed when cause-bucket taxonomy review is missing", () => {
+  const preview = buildMoralTradeClearingPreview(
+    baseInput({
+      causeBucketTaxonomyStatus: "missing",
+    }),
+  );
+
+  assert.equal(preview.status, "blocked_preview_only");
+  assert.equal(preview.boundaryStatuses.causeBucketTaxonomyStatus, "missing");
+  assert.ok(preview.blockerCodes.includes("cause_bucket_taxonomy_not_passed"));
+  assert.equal(
+    preview.sections.find((section) => section.key === "cause-bucket-taxonomy")?.status,
+    "blocked",
+  );
+  assert.ok(
+    preview.userFacingBlockers.some((blocker) =>
+      /versioned plural-reviewed taxonomy/i.test(blocker),
+    ),
   );
 });
 

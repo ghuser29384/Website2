@@ -92,6 +92,10 @@ import {
   validateMoralTradeDirectPairClearingContract,
 } from "@/lib/moral-trade/direct-pair-clearing";
 import {
+  getMoralTradeCauseBucketTaxonomyContract,
+  validateMoralTradeCauseBucketTaxonomyContract,
+} from "@/lib/moral-trade/cause-bucket-taxonomy";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -307,6 +311,12 @@ export async function GET(request: Request) {
   const directPairClearingContract = getMoralTradeDirectPairClearingContract();
   const directPairClearingValidation =
     validateMoralTradeDirectPairClearingContract(directPairClearingContract);
+  const causeBucketTaxonomyContract =
+    getMoralTradeCauseBucketTaxonomyContract();
+  const causeBucketTaxonomyValidation =
+    validateMoralTradeCauseBucketTaxonomyContract(
+      causeBucketTaxonomyContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -440,6 +450,7 @@ export async function GET(request: Request) {
       postClearAuditValidation.status === "pass" &&
       nonPublicGoodsSubsidyValidation.status === "pass" &&
       directPairClearingValidation.status === "pass" &&
+      causeBucketTaxonomyValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -493,6 +504,7 @@ export async function GET(request: Request) {
     postClearAuditValidation,
     nonPublicGoodsSubsidyValidation,
     directPairClearingValidation,
+    causeBucketTaxonomyValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -1028,6 +1040,44 @@ export async function GET(request: Request) {
       ),
       directPairClearingContractTests:
         directPairClearingContract.contractTests,
+      causeBucketTaxonomyContractVersion:
+        causeBucketTaxonomyContract.version,
+      causeBucketTaxonomyTransitionKeys:
+        causeBucketTaxonomyContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      causeBucketTaxonomyTypes:
+        causeBucketTaxonomyContract.taxonomyTypes,
+      causeBucketTaxonomySubjectTypes:
+        causeBucketTaxonomyContract.subjectTypes,
+      causeBucketTaxonomyReviewStates:
+        causeBucketTaxonomyContract.reviewStates,
+      causeBucketTaxonomyStates:
+        causeBucketTaxonomyContract.taxonomyStates,
+      causeBucketAssignmentConfidenceStates:
+        causeBucketTaxonomyContract.assignmentConfidenceStates,
+      causeBucketAssignmentVisibilityStates:
+        causeBucketTaxonomyContract.assignmentVisibilityStates,
+      causeBucketAssignmentStates:
+        causeBucketTaxonomyContract.assignmentStates,
+      causeBucketTaxonomyFirstClassRecordTables:
+        causeBucketTaxonomyContract.firstClassRecordTables,
+      causeBucketTaxonomyPolicySnapshotSubjects:
+        causeBucketTaxonomyContract.policySnapshotSubjects,
+      causeBucketTaxonomyPrivacyBoundary:
+        causeBucketTaxonomyContract.privacyBoundary,
+      causeBucketTaxonomyNonRankingRule:
+        causeBucketTaxonomyContract.nonRankingRule,
+      causeBucketTaxonomyMaterialChangeRule:
+        causeBucketTaxonomyContract.materialChangeRule,
+      causeBucketTaxonomySampleEvaluationStatuses: Object.fromEntries(
+        causeBucketTaxonomyContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      causeBucketTaxonomyContractTests:
+        causeBucketTaxonomyContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1531,6 +1581,7 @@ export async function GET(request: Request) {
       ...postClearAuditValidation.blockers,
       ...nonPublicGoodsSubsidyValidation.blockers,
       ...directPairClearingValidation.blockers,
+      ...causeBucketTaxonomyValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

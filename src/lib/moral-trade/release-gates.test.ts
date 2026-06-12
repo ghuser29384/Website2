@@ -52,6 +52,7 @@ function previewInput(
       result("financial_reconciliation", "not_required_for_stage"),
       result("audit_integrity_checkpoint", "not_required_for_stage"),
       result("public_metric_suppression", "not_required_for_stage"),
+      result("cause_bucket_taxonomy_review_test", "not_required_for_stage"),
     ],
     ...overrides,
   };
@@ -68,6 +69,11 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_privileged_action_records"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("state_interpretation"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("refund_cancellation"));
+  assert.ok(
+    contract.requirementDefinitions.some(
+      (requirement) => requirement.key === "cause_bucket_taxonomy_review_test",
+    ),
+  );
   assert.ok(contract.privilegedActionKeys.includes("manual_capture"));
   assert.ok(contract.privilegedActionKeys.includes("emergency_unpause"));
 });
@@ -78,8 +84,8 @@ test("public-goods preview can pass only with explicit not-required inactive con
   assert.equal(evaluation.status, "pass");
   assert.equal(evaluation.payable, false);
   assert.equal(evaluation.relianceBearing, false);
-  assert.equal(evaluation.inactiveRequirementCount, 10);
-  assert.equal(evaluation.notRequiredRequirementCount, 10);
+  assert.equal(evaluation.inactiveRequirementCount, 11);
+  assert.equal(evaluation.notRequiredRequirementCount, 11);
 });
 
 test("missing required and inactive-control results fail closed", () => {
@@ -176,6 +182,7 @@ test("neutral waivers require a privileged neutral-review approval", () => {
         result("financial_reconciliation", "not_required_for_stage"),
         result("audit_integrity_checkpoint", "not_required_for_stage"),
         result("public_metric_suppression", "not_required_for_stage"),
+        result("cause_bucket_taxonomy_review_test", "not_required_for_stage"),
       ],
     }),
   );
@@ -201,6 +208,7 @@ test("neutral waivers require a privileged neutral-review approval", () => {
         result("financial_reconciliation", "not_required_for_stage"),
         result("audit_integrity_checkpoint", "not_required_for_stage"),
         result("public_metric_suppression", "not_required_for_stage"),
+        result("cause_bucket_taxonomy_review_test", "not_required_for_stage"),
       ],
     }),
   );

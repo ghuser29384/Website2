@@ -91,6 +91,7 @@ const PREVIEW_INPUT_KEYS = new Set([
   "matchingClearingRunStatus",
   "mode",
   "noTradeBaseline",
+  "causeBucketTaxonomyStatus",
   "nonPublicGoodsSubsidyStatus",
   "nonparticipantExternalityStatus",
   "participantConfirmationStatus",
@@ -310,6 +311,11 @@ function normalizePreviewInput(value: unknown) {
     atomicSettlementStatus: gateStatus(
       value.atomicSettlementStatus,
       "previewInput.atomicSettlementStatus",
+      blockers,
+    ),
+    causeBucketTaxonomyStatus: gateStatus(
+      value.causeBucketTaxonomyStatus,
+      "previewInput.causeBucketTaxonomyStatus",
       blockers,
     ),
     baselineConfidenceLevel: enumField(

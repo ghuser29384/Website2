@@ -2010,6 +2010,10 @@ test("public contract APIs enforce the documented public contract read throttle"
       path: "src/app/api/moral-trade/transparency/report/route.ts",
       cacheControl: "no_store_dynamic",
     },
+    {
+      path: "src/app/api/moral-trade/cause-bucket-taxonomy/contract/route.ts",
+      cacheControl: "no_store_dynamic",
+    },
     { path: "src/app/api/profile/schema/route.ts", cacheControl: "public_contract_static" },
   ];
 
@@ -2149,6 +2153,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const directPairClearingSource = readRepoFile(
     "src/lib/moral-trade/direct-pair-clearing.ts",
   );
+  const causeBucketTaxonomySource = readRepoFile(
+    "src/lib/moral-trade/cause-bucket-taxonomy.ts",
+  );
   const sideAgreementSource = readRepoFile("src/lib/moral-trade/side-agreements.ts");
   const tradeClassificationSource = readRepoFile(
     "src/lib/moral-trade/trade-classification.ts",
@@ -2275,6 +2282,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const directPairClearingMigration = readRepoFile(
     "supabase/migrations/20260612_moral_trade_direct_pair_clearing_records.sql",
   );
+  const causeBucketTaxonomyMigration = readRepoFile(
+    "supabase/migrations/20260612_moral_trade_cause_bucket_taxonomy_records.sql",
+  );
   const sideAgreementMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_side_agreement_disclosures.sql",
   );
@@ -2374,6 +2384,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const directPairClearingContractRoute = readRepoFile(
     "src/app/api/moral-trade/direct-pair-clearing/contract/route.ts",
+  );
+  const causeBucketTaxonomyContractRoute = readRepoFile(
+    "src/app/api/moral-trade/cause-bucket-taxonomy/contract/route.ts",
   );
   const sideAgreementContractRoute = readRepoFile(
     "src/app/api/moral-trade/side-agreements/contract/route.ts",
@@ -2753,6 +2766,14 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(directPairClearingSource, /direct_pair_both_party_confirmation_missing/);
   assert.match(directPairClearingSource, /autonomous outreach/i);
   assert.match(directPairClearingSource, /direct contact details/i);
+  assert.match(causeBucketTaxonomySource, /getMoralTradeCauseBucketTaxonomyContract/);
+  assert.match(causeBucketTaxonomySource, /evaluateMoralTradeCauseBucketTaxonomy/);
+  assert.match(causeBucketTaxonomySource, /moral_trade_cause_bucket_taxonomies/);
+  assert.match(causeBucketTaxonomySource, /moral_trade_cause_bucket_assignments/);
+  assert.match(causeBucketTaxonomySource, /cause_bucket_protected_trait_proxy_review_not_non_blocking/);
+  assert.match(causeBucketTaxonomySource, /cause_bucket_effect_bearing_assignment_not_reviewer_normalized/);
+  assert.match(causeBucketTaxonomySource, /not moral rankings/i);
+  assert.match(causeBucketTaxonomySource, /inferred ideology/i);
   assert.match(sideAgreementSource, /getMoralTradeSideAgreementContract/);
   assert.match(sideAgreementSource, /evaluateMoralTradeSideAgreementDisclosure/);
   assert.match(sideAgreementSource, /moral_trade_side_agreement_disclosures/);
@@ -2942,6 +2963,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(directPairClearingMigration, /final_confirmation_record_refs/);
   assert.match(directPairClearingMigration, /privacy_grant_refs/);
   assert.match(directPairClearingMigration, /ordinary_lock_review_payment_privacy_gates_status/);
+  assert.match(causeBucketTaxonomyMigration, /moral_trade_cause_bucket_taxonomies/);
+  assert.match(causeBucketTaxonomyMigration, /moral_trade_cause_bucket_assignments/);
+  assert.match(causeBucketTaxonomyMigration, /cause_bucket_taxonomy/);
+  assert.match(causeBucketTaxonomyMigration, /protected_trait_proxy_review_state/);
+  assert.match(causeBucketTaxonomyMigration, /public_moral_ranking_bool/);
+  assert.match(causeBucketTaxonomyMigration, /participant_visible_dependency_notice_bool/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_disclosures/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_reviews/);
   assert.match(sideAgreementMigration, /side_agreement_disclosure/);
@@ -3104,6 +3131,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /no_background_networking_bool/);
   assert.match(schemaSource, /final_confirmation_record_refs/);
   assert.match(schemaSource, /ordinary_lock_review_payment_privacy_gates_status/);
+  assert.match(schemaSource, /moral_trade_cause_bucket_taxonomies/);
+  assert.match(schemaSource, /moral_trade_cause_bucket_assignments/);
+  assert.match(schemaSource, /cause_bucket_taxonomy/);
+  assert.match(schemaSource, /public_moral_ranking_bool/);
+  assert.match(schemaSource, /public_inferred_ideology_or_psychology_bool/);
   assert.match(schemaSource, /moral_trade_side_agreement_disclosures/);
   assert.match(schemaSource, /moral_trade_side_agreement_reviews/);
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
@@ -3672,6 +3704,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /direct-pair clearing governance/);
   assert.match(apiContractProfile, /direct contact details/);
   assert.match(apiContractProfile, /private surplus estimates/);
+  assert.match(apiContractProfile, /cause_bucket_taxonomy_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_cause_bucket_taxonomy_contract/);
+  assert.match(apiContractProfile, /cause-bucket taxonomy governance/);
+  assert.match(apiContractProfile, /protected-trait facts/);
+  assert.match(apiContractProfile, /inferred psychology/);
   assert.match(apiContractProfile, /side_agreement_contract_response/);
   assert.match(apiContractProfile, /moral_trade_side_agreement_contract/);
   assert.match(apiContractProfile, /side-agreement disclosure/);
@@ -3765,7 +3802,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.60-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.61-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -3933,6 +3970,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /directPairClearingContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /directPairClearingContract\.allowedLaunchTradeTypes/);
   assert.match(technicalSpecPage, /direct-pair-clearing\/contract/);
+  assert.match(technicalSpecPage, /Cause-bucket taxonomy/);
+  assert.match(technicalSpecPage, /causeBucketTaxonomyContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /causeBucketTaxonomyContract\.taxonomyTypes/);
+  assert.match(technicalSpecPage, /cause-bucket-taxonomy\/contract/);
   assert.match(technicalSpecPage, /Side-agreement disclosure contract/);
   assert.match(technicalSpecPage, /sideAgreementContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /sideAgreementContract\.reviewDimensions/);
@@ -4356,6 +4397,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(directPairClearingContractRoute, /allowedLaunchTradeTypes/);
   assert.match(directPairClearingContractRoute, /noAutonomousOutreachRule/);
   assert.match(directPairClearingContractRoute, /directPairSampleEvaluationStatuses/);
+  assert.match(causeBucketTaxonomyContractRoute, /validateMoralTradeCauseBucketTaxonomyContract/);
+  assert.match(causeBucketTaxonomyContractRoute, /taxonomyTypes/);
+  assert.match(causeBucketTaxonomyContractRoute, /nonRankingRule/);
+  assert.match(causeBucketTaxonomyContractRoute, /causeBucketSampleEvaluationStatuses/);
   assert.match(sideAgreementContractRoute, /validateMoralTradeSideAgreementContract/);
   assert.match(sideAgreementContractRoute, /reviewDimensions/);
   assert.match(sideAgreementContractRoute, /sideAgreementSampleEvaluationStatuses/);

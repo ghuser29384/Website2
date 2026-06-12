@@ -6164,6 +6164,18 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_cause_bucket_taxonomies: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_cause_bucket_assignments: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_direct_pair_clearing_records: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
@@ -7810,6 +7822,7 @@ export interface Database {
             | "post_clear_audit"
             | "non_public_goods_subsidy"
             | "subsidy_schedule"
+            | "cause_bucket_taxonomy"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7873,6 +7886,7 @@ export interface Database {
             | "post_clear_audit"
             | "non_public_goods_subsidy"
             | "subsidy_schedule"
+            | "cause_bucket_taxonomy"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7935,6 +7949,7 @@ export interface Database {
             | "post_clear_audit"
             | "non_public_goods_subsidy"
             | "subsidy_schedule"
+            | "cause_bucket_taxonomy"
             | "direct_pair_clearing";
           subject_key?: string;
           version_label?: string;
