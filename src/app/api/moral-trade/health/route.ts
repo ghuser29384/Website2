@@ -112,6 +112,10 @@ import {
   validateMoralTradePrivateExchangeRateContract,
 } from "@/lib/moral-trade/private-exchange-rate";
 import {
+  getMoralTradeNoncompensableBlockerContract,
+  validateMoralTradeNoncompensableBlockerContract,
+} from "@/lib/moral-trade/noncompensable-blockers";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -354,6 +358,12 @@ export async function GET(request: Request) {
     validateMoralTradePrivateExchangeRateContract(
       privateExchangeRateContract,
     );
+  const noncompensableBlockerContract =
+    getMoralTradeNoncompensableBlockerContract();
+  const noncompensableBlockerValidation =
+    validateMoralTradeNoncompensableBlockerContract(
+      noncompensableBlockerContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -492,6 +502,7 @@ export async function GET(request: Request) {
       netOffsetAccountingValidation.status === "pass" &&
       offerValidityValidation.status === "pass" &&
       privateExchangeRateValidation.status === "pass" &&
+      noncompensableBlockerValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -550,6 +561,7 @@ export async function GET(request: Request) {
     netOffsetAccountingValidation,
     offerValidityValidation,
     privateExchangeRateValidation,
+    noncompensableBlockerValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -1253,6 +1265,40 @@ export async function GET(request: Request) {
       ),
       privateExchangeRateContractTests:
         privateExchangeRateContract.contractTests,
+      noncompensableBlockerContractVersion:
+        noncompensableBlockerContract.version,
+      noncompensableBlockerTransitionKeys:
+        noncompensableBlockerContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      noncompensableBlockerSubjectTypes:
+        noncompensableBlockerContract.subjectTypes,
+      noncompensableBlockerProtectedInterestTypes:
+        noncompensableBlockerContract.protectedInterestTypes,
+      noncompensableBlockerAttemptedCompensationOrWaiverStates:
+        noncompensableBlockerContract.attemptedCompensationOrWaiverStates,
+      noncompensableBlockerPersonalWaiverAllowedStates:
+        noncompensableBlockerContract.personalWaiverAllowedStates,
+      noncompensableBlockerReviewStates:
+        noncompensableBlockerContract.reviewStates,
+      noncompensableBlockerPolicyStatuses:
+        noncompensableBlockerContract.policyStatuses,
+      noncompensableBlockerFirstClassRecordTables:
+        noncompensableBlockerContract.firstClassRecordTables,
+      noncompensableBlockerPolicySnapshotSubjects:
+        noncompensableBlockerContract.policySnapshotSubjects,
+      noncompensableBlockerPersonalWaiverRule:
+        noncompensableBlockerContract.personalWaiverRule,
+      noncompensableBlockerCompensationAttemptRule:
+        noncompensableBlockerContract.compensationAttemptRule,
+      noncompensableBlockerSampleEvaluationStatuses: Object.fromEntries(
+        noncompensableBlockerContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      noncompensableBlockerContractTests:
+        noncompensableBlockerContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1761,6 +1807,7 @@ export async function GET(request: Request) {
       ...netOffsetAccountingValidation.blockers,
       ...offerValidityValidation.blockers,
       ...privateExchangeRateValidation.blockers,
+      ...noncompensableBlockerValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

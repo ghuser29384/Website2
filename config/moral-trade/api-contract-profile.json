@@ -1,6 +1,6 @@
 {
-  "version": "moral-trade-api-contract-v0.65-2026-06",
-  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed matching-clearing execution/replay records, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, baseline-integrity endpoint enforcement, agreement-amendment governance, agreement-amendment endpoint enforcement, challenge-appeal and appeal-case governance, challenge-appeal endpoint enforcement, side-agreement disclosure governance, trade-classification governance, approved-template and template-conformance governance, review-capacity and queue-admission governance, participant-term-sheet and counterparty-disclosure governance, recipient-acceptance and adverse-association governance, AI-preference-elicitation governance, post-clear audit sampling governance, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, resource-compatibility governance, net-offset accounting governance, offer-validity governance, private exchange-rate governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
+  "version": "moral-trade-api-contract-v0.66-2026-06",
+  "purpose": "Public route catalog for the core Moral Trade API surfaces, including reviewer-quality governance, anti-enumeration governance, privacy-grant/access-log governance, impact-claim governance, matching-clearing governance, persistence-backed matching-clearing execution/replay records, persistence-backed clearing-preview execution, baseline-integrity/manufacturing governance, baseline-integrity endpoint enforcement, agreement-amendment governance, agreement-amendment endpoint enforcement, challenge-appeal and appeal-case governance, challenge-appeal endpoint enforcement, side-agreement disclosure governance, trade-classification governance, approved-template and template-conformance governance, review-capacity and queue-admission governance, participant-term-sheet and counterparty-disclosure governance, recipient-acceptance and adverse-association governance, AI-preference-elicitation governance, post-clear audit sampling governance, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, resource-compatibility governance, net-offset accounting governance, offer-validity governance, private exchange-rate governance, noncompensable blocker governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, user-facing blocker explanation governance, privacy class, schema orientation, rate-limit surface, cache posture, and safe fallback behavior.",
   "routes": [
     {
       "key": "moral_trade_health",
@@ -445,6 +445,18 @@
       "rateLimitSurface": "public_contract_read",
       "cacheControl": "no_store_dynamic",
       "fallback": "Return private exchange-rate blockers, first-class quote record metadata, public non-price rule, privacy boundary, affected-participant coverage rule, and sample evaluations; never expose participant identity hashes, exact private caps, raw willingness-to-trade terms, reviewer notes, public cause prices, global moral exchange rates, moral value inference, or participant-specific quote rows."
+    },
+    {
+      "key": "moral_trade_noncompensable_blocker_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/noncompensable-blockers/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "noncompensable_blocker_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return noncompensable blocker rules, first-class assessment metadata, protected-interest categories, compensation-attempt states, waiver states, review states, and sample evaluations; never expose participant identity hashes, private legal or privacy details, exact protected-interest facts, reviewer notes, or participant-specific assessment rows."
     },
     {
       "key": "moral_trade_side_agreement_contract",
@@ -1478,7 +1490,7 @@
     },
     {
       "key": "moral_trade_aggregate_health_response",
-      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, production-readiness, recipient-destination, recipient-acceptance/adverse-association, AI-preference-elicitation, post-clear audit sampling, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, resource-compatibility governance, net-offset accounting governance, offer-validity governance, private exchange-rate governance, side-agreement disclosure, trade-classification governance, template-conformance governance, review-capacity governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, review-workflow blocker explanation, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
+      "purpose": "Aggregate protocol, data-model, policy-bundle, release-gate, participant-confirmation, participant-eligibility, account-security, reviewer-quality, anti-enumeration, privacy-governance, impact-claim, matching-clearing, baseline-integrity, agreement-amendment, production-readiness, recipient-destination, recipient-acceptance/adverse-association, AI-preference-elicitation, post-clear audit sampling, non-public-goods subsidy governance, direct-pair clearing governance, cause-bucket taxonomy governance, resource-compatibility governance, net-offset accounting governance, offer-validity governance, private exchange-rate governance, noncompensable blocker governance, side-agreement disclosure, trade-classification governance, template-conformance governance, review-capacity governance, protective-assessment governance, user-safety/content-moderation governance, financial-settlement-controls governance, schema-registry, copilot, match-signal, challenge-appeal, disclosure-grant, review-workflow blocker explanation, reasoning-packet, operations, security, incident-response, evaluation, performance, externality, transparency, API-contract, AI-governance, and document-coverage validation response.",
       "fields": [
         { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True only when every core validator passes." },
         { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the validation run." },
@@ -1508,6 +1520,7 @@
         { "key": "netOffsetAccountingValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Net-offset accounting validator result for first-class donation-offset accounting records, immutable policy, baseline opposed action, matched canceled amount, compromise transfer, sponsor/match amount, residual opposed action, substitution-channel state, evidence standard, gross-volume exclusion, and privacy-safe accounting surfaces." },
         { "key": "offerValidityValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Offer-validity validator result for first-class validity records, immutable policy, validity windows, stale baseline, stale empirical assumption, stale evidence standard, stale payment method, stale jurisdiction, stale destination, stale counterparty bucket, and renewed preview/confirmation requirements." },
         { "key": "privateExchangeRateValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Private exchange-rate validator result for first-class quote records, immutable policy, affected-participant coverage, quote-term hashes, privacy-safe compatibility bands, public non-price rule, and fail-closed suppression of public cause prices, global moral exchange rates, exact willingness-to-trade terms, and moral-value inference." },
+        { "key": "noncompensableBlockerValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Noncompensable blocker validator result for first-class assessments, immutable policy, protected-interest categories, attempted compensation or waiver states, renewed-confirmation waiver limits, and fail-closed treatment of safety, legal, privacy, rights, reporting, civil-rights, confidentiality, regulated-goods, cyber-abuse, financial-crime, anti-threat, and process-integrity blockers." },
         { "key": "sideAgreementValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Side-agreement disclosure validator result for first-class disclosure records, review dimensions, immutable policy snapshots, privacy-safe public summaries, and fail-closed unreviewed side arrangements." },
         { "key": "tradeClassificationValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Trade-classification validator result for first-class classification records, compensated moral-action terms, ordinary-service/procurement review, immutable policy snapshots, metric exclusion, and fail-closed public-badge exposure." },
         { "key": "templateConformanceValidation", "type": "validator_result", "required": true, "privacy": "public", "description": "Template-conformance validator result for approved trade templates, immutable parameter policies, subject-specific template instances, neutral-review off-template exceptions, renewed participant confirmation, and fail-closed free-text boundaries." },
@@ -1991,6 +2004,19 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class private quote records, policy snapshots, subject coverage, quote types, disclosure scopes, transition requirements, public non-price rule, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, public non-price rule, privacy boundary, affected-participant coverage rule, first-class table names, policy subjects, subject types, quote types, disclosure scopes, quote states, transition requirements, sample statuses, and test hooks without participant identity hashes, exact private caps, raw willingness-to-trade terms, reviewer notes, public cause prices, global moral exchange rates, moral value inference, or participant-specific quote rows." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Private exchange-rate blockers that prevent relying on match, lock, clearing, capture, reliance, public metrics, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "noncompensable_blocker_contract_response",
+      "purpose": "Public validator-backed noncompensable blocker governance contract for treating safety, legal, privacy, rights, reporting, civil-rights, confidentiality, regulated-goods, cyber-abuse, financial-crime, anti-threat, and process-integrity blockers as constraints rather than prices.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the noncompensable blocker contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the noncompensable blocker validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Noncompensable blocker contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class assessment records, policy snapshots, subject coverage, protected-interest categories, attempted compensation or waiver states, personal waiver states, transition requirements, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, personal-waiver rule, compensation-attempt rule, first-class table names, policy subjects, subject types, protected-interest types, attempted compensation or waiver states, personal waiver states, review states, transition requirements, sample statuses, and test hooks without participant identity hashes, private legal or privacy details, exact protected-interest facts, reviewer notes, or participant-specific assessment rows." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Noncompensable blocker blockers that prevent relying on match, lock, payment capture, payout release, reliance, public completion, or release-gate promotion." }
       ]
     },
     {
@@ -3077,6 +3103,7 @@
     "template_conformance_contract_route",
     "review_capacity_contract_route",
     "private_exchange_rate_contract_route",
+    "noncompensable_blocker_contract_route",
     "disclosure_grant_route_contract",
     "financial_settlement_controls_route_contract",
     "matching_clearing_execute_route_contract",

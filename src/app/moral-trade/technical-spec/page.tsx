@@ -135,6 +135,10 @@ import {
   validateMoralTradePrivateExchangeRateContract,
 } from "@/lib/moral-trade/private-exchange-rate";
 import {
+  getMoralTradeNoncompensableBlockerContract,
+  validateMoralTradeNoncompensableBlockerContract,
+} from "@/lib/moral-trade/noncompensable-blockers";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -366,6 +370,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradePrivateExchangeRateContract(
       privateExchangeRateContract,
     );
+  const noncompensableBlockerContract =
+    getMoralTradeNoncompensableBlockerContract();
+  const noncompensableBlockerValidation =
+    validateMoralTradeNoncompensableBlockerContract(
+      noncompensableBlockerContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -511,6 +521,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     netOffsetAccountingValidation,
     offerValidityValidation,
     privateExchangeRateValidation,
+    noncompensableBlockerValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -779,6 +790,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Private exchange-rate quotes",
       status: privateExchangeRateValidation.status,
       summary: `${privateExchangeRateContract.quoteTypes.length} quote type(s), ${privateExchangeRateContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: noncompensableBlockerValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/noncompensable-blockers/contract",
+      label: "Noncompensable blockers",
+      status: noncompensableBlockerValidation.status,
+      summary: `${noncompensableBlockerContract.protectedInterestTypes.length} protected interest type(s), ${noncompensableBlockerContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -3232,6 +3251,83 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Privacy boundary</p>
             <p>{privateExchangeRateContract.privacyBoundary}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="noncompensable-blocker-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Noncompensable blocker contract</p>
+            <h2 id="noncompensable-blocker-contract-heading">
+              Blocking controls are constraints, not prices.
+            </h2>
+            <p>
+              Moraltrade68 requires safety, legal, privacy, third-party-rights,
+              reporting-integrity, civil-rights, confidentiality, regulated-goods,
+              cyber-abuse, financial-crime, anti-threat, and process-integrity blockers to
+              stay noncompensable unless frozen policy explicitly treats the protected
+              interest as personally waivable and renewed confirmations are non-blocking.
+              Side payments, higher donations, performance bonds, reciprocal favors, and
+              private agreements cannot clear these blockers by themselves.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Noncompensable blockers {noncompensableBlockerContract.version}
+              </p>
+              <h3>Status {noncompensableBlockerValidation.status}</h3>
+              <p>
+                {noncompensableBlockerValidation.checks.length} check(s),{" "}
+                {noncompensableBlockerValidation.blockers.length} blocker(s),{" "}
+                {noncompensableBlockerContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/noncompensable-blockers/contract">
+              Open blocker JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Protected interests</h3>
+              <ul className="clean-list">
+                {noncompensableBlockerContract.protectedInterestTypes.map((interest) => (
+                  <li key={interest}>{interest.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Compensation states</h3>
+              <ul className="clean-list">
+                {noncompensableBlockerContract.attemptedCompensationOrWaiverStates.map((state) => (
+                  <li key={state}>{state.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Review states</h3>
+              <ul className="clean-list">
+                {noncompensableBlockerContract.reviewStates.map((state) => (
+                  <li key={state}>{state.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {noncompensableBlockerContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Personal waiver rule</p>
+            <p>{noncompensableBlockerContract.personalWaiverRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Compensation-attempt rule</p>
+            <p>{noncompensableBlockerContract.compensationAttemptRule}</p>
           </div>
         </section>
 

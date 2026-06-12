@@ -241,6 +241,14 @@ test("api contract profile publishes core routes, schemas, privacy classes, and 
   assert.ok(
     profile.routes.some(
       (route) =>
+        route.key === "moral_trade_noncompensable_blocker_contract" &&
+        route.path === "/api/moral-trade/noncompensable-blockers/contract" &&
+        route.responseSchema === "noncompensable_blocker_contract_response",
+    ),
+  );
+  assert.ok(
+    profile.routes.some(
+      (route) =>
         route.key === "moral_trade_side_agreement_contract" &&
         route.path === "/api/moral-trade/side-agreements/contract" &&
         route.responseSchema === "side_agreement_contract_response",

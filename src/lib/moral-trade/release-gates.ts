@@ -179,6 +179,7 @@ const POLICY_SNAPSHOT_SUBJECTS = [
   "financial_reconciliation",
   "audit_integrity",
   "data_security",
+  "noncompensable_blocker",
 ] as const;
 
 const PRIVILEGED_ACTION_KEYS = [
@@ -366,6 +367,15 @@ export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequire
     description:
       "Private exchange-rate quote records prove clearing ratios, side payments, counterpart volumes, and implied tradeoffs are participant-owned private terms that never become public cause prices, global moral exchange rates, public effectiveness comparisons, exact willingness-to-trade terms, or inferred moral values.",
   },
+  {
+    key: "noncompensable_safety_blocker_test",
+    label: "Noncompensable safety blocker test",
+    category: "safety",
+    policySnapshotRequired: true,
+    privilegedActionRequired: false,
+    description:
+      "Noncompensable blocker assessments prove safety, legal, privacy, third-party-rights, reporting-integrity, civil-rights, confidentiality, regulated-goods, cyber-abuse, financial-crime, anti-threat, and process-integrity blockers are constraints that side payments, higher donations, performance bonds, reciprocal favors, private agreements, and private waivers cannot clear by themselves.",
+  },
 ] as const satisfies MoralTradeReleaseGateRequirementDefinition[];
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
@@ -393,6 +403,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "net_offset_accounting_test",
       "offer_validity_record_test",
       "private_exchange_rate_quote_test",
+      "noncompensable_safety_blocker_test",
     ],
     hardBlockerSummary:
       "Preview can render only when route, privacy, and anti-threat evidence pass; later controls must be explicit not-required decisions.",
@@ -423,6 +434,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "net_offset_accounting_test",
       "offer_validity_record_test",
       "private_exchange_rate_quote_test",
+      "noncompensable_safety_blocker_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -449,6 +461,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
       "private_exchange_rate_quote_test",
+      "noncompensable_safety_blocker_test",
     ],
     inactiveRequirementKeys: [
       "provider_event_replay_tests",
@@ -487,6 +500,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "net_offset_accounting_test",
       "offer_validity_record_test",
       "private_exchange_rate_quote_test",
+      "noncompensable_safety_blocker_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -509,6 +523,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "net_offset_accounting_test",
       "offer_validity_record_test",
       "private_exchange_rate_quote_test",
+      "noncompensable_safety_blocker_test",
     ],
     inactiveRequirementKeys: [
       "dry_run_calculation",
@@ -635,6 +650,7 @@ function samplePayableEvaluation() {
       makeResult("net_offset_accounting_test", "passed"),
       makeResult("offer_validity_record_test", "passed"),
       makeResult("private_exchange_rate_quote_test", "passed"),
+      makeResult("noncompensable_safety_blocker_test", "passed"),
       makeResult("public_metric_suppression", "not_required_for_stage"),
     ],
   });
@@ -825,7 +841,9 @@ export function validateMoralTradeReleaseGateContract(
         requirementKeys.includes("cause_bucket_taxonomy_review_test") &&
         requirementKeys.includes("resource_compatibility_assessment_test") &&
         requirementKeys.includes("net_offset_accounting_test") &&
-        requirementKeys.includes("offer_validity_record_test"),
+        requirementKeys.includes("offer_validity_record_test") &&
+        requirementKeys.includes("private_exchange_rate_quote_test") &&
+        requirementKeys.includes("noncompensable_safety_blocker_test"),
       requirementKeys.join(", "),
     ),
     check(

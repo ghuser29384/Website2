@@ -6200,6 +6200,12 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_noncompensable_blocker_assessments: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_direct_pair_clearing_records: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
@@ -7851,6 +7857,7 @@ export interface Database {
             | "net_offset_accounting"
             | "offer_validity"
             | "private_exchange_rate_quote"
+            | "noncompensable_blocker"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7919,6 +7926,7 @@ export interface Database {
             | "net_offset_accounting"
             | "offer_validity"
             | "private_exchange_rate_quote"
+            | "noncompensable_blocker"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7986,6 +7994,7 @@ export interface Database {
             | "net_offset_accounting"
             | "offer_validity"
             | "private_exchange_rate_quote"
+            | "noncompensable_blocker"
             | "direct_pair_clearing";
           subject_key?: string;
           version_label?: string;

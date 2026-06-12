@@ -2168,6 +2168,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const privateExchangeRateSource = readRepoFile(
     "src/lib/moral-trade/private-exchange-rate.ts",
   );
+  const noncompensableBlockerSource = readRepoFile(
+    "src/lib/moral-trade/noncompensable-blockers.ts",
+  );
   const sideAgreementSource = readRepoFile("src/lib/moral-trade/side-agreements.ts");
   const tradeClassificationSource = readRepoFile(
     "src/lib/moral-trade/trade-classification.ts",
@@ -2309,6 +2312,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const privateExchangeRateMigration = readRepoFile(
     "supabase/migrations/20260612_moral_trade_private_exchange_rate_quote_records.sql",
   );
+  const noncompensableBlockerMigration = readRepoFile(
+    "supabase/migrations/20260612_z_moral_trade_noncompensable_blocker_assessments.sql",
+  );
   const sideAgreementMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_side_agreement_disclosures.sql",
   );
@@ -2423,6 +2429,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const privateExchangeRateContractRoute = readRepoFile(
     "src/app/api/moral-trade/private-exchange-rate/contract/route.ts",
+  );
+  const noncompensableBlockerContractRoute = readRepoFile(
+    "src/app/api/moral-trade/noncompensable-blockers/contract/route.ts",
   );
   const sideAgreementContractRoute = readRepoFile(
     "src/app/api/moral-trade/side-agreements/contract/route.ts",
@@ -2834,6 +2843,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(privateExchangeRateSource, /private_exchange_rate_public_cause_price_published/);
   assert.match(privateExchangeRateSource, /private_exchange_rate_global_exchange_rate_published/);
   assert.match(privateExchangeRateSource, /willingness-to-trade/i);
+  assert.match(noncompensableBlockerSource, /getMoralTradeNoncompensableBlockerContract/);
+  assert.match(noncompensableBlockerSource, /evaluateMoralTradeNoncompensableBlocker/);
+  assert.match(noncompensableBlockerSource, /moral_trade_noncompensable_blocker_assessments/);
+  assert.match(noncompensableBlockerSource, /noncompensable_blocker_compensation_attempt_for_nonwaivable_interest/);
+  assert.match(noncompensableBlockerSource, /constraints rather than prices/i);
+  assert.match(noncompensableBlockerSource, /performance bond/i);
   assert.match(sideAgreementSource, /getMoralTradeSideAgreementContract/);
   assert.match(sideAgreementSource, /evaluateMoralTradeSideAgreementDisclosure/);
   assert.match(sideAgreementSource, /moral_trade_side_agreement_disclosures/);
@@ -3051,6 +3066,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(privateExchangeRateMigration, /public_moral_price_prohibited_bool/);
   assert.match(privateExchangeRateMigration, /global_exchange_rate_published_bool/);
   assert.match(privateExchangeRateMigration, /exact_counterparty_quote_disclosed_bool/);
+  assert.match(noncompensableBlockerMigration, /moral_trade_noncompensable_blocker_assessments/);
+  assert.match(noncompensableBlockerMigration, /noncompensable_blocker/);
+  assert.match(noncompensableBlockerMigration, /protected_interest_type/);
+  assert.match(noncompensableBlockerMigration, /attempted_compensation_or_waiver_state/);
+  assert.match(noncompensableBlockerMigration, /renewed_confirmation_record_refs/);
+  assert.match(noncompensableBlockerMigration, /constraints, not prices/i);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_disclosures/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_reviews/);
   assert.match(sideAgreementMigration, /side_agreement_disclosure/);
@@ -3238,6 +3259,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /public_moral_price_prohibited_bool/);
   assert.match(schemaSource, /global_exchange_rate_published_bool/);
   assert.match(schemaSource, /exact_counterparty_quote_disclosed_bool/);
+  assert.match(schemaSource, /moral_trade_noncompensable_blocker_assessments/);
+  assert.match(schemaSource, /noncompensable_blocker/);
+  assert.match(schemaSource, /protected_interest_type/);
+  assert.match(schemaSource, /attempted_compensation_or_waiver_state/);
   assert.match(schemaSource, /moral_trade_side_agreement_disclosures/);
   assert.match(schemaSource, /moral_trade_side_agreement_reviews/);
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
@@ -3831,6 +3856,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /private exchange-rate governance/);
   assert.match(apiContractProfile, /public non-price rule/);
   assert.match(apiContractProfile, /global moral exchange rates/);
+  assert.match(apiContractProfile, /noncompensable_blocker_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_noncompensable_blocker_contract/);
+  assert.match(apiContractProfile, /noncompensable blocker governance/);
+  assert.match(apiContractProfile, /protected-interest categories/);
+  assert.match(apiContractProfile, /exact protected-interest facts/);
   assert.match(apiContractProfile, /side_agreement_contract_response/);
   assert.match(apiContractProfile, /moral_trade_side_agreement_contract/);
   assert.match(apiContractProfile, /side-agreement disclosure/);
@@ -3924,7 +3954,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.65-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.66-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -4285,6 +4315,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /privateExchangeRateContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /privateExchangeRateContract\.quoteTypes/);
   assert.match(technicalSpecPage, /private-exchange-rate\/contract/);
+  assert.match(technicalSpecPage, /Noncompensable blockers/);
+  assert.match(technicalSpecPage, /noncompensableBlockerContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /noncompensableBlockerContract\.protectedInterestTypes/);
+  assert.match(technicalSpecPage, /noncompensable-blockers\/contract/);
   assert.match(technicalSpecPage, /resource-compatibility\/contract/);
   assert.match(technicalSpecPage, /Field-level schema/);
   assert.match(technicalSpecPage, /State transitions/);
@@ -4358,6 +4392,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /privateExchangeRateValidation/);
   assert.match(healthRoute, /privateExchangeRateFirstClassRecordTables/);
   assert.match(healthRoute, /privateExchangeRatePublicNonPriceRule/);
+  assert.match(healthRoute, /noncompensableBlockerValidation/);
+  assert.match(healthRoute, /noncompensableBlockerFirstClassRecordTables/);
+  assert.match(healthRoute, /noncompensableBlockerCompensationAttemptRule/);
   assert.match(healthRoute, /aiPreferenceElicitationValidation/);
   assert.match(healthRoute, /aiPreferenceElicitationTransitionKeys/);
   assert.match(healthRoute, /aiPreferenceElicitationFirstClassRecordTables/);
@@ -4568,6 +4605,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(privateExchangeRateContractRoute, /publicNonPriceRule/);
   assert.match(privateExchangeRateContractRoute, /affectedParticipantCoverageRule/);
   assert.match(privateExchangeRateContractRoute, /privateExchangeRateSampleEvaluationStatuses/);
+  assert.match(noncompensableBlockerContractRoute, /validateMoralTradeNoncompensableBlockerContract/);
+  assert.match(noncompensableBlockerContractRoute, /protectedInterestTypes/);
+  assert.match(noncompensableBlockerContractRoute, /compensationAttemptRule/);
+  assert.match(noncompensableBlockerContractRoute, /noncompensableBlockerSampleEvaluationStatuses/);
   assert.match(sideAgreementContractRoute, /validateMoralTradeSideAgreementContract/);
   assert.match(sideAgreementContractRoute, /reviewDimensions/);
   assert.match(sideAgreementContractRoute, /sideAgreementSampleEvaluationStatuses/);
