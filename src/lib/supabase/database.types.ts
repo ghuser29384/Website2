@@ -6152,6 +6152,18 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_non_public_goods_subsidy_pools: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      moral_trade_subsidy_schedule_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_appeal_policies: {
         Row: {
           id: string;
@@ -7789,7 +7801,9 @@ export interface Database {
             | "recipient_acceptance"
             | "adverse_association"
             | "ai_preference_elicitation"
-            | "post_clear_audit";
+            | "post_clear_audit"
+            | "non_public_goods_subsidy"
+            | "subsidy_schedule";
           subject_key: string;
           version_label: string;
           status: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7849,7 +7863,9 @@ export interface Database {
             | "recipient_acceptance"
             | "adverse_association"
             | "ai_preference_elicitation"
-            | "post_clear_audit";
+            | "post_clear_audit"
+            | "non_public_goods_subsidy"
+            | "subsidy_schedule";
           subject_key: string;
           version_label: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7908,7 +7924,9 @@ export interface Database {
             | "recipient_acceptance"
             | "adverse_association"
             | "ai_preference_elicitation"
-            | "post_clear_audit";
+            | "post_clear_audit"
+            | "non_public_goods_subsidy"
+            | "subsidy_schedule";
           subject_key?: string;
           version_label?: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";

@@ -67,6 +67,7 @@ function baseInput(
     adverseAssociationStatus: "passed",
     aiPreferenceElicitationStatus: "not_required_for_stage",
     postClearAuditSamplingStatus: "not_required_for_stage",
+    nonPublicGoodsSubsidyStatus: "not_required_for_stage",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:test",
     stateInterpretationPolicyRef: "state-policy:test",
@@ -92,6 +93,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredControlStatuses.includes("adverse_association"));
   assert.ok(contract.requiredControlStatuses.includes("ai_preference_elicitation"));
   assert.ok(contract.requiredControlStatuses.includes("post_clear_audit_sampling"));
+  assert.ok(contract.requiredControlStatuses.includes("non_public_goods_subsidy"));
   assert.ok(contract.requiredControlStatuses.includes("policy_snapshot"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_clearing_preview_records"));
   assert.equal(
@@ -125,6 +127,7 @@ test("donation-offset clearing preview can pass as non-capture final-lock previe
   assert.equal(preview.boundaryStatuses.recipientAcceptanceStatus, "passed");
   assert.equal(preview.boundaryStatuses.aiPreferenceElicitationStatus, "not_required_for_stage");
   assert.equal(preview.boundaryStatuses.postClearAuditSamplingStatus, "not_required_for_stage");
+  assert.equal(preview.boundaryStatuses.nonPublicGoodsSubsidyStatus, "not_required_for_stage");
   assert.equal(
     preview.sections.find((section) => section.key === "pledge-performance-terms")?.status,
     "not_required_for_stage",
@@ -155,6 +158,7 @@ test("clearing preview fails closed when run, ratio, reservation, and confirmati
       adverseAssociationStatus: "needs_review",
       aiPreferenceElicitationStatus: "needs_review",
       postClearAuditSamplingStatus: "missing",
+      nonPublicGoodsSubsidyStatus: "missing",
     }),
   );
 
@@ -170,6 +174,7 @@ test("clearing preview fails closed when run, ratio, reservation, and confirmati
   assert.ok(preview.blockerCodes.includes("adverse_association_not_passed"));
   assert.ok(preview.blockerCodes.includes("ai_preference_elicitation_not_passed"));
   assert.ok(preview.blockerCodes.includes("post_clear_audit_sampling_not_passed"));
+  assert.ok(preview.blockerCodes.includes("non_public_goods_subsidy_not_passed"));
   assert.ok(
     preview.userFacingBlockers.some((blocker) =>
       /reviewed deterministic clearing run/i.test(blocker),

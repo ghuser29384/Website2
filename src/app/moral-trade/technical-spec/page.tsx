@@ -107,6 +107,10 @@ import {
   validateMoralTradePostClearAuditContract,
 } from "@/lib/moral-trade/post-clear-audit";
 import {
+  getMoralTradeNonPublicGoodsSubsidyContract,
+  validateMoralTradeNonPublicGoodsSubsidyContract,
+} from "@/lib/moral-trade/non-public-goods-subsidies";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -302,6 +306,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const postClearAuditContract = getMoralTradePostClearAuditContract();
   const postClearAuditValidation =
     validateMoralTradePostClearAuditContract(postClearAuditContract);
+  const nonPublicGoodsSubsidyContract =
+    getMoralTradeNonPublicGoodsSubsidyContract();
+  const nonPublicGoodsSubsidyValidation =
+    validateMoralTradeNonPublicGoodsSubsidyContract(
+      nonPublicGoodsSubsidyContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -440,6 +450,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     recipientAcceptanceValidation,
     aiPreferenceElicitationValidation,
     postClearAuditValidation,
+    nonPublicGoodsSubsidyValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -652,6 +663,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Post-clear audit",
       status: postClearAuditValidation.status,
       summary: `${postClearAuditContract.auditTypes.length} audit type(s), ${postClearAuditContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: nonPublicGoodsSubsidyValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/non-public-goods-subsidies/contract",
+      label: "Subsidy governance",
+      status: nonPublicGoodsSubsidyValidation.status,
+      summary: `${nonPublicGoodsSubsidyContract.allowedLaunchTiers.length} launch tier(s), ${nonPublicGoodsSubsidyContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -2581,6 +2600,81 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Privacy boundary</p>
             <p>{postClearAuditContract.privacyBoundary}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="non-public-goods-subsidy-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Subsidy governance</p>
+            <h2 id="non-public-goods-subsidy-contract-heading">
+              Sponsor-funded subsidies are mechanism support, not moral-trade volume or impact.
+            </h2>
+            <p>
+              Moraltrade68 allows sponsor-funded non-public-goods subsidies only as governed
+              bridge mechanisms for low-risk donation-offset tiers. The subsidy pool and
+              schedule must freeze source review, conflict review, eligibility, caps,
+              allocation schedule, public disclosure level, and refund or carry-forward
+              handling before lock, payment, public metrics, or release promotion.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Subsidy governance {nonPublicGoodsSubsidyContract.version}
+              </p>
+              <h3>Status {nonPublicGoodsSubsidyValidation.status}</h3>
+              <p>
+                {nonPublicGoodsSubsidyValidation.checks.length} check(s),{" "}
+                {nonPublicGoodsSubsidyValidation.blockers.length} blocker(s),{" "}
+                {nonPublicGoodsSubsidyContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/non-public-goods-subsidies/contract">
+              Open subsidy JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {nonPublicGoodsSubsidyContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Allowed launch tier</h3>
+              <ul className="clean-list">
+                {nonPublicGoodsSubsidyContract.allowedLaunchTiers.map((tier) => (
+                  <li key={tier}>{tier.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Source and conflict states</h3>
+              <ul className="clean-list">
+                {nonPublicGoodsSubsidyContract.sourceReviewStates.map((state) => (
+                  <li key={state}>{state.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {nonPublicGoodsSubsidyContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Metric exclusion</p>
+            <p>{nonPublicGoodsSubsidyContract.metricExclusionRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Privacy boundary</p>
+            <p>{nonPublicGoodsSubsidyContract.privacyBoundary}</p>
           </div>
         </section>
 

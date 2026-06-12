@@ -2143,6 +2143,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const postClearAuditSource = readRepoFile(
     "src/lib/moral-trade/post-clear-audit.ts",
   );
+  const nonPublicGoodsSubsidySource = readRepoFile(
+    "src/lib/moral-trade/non-public-goods-subsidies.ts",
+  );
   const sideAgreementSource = readRepoFile("src/lib/moral-trade/side-agreements.ts");
   const tradeClassificationSource = readRepoFile(
     "src/lib/moral-trade/trade-classification.ts",
@@ -2263,6 +2266,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const postClearAuditMigration = readRepoFile(
     "supabase/migrations/20260611_moral_trade_post_clear_audit_records.sql",
   );
+  const nonPublicGoodsSubsidyMigration = readRepoFile(
+    "supabase/migrations/20260612_moral_trade_non_public_goods_subsidy_records.sql",
+  );
   const sideAgreementMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_side_agreement_disclosures.sql",
   );
@@ -2356,6 +2362,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const postClearAuditContractRoute = readRepoFile(
     "src/app/api/moral-trade/post-clear-audit/contract/route.ts",
+  );
+  const nonPublicGoodsSubsidyContractRoute = readRepoFile(
+    "src/app/api/moral-trade/non-public-goods-subsidies/contract/route.ts",
   );
   const sideAgreementContractRoute = readRepoFile(
     "src/app/api/moral-trade/side-agreements/contract/route.ts",
@@ -2721,6 +2730,13 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(postClearAuditSource, /post_clear_audit_non_blocking_record_required/);
   assert.match(postClearAuditSource, /no_public_moral_reputation_or_retroactive_obligation/);
   assert.match(postClearAuditSource, /raw payment evidence/);
+  assert.match(nonPublicGoodsSubsidySource, /getMoralTradeNonPublicGoodsSubsidyContract/);
+  assert.match(nonPublicGoodsSubsidySource, /evaluateMoralTradeNonPublicGoodsSubsidy/);
+  assert.match(nonPublicGoodsSubsidySource, /moral_trade_non_public_goods_subsidy_pools/);
+  assert.match(nonPublicGoodsSubsidySource, /moral_trade_subsidy_schedule_records/);
+  assert.match(nonPublicGoodsSubsidySource, /subsidy_source_of_funds_not_non_blocking/);
+  assert.match(nonPublicGoodsSubsidySource, /subsidy_moral_trade_volume_exclusion_missing/);
+  assert.match(nonPublicGoodsSubsidySource, /counterparty-distinctness metrics/);
   assert.match(sideAgreementSource, /getMoralTradeSideAgreementContract/);
   assert.match(sideAgreementSource, /evaluateMoralTradeSideAgreementDisclosure/);
   assert.match(sideAgreementSource, /moral_trade_side_agreement_disclosures/);
@@ -2899,6 +2915,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(postClearAuditMigration, /public_reputation_effect_prohibited_bool/);
   assert.match(postClearAuditMigration, /raw_payment_evidence_public_bool/);
   assert.match(postClearAuditMigration, /participant_specific_rows_public_bool/);
+  assert.match(nonPublicGoodsSubsidyMigration, /moral_trade_non_public_goods_subsidy_pools/);
+  assert.match(nonPublicGoodsSubsidyMigration, /moral_trade_subsidy_schedule_records/);
+  assert.match(nonPublicGoodsSubsidyMigration, /non_public_goods_subsidy/);
+  assert.match(nonPublicGoodsSubsidyMigration, /participant_moral_trade_volume_exclusion_bool/);
+  assert.match(nonPublicGoodsSubsidyMigration, /counterparty_distinctness_exclusion_bool/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_disclosures/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_reviews/);
   assert.match(sideAgreementMigration, /side_agreement_disclosure/);
@@ -3051,6 +3072,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /post_clear_audit/);
   assert.match(schemaSource, /raw_payment_evidence_public_bool/);
   assert.match(schemaSource, /participant_specific_rows_public_bool/);
+  assert.match(schemaSource, /moral_trade_non_public_goods_subsidy_pools/);
+  assert.match(schemaSource, /moral_trade_subsidy_schedule_records/);
+  assert.match(schemaSource, /non_public_goods_subsidy/);
+  assert.match(schemaSource, /participant_moral_trade_volume_exclusion_bool/);
+  assert.match(schemaSource, /counterparty_distinctness_exclusion_bool/);
   assert.match(schemaSource, /moral_trade_side_agreement_disclosures/);
   assert.match(schemaSource, /moral_trade_side_agreement_reviews/);
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
@@ -3609,6 +3635,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /post-clear audit sampling governance/);
   assert.match(apiContractProfile, /raw payment evidence/);
   assert.match(apiContractProfile, /public moral reputation scores/);
+  assert.match(apiContractProfile, /non_public_goods_subsidy_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_non_public_goods_subsidy_contract/);
+  assert.match(apiContractProfile, /non-public-goods subsidy governance/);
+  assert.match(apiContractProfile, /sponsor identity hashes/);
+  assert.match(apiContractProfile, /participant-specific subsidy records/);
   assert.match(apiContractProfile, /side_agreement_contract_response/);
   assert.match(apiContractProfile, /moral_trade_side_agreement_contract/);
   assert.match(apiContractProfile, /side-agreement disclosure/);
@@ -3702,7 +3733,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.58-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.59-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -3862,6 +3893,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /postClearAuditContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /postClearAuditContract\.auditTypes/);
   assert.match(technicalSpecPage, /post-clear-audit\/contract/);
+  assert.match(technicalSpecPage, /Subsidy governance/);
+  assert.match(technicalSpecPage, /nonPublicGoodsSubsidyContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /nonPublicGoodsSubsidyContract\.allowedLaunchTiers/);
+  assert.match(technicalSpecPage, /non-public-goods-subsidies\/contract/);
   assert.match(technicalSpecPage, /Side-agreement disclosure contract/);
   assert.match(technicalSpecPage, /sideAgreementContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /sideAgreementContract\.reviewDimensions/);
@@ -4277,6 +4312,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(postClearAuditContractRoute, /auditTypes/);
   assert.match(postClearAuditContractRoute, /firstClassRecordTables/);
   assert.match(postClearAuditContractRoute, /postClearAuditSampleEvaluationStatuses/);
+  assert.match(nonPublicGoodsSubsidyContractRoute, /validateMoralTradeNonPublicGoodsSubsidyContract/);
+  assert.match(nonPublicGoodsSubsidyContractRoute, /allowedLaunchTiers/);
+  assert.match(nonPublicGoodsSubsidyContractRoute, /metricExclusionRule/);
+  assert.match(nonPublicGoodsSubsidyContractRoute, /subsidySampleEvaluationStatuses/);
   assert.match(sideAgreementContractRoute, /validateMoralTradeSideAgreementContract/);
   assert.match(sideAgreementContractRoute, /reviewDimensions/);
   assert.match(sideAgreementContractRoute, /sideAgreementSampleEvaluationStatuses/);

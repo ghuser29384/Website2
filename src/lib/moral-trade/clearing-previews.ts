@@ -1,5 +1,5 @@
 export const MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION =
-  "moral-trade-clearing-preview-v0.3-2026-06";
+  "moral-trade-clearing-preview-v0.4-2026-06";
 export const MORAL_TRADE_CLEARING_PREVIEW_VALIDATOR_VERSION =
   "moral-trade-clearing-preview-validator-v0.1";
 
@@ -90,6 +90,7 @@ export interface MoralTradeClearingPreviewInput {
   adverseAssociationStatus: MoralTradeClearingPreviewGateStatus;
   aiPreferenceElicitationStatus: MoralTradeClearingPreviewGateStatus;
   postClearAuditSamplingStatus: MoralTradeClearingPreviewGateStatus;
+  nonPublicGoodsSubsidyStatus: MoralTradeClearingPreviewGateStatus;
   privacyDisclosureStatus: MoralTradeClearingPreviewGateStatus;
   policySnapshotRef: string;
   stateInterpretationPolicyRef: string;
@@ -140,6 +141,7 @@ export interface MoralTradeClearingPreview {
     adverseAssociationStatus: MoralTradeClearingPreviewGateStatus;
     aiPreferenceElicitationStatus: MoralTradeClearingPreviewGateStatus;
     postClearAuditSamplingStatus: MoralTradeClearingPreviewGateStatus;
+    nonPublicGoodsSubsidyStatus: MoralTradeClearingPreviewGateStatus;
   };
   sections: MoralTradeClearingPreviewSection[];
   userFacingBlockers: string[];
@@ -201,6 +203,7 @@ const REQUIRED_SECTIONS = [
   "externality-and-safety",
   "classification-and-assessments",
   "recipient-ai-boundaries",
+  "subsidy-governance",
   "privacy-and-policy",
   "pledge-performance-terms",
 ] as const;
@@ -232,6 +235,7 @@ const REQUIRED_CONTROL_STATUSES = [
   "adverse_association",
   "ai_preference_elicitation",
   "post_clear_audit_sampling",
+  "non_public_goods_subsidy",
   "privacy_disclosure",
   "policy_snapshot",
   "state_interpretation_policy",
@@ -402,6 +406,12 @@ export function buildMoralTradeClearingPreview(
       "post_clear_audit_sampling_not_passed",
     ),
   ];
+  const subsidyBlockers = [
+    ...statusBlocker(
+      input.nonPublicGoodsSubsidyStatus,
+      "non_public_goods_subsidy_not_passed",
+    ),
+  ];
   const privacyPolicyBlockers = [
     ...statusBlocker(input.privacyDisclosureStatus, "privacy_disclosure_not_passed"),
     ...(input.policySnapshotRef.trim() ? [] : ["policy_snapshot_missing"]),
@@ -461,6 +471,7 @@ export function buildMoralTradeClearingPreview(
     ...safetyBlockers,
     ...classificationBlockers,
     ...boundaryBlockers,
+    ...subsidyBlockers,
     ...privacyPolicyBlockers,
     ...pledgeBlockers,
   ];
@@ -500,6 +511,7 @@ export function buildMoralTradeClearingPreview(
       adverseAssociationStatus: input.adverseAssociationStatus,
       aiPreferenceElicitationStatus: input.aiPreferenceElicitationStatus,
       postClearAuditSamplingStatus: input.postClearAuditSamplingStatus,
+      nonPublicGoodsSubsidyStatus: input.nonPublicGoodsSubsidyStatus,
     },
     sections: [
       makeSection({
@@ -635,6 +647,18 @@ export function buildMoralTradeClearingPreview(
           "Resolve recipient acceptance, adverse-association review, any AI-shaped preference input, and post-clear audit sampling before final lock, disclosure, payment, or public metrics.",
       }),
       makeSection({
+        key: "subsidy-governance",
+        label: "Subsidy governance",
+        status: subsidyBlockers.length ? "blocked" : "passed",
+        blockerCodes: subsidyBlockers,
+        passedMessage:
+          "Any non-public-goods subsidy schedule is source-reviewed, conflict-reviewed, cap-checked, and excluded from participant moral-trade and impact metrics.",
+        blockedMessage:
+          "Sponsor-funded subsidy governance still blocks lock, payment, public metrics, or release promotion.",
+        nextAction:
+          "Freeze the subsidy pool, source-of-funds review, conflict review, eligibility rule, caps, schedule, disclosure level, and refund or carry-forward policy.",
+      }),
+      makeSection({
         key: "pledge-performance-terms",
         label: "Pledge performance terms",
         status:
@@ -684,6 +708,8 @@ export function buildMoralTradeClearingPreview(
           return "AI-shaped preferences must be converted into user-edited structured input and confirmed or reviewed.";
         case "post_clear_audit_sampling_not_passed":
           return "Post-clear audit sampling must be non-blocking before public metrics, release promotion, or completion claims.";
+        case "non_public_goods_subsidy_not_passed":
+          return "Any sponsor subsidy must be frozen, source-reviewed, conflict-reviewed, cap-checked, and excluded from participant volume, impact, and counterparty-distinctness metrics.";
         case "baseline_integrity_not_non_blocking":
         case "baseline_confidence_low":
           return "The baseline needs stronger review before it can support clearing.";
@@ -699,9 +725,9 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
   return {
     version: MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION,
     purpose:
-      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, safety, and policy controls are non-blocking.",
+      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
     failClosedRule:
-      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including recipient-acceptance, adverse-association, AI-preference-elicitation, and post-clear audit sampling controls.",
+      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
     persistenceRule:
       "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
@@ -855,6 +881,7 @@ export function buildDemoDonationOffsetClearingPreview() {
     adverseAssociationStatus: "passed",
     aiPreferenceElicitationStatus: "not_required_for_stage",
     postClearAuditSamplingStatus: "not_required_for_stage",
+    nonPublicGoodsSubsidyStatus: "not_required_for_stage",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:donation-offset-preview-v1",
     stateInterpretationPolicyRef: "state-policy:donation-offset-preview-v1",
@@ -915,6 +942,7 @@ export function buildDemoPledgeSwapClearingPreview() {
     adverseAssociationStatus: "not_required_for_stage",
     aiPreferenceElicitationStatus: "not_required_for_stage",
     postClearAuditSamplingStatus: "not_required_for_stage",
+    nonPublicGoodsSubsidyStatus: "not_required_for_stage",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:pledge-swap-preview-v1",
     stateInterpretationPolicyRef: "state-policy:pledge-swap-preview-v1",

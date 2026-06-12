@@ -82,6 +82,7 @@ const PREVIEW_INPUT_KEYS = new Set([
   "matchingClearingRunStatus",
   "mode",
   "noTradeBaseline",
+  "nonPublicGoodsSubsidyStatus",
   "nonparticipantExternalityStatus",
   "participantConfirmationStatus",
   "participantRatioMaxBps",
@@ -386,6 +387,11 @@ function normalizePreviewInput(value: unknown) {
     postClearAuditSamplingStatus: gateStatus(
       value.postClearAuditSamplingStatus,
       "previewInput.postClearAuditSamplingStatus",
+      blockers,
+    ),
+    nonPublicGoodsSubsidyStatus: gateStatus(
+      value.nonPublicGoodsSubsidyStatus,
+      "previewInput.nonPublicGoodsSubsidyStatus",
       blockers,
     ),
     privacyDisclosureStatus: gateStatus(

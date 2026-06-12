@@ -84,6 +84,10 @@ import {
   validateMoralTradePostClearAuditContract,
 } from "@/lib/moral-trade/post-clear-audit";
 import {
+  getMoralTradeNonPublicGoodsSubsidyContract,
+  validateMoralTradeNonPublicGoodsSubsidyContract,
+} from "@/lib/moral-trade/non-public-goods-subsidies";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -290,6 +294,12 @@ export async function GET(request: Request) {
   const postClearAuditContract = getMoralTradePostClearAuditContract();
   const postClearAuditValidation =
     validateMoralTradePostClearAuditContract(postClearAuditContract);
+  const nonPublicGoodsSubsidyContract =
+    getMoralTradeNonPublicGoodsSubsidyContract();
+  const nonPublicGoodsSubsidyValidation =
+    validateMoralTradeNonPublicGoodsSubsidyContract(
+      nonPublicGoodsSubsidyContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -421,6 +431,7 @@ export async function GET(request: Request) {
       recipientAcceptanceValidation.status === "pass" &&
       aiPreferenceElicitationValidation.status === "pass" &&
       postClearAuditValidation.status === "pass" &&
+      nonPublicGoodsSubsidyValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -472,6 +483,7 @@ export async function GET(request: Request) {
     recipientAcceptanceValidation,
     aiPreferenceElicitationValidation,
     postClearAuditValidation,
+    nonPublicGoodsSubsidyValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -935,6 +947,46 @@ export async function GET(request: Request) {
       ),
       postClearAuditContractTests:
         postClearAuditContract.contractTests,
+      nonPublicGoodsSubsidyContractVersion:
+        nonPublicGoodsSubsidyContract.version,
+      nonPublicGoodsSubsidyTransitionKeys:
+        nonPublicGoodsSubsidyContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      nonPublicGoodsSubsidyTradeTypes:
+        nonPublicGoodsSubsidyContract.tradeTypes,
+      nonPublicGoodsSubsidyAllowedLaunchTiers:
+        nonPublicGoodsSubsidyContract.allowedLaunchTiers,
+      nonPublicGoodsSubsidySourceReviewStates:
+        nonPublicGoodsSubsidyContract.sourceReviewStates,
+      nonPublicGoodsSubsidyConflictStates:
+        nonPublicGoodsSubsidyContract.conflictStates,
+      nonPublicGoodsSubsidyDisclosureLevels:
+        nonPublicGoodsSubsidyContract.disclosureLevels,
+      nonPublicGoodsSubsidyRefundPolicies:
+        nonPublicGoodsSubsidyContract.refundPolicies,
+      nonPublicGoodsSubsidyPoolStates:
+        nonPublicGoodsSubsidyContract.poolStates,
+      nonPublicGoodsSubsidyScheduleStates:
+        nonPublicGoodsSubsidyContract.scheduleStates,
+      nonPublicGoodsSubsidyPolicyStatuses:
+        nonPublicGoodsSubsidyContract.policyStatuses,
+      nonPublicGoodsSubsidyFirstClassRecordTables:
+        nonPublicGoodsSubsidyContract.firstClassRecordTables,
+      nonPublicGoodsSubsidyPolicySnapshotSubjects:
+        nonPublicGoodsSubsidyContract.policySnapshotSubjects,
+      nonPublicGoodsSubsidyPrivacyBoundary:
+        nonPublicGoodsSubsidyContract.privacyBoundary,
+      nonPublicGoodsSubsidyMetricExclusionRule:
+        nonPublicGoodsSubsidyContract.metricExclusionRule,
+      nonPublicGoodsSubsidySampleEvaluationStatuses: Object.fromEntries(
+        nonPublicGoodsSubsidyContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      nonPublicGoodsSubsidyContractTests:
+        nonPublicGoodsSubsidyContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1436,6 +1488,7 @@ export async function GET(request: Request) {
       ...recipientAcceptanceValidation.blockers,
       ...aiPreferenceElicitationValidation.blockers,
       ...postClearAuditValidation.blockers,
+      ...nonPublicGoodsSubsidyValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,
