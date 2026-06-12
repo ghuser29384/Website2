@@ -6164,6 +6164,12 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_direct_pair_clearing_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_appeal_policies: {
         Row: {
           id: string;
@@ -7803,7 +7809,8 @@ export interface Database {
             | "ai_preference_elicitation"
             | "post_clear_audit"
             | "non_public_goods_subsidy"
-            | "subsidy_schedule";
+            | "subsidy_schedule"
+            | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
           status: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7865,7 +7872,8 @@ export interface Database {
             | "ai_preference_elicitation"
             | "post_clear_audit"
             | "non_public_goods_subsidy"
-            | "subsidy_schedule";
+            | "subsidy_schedule"
+            | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";
@@ -7926,7 +7934,8 @@ export interface Database {
             | "ai_preference_elicitation"
             | "post_clear_audit"
             | "non_public_goods_subsidy"
-            | "subsidy_schedule";
+            | "subsidy_schedule"
+            | "direct_pair_clearing";
           subject_key?: string;
           version_label?: string;
           status?: "draft" | "approved" | "immutable" | "superseded" | "revoked";

@@ -32,6 +32,8 @@ function baseInput(
     reproducibilityStatus: "passed",
     finalLockProposalRef: "matched-trade-lock-proposal:test",
     finalLockProposalStatus: "passed",
+    clearingMode: "batch",
+    directPairClearingStatus: "not_required_for_stage",
     requiredFreshConfirmations: 2,
     freshConfirmationCount: 2,
     participantConfirmationStatus: "passed",
@@ -85,6 +87,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredSections.includes("ratio-and-residual"));
   assert.ok(contract.requiredSections.includes("commitment-reservation"));
   assert.ok(contract.requiredSections.includes("atomic-settlement"));
+  assert.ok(contract.requiredSections.includes("direct-pair-or-batch-mode"));
   assert.ok(contract.requiredSections.includes("recipient-ai-boundaries"));
   assert.ok(contract.requiredSections.includes("pledge-performance-terms"));
   assert.ok(contract.requiredControlStatuses.includes("matching_clearing_run"));
@@ -94,6 +97,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredControlStatuses.includes("ai_preference_elicitation"));
   assert.ok(contract.requiredControlStatuses.includes("post_clear_audit_sampling"));
   assert.ok(contract.requiredControlStatuses.includes("non_public_goods_subsidy"));
+  assert.ok(contract.requiredControlStatuses.includes("direct_pair_clearing"));
   assert.ok(contract.requiredControlStatuses.includes("policy_snapshot"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_clearing_preview_records"));
   assert.equal(
@@ -125,12 +129,40 @@ test("donation-offset clearing preview can pass as non-capture final-lock previe
     "passed",
   );
   assert.equal(preview.boundaryStatuses.recipientAcceptanceStatus, "passed");
+  assert.equal(preview.boundaryStatuses.directPairClearingStatus, "not_required_for_stage");
   assert.equal(preview.boundaryStatuses.aiPreferenceElicitationStatus, "not_required_for_stage");
   assert.equal(preview.boundaryStatuses.postClearAuditSamplingStatus, "not_required_for_stage");
   assert.equal(preview.boundaryStatuses.nonPublicGoodsSubsidyStatus, "not_required_for_stage");
   assert.equal(
     preview.sections.find((section) => section.key === "pledge-performance-terms")?.status,
     "not_required_for_stage",
+  );
+  assert.equal(
+    preview.sections.find((section) => section.key === "direct-pair-or-batch-mode")?.status,
+    "not_required_for_stage",
+  );
+});
+
+test("direct-pair clearing mode fails closed until the direct-pair record passes", () => {
+  const preview = buildMoralTradeClearingPreview(
+    baseInput({
+      clearingMode: "direct_pair",
+      directPairClearingStatus: "missing",
+    }),
+  );
+
+  assert.equal(preview.status, "blocked_preview_only");
+  assert.equal(preview.matchedTerms.clearingMode, "direct_pair");
+  assert.equal(preview.boundaryStatuses.directPairClearingStatus, "missing");
+  assert.ok(preview.blockerCodes.includes("direct_pair_clearing_not_passed"));
+  assert.equal(
+    preview.sections.find((section) => section.key === "direct-pair-or-batch-mode")?.status,
+    "blocked",
+  );
+  assert.ok(
+    preview.userFacingBlockers.some((blocker) =>
+      /confirmed two-party record/i.test(blocker),
+    ),
   );
 });
 

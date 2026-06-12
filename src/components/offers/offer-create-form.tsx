@@ -2230,6 +2230,8 @@ export function OfferCreateForm({
         finalLockProposalStatus: clearingPreviewStatusFromOffsetLock(
           offsetMatchedLockProposalStatus,
         ),
+        clearingMode: "batch",
+        directPairClearingStatus: "not_required_for_stage",
         requiredFreshConfirmations: Number(offsetAffectedParticipantCount) || 2,
         freshConfirmationCount: Number(offsetFreshConfirmationCount) || 0,
         participantConfirmationStatus: clearingPreviewStatusFromOffsetConfirmation(
@@ -2314,6 +2316,8 @@ export function OfferCreateForm({
           reproducibilityStatus: "missing",
           finalLockProposalRef: "",
           finalLockProposalStatus: "missing",
+          clearingMode: "preview_only",
+          directPairClearingStatus: "not_required_for_stage",
           requiredFreshConfirmations: 2,
           freshConfirmationCount: 0,
           participantConfirmationStatus: "missing",

@@ -1,5 +1,5 @@
 export const MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION =
-  "moral-trade-clearing-preview-v0.4-2026-06";
+  "moral-trade-clearing-preview-v0.5-2026-06";
 export const MORAL_TRADE_CLEARING_PREVIEW_VALIDATOR_VERSION =
   "moral-trade-clearing-preview-validator-v0.1";
 
@@ -14,6 +14,12 @@ export type MoralTradeClearingPreviewMode =
 export type MoralTradeClearingPreviewReleaseStage =
   | "donation_offset_preview_no_capture"
   | "pledge_swap_preview_manual_review_only";
+
+export type MoralTradeClearingPreviewClearingMode =
+  | "batch"
+  | "direct_pair"
+  | "preview_only"
+  | "manual_review";
 
 export type MoralTradeClearingPreviewStatus =
   | "preview_ready"
@@ -55,6 +61,8 @@ export interface MoralTradeClearingPreviewInput {
   reproducibilityStatus: MoralTradeClearingPreviewGateStatus;
   finalLockProposalRef: string;
   finalLockProposalStatus: MoralTradeClearingPreviewGateStatus;
+  clearingMode: MoralTradeClearingPreviewClearingMode;
+  directPairClearingStatus: MoralTradeClearingPreviewGateStatus;
   requiredFreshConfirmations: number;
   freshConfirmationCount: number;
   participantConfirmationStatus: MoralTradeClearingPreviewGateStatus;
@@ -135,8 +143,10 @@ export interface MoralTradeClearingPreview {
     unmatchedResidualCents: number;
     residualNoTradeAction: string;
     fallbackRule: string;
+    clearingMode: MoralTradeClearingPreviewClearingMode;
   };
   boundaryStatuses: {
+    directPairClearingStatus: MoralTradeClearingPreviewGateStatus;
     recipientAcceptanceStatus: MoralTradeClearingPreviewGateStatus;
     adverseAssociationStatus: MoralTradeClearingPreviewGateStatus;
     aiPreferenceElicitationStatus: MoralTradeClearingPreviewGateStatus;
@@ -198,6 +208,7 @@ const REQUIRED_SECTIONS = [
   "ratio-and-residual",
   "commitment-reservation",
   "atomic-settlement",
+  "direct-pair-or-batch-mode",
   "final-lock",
   "destination-and-tax",
   "externality-and-safety",
@@ -221,6 +232,7 @@ const REQUIRED_CONTROL_STATUSES = [
   "commitment_reservation",
   "double_count",
   "atomic_settlement",
+  "direct_pair_clearing",
   "destination_verification",
   "donor_of_record_tax",
   "nonparticipant_externality",
@@ -366,6 +378,12 @@ export function buildMoralTradeClearingPreview(
     input.atomicSettlementStatus,
     "atomic_settlement_not_passed",
   );
+  const directPairBlockers =
+    input.clearingMode === "direct_pair"
+      ? statusBlocker(input.directPairClearingStatus, "direct_pair_clearing_not_passed")
+      : input.directPairClearingStatus === "passed"
+        ? ["direct_pair_status_passed_for_non_direct_pair_mode"]
+        : [];
   const finalLockBlockers = [
     ...statusBlocker(input.finalLockProposalStatus, "final_lock_proposal_not_current"),
     ...(input.finalLockProposalRef.trim() ? [] : ["final_lock_proposal_missing"]),
@@ -466,6 +484,7 @@ export function buildMoralTradeClearingPreview(
     ...ratioBlockers,
     ...reservationBlockers,
     ...atomicBlockers,
+    ...directPairBlockers,
     ...finalLockBlockers,
     ...destinationBlockers,
     ...safetyBlockers,
@@ -505,8 +524,10 @@ export function buildMoralTradeClearingPreview(
       unmatchedResidualCents: cents(input.unmatchedResidualCents),
       residualNoTradeAction: input.residualNoTradeAction,
       fallbackRule: input.fallbackRule,
+      clearingMode: input.clearingMode,
     },
     boundaryStatuses: {
+      directPairClearingStatus: input.directPairClearingStatus,
       recipientAcceptanceStatus: input.recipientAcceptanceStatus,
       adverseAssociationStatus: input.adverseAssociationStatus,
       aiPreferenceElicitationStatus: input.aiPreferenceElicitationStatus,
@@ -573,6 +594,25 @@ export function buildMoralTradeClearingPreview(
           "The batch is not yet protected by all-or-none settlement semantics.",
         nextAction:
           "Require every participant confirmation, eligibility, authorization, and reservation before any side can rely or capture.",
+      }),
+      makeSection({
+        key: "direct-pair-or-batch-mode",
+        label: "Direct-pair or batch mode",
+        status:
+          input.clearingMode === "direct_pair"
+            ? directPairBlockers.length
+              ? "blocked"
+              : "passed"
+            : "not_required_for_stage",
+        blockerCodes: directPairBlockers,
+        passedMessage:
+          input.clearingMode === "direct_pair"
+            ? "Direct-pair clearing has a frozen two-party record, both-party consent, no background networking, and ordinary gates."
+            : "This preview uses batch clearing; direct-pair records are not required for this stage.",
+        blockedMessage:
+          "Direct-pair clearing still needs a frozen two-party or invite-linked record, both confirmations, no autonomous outreach, and ordinary review, payment, privacy, and lock gates.",
+        nextAction:
+          "Create or update the direct-pair clearing record and keep the preview non-capture until the direct-pair and ordinary gate statuses are non-blocking.",
       }),
       makeSection({
         key: "final-lock",
@@ -697,6 +737,10 @@ export function buildMoralTradeClearingPreview(
           return "Commitments must be reserved so the same action, donation, baseline, or evidence is not double-counted.";
         case "atomic_settlement_not_passed":
           return "All required participants must be locked together before anyone can rely or pay.";
+        case "direct_pair_clearing_not_passed":
+          return "Direct-pair mode requires a confirmed two-party record and cannot bypass ordinary review, privacy, payment, or lock gates.";
+        case "direct_pair_status_passed_for_non_direct_pair_mode":
+          return "Direct-pair status must match the selected clearing mode.";
         case "destination_verification_not_passed":
         case "payment_destination_not_verified":
           return "Recipient and payment destination verification must be non-blocking.";
@@ -727,7 +771,7 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
     purpose:
       "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
     failClosedRule:
-      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
+      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
     persistenceRule:
       "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
@@ -845,6 +889,8 @@ export function buildDemoDonationOffsetClearingPreview() {
     reproducibilityStatus: "passed",
     finalLockProposalRef: "matched-trade-lock-proposal:demo-offset-v1",
     finalLockProposalStatus: "passed",
+    clearingMode: "batch",
+    directPairClearingStatus: "not_required_for_stage",
     requiredFreshConfirmations: 2,
     freshConfirmationCount: 2,
     participantConfirmationStatus: "passed",
@@ -904,6 +950,8 @@ export function buildDemoPledgeSwapClearingPreview() {
     reproducibilityStatus: "passed",
     finalLockProposalRef: "",
     finalLockProposalStatus: "preview_only",
+    clearingMode: "preview_only",
+    directPairClearingStatus: "not_required_for_stage",
     requiredFreshConfirmations: 2,
     freshConfirmationCount: 0,
     participantConfirmationStatus: "missing",

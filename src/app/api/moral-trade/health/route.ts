@@ -88,6 +88,10 @@ import {
   validateMoralTradeNonPublicGoodsSubsidyContract,
 } from "@/lib/moral-trade/non-public-goods-subsidies";
 import {
+  getMoralTradeDirectPairClearingContract,
+  validateMoralTradeDirectPairClearingContract,
+} from "@/lib/moral-trade/direct-pair-clearing";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -300,6 +304,9 @@ export async function GET(request: Request) {
     validateMoralTradeNonPublicGoodsSubsidyContract(
       nonPublicGoodsSubsidyContract,
     );
+  const directPairClearingContract = getMoralTradeDirectPairClearingContract();
+  const directPairClearingValidation =
+    validateMoralTradeDirectPairClearingContract(directPairClearingContract);
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -432,6 +439,7 @@ export async function GET(request: Request) {
       aiPreferenceElicitationValidation.status === "pass" &&
       postClearAuditValidation.status === "pass" &&
       nonPublicGoodsSubsidyValidation.status === "pass" &&
+      directPairClearingValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -484,6 +492,7 @@ export async function GET(request: Request) {
     aiPreferenceElicitationValidation,
     postClearAuditValidation,
     nonPublicGoodsSubsidyValidation,
+    directPairClearingValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -987,6 +996,38 @@ export async function GET(request: Request) {
       ),
       nonPublicGoodsSubsidyContractTests:
         nonPublicGoodsSubsidyContract.contractTests,
+      directPairClearingContractVersion:
+        directPairClearingContract.version,
+      directPairClearingTransitionKeys:
+        directPairClearingContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      directPairClearingTradeTypes:
+        directPairClearingContract.tradeTypes,
+      directPairClearingAllowedLaunchTradeTypes:
+        directPairClearingContract.allowedLaunchTradeTypes,
+      directPairClearingStates:
+        directPairClearingContract.directPairStates,
+      directPairClearingReviewStates:
+        directPairClearingContract.reviewStates,
+      directPairClearingPolicyStatuses:
+        directPairClearingContract.policyStatuses,
+      directPairClearingFirstClassRecordTables:
+        directPairClearingContract.firstClassRecordTables,
+      directPairClearingPolicySnapshotSubjects:
+        directPairClearingContract.policySnapshotSubjects,
+      directPairClearingPrivacyBoundary:
+        directPairClearingContract.privacyBoundary,
+      directPairClearingNoAutonomousOutreachRule:
+        directPairClearingContract.noAutonomousOutreachRule,
+      directPairClearingSampleEvaluationStatuses: Object.fromEntries(
+        directPairClearingContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      directPairClearingContractTests:
+        directPairClearingContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1489,6 +1530,7 @@ export async function GET(request: Request) {
       ...aiPreferenceElicitationValidation.blockers,
       ...postClearAuditValidation.blockers,
       ...nonPublicGoodsSubsidyValidation.blockers,
+      ...directPairClearingValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

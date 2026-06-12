@@ -11,6 +11,7 @@ import {
   buildMoralTradeClearingPreview,
   getMoralTradeClearingPreviewContract,
   validateMoralTradeClearingPreviewContract,
+  type MoralTradeClearingPreviewClearingMode,
   type MoralTradeClearingPreviewGateStatus,
   type MoralTradeClearingPreviewInput,
   type MoralTradeClearingPreviewMode,
@@ -39,6 +40,12 @@ const RELEASE_STAGES = new Set<MoralTradeClearingPreviewReleaseStage>([
   "donation_offset_preview_no_capture",
   "pledge_swap_preview_manual_review_only",
 ]);
+const CLEARING_MODES = new Set<MoralTradeClearingPreviewClearingMode>([
+  "batch",
+  "direct_pair",
+  "preview_only",
+  "manual_review",
+]);
 const GATE_STATUSES = new Set<MoralTradeClearingPreviewGateStatus>([
   "passed",
   "not_required_for_stage",
@@ -65,8 +72,10 @@ const PREVIEW_INPUT_KEYS = new Set([
   "baselineSnapshotHash",
   "baselineVersion",
   "clearingRatioBps",
+  "clearingMode",
   "commitmentReservationStatus",
   "destinationVerificationStatus",
+  "directPairClearingStatus",
   "donorOfRecordTaxStatus",
   "doubleCountStatus",
   "evidenceAuthenticityStatus",
@@ -318,6 +327,13 @@ function normalizePreviewInput(value: unknown) {
     baselineSnapshotHash: nullableHashField(value.baselineSnapshotHash),
     baselineVersion: stringField(value.baselineVersion),
     clearingRatioBps: numberField(value.clearingRatioBps, 0),
+    clearingMode: enumField(
+      value.clearingMode,
+      CLEARING_MODES,
+      "preview_only",
+      "previewInput.clearingMode",
+      blockers,
+    ),
     commitmentReservationStatus: gateStatus(
       value.commitmentReservationStatus,
       "previewInput.commitmentReservationStatus",
@@ -326,6 +342,11 @@ function normalizePreviewInput(value: unknown) {
     destinationVerificationStatus: gateStatus(
       value.destinationVerificationStatus,
       "previewInput.destinationVerificationStatus",
+      blockers,
+    ),
+    directPairClearingStatus: gateStatus(
+      value.directPairClearingStatus,
+      "previewInput.directPairClearingStatus",
       blockers,
     ),
     donorOfRecordTaxStatus: gateStatus(

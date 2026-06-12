@@ -111,6 +111,10 @@ import {
   validateMoralTradeNonPublicGoodsSubsidyContract,
 } from "@/lib/moral-trade/non-public-goods-subsidies";
 import {
+  getMoralTradeDirectPairClearingContract,
+  validateMoralTradeDirectPairClearingContract,
+} from "@/lib/moral-trade/direct-pair-clearing";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -312,6 +316,9 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeNonPublicGoodsSubsidyContract(
       nonPublicGoodsSubsidyContract,
     );
+  const directPairClearingContract = getMoralTradeDirectPairClearingContract();
+  const directPairClearingValidation =
+    validateMoralTradeDirectPairClearingContract(directPairClearingContract);
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -451,6 +458,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     aiPreferenceElicitationValidation,
     postClearAuditValidation,
     nonPublicGoodsSubsidyValidation,
+    directPairClearingValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -671,6 +679,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Subsidy governance",
       status: nonPublicGoodsSubsidyValidation.status,
       summary: `${nonPublicGoodsSubsidyContract.allowedLaunchTiers.length} launch tier(s), ${nonPublicGoodsSubsidyContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: directPairClearingValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/direct-pair-clearing/contract",
+      label: "Direct-pair clearing",
+      status: directPairClearingValidation.status,
+      summary: `${directPairClearingContract.allowedLaunchTradeTypes.length} launch trade type(s), ${directPairClearingContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -2675,6 +2691,81 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Privacy boundary</p>
             <p>{nonPublicGoodsSubsidyContract.privacyBoundary}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="direct-pair-clearing-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Direct-pair clearing</p>
+            <h2 id="direct-pair-clearing-contract-heading">
+              Direct-pair mode is a reviewed two-party path, not autonomous outreach.
+            </h2>
+            <p>
+              Moraltrade68 allows a known or invite-linked counterparty path for low-liquidity
+              donation-offset and pledge-swap previews. The direct-pair record must freeze the
+              pair, terms, policy, confirmations, privacy grants, user-safety state, and ordinary
+              lock/review/payment/privacy gates before lock, capture, public metrics, or release
+              promotion can rely on it.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Direct-pair clearing {directPairClearingContract.version}
+              </p>
+              <h3>Status {directPairClearingValidation.status}</h3>
+              <p>
+                {directPairClearingValidation.checks.length} check(s),{" "}
+                {directPairClearingValidation.blockers.length} blocker(s),{" "}
+                {directPairClearingContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/direct-pair-clearing/contract">
+              Open direct-pair JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {directPairClearingContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Launch trade types</h3>
+              <ul className="clean-list">
+                {directPairClearingContract.allowedLaunchTradeTypes.map((tradeType) => (
+                  <li key={tradeType}>{tradeType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Direct-pair states</h3>
+              <ul className="clean-list">
+                {directPairClearingContract.directPairStates.map((state) => (
+                  <li key={state}>{state.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {directPairClearingContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">No autonomous outreach</p>
+            <p>{directPairClearingContract.noAutonomousOutreachRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Privacy boundary</p>
+            <p>{directPairClearingContract.privacyBoundary}</p>
           </div>
         </section>
 
