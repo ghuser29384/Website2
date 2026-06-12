@@ -2165,6 +2165,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const offerValiditySource = readRepoFile(
     "src/lib/moral-trade/offer-validity.ts",
   );
+  const privateExchangeRateSource = readRepoFile(
+    "src/lib/moral-trade/private-exchange-rate.ts",
+  );
   const sideAgreementSource = readRepoFile("src/lib/moral-trade/side-agreements.ts");
   const tradeClassificationSource = readRepoFile(
     "src/lib/moral-trade/trade-classification.ts",
@@ -2303,6 +2306,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const offerValidityMigration = readRepoFile(
     "supabase/migrations/20260612_moral_trade_offer_validity_records.sql",
   );
+  const privateExchangeRateMigration = readRepoFile(
+    "supabase/migrations/20260612_moral_trade_private_exchange_rate_quote_records.sql",
+  );
   const sideAgreementMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_side_agreement_disclosures.sql",
   );
@@ -2414,6 +2420,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const offerValidityContractRoute = readRepoFile(
     "src/app/api/moral-trade/offer-validity/contract/route.ts",
+  );
+  const privateExchangeRateContractRoute = readRepoFile(
+    "src/app/api/moral-trade/private-exchange-rate/contract/route.ts",
   );
   const sideAgreementContractRoute = readRepoFile(
     "src/app/api/moral-trade/side-agreements/contract/route.ts",
@@ -2819,6 +2828,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(offerValiditySource, /offer_validity_expired/);
   assert.match(offerValiditySource, /offer_validity_stale/);
   assert.match(offerValiditySource, /counterparty_bucket_stale/);
+  assert.match(privateExchangeRateSource, /getMoralTradePrivateExchangeRateContract/);
+  assert.match(privateExchangeRateSource, /evaluateMoralTradePrivateExchangeRate/);
+  assert.match(privateExchangeRateSource, /moral_trade_private_exchange_rate_quote_records/);
+  assert.match(privateExchangeRateSource, /private_exchange_rate_public_cause_price_published/);
+  assert.match(privateExchangeRateSource, /private_exchange_rate_global_exchange_rate_published/);
+  assert.match(privateExchangeRateSource, /willingness-to-trade/i);
   assert.match(sideAgreementSource, /getMoralTradeSideAgreementContract/);
   assert.match(sideAgreementSource, /evaluateMoralTradeSideAgreementDisclosure/);
   assert.match(sideAgreementSource, /moral_trade_side_agreement_disclosures/);
@@ -3031,6 +3046,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(offerValidityMigration, /offer_expires_at/);
   assert.match(offerValidityMigration, /stale_reason_codes_json/);
   assert.match(offerValidityMigration, /renewal_confirmation_record_refs/);
+  assert.match(privateExchangeRateMigration, /moral_trade_private_exchange_rate_quote_records/);
+  assert.match(privateExchangeRateMigration, /private_exchange_rate_quote/);
+  assert.match(privateExchangeRateMigration, /public_moral_price_prohibited_bool/);
+  assert.match(privateExchangeRateMigration, /global_exchange_rate_published_bool/);
+  assert.match(privateExchangeRateMigration, /exact_counterparty_quote_disclosed_bool/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_disclosures/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_reviews/);
   assert.match(sideAgreementMigration, /side_agreement_disclosure/);
@@ -3213,6 +3233,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /baseline_snapshot_hash/);
   assert.match(schemaSource, /offer_expires_at/);
   assert.match(schemaSource, /stale_reason_codes_json/);
+  assert.match(schemaSource, /moral_trade_private_exchange_rate_quote_records/);
+  assert.match(schemaSource, /private_exchange_rate_quote/);
+  assert.match(schemaSource, /public_moral_price_prohibited_bool/);
+  assert.match(schemaSource, /global_exchange_rate_published_bool/);
+  assert.match(schemaSource, /exact_counterparty_quote_disclosed_bool/);
   assert.match(schemaSource, /moral_trade_side_agreement_disclosures/);
   assert.match(schemaSource, /moral_trade_side_agreement_reviews/);
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
@@ -3801,6 +3826,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /offer-validity governance/);
   assert.match(apiContractProfile, /validity-window rule/);
   assert.match(apiContractProfile, /private payment credentials/);
+  assert.match(apiContractProfile, /private_exchange_rate_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_private_exchange_rate_contract/);
+  assert.match(apiContractProfile, /private exchange-rate governance/);
+  assert.match(apiContractProfile, /public non-price rule/);
+  assert.match(apiContractProfile, /global moral exchange rates/);
   assert.match(apiContractProfile, /side_agreement_contract_response/);
   assert.match(apiContractProfile, /moral_trade_side_agreement_contract/);
   assert.match(apiContractProfile, /side-agreement disclosure/);
@@ -3894,7 +3924,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.64-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.65-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -4251,6 +4281,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /offerValidityContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /offerValidityContract\.staleReasonCodes/);
   assert.match(technicalSpecPage, /offer-validity\/contract/);
+  assert.match(technicalSpecPage, /Private exchange-rate quotes/);
+  assert.match(technicalSpecPage, /privateExchangeRateContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /privateExchangeRateContract\.quoteTypes/);
+  assert.match(technicalSpecPage, /private-exchange-rate\/contract/);
   assert.match(technicalSpecPage, /resource-compatibility\/contract/);
   assert.match(technicalSpecPage, /Field-level schema/);
   assert.match(technicalSpecPage, /State transitions/);
@@ -4321,6 +4355,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /offerValidityValidation/);
   assert.match(healthRoute, /offerValidityFirstClassRecordTables/);
   assert.match(healthRoute, /offerValidityWindowRule/);
+  assert.match(healthRoute, /privateExchangeRateValidation/);
+  assert.match(healthRoute, /privateExchangeRateFirstClassRecordTables/);
+  assert.match(healthRoute, /privateExchangeRatePublicNonPriceRule/);
   assert.match(healthRoute, /aiPreferenceElicitationValidation/);
   assert.match(healthRoute, /aiPreferenceElicitationTransitionKeys/);
   assert.match(healthRoute, /aiPreferenceElicitationFirstClassRecordTables/);
@@ -4527,6 +4564,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(offerValidityContractRoute, /staleReasonCodes/);
   assert.match(offerValidityContractRoute, /validityWindowRule/);
   assert.match(offerValidityContractRoute, /offerValiditySampleEvaluationStatuses/);
+  assert.match(privateExchangeRateContractRoute, /validateMoralTradePrivateExchangeRateContract/);
+  assert.match(privateExchangeRateContractRoute, /publicNonPriceRule/);
+  assert.match(privateExchangeRateContractRoute, /affectedParticipantCoverageRule/);
+  assert.match(privateExchangeRateContractRoute, /privateExchangeRateSampleEvaluationStatuses/);
   assert.match(sideAgreementContractRoute, /validateMoralTradeSideAgreementContract/);
   assert.match(sideAgreementContractRoute, /reviewDimensions/);
   assert.match(sideAgreementContractRoute, /sideAgreementSampleEvaluationStatuses/);

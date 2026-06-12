@@ -108,6 +108,10 @@ import {
   validateMoralTradeOfferValidityContract,
 } from "@/lib/moral-trade/offer-validity";
 import {
+  getMoralTradePrivateExchangeRateContract,
+  validateMoralTradePrivateExchangeRateContract,
+} from "@/lib/moral-trade/private-exchange-rate";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -344,6 +348,12 @@ export async function GET(request: Request) {
   const offerValidityContract = getMoralTradeOfferValidityContract();
   const offerValidityValidation =
     validateMoralTradeOfferValidityContract(offerValidityContract);
+  const privateExchangeRateContract =
+    getMoralTradePrivateExchangeRateContract();
+  const privateExchangeRateValidation =
+    validateMoralTradePrivateExchangeRateContract(
+      privateExchangeRateContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -481,6 +491,7 @@ export async function GET(request: Request) {
       resourceCompatibilityValidation.status === "pass" &&
       netOffsetAccountingValidation.status === "pass" &&
       offerValidityValidation.status === "pass" &&
+      privateExchangeRateValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -538,6 +549,7 @@ export async function GET(request: Request) {
     resourceCompatibilityValidation,
     netOffsetAccountingValidation,
     offerValidityValidation,
+    privateExchangeRateValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -1207,6 +1219,40 @@ export async function GET(request: Request) {
       ),
       offerValidityContractTests:
         offerValidityContract.contractTests,
+      privateExchangeRateContractVersion:
+        privateExchangeRateContract.version,
+      privateExchangeRateTransitionKeys:
+        privateExchangeRateContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      privateExchangeRateSubjectTypes:
+        privateExchangeRateContract.subjectTypes,
+      privateExchangeRateQuoteTypes:
+        privateExchangeRateContract.quoteTypes,
+      privateExchangeRateDisclosureScopes:
+        privateExchangeRateContract.disclosureScopes,
+      privateExchangeRateQuoteStates:
+        privateExchangeRateContract.quoteStates,
+      privateExchangeRatePolicyStatuses:
+        privateExchangeRateContract.policyStatuses,
+      privateExchangeRateFirstClassRecordTables:
+        privateExchangeRateContract.firstClassRecordTables,
+      privateExchangeRatePolicySnapshotSubjects:
+        privateExchangeRateContract.policySnapshotSubjects,
+      privateExchangeRatePublicNonPriceRule:
+        privateExchangeRateContract.publicNonPriceRule,
+      privateExchangeRatePrivacyBoundary:
+        privateExchangeRateContract.privacyBoundary,
+      privateExchangeRateAffectedParticipantCoverageRule:
+        privateExchangeRateContract.affectedParticipantCoverageRule,
+      privateExchangeRateSampleEvaluationStatuses: Object.fromEntries(
+        privateExchangeRateContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      privateExchangeRateContractTests:
+        privateExchangeRateContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1714,6 +1760,7 @@ export async function GET(request: Request) {
       ...resourceCompatibilityValidation.blockers,
       ...netOffsetAccountingValidation.blockers,
       ...offerValidityValidation.blockers,
+      ...privateExchangeRateValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

@@ -95,6 +95,7 @@ const PREVIEW_INPUT_KEYS = new Set([
   "resourceCompatibilityStatus",
   "netOffsetAccountingStatus",
   "offerValidityStatus",
+  "privateExchangeRateStatus",
   "nonPublicGoodsSubsidyStatus",
   "nonparticipantExternalityStatus",
   "participantConfirmationStatus",
@@ -334,6 +335,11 @@ function normalizePreviewInput(value: unknown) {
     offerValidityStatus: gateStatus(
       value.offerValidityStatus,
       "previewInput.offerValidityStatus",
+      blockers,
+    ),
+    privateExchangeRateStatus: gateStatus(
+      value.privateExchangeRateStatus,
+      "previewInput.privateExchangeRateStatus",
       blockers,
     ),
     baselineConfidenceLevel: enumField(

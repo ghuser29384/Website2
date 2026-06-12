@@ -1,5 +1,5 @@
 export const MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION =
-  "moral-trade-clearing-preview-v0.9-2026-06";
+  "moral-trade-clearing-preview-v0.10-2026-06";
 export const MORAL_TRADE_CLEARING_PREVIEW_VALIDATOR_VERSION =
   "moral-trade-clearing-preview-validator-v0.1";
 
@@ -103,6 +103,7 @@ export interface MoralTradeClearingPreviewInput {
   resourceCompatibilityStatus: MoralTradeClearingPreviewGateStatus;
   netOffsetAccountingStatus: MoralTradeClearingPreviewGateStatus;
   offerValidityStatus: MoralTradeClearingPreviewGateStatus;
+  privateExchangeRateStatus: MoralTradeClearingPreviewGateStatus;
   privacyDisclosureStatus: MoralTradeClearingPreviewGateStatus;
   policySnapshotRef: string;
   stateInterpretationPolicyRef: string;
@@ -160,6 +161,7 @@ export interface MoralTradeClearingPreview {
     resourceCompatibilityStatus: MoralTradeClearingPreviewGateStatus;
     netOffsetAccountingStatus: MoralTradeClearingPreviewGateStatus;
     offerValidityStatus: MoralTradeClearingPreviewGateStatus;
+    privateExchangeRateStatus: MoralTradeClearingPreviewGateStatus;
   };
   sections: MoralTradeClearingPreviewSection[];
   userFacingBlockers: string[];
@@ -221,6 +223,7 @@ const REQUIRED_SECTIONS = [
   "resource-compatibility",
   "net-offset-accounting",
   "offer-validity",
+  "private-exchange-rate",
   "final-lock",
   "destination-and-tax",
   "externality-and-safety",
@@ -249,6 +252,7 @@ const REQUIRED_CONTROL_STATUSES = [
   "resource_compatibility",
   "net_offset_accounting",
   "offer_validity",
+  "private_exchange_rate_quote",
   "destination_verification",
   "donor_of_record_tax",
   "nonparticipant_externality",
@@ -416,6 +420,10 @@ export function buildMoralTradeClearingPreview(
     input.offerValidityStatus,
     "offer_validity_not_passed",
   );
+  const privateExchangeRateBlockers = statusBlocker(
+    input.privateExchangeRateStatus,
+    "private_exchange_rate_not_passed",
+  );
   const finalLockBlockers = [
     ...statusBlocker(input.finalLockProposalStatus, "final_lock_proposal_not_current"),
     ...(input.finalLockProposalRef.trim() ? [] : ["final_lock_proposal_missing"]),
@@ -521,6 +529,7 @@ export function buildMoralTradeClearingPreview(
     ...resourceCompatibilityBlockers,
     ...netOffsetAccountingBlockers,
     ...offerValidityBlockers,
+    ...privateExchangeRateBlockers,
     ...finalLockBlockers,
     ...destinationBlockers,
     ...safetyBlockers,
@@ -573,6 +582,7 @@ export function buildMoralTradeClearingPreview(
       resourceCompatibilityStatus: input.resourceCompatibilityStatus,
       netOffsetAccountingStatus: input.netOffsetAccountingStatus,
       offerValidityStatus: input.offerValidityStatus,
+      privateExchangeRateStatus: input.privateExchangeRateStatus,
     },
     sections: [
       makeSection({
@@ -701,6 +711,18 @@ export function buildMoralTradeClearingPreview(
           "The offer is stale, expired, unrenewed, or missing a validity record.",
         nextAction:
           "Renew the preview and confirmation whenever the baseline, terms, evidence standard, payment method, jurisdiction, destination, or counterparty bucket is stale or expired.",
+      }),
+      makeSection({
+        key: "private-exchange-rate",
+        label: "Private exchange-rate quote",
+        status: privateExchangeRateBlockers.length ? "blocked" : "passed",
+        blockerCodes: privateExchangeRateBlockers,
+        passedMessage:
+          "Clearing ratios, side payments, and implied tradeoffs are backed by private participant quote records and exposed only as privacy-safe compatibility bands.",
+        blockedMessage:
+          "Private exchange-rate quote handling still blocks matching, lock, capture, reliance, public metrics, or release promotion.",
+        nextAction:
+          "Record affected participants' private quote terms, suppress public moral prices and exact willingness-to-trade terms, and expose only compatibility bands unless a narrower disclosure is granted.",
       }),
       makeSection({
         key: "final-lock",
@@ -837,6 +859,8 @@ export function buildMoralTradeClearingPreview(
           return "Donation-offset volume must be net of the opposed action that was actually canceled or redirected, with baseline, residual, substitution-channel, and evidence-standard accounting recorded before it can count.";
         case "offer_validity_not_passed":
           return "This offer needs a current validity record or renewed confirmation because baselines, terms, evidence standards, payment methods, jurisdictions, destinations, or counterparty buckets can go stale.";
+        case "private_exchange_rate_not_passed":
+          return "Clearing ratios, side payments, and cause tradeoffs need private quote records and cannot be published as cause prices, global moral exchange rates, exact willingness-to-trade terms, or inferred moral values.";
         case "destination_verification_not_passed":
         case "payment_destination_not_verified":
           return "Recipient and payment destination verification must be non-blocking.";
@@ -865,9 +889,9 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
   return {
     version: MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION,
     purpose:
-      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
+      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote handling, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
     failClosedRule:
-      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
+      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
     persistenceRule:
       "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
@@ -1028,6 +1052,7 @@ export function buildDemoDonationOffsetClearingPreview() {
     resourceCompatibilityStatus: "passed",
     netOffsetAccountingStatus: "passed",
     offerValidityStatus: "passed",
+    privateExchangeRateStatus: "passed",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:donation-offset-preview-v1",
     stateInterpretationPolicyRef: "state-policy:donation-offset-preview-v1",
@@ -1095,6 +1120,7 @@ export function buildDemoPledgeSwapClearingPreview() {
     resourceCompatibilityStatus: "passed",
     netOffsetAccountingStatus: "passed",
     offerValidityStatus: "passed",
+    privateExchangeRateStatus: "passed",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:pledge-swap-preview-v1",
     stateInterpretationPolicyRef: "state-policy:pledge-swap-preview-v1",

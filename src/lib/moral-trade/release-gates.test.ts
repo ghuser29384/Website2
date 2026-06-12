@@ -56,6 +56,7 @@ function previewInput(
       result("resource_compatibility_assessment_test", "not_required_for_stage"),
       result("net_offset_accounting_test", "not_required_for_stage"),
       result("offer_validity_record_test", "not_required_for_stage"),
+      result("private_exchange_rate_quote_test", "not_required_for_stage"),
     ],
     ...overrides,
   };
@@ -92,6 +93,11 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
       (requirement) => requirement.key === "offer_validity_record_test",
     ),
   );
+  assert.ok(
+    contract.requirementDefinitions.some(
+      (requirement) => requirement.key === "private_exchange_rate_quote_test",
+    ),
+  );
   assert.ok(contract.privilegedActionKeys.includes("manual_capture"));
   assert.ok(contract.privilegedActionKeys.includes("emergency_unpause"));
 });
@@ -102,8 +108,8 @@ test("public-goods preview can pass only with explicit not-required inactive con
   assert.equal(evaluation.status, "pass");
   assert.equal(evaluation.payable, false);
   assert.equal(evaluation.relianceBearing, false);
-  assert.equal(evaluation.inactiveRequirementCount, 14);
-  assert.equal(evaluation.notRequiredRequirementCount, 14);
+  assert.equal(evaluation.inactiveRequirementCount, 15);
+  assert.equal(evaluation.notRequiredRequirementCount, 15);
 });
 
 test("missing required and inactive-control results fail closed", () => {
@@ -156,6 +162,7 @@ test("required gates block stale, unknown, mutable, and under-review states", ()
       result("resource_compatibility_assessment_test"),
       result("net_offset_accounting_test"),
       result("offer_validity_record_test"),
+      result("private_exchange_rate_quote_test"),
       result("public_metric_suppression", "not_required_for_stage"),
     ],
   });
@@ -208,6 +215,7 @@ test("neutral waivers require a privileged neutral-review approval", () => {
         result("resource_compatibility_assessment_test", "not_required_for_stage"),
         result("net_offset_accounting_test", "not_required_for_stage"),
         result("offer_validity_record_test", "not_required_for_stage"),
+        result("private_exchange_rate_quote_test", "not_required_for_stage"),
       ],
     }),
   );
@@ -237,6 +245,7 @@ test("neutral waivers require a privileged neutral-review approval", () => {
         result("resource_compatibility_assessment_test", "not_required_for_stage"),
         result("net_offset_accounting_test", "not_required_for_stage"),
         result("offer_validity_record_test", "not_required_for_stage"),
+        result("private_exchange_rate_quote_test", "not_required_for_stage"),
       ],
     }),
   );

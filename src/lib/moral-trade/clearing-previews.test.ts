@@ -74,6 +74,7 @@ function baseInput(
     resourceCompatibilityStatus: "passed",
     netOffsetAccountingStatus: "passed",
     offerValidityStatus: "passed",
+    privateExchangeRateStatus: "passed",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:test",
     stateInterpretationPolicyRef: "state-policy:test",
@@ -96,6 +97,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredSections.includes("resource-compatibility"));
   assert.ok(contract.requiredSections.includes("net-offset-accounting"));
   assert.ok(contract.requiredSections.includes("offer-validity"));
+  assert.ok(contract.requiredSections.includes("private-exchange-rate"));
   assert.ok(contract.requiredSections.includes("recipient-ai-boundaries"));
   assert.ok(contract.requiredSections.includes("pledge-performance-terms"));
   assert.ok(contract.requiredControlStatuses.includes("matching_clearing_run"));
@@ -110,6 +112,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredControlStatuses.includes("resource_compatibility"));
   assert.ok(contract.requiredControlStatuses.includes("net_offset_accounting"));
   assert.ok(contract.requiredControlStatuses.includes("offer_validity"));
+  assert.ok(contract.requiredControlStatuses.includes("private_exchange_rate_quote"));
   assert.ok(contract.requiredControlStatuses.includes("policy_snapshot"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_clearing_preview_records"));
   assert.equal(
@@ -149,6 +152,7 @@ test("donation-offset clearing preview can pass as non-capture final-lock previe
   assert.equal(preview.boundaryStatuses.resourceCompatibilityStatus, "passed");
   assert.equal(preview.boundaryStatuses.netOffsetAccountingStatus, "passed");
   assert.equal(preview.boundaryStatuses.offerValidityStatus, "passed");
+  assert.equal(preview.boundaryStatuses.privateExchangeRateStatus, "passed");
   assert.equal(
     preview.sections.find((section) => section.key === "pledge-performance-terms")?.status,
     "not_required_for_stage",
@@ -239,6 +243,27 @@ test("clearing preview fails closed when offer validity is missing", () => {
   assert.ok(
     preview.userFacingBlockers.some((blocker) =>
       /current validity record/i.test(blocker),
+    ),
+  );
+});
+
+test("clearing preview fails closed when private exchange-rate quote handling is missing", () => {
+  const preview = buildMoralTradeClearingPreview(
+    baseInput({
+      privateExchangeRateStatus: "missing",
+    }),
+  );
+
+  assert.equal(preview.status, "blocked_preview_only");
+  assert.equal(preview.boundaryStatuses.privateExchangeRateStatus, "missing");
+  assert.ok(preview.blockerCodes.includes("private_exchange_rate_not_passed"));
+  assert.equal(
+    preview.sections.find((section) => section.key === "private-exchange-rate")?.status,
+    "blocked",
+  );
+  assert.ok(
+    preview.userFacingBlockers.some((blocker) =>
+      /global moral exchange rates/i.test(blocker),
     ),
   );
 });
@@ -444,6 +469,7 @@ test("offer creation UI and technical spec are wired to clearing previews", () =
 
   assert.match(formSource, /buildMoralTradeClearingPreview/);
   assert.match(formSource, /clearingPreview/);
+  assert.match(formSource, /privateExchangeRateStatus/);
   assert.match(formSource, /Match candidate is not a locked deal/);
   assert.match(specSource, /getMoralTradeClearingPreviewContract/);
   assert.match(specSource, /Clearing preview contract/);

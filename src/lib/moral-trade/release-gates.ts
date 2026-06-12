@@ -357,6 +357,15 @@ export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequire
     description:
       "Offer-validity records prove baselines, empirical assumptions, evidence standards, payment methods, jurisdictions, destinations, and counterparty buckets are current or renewed before matching, lock, capture, reliance, public completion, or release promotion.",
   },
+  {
+    key: "private_exchange_rate_quote_test",
+    label: "Private exchange-rate quote test",
+    category: "privacy",
+    policySnapshotRequired: true,
+    privilegedActionRequired: false,
+    description:
+      "Private exchange-rate quote records prove clearing ratios, side payments, counterpart volumes, and implied tradeoffs are participant-owned private terms that never become public cause prices, global moral exchange rates, public effectiveness comparisons, exact willingness-to-trade terms, or inferred moral values.",
+  },
 ] as const satisfies MoralTradeReleaseGateRequirementDefinition[];
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
@@ -383,6 +392,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "resource_compatibility_assessment_test",
       "net_offset_accounting_test",
       "offer_validity_record_test",
+      "private_exchange_rate_quote_test",
     ],
     hardBlockerSummary:
       "Preview can render only when route, privacy, and anti-threat evidence pass; later controls must be explicit not-required decisions.",
@@ -412,6 +422,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "resource_compatibility_assessment_test",
       "net_offset_accounting_test",
       "offer_validity_record_test",
+      "private_exchange_rate_quote_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -437,6 +448,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "audit_integrity_checkpoint",
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
+      "private_exchange_rate_quote_test",
     ],
     inactiveRequirementKeys: [
       "provider_event_replay_tests",
@@ -474,6 +486,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "resource_compatibility_assessment_test",
       "net_offset_accounting_test",
       "offer_validity_record_test",
+      "private_exchange_rate_quote_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -495,6 +508,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "resource_compatibility_assessment_test",
       "net_offset_accounting_test",
       "offer_validity_record_test",
+      "private_exchange_rate_quote_test",
     ],
     inactiveRequirementKeys: [
       "dry_run_calculation",
@@ -620,6 +634,7 @@ function samplePayableEvaluation() {
       makeResult("resource_compatibility_assessment_test", "passed"),
       makeResult("net_offset_accounting_test", "passed"),
       makeResult("offer_validity_record_test", "passed"),
+      makeResult("private_exchange_rate_quote_test", "passed"),
       makeResult("public_metric_suppression", "not_required_for_stage"),
     ],
   });

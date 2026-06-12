@@ -14214,7 +14214,8 @@ alter table public.moral_trade_policy_snapshots
       'resource_compatibility',
       'net_offset_accounting',
       'offer_validity',
-      'direct_pair_clearing'
+      'direct_pair_clearing',
+      'private_exchange_rate_quote'
     )
   );
 
@@ -15164,6 +15165,98 @@ create index if not exists moral_trade_offer_validity_expiry_idx
   on public.moral_trade_offer_validity_records (stale_at, offer_expires_at, validity_state);
 
 alter table public.moral_trade_offer_validity_records enable row level security;
+
+create table if not exists public.moral_trade_private_exchange_rate_quote_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  subject_type text not null check (
+    subject_type in (
+      'offset_offer',
+      'pledge_swap_offer',
+      'matched_trade_lock_proposal',
+      'cleared_trade_agreement',
+      'bargaining_round_record'
+    )
+  ),
+  subject_id text not null,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  private_exchange_rate_quote_policy_ref text not null,
+  policy_status text not null default 'missing' check (
+    policy_status in ('resolved_immutable', 'missing', 'mutable', 'stale', 'superseded')
+  ),
+  quote_type text not null check (
+    quote_type in (
+      'clearing_ratio_bound',
+      'side_payment_bound',
+      'counterpart_volume_bound',
+      'action_money_tradeoff',
+      'empirical_effectiveness_tradeoff',
+      'manual_review'
+    )
+  ),
+  private_quote_terms_hash text not null check (private_quote_terms_hash ~ '^sha256:[a-f0-9]{64}$'),
+  acceptable_min_bps integer not null check (acceptable_min_bps >= 0),
+  acceptable_max_bps integer not null check (acceptable_max_bps >= 0),
+  settlement_currency text check (settlement_currency is null or settlement_currency ~ '^[A-Z]{3}$'),
+  disclosure_scope text not null default 'participant_only' check (
+    disclosure_scope in (
+      'participant_only',
+      'reviewer_only',
+      'counterparty_band_only',
+      'public_suppressed'
+    )
+  ),
+  public_moral_price_prohibited_bool boolean not null default true,
+  public_cause_price_published_bool boolean not null default false,
+  global_exchange_rate_published_bool boolean not null default false,
+  public_effectiveness_comparison_published_bool boolean not null default false,
+  moral_value_inference_published_bool boolean not null default false,
+  exact_counterparty_quote_disclosed_bool boolean not null default false,
+  raw_private_terms_public_bool boolean not null default false,
+  quote_state text not null default 'draft' check (
+    quote_state in ('draft', 'active', 'locked', 'expired', 'superseded', 'withdrawn')
+  ),
+  reviewer_decision_ref text,
+  reviewed_by uuid references public.profiles (id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (acceptable_min_bps <= acceptable_max_bps),
+  check (
+    quote_type not in ('side_payment_bound', 'action_money_tradeoff')
+    or settlement_currency is not null
+  ),
+  check (
+    quote_state not in ('active', 'locked')
+    or (
+      policy_status = 'resolved_immutable'
+      and length(trim(private_exchange_rate_quote_policy_ref)) > 0
+      and public_moral_price_prohibited_bool
+      and not public_cause_price_published_bool
+      and not global_exchange_rate_published_bool
+      and not public_effectiveness_comparison_published_bool
+      and not moral_value_inference_published_bool
+      and not exact_counterparty_quote_disclosed_bool
+      and not raw_private_terms_public_bool
+      and reviewer_decision_ref is not null
+      and reviewed_at is not null
+    )
+  )
+);
+
+comment on table public.moral_trade_private_exchange_rate_quote_records is
+  'First-class private exchange-rate quote records for participant-owned ratio bounds, side-payment bounds, counterpart-volume bounds, and implied tradeoffs. Public surfaces may report that trades cleared within participant bounds but cannot publish cause prices, global moral exchange rates, public effectiveness comparisons, exact willingness-to-trade terms, or inferred moral values.';
+
+create index if not exists moral_trade_private_exchange_rate_subject_idx
+  on public.moral_trade_private_exchange_rate_quote_records (subject_type, subject_id, quote_state, updated_at desc);
+
+create index if not exists moral_trade_private_exchange_rate_participant_idx
+  on public.moral_trade_private_exchange_rate_quote_records (participant_id_hash, quote_type, quote_state);
+
+create index if not exists moral_trade_private_exchange_rate_policy_idx
+  on public.moral_trade_private_exchange_rate_quote_records (policy_snapshot_id, policy_status, quote_state);
+
+alter table public.moral_trade_private_exchange_rate_quote_records enable row level security;
 
 create table if not exists public.moral_trade_direct_pair_clearing_records (
   id uuid primary key default gen_random_uuid(),

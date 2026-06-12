@@ -131,6 +131,10 @@ import {
   validateMoralTradeOfferValidityContract,
 } from "@/lib/moral-trade/offer-validity";
 import {
+  getMoralTradePrivateExchangeRateContract,
+  validateMoralTradePrivateExchangeRateContract,
+} from "@/lib/moral-trade/private-exchange-rate";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -356,6 +360,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const offerValidityContract = getMoralTradeOfferValidityContract();
   const offerValidityValidation =
     validateMoralTradeOfferValidityContract(offerValidityContract);
+  const privateExchangeRateContract =
+    getMoralTradePrivateExchangeRateContract();
+  const privateExchangeRateValidation =
+    validateMoralTradePrivateExchangeRateContract(
+      privateExchangeRateContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -500,6 +510,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     resourceCompatibilityValidation,
     netOffsetAccountingValidation,
     offerValidityValidation,
+    privateExchangeRateValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -760,6 +771,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Offer validity",
       status: offerValidityValidation.status,
       summary: `${offerValidityContract.staleReasonCodes.length} stale reason code(s), ${offerValidityContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: privateExchangeRateValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/private-exchange-rate/contract",
+      label: "Private exchange-rate quotes",
+      status: privateExchangeRateValidation.status,
+      summary: `${privateExchangeRateContract.quoteTypes.length} quote type(s), ${privateExchangeRateContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -3138,6 +3157,81 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Validity-window rule</p>
             <p>{offerValidityContract.validityWindowRule}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="private-exchange-rate-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Private exchange-rate quotes</p>
+            <h2 id="private-exchange-rate-contract-heading">
+              Participant quote terms stay private rather than becoming moral prices.
+            </h2>
+            <p>
+              Moraltrade68 requires clearing ratios, side payments, counterpart volumes, and
+              implied cause tradeoffs to remain participant-owned terms for a frozen proposal.
+              Public surfaces may say a trade cleared within participant bounds, but cannot
+              publish cause-price tables, moral exchange-rate charts, exact willingness-to-trade
+              terms, or moral-value inferences from private quote records.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Private exchange-rate quotes {privateExchangeRateContract.version}
+              </p>
+              <h3>Status {privateExchangeRateValidation.status}</h3>
+              <p>
+                {privateExchangeRateValidation.checks.length} check(s),{" "}
+                {privateExchangeRateValidation.blockers.length} blocker(s),{" "}
+                {privateExchangeRateContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/private-exchange-rate/contract">
+              Open quote JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {privateExchangeRateContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Quote types</h3>
+              <ul className="clean-list">
+                {privateExchangeRateContract.quoteTypes.map((quoteType) => (
+                  <li key={quoteType}>{quoteType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Disclosure scopes</h3>
+              <ul className="clean-list">
+                {privateExchangeRateContract.disclosureScopes.map((scope) => (
+                  <li key={scope}>{scope.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {privateExchangeRateContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Public non-price rule</p>
+            <p>{privateExchangeRateContract.publicNonPriceRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Privacy boundary</p>
+            <p>{privateExchangeRateContract.privacyBoundary}</p>
           </div>
         </section>
 

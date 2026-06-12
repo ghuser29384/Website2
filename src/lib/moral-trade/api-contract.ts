@@ -132,6 +132,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_resource_compatibility_contract",
   "moral_trade_net_offset_accounting_contract",
   "moral_trade_offer_validity_contract",
+  "moral_trade_private_exchange_rate_contract",
   "moral_trade_side_agreement_contract",
   "moral_trade_trade_classification_contract",
   "moral_trade_template_conformance_contract",
