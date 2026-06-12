@@ -94,6 +94,7 @@ const PREVIEW_INPUT_KEYS = new Set([
   "causeBucketTaxonomyStatus",
   "resourceCompatibilityStatus",
   "netOffsetAccountingStatus",
+  "offerValidityStatus",
   "nonPublicGoodsSubsidyStatus",
   "nonparticipantExternalityStatus",
   "participantConfirmationStatus",
@@ -328,6 +329,11 @@ function normalizePreviewInput(value: unknown) {
     netOffsetAccountingStatus: gateStatus(
       value.netOffsetAccountingStatus,
       "previewInput.netOffsetAccountingStatus",
+      blockers,
+    ),
+    offerValidityStatus: gateStatus(
+      value.offerValidityStatus,
+      "previewInput.offerValidityStatus",
       blockers,
     ),
     baselineConfidenceLevel: enumField(

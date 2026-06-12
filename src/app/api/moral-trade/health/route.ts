@@ -104,6 +104,10 @@ import {
   validateMoralTradeNetOffsetAccountingContract,
 } from "@/lib/moral-trade/net-offset-accounting";
 import {
+  getMoralTradeOfferValidityContract,
+  validateMoralTradeOfferValidityContract,
+} from "@/lib/moral-trade/offer-validity";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -337,6 +341,9 @@ export async function GET(request: Request) {
     validateMoralTradeNetOffsetAccountingContract(
       netOffsetAccountingContract,
     );
+  const offerValidityContract = getMoralTradeOfferValidityContract();
+  const offerValidityValidation =
+    validateMoralTradeOfferValidityContract(offerValidityContract);
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -473,6 +480,7 @@ export async function GET(request: Request) {
       causeBucketTaxonomyValidation.status === "pass" &&
       resourceCompatibilityValidation.status === "pass" &&
       netOffsetAccountingValidation.status === "pass" &&
+      offerValidityValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -529,6 +537,7 @@ export async function GET(request: Request) {
     causeBucketTaxonomyValidation,
     resourceCompatibilityValidation,
     netOffsetAccountingValidation,
+    offerValidityValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -1170,6 +1179,34 @@ export async function GET(request: Request) {
       ),
       netOffsetAccountingContractTests:
         netOffsetAccountingContract.contractTests,
+      offerValidityContractVersion:
+        offerValidityContract.version,
+      offerValidityTransitionKeys:
+        offerValidityContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      offerValiditySubjectTypes:
+        offerValidityContract.subjectTypes,
+      offerValidityStates:
+        offerValidityContract.validityStates,
+      offerValidityStaleReasonCodes:
+        offerValidityContract.staleReasonCodes,
+      offerValidityPolicyStatuses:
+        offerValidityContract.policyStatuses,
+      offerValidityFirstClassRecordTables:
+        offerValidityContract.firstClassRecordTables,
+      offerValidityPolicySnapshotSubjects:
+        offerValidityContract.policySnapshotSubjects,
+      offerValidityWindowRule:
+        offerValidityContract.validityWindowRule,
+      offerValiditySampleEvaluationStatuses: Object.fromEntries(
+        offerValidityContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      offerValidityContractTests:
+        offerValidityContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1676,6 +1713,7 @@ export async function GET(request: Request) {
       ...causeBucketTaxonomyValidation.blockers,
       ...resourceCompatibilityValidation.blockers,
       ...netOffsetAccountingValidation.blockers,
+      ...offerValidityValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

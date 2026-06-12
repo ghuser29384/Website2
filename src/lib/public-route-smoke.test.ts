@@ -2162,6 +2162,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const netOffsetAccountingSource = readRepoFile(
     "src/lib/moral-trade/net-offset-accounting.ts",
   );
+  const offerValiditySource = readRepoFile(
+    "src/lib/moral-trade/offer-validity.ts",
+  );
   const sideAgreementSource = readRepoFile("src/lib/moral-trade/side-agreements.ts");
   const tradeClassificationSource = readRepoFile(
     "src/lib/moral-trade/trade-classification.ts",
@@ -2297,6 +2300,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const netOffsetAccountingMigration = readRepoFile(
     "supabase/migrations/20260612_moral_trade_net_offset_accounting_records.sql",
   );
+  const offerValidityMigration = readRepoFile(
+    "supabase/migrations/20260612_moral_trade_offer_validity_records.sql",
+  );
   const sideAgreementMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_side_agreement_disclosures.sql",
   );
@@ -2405,6 +2411,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const netOffsetAccountingContractRoute = readRepoFile(
     "src/app/api/moral-trade/net-offset-accounting/contract/route.ts",
+  );
+  const offerValidityContractRoute = readRepoFile(
+    "src/app/api/moral-trade/offer-validity/contract/route.ts",
   );
   const sideAgreementContractRoute = readRepoFile(
     "src/app/api/moral-trade/side-agreements/contract/route.ts",
@@ -2804,6 +2813,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(netOffsetAccountingSource, /gross_transfer_without_canceled_offset/);
   assert.match(netOffsetAccountingSource, /matched_canceled_offset_missing/);
   assert.match(netOffsetAccountingSource, /private baseline details/i);
+  assert.match(offerValiditySource, /getMoralTradeOfferValidityContract/);
+  assert.match(offerValiditySource, /evaluateMoralTradeOfferValidity/);
+  assert.match(offerValiditySource, /moral_trade_offer_validity_records/);
+  assert.match(offerValiditySource, /offer_validity_expired/);
+  assert.match(offerValiditySource, /offer_validity_stale/);
+  assert.match(offerValiditySource, /counterparty_bucket_stale/);
   assert.match(sideAgreementSource, /getMoralTradeSideAgreementContract/);
   assert.match(sideAgreementSource, /evaluateMoralTradeSideAgreementDisclosure/);
   assert.match(sideAgreementSource, /moral_trade_side_agreement_disclosures/);
@@ -3010,6 +3025,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(netOffsetAccountingMigration, /compromise_transfer_amount_cents/);
   assert.match(netOffsetAccountingMigration, /residual_opposed_amount_cents/);
   assert.match(netOffsetAccountingMigration, /substitution_channel_review_state/);
+  assert.match(offerValidityMigration, /moral_trade_offer_validity_records/);
+  assert.match(offerValidityMigration, /offer_validity/);
+  assert.match(offerValidityMigration, /baseline_snapshot_hash/);
+  assert.match(offerValidityMigration, /offer_expires_at/);
+  assert.match(offerValidityMigration, /stale_reason_codes_json/);
+  assert.match(offerValidityMigration, /renewal_confirmation_record_refs/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_disclosures/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_reviews/);
   assert.match(sideAgreementMigration, /side_agreement_disclosure/);
@@ -3187,6 +3208,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /matched_canceled_amount_cents/);
   assert.match(schemaSource, /compromise_transfer_amount_cents/);
   assert.match(schemaSource, /substitution_channel_review_state/);
+  assert.match(schemaSource, /moral_trade_offer_validity_records/);
+  assert.match(schemaSource, /offer_validity/);
+  assert.match(schemaSource, /baseline_snapshot_hash/);
+  assert.match(schemaSource, /offer_expires_at/);
+  assert.match(schemaSource, /stale_reason_codes_json/);
   assert.match(schemaSource, /moral_trade_side_agreement_disclosures/);
   assert.match(schemaSource, /moral_trade_side_agreement_reviews/);
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
@@ -3770,6 +3796,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /net-offset accounting governance/);
   assert.match(apiContractProfile, /gross-volume exclusion/);
   assert.match(apiContractProfile, /private baseline details/);
+  assert.match(apiContractProfile, /offer_validity_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_offer_validity_contract/);
+  assert.match(apiContractProfile, /offer-validity governance/);
+  assert.match(apiContractProfile, /validity-window rule/);
+  assert.match(apiContractProfile, /private payment credentials/);
   assert.match(apiContractProfile, /side_agreement_contract_response/);
   assert.match(apiContractProfile, /moral_trade_side_agreement_contract/);
   assert.match(apiContractProfile, /side-agreement disclosure/);
@@ -3863,7 +3894,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.63-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.64-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -4216,6 +4247,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /netOffsetAccountingContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /netOffsetAccountingContract\.baselineOpposedActionTypes/);
   assert.match(technicalSpecPage, /net-offset-accounting\/contract/);
+  assert.match(technicalSpecPage, /Offer validity/);
+  assert.match(technicalSpecPage, /offerValidityContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /offerValidityContract\.staleReasonCodes/);
+  assert.match(technicalSpecPage, /offer-validity\/contract/);
   assert.match(technicalSpecPage, /resource-compatibility\/contract/);
   assert.match(technicalSpecPage, /Field-level schema/);
   assert.match(technicalSpecPage, /State transitions/);
@@ -4283,6 +4318,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /netOffsetAccountingValidation/);
   assert.match(healthRoute, /netOffsetAccountingFirstClassRecordTables/);
   assert.match(healthRoute, /netOffsetAccountingGrossVolumeExclusionRule/);
+  assert.match(healthRoute, /offerValidityValidation/);
+  assert.match(healthRoute, /offerValidityFirstClassRecordTables/);
+  assert.match(healthRoute, /offerValidityWindowRule/);
   assert.match(healthRoute, /aiPreferenceElicitationValidation/);
   assert.match(healthRoute, /aiPreferenceElicitationTransitionKeys/);
   assert.match(healthRoute, /aiPreferenceElicitationFirstClassRecordTables/);
@@ -4485,6 +4523,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(netOffsetAccountingContractRoute, /baselineOpposedActionTypes/);
   assert.match(netOffsetAccountingContractRoute, /grossVolumeExclusionRule/);
   assert.match(netOffsetAccountingContractRoute, /netOffsetAccountingSampleEvaluationStatuses/);
+  assert.match(offerValidityContractRoute, /validateMoralTradeOfferValidityContract/);
+  assert.match(offerValidityContractRoute, /staleReasonCodes/);
+  assert.match(offerValidityContractRoute, /validityWindowRule/);
+  assert.match(offerValidityContractRoute, /offerValiditySampleEvaluationStatuses/);
   assert.match(sideAgreementContractRoute, /validateMoralTradeSideAgreementContract/);
   assert.match(sideAgreementContractRoute, /reviewDimensions/);
   assert.match(sideAgreementContractRoute, /sideAgreementSampleEvaluationStatuses/);

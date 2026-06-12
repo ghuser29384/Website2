@@ -1,5 +1,5 @@
 export const MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION =
-  "moral-trade-clearing-preview-v0.8-2026-06";
+  "moral-trade-clearing-preview-v0.9-2026-06";
 export const MORAL_TRADE_CLEARING_PREVIEW_VALIDATOR_VERSION =
   "moral-trade-clearing-preview-validator-v0.1";
 
@@ -102,6 +102,7 @@ export interface MoralTradeClearingPreviewInput {
   causeBucketTaxonomyStatus: MoralTradeClearingPreviewGateStatus;
   resourceCompatibilityStatus: MoralTradeClearingPreviewGateStatus;
   netOffsetAccountingStatus: MoralTradeClearingPreviewGateStatus;
+  offerValidityStatus: MoralTradeClearingPreviewGateStatus;
   privacyDisclosureStatus: MoralTradeClearingPreviewGateStatus;
   policySnapshotRef: string;
   stateInterpretationPolicyRef: string;
@@ -158,6 +159,7 @@ export interface MoralTradeClearingPreview {
     causeBucketTaxonomyStatus: MoralTradeClearingPreviewGateStatus;
     resourceCompatibilityStatus: MoralTradeClearingPreviewGateStatus;
     netOffsetAccountingStatus: MoralTradeClearingPreviewGateStatus;
+    offerValidityStatus: MoralTradeClearingPreviewGateStatus;
   };
   sections: MoralTradeClearingPreviewSection[];
   userFacingBlockers: string[];
@@ -218,6 +220,7 @@ const REQUIRED_SECTIONS = [
   "cause-bucket-taxonomy",
   "resource-compatibility",
   "net-offset-accounting",
+  "offer-validity",
   "final-lock",
   "destination-and-tax",
   "externality-and-safety",
@@ -245,6 +248,7 @@ const REQUIRED_CONTROL_STATUSES = [
   "cause_bucket_taxonomy",
   "resource_compatibility",
   "net_offset_accounting",
+  "offer_validity",
   "destination_verification",
   "donor_of_record_tax",
   "nonparticipant_externality",
@@ -408,6 +412,10 @@ export function buildMoralTradeClearingPreview(
     input.netOffsetAccountingStatus,
     "net_offset_accounting_not_passed",
   );
+  const offerValidityBlockers = statusBlocker(
+    input.offerValidityStatus,
+    "offer_validity_not_passed",
+  );
   const finalLockBlockers = [
     ...statusBlocker(input.finalLockProposalStatus, "final_lock_proposal_not_current"),
     ...(input.finalLockProposalRef.trim() ? [] : ["final_lock_proposal_missing"]),
@@ -512,6 +520,7 @@ export function buildMoralTradeClearingPreview(
     ...causeBucketBlockers,
     ...resourceCompatibilityBlockers,
     ...netOffsetAccountingBlockers,
+    ...offerValidityBlockers,
     ...finalLockBlockers,
     ...destinationBlockers,
     ...safetyBlockers,
@@ -563,6 +572,7 @@ export function buildMoralTradeClearingPreview(
       causeBucketTaxonomyStatus: input.causeBucketTaxonomyStatus,
       resourceCompatibilityStatus: input.resourceCompatibilityStatus,
       netOffsetAccountingStatus: input.netOffsetAccountingStatus,
+      offerValidityStatus: input.offerValidityStatus,
     },
     sections: [
       makeSection({
@@ -679,6 +689,18 @@ export function buildMoralTradeClearingPreview(
           "Net-offset accounting still blocks lock, clearing, capture, public metrics, or release promotion.",
         nextAction:
           "Record baseline opposed action, matched canceled amount, compromise transfer amount, sponsor/match amount, residual opposed action, substitution-channel review, and evidence standard before counting volume.",
+      }),
+      makeSection({
+        key: "offer-validity",
+        label: "Offer validity",
+        status: offerValidityBlockers.length ? "blocked" : "passed",
+        blockerCodes: offerValidityBlockers,
+        passedMessage:
+          "The offer has a current validity record for baseline, terms, empirical assumptions, evidence standards, jurisdiction, destination, and counterparty bucket.",
+        blockedMessage:
+          "The offer is stale, expired, unrenewed, or missing a validity record.",
+        nextAction:
+          "Renew the preview and confirmation whenever the baseline, terms, evidence standard, payment method, jurisdiction, destination, or counterparty bucket is stale or expired.",
       }),
       makeSection({
         key: "final-lock",
@@ -813,6 +835,8 @@ export function buildMoralTradeClearingPreview(
           return "Resource-compatibility review must show the proposed actions, destinations, timing, duties, and control claims are jointly feasible rather than a zero-sum or mutually exclusive conflict.";
         case "net_offset_accounting_not_passed":
           return "Donation-offset volume must be net of the opposed action that was actually canceled or redirected, with baseline, residual, substitution-channel, and evidence-standard accounting recorded before it can count.";
+        case "offer_validity_not_passed":
+          return "This offer needs a current validity record or renewed confirmation because baselines, terms, evidence standards, payment methods, jurisdictions, destinations, or counterparty buckets can go stale.";
         case "destination_verification_not_passed":
         case "payment_destination_not_verified":
           return "Recipient and payment destination verification must be non-blocking.";
@@ -841,9 +865,9 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
   return {
     version: MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION,
     purpose:
-      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, cause-bucket taxonomy, resource-compatibility, net-offset accounting, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
+      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
     failClosedRule:
-      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, cause-bucket taxonomy, resource-compatibility, net-offset accounting, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
+      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
     persistenceRule:
       "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
@@ -1003,6 +1027,7 @@ export function buildDemoDonationOffsetClearingPreview() {
     causeBucketTaxonomyStatus: "passed",
     resourceCompatibilityStatus: "passed",
     netOffsetAccountingStatus: "passed",
+    offerValidityStatus: "passed",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:donation-offset-preview-v1",
     stateInterpretationPolicyRef: "state-policy:donation-offset-preview-v1",
@@ -1069,6 +1094,7 @@ export function buildDemoPledgeSwapClearingPreview() {
     causeBucketTaxonomyStatus: "passed",
     resourceCompatibilityStatus: "passed",
     netOffsetAccountingStatus: "passed",
+    offerValidityStatus: "passed",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:pledge-swap-preview-v1",
     stateInterpretationPolicyRef: "state-policy:pledge-swap-preview-v1",

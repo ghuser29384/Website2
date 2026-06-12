@@ -348,6 +348,15 @@ export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequire
     description:
       "Net-of-offset accounting records baseline opposed action, matched canceled amount, compromise transfer, sponsor or match amount, residual opposed action, substitution-channel state, and evidence standard before donation-offset volume or completion can be counted.",
   },
+  {
+    key: "offer_validity_record_test",
+    label: "Offer-validity record test",
+    category: "review",
+    policySnapshotRequired: true,
+    privilegedActionRequired: false,
+    description:
+      "Offer-validity records prove baselines, empirical assumptions, evidence standards, payment methods, jurisdictions, destinations, and counterparty buckets are current or renewed before matching, lock, capture, reliance, public completion, or release promotion.",
+  },
 ] as const satisfies MoralTradeReleaseGateRequirementDefinition[];
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
@@ -373,6 +382,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
       "net_offset_accounting_test",
+      "offer_validity_record_test",
     ],
     hardBlockerSummary:
       "Preview can render only when route, privacy, and anti-threat evidence pass; later controls must be explicit not-required decisions.",
@@ -401,6 +411,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
       "net_offset_accounting_test",
+      "offer_validity_record_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -433,6 +444,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "financial_reconciliation",
       "public_metric_suppression",
       "net_offset_accounting_test",
+      "offer_validity_record_test",
     ],
     hardBlockerSummary:
       "Reliance-bearing swaps require deterministic lock evidence, participant eligibility, challenge evidence, neutral review, and audit gates.",
@@ -461,6 +473,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
       "net_offset_accounting_test",
+      "offer_validity_record_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -481,6 +494,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
       "net_offset_accounting_test",
+      "offer_validity_record_test",
     ],
     inactiveRequirementKeys: [
       "dry_run_calculation",
@@ -605,6 +619,7 @@ function samplePayableEvaluation() {
       makeResult("cause_bucket_taxonomy_review_test", "passed"),
       makeResult("resource_compatibility_assessment_test", "passed"),
       makeResult("net_offset_accounting_test", "passed"),
+      makeResult("offer_validity_record_test", "passed"),
       makeResult("public_metric_suppression", "not_required_for_stage"),
     ],
   });
@@ -794,7 +809,8 @@ export function validateMoralTradeReleaseGateContract(
         requirementKeys.includes("audit_integrity_checkpoint") &&
         requirementKeys.includes("cause_bucket_taxonomy_review_test") &&
         requirementKeys.includes("resource_compatibility_assessment_test") &&
-        requirementKeys.includes("net_offset_accounting_test"),
+        requirementKeys.includes("net_offset_accounting_test") &&
+        requirementKeys.includes("offer_validity_record_test"),
       requirementKeys.join(", "),
     ),
     check(

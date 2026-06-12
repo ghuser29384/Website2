@@ -73,6 +73,7 @@ function baseInput(
     causeBucketTaxonomyStatus: "passed",
     resourceCompatibilityStatus: "passed",
     netOffsetAccountingStatus: "passed",
+    offerValidityStatus: "passed",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:test",
     stateInterpretationPolicyRef: "state-policy:test",
@@ -94,6 +95,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredSections.includes("cause-bucket-taxonomy"));
   assert.ok(contract.requiredSections.includes("resource-compatibility"));
   assert.ok(contract.requiredSections.includes("net-offset-accounting"));
+  assert.ok(contract.requiredSections.includes("offer-validity"));
   assert.ok(contract.requiredSections.includes("recipient-ai-boundaries"));
   assert.ok(contract.requiredSections.includes("pledge-performance-terms"));
   assert.ok(contract.requiredControlStatuses.includes("matching_clearing_run"));
@@ -107,6 +109,7 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredControlStatuses.includes("cause_bucket_taxonomy"));
   assert.ok(contract.requiredControlStatuses.includes("resource_compatibility"));
   assert.ok(contract.requiredControlStatuses.includes("net_offset_accounting"));
+  assert.ok(contract.requiredControlStatuses.includes("offer_validity"));
   assert.ok(contract.requiredControlStatuses.includes("policy_snapshot"));
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_clearing_preview_records"));
   assert.equal(
@@ -145,6 +148,7 @@ test("donation-offset clearing preview can pass as non-capture final-lock previe
   assert.equal(preview.boundaryStatuses.causeBucketTaxonomyStatus, "passed");
   assert.equal(preview.boundaryStatuses.resourceCompatibilityStatus, "passed");
   assert.equal(preview.boundaryStatuses.netOffsetAccountingStatus, "passed");
+  assert.equal(preview.boundaryStatuses.offerValidityStatus, "passed");
   assert.equal(
     preview.sections.find((section) => section.key === "pledge-performance-terms")?.status,
     "not_required_for_stage",
@@ -214,6 +218,27 @@ test("clearing preview fails closed when net-offset accounting review is missing
   assert.ok(
     preview.userFacingBlockers.some((blocker) =>
       /net of the opposed action/i.test(blocker),
+    ),
+  );
+});
+
+test("clearing preview fails closed when offer validity is missing", () => {
+  const preview = buildMoralTradeClearingPreview(
+    baseInput({
+      offerValidityStatus: "missing",
+    }),
+  );
+
+  assert.equal(preview.status, "blocked_preview_only");
+  assert.equal(preview.boundaryStatuses.offerValidityStatus, "missing");
+  assert.ok(preview.blockerCodes.includes("offer_validity_not_passed"));
+  assert.equal(
+    preview.sections.find((section) => section.key === "offer-validity")?.status,
+    "blocked",
+  );
+  assert.ok(
+    preview.userFacingBlockers.some((blocker) =>
+      /current validity record/i.test(blocker),
     ),
   );
 });

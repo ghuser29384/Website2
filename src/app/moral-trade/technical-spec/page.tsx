@@ -127,6 +127,10 @@ import {
   validateMoralTradeNetOffsetAccountingContract,
 } from "@/lib/moral-trade/net-offset-accounting";
 import {
+  getMoralTradeOfferValidityContract,
+  validateMoralTradeOfferValidityContract,
+} from "@/lib/moral-trade/offer-validity";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -349,6 +353,9 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeNetOffsetAccountingContract(
       netOffsetAccountingContract,
     );
+  const offerValidityContract = getMoralTradeOfferValidityContract();
+  const offerValidityValidation =
+    validateMoralTradeOfferValidityContract(offerValidityContract);
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -492,6 +499,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     causeBucketTaxonomyValidation,
     resourceCompatibilityValidation,
     netOffsetAccountingValidation,
+    offerValidityValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -744,6 +752,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Net-offset accounting",
       status: netOffsetAccountingValidation.status,
       summary: `${netOffsetAccountingContract.baselineOpposedActionTypes.length} baseline action type(s), ${netOffsetAccountingContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: offerValidityValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/offer-validity/contract",
+      label: "Offer validity",
+      status: offerValidityValidation.status,
+      summary: `${offerValidityContract.staleReasonCodes.length} stale reason code(s), ${offerValidityContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -3052,6 +3068,76 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Privacy boundary</p>
             <p>{netOffsetAccountingContract.privacyBoundary}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="offer-validity-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Offer validity</p>
+            <h2 id="offer-validity-contract-heading">
+              Stale offers require renewed preview and confirmation.
+            </h2>
+            <p>
+              Moraltrade68 requires donation-offset and pledge-swap offers to expire or renew
+              when baselines, empirical assumptions, evidence standards, payment methods,
+              jurisdictions, destinations, or counterparty buckets become stale. Matching, lock,
+              capture, reliance, public completion, and release promotion all fail closed without
+              a current offer-validity record.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Offer validity {offerValidityContract.version}
+              </p>
+              <h3>Status {offerValidityValidation.status}</h3>
+              <p>
+                {offerValidityValidation.checks.length} check(s),{" "}
+                {offerValidityValidation.blockers.length} blocker(s),{" "}
+                {offerValidityContract.firstClassRecordTables.length} first-class record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/offer-validity/contract">
+              Open validity JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {offerValidityContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Stale reason codes</h3>
+              <ul className="clean-list">
+                {offerValidityContract.staleReasonCodes.map((reason) => (
+                  <li key={reason}>{reason.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Validity states</h3>
+              <ul className="clean-list">
+                {offerValidityContract.validityStates.map((state) => (
+                  <li key={state}>{state.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {offerValidityContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Validity-window rule</p>
+            <p>{offerValidityContract.validityWindowRule}</p>
           </div>
         </section>
 

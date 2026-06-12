@@ -6188,6 +6188,12 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_offer_validity_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_direct_pair_clearing_records: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
@@ -7837,6 +7843,7 @@ export interface Database {
             | "cause_bucket_taxonomy"
             | "resource_compatibility"
             | "net_offset_accounting"
+            | "offer_validity"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7903,6 +7910,7 @@ export interface Database {
             | "cause_bucket_taxonomy"
             | "resource_compatibility"
             | "net_offset_accounting"
+            | "offer_validity"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7968,6 +7976,7 @@ export interface Database {
             | "cause_bucket_taxonomy"
             | "resource_compatibility"
             | "net_offset_accounting"
+            | "offer_validity"
             | "direct_pair_clearing";
           subject_key?: string;
           version_label?: string;
