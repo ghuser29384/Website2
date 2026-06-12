@@ -54,6 +54,7 @@ function previewInput(
       result("public_metric_suppression", "not_required_for_stage"),
       result("cause_bucket_taxonomy_review_test", "not_required_for_stage"),
       result("resource_compatibility_assessment_test", "not_required_for_stage"),
+      result("net_offset_accounting_test", "not_required_for_stage"),
     ],
     ...overrides,
   };
@@ -80,6 +81,11 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
       (requirement) => requirement.key === "resource_compatibility_assessment_test",
     ),
   );
+  assert.ok(
+    contract.requirementDefinitions.some(
+      (requirement) => requirement.key === "net_offset_accounting_test",
+    ),
+  );
   assert.ok(contract.privilegedActionKeys.includes("manual_capture"));
   assert.ok(contract.privilegedActionKeys.includes("emergency_unpause"));
 });
@@ -90,8 +96,8 @@ test("public-goods preview can pass only with explicit not-required inactive con
   assert.equal(evaluation.status, "pass");
   assert.equal(evaluation.payable, false);
   assert.equal(evaluation.relianceBearing, false);
-  assert.equal(evaluation.inactiveRequirementCount, 12);
-  assert.equal(evaluation.notRequiredRequirementCount, 12);
+  assert.equal(evaluation.inactiveRequirementCount, 13);
+  assert.equal(evaluation.notRequiredRequirementCount, 13);
 });
 
 test("missing required and inactive-control results fail closed", () => {
@@ -142,6 +148,7 @@ test("required gates block stale, unknown, mutable, and under-review states", ()
       result("audit_integrity_checkpoint"),
       result("cause_bucket_taxonomy_review_test"),
       result("resource_compatibility_assessment_test"),
+      result("net_offset_accounting_test"),
       result("public_metric_suppression", "not_required_for_stage"),
     ],
   });
@@ -192,6 +199,7 @@ test("neutral waivers require a privileged neutral-review approval", () => {
         result("public_metric_suppression", "not_required_for_stage"),
         result("cause_bucket_taxonomy_review_test", "not_required_for_stage"),
         result("resource_compatibility_assessment_test", "not_required_for_stage"),
+        result("net_offset_accounting_test", "not_required_for_stage"),
       ],
     }),
   );
@@ -219,6 +227,7 @@ test("neutral waivers require a privileged neutral-review approval", () => {
         result("public_metric_suppression", "not_required_for_stage"),
         result("cause_bucket_taxonomy_review_test", "not_required_for_stage"),
         result("resource_compatibility_assessment_test", "not_required_for_stage"),
+        result("net_offset_accounting_test", "not_required_for_stage"),
       ],
     }),
   );

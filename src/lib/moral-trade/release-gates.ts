@@ -339,6 +339,15 @@ export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequire
     description:
       "First-class joint-feasibility assessments pass before non-public-goods trades with actions, donations, abstentions, destinations, timing, duties, or control claims can lock, clear, capture, count publicly, or promote release gates.",
   },
+  {
+    key: "net_offset_accounting_test",
+    label: "Net-offset accounting test",
+    category: "metrics",
+    policySnapshotRequired: true,
+    privilegedActionRequired: false,
+    description:
+      "Net-of-offset accounting records baseline opposed action, matched canceled amount, compromise transfer, sponsor or match amount, residual opposed action, substitution-channel state, and evidence standard before donation-offset volume or completion can be counted.",
+  },
 ] as const satisfies MoralTradeReleaseGateRequirementDefinition[];
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
@@ -363,6 +372,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "public_metric_suppression",
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
+      "net_offset_accounting_test",
     ],
     hardBlockerSummary:
       "Preview can render only when route, privacy, and anti-threat evidence pass; later controls must be explicit not-required decisions.",
@@ -390,6 +400,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "audit_integrity_checkpoint",
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
+      "net_offset_accounting_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -421,6 +432,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "recipient_destination_verification",
       "financial_reconciliation",
       "public_metric_suppression",
+      "net_offset_accounting_test",
     ],
     hardBlockerSummary:
       "Reliance-bearing swaps require deterministic lock evidence, participant eligibility, challenge evidence, neutral review, and audit gates.",
@@ -448,6 +460,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "audit_integrity_checkpoint",
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
+      "net_offset_accounting_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -467,6 +480,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "public_metric_suppression",
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
+      "net_offset_accounting_test",
     ],
     inactiveRequirementKeys: [
       "dry_run_calculation",
@@ -590,6 +604,7 @@ function samplePayableEvaluation() {
       makeResult("audit_integrity_checkpoint", "passed"),
       makeResult("cause_bucket_taxonomy_review_test", "passed"),
       makeResult("resource_compatibility_assessment_test", "passed"),
+      makeResult("net_offset_accounting_test", "passed"),
       makeResult("public_metric_suppression", "not_required_for_stage"),
     ],
   });
@@ -778,7 +793,8 @@ export function validateMoralTradeReleaseGateContract(
         requirementKeys.includes("recipient_destination_verification") &&
         requirementKeys.includes("audit_integrity_checkpoint") &&
         requirementKeys.includes("cause_bucket_taxonomy_review_test") &&
-        requirementKeys.includes("resource_compatibility_assessment_test"),
+        requirementKeys.includes("resource_compatibility_assessment_test") &&
+        requirementKeys.includes("net_offset_accounting_test"),
       requirementKeys.join(", "),
     ),
     check(

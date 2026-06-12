@@ -100,6 +100,10 @@ import {
   validateMoralTradeResourceCompatibilityContract,
 } from "@/lib/moral-trade/resource-compatibility";
 import {
+  getMoralTradeNetOffsetAccountingContract,
+  validateMoralTradeNetOffsetAccountingContract,
+} from "@/lib/moral-trade/net-offset-accounting";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -327,6 +331,12 @@ export async function GET(request: Request) {
     validateMoralTradeResourceCompatibilityContract(
       resourceCompatibilityContract,
     );
+  const netOffsetAccountingContract =
+    getMoralTradeNetOffsetAccountingContract();
+  const netOffsetAccountingValidation =
+    validateMoralTradeNetOffsetAccountingContract(
+      netOffsetAccountingContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -462,6 +472,7 @@ export async function GET(request: Request) {
       directPairClearingValidation.status === "pass" &&
       causeBucketTaxonomyValidation.status === "pass" &&
       resourceCompatibilityValidation.status === "pass" &&
+      netOffsetAccountingValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -517,6 +528,7 @@ export async function GET(request: Request) {
     directPairClearingValidation,
     causeBucketTaxonomyValidation,
     resourceCompatibilityValidation,
+    netOffsetAccountingValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -1124,6 +1136,40 @@ export async function GET(request: Request) {
       ),
       resourceCompatibilityContractTests:
         resourceCompatibilityContract.contractTests,
+      netOffsetAccountingContractVersion:
+        netOffsetAccountingContract.version,
+      netOffsetAccountingTransitionKeys:
+        netOffsetAccountingContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      netOffsetAccountingSubjectTypes:
+        netOffsetAccountingContract.subjectTypes,
+      netOffsetAccountingBaselineOpposedActionTypes:
+        netOffsetAccountingContract.baselineOpposedActionTypes,
+      netOffsetAccountingResidualActionPolicies:
+        netOffsetAccountingContract.residualActionPolicies,
+      netOffsetAccountingSubstitutionChannelReviewStates:
+        netOffsetAccountingContract.substitutionChannelReviewStates,
+      netOffsetAccountingNetOffsetStates:
+        netOffsetAccountingContract.netOffsetStates,
+      netOffsetAccountingPolicyStatuses:
+        netOffsetAccountingContract.policyStatuses,
+      netOffsetAccountingFirstClassRecordTables:
+        netOffsetAccountingContract.firstClassRecordTables,
+      netOffsetAccountingPolicySnapshotSubjects:
+        netOffsetAccountingContract.policySnapshotSubjects,
+      netOffsetAccountingPrivacyBoundary:
+        netOffsetAccountingContract.privacyBoundary,
+      netOffsetAccountingGrossVolumeExclusionRule:
+        netOffsetAccountingContract.grossVolumeExclusionRule,
+      netOffsetAccountingSampleEvaluationStatuses: Object.fromEntries(
+        netOffsetAccountingContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      netOffsetAccountingContractTests:
+        netOffsetAccountingContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1629,6 +1675,7 @@ export async function GET(request: Request) {
       ...directPairClearingValidation.blockers,
       ...causeBucketTaxonomyValidation.blockers,
       ...resourceCompatibilityValidation.blockers,
+      ...netOffsetAccountingValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

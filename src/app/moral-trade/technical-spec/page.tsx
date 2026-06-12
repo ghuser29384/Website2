@@ -123,6 +123,10 @@ import {
   validateMoralTradeResourceCompatibilityContract,
 } from "@/lib/moral-trade/resource-compatibility";
 import {
+  getMoralTradeNetOffsetAccountingContract,
+  validateMoralTradeNetOffsetAccountingContract,
+} from "@/lib/moral-trade/net-offset-accounting";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -339,6 +343,12 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeResourceCompatibilityContract(
       resourceCompatibilityContract,
     );
+  const netOffsetAccountingContract =
+    getMoralTradeNetOffsetAccountingContract();
+  const netOffsetAccountingValidation =
+    validateMoralTradeNetOffsetAccountingContract(
+      netOffsetAccountingContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -481,6 +491,7 @@ export default async function MoralTradeTechnicalSpecPage() {
     directPairClearingValidation,
     causeBucketTaxonomyValidation,
     resourceCompatibilityValidation,
+    netOffsetAccountingValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -725,6 +736,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Resource compatibility",
       status: resourceCompatibilityValidation.status,
       summary: `${resourceCompatibilityContract.conflictTypes.length} conflict type(s), ${resourceCompatibilityContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: netOffsetAccountingValidation.blockers.length,
+      family: "Clearing",
+      href: "/api/moral-trade/net-offset-accounting/contract",
+      label: "Net-offset accounting",
+      status: netOffsetAccountingValidation.status,
+      summary: `${netOffsetAccountingContract.baselineOpposedActionTypes.length} baseline action type(s), ${netOffsetAccountingContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -2958,6 +2977,81 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Privacy boundary</p>
             <p>{resourceCompatibilityContract.privacyBoundary}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="net-offset-accounting-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Net-offset accounting</p>
+            <h2 id="net-offset-accounting-contract-heading">
+              Gross transfers cannot masquerade as net moral-trade volume.
+            </h2>
+            <p>
+              Moraltrade68 requires donation-offset volume to be net of the opposed action that
+              was actually canceled or redirected. Before volume, completion, public metrics, or
+              release promotion can count, the record must distinguish baseline opposed action,
+              matched canceled amount, compromise transfer, sponsor or match amount, residual
+              opposed action, substitution-channel status, and evidence standard.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Net-offset accounting {netOffsetAccountingContract.version}
+              </p>
+              <h3>Status {netOffsetAccountingValidation.status}</h3>
+              <p>
+                {netOffsetAccountingValidation.checks.length} check(s),{" "}
+                {netOffsetAccountingValidation.blockers.length} blocker(s),{" "}
+                {netOffsetAccountingContract.firstClassRecordTables.length} first-class record
+                table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/net-offset-accounting/contract">
+              Open net-offset JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Gated transitions</h3>
+              <ul className="clean-list">
+                {netOffsetAccountingContract.transitionDefinitions.map((transition) => (
+                  <li key={transition.key}>{transition.key.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Baseline action types</h3>
+              <ul className="clean-list">
+                {netOffsetAccountingContract.baselineOpposedActionTypes.map((actionType) => (
+                  <li key={actionType}>{actionType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Residual policies</h3>
+              <ul className="clean-list">
+                {netOffsetAccountingContract.residualActionPolicies.map((policy) => (
+                  <li key={policy}>{policy.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {netOffsetAccountingContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Gross-volume exclusion</p>
+            <p>{netOffsetAccountingContract.grossVolumeExclusionRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Privacy boundary</p>
+            <p>{netOffsetAccountingContract.privacyBoundary}</p>
           </div>
         </section>
 

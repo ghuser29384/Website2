@@ -6182,6 +6182,12 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_net_offset_accounting_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_direct_pair_clearing_records: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
@@ -7830,6 +7836,7 @@ export interface Database {
             | "subsidy_schedule"
             | "cause_bucket_taxonomy"
             | "resource_compatibility"
+            | "net_offset_accounting"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7895,6 +7902,7 @@ export interface Database {
             | "subsidy_schedule"
             | "cause_bucket_taxonomy"
             | "resource_compatibility"
+            | "net_offset_accounting"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7959,6 +7967,7 @@ export interface Database {
             | "subsidy_schedule"
             | "cause_bucket_taxonomy"
             | "resource_compatibility"
+            | "net_offset_accounting"
             | "direct_pair_clearing";
           subject_key?: string;
           version_label?: string;
