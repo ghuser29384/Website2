@@ -59,6 +59,7 @@ function previewInput(
       result("private_exchange_rate_quote_test", "not_required_for_stage"),
       result("noncompensable_safety_blocker_test", "not_required_for_stage"),
       result("batch_clearing_objective_result_test", "not_required_for_stage"),
+      result("sensitive_evidence_privacy_preserving_attestation_test", "not_required_for_stage"),
     ],
     ...overrides,
   };
@@ -77,6 +78,7 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("refund_cancellation"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("noncompensable_blocker"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("batch_clearing_objective"));
+  assert.ok(contract.immutablePolicySnapshotSubjects.includes("sensitive_evidence_attestation"));
   assert.ok(
     contract.requirementDefinitions.some(
       (requirement) => requirement.key === "cause_bucket_taxonomy_review_test",
@@ -112,6 +114,13 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
       (requirement) => requirement.key === "batch_clearing_objective_result_test",
     ),
   );
+  assert.ok(
+    contract.requirementDefinitions.some(
+      (requirement) =>
+        requirement.key === "sensitive_evidence_privacy_preserving_attestation_test" &&
+        /claim-typed attestation/i.test(requirement.description),
+    ),
+  );
   assert.ok(contract.privilegedActionKeys.includes("manual_capture"));
   assert.ok(contract.privilegedActionKeys.includes("emergency_unpause"));
 });
@@ -122,8 +131,8 @@ test("public-goods preview can pass only with explicit not-required inactive con
   assert.equal(evaluation.status, "pass");
   assert.equal(evaluation.payable, false);
   assert.equal(evaluation.relianceBearing, false);
-  assert.equal(evaluation.inactiveRequirementCount, 17);
-  assert.equal(evaluation.notRequiredRequirementCount, 17);
+  assert.equal(evaluation.inactiveRequirementCount, 18);
+  assert.equal(evaluation.notRequiredRequirementCount, 18);
 });
 
 test("missing required and inactive-control results fail closed", () => {
@@ -179,6 +188,7 @@ test("required gates block stale, unknown, mutable, and under-review states", ()
       result("private_exchange_rate_quote_test"),
       result("noncompensable_safety_blocker_test"),
       result("batch_clearing_objective_result_test"),
+      result("sensitive_evidence_privacy_preserving_attestation_test"),
       result("public_metric_suppression", "not_required_for_stage"),
     ],
   });
@@ -234,6 +244,7 @@ test("neutral waivers require a privileged neutral-review approval", () => {
         result("private_exchange_rate_quote_test", "not_required_for_stage"),
         result("noncompensable_safety_blocker_test", "not_required_for_stage"),
         result("batch_clearing_objective_result_test", "not_required_for_stage"),
+        result("sensitive_evidence_privacy_preserving_attestation_test", "not_required_for_stage"),
       ],
     }),
   );
@@ -266,6 +277,7 @@ test("neutral waivers require a privileged neutral-review approval", () => {
         result("private_exchange_rate_quote_test", "not_required_for_stage"),
         result("noncompensable_safety_blocker_test", "not_required_for_stage"),
         result("batch_clearing_objective_result_test", "not_required_for_stage"),
+        result("sensitive_evidence_privacy_preserving_attestation_test", "not_required_for_stage"),
       ],
     }),
   );

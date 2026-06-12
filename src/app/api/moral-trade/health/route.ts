@@ -120,6 +120,10 @@ import {
   validateMoralTradeBatchClearingObjectiveContract,
 } from "@/lib/moral-trade/batch-clearing-objective";
 import {
+  getMoralTradeSensitiveEvidenceAttestationContract,
+  validateMoralTradeSensitiveEvidenceAttestationContract,
+} from "@/lib/moral-trade/sensitive-evidence-attestations";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -374,6 +378,12 @@ export async function GET(request: Request) {
     validateMoralTradeBatchClearingObjectiveContract(
       batchClearingObjectiveContract,
     );
+  const sensitiveEvidenceAttestationContract =
+    getMoralTradeSensitiveEvidenceAttestationContract();
+  const sensitiveEvidenceAttestationValidation =
+    validateMoralTradeSensitiveEvidenceAttestationContract(
+      sensitiveEvidenceAttestationContract,
+    );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -514,6 +524,7 @@ export async function GET(request: Request) {
       privateExchangeRateValidation.status === "pass" &&
       noncompensableBlockerValidation.status === "pass" &&
       batchClearingObjectiveValidation.status === "pass" &&
+      sensitiveEvidenceAttestationValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -574,6 +585,7 @@ export async function GET(request: Request) {
     privateExchangeRateValidation,
     noncompensableBlockerValidation,
     batchClearingObjectiveValidation,
+    sensitiveEvidenceAttestationValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -1349,6 +1361,46 @@ export async function GET(request: Request) {
       ),
       batchClearingObjectiveContractTests:
         batchClearingObjectiveContract.contractTests,
+      sensitiveEvidenceAttestationContractVersion:
+        sensitiveEvidenceAttestationContract.version,
+      sensitiveEvidenceAttestationTransitionKeys:
+        sensitiveEvidenceAttestationContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      sensitiveEvidenceAttestationSubjectTypes:
+        sensitiveEvidenceAttestationContract.subjectTypes,
+      sensitiveEvidenceAttestationEvidencePathTypes:
+        sensitiveEvidenceAttestationContract.evidencePathTypes,
+      sensitiveEvidenceAttestationClaimTypes:
+        sensitiveEvidenceAttestationContract.claimTypes,
+      sensitiveEvidenceAttestationDisclosureModes:
+        sensitiveEvidenceAttestationContract.disclosureModes,
+      sensitiveEvidenceAttestationPrivacyGrantStatuses:
+        sensitiveEvidenceAttestationContract.privacyGrantStatuses,
+      sensitiveEvidenceAttestationConfidentialityReviewStatuses:
+        sensitiveEvidenceAttestationContract.confidentialityReviewStatuses,
+      sensitiveEvidenceAttestationResultStates:
+        sensitiveEvidenceAttestationContract.resultStates,
+      sensitiveEvidenceAttestationPolicyStatuses:
+        sensitiveEvidenceAttestationContract.policyStatuses,
+      sensitiveEvidenceAttestationFirstClassRecordTables:
+        sensitiveEvidenceAttestationContract.firstClassRecordTables,
+      sensitiveEvidenceAttestationPolicySnapshotSubjects:
+        sensitiveEvidenceAttestationContract.policySnapshotSubjects,
+      sensitiveEvidenceAttestationAttestationResultRule:
+        sensitiveEvidenceAttestationContract.attestationResultRule,
+      sensitiveEvidenceAttestationRawArtifactDisclosureRule:
+        sensitiveEvidenceAttestationContract.rawArtifactDisclosureRule,
+      sensitiveEvidenceAttestationChallengeRule:
+        sensitiveEvidenceAttestationContract.challengeRule,
+      sensitiveEvidenceAttestationSampleEvaluationStatuses: Object.fromEntries(
+        sensitiveEvidenceAttestationContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      sensitiveEvidenceAttestationContractTests:
+        sensitiveEvidenceAttestationContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1859,6 +1911,7 @@ export async function GET(request: Request) {
       ...privateExchangeRateValidation.blockers,
       ...noncompensableBlockerValidation.blockers,
       ...batchClearingObjectiveValidation.blockers,
+      ...sensitiveEvidenceAttestationValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

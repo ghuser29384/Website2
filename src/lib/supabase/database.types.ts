@@ -6212,6 +6212,12 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_sensitive_evidence_attestations: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_direct_pair_clearing_records: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
@@ -7865,6 +7871,7 @@ export interface Database {
             | "private_exchange_rate_quote"
             | "noncompensable_blocker"
             | "batch_clearing_objective"
+            | "sensitive_evidence_attestation"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -7935,6 +7942,7 @@ export interface Database {
             | "private_exchange_rate_quote"
             | "noncompensable_blocker"
             | "batch_clearing_objective"
+            | "sensitive_evidence_attestation"
             | "direct_pair_clearing";
           subject_key: string;
           version_label: string;
@@ -8004,6 +8012,7 @@ export interface Database {
             | "private_exchange_rate_quote"
             | "noncompensable_blocker"
             | "batch_clearing_objective"
+            | "sensitive_evidence_attestation"
             | "direct_pair_clearing";
           subject_key?: string;
           version_label?: string;

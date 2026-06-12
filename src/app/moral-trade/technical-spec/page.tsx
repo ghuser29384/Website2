@@ -143,6 +143,10 @@ import {
   validateMoralTradeBatchClearingObjectiveContract,
 } from "@/lib/moral-trade/batch-clearing-objective";
 import {
+  getMoralTradeSensitiveEvidenceAttestationContract,
+  validateMoralTradeSensitiveEvidenceAttestationContract,
+} from "@/lib/moral-trade/sensitive-evidence-attestations";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -385,6 +389,12 @@ export default async function MoralTradeTechnicalSpecPage() {
   const batchClearingObjectiveValidation =
     validateMoralTradeBatchClearingObjectiveContract(
       batchClearingObjectiveContract,
+    );
+  const sensitiveEvidenceAttestationContract =
+    getMoralTradeSensitiveEvidenceAttestationContract();
+  const sensitiveEvidenceAttestationValidation =
+    validateMoralTradeSensitiveEvidenceAttestationContract(
+      sensitiveEvidenceAttestationContract,
     );
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
@@ -816,6 +826,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Batch-clearing objective",
       status: batchClearingObjectiveValidation.status,
       summary: `${batchClearingObjectiveContract.objectiveTypes.length} objective type(s), ${batchClearingObjectiveContract.prohibitedAllocationDrivers.length} prohibited driver(s).`,
+    },
+    {
+      blockers: sensitiveEvidenceAttestationValidation.blockers.length,
+      family: "Privacy",
+      href: "/api/moral-trade/sensitive-evidence-attestations/contract",
+      label: "Sensitive-evidence attestations",
+      status: sensitiveEvidenceAttestationValidation.status,
+      summary: `${sensitiveEvidenceAttestationContract.claimTypes.length} claim type(s), ${sensitiveEvidenceAttestationContract.firstClassRecordTables.length} first-class table(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -3343,6 +3361,81 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Prohibited allocation rule</p>
             <p>{batchClearingObjectiveContract.prohibitedAllocationRule}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="sensitive-evidence-attestation-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Sensitive-evidence attestations</p>
+            <h2 id="sensitive-evidence-attestation-contract-heading">
+              Counterparties get attestation results, not raw private artifacts.
+            </h2>
+            <p>
+              Moraltrade68 requires sensitive evidence paths to support privacy-preserving
+              verification attestations. Counterparties receive claim-typed results,
+              uncertainty, scope, and challenge routes. Raw private artifacts require a
+              current privacy grant and passed confidentiality review before broader
+              disclosure, and public raw artifact disclosure is blocked.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Sensitive-evidence attestations {sensitiveEvidenceAttestationContract.version}
+              </p>
+              <h3>Status {sensitiveEvidenceAttestationValidation.status}</h3>
+              <p>
+                {sensitiveEvidenceAttestationValidation.checks.length} check(s),{" "}
+                {sensitiveEvidenceAttestationValidation.blockers.length} blocker(s),{" "}
+                {sensitiveEvidenceAttestationContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/sensitive-evidence-attestations/contract">
+              Open attestation JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Claim types</h3>
+              <ul className="clean-list">
+                {sensitiveEvidenceAttestationContract.claimTypes.map((claimType) => (
+                  <li key={claimType}>{claimType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Evidence paths</h3>
+              <ul className="clean-list">
+                {sensitiveEvidenceAttestationContract.evidencePathTypes.map((pathType) => (
+                  <li key={pathType}>{pathType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Disclosure modes</h3>
+              <ul className="clean-list">
+                {sensitiveEvidenceAttestationContract.disclosureModes.map((mode) => (
+                  <li key={mode}>{mode.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {sensitiveEvidenceAttestationContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Raw artifact disclosure rule</p>
+            <p>{sensitiveEvidenceAttestationContract.rawArtifactDisclosureRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Challenge route</p>
+            <p>{sensitiveEvidenceAttestationContract.challengeRule}</p>
           </div>
         </section>
 

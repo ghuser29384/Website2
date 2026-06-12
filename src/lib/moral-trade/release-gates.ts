@@ -181,6 +181,7 @@ const POLICY_SNAPSHOT_SUBJECTS = [
   "data_security",
   "noncompensable_blocker",
   "batch_clearing_objective",
+  "sensitive_evidence_attestation",
 ] as const;
 
 const PRIVILEGED_ACTION_KEYS = [
@@ -386,6 +387,15 @@ export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequire
     description:
       "Donation-offset batch clearing records a frozen objective, deterministic tie-break fairness rule, reproducible objective result, and prohibited-driver counters before scarce matches can allocate, lock, capture, rely, publish metrics, or promote release gates.",
   },
+  {
+    key: "sensitive_evidence_privacy_preserving_attestation_test",
+    label: "Sensitive-evidence attestation test",
+    category: "privacy",
+    policySnapshotRequired: true,
+    privilegedActionRequired: false,
+    description:
+      "Sensitive evidence paths return claim-typed attestation results, uncertainty, scope, and challenge routes to counterparties, and raw private artifacts require current privacy grants plus passed confidentiality review.",
+  },
 ] as const satisfies MoralTradeReleaseGateRequirementDefinition[];
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
@@ -415,6 +425,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "private_exchange_rate_quote_test",
       "noncompensable_safety_blocker_test",
       "batch_clearing_objective_result_test",
+      "sensitive_evidence_privacy_preserving_attestation_test",
     ],
     hardBlockerSummary:
       "Preview can render only when route, privacy, and anti-threat evidence pass; later controls must be explicit not-required decisions.",
@@ -447,6 +458,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "private_exchange_rate_quote_test",
       "noncompensable_safety_blocker_test",
       "batch_clearing_objective_result_test",
+      "sensitive_evidence_privacy_preserving_attestation_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -474,6 +486,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "resource_compatibility_assessment_test",
       "private_exchange_rate_quote_test",
       "noncompensable_safety_blocker_test",
+      "sensitive_evidence_privacy_preserving_attestation_test",
     ],
     inactiveRequirementKeys: [
       "provider_event_replay_tests",
@@ -515,6 +528,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "private_exchange_rate_quote_test",
       "noncompensable_safety_blocker_test",
       "batch_clearing_objective_result_test",
+      "sensitive_evidence_privacy_preserving_attestation_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -539,6 +553,7 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "private_exchange_rate_quote_test",
       "noncompensable_safety_blocker_test",
       "batch_clearing_objective_result_test",
+      "sensitive_evidence_privacy_preserving_attestation_test",
     ],
     inactiveRequirementKeys: [
       "dry_run_calculation",
@@ -667,6 +682,7 @@ function samplePayableEvaluation() {
       makeResult("private_exchange_rate_quote_test", "passed"),
       makeResult("noncompensable_safety_blocker_test", "passed"),
       makeResult("batch_clearing_objective_result_test", "passed"),
+      makeResult("sensitive_evidence_privacy_preserving_attestation_test", "passed"),
       makeResult("public_metric_suppression", "not_required_for_stage"),
     ],
   });
@@ -860,7 +876,8 @@ export function validateMoralTradeReleaseGateContract(
         requirementKeys.includes("offer_validity_record_test") &&
         requirementKeys.includes("private_exchange_rate_quote_test") &&
         requirementKeys.includes("noncompensable_safety_blocker_test") &&
-        requirementKeys.includes("batch_clearing_objective_result_test"),
+        requirementKeys.includes("batch_clearing_objective_result_test") &&
+        requirementKeys.includes("sensitive_evidence_privacy_preserving_attestation_test"),
       requirementKeys.join(", "),
     ),
     check(

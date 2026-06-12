@@ -2174,6 +2174,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const batchClearingObjectiveSource = readRepoFile(
     "src/lib/moral-trade/batch-clearing-objective.ts",
   );
+  const sensitiveEvidenceAttestationSource = readRepoFile(
+    "src/lib/moral-trade/sensitive-evidence-attestations.ts",
+  );
   const sideAgreementSource = readRepoFile("src/lib/moral-trade/side-agreements.ts");
   const tradeClassificationSource = readRepoFile(
     "src/lib/moral-trade/trade-classification.ts",
@@ -2321,6 +2324,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const batchClearingObjectiveMigration = readRepoFile(
     "supabase/migrations/20260612_zz_moral_trade_batch_clearing_objective_records.sql",
   );
+  const sensitiveEvidenceAttestationMigration = readRepoFile(
+    "supabase/migrations/20260612_zzz_moral_trade_sensitive_evidence_attestations.sql",
+  );
   const sideAgreementMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_side_agreement_disclosures.sql",
   );
@@ -2441,6 +2447,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const batchClearingObjectiveContractRoute = readRepoFile(
     "src/app/api/moral-trade/batch-clearing-objective/contract/route.ts",
+  );
+  const sensitiveEvidenceAttestationContractRoute = readRepoFile(
+    "src/app/api/moral-trade/sensitive-evidence-attestations/contract/route.ts",
   );
   const sideAgreementContractRoute = readRepoFile(
     "src/app/api/moral-trade/side-agreements/contract/route.ts",
@@ -2864,6 +2873,12 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(batchClearingObjectiveSource, /batch_clearing_objective_prohibited_allocation_driver/);
   assert.match(batchClearingObjectiveSource, /matched volume alone/i);
   assert.match(batchClearingObjectiveSource, /database order/i);
+  assert.match(sensitiveEvidenceAttestationSource, /getMoralTradeSensitiveEvidenceAttestationContract/);
+  assert.match(sensitiveEvidenceAttestationSource, /evaluateMoralTradeSensitiveEvidenceAttestation/);
+  assert.match(sensitiveEvidenceAttestationSource, /moral_trade_sensitive_evidence_attestations/);
+  assert.match(sensitiveEvidenceAttestationSource, /sensitive_evidence_counterparty_raw_artifact_disclosure_blocked/);
+  assert.match(sensitiveEvidenceAttestationSource, /claim-typed/i);
+  assert.match(sensitiveEvidenceAttestationSource, /privacy grant/i);
   assert.match(sideAgreementSource, /getMoralTradeSideAgreementContract/);
   assert.match(sideAgreementSource, /evaluateMoralTradeSideAgreementDisclosure/);
   assert.match(sideAgreementSource, /moral_trade_side_agreement_disclosures/);
@@ -3092,6 +3107,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(batchClearingObjectiveMigration, /tie_break_fairness_rule_type/);
   assert.match(batchClearingObjectiveMigration, /allocation_drivers_json/);
   assert.match(batchClearingObjectiveMigration, /prohibited allocation drivers/i);
+  assert.match(sensitiveEvidenceAttestationMigration, /moral_trade_sensitive_evidence_attestations/);
+  assert.match(sensitiveEvidenceAttestationMigration, /sensitive_evidence_attestation/);
+  assert.match(sensitiveEvidenceAttestationMigration, /claim_type/);
+  assert.match(sensitiveEvidenceAttestationMigration, /challenge_route/);
+  assert.match(sensitiveEvidenceAttestationMigration, /privacy grant and passed confidentiality review/i);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_disclosures/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_reviews/);
   assert.match(sideAgreementMigration, /side_agreement_disclosure/);
@@ -3287,6 +3307,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /batch_clearing_objective/);
   assert.match(schemaSource, /tie_break_fairness_rule_type/);
   assert.match(schemaSource, /allocation_drivers_json/);
+  assert.match(schemaSource, /moral_trade_sensitive_evidence_attestations/);
+  assert.match(schemaSource, /sensitive_evidence_attestation/);
+  assert.match(schemaSource, /claim_type/);
+  assert.match(schemaSource, /challenge_route/);
   assert.match(schemaSource, /moral_trade_side_agreement_disclosures/);
   assert.match(schemaSource, /moral_trade_side_agreement_reviews/);
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
@@ -3889,6 +3913,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /moral_trade_batch_clearing_objective_contract/);
   assert.match(apiContractProfile, /batch-clearing objective governance/);
   assert.match(apiContractProfile, /prohibited allocation drivers/);
+  assert.match(apiContractProfile, /sensitive_evidence_attestation_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_sensitive_evidence_attestation_contract/);
+  assert.match(apiContractProfile, /sensitive-evidence attestation governance/);
+  assert.match(apiContractProfile, /raw private artifacts/);
   assert.match(apiContractProfile, /side_agreement_contract_response/);
   assert.match(apiContractProfile, /moral_trade_side_agreement_contract/);
   assert.match(apiContractProfile, /side-agreement disclosure/);
@@ -3982,7 +4010,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.67-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.68-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -4351,6 +4379,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /batchClearingObjectiveContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /batchClearingObjectiveContract\.prohibitedAllocationDrivers/);
   assert.match(technicalSpecPage, /batch-clearing-objective\/contract/);
+  assert.match(technicalSpecPage, /Sensitive-evidence attestations/);
+  assert.match(technicalSpecPage, /sensitiveEvidenceAttestationContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /sensitiveEvidenceAttestationContract\.claimTypes/);
+  assert.match(technicalSpecPage, /sensitive-evidence-attestations\/contract/);
   assert.match(technicalSpecPage, /resource-compatibility\/contract/);
   assert.match(technicalSpecPage, /Field-level schema/);
   assert.match(technicalSpecPage, /State transitions/);
@@ -4430,6 +4462,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /batchClearingObjectiveValidation/);
   assert.match(healthRoute, /batchClearingObjectiveFirstClassRecordTables/);
   assert.match(healthRoute, /batchClearingObjectiveProhibitedAllocationRule/);
+  assert.match(healthRoute, /sensitiveEvidenceAttestationValidation/);
+  assert.match(healthRoute, /sensitiveEvidenceAttestationFirstClassRecordTables/);
+  assert.match(healthRoute, /sensitiveEvidenceAttestationRawArtifactDisclosureRule/);
   assert.match(healthRoute, /aiPreferenceElicitationValidation/);
   assert.match(healthRoute, /aiPreferenceElicitationTransitionKeys/);
   assert.match(healthRoute, /aiPreferenceElicitationFirstClassRecordTables/);
@@ -4648,6 +4683,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(batchClearingObjectiveContractRoute, /prohibitedAllocationDrivers/);
   assert.match(batchClearingObjectiveContractRoute, /deterministicTieBreakRule/);
   assert.match(batchClearingObjectiveContractRoute, /batchClearingObjectiveSampleEvaluationStatuses/);
+  assert.match(sensitiveEvidenceAttestationContractRoute, /validateMoralTradeSensitiveEvidenceAttestationContract/);
+  assert.match(sensitiveEvidenceAttestationContractRoute, /rawArtifactDisclosureRule/);
+  assert.match(sensitiveEvidenceAttestationContractRoute, /sensitiveEvidenceAttestationSampleEvaluationStatuses/);
   assert.match(sideAgreementContractRoute, /validateMoralTradeSideAgreementContract/);
   assert.match(sideAgreementContractRoute, /reviewDimensions/);
   assert.match(sideAgreementContractRoute, /sideAgreementSampleEvaluationStatuses/);
