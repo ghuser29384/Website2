@@ -2177,6 +2177,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const sensitiveEvidenceAttestationSource = readRepoFile(
     "src/lib/moral-trade/sensitive-evidence-attestations.ts",
   );
+  const pilotEvidenceSource = readRepoFile(
+    "src/lib/moral-trade/pilot-evidence.ts",
+  );
   const sideAgreementSource = readRepoFile("src/lib/moral-trade/side-agreements.ts");
   const tradeClassificationSource = readRepoFile(
     "src/lib/moral-trade/trade-classification.ts",
@@ -2327,6 +2330,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   const sensitiveEvidenceAttestationMigration = readRepoFile(
     "supabase/migrations/20260612_zzz_moral_trade_sensitive_evidence_attestations.sql",
   );
+  const pilotEvidenceMigration = readRepoFile(
+    "supabase/migrations/20260612_zzzz_moral_trade_pilot_evidence_gates.sql",
+  );
   const sideAgreementMigration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_side_agreement_disclosures.sql",
   );
@@ -2450,6 +2456,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   );
   const sensitiveEvidenceAttestationContractRoute = readRepoFile(
     "src/app/api/moral-trade/sensitive-evidence-attestations/contract/route.ts",
+  );
+  const pilotEvidenceContractRoute = readRepoFile(
+    "src/app/api/moral-trade/pilot-evidence/contract/route.ts",
   );
   const sideAgreementContractRoute = readRepoFile(
     "src/app/api/moral-trade/side-agreements/contract/route.ts",
@@ -2879,6 +2888,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(sensitiveEvidenceAttestationSource, /sensitive_evidence_counterparty_raw_artifact_disclosure_blocked/);
   assert.match(sensitiveEvidenceAttestationSource, /claim-typed/i);
   assert.match(sensitiveEvidenceAttestationSource, /privacy grant/i);
+  assert.match(pilotEvidenceSource, /getMoralTradePilotEvidenceContract/);
+  assert.match(pilotEvidenceSource, /evaluateMoralTradePilotEvidence/);
+  assert.match(pilotEvidenceSource, /moral_trade_pilot_evidence_gates/);
+  assert.match(pilotEvidenceSource, /market_simulation_red_team_test/);
+  assert.match(pilotEvidenceSource, /pilot_success_cannot_be_matched_volume_alone/);
   assert.match(sideAgreementSource, /getMoralTradeSideAgreementContract/);
   assert.match(sideAgreementSource, /evaluateMoralTradeSideAgreementDisclosure/);
   assert.match(sideAgreementSource, /moral_trade_side_agreement_disclosures/);
@@ -3112,6 +3126,11 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(sensitiveEvidenceAttestationMigration, /claim_type/);
   assert.match(sensitiveEvidenceAttestationMigration, /challenge_route/);
   assert.match(sensitiveEvidenceAttestationMigration, /privacy grant and passed confidentiality review/i);
+  assert.match(pilotEvidenceMigration, /moral_trade_pilot_evidence_gates/);
+  assert.match(pilotEvidenceMigration, /pilot_evidence/);
+  assert.match(pilotEvidenceMigration, /pre_registered_criteria_hash/);
+  assert.match(pilotEvidenceMigration, /success_metric_refs_json/);
+  assert.match(pilotEvidenceMigration, /matched volume alone/i);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_disclosures/);
   assert.match(sideAgreementMigration, /moral_trade_side_agreement_reviews/);
   assert.match(sideAgreementMigration, /side_agreement_disclosure/);
@@ -3311,6 +3330,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(schemaSource, /sensitive_evidence_attestation/);
   assert.match(schemaSource, /claim_type/);
   assert.match(schemaSource, /challenge_route/);
+  assert.match(schemaSource, /moral_trade_pilot_evidence_gates/);
+  assert.match(schemaSource, /pilot_evidence/);
+  assert.match(schemaSource, /pre_registered_criteria_hash/);
+  assert.match(schemaSource, /success_metric_refs_json/);
   assert.match(schemaSource, /moral_trade_side_agreement_disclosures/);
   assert.match(schemaSource, /moral_trade_side_agreement_reviews/);
   assert.match(schemaSource, /moral_trade_trade_classification_records/);
@@ -3917,6 +3940,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /moral_trade_sensitive_evidence_attestation_contract/);
   assert.match(apiContractProfile, /sensitive-evidence attestation governance/);
   assert.match(apiContractProfile, /raw private artifacts/);
+  assert.match(apiContractProfile, /pilot_evidence_contract_response/);
+  assert.match(apiContractProfile, /moral_trade_pilot_evidence_contract/);
+  assert.match(apiContractProfile, /pilot-evidence governance/);
+  assert.match(apiContractProfile, /matched volume alone/);
   assert.match(apiContractProfile, /side_agreement_contract_response/);
   assert.match(apiContractProfile, /moral_trade_side_agreement_contract/);
   assert.match(apiContractProfile, /side-agreement disclosure/);
@@ -4010,7 +4037,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(apiContractProfile, /search privacy controls/);
   assert.match(apiContractProfile, /mutate privacy grants/);
   assert.match(apiContractProfile, /review_workflow_contract_response/);
-  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.68-2026-06/);
+  assert.match(apiContractProfile, /moral-trade-api-contract-v0\.69-2026-06/);
   assert.match(apiContractProfile, /user-facing blocker explanation governance/);
   assert.match(apiContractProfile, /privacy-safe blocker explanations/);
   assert.match(apiContractProfile, /money and obligation effects/);
@@ -4383,6 +4410,10 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(technicalSpecPage, /sensitiveEvidenceAttestationContract\.firstClassRecordTables/);
   assert.match(technicalSpecPage, /sensitiveEvidenceAttestationContract\.claimTypes/);
   assert.match(technicalSpecPage, /sensitive-evidence-attestations\/contract/);
+  assert.match(technicalSpecPage, /Pilot evidence gates/);
+  assert.match(technicalSpecPage, /pilotEvidenceContract\.firstClassRecordTables/);
+  assert.match(technicalSpecPage, /pilotEvidenceContract\.successMetrics/);
+  assert.match(technicalSpecPage, /pilot-evidence\/contract/);
   assert.match(technicalSpecPage, /resource-compatibility\/contract/);
   assert.match(technicalSpecPage, /Field-level schema/);
   assert.match(technicalSpecPage, /State transitions/);
@@ -4465,6 +4496,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(healthRoute, /sensitiveEvidenceAttestationValidation/);
   assert.match(healthRoute, /sensitiveEvidenceAttestationFirstClassRecordTables/);
   assert.match(healthRoute, /sensitiveEvidenceAttestationRawArtifactDisclosureRule/);
+  assert.match(healthRoute, /pilotEvidenceValidation/);
+  assert.match(healthRoute, /pilotEvidenceFirstClassRecordTables/);
+  assert.match(healthRoute, /pilotEvidenceMatchedVolumeRule/);
   assert.match(healthRoute, /aiPreferenceElicitationValidation/);
   assert.match(healthRoute, /aiPreferenceElicitationTransitionKeys/);
   assert.match(healthRoute, /aiPreferenceElicitationFirstClassRecordTables/);
@@ -4686,6 +4720,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(sensitiveEvidenceAttestationContractRoute, /validateMoralTradeSensitiveEvidenceAttestationContract/);
   assert.match(sensitiveEvidenceAttestationContractRoute, /rawArtifactDisclosureRule/);
   assert.match(sensitiveEvidenceAttestationContractRoute, /sensitiveEvidenceAttestationSampleEvaluationStatuses/);
+  assert.match(pilotEvidenceContractRoute, /validateMoralTradePilotEvidenceContract/);
+  assert.match(pilotEvidenceContractRoute, /matchedVolumeRule/);
+  assert.match(pilotEvidenceContractRoute, /pilotEvidenceSampleEvaluationStatuses/);
   assert.match(sideAgreementContractRoute, /validateMoralTradeSideAgreementContract/);
   assert.match(sideAgreementContractRoute, /reviewDimensions/);
   assert.match(sideAgreementContractRoute, /sideAgreementSampleEvaluationStatuses/);

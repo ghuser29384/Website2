@@ -99,6 +99,7 @@ const PREVIEW_INPUT_KEYS = new Set([
   "privateExchangeRateStatus",
   "noncompensableBlockerStatus",
   "sensitiveEvidenceAttestationStatus",
+  "pilotEvidenceStatus",
   "nonPublicGoodsSubsidyStatus",
   "nonparticipantExternalityStatus",
   "participantConfirmationStatus",
@@ -358,6 +359,11 @@ function normalizePreviewInput(value: unknown) {
     sensitiveEvidenceAttestationStatus: gateStatus(
       value.sensitiveEvidenceAttestationStatus,
       "previewInput.sensitiveEvidenceAttestationStatus",
+      blockers,
+    ),
+    pilotEvidenceStatus: gateStatus(
+      value.pilotEvidenceStatus,
+      "previewInput.pilotEvidenceStatus",
       blockers,
     ),
     baselineConfidenceLevel: enumField(

@@ -124,6 +124,10 @@ import {
   validateMoralTradeSensitiveEvidenceAttestationContract,
 } from "@/lib/moral-trade/sensitive-evidence-attestations";
 import {
+  getMoralTradePilotEvidenceContract,
+  validateMoralTradePilotEvidenceContract,
+} from "@/lib/moral-trade/pilot-evidence";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -384,6 +388,9 @@ export async function GET(request: Request) {
     validateMoralTradeSensitiveEvidenceAttestationContract(
       sensitiveEvidenceAttestationContract,
     );
+  const pilotEvidenceContract = getMoralTradePilotEvidenceContract();
+  const pilotEvidenceValidation =
+    validateMoralTradePilotEvidenceContract(pilotEvidenceContract);
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -525,6 +532,7 @@ export async function GET(request: Request) {
       noncompensableBlockerValidation.status === "pass" &&
       batchClearingObjectiveValidation.status === "pass" &&
       sensitiveEvidenceAttestationValidation.status === "pass" &&
+      pilotEvidenceValidation.status === "pass" &&
       sideAgreementValidation.status === "pass" &&
       tradeClassificationValidation.status === "pass" &&
       templateConformanceValidation.status === "pass" &&
@@ -586,6 +594,7 @@ export async function GET(request: Request) {
     noncompensableBlockerValidation,
     batchClearingObjectiveValidation,
     sensitiveEvidenceAttestationValidation,
+    pilotEvidenceValidation,
     sideAgreementValidation,
     tradeClassificationValidation,
     templateConformanceValidation,
@@ -1401,6 +1410,29 @@ export async function GET(request: Request) {
       ),
       sensitiveEvidenceAttestationContractTests:
         sensitiveEvidenceAttestationContract.contractTests,
+      pilotEvidenceContractVersion: pilotEvidenceContract.version,
+      pilotEvidenceTransitionKeys:
+        pilotEvidenceContract.transitionDefinitions.map(
+          (transition) => transition.key,
+        ),
+      pilotEvidenceTracks: pilotEvidenceContract.pilotTracks,
+      pilotEvidenceEvidenceTypes: pilotEvidenceContract.evidenceTypes,
+      pilotEvidenceSuccessMetrics: pilotEvidenceContract.successMetrics,
+      pilotEvidenceFirstClassRecordTables:
+        pilotEvidenceContract.firstClassRecordTables,
+      pilotEvidencePolicySnapshotSubjects:
+        pilotEvidenceContract.policySnapshotSubjects,
+      pilotEvidenceSimulationRule: pilotEvidenceContract.simulationRule,
+      pilotEvidenceRedTeamRule: pilotEvidenceContract.redTeamRule,
+      pilotEvidenceExitCriteriaRule: pilotEvidenceContract.exitCriteriaRule,
+      pilotEvidenceMatchedVolumeRule: pilotEvidenceContract.matchedVolumeRule,
+      pilotEvidenceSampleEvaluationStatuses: Object.fromEntries(
+        pilotEvidenceContract.sampleEvaluations.map((evaluation) => [
+          evaluation.transition,
+          evaluation.status,
+        ]),
+      ),
+      pilotEvidenceContractTests: pilotEvidenceContract.contractTests,
       sideAgreementContractVersion: sideAgreementContract.version,
       sideAgreementTransitionKeys:
         sideAgreementContract.transitionDefinitions.map(
@@ -1912,6 +1944,7 @@ export async function GET(request: Request) {
       ...noncompensableBlockerValidation.blockers,
       ...batchClearingObjectiveValidation.blockers,
       ...sensitiveEvidenceAttestationValidation.blockers,
+      ...pilotEvidenceValidation.blockers,
       ...sideAgreementValidation.blockers,
       ...tradeClassificationValidation.blockers,
       ...templateConformanceValidation.blockers,

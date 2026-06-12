@@ -147,6 +147,10 @@ import {
   validateMoralTradeSensitiveEvidenceAttestationContract,
 } from "@/lib/moral-trade/sensitive-evidence-attestations";
 import {
+  getMoralTradePilotEvidenceContract,
+  validateMoralTradePilotEvidenceContract,
+} from "@/lib/moral-trade/pilot-evidence";
+import {
   getMoralTradeSideAgreementContract,
   validateMoralTradeSideAgreementContract,
 } from "@/lib/moral-trade/side-agreements";
@@ -396,6 +400,9 @@ export default async function MoralTradeTechnicalSpecPage() {
     validateMoralTradeSensitiveEvidenceAttestationContract(
       sensitiveEvidenceAttestationContract,
     );
+  const pilotEvidenceContract = getMoralTradePilotEvidenceContract();
+  const pilotEvidenceValidation =
+    validateMoralTradePilotEvidenceContract(pilotEvidenceContract);
   const sideAgreementContract = getMoralTradeSideAgreementContract();
   const sideAgreementValidation =
     validateMoralTradeSideAgreementContract(sideAgreementContract);
@@ -834,6 +841,14 @@ export default async function MoralTradeTechnicalSpecPage() {
       label: "Sensitive-evidence attestations",
       status: sensitiveEvidenceAttestationValidation.status,
       summary: `${sensitiveEvidenceAttestationContract.claimTypes.length} claim type(s), ${sensitiveEvidenceAttestationContract.firstClassRecordTables.length} first-class table(s).`,
+    },
+    {
+      blockers: pilotEvidenceValidation.blockers.length,
+      family: "Operations",
+      href: "/api/moral-trade/pilot-evidence/contract",
+      label: "Pilot evidence gates",
+      status: pilotEvidenceValidation.status,
+      summary: `${pilotEvidenceContract.evidenceTypes.length} evidence type(s), ${pilotEvidenceContract.successMetrics.length} success metric(s).`,
     },
     {
       blockers: sideAgreementValidation.blockers.length,
@@ -3436,6 +3451,81 @@ export default async function MoralTradeTechnicalSpecPage() {
           <div className="panel protocol-note">
             <p className="detail-kicker">Challenge route</p>
             <p>{sensitiveEvidenceAttestationContract.challengeRule}</p>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="pilot-evidence-contract-heading">
+          <div className="section-head section-head-compact">
+            <p className="eyebrow">Pilot evidence gates</p>
+            <h2 id="pilot-evidence-contract-heading">
+              Pilot promotion needs simulation, red-team evidence, and exit criteria.
+            </h2>
+            <p>
+              Moraltrade68 requires donation-offset and pledge-swap pilots to pass
+              market simulation, red-team review, and pre-registered scale-up,
+              pause, and rollback criteria before payable, reliance-bearing, public
+              metric, capped real-money, or release-gate promotion. Matched volume
+              alone cannot satisfy pilot success.
+            </p>
+          </div>
+          <div className="protocol-validator-card panel">
+            <div>
+              <p className="detail-kicker">
+                Pilot evidence gates {pilotEvidenceContract.version}
+              </p>
+              <h3>Status {pilotEvidenceValidation.status}</h3>
+              <p>
+                {pilotEvidenceValidation.checks.length} check(s),{" "}
+                {pilotEvidenceValidation.blockers.length} blocker(s),{" "}
+                {pilotEvidenceContract.firstClassRecordTables.length} first-class
+                record table(s).
+              </p>
+            </div>
+            <Link className="button button-secondary" href="/api/moral-trade/pilot-evidence/contract">
+              Open pilot evidence JSON
+            </Link>
+          </div>
+          <div className="protocol-contract-grid">
+            <article className="panel protocol-contract-card">
+              <h3>Evidence types</h3>
+              <ul className="clean-list">
+                {pilotEvidenceContract.evidenceTypes.map((evidenceType) => (
+                  <li key={evidenceType}>{evidenceType.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Success metrics</h3>
+              <ul className="clean-list">
+                {pilotEvidenceContract.successMetrics.map((metric) => (
+                  <li key={metric}>{metric.replaceAll("_", " ")}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>First-class records</h3>
+              <ul className="clean-list">
+                {pilotEvidenceContract.firstClassRecordTables.map((table) => (
+                  <li key={table}>{table}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="panel protocol-contract-card">
+              <h3>Policy subjects</h3>
+              <ul className="clean-list">
+                {pilotEvidenceContract.policySnapshotSubjects.map((subject) => (
+                  <li key={subject}>{subject}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Matched-volume rule</p>
+            <p>{pilotEvidenceContract.matchedVolumeRule}</p>
+          </div>
+          <div className="panel protocol-note">
+            <p className="detail-kicker">Exit-criteria rule</p>
+            <p>{pilotEvidenceContract.exitCriteriaRule}</p>
           </div>
         </section>
 

@@ -2240,6 +2240,7 @@ export function OfferCreateForm({
         privateExchangeRateStatus: "needs_review",
         noncompensableBlockerStatus: "needs_review",
         sensitiveEvidenceAttestationStatus: "needs_review",
+        pilotEvidenceStatus: "needs_review",
         requiredFreshConfirmations: Number(offsetAffectedParticipantCount) || 2,
         freshConfirmationCount: Number(offsetFreshConfirmationCount) || 0,
         participantConfirmationStatus: clearingPreviewStatusFromOffsetConfirmation(
@@ -2334,6 +2335,7 @@ export function OfferCreateForm({
           privateExchangeRateStatus: "needs_review",
           noncompensableBlockerStatus: "needs_review",
           sensitiveEvidenceAttestationStatus: "needs_review",
+          pilotEvidenceStatus: "needs_review",
           requiredFreshConfirmations: 2,
           freshConfirmationCount: 0,
           participantConfirmationStatus: "missing",

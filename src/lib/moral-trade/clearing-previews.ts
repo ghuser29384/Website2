@@ -1,5 +1,5 @@
 export const MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION =
-  "moral-trade-clearing-preview-v0.13-2026-06";
+  "moral-trade-clearing-preview-v0.14-2026-06";
 export const MORAL_TRADE_CLEARING_PREVIEW_VALIDATOR_VERSION =
   "moral-trade-clearing-preview-validator-v0.1";
 
@@ -107,6 +107,7 @@ export interface MoralTradeClearingPreviewInput {
   privateExchangeRateStatus: MoralTradeClearingPreviewGateStatus;
   noncompensableBlockerStatus: MoralTradeClearingPreviewGateStatus;
   sensitiveEvidenceAttestationStatus: MoralTradeClearingPreviewGateStatus;
+  pilotEvidenceStatus: MoralTradeClearingPreviewGateStatus;
   privacyDisclosureStatus: MoralTradeClearingPreviewGateStatus;
   policySnapshotRef: string;
   stateInterpretationPolicyRef: string;
@@ -168,6 +169,7 @@ export interface MoralTradeClearingPreview {
     privateExchangeRateStatus: MoralTradeClearingPreviewGateStatus;
     noncompensableBlockerStatus: MoralTradeClearingPreviewGateStatus;
     sensitiveEvidenceAttestationStatus: MoralTradeClearingPreviewGateStatus;
+    pilotEvidenceStatus: MoralTradeClearingPreviewGateStatus;
   };
   sections: MoralTradeClearingPreviewSection[];
   userFacingBlockers: string[];
@@ -233,6 +235,7 @@ const REQUIRED_SECTIONS = [
   "private-exchange-rate",
   "noncompensable-blockers",
   "sensitive-evidence-attestations",
+  "pilot-evidence",
   "final-lock",
   "destination-and-tax",
   "externality-and-safety",
@@ -265,6 +268,7 @@ const REQUIRED_CONTROL_STATUSES = [
   "private_exchange_rate_quote",
   "noncompensable_blocker",
   "sensitive_evidence_attestation",
+  "pilot_evidence",
   "destination_verification",
   "donor_of_record_tax",
   "nonparticipant_externality",
@@ -453,6 +457,10 @@ export function buildMoralTradeClearingPreview(
     input.sensitiveEvidenceAttestationStatus,
     "sensitive_evidence_attestation_not_passed",
   );
+  const pilotEvidenceBlockers = statusBlocker(
+    input.pilotEvidenceStatus,
+    "pilot_evidence_not_passed",
+  );
   const finalLockBlockers = [
     ...statusBlocker(input.finalLockProposalStatus, "final_lock_proposal_not_current"),
     ...(input.finalLockProposalRef.trim() ? [] : ["final_lock_proposal_missing"]),
@@ -562,6 +570,7 @@ export function buildMoralTradeClearingPreview(
     ...privateExchangeRateBlockers,
     ...noncompensableBlockerBlockers,
     ...sensitiveEvidenceAttestationBlockers,
+    ...pilotEvidenceBlockers,
     ...finalLockBlockers,
     ...destinationBlockers,
     ...safetyBlockers,
@@ -618,6 +627,7 @@ export function buildMoralTradeClearingPreview(
       privateExchangeRateStatus: input.privateExchangeRateStatus,
       noncompensableBlockerStatus: input.noncompensableBlockerStatus,
       sensitiveEvidenceAttestationStatus: input.sensitiveEvidenceAttestationStatus,
+      pilotEvidenceStatus: input.pilotEvidenceStatus,
     },
     sections: [
       makeSection({
@@ -803,6 +813,18 @@ export function buildMoralTradeClearingPreview(
           "Record privacy-preserving attestations for private receipts, identity artifacts, payment destinations, provider records, and reviewer notes before counterparties rely on the claim.",
       }),
       makeSection({
+        key: "pilot-evidence",
+        label: "Pilot evidence",
+        status: pilotEvidenceBlockers.length ? "blocked" : "passed",
+        blockerCodes: pilotEvidenceBlockers,
+        passedMessage:
+          "Pilot promotion evidence includes simulation, red-team review, pre-registered scale-up criteria, pause criteria, rollback criteria, and non-volume success metrics.",
+        blockedMessage:
+          "Pilot evidence still blocks payable, reliance-bearing, public-metric, or release-promotion states.",
+        nextAction:
+          "Record market simulation, red-team evidence, scale-up criteria, pause criteria, rollback criteria, and non-volume success metrics; matched volume alone cannot satisfy pilot success.",
+      }),
+      makeSection({
         key: "final-lock",
         label: "Final lock confirmation",
         status: finalLockBlockers.length ? "blocked" : "passed",
@@ -947,6 +969,8 @@ export function buildMoralTradeClearingPreview(
           return "Safety, legal, privacy, third-party-rights, reporting-integrity, civil-rights, confidentiality, regulated-goods, cyber-abuse, financial-crime, anti-threat, and process-integrity blockers are constraints, not prices; side payments, higher donations, performance bonds, reciprocal favors, private agreements, or private waivers cannot clear them by themselves.";
         case "sensitive_evidence_attestation_not_passed":
           return "Sensitive evidence must be represented by claim-typed attestation results, uncertainty, scope, and challenge routes; raw private artifacts cannot go to counterparties without a current privacy grant and passed confidentiality review, and cannot be public.";
+        case "pilot_evidence_not_passed":
+          return "Donation-offset and pledge-swap pilots need market simulation, red-team evidence, pre-registered scale-up, pause, and rollback criteria, and non-volume success metrics; matched volume alone cannot satisfy pilot success.";
         case "destination_verification_not_passed":
         case "payment_destination_not_verified":
           return "Recipient and payment destination verification must be non-blocking.";
@@ -975,9 +999,9 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
   return {
     version: MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION,
     purpose:
-      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, batch-clearing objective, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote handling, noncompensable blocker review, sensitive-evidence attestation, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
+      "Build user-facing donation-offset and pledge-swap clearing previews that remain non-capture, non-reliance-bearing, and fail closed until frozen matching-clearing, final lock, confirmation, reservation, atomic-settlement, direct-pair mode, batch-clearing objective, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote handling, noncompensable blocker review, sensitive-evidence attestation, pilot evidence, destination, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, sponsor-subsidy governance, safety, and policy controls are non-blocking.",
     failClosedRule:
-      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, batch-clearing objective, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote, noncompensable blocker, sensitive-evidence attestation, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
+      "A match candidate is not a deal. Missing, stale, out-of-bounds, under-review, or superseded controls keep the record preview-only and block lock, capture, reliance, public completion, and moral-trade metric eligibility, including direct-pair clearing, batch-clearing objective, cause-bucket taxonomy, resource-compatibility, net-offset accounting, offer-validity, private exchange-rate quote, noncompensable blocker, sensitive-evidence attestation, pilot evidence, recipient-acceptance, adverse-association, AI-preference-elicitation, post-clear audit sampling, and sponsor-subsidy governance controls.",
     persistenceRule:
       "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
@@ -1142,6 +1166,7 @@ export function buildDemoDonationOffsetClearingPreview() {
     privateExchangeRateStatus: "passed",
     noncompensableBlockerStatus: "passed",
     sensitiveEvidenceAttestationStatus: "passed",
+    pilotEvidenceStatus: "passed",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:donation-offset-preview-v1",
     stateInterpretationPolicyRef: "state-policy:donation-offset-preview-v1",
@@ -1213,6 +1238,7 @@ export function buildDemoPledgeSwapClearingPreview() {
     privateExchangeRateStatus: "passed",
     noncompensableBlockerStatus: "passed",
     sensitiveEvidenceAttestationStatus: "needs_review",
+    pilotEvidenceStatus: "needs_review",
     privacyDisclosureStatus: "passed",
     policySnapshotRef: "policy-snapshot:pledge-swap-preview-v1",
     stateInterpretationPolicyRef: "state-policy:pledge-swap-preview-v1",

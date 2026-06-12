@@ -182,6 +182,7 @@ const POLICY_SNAPSHOT_SUBJECTS = [
   "noncompensable_blocker",
   "batch_clearing_objective",
   "sensitive_evidence_attestation",
+  "pilot_evidence",
 ] as const;
 
 const PRIVILEGED_ACTION_KEYS = [
@@ -396,6 +397,24 @@ export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequire
     description:
       "Sensitive evidence paths return claim-typed attestation results, uncertainty, scope, and challenge routes to counterparties, and raw private artifacts require current privacy grants plus passed confidentiality review.",
   },
+  {
+    key: "market_simulation_red_team_test",
+    label: "Market simulation and red-team test",
+    category: "review",
+    policySnapshotRequired: true,
+    privilegedActionRequired: false,
+    description:
+      "Donation-offset and pledge-swap pilots have reviewed market simulation, replay, red-team, participant-comprehension, and abuse-case evidence before payable, reliance-bearing, public-metric, or release-promotion states.",
+  },
+  {
+    key: "pilot_exit_criteria_test",
+    label: "Pilot exit criteria test",
+    category: "operations",
+    policySnapshotRequired: true,
+    privilegedActionRequired: false,
+    description:
+      "Donation-offset and pledge-swap pilots pre-register scale-up, pause, and rollback criteria, and matched volume alone cannot satisfy pilot success.",
+  },
 ] as const satisfies MoralTradeReleaseGateRequirementDefinition[];
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
@@ -426,6 +445,8 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "noncompensable_safety_blocker_test",
       "batch_clearing_objective_result_test",
       "sensitive_evidence_privacy_preserving_attestation_test",
+      "market_simulation_red_team_test",
+      "pilot_exit_criteria_test",
     ],
     hardBlockerSummary:
       "Preview can render only when route, privacy, and anti-threat evidence pass; later controls must be explicit not-required decisions.",
@@ -459,6 +480,8 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "noncompensable_safety_blocker_test",
       "batch_clearing_objective_result_test",
       "sensitive_evidence_privacy_preserving_attestation_test",
+      "market_simulation_red_team_test",
+      "pilot_exit_criteria_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -487,6 +510,8 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "private_exchange_rate_quote_test",
       "noncompensable_safety_blocker_test",
       "sensitive_evidence_privacy_preserving_attestation_test",
+      "market_simulation_red_team_test",
+      "pilot_exit_criteria_test",
     ],
     inactiveRequirementKeys: [
       "provider_event_replay_tests",
@@ -529,6 +554,8 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "noncompensable_safety_blocker_test",
       "batch_clearing_objective_result_test",
       "sensitive_evidence_privacy_preserving_attestation_test",
+      "market_simulation_red_team_test",
+      "pilot_exit_criteria_test",
     ],
     inactiveRequirementKeys: ["public_metric_suppression"],
     hardBlockerSummary:
@@ -554,6 +581,8 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
       "noncompensable_safety_blocker_test",
       "batch_clearing_objective_result_test",
       "sensitive_evidence_privacy_preserving_attestation_test",
+      "market_simulation_red_team_test",
+      "pilot_exit_criteria_test",
     ],
     inactiveRequirementKeys: [
       "dry_run_calculation",
@@ -683,6 +712,8 @@ function samplePayableEvaluation() {
       makeResult("noncompensable_safety_blocker_test", "passed"),
       makeResult("batch_clearing_objective_result_test", "passed"),
       makeResult("sensitive_evidence_privacy_preserving_attestation_test", "passed"),
+      makeResult("market_simulation_red_team_test", "passed"),
+      makeResult("pilot_exit_criteria_test", "passed"),
       makeResult("public_metric_suppression", "not_required_for_stage"),
     ],
   });
@@ -877,7 +908,9 @@ export function validateMoralTradeReleaseGateContract(
         requirementKeys.includes("private_exchange_rate_quote_test") &&
         requirementKeys.includes("noncompensable_safety_blocker_test") &&
         requirementKeys.includes("batch_clearing_objective_result_test") &&
-        requirementKeys.includes("sensitive_evidence_privacy_preserving_attestation_test"),
+        requirementKeys.includes("sensitive_evidence_privacy_preserving_attestation_test") &&
+        requirementKeys.includes("market_simulation_red_team_test") &&
+        requirementKeys.includes("pilot_exit_criteria_test"),
       requirementKeys.join(", "),
     ),
     check(
