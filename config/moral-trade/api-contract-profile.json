@@ -387,6 +387,18 @@
       "fallback": "Return post-clear audit sampling validation blockers, first-class record metadata, and sample evaluations; never expose raw payment evidence, private counterparty terms, reviewer notes, raw reconciliation rows, raw provider payloads, participant-specific audit rows, private evidence artifacts, or public moral reputation scores."
     },
     {
+      "key": "moral_trade_post_clear_audit_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/post-clear-audit/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "post_clear_audit_enforce_request",
+      "responseSchema": "post_clear_audit_enforce_response",
+      "rateLimitSurface": "post_clear_audit_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated post-clear audit enforcement requests create no sampling, audit review, correction, reconciliation, payout, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_non_public_goods_subsidy_contract",
       "method": "GET",
       "path": "/api/moral-trade/non-public-goods-subsidies/contract",
@@ -2105,6 +2117,38 @@
       ]
     },
     {
+      "key": "post_clear_audit_enforce_request",
+      "purpose": "Authenticated private request for live post-clear audit enforcement before sampling assignment, audit review, correction resolution, reconciliation close, payout, public-metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Post-clear audit transition, checked-at time, post-clear audit requirement flag, frozen audit policies, and audit records to normalize and evaluate; unsupported wrapper, evaluation, policy, or audit-record keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "post_clear_audit_enforce_response",
+      "purpose": "Authenticated private fail-closed post-clear audit enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the post-clear audit contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Post-clear audit contract version used by the enforcement attempt." },
+        { "key": "postClearAuditGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when normalized post-clear audit evaluation passes; blocked otherwise." },
+        { "key": "postClearSamplingAssignmentAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; this enforcement endpoint records evidence but never assigns post-clear audit samples." },
+        { "key": "auditRecordReviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; audit review requires a separate review workflow." },
+        { "key": "correctiveActionResolutionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; corrective action resolution requires a separate frozen-policy control path." },
+        { "key": "paymentReconciliationCloseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reconciliation close requires a separate payment/reconciliation control path." },
+        { "key": "payoutReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payout release requires a separate settlement control path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_post_clear_audit_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized post-clear audit evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Post-clear audit contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "non_public_goods_subsidy_contract_response",
       "purpose": "Public validator-backed non-public-goods subsidy governance contract for sponsor-funded low-risk donation-offset subsidy pools and schedules before lock, payment, public metrics, refund/carry-forward handling, or release-gate promotion.",
       "fields": [
@@ -3496,6 +3540,7 @@
     "participant_term_sheet_enforce_route_contract",
     "recipient_acceptance_enforce_route_contract",
     "ai_preference_elicitation_enforce_route_contract",
+    "post_clear_audit_enforce_route_contract",
     "private_exchange_rate_contract_route",
     "noncompensable_blocker_contract_route",
     "batch_clearing_objective_contract_route",

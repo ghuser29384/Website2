@@ -126,6 +126,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_recipient_acceptance_contract",
   "moral_trade_ai_preference_elicitation_contract",
   "moral_trade_post_clear_audit_contract",
+  "moral_trade_post_clear_audit_enforce",
   "moral_trade_non_public_goods_subsidy_contract",
   "moral_trade_direct_pair_clearing_contract",
   "moral_trade_cause_bucket_taxonomy_contract",

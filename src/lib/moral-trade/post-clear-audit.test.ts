@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforcePostClearAudit } from "@/app/api/moral-trade/post-clear-audit/enforce/route";
+
 import {
   evaluateMoralTradePostClearAudit,
   getMoralTradePostClearAuditContract,
@@ -286,13 +288,50 @@ test("post-clear audit privacy fields fail closed", () => {
   );
 });
 
+test("post-clear audit enforce route is fail-closed before persistence on invalid input", async () => {
+  const response = await enforcePostClearAudit(
+    new Request("http://localhost/api/moral-trade/post-clear-audit/enforce", {
+      body: "not-json",
+      method: "POST",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.postClearAuditGateStatus, "blocked");
+  assert.equal(body.postClearSamplingAssignmentAllowed, false);
+  assert.equal(body.auditRecordReviewAllowed, false);
+  assert.equal(body.correctiveActionResolutionAllowed, false);
+  assert.equal(body.paymentReconciliationCloseAllowed, false);
+  assert.equal(body.payoutReleaseAllowed, false);
+  assert.equal(body.publicMetricPublicationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.persistence.status, "not_recorded");
+  assert.equal(
+    body.persistence.table,
+    "moral_trade_post_clear_audit_enforcement_records",
+  );
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+});
+
 test("post-clear audit contract is wired through route, health, spec, API profile, and migrations", () => {
   const route = readRepoFile(
     "src/app/api/moral-trade/post-clear-audit/contract/route.ts",
   );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/post-clear-audit/enforce/route.ts",
+  );
   const health = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const spec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
   const apiContract = readRepoFile("src/lib/moral-trade/api-contract.ts");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile(
+    "config/moral-trade/operations-profile.json",
+  );
   const apiProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const clearingPreview = readRepoFile("src/lib/moral-trade/clearing-previews.ts");
   const migration = readRepoFile(
@@ -300,23 +339,59 @@ test("post-clear audit contract is wired through route, health, spec, API profil
   );
   const schema = readRepoFile("supabase/schema.sql");
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
+  const forbiddenAllowColumns = [
+    "post_clear_sampling_assignment_allowed_bool",
+    "audit_record_review_allowed_bool",
+    "corrective_action_resolution_allowed_bool",
+    "payment_reconciliation_close_allowed_bool",
+    "payout_release_allowed_bool",
+    "public_metric_publication_allowed_bool",
+    "release_gate_promotion_allowed_bool",
+  ];
 
   assert.match(route, /getMoralTradePostClearAuditContract/);
   assert.match(route, /postClearAuditSampleEvaluationStatuses/);
+  assert.match(enforceRoute, /post_clear_audit_enforce/);
+  assert.match(enforceRoute, /moral_trade_post_clear_audit_enforcement_records/);
+  assert.match(enforceRoute, /authentication_required:post_clear_audit_enforce/);
+  assert.match(enforceRoute, /database_insert_failed:post_clear_audit_enforce/);
+  assert.match(enforceRoute, /postClearSamplingAssignmentAllowed: false/);
+  assert.match(enforceRoute, /auditRecordReviewAllowed: false/);
+  assert.match(enforceRoute, /correctiveActionResolutionAllowed: false/);
+  assert.match(enforceRoute, /paymentReconciliationCloseAllowed: false/);
+  assert.match(enforceRoute, /payoutReleaseAllowed: false/);
+  assert.match(enforceRoute, /publicMetricPublicationAllowed: false/);
+  assert.match(enforceRoute, /releaseGatePromotionAllowed: false/);
   assert.match(health, /postClearAuditValidation/);
   assert.match(health, /postClearAuditFirstClassRecordTables/);
   assert.match(spec, /postClearAuditContract\.firstClassRecordTables/);
   assert.match(spec, /\/api\/moral-trade\/post-clear-audit\/contract/);
   assert.match(apiContract, /moral_trade_post_clear_audit_contract/);
+  assert.match(apiContract, /moral_trade_post_clear_audit_enforce/);
+  assert.match(apiRateLimit, /post_clear_audit_enforce/);
+  assert.match(operations, /post_clear_audit_enforce/);
+  assert.match(operationsProfile, /post_clear_audit_enforce/);
   assert.match(apiProfile, /post_clear_audit_contract_response/);
+  assert.match(apiProfile, /post_clear_audit_enforce_request/);
+  assert.match(apiProfile, /post_clear_audit_enforce_response/);
+  assert.match(apiProfile, /post_clear_audit_enforce_route_contract/);
   assert.match(apiProfile, /post-clear audit sampling governance/);
   assert.match(clearingPreview, /postClearAuditSamplingStatus/);
   assert.match(migration, /moral_trade_post_clear_audit_policies/);
   assert.match(migration, /moral_trade_post_clear_audit_records/);
+  assert.match(migration, /moral_trade_post_clear_audit_enforcement_records/);
+  assert.match(migration, /owner_profile_id = auth\.uid\(\)/);
   assert.match(migration, /public_reputation_effect_prohibited_bool/);
   assert.match(migration, /post_clear_audit/);
   assert.match(schema, /moral_trade_post_clear_audit_records/);
+  assert.match(schema, /moral_trade_post_clear_audit_enforcement_records/);
   assert.match(schema, /raw_payment_evidence_public_bool/);
   assert.match(databaseTypes, /moral_trade_post_clear_audit_policies/);
+  assert.match(databaseTypes, /moral_trade_post_clear_audit_enforcement_records/);
   assert.match(databaseTypes, /post_clear_audit/);
+
+  for (const column of forbiddenAllowColumns) {
+    assert.match(migration, new RegExp(`check \\(${column} = false\\)`));
+    assert.match(schema, new RegExp(`check \\(${column} = false\\)`));
+  }
 });
