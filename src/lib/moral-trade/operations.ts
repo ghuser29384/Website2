@@ -152,6 +152,7 @@ const REQUIRED_RATE_LIMITS = [
   "risk_control_matrix_enforce",
   "preference_integrity_enforce",
   "commitment_settlement_enforce",
+  "pledge_performance_bond_enforce",
   "direct_pair_clearing_enforce",
   "cause_bucket_taxonomy_enforce",
   "resource_compatibility_enforce",

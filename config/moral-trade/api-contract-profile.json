@@ -591,6 +591,30 @@
       "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated commitment-settlement enforcement requests create no runtime transition, match preview, matched-trade lock, payment authorization, payment-capture, performance-release, public-metric, or release-promotion state change."
     },
     {
+      "key": "moral_trade_pledge_performance_bond_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/pledge-performance-bonds/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "pledge_performance_bond_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return pledge-performance-bond blockers, first-class policy and record metadata, existing performance-bond infrastructure references, neutral-forfeiture rule, no-escrow/no-reputation rule, release-gate hook, and sample evaluations; never expose participant identity hashes, payment credentials, private evidence, reviewer notes, or participant-specific bond rows."
+    },
+    {
+      "key": "moral_trade_pledge_performance_bond_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/pledge-performance-bonds/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "pledge_performance_bond_enforce_request",
+      "responseSchema": "pledge_performance_bond_enforce_response",
+      "rateLimitSurface": "pledge_performance_bond_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated pledge-performance-bond enforcement requests create no runtime transition, matched-trade lock, payment authorization, payment-capture, performance-release, forfeiture, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_direct_pair_clearing_contract",
       "method": "GET",
       "path": "/api/moral-trade/direct-pair-clearing/contract",
@@ -2912,6 +2936,50 @@
       ]
     },
     {
+      "key": "pledge_performance_bond_contract_response",
+      "purpose": "Public validator-backed pledge-performance-bond governance contract for bounded factual-trust support, frozen bond terms, neutral forfeiture review, and no escrow/reputation/additionality claims.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the pledge-performance-bond contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the pledge-performance-bond validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Pledge-performance-bond contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class policy and record tables, existing bond infrastructure, policy subjects, release-gate hook, transition coverage, neutral-forfeiture rule, no-escrow/no-reputation rule, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, neutral-forfeiture rule, no-escrow/no-reputation rule, first-class table names, existing infrastructure table names, policy subjects, release-gate hooks, transition requirements, sample statuses, and test hooks without participant hashes, payment credentials, private evidence, reviewer notes, or participant-specific bond rows." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Pledge-performance-bond blockers that prevent lock, payment, performance release, forfeiture, public metric, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "pledge_performance_bond_enforce_request",
+      "purpose": "Authenticated private request for pledge-performance-bond enforcement before matched-trade lock, payment authorization, payment capture, performance release, forfeiture decision, public-metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Pledge-performance-bond transition, checked-at time, required flag, policy records, and bond records to normalize and evaluate; unsupported wrapper or evaluation keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "pledge_performance_bond_enforce_response",
+      "purpose": "Authenticated private fail-closed pledge-performance-bond enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the pledge-performance-bond contract validator and normalized evaluation pass; all state-changing permission booleans remain false." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Pledge-performance-bond contract version used by the enforcement attempt." },
+        { "key": "performanceBondGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Pass only when normalized pledge-performance-bond evaluation and contract validation pass; blocked otherwise." },
+        { "key": "runtimeTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; runtime transition requires a separate state-transition path." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock proposal and confirmation path." },
+        { "key": "paymentAuthorizationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment authorization requires a separate payment control path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "performanceReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; performance release requires a separate performance path." },
+        { "key": "forfeitureDecisionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; forfeiture requires separate neutral-review and payment/release handling." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path and cannot treat bond status as reputation." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_pledge_performance_bond_enforcement_records row was appended." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, validation, and contract version when input could be evaluated." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "private", "description": "Pledge-performance-bond contract validation result used by the enforcement route." },
+        { "key": "persistenceStatus", "type": "string", "required": false, "privacy": "private", "description": "Persistence status for the append-only enforcement record." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, evaluation, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "direct_pair_clearing_contract_response",
       "purpose": "Public validator-backed direct-pair clearing governance contract for two-party or invite-linked donation-offset and pledge-swap previews before lock, payment, capture, public metrics, or release-gate promotion.",
       "fields": [
@@ -4723,6 +4791,7 @@
     "risk_control_matrix_enforce_route_contract",
     "preference_integrity_enforce_route_contract",
     "commitment_settlement_enforce_route_contract",
+    "pledge_performance_bond_enforce_route_contract",
     "direct_pair_clearing_enforce_route_contract",
     "cause_bucket_taxonomy_enforce_route_contract",
     "resource_compatibility_enforce_route_contract",
