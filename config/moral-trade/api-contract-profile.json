@@ -795,6 +795,18 @@
       "fallback": "Return protective-assessment validation blockers and fail-closed sample evaluations; never expose protected-trait facts, authority documents, private reports, credentials, source-of-funds evidence, reviewer notes, raw evidence, or participant-specific assessment records."
     },
     {
+      "key": "moral_trade_protective_assessment_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/protective-assessments/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "protective_assessment_enforce_request",
+      "responseSchema": "protective_assessment_enforce_response",
+      "rateLimitSurface": "protective_assessment_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated protective-assessment enforcement requests create no draft-preview, matched-trade-lock, payment-capture, payout-release, public-completion, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_user_safety_content_moderation_contract",
       "method": "GET",
       "path": "/api/moral-trade/user-safety-content-moderation/contract",
@@ -3020,6 +3032,37 @@
       ]
     },
     {
+      "key": "protective_assessment_enforce_request",
+      "purpose": "Authenticated private fail-closed protective-assessment enforcement request.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private", "description": "Normalized protective-assessment evaluation input containing transition, checked-at timestamp, and first-class protective assessment records." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private", "description": "Optional caller-stable idempotency key for owner-scoped duplicate replay." }
+      ]
+    },
+    {
+      "key": "protective_assessment_enforce_response",
+      "purpose": "Authenticated private protective-assessment enforcement result that records the evaluation while never authorizing downstream lock, payment, payout, public completion, or release state changes.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the contract validator passes and the request was processed." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Protective-assessment contract version used by the enforcement route." },
+        { "key": "protectiveAssessmentGateStatus", "type": "string", "required": true, "privacy": "private", "description": "Blocked unless the normalized protective-assessment evaluation is non-blocking." },
+        { "key": "draftPreviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; draft preview requires a separate preview path." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "payoutReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payout release requires a separate payout control path." },
+        { "key": "publicCompletionClaimAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public completion claims require a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_protective_assessment_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized protective-assessment evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Protective-assessment contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "user_safety_content_moderation_contract_response",
       "purpose": "Public validator-backed user-safety and content-moderation contract for contact attempts, invite links, blocking, decline handling, abuse reporting, retaliation prevention, prohibited-use moderation, and viewpoint-neutral handling before public, reviewer-actionable, reliance-bearing, payable, profile-amplifying, contact-enabling, or release-gate transitions.",
       "fields": [
@@ -4027,6 +4070,7 @@
     "review_capacity_contract_route",
     "review_capacity_enforce_route_contract",
     "participant_term_sheet_enforce_route_contract",
+    "protective_assessment_enforce_route_contract",
     "recipient_acceptance_enforce_route_contract",
     "ai_preference_elicitation_enforce_route_contract",
     "post_clear_audit_enforce_route_contract",

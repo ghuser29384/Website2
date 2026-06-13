@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforceProtectiveAssessment } from "@/app/api/moral-trade/protective-assessments/enforce/route";
+
 import {
   evaluateMoralTradeProtectiveAssessments,
   getMoralTradeProtectiveAssessmentContract,
@@ -270,10 +272,43 @@ test("assessment records fail closed for stale policy, stale review, notice, app
   );
 });
 
+test("protective-assessment enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceProtectiveAssessment(
+    new Request("http://localhost/api/moral-trade/protective-assessments/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.protectiveAssessmentGateStatus, "blocked");
+  assert.equal(body.draftPreviewAllowed, false);
+  assert.equal(body.matchedTradeLockAllowed, false);
+  assert.equal(body.paymentCaptureAllowed, false);
+  assert.equal(body.payoutReleaseAllowed, false);
+  assert.equal(body.publicCompletionClaimAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_protective_assessment_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("protective-assessment contract is wired through route, health, spec, schema, and API profile", () => {
   const source = readRepoFile("src/lib/moral-trade/protective-assessments.ts");
   const route = readRepoFile(
     "src/app/api/moral-trade/protective-assessments/contract/route.ts",
+  );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/protective-assessments/enforce/route.ts",
   );
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const technicalSpecPage = readRepoFile(
@@ -282,9 +317,15 @@ test("protective-assessment contract is wired through route, health, spec, schem
   const migration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_protective_assessments.sql",
   );
+  const enforcementMigration = readRepoFile(
+    "supabase/migrations/20260613_moral_trade_protective_assessment_enforcement_records.sql",
+  );
   const schema = readRepoFile("supabase/schema.sql");
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
   const apiContract = readRepoFile("src/lib/moral-trade/api-contract.ts");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
   const apiContractProfile = readRepoFile(
     "config/moral-trade/api-contract-profile.json",
   );
@@ -293,6 +334,12 @@ test("protective-assessment contract is wired through route, health, spec, schem
   assert.match(source, /regulated_goods_hazardous_activity/);
   assert.match(source, /cyber_abuse_digital_systems_integrity/);
   assert.match(route, /validateMoralTradeProtectiveAssessmentContract/);
+  assert.match(enforceRoute, /protective_assessment_enforce/);
+  assert.match(enforceRoute, /moral_trade_protective_assessment_enforcement_records/);
+  assert.match(enforceRoute, /matchedTradeLockAllowed: false/);
+  assert.match(enforceRoute, /publicCompletionClaimAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:protective_assessment_enforce/);
+  assert.match(enforceRoute, /authentication_required:protective_assessment_enforce/);
   assert.match(healthRoute, /protectiveAssessmentValidation/);
   assert.match(healthRoute, /protectiveAssessmentDimensions/);
   assert.match(technicalSpecPage, /Protective assessments/);
@@ -305,10 +352,24 @@ test("protective-assessment contract is wired through route, health, spec, schem
   assert.match(migration, /moral_trade_action_reversibility_assessments/);
   assert.match(migration, /moral_trade_donor_of_record_tax_reviews/);
   assert.match(migration, /moral_trade_authority_obligation_assessments/);
+  assert.match(enforcementMigration, /moral_trade_protective_assessment_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /matched_trade_lock_allowed_bool = false/);
+  assert.match(enforcementMigration, /public_completion_claim_allowed_bool = false/);
+  assert.match(enforcementMigration, /release_gate_promotion_allowed_bool = false/);
   assert.match(schema, /moral_trade_protective_assessment_records/);
+  assert.match(schema, /moral_trade_protective_assessment_enforcement_records/);
   assert.match(schema, /protective_assessment/);
   assert.match(databaseTypes, /moral_trade_protective_assessment_records/);
+  assert.match(databaseTypes, /moral_trade_protective_assessment_enforcement_records/);
   assert.match(apiContract, /moral_trade_protective_assessment_contract/);
+  assert.match(apiContract, /moral_trade_protective_assessment_enforce/);
+  assert.match(apiRateLimit, /protective_assessment_enforce/);
+  assert.match(operations, /protective_assessment_enforce/);
+  assert.match(operationsProfile, /protective_assessment_enforce/);
   assert.match(apiContractProfile, /protective_assessment_contract_response/);
+  assert.match(apiContractProfile, /protective_assessment_enforce_request/);
+  assert.match(apiContractProfile, /protective_assessment_enforce_response/);
+  assert.match(apiContractProfile, /moral_trade_protective_assessment_enforce/);
   assert.match(apiContractProfile, /protected-trait facts/);
 });

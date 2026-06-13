@@ -25,6 +25,7 @@ export type MoralTradeApiRateLimitSurface =
   | "template_conformance_enforce"
   | "review_capacity_enforce"
   | "participant_term_sheet_enforce"
+  | "protective_assessment_enforce"
   | "recipient_acceptance_enforce"
   | "ai_preference_elicitation_enforce"
   | "post_clear_audit_enforce"
@@ -78,6 +79,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   template_conformance_enforce: { limit: 20, windowMs: 60_000 },
   review_capacity_enforce: { limit: 20, windowMs: 60_000 },
   participant_term_sheet_enforce: { limit: 20, windowMs: 60_000 },
+  protective_assessment_enforce: { limit: 20, windowMs: 60_000 },
   recipient_acceptance_enforce: { limit: 20, windowMs: 60_000 },
   ai_preference_elicitation_enforce: { limit: 20, windowMs: 60_000 },
   post_clear_audit_enforce: { limit: 20, windowMs: 60_000 },
