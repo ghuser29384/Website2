@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { GET as getNetOffsetAccountingContract } from "@/app/api/moral-trade/net-offset-accounting/contract/route";
+import { POST as enforceNetOffsetAccounting } from "@/app/api/moral-trade/net-offset-accounting/enforce/route";
 import {
   evaluateMoralTradeNetOffsetAccounting,
   getMoralTradeNetOffsetAccountingContract,
@@ -185,32 +186,94 @@ test("net-offset accounting route exposes only public contract metadata", async 
   assert.match(body.publicContract.privacyBoundary, /participant-specific accounting rows/i);
 });
 
+test("net-offset accounting enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceNetOffsetAccounting(
+    new Request("http://localhost/api/moral-trade/net-offset-accounting/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.netOffsetAccountingGateStatus, "blocked");
+  assert.equal(body.draftPreviewAllowed, false);
+  assert.equal(body.matchCandidateGenerationAllowed, false);
+  assert.equal(body.matchedTradeLockAllowed, false);
+  assert.equal(body.clearingRunAllowed, false);
+  assert.equal(body.paymentCaptureAllowed, false);
+  assert.equal(body.publicMetricPublicationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_net_offset_accounting_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("net-offset accounting contract is wired through route, health, spec, API profile, preview, and schema", () => {
   const route = readFileSync(
     "src/app/api/moral-trade/net-offset-accounting/contract/route.ts",
     "utf8",
   );
+  const enforceRoute = readFileSync(
+    "src/app/api/moral-trade/net-offset-accounting/enforce/route.ts",
+    "utf8",
+  );
   const health = readFileSync("src/app/api/moral-trade/health/route.ts", "utf8");
   const spec = readFileSync("src/app/moral-trade/technical-spec/page.tsx", "utf8");
   const apiProfile = readFileSync("config/moral-trade/api-contract-profile.json", "utf8");
+  const apiContract = readFileSync("src/lib/moral-trade/api-contract.ts", "utf8");
+  const apiRateLimit = readFileSync("src/lib/moral-trade/api-rate-limit.ts", "utf8");
+  const operations = readFileSync("src/lib/moral-trade/operations.ts", "utf8");
+  const operationsProfile = readFileSync("config/moral-trade/operations-profile.json", "utf8");
   const clearingPreview = readFileSync("src/lib/moral-trade/clearing-previews.ts", "utf8");
   const migration = readFileSync(
     "supabase/migrations/20260612_moral_trade_net_offset_accounting_records.sql",
+    "utf8",
+  );
+  const enforcementMigration = readFileSync(
+    "supabase/migrations/20260613_moral_trade_net_offset_accounting_enforcement_records.sql",
     "utf8",
   );
   const schema = readFileSync("supabase/schema.sql", "utf8");
   const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
 
   assert.match(route, /getMoralTradeNetOffsetAccountingContract/);
+  assert.match(enforceRoute, /net_offset_accounting_enforce/);
+  assert.match(enforceRoute, /moral_trade_net_offset_accounting_enforcement_records/);
+  assert.match(enforceRoute, /draftPreviewAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:net_offset_accounting_enforce/);
+  assert.match(enforceRoute, /authentication_required:net_offset_accounting_enforce/);
   assert.match(health, /netOffsetAccountingValidation/);
   assert.match(spec, /\/api\/moral-trade\/net-offset-accounting\/contract/);
   assert.match(apiProfile, /net_offset_accounting_contract_response/);
+  assert.match(apiProfile, /net_offset_accounting_enforce_request/);
+  assert.match(apiProfile, /net_offset_accounting_enforce_response/);
   assert.match(apiProfile, /moral_trade_net_offset_accounting_contract/);
+  assert.match(apiProfile, /moral_trade_net_offset_accounting_enforce/);
+  assert.match(apiContract, /moral_trade_net_offset_accounting_enforce/);
+  assert.match(apiRateLimit, /net_offset_accounting_enforce/);
+  assert.match(operations, /net_offset_accounting_enforce/);
+  assert.match(operationsProfile, /net_offset_accounting_enforce/);
   assert.match(clearingPreview, /netOffsetAccountingStatus/);
   assert.match(migration, /moral_trade_net_offset_accounting_records/);
   assert.match(migration, /net_offset_accounting/);
+  assert.match(enforcementMigration, /moral_trade_net_offset_accounting_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /draft_preview_allowed_bool = false/);
+  assert.match(enforcementMigration, /match_candidate_generation_allowed_bool = false/);
+  assert.match(enforcementMigration, /payment_capture_allowed_bool = false/);
   assert.match(schema, /moral_trade_net_offset_accounting_records/);
+  assert.match(schema, /moral_trade_net_offset_accounting_enforcement_records/);
   assert.match(schema, /net_offset_accounting/);
   assert.match(databaseTypes, /moral_trade_net_offset_accounting_records/);
+  assert.match(databaseTypes, /moral_trade_net_offset_accounting_enforcement_records/);
   assert.match(databaseTypes, /net_offset_accounting/);
 });

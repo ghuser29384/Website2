@@ -6242,6 +6242,12 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_net_offset_accounting_enforcement_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_offer_validity_records: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
