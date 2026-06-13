@@ -14903,6 +14903,69 @@ create table if not exists public.moral_trade_ai_preference_elicitation_records 
 comment on table public.moral_trade_ai_preference_elicitation_records is
   'Hash-backed AI preference-elicitation records. Records preserve a boundary between AI drafting and user-edited structured input, prohibit hidden willingness-to-pay inference, autonomous counteroffers, accepted matches, private disclosure, and state changes, and keep raw AI material private.';
 
+create table if not exists public.moral_trade_ai_preference_elicitation_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null check (
+    transition in (
+      'draft_preference_elicitation',
+      'structured_input_conversion',
+      'match_candidate_preview',
+      'matched_trade_lock',
+      'clearing_run_input',
+      'counterparty_disclosure',
+      'payment_authorization',
+      'payment_capture',
+      'public_metric_publication',
+      'release_gate_promotion'
+    )
+  ),
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  ai_preference_elicitation_used_bool boolean not null default false,
+  required_policy_count integer not null default 0 check (required_policy_count >= 0),
+  required_record_count integer not null default 0 check (required_record_count >= 0),
+  immutable_policy_count integer not null default 0 check (immutable_policy_count >= 0),
+  converted_structured_input_count integer not null default 0 check (converted_structured_input_count >= 0),
+  confirmation_or_reviewer_decision_count integer not null default 0 check (confirmation_or_reviewer_decision_count >= 0),
+  policy_record_count integer not null default 0 check (policy_record_count >= 0),
+  elicitation_record_count integer not null default 0 check (elicitation_record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  structured_input_conversion_allowed_bool boolean not null default false,
+  match_candidate_preview_allowed_bool boolean not null default false,
+  lock_transition_allowed_bool boolean not null default false,
+  clearing_run_input_allowed_bool boolean not null default false,
+  counterparty_disclosure_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_ai_preference_elicitation_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (immutable_policy_count <= policy_record_count),
+  check (converted_structured_input_count <= elicitation_record_count),
+  check (confirmation_or_reviewer_decision_count <= elicitation_record_count),
+  check (structured_input_conversion_allowed_bool = false),
+  check (match_candidate_preview_allowed_bool = false),
+  check (lock_transition_allowed_bool = false),
+  check (clearing_run_input_allowed_bool = false),
+  check (counterparty_disclosure_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+comment on table public.moral_trade_ai_preference_elicitation_enforcement_records is
+  'Append-only user-owned AI preference-elicitation enforcement records. A record stores normalized AI preference-elicitation policy and record input, deterministic evaluation result, blockers, and evaluation hash while enforcing that enforcement records cannot authorize structured input conversion, matching, clearing, counterparty disclosure, payment authorization, payment capture, public metric publication, or release-gate promotion.';
+
 create index if not exists moral_trade_ai_preference_elicitation_policies_stage_idx
   on public.moral_trade_ai_preference_elicitation_policies (release_stage, policy_status);
 
@@ -14911,9 +14974,43 @@ create index if not exists moral_trade_ai_preference_elicitation_records_subject
 
 create index if not exists moral_trade_ai_preference_elicitation_records_participant_idx
   on public.moral_trade_ai_preference_elicitation_records (participant_id_hash, elicitation_scope, updated_at desc);
+create index if not exists moral_trade_ai_preference_elicitation_enforcement_records_owner_status_idx
+  on public.moral_trade_ai_preference_elicitation_enforcement_records (owner_profile_id, enforcement_status, created_at desc);
+create index if not exists moral_trade_ai_preference_elicitation_enforcement_records_transition_status_idx
+  on public.moral_trade_ai_preference_elicitation_enforcement_records (transition, enforcement_status, created_at desc);
+create index if not exists moral_trade_ai_preference_elicitation_enforcement_records_hash_idx
+  on public.moral_trade_ai_preference_elicitation_enforcement_records (evaluation_hash, created_at desc);
 
 alter table public.moral_trade_ai_preference_elicitation_policies enable row level security;
 alter table public.moral_trade_ai_preference_elicitation_records enable row level security;
+alter table public.moral_trade_ai_preference_elicitation_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_ai_preference_elicitation_enforcement_records_select_owner"
+  on public.moral_trade_ai_preference_elicitation_enforcement_records;
+create policy "moral_trade_ai_preference_elicitation_enforcement_records_select_owner"
+  on public.moral_trade_ai_preference_elicitation_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_ai_preference_elicitation_enforcement_records_insert_owner"
+  on public.moral_trade_ai_preference_elicitation_enforcement_records;
+create policy "moral_trade_ai_preference_elicitation_enforcement_records_insert_owner"
+  on public.moral_trade_ai_preference_elicitation_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and structured_input_conversion_allowed_bool = false
+    and match_candidate_preview_allowed_bool = false
+    and lock_transition_allowed_bool = false
+    and clearing_run_input_allowed_bool = false
+    and counterparty_disclosure_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
 
 create table if not exists public.moral_trade_post_clear_audit_policies (
   id uuid primary key default gen_random_uuid(),

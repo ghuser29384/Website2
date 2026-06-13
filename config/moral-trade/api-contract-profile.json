@@ -363,6 +363,18 @@
       "fallback": "Return AI-preference-elicitation boundary validation blockers, first-class record metadata, and sample evaluations; never expose raw prompts, raw AI outputs, hidden willingness-to-pay estimates, private participant notes, reviewer notes, hidden negotiation moves, private disclosure candidates, payment details, or participant-specific elicitation records."
     },
     {
+      "key": "moral_trade_ai_preference_elicitation_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/ai-preference-elicitation/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "ai_preference_elicitation_enforce_request",
+      "responseSchema": "ai_preference_elicitation_enforce_response",
+      "rateLimitSurface": "ai_preference_elicitation_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated AI-preference enforcement requests create no structured-input, matching, clearing, disclosure, payment, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_post_clear_audit_contract",
       "method": "GET",
       "path": "/api/moral-trade/post-clear-audit/contract",
@@ -2046,6 +2058,40 @@
       ]
     },
     {
+      "key": "ai_preference_elicitation_enforce_request",
+      "purpose": "Authenticated private request for live AI preference-elicitation boundary enforcement before structured input conversion, matching, clearing, disclosure, payment, public-metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "AI preference transition, usage flag, checked-at time, AI preference policies, and elicitation records to normalize and evaluate; unsupported wrapper, evaluation, policy, or record keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "ai_preference_elicitation_enforce_response",
+      "purpose": "Authenticated private fail-closed AI preference-elicitation enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the AI preference-elicitation contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "AI preference-elicitation contract version used by the enforcement attempt." },
+        { "key": "aiPreferenceElicitationGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when normalized AI preference-elicitation evaluation passes; blocked otherwise." },
+        { "key": "structuredInputConversionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; this enforcement endpoint records evidence but never converts AI output into state-changing structured input." },
+        { "key": "matchCandidatePreviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matching previews require a separate matching control path." },
+        { "key": "lockTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; lock requires a separate matched-trade control path." },
+        { "key": "clearingRunInputAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; clearing input requires a separate frozen-run control path." },
+        { "key": "counterpartyDisclosureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; counterparty disclosure requires a separate privacy/disclosure control path." },
+        { "key": "paymentAuthorizationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment authorization requires a separate payment control path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_ai_preference_elicitation_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized AI preference-elicitation evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "AI preference-elicitation contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "post_clear_audit_contract_response",
       "purpose": "Public validator-backed post-clear audit sampling contract for completed non-public-goods trades, fail-closed public metrics, payout release, payment reconciliation close, and release promotion when baselines, evidence, recipient acceptance, disclosure, payment state, classification, or user-facing term sheets do not match the frozen record.",
       "fields": [
@@ -3449,6 +3495,7 @@
     "review_capacity_enforce_route_contract",
     "participant_term_sheet_enforce_route_contract",
     "recipient_acceptance_enforce_route_contract",
+    "ai_preference_elicitation_enforce_route_contract",
     "private_exchange_rate_contract_route",
     "noncompensable_blocker_contract_route",
     "batch_clearing_objective_contract_route",

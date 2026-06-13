@@ -281,32 +281,95 @@ test("AI preference-elicitation contract is wired through route, health, spec, A
   const route = readRepoFile(
     "src/app/api/moral-trade/ai-preference-elicitation/contract/route.ts",
   );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/ai-preference-elicitation/enforce/route.ts",
+  );
   const health = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const spec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
   const apiContract = readRepoFile("src/lib/moral-trade/api-contract.ts");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile(
+    "config/moral-trade/operations-profile.json",
+  );
   const apiProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const migration = readRepoFile(
     "supabase/migrations/20260611_moral_trade_ai_preference_elicitation_records.sql",
   );
   const schema = readRepoFile("supabase/schema.sql");
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
+  const forbiddenAllowColumns = [
+    "structured_input_conversion_allowed_bool",
+    "match_candidate_preview_allowed_bool",
+    "lock_transition_allowed_bool",
+    "clearing_run_input_allowed_bool",
+    "counterparty_disclosure_allowed_bool",
+    "payment_authorization_allowed_bool",
+    "payment_capture_allowed_bool",
+    "public_metric_publication_allowed_bool",
+    "release_gate_promotion_allowed_bool",
+  ];
 
   assert.match(route, /getMoralTradeAiPreferenceElicitationContract/);
   assert.match(route, /aiPreferenceElicitationSampleEvaluationStatuses/);
+  assert.match(enforceRoute, /ai_preference_elicitation_enforce/);
+  assert.match(
+    enforceRoute,
+    /moral_trade_ai_preference_elicitation_enforcement_records/,
+  );
+  assert.match(
+    enforceRoute,
+    /authentication_required:ai_preference_elicitation_enforce/,
+  );
+  assert.match(
+    enforceRoute,
+    /database_insert_failed:ai_preference_elicitation_enforce/,
+  );
+  assert.match(enforceRoute, /structuredInputConversionAllowed: false/);
+  assert.match(enforceRoute, /matchCandidatePreviewAllowed: false/);
+  assert.match(enforceRoute, /lockTransitionAllowed: false/);
+  assert.match(enforceRoute, /clearingRunInputAllowed: false/);
+  assert.match(enforceRoute, /counterpartyDisclosureAllowed: false/);
+  assert.match(enforceRoute, /paymentAuthorizationAllowed: false/);
+  assert.match(enforceRoute, /paymentCaptureAllowed: false/);
+  assert.match(enforceRoute, /publicMetricPublicationAllowed: false/);
+  assert.match(enforceRoute, /releaseGatePromotionAllowed: false/);
   assert.match(health, /aiPreferenceElicitationValidation/);
   assert.match(health, /aiPreferenceElicitationFirstClassRecordTables/);
   assert.match(spec, /aiPreferenceElicitationContract\.firstClassRecordTables/);
   assert.match(spec, /\/api\/moral-trade\/ai-preference-elicitation\/contract/);
   assert.match(apiContract, /moral_trade_ai_preference_elicitation_contract/);
+  assert.match(apiContract, /moral_trade_ai_preference_elicitation_enforce/);
+  assert.match(apiRateLimit, /ai_preference_elicitation_enforce/);
+  assert.match(operations, /ai_preference_elicitation_enforce/);
+  assert.match(operationsProfile, /ai_preference_elicitation_enforce/);
   assert.match(apiProfile, /ai_preference_elicitation_contract_response/);
+  assert.match(apiProfile, /ai_preference_elicitation_enforce_request/);
+  assert.match(apiProfile, /ai_preference_elicitation_enforce_response/);
+  assert.match(apiProfile, /ai_preference_elicitation_enforce_route_contract/);
   assert.match(apiProfile, /AI-preference-elicitation governance/);
   assert.match(migration, /moral_trade_ai_preference_elicitation_policies/);
   assert.match(migration, /moral_trade_ai_preference_elicitation_records/);
+  assert.match(
+    migration,
+    /moral_trade_ai_preference_elicitation_enforcement_records/,
+  );
+  assert.match(migration, /owner_profile_id = auth\.uid\(\)/);
   assert.match(migration, /hidden_willingness_to_pay_inference_prohibited_bool/);
   assert.match(migration, /autonomous_counteroffer_or_acceptance_bool/);
   assert.match(migration, /ai_preference_elicitation/);
   assert.match(schema, /moral_trade_ai_preference_elicitation_records/);
+  assert.match(schema, /moral_trade_ai_preference_elicitation_enforcement_records/);
   assert.match(schema, /hidden_wtp_estimate_public_bool/);
   assert.match(databaseTypes, /moral_trade_ai_preference_elicitation_policies/);
+  assert.match(
+    databaseTypes,
+    /moral_trade_ai_preference_elicitation_enforcement_records/,
+  );
   assert.match(databaseTypes, /ai_preference_elicitation/);
+
+  for (const column of forbiddenAllowColumns) {
+    assert.match(migration, new RegExp(`check \\(${column} = false\\)`));
+    assert.match(schema, new RegExp(`check \\(${column} = false\\)`));
+  }
 });
