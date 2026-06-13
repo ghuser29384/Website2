@@ -132,6 +132,7 @@ const REQUIRED_RATE_LIMITS = [
   "agreement_amendment_enforce",
   "side_agreement_enforce",
   "trade_classification_enforce",
+  "template_conformance_enforce",
   "challenge_appeal_evaluate",
   "challenge_appeal_enforce",
   "disclosure_evaluate",

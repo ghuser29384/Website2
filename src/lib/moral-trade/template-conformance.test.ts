@@ -273,10 +273,16 @@ test("template-conformance route, health, spec, API contract, and schema are wir
   const contractRoute = readRepoFile(
     "src/app/api/moral-trade/template-conformance/contract/route.ts",
   );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/template-conformance/enforce/route.ts",
+  );
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const technicalSpec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
+  const apiRateLimitSource = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
+  const operationsSource = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
   const migration = readRepoFile(
     "supabase/migrations/20260611_moral_trade_template_conformance_records.sql",
   );
@@ -290,19 +296,46 @@ test("template-conformance route, health, spec, API contract, and schema are wir
   assert.match(source, /moral_trade_template_instance_records/);
   assert.match(source, /free_text_creates_new_obligations/);
   assert.match(contractRoute, /templateConformanceSampleEvaluationStatuses/);
+  assert.match(enforceRoute, /template_conformance_enforce/);
+  assert.match(enforceRoute, /moral_trade_template_conformance_enforcement_records/);
+  assert.match(enforceRoute, /livePublicationAllowed: false/);
+  assert.match(enforceRoute, /lockTransitionAllowed: false/);
+  assert.match(enforceRoute, /paymentTransitionAllowed: false/);
+  assert.match(enforceRoute, /relianceBearingTransitionAllowed: false/);
+  assert.match(enforceRoute, /publicMetricPublicationAllowed: false/);
+  assert.match(enforceRoute, /releaseGatePromotionAllowed: false/);
+  assert.match(enforceRoute, /authentication_required:template_conformance_enforce/);
+  assert.match(enforceRoute, /database_insert_failed:template_conformance_enforce/);
+  assert.match(apiRateLimitSource, /template_conformance_enforce/);
   assert.match(healthRoute, /templateConformanceValidation/);
   assert.match(healthRoute, /templateConformanceFirstClassRecordTables/);
   assert.match(technicalSpec, /templateConformanceContract\.firstClassRecordTables/);
   assert.match(apiContractSource, /moral_trade_template_conformance_contract/);
+  assert.match(apiContractSource, /moral_trade_template_conformance_enforce/);
   assert.match(apiContractProfile, /template_conformance_contract_response/);
+  assert.match(apiContractProfile, /template_conformance_enforce_request/);
+  assert.match(apiContractProfile, /template_conformance_enforce_response/);
+  assert.match(apiContractProfile, /template_conformance_enforce_route_contract/);
+  assert.match(operationsSource, /template_conformance_enforce/);
+  assert.match(operationsProfile, /template_conformance_enforce/);
   for (const tableSource of [migration, schema]) {
     assert.match(tableSource, /moral_trade_approved_trade_templates/);
     assert.match(tableSource, /moral_trade_template_parameter_policies/);
     assert.match(tableSource, /moral_trade_template_instance_records/);
+    assert.match(tableSource, /moral_trade_template_conformance_enforcement_records/);
     assert.match(tableSource, /approved_trade_template/);
     assert.match(tableSource, /template_parameter/);
     assert.match(tableSource, /free_text_creates_new_obligations_bool/);
+    assert.match(tableSource, /live_publication_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /check \(live_publication_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(lock_transition_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(payment_transition_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(reliance_bearing_transition_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(public_metric_publication_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(release_gate_promotion_allowed_bool = false\)/);
+    assert.match(tableSource, /owner_profile_id = auth\.uid\(\)/);
   }
   assert.match(databaseTypes, /moral_trade_approved_trade_templates/);
   assert.match(databaseTypes, /moral_trade_template_instance_records/);
+  assert.match(databaseTypes, /moral_trade_template_conformance_enforcement_records/);
 });

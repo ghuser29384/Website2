@@ -555,6 +555,18 @@
       "fallback": "Return approved-template and parameter-conformance validation blockers, first-class template/policy/instance record metadata, and sample evaluations; never expose private terms, exact caps, free-text narratives, hidden counterparty data, reviewer notes, private wishes, payment details, or participant-specific template instance records."
     },
     {
+      "key": "moral_trade_template_conformance_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/template-conformance/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "template_conformance_enforce_request",
+      "responseSchema": "template_conformance_enforce_response",
+      "rateLimitSurface": "template_conformance_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated template-conformance enforcement requests create no live-publication, lock, payment, reliance, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_review_capacity_contract",
       "method": "GET",
       "path": "/api/moral-trade/review-capacity/contract",
@@ -2224,6 +2236,37 @@
       ]
     },
     {
+      "key": "template_conformance_enforce_request",
+      "purpose": "Authenticated private request for live template-instance enforcement before live publication, lock, payment, reliance, public-metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Template-conformance transition, checked-at time, approved template records, and template instance records to normalize and evaluate; unsupported wrapper, evaluation, template, or instance keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "template_conformance_enforce_response",
+      "purpose": "Authenticated private fail-closed template-conformance enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the template-conformance contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Template-conformance contract version used by the enforcement attempt." },
+        { "key": "templateConformanceGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when normalized template-conformance evaluation passes; blocked otherwise." },
+        { "key": "livePublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes live offer publication." },
+        { "key": "lockTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes lock." },
+        { "key": "paymentTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes payment." },
+        { "key": "relianceBearingTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; no response can make a transition reliance-bearing." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_template_conformance_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized template-conformance evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Template-conformance contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "review_capacity_contract_response",
       "purpose": "Public validator-backed review-capacity and queue-admission contract for non-public-goods offers before live, matchable, payable, reliance-bearing, public metric, or release-gate transitions.",
       "fields": [
@@ -3266,6 +3309,7 @@
     "challenge_appeal_route_contract",
     "challenge_appeal_enforce_route_contract",
     "template_conformance_contract_route",
+    "template_conformance_enforce_route_contract",
     "review_capacity_contract_route",
     "private_exchange_rate_contract_route",
     "noncompensable_blocker_contract_route",
