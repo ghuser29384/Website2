@@ -339,6 +339,18 @@
       "fallback": "Return recipient-acceptance and adverse-association validation blockers, first-class record metadata, and sample evaluations; never expose recipient private notes, donor private terms, raw adverse-association evidence, expanded recipient identities, private donor reasons, reviewer notes, payment details, raw provider payloads, or participant-specific acceptance records."
     },
     {
+      "key": "moral_trade_recipient_acceptance_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/recipient-acceptance/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "recipient_acceptance_enforce_request",
+      "responseSchema": "recipient_acceptance_enforce_response",
+      "rateLimitSurface": "recipient_acceptance_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated recipient-acceptance enforcement requests create no recipient-listing, lock, payment, payout, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_ai_preference_elicitation_contract",
       "method": "GET",
       "path": "/api/moral-trade/ai-preference-elicitation/contract",
@@ -1989,6 +2001,38 @@
       ]
     },
     {
+      "key": "recipient_acceptance_enforce_request",
+      "purpose": "Authenticated private request for live recipient-acceptance and adverse-association enforcement before recipient listing, lock, payment, payout, public-metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Recipient-acceptance transition, checked-at time, recipient-acceptance policies, recipient acceptance records, and adverse-association reviews to normalize and evaluate; unsupported wrapper, evaluation, policy, acceptance, or review keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "recipient_acceptance_enforce_response",
+      "purpose": "Authenticated private fail-closed recipient-acceptance enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the recipient-acceptance contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Recipient-acceptance contract version used by the enforcement attempt." },
+        { "key": "recipientAcceptanceGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when normalized recipient-acceptance evaluation passes; blocked otherwise." },
+        { "key": "recipientListingPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes recipient listing publication." },
+        { "key": "lockTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; lock requires a separate matched-trade control path." },
+        { "key": "paymentAuthorizationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment authorization requires a separate payment control path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "payoutReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payout release requires a separate settlement control path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_recipient_acceptance_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized recipient-acceptance evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Recipient-acceptance contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "ai_preference_elicitation_contract_response",
       "purpose": "Public validator-backed AI preference-elicitation contract for fail-closed user-edited structured input conversion before AI-assisted baselines, caps, side constraints, empirical assumptions, cause buckets, evidence preferences, fallback rules, matching, clearing, disclosure, payment, public metrics, or release promotion can affect state.",
       "fields": [
@@ -3404,6 +3448,7 @@
     "review_capacity_contract_route",
     "review_capacity_enforce_route_contract",
     "participant_term_sheet_enforce_route_contract",
+    "recipient_acceptance_enforce_route_contract",
     "private_exchange_rate_contract_route",
     "noncompensable_blocker_contract_route",
     "batch_clearing_objective_contract_route",

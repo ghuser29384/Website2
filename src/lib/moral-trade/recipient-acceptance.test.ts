@@ -309,27 +309,78 @@ test("recipient-acceptance contract is wired through route, health, spec, API pr
   const route = readRepoFile(
     "src/app/api/moral-trade/recipient-acceptance/contract/route.ts",
   );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/recipient-acceptance/enforce/route.ts",
+  );
   const health = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const spec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
   const apiContract = readRepoFile("src/lib/moral-trade/api-contract.ts");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile(
+    "config/moral-trade/operations-profile.json",
+  );
   const apiProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const migration = readRepoFile(
     "supabase/migrations/20260611_moral_trade_recipient_acceptance_records.sql",
   );
   const schema = readRepoFile("supabase/schema.sql");
+  const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
+  const forbiddenAllowColumns = [
+    "recipient_listing_publication_allowed_bool",
+    "lock_transition_allowed_bool",
+    "payment_authorization_allowed_bool",
+    "payment_capture_allowed_bool",
+    "payout_release_allowed_bool",
+    "public_metric_publication_allowed_bool",
+    "release_gate_promotion_allowed_bool",
+  ];
 
   assert.match(route, /getMoralTradeRecipientAcceptanceContract/);
   assert.match(route, /recipientAcceptanceSampleEvaluationStatuses/);
+  assert.match(enforceRoute, /recipient_acceptance_enforce/);
+  assert.match(
+    enforceRoute,
+    /moral_trade_recipient_acceptance_enforcement_records/,
+  );
+  assert.match(enforceRoute, /authentication_required:recipient_acceptance_enforce/);
+  assert.match(enforceRoute, /database_insert_failed:recipient_acceptance_enforce/);
+  assert.match(enforceRoute, /recipientListingPublicationAllowed: false/);
+  assert.match(enforceRoute, /lockTransitionAllowed: false/);
+  assert.match(enforceRoute, /paymentAuthorizationAllowed: false/);
+  assert.match(enforceRoute, /paymentCaptureAllowed: false/);
+  assert.match(enforceRoute, /payoutReleaseAllowed: false/);
+  assert.match(enforceRoute, /publicMetricPublicationAllowed: false/);
+  assert.match(enforceRoute, /releaseGatePromotionAllowed: false/);
   assert.match(health, /recipientAcceptanceValidation/);
   assert.match(health, /recipientAcceptanceFirstClassRecordTables/);
   assert.match(spec, /recipientAcceptanceContract\.firstClassRecordTables/);
   assert.match(spec, /\/api\/moral-trade\/recipient-acceptance\/contract/);
   assert.match(apiContract, /moral_trade_recipient_acceptance_contract/);
+  assert.match(apiContract, /moral_trade_recipient_acceptance_enforce/);
+  assert.match(apiRateLimit, /recipient_acceptance_enforce/);
+  assert.match(operations, /recipient_acceptance_enforce/);
+  assert.match(operationsProfile, /recipient_acceptance_enforce/);
   assert.match(apiProfile, /recipient_acceptance_contract_response/);
+  assert.match(apiProfile, /recipient_acceptance_enforce_request/);
+  assert.match(apiProfile, /recipient_acceptance_enforce_response/);
+  assert.match(apiProfile, /recipient_acceptance_enforce_route_contract/);
   assert.match(migration, /moral_trade_recipient_acceptance_policies/);
   assert.match(migration, /moral_trade_recipient_acceptance_records/);
   assert.match(migration, /moral_trade_adverse_association_reviews/);
+  assert.match(
+    migration,
+    /moral_trade_recipient_acceptance_enforcement_records/,
+  );
+  assert.match(migration, /owner_profile_id = auth\.uid\(\)/);
   assert.match(migration, /adverse_association/);
   assert.match(schema, /moral_trade_recipient_acceptance_records/);
   assert.match(schema, /moral_trade_adverse_association_reviews/);
+  assert.match(schema, /moral_trade_recipient_acceptance_enforcement_records/);
+  assert.match(databaseTypes, /moral_trade_recipient_acceptance_enforcement_records/);
+
+  for (const column of forbiddenAllowColumns) {
+    assert.match(migration, new RegExp(`check \\(${column} = false\\)`));
+    assert.match(schema, new RegExp(`check \\(${column} = false\\)`));
+  }
 });
