@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { GET as getCauseBucketTaxonomyContract } from "@/app/api/moral-trade/cause-bucket-taxonomy/contract/route";
+import { POST as enforceCauseBucketTaxonomy } from "@/app/api/moral-trade/cause-bucket-taxonomy/enforce/route";
 import {
   evaluateMoralTradeCauseBucketTaxonomy,
   getMoralTradeCauseBucketTaxonomyContract,
@@ -244,35 +245,96 @@ test("cause-bucket taxonomy route exposes only public contract metadata", async 
   assert.match(body.publicContract.privacyBoundary, /participant identity hashes/i);
 });
 
+test("cause-bucket taxonomy enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceCauseBucketTaxonomy(
+    new Request("http://localhost/api/moral-trade/cause-bucket-taxonomy/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.causeBucketTaxonomyGateStatus, "blocked");
+  assert.equal(body.draftPreviewAllowed, false);
+  assert.equal(body.matchCandidateGenerationAllowed, false);
+  assert.equal(body.matchedTradeLockAllowed, false);
+  assert.equal(body.clearingRunAllowed, false);
+  assert.equal(body.publicMetricPublicationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_cause_bucket_taxonomy_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("cause-bucket taxonomy contract is wired through route, health, spec, API profile, and schema", () => {
   const route = readFileSync(
     "src/app/api/moral-trade/cause-bucket-taxonomy/contract/route.ts",
     "utf8",
   );
+  const enforceRoute = readFileSync(
+    "src/app/api/moral-trade/cause-bucket-taxonomy/enforce/route.ts",
+    "utf8",
+  );
   const health = readFileSync("src/app/api/moral-trade/health/route.ts", "utf8");
   const spec = readFileSync("src/app/moral-trade/technical-spec/page.tsx", "utf8");
   const apiProfile = readFileSync("config/moral-trade/api-contract-profile.json", "utf8");
+  const apiContract = readFileSync("src/lib/moral-trade/api-contract.ts", "utf8");
+  const apiRateLimit = readFileSync("src/lib/moral-trade/api-rate-limit.ts", "utf8");
+  const operations = readFileSync("src/lib/moral-trade/operations.ts", "utf8");
+  const operationsProfile = readFileSync("config/moral-trade/operations-profile.json", "utf8");
   const clearingPreview = readFileSync("src/lib/moral-trade/clearing-previews.ts", "utf8");
   const migration = readFileSync(
     "supabase/migrations/20260612_moral_trade_cause_bucket_taxonomy_records.sql",
+    "utf8",
+  );
+  const enforcementMigration = readFileSync(
+    "supabase/migrations/20260613_moral_trade_cause_bucket_taxonomy_enforcement_records.sql",
     "utf8",
   );
   const schema = readFileSync("supabase/schema.sql", "utf8");
   const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
 
   assert.match(route, /getMoralTradeCauseBucketTaxonomyContract/);
+  assert.match(enforceRoute, /cause_bucket_taxonomy_enforce/);
+  assert.match(enforceRoute, /moral_trade_cause_bucket_taxonomy_enforcement_records/);
+  assert.match(enforceRoute, /draftPreviewAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:cause_bucket_taxonomy_enforce/);
+  assert.match(enforceRoute, /authentication_required:cause_bucket_taxonomy_enforce/);
   assert.match(health, /causeBucketTaxonomyValidation/);
   assert.match(spec, /\/api\/moral-trade\/cause-bucket-taxonomy\/contract/);
   assert.match(apiProfile, /cause_bucket_taxonomy_contract_response/);
+  assert.match(apiProfile, /cause_bucket_taxonomy_enforce_request/);
+  assert.match(apiProfile, /cause_bucket_taxonomy_enforce_response/);
   assert.match(apiProfile, /moral_trade_cause_bucket_taxonomy_contract/);
+  assert.match(apiProfile, /moral_trade_cause_bucket_taxonomy_enforce/);
+  assert.match(apiContract, /moral_trade_cause_bucket_taxonomy_enforce/);
+  assert.match(apiRateLimit, /cause_bucket_taxonomy_enforce/);
+  assert.match(operations, /cause_bucket_taxonomy_enforce/);
+  assert.match(operationsProfile, /cause_bucket_taxonomy_enforce/);
   assert.match(clearingPreview, /causeBucketTaxonomyStatus/);
   assert.match(migration, /moral_trade_cause_bucket_taxonomies/);
   assert.match(migration, /moral_trade_cause_bucket_assignments/);
   assert.match(migration, /cause_bucket_taxonomy/);
+  assert.match(enforcementMigration, /moral_trade_cause_bucket_taxonomy_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /draft_preview_allowed_bool = false/);
+  assert.match(enforcementMigration, /match_candidate_generation_allowed_bool = false/);
+  assert.match(enforcementMigration, /clearing_run_allowed_bool = false/);
   assert.match(schema, /moral_trade_cause_bucket_taxonomies/);
   assert.match(schema, /moral_trade_cause_bucket_assignments/);
+  assert.match(schema, /moral_trade_cause_bucket_taxonomy_enforcement_records/);
   assert.match(schema, /cause_bucket_taxonomy/);
   assert.match(databaseTypes, /moral_trade_cause_bucket_taxonomies/);
   assert.match(databaseTypes, /moral_trade_cause_bucket_assignments/);
+  assert.match(databaseTypes, /moral_trade_cause_bucket_taxonomy_enforcement_records/);
   assert.match(databaseTypes, /cause_bucket_taxonomy/);
 });
