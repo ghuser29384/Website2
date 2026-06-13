@@ -40,6 +40,7 @@ export type MoralTradeApiRateLimitSurface =
   | "non_public_goods_subsidy_enforce"
   | "non_public_goods_tier_enforce"
   | "risk_control_matrix_enforce"
+  | "preference_integrity_enforce"
   | "direct_pair_clearing_enforce"
   | "cause_bucket_taxonomy_enforce"
   | "resource_compatibility_enforce"
@@ -104,6 +105,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   non_public_goods_subsidy_enforce: { limit: 20, windowMs: 60_000 },
   non_public_goods_tier_enforce: { limit: 20, windowMs: 60_000 },
   risk_control_matrix_enforce: { limit: 20, windowMs: 60_000 },
+  preference_integrity_enforce: { limit: 20, windowMs: 60_000 },
   direct_pair_clearing_enforce: { limit: 20, windowMs: 60_000 },
   cause_bucket_taxonomy_enforce: { limit: 20, windowMs: 60_000 },
   resource_compatibility_enforce: { limit: 20, windowMs: 60_000 },

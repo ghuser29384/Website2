@@ -543,6 +543,30 @@
       "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated risk-control matrix enforcement requests create no runtime transition, matched-trade lock, payment authorization, payment capture, public-metric publication, or release-gate promotion state change."
     },
     {
+      "key": "moral_trade_preference_integrity_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/preference-integrity/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "preference_integrity_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return preference-integrity blockers, first-class record metadata, non-cardinality rule, self-offset metric rule, release-gate hooks, and sample evaluations; never expose participant identity hashes, private option judgments, raw moral theories, exact willingness-to-trade scores, reviewer notes, or participant-specific side constraints."
+    },
+    {
+      "key": "moral_trade_preference_integrity_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/preference-integrity/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "preference_integrity_enforce_request",
+      "responseSchema": "preference_integrity_enforce_response",
+      "rateLimitSurface": "preference_integrity_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated preference-integrity enforcement requests create no runtime transition, match preview, matched-trade lock, payment authorization, payment-capture, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_direct_pair_clearing_contract",
       "method": "GET",
       "path": "/api/moral-trade/direct-pair-clearing/contract",
@@ -2773,6 +2797,51 @@
       ]
     },
     {
+      "key": "preference_integrity_contract_response",
+      "purpose": "Public validator-backed preference-integrity governance contract for option-set comparison, non-cardinal preference comparability, trade burden accounting, moral-difference attestation, anti-holdup bargaining, empirical assumptions, moral side constraints, and intrapersonal self-offset classification before non-public-goods match, lock, payment, public metric, or release transitions.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the preference-integrity contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the preference-integrity validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Preference-integrity contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class record tables, policy subjects, release-gate hooks, non-cardinality rule, self-offset metric rule, transition requirements, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, public non-cardinality rule, self-offset metric rule, first-class table names, policy subjects, subject types, release-gate hooks, transition requirements, sample statuses, and test hooks without participant identity hashes, private option judgments, raw moral theories, exact willingness-to-trade scores, reviewer notes, or participant-specific side constraints." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Preference-integrity blockers that prevent match, lock, payment, reliance, public metric, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "preference_integrity_enforce_request",
+      "purpose": "Authenticated private request for live preference-integrity enforcement before match preview, matched-trade lock, payment authorization, payment capture, reliance, public-metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Preference-integrity transition, checked-at time, integrity-required flag, and option-set, comparability, burden, moral-difference, bargaining, assumption, side-constraint, and self-offset records to normalize and evaluate; unsupported wrapper or evaluation keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "preference_integrity_enforce_response",
+      "purpose": "Authenticated private fail-closed preference-integrity enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the preference-integrity contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Preference-integrity contract version used by the enforcement attempt." },
+        { "key": "preferenceIntegrityGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when normalized preference-integrity evaluation passes; blocked otherwise." },
+        { "key": "runtimeTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; runtime transition requires a separate state-transition path." },
+        { "key": "matchCandidatePreviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; match preview requires a separate matching path." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock proposal and confirmation path." },
+        { "key": "paymentAuthorizationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment authorization requires a separate payment control path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_preference_integrity_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized preference-integrity evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Preference-integrity contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, evaluation, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "direct_pair_clearing_contract_response",
       "purpose": "Public validator-backed direct-pair clearing governance contract for two-party or invite-linked donation-offset and pledge-swap previews before lock, payment, capture, public metrics, or release-gate promotion.",
       "fields": [
@@ -4582,6 +4651,7 @@
     "non_public_goods_subsidy_enforce_route_contract",
     "non_public_goods_tier_enforce_route_contract",
     "risk_control_matrix_enforce_route_contract",
+    "preference_integrity_enforce_route_contract",
     "direct_pair_clearing_enforce_route_contract",
     "cause_bucket_taxonomy_enforce_route_contract",
     "resource_compatibility_enforce_route_contract",

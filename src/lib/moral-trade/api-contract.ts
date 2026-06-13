@@ -139,6 +139,8 @@ const REQUIRED_ROUTES = [
   "moral_trade_non_public_goods_tier_enforce",
   "moral_trade_risk_control_matrix_contract",
   "moral_trade_risk_control_matrix_enforce",
+  "moral_trade_preference_integrity_contract",
+  "moral_trade_preference_integrity_enforce",
   "moral_trade_direct_pair_clearing_contract",
   "moral_trade_direct_pair_clearing_enforce",
   "moral_trade_cause_bucket_taxonomy_contract",
