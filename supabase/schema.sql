@@ -19155,3 +19155,149 @@ create policy "moral_trade_preference_integrity_enforcement_records_insert_owner
     and public_metric_publication_allowed_bool = false
     and release_gate_promotion_allowed_bool = false
   );
+
+create table if not exists public.moral_trade_commitment_inventory_records (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  participant_id_hash text not null check (participant_id_hash ~ '^sha256:[a-f0-9]{64}$'),
+  commitment_type text not null,
+  subject_type text not null,
+  subject_id text not null,
+  no_trade_baseline_snapshot_hash text not null check (no_trade_baseline_snapshot_hash ~ '^sha256:[a-f0-9]{64}$'),
+  negative_commitment_scope_ref text,
+  action_unit text not null,
+  amount_cents integer not null default 0 check (amount_cents >= 0),
+  currency text not null,
+  performance_window_start timestamptz not null,
+  performance_window_end timestamptz not null,
+  total_capacity_units numeric not null check (total_capacity_units >= 0),
+  reserved_capacity_units numeric not null default 0 check (reserved_capacity_units >= 0),
+  fulfilled_capacity_units numeric not null default 0 check (fulfilled_capacity_units >= 0),
+  commitment_inventory_policy_ref text not null,
+  reuse_policy text not null,
+  inventory_state text not null,
+  privacy_grant_refs text[] not null default '{}',
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (performance_window_start < performance_window_end),
+  check (reserved_capacity_units <= total_capacity_units),
+  check (fulfilled_capacity_units <= total_capacity_units),
+  check (reserved_capacity_units + fulfilled_capacity_units <= total_capacity_units)
+);
+
+create table if not exists public.moral_trade_commitment_reservation_records (
+  id uuid primary key default gen_random_uuid(),
+  commitment_inventory_record_id uuid not null references public.moral_trade_commitment_inventory_records (id) on delete restrict,
+  matched_trade_lock_proposal_ref text,
+  cleared_trade_agreement_ref text,
+  reserved_units numeric not null check (reserved_units > 0),
+  reserved_amount_cents integer not null default 0 check (reserved_amount_cents >= 0),
+  reservation_scope text not null,
+  reservation_state text not null,
+  double_count_check_state text not null,
+  release_reason text,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    matched_trade_lock_proposal_ref is not null
+    or cleared_trade_agreement_ref is not null
+  ),
+  check (double_count_check_state in ('not_required', 'passed'))
+);
+
+create table if not exists public.moral_trade_atomic_settlement_groups (
+  id uuid primary key default gen_random_uuid(),
+  trade_type text not null,
+  matched_trade_lock_proposal_refs text[] not null default '{}',
+  required_participant_count integer not null check (required_participant_count >= 2),
+  required_final_confirmation_refs text[] not null default '{}',
+  required_payment_authorization_refs text[] not null default '{}',
+  commitment_reservation_refs text[] not null default '{}',
+  atomic_settlement_policy_ref text not null,
+  all_or_none_state text not null,
+  failed_member_behavior text not null,
+  no_partial_capture_bool boolean not null default true,
+  no_partial_disclosure_bool boolean not null default true,
+  no_irreversible_performance_before_lock_bool boolean not null default true,
+  reviewer_decision_ref text,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (cardinality(matched_trade_lock_proposal_refs) > 0),
+  check (cardinality(required_final_confirmation_refs) >= required_participant_count),
+  check (cardinality(commitment_reservation_refs) > 0),
+  check (failed_member_behavior <> 'manual_review'),
+  check (no_partial_capture_bool = true),
+  check (no_partial_disclosure_bool = true),
+  check (no_irreversible_performance_before_lock_bool = true)
+);
+
+create table if not exists public.moral_trade_commitment_settlement_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null,
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  commitment_settlement_required_bool boolean not null default false,
+  reviewed_record_count integer not null default 0 check (reviewed_record_count >= 0),
+  non_blocking_record_count integer not null default 0 check (non_blocking_record_count >= 0),
+  reserved_commitment_count integer not null default 0 check (reserved_commitment_count >= 0),
+  atomic_settlement_group_count integer not null default 0 check (atomic_settlement_group_count >= 0),
+  record_count integer not null default 0 check (record_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  runtime_transition_allowed_bool boolean not null default false,
+  match_candidate_preview_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  payment_authorization_allowed_bool boolean not null default false,
+  payment_capture_allowed_bool boolean not null default false,
+  performance_release_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_commitment_settlement_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (non_blocking_record_count <= record_count),
+  check (runtime_transition_allowed_bool = false),
+  check (match_candidate_preview_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (payment_authorization_allowed_bool = false),
+  check (payment_capture_allowed_bool = false),
+  check (performance_release_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+alter table public.moral_trade_commitment_settlement_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_commitment_settlement_enforcement_records_select_owner"
+  on public.moral_trade_commitment_settlement_enforcement_records;
+create policy "moral_trade_commitment_settlement_enforcement_records_select_owner"
+  on public.moral_trade_commitment_settlement_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_commitment_settlement_enforcement_records_insert_owner"
+  on public.moral_trade_commitment_settlement_enforcement_records;
+create policy "moral_trade_commitment_settlement_enforcement_records_insert_owner"
+  on public.moral_trade_commitment_settlement_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and runtime_transition_allowed_bool = false
+    and match_candidate_preview_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and payment_authorization_allowed_bool = false
+    and payment_capture_allowed_bool = false
+    and performance_release_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );
