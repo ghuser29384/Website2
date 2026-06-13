@@ -280,10 +280,16 @@ test("review-capacity route, health, spec, API contract, and schema are wired", 
   const contractRoute = readRepoFile(
     "src/app/api/moral-trade/review-capacity/contract/route.ts",
   );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/review-capacity/enforce/route.ts",
+  );
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const technicalSpec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
+  const apiRateLimitSource = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
+  const operationsSource = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
   const migration = readRepoFile(
     "supabase/migrations/20260611_moral_trade_review_capacity_records.sql",
   );
@@ -298,21 +304,53 @@ test("review-capacity route, health, spec, API contract, and schema are wired", 
   assert.match(source, /waitlisted_capacity/);
   assert.match(source, /estimated_review_after_payment_authorization_expiry/);
   assert.match(contractRoute, /reviewCapacitySampleEvaluationStatuses/);
+  assert.match(enforceRoute, /review_capacity_enforce/);
+  assert.match(enforceRoute, /moral_trade_review_capacity_enforcement_records/);
+  assert.match(enforceRoute, /livePublicationAllowed: false/);
+  assert.match(enforceRoute, /matchablePublicationAllowed: false/);
+  assert.match(enforceRoute, /lockTransitionAllowed: false/);
+  assert.match(enforceRoute, /paymentAuthorizationAllowed: false/);
+  assert.match(enforceRoute, /paymentCaptureAllowed: false/);
+  assert.match(enforceRoute, /relianceBearingTransitionAllowed: false/);
+  assert.match(enforceRoute, /publicMetricPublicationAllowed: false/);
+  assert.match(enforceRoute, /releaseGatePromotionAllowed: false/);
+  assert.match(enforceRoute, /authentication_required:review_capacity_enforce/);
+  assert.match(enforceRoute, /database_insert_failed:review_capacity_enforce/);
+  assert.match(apiRateLimitSource, /review_capacity_enforce/);
   assert.match(healthRoute, /reviewCapacityValidation/);
   assert.match(healthRoute, /reviewCapacityFirstClassRecordTables/);
   assert.match(technicalSpec, /reviewCapacityContract\.firstClassRecordTables/);
   assert.match(apiContractSource, /moral_trade_review_capacity_contract/);
+  assert.match(apiContractSource, /moral_trade_review_capacity_enforce/);
   assert.match(apiContractProfile, /review_capacity_contract_response/);
+  assert.match(apiContractProfile, /review_capacity_enforce_request/);
+  assert.match(apiContractProfile, /review_capacity_enforce_response/);
+  assert.match(apiContractProfile, /review_capacity_enforce_route_contract/);
+  assert.match(operationsSource, /review_capacity_enforce/);
+  assert.match(operationsProfile, /review_capacity_enforce/);
   for (const tableSource of [migration, schema]) {
     assert.match(tableSource, /moral_trade_review_capacity_policies/);
     assert.match(tableSource, /moral_trade_review_queue_records/);
     assert.match(tableSource, /moral_trade_reviewer_panel_assignments/);
+    assert.match(tableSource, /moral_trade_review_capacity_enforcement_records/);
     assert.match(tableSource, /review_capacity/);
     assert.match(tableSource, /review_queue_admission/);
     assert.match(tableSource, /visible_user_queue_status/);
     assert.match(tableSource, /payment_authorization_expires_at/);
+    assert.match(tableSource, /live_publication_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /matchable_publication_allowed_bool boolean not null default false/);
+    assert.match(tableSource, /check \(live_publication_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(matchable_publication_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(lock_transition_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(payment_authorization_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(payment_capture_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(reliance_bearing_transition_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(public_metric_publication_allowed_bool = false\)/);
+    assert.match(tableSource, /check \(release_gate_promotion_allowed_bool = false\)/);
+    assert.match(tableSource, /owner_profile_id = auth\.uid\(\)/);
   }
   assert.match(databaseTypes, /moral_trade_review_capacity_policies/);
   assert.match(databaseTypes, /moral_trade_review_queue_records/);
   assert.match(databaseTypes, /moral_trade_reviewer_panel_assignments/);
+  assert.match(databaseTypes, /moral_trade_review_capacity_enforcement_records/);
 });

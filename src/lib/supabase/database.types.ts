@@ -6098,6 +6098,12 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_review_capacity_enforcement_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_counterparty_blinding_policies: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;
