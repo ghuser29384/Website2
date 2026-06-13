@@ -627,6 +627,18 @@
       "fallback": "Return sensitive-evidence attestation rules, first-class attestation record metadata, claim types, disclosure modes, privacy-grant statuses, confidentiality-review statuses, challenge routes, and sample evaluations; never expose raw private artifacts, identity artifacts, private receipts, provider payloads, reviewer notes, payment destination artifacts, or participant-specific attestation rows."
     },
     {
+      "key": "moral_trade_sensitive_evidence_attestation_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/sensitive-evidence-attestations/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "sensitive_evidence_attestation_enforce_request",
+      "responseSchema": "sensitive_evidence_attestation_enforce_response",
+      "rateLimitSurface": "sensitive_evidence_attestation_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated sensitive-evidence attestation enforcement requests create no evidence-review, counterparty-preview, lock, payment-capture, payout-release, reliance, public-metric, challenge-response, raw-artifact-disclosure, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_pilot_evidence_contract",
       "method": "GET",
       "path": "/api/moral-trade/pilot-evidence/contract",
@@ -2679,6 +2691,41 @@
       ]
     },
     {
+      "key": "sensitive_evidence_attestation_enforce_request",
+      "purpose": "Authenticated private fail-closed sensitive-evidence attestation enforcement request.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private", "description": "Normalized sensitive-evidence attestation evaluation input containing transition, attestation requirement, checked-at timestamp, and first-class attestation records." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private", "description": "Optional caller-stable idempotency key for owner-scoped duplicate replay." }
+      ]
+    },
+    {
+      "key": "sensitive_evidence_attestation_enforce_response",
+      "purpose": "Authenticated private sensitive-evidence attestation enforcement result that records the evaluation while never authorizing downstream state changes or raw artifact disclosure.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the contract validator passes and the request was processed." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Sensitive-evidence attestation contract version used by the enforcement route." },
+        { "key": "sensitiveEvidenceAttestationGateStatus", "type": "string", "required": true, "privacy": "private", "description": "Blocked unless the normalized sensitive-evidence attestation evaluation is non-blocking." },
+        { "key": "evidenceReviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; evidence review requires a separate reviewer path." },
+        { "key": "counterpartyPreviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; counterparty preview requires a separate disclosure path." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "payoutReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payout release requires a separate payout control path." },
+        { "key": "relianceAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reliance requires a separate reliance-bearing state path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "challengeResponseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; challenge response requires a separate appeal path." },
+        { "key": "rawArtifactDisclosureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; raw artifact disclosure requires a separate privacy-grant and disclosure path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_sensitive_evidence_attestation_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized sensitive-evidence attestation evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Sensitive-evidence attestation contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "pilot_evidence_contract_response",
       "purpose": "Public validator-backed pilot-evidence governance contract for market simulation, red-team, scale-up, pause, rollback, and non-volume success evidence before donation-offset payable promotion, pledge-swap reliance promotion, capped real-money release, public metric release, or release-gate promotion.",
       "fields": [
@@ -3950,6 +3997,7 @@
     "private_exchange_rate_enforce_route_contract",
     "noncompensable_blocker_enforce_route_contract",
     "batch_clearing_objective_enforce_route_contract",
+    "sensitive_evidence_attestation_enforce_route_contract",
     "private_exchange_rate_contract_route",
     "noncompensable_blocker_contract_route",
     "batch_clearing_objective_contract_route",
