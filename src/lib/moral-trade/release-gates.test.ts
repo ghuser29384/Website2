@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
+import { POST as enforceReleaseGate } from "@/app/api/moral-trade/release-gates/enforce/route";
+
 import {
   evaluateMoralTradeReleaseGate,
   getMoralTradeReleaseGateContract,
@@ -269,16 +271,65 @@ test("neutral waivers require a privileged neutral-review approval", () => {
   assert.equal(approved.status, "pass");
 });
 
+test("release-gate enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceReleaseGate(
+    new Request("http://localhost/api/moral-trade/release-gates/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.releaseGateStatus, "blocked");
+  assert.equal(body.payableAllowed, false);
+  assert.equal(body.relianceBearingAllowed, false);
+  assert.equal(body.publicMetricPublicationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_release_gate_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("release-gate route, health, technical spec, and migration are wired", () => {
   const route = readFileSync("src/app/api/moral-trade/release-gates/contract/route.ts", "utf8");
+  const enforceRoute = readFileSync("src/app/api/moral-trade/release-gates/enforce/route.ts", "utf8");
   const health = readFileSync("src/app/api/moral-trade/health/route.ts", "utf8");
   const technicalSpec = readFileSync("src/app/moral-trade/technical-spec/page.tsx", "utf8");
   const migration = readFileSync(
     "supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql",
     "utf8",
   );
+  const enforcementMigration = readFileSync(
+    "supabase/migrations/20260613_moral_trade_release_gate_enforcement_records.sql",
+    "utf8",
+  );
+  const schema = readFileSync("supabase/schema.sql", "utf8");
+  const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
+  const apiContract = readFileSync("src/lib/moral-trade/api-contract.ts", "utf8");
+  const apiRateLimit = readFileSync("src/lib/moral-trade/api-rate-limit.ts", "utf8");
+  const operations = readFileSync("src/lib/moral-trade/operations.ts", "utf8");
+  const operationsProfile = readFileSync("config/moral-trade/operations-profile.json", "utf8");
+  const apiContractProfile = readFileSync(
+    "config/moral-trade/api-contract-profile.json",
+    "utf8",
+  );
 
   assert.match(route, /validateMoralTradeReleaseGateContract/);
+  assert.match(enforceRoute, /release_gate_enforce/);
+  assert.match(enforceRoute, /moral_trade_release_gate_enforcement_records/);
+  assert.match(enforceRoute, /payableAllowed: false/);
+  assert.match(enforceRoute, /relianceBearingAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:release_gate_enforce/);
+  assert.match(enforceRoute, /authentication_required:release_gate_enforce/);
   assert.match(health, /releaseGateValidation/);
   assert.match(health, /releaseGateStageKeys/);
   assert.match(technicalSpec, /Release gate contract/);
@@ -286,4 +337,21 @@ test("release-gate route, health, technical spec, and migration are wired", () =
   assert.match(migration, /moral_trade_policy_snapshots/);
   assert.match(migration, /moral_trade_release_gate_requirement_results/);
   assert.match(migration, /moral_trade_privileged_action_records/);
+  assert.match(enforcementMigration, /moral_trade_release_gate_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /payable_allowed_bool = false/);
+  assert.match(enforcementMigration, /reliance_bearing_allowed_bool = false/);
+  assert.match(enforcementMigration, /public_metric_publication_allowed_bool = false/);
+  assert.match(enforcementMigration, /release_gate_promotion_allowed_bool = false/);
+  assert.match(schema, /moral_trade_release_gate_enforcement_records/);
+  assert.match(schema, /payable_allowed_bool = false/);
+  assert.match(databaseTypes, /moral_trade_release_gate_enforcement_records/);
+  assert.match(apiContract, /moral_trade_release_gate_enforce/);
+  assert.match(apiRateLimit, /release_gate_enforce/);
+  assert.match(operations, /release_gate_enforce/);
+  assert.match(operationsProfile, /release_gate_enforce/);
+  assert.match(apiContractProfile, /moral_trade_release_gate_enforce/);
+  assert.match(apiContractProfile, /release_gate_enforce_request/);
+  assert.match(apiContractProfile, /release_gate_enforce_response/);
+  assert.match(apiContractProfile, /release_gate_enforce_route_contract/);
 });

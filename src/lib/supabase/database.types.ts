@@ -8402,6 +8402,12 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_release_gate_enforcement_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_consent_quality_records: {
         Row: {
           id: string;

@@ -135,6 +135,18 @@
       "fallback": "Return release-gate validation blockers and sample fail-closed evaluations; never claim payable, reliance-bearing, or public-metric readiness from missing, stale, unknown, mutable, or unreviewed gate evidence."
     },
     {
+      "key": "moral_trade_release_gate_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/release-gates/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "release_gate_enforce_request",
+      "responseSchema": "release_gate_enforce_response",
+      "rateLimitSurface": "release_gate_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated release-gate enforcement requests create no payable, reliance-bearing, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_participant_confirmation_contract",
       "method": "GET",
       "path": "/api/moral-trade/participant-confirmations/contract",
@@ -1903,6 +1915,35 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for release stages, requirement definitions, policy-snapshot subjects, first-class records, privileged actions, and fail-closed sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Stage flags, requirement keys, first-class table names, policy snapshot subjects, privileged action keys, state interpretation rule, sample evaluations, and contract-test hooks." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Release-gate blockers that prevent relying on payable, reliance-bearing, or public metric readiness claims." }
+      ]
+    },
+    {
+      "key": "release_gate_enforce_request",
+      "purpose": "Authenticated private fail-closed release-gate enforcement request.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private", "description": "Normalized release-gate evaluation input containing stage, gate id, immutable policy status, feature flag state, emergency pause state, and first-class requirement result summaries." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private", "description": "Optional caller-stable idempotency key for owner-scoped duplicate replay." }
+      ]
+    },
+    {
+      "key": "release_gate_enforce_response",
+      "purpose": "Authenticated private release-gate enforcement result that records the evaluated gate bundle while never authorizing payable, reliance-bearing, public-metric, or release-promotion state changes.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the contract validator passes and the request was processed." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Release-gate contract version used by the enforcement route." },
+        { "key": "releaseGateStatus", "type": "string", "required": true, "privacy": "private", "description": "Blocked unless the normalized release-gate evaluation is non-blocking." },
+        { "key": "payableAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payable activation requires a separate release decision path." },
+        { "key": "relianceBearingAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reliance-bearing activation requires a separate release decision path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires privileged neutral review or dual-control outside this logging endpoint." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_release_gate_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized release-gate evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Release-gate contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
       ]
     },
     {
@@ -4145,6 +4186,7 @@
     "ai_governance_route_contract",
     "data_model_contract_route",
     "policy_bundle_contract_route",
+    "release_gate_enforce_route_contract",
     "public_offers_collection_route",
     "public_offer_detail_route",
     "public_offers_facets_route",

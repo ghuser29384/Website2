@@ -128,6 +128,7 @@ const REQUIRED_RATE_LIMITS = [
   "match_signal_evaluate",
   "matching_clearing_execute",
   "clearing_preview_execute",
+  "release_gate_enforce",
   "baseline_integrity_enforce",
   "agreement_amendment_enforce",
   "side_agreement_enforce",

@@ -56,6 +56,7 @@
     { "key": "match_signal_evaluate", "window": "1 minute", "limit": 60 },
     { "key": "matching_clearing_execute", "window": "1 minute", "limit": 20 },
     { "key": "clearing_preview_execute", "window": "1 minute", "limit": 30 },
+    { "key": "release_gate_enforce", "window": "1 minute", "limit": 20 },
     { "key": "baseline_integrity_enforce", "window": "1 minute", "limit": 20 },
     { "key": "agreement_amendment_enforce", "window": "1 minute", "limit": 20 },
     { "key": "side_agreement_enforce", "window": "1 minute", "limit": 20 },
