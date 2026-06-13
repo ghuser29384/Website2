@@ -33,6 +33,7 @@ export type MoralTradeApiRateLimitSurface =
   | "cause_bucket_taxonomy_enforce"
   | "resource_compatibility_enforce"
   | "net_offset_accounting_enforce"
+  | "offer_validity_enforce"
   | "challenge_appeal_evaluate"
   | "challenge_appeal_enforce"
   | "disclosure_evaluate"
@@ -80,6 +81,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   cause_bucket_taxonomy_enforce: { limit: 20, windowMs: 60_000 },
   resource_compatibility_enforce: { limit: 20, windowMs: 60_000 },
   net_offset_accounting_enforce: { limit: 20, windowMs: 60_000 },
+  offer_validity_enforce: { limit: 20, windowMs: 60_000 },
   challenge_appeal_evaluate: { limit: 30, windowMs: 60_000 },
   challenge_appeal_enforce: { limit: 20, windowMs: 60_000 },
   disclosure_evaluate: { limit: 30, windowMs: 60_000 },

@@ -71,6 +71,7 @@
     { "key": "cause_bucket_taxonomy_enforce", "window": "1 minute", "limit": 20 },
     { "key": "resource_compatibility_enforce", "window": "1 minute", "limit": 20 },
     { "key": "net_offset_accounting_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "offer_validity_enforce", "window": "1 minute", "limit": 20 },
     { "key": "challenge_appeal_evaluate", "window": "1 minute", "limit": 30 },
     { "key": "challenge_appeal_enforce", "window": "1 minute", "limit": 20 },
     { "key": "disclosure_evaluate", "window": "1 minute", "limit": 30 },
