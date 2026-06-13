@@ -140,6 +140,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_side_agreement_contract",
   "moral_trade_side_agreement_enforce",
   "moral_trade_trade_classification_contract",
+  "moral_trade_trade_classification_enforce",
   "moral_trade_template_conformance_contract",
   "moral_trade_review_capacity_contract",
   "moral_trade_participant_term_sheet_contract",

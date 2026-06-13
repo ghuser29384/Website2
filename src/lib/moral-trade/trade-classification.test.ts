@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforceTradeClassification } from "@/app/api/moral-trade/trade-classification/enforce/route";
+
 import {
   evaluateMoralTradeTradeClassification,
   getMoralTradeTradeClassificationContract,
@@ -72,6 +74,11 @@ test("trade-classification contract validates first-class classification governa
   assert.equal(validation.status, "pass");
   assert.deepEqual(validation.blockers, []);
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_trade_classification_records"));
+  assert.ok(
+    contract.firstClassRecordTables.includes(
+      "moral_trade_trade_classification_enforcement_records",
+    ),
+  );
   assert.ok(contract.firstClassRecordTables.includes("moral_trade_compensated_action_terms"));
   assert.ok(
     contract.firstClassRecordTables.includes(
@@ -250,14 +257,48 @@ test("trade-classification records fail closed for public badges, stale policy, 
   );
 });
 
+test("trade-classification enforce route is fail-closed before persistence on invalid input", async () => {
+  const response = await enforceTradeClassification(
+    new Request("http://localhost/api/moral-trade/trade-classification/enforce", {
+      body: "not-json",
+      method: "POST",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.tradeClassificationGateStatus, "blocked");
+  assert.equal(body.lockTransitionAllowed, false);
+  assert.equal(body.paymentTransitionAllowed, false);
+  assert.equal(body.payoutReleaseAllowed, false);
+  assert.equal(body.relianceBearingTransitionAllowed, false);
+  assert.equal(body.publicMetricPublicationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.persistence.status, "not_recorded");
+  assert.equal(
+    body.persistence.table,
+    "moral_trade_trade_classification_enforcement_records",
+  );
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+});
+
 test("trade-classification route, health, technical spec, API contract, and migration are wired", () => {
   const source = readRepoFile("src/lib/moral-trade/trade-classification.ts");
   const route = readRepoFile(
     "src/app/api/moral-trade/trade-classification/contract/route.ts",
   );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/trade-classification/enforce/route.ts",
+  );
   const health = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const spec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
+  const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContract = readRepoFile("config/moral-trade/api-contract-profile.json");
+  const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
   const migration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_trade_classification_records.sql",
   );
@@ -265,23 +306,45 @@ test("trade-classification route, health, technical spec, API contract, and migr
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
 
   assert.match(source, /moral_trade_trade_classification_records/);
+  assert.match(source, /moral_trade_trade_classification_enforcement_records/);
+  assert.match(source, /trade_classification_enforce_route_contract/);
   assert.match(source, /moral_trade_compensated_action_terms/);
   assert.match(source, /ordinary_service_procurement/);
   assert.match(source, /not a public moral status badge/);
   assert.match(route, /getMoralTradeTradeClassificationContract/);
   assert.match(route, /tradeClassificationSampleEvaluationStatuses/);
+  assert.match(enforceRoute, /trade_classification_enforce/);
+  assert.match(enforceRoute, /moral_trade_trade_classification_enforcement_records/);
+  assert.match(enforceRoute, /auth\.getUser/);
+  assert.match(enforceRoute, /lockTransitionAllowed:\s*false/);
+  assert.match(enforceRoute, /paymentTransitionAllowed:\s*false/);
+  assert.match(enforceRoute, /payoutReleaseAllowed:\s*false/);
+  assert.match(enforceRoute, /relianceBearingTransitionAllowed:\s*false/);
+  assert.match(enforceRoute, /publicMetricPublicationAllowed:\s*false/);
+  assert.match(enforceRoute, /releaseGatePromotionAllowed:\s*false/);
   assert.match(health, /tradeClassificationValidation/);
   assert.match(health, /tradeClassificationFirstClassRecordTables/);
   assert.match(spec, /Trade-classification contract/);
   assert.match(spec, /trade-classification\/contract/);
+  assert.match(apiContractSource, /moral_trade_trade_classification_enforce/);
   assert.match(apiContract, /moral_trade_trade_classification_contract/);
+  assert.match(apiContract, /moral_trade_trade_classification_enforce/);
+  assert.match(apiContract, /trade_classification_enforce_request/);
+  assert.match(apiContract, /trade_classification_enforce_response/);
   assert.match(apiContract, /trade_classification_contract_response/);
+  assert.match(operationsProfile, /trade_classification_enforce/);
+  assert.match(operations, /trade_classification_enforce/);
   assert.match(migration, /moral_trade_trade_classification_records/);
+  assert.match(migration, /moral_trade_trade_classification_enforcement_records/);
   assert.match(migration, /moral_trade_compensated_action_terms/);
   assert.match(migration, /moral_trade_ordinary_service_procurement_reviews/);
+  assert.match(migration, /public_metric_publication_allowed_bool = false/);
+  assert.match(migration, /release_gate_promotion_allowed_bool = false/);
   assert.match(migration, /ordinary_service_procurement/);
   assert.match(schema, /moral_trade_trade_classification_records/);
+  assert.match(schema, /moral_trade_trade_classification_enforcement_records/);
   assert.match(schema, /moral_trade_compensated_action_terms/);
   assert.match(databaseTypes, /moral_trade_trade_classification_records/);
+  assert.match(databaseTypes, /moral_trade_trade_classification_enforcement_records/);
   assert.match(databaseTypes, /moral_trade_ordinary_service_procurement_reviews/);
 });

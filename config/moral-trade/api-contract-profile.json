@@ -531,6 +531,18 @@
       "fallback": "Return trade-classification validation blockers and fail-closed sample evaluations; never expose private moral-reason narratives, performer rationale, reviewer notes, raw compensation terms, source hashes, provider payloads, contact details, or payment credentials."
     },
     {
+      "key": "moral_trade_trade_classification_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/trade-classification/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "trade_classification_enforce_request",
+      "responseSchema": "trade_classification_enforce_response",
+      "rateLimitSurface": "trade_classification_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated trade-classification enforcement requests create no lock, payment, payout, reliance, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_template_conformance_contract",
       "method": "GET",
       "path": "/api/moral-trade/template-conformance/contract",
@@ -2165,6 +2177,37 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class classification records, compensated-action terms, ordinary-service/procurement review, immutable policy snapshots, metric exclusion, public non-claim, fail-closed statuses, gated transitions, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, public non-claim, first-class table names, policy subjects, classification values, subject types, review dimensions, transition requirements, sample statuses, and test hooks without private moral-reason narratives, performer rationale, reviewer notes, raw compensation terms, source hashes, provider payloads, contact details, or payment credentials." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Trade-classification blockers that prevent relying on lock, payment capture, payout release, public metric publication, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "trade_classification_enforce_request",
+      "purpose": "Authenticated private request for live trade-classification enforcement before payable, reliance-bearing, public-metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Trade-classification transition, checked-at time, and classification records to normalize and evaluate." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "trade_classification_enforce_response",
+      "purpose": "Authenticated private fail-closed trade-classification enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the trade-classification contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Trade-classification contract version used by the enforcement attempt." },
+        { "key": "tradeClassificationGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when normalized trade-classification evaluation passes; blocked otherwise." },
+        { "key": "lockTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes lock." },
+        { "key": "paymentTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes payment." },
+        { "key": "payoutReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes payout release." },
+        { "key": "relianceBearingTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; no response can make a transition reliance-bearing." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped enforcement record was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized trade-classification evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Trade-classification contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
       ]
     },
     {

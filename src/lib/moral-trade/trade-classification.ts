@@ -1,5 +1,5 @@
 export const MORAL_TRADE_TRADE_CLASSIFICATION_CONTRACT_VERSION =
-  "moral-trade-trade-classification-v0.1-2026-06";
+  "moral-trade-trade-classification-v0.2-2026-06";
 export const MORAL_TRADE_TRADE_CLASSIFICATION_VALIDATOR_VERSION =
   "moral-trade-trade-classification-validator-v0.1";
 
@@ -185,6 +185,7 @@ const MAX_REVIEW_AGE_DAYS = 180;
 
 const FIRST_CLASS_RECORD_TABLES = [
   "moral_trade_trade_classification_records",
+  "moral_trade_trade_classification_enforcement_records",
   "moral_trade_compensated_action_terms",
   "moral_trade_ordinary_service_procurement_reviews",
 ] as const;
@@ -293,6 +294,7 @@ const CONTRACT_TESTS = [
   "compensated_action_mixed_trade_requires_frozen_terms",
   "ordinary_service_excluded_from_moral_trade_metrics",
   "public_badge_exposure_blocks_classification",
+  "trade_classification_enforce_route_contract",
   "trade_classification_route_health_spec_and_migration_wiring",
 ] as const;
 
@@ -650,7 +652,7 @@ export function getMoralTradeTradeClassificationContract():
     purpose:
       "Fail-closed trade-classification governance for compensated moral actions, ordinary service/procurement exclusion, and moral-trade metric eligibility.",
     failClosedRule:
-      "Compensated moral actions can reach lock, payment, payout, or moral-trade metrics only when classified as mixed moral trade with frozen terms and non-blocking review. Ordinary donations, same-view matching, and ordinary service/procurement stay excluded from moral-trade-specific metrics.",
+      "Compensated moral actions can reach lock, payment, payout, or moral-trade metrics only when classified as mixed moral trade with frozen terms and non-blocking review. Enforcement records are append-only, owner-scoped, and never authorize lock, payment, payout, reliance, public metrics, or release promotion by themselves. Ordinary donations, same-view matching, and ordinary service/procurement stay excluded from moral-trade-specific metrics.",
     publicNonClaim:
       "The trade_classification value is an implementation guard, not a public moral status badge or objective ranking of moral worth.",
     firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
@@ -676,7 +678,7 @@ export function validateMoralTradeTradeClassificationContract(
   const checks = [
     check(
       "first-class-trade-classification-tables",
-      "Trade classification, compensated-action terms, and ordinary-service reviews are first-class records.",
+      "Trade classification, enforcement, compensated-action terms, and ordinary-service reviews are first-class records.",
       FIRST_CLASS_RECORD_TABLES.every((table) =>
         contract.firstClassRecordTables.includes(table),
       ),

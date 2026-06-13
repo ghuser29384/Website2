@@ -131,6 +131,7 @@ const REQUIRED_RATE_LIMITS = [
   "baseline_integrity_enforce",
   "agreement_amendment_enforce",
   "side_agreement_enforce",
+  "trade_classification_enforce",
   "challenge_appeal_evaluate",
   "challenge_appeal_enforce",
   "disclosure_evaluate",
