@@ -21,6 +21,7 @@ export type MoralTradeApiRateLimitSurface =
   | "release_gate_enforce"
   | "baseline_integrity_enforce"
   | "agreement_amendment_enforce"
+  | "production_readiness_enforce"
   | "side_agreement_enforce"
   | "trade_classification_enforce"
   | "template_conformance_enforce"
@@ -82,6 +83,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   release_gate_enforce: { limit: 20, windowMs: 60_000 },
   baseline_integrity_enforce: { limit: 20, windowMs: 60_000 },
   agreement_amendment_enforce: { limit: 20, windowMs: 60_000 },
+  production_readiness_enforce: { limit: 20, windowMs: 60_000 },
   side_agreement_enforce: { limit: 20, windowMs: 60_000 },
   trade_classification_enforce: { limit: 20, windowMs: 60_000 },
   template_conformance_enforce: { limit: 20, windowMs: 60_000 },

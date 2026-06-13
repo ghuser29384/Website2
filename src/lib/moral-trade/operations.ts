@@ -131,6 +131,7 @@ const REQUIRED_RATE_LIMITS = [
   "release_gate_enforce",
   "baseline_integrity_enforce",
   "agreement_amendment_enforce",
+  "production_readiness_enforce",
   "side_agreement_enforce",
   "trade_classification_enforce",
   "template_conformance_enforce",

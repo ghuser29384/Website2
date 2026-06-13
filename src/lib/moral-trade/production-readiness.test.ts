@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforceProductionReadiness } from "@/app/api/moral-trade/production-readiness/enforce/route";
+
 import {
   evaluateMoralTradeProductionReadiness,
   getMoralTradeProductionReadinessContract,
@@ -159,14 +161,48 @@ test("not-required operational controls need immutable policy snapshots", () => 
   );
 });
 
+test("production-readiness enforcement rejects malformed input without state mutation", async () => {
+  const response = await enforceProductionReadiness(
+    new Request("http://localhost/api/moral-trade/production-readiness/enforce", {
+      method: "POST",
+      body: "{",
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.ok, false);
+  assert.equal(body.productionReadinessGateStatus, "blocked");
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.sandboxCalculationPreviewAllowed, false);
+  assert.equal(body.realMoneyCaptureAllowed, false);
+  assert.equal(body.payoutReleaseAllowed, false);
+  assert.equal(body.roundCloseAllowed, false);
+  assert.equal(body.publicMoneyMetricReleaseAllowed, false);
+  assert.equal(body.privacyDisclosureAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.nonEmergencyPrivilegedChangeAllowed, false);
+  assert.equal(body.persistence.table, "moral_trade_production_readiness_enforcement_records");
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+});
+
 test("production-readiness route, health, technical spec, API contract, and migration are wired", () => {
   const source = readRepoFile("src/lib/moral-trade/production-readiness.ts");
   const route = readRepoFile("src/app/api/moral-trade/production-readiness/contract/route.ts");
+  const enforceRoute = readRepoFile("src/app/api/moral-trade/production-readiness/enforce/route.ts");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
+  const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
   const health = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const spec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
   const apiContract = readRepoFile("config/moral-trade/api-contract-profile.json");
   const migration = readRepoFile(
     "supabase/migrations/20260607_zzz_moral_trade_production_readiness_records.sql",
+  );
+  const enforcementMigration = readRepoFile(
+    "supabase/migrations/20260613_moral_trade_production_readiness_enforcement_records.sql",
   );
   const schema = readRepoFile("supabase/schema.sql");
 
@@ -175,19 +211,40 @@ test("production-readiness route, health, technical spec, API contract, and migr
   assert.match(source, /moral_trade_audit_integrity_checkpoints/);
   assert.match(route, /getMoralTradeProductionReadinessContract/);
   assert.match(route, /productionReadinessSampleEvaluationStatuses/);
+  assert.match(enforceRoute, /evaluateMoralTradeProductionReadiness/);
+  assert.match(enforceRoute, /production_readiness_enforce/);
+  assert.match(enforceRoute, /moral_trade_production_readiness_enforcement_records/);
+  assert.match(enforceRoute, /sandboxCalculationPreviewAllowed: false/);
+  assert.match(enforceRoute, /realMoneyCaptureAllowed: false/);
+  assert.match(enforceRoute, /nonEmergencyPrivilegedChangeAllowed: false/);
+  assert.match(apiRateLimit, /production_readiness_enforce/);
+  assert.match(operations, /production_readiness_enforce/);
+  assert.match(operationsProfile, /production_readiness_enforce/);
   assert.match(health, /productionReadinessValidation/);
   assert.match(health, /productionReadinessFirstClassRecordTables/);
   assert.match(spec, /Production readiness contract/);
   assert.match(spec, /production-readiness\/contract/);
   assert.match(apiContract, /moral_trade_production_readiness_contract/);
+  assert.match(apiContract, /moral_trade_production_readiness_enforce/);
   assert.match(apiContract, /production_readiness_contract_response/);
+  assert.match(apiContract, /production_readiness_enforce_request/);
+  assert.match(apiContract, /production_readiness_enforce_response/);
   assert.match(migration, /moral_trade_account_security_events/);
   assert.match(migration, /moral_trade_backup_recovery_checkpoints/);
   assert.match(migration, /moral_trade_financial_reconciliation_runs/);
   assert.match(migration, /moral_trade_audit_integrity_checkpoints/);
   assert.match(migration, /moral_trade_configuration_snapshots/);
+  assert.match(enforcementMigration, /moral_trade_production_readiness_enforcement_records/);
+  assert.match(enforcementMigration, /sandbox_calculation_preview_allowed_bool boolean not null default false/);
+  assert.match(enforcementMigration, /real_money_capture_allowed_bool boolean not null default false/);
+  assert.match(enforcementMigration, /non_emergency_privileged_change_allowed_bool boolean not null default false/);
+  assert.match(enforcementMigration, /record_count <= 64/);
+  assert.match(databaseTypes, /moral_trade_production_readiness_enforcement_records/);
   assert.match(schema, /moral_trade_account_security_events/);
   assert.match(schema, /moral_trade_backup_recovery_checkpoints/);
   assert.match(schema, /moral_trade_financial_reconciliation_runs/);
   assert.match(schema, /moral_trade_audit_integrity_checkpoints/);
+  assert.match(schema, /moral_trade_production_readiness_enforcement_records/);
+  assert.match(schema, /sandbox_calculation_preview_allowed_bool boolean not null default false/);
+  assert.match(schema, /non_emergency_privileged_change_allowed_bool boolean not null default false/);
 });

@@ -375,6 +375,18 @@
       "fallback": "Return production-readiness validation blockers and fail-closed sample evaluations; never expose account-security events, backup contents, configuration values, provider payloads, private audit records, reconciliation details, or key material."
     },
     {
+      "key": "moral_trade_production_readiness_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/production-readiness/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "production_readiness_enforce_request",
+      "responseSchema": "production_readiness_enforce_response",
+      "rateLimitSurface": "production_readiness_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Require authentication before writing an append-only production-readiness enforcement record; invalid, duplicate, rate-limited, unconfigured, or unauthenticated requests create no state change and never authorize sandbox preview, money capture, payout release, round close, public money metrics, privacy disclosure, release promotion, or privileged change."
+    },
+    {
       "key": "moral_trade_recipient_destination_contract",
       "method": "GET",
       "path": "/api/moral-trade/recipient-destinations/contract",
@@ -2390,6 +2402,39 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class operational records, policy snapshot subjects, fail-closed statuses, high-risk gates, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, first-class table names, policy subjects, control keys, gate requirements, sample statuses, and test hooks without private operational evidence." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Production-readiness blockers that prevent relying on money movement, payout release, public money metrics, privacy disclosure, release-gate promotion, or non-emergency privileged changes." }
+      ]
+    },
+    {
+      "key": "production_readiness_enforce_request",
+      "purpose": "Authenticated private request for production-readiness enforcement before sandbox preview, real-money capture, payout release, round close, public money metric release, privacy disclosure, release-gate promotion, or non-emergency privileged changes.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Production-readiness gate, checked-at time, and operational control records to normalize and evaluate; unsupported wrapper, evaluation, or record keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "production_readiness_enforce_response",
+      "purpose": "Authenticated private fail-closed production-readiness enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the production-readiness contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Production-readiness contract version used by the enforcement attempt." },
+        { "key": "productionReadinessGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "non_blocking only when normalized production-readiness evaluation passes; blocked otherwise." },
+        { "key": "sandboxCalculationPreviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; sandbox preview requires a separate caller transition after this evidence is reviewed." },
+        { "key": "realMoneyCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires separate payment and release-gate controls." },
+        { "key": "payoutReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payout release requires separate settlement controls." },
+        { "key": "roundCloseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; round close requires a separate reviewed transition." },
+        { "key": "publicMoneyMetricReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public money metric release requires a separate publication control." },
+        { "key": "privacyDisclosureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; private disclosure requires a separate privacy-grant control." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate neutral-review decision." },
+        { "key": "nonEmergencyPrivilegedChangeAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; privileged change requires a separate privileged-action control." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_production_readiness_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized production-readiness evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Production-readiness contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
       ]
     },
     {
