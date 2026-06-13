@@ -29,6 +29,7 @@ export type MoralTradeApiRateLimitSurface =
   | "participant_confirmation_enforce"
   | "participant_eligibility_enforce"
   | "account_security_enforce"
+  | "reviewer_quality_enforce"
   | "protective_assessment_enforce"
   | "user_safety_content_moderation_enforce"
   | "financial_settlement_controls_enforce"
@@ -89,6 +90,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   participant_confirmation_enforce: { limit: 20, windowMs: 60_000 },
   participant_eligibility_enforce: { limit: 20, windowMs: 60_000 },
   account_security_enforce: { limit: 20, windowMs: 60_000 },
+  reviewer_quality_enforce: { limit: 20, windowMs: 60_000 },
   protective_assessment_enforce: { limit: 20, windowMs: 60_000 },
   user_safety_content_moderation_enforce: { limit: 20, windowMs: 60_000 },
   financial_settlement_controls_enforce: { limit: 20, windowMs: 60_000 },

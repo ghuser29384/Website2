@@ -231,6 +231,18 @@
       "fallback": "Return reviewer-quality validation blockers and fail-closed sample evaluations; never expose reviewer identities, private reviewer notes, conflict facts, calibration details, audit evidence, or participant-specific subject records."
     },
     {
+      "key": "moral_trade_reviewer_quality_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/reviewer-quality/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "reviewer_quality_enforce_request",
+      "responseSchema": "reviewer_quality_enforce_response",
+      "rateLimitSurface": "reviewer_quality_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated reviewer-quality enforcement requests create no clearing, release-gate, recipient-verification, privacy-disclosure, evidence-acceptance, impact-publication, appeal-resolution, incident-closure, payout-release, blocker-override, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_anti_enumeration_contract",
       "method": "GET",
       "path": "/api/moral-trade/anti-enumeration/contract",
@@ -2133,6 +2145,42 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class reviewer-quality policies, review-quality audits, review decisions, review types, fail-closed statuses, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Privacy rule, fail-closed rule, first-class table names, policy subjects, review types, fail-closed statuses, sample statuses, and test hooks without reviewer identities or private quality evidence." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Reviewer-quality blockers that prevent relying on clearing, release-gate approval, recipient verification, privacy grants, evidence acceptance, impact claims, appeals, incident closure, payout release, or blocker overrides." }
+      ]
+    },
+    {
+      "key": "reviewer_quality_enforce_request",
+      "purpose": "Authenticated private fail-closed reviewer-quality enforcement request.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private", "description": "Normalized reviewer-quality evaluation input containing review type, checked-at timestamp, frozen policy summaries, private review decision summaries, and private audit summaries." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private", "description": "Optional caller-stable idempotency key for owner-scoped duplicate replay." }
+      ]
+    },
+    {
+      "key": "reviewer_quality_enforce_response",
+      "purpose": "Authenticated private reviewer-quality enforcement result that records the evaluated policy, decision, and audit bundle while never authorizing downstream clearing, release, verification, disclosure, evidence, publication, appeal, incident, payout, override, metric, or release-promotion state changes.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the contract validator passes and the request was processed." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Reviewer-quality contract version used by the enforcement route." },
+        { "key": "reviewerQualityGateStatus", "type": "string", "required": true, "privacy": "private", "description": "Blocked unless the normalized reviewer-quality evaluation is non-blocking." },
+        { "key": "matchingClearingAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matching or clearing requires a separate clearing path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "recipientDestinationVerificationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; recipient or destination verification requires a separate verification path." },
+        { "key": "privacyDisclosureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; privacy disclosure requires a separate privacy path." },
+        { "key": "evidenceAcceptanceAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; evidence acceptance requires a separate evidence path." },
+        { "key": "impactClaimPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; impact publication requires a separate publication path." },
+        { "key": "appealResolutionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; appeal resolution requires a separate appeal path." },
+        { "key": "incidentClosureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; incident closure requires a separate incident path." },
+        { "key": "payoutReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payout release requires a separate payout path." },
+        { "key": "blockerOverrideAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; blocker overrides require a separate privileged action path." },
+        { "key": "publicMetricReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric release requires a separate release path." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_reviewer_quality_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized reviewer-quality evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Reviewer-quality contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
       ]
     },
     {
@@ -4342,6 +4390,7 @@
     "participant_confirmation_enforce_route_contract",
     "participant_eligibility_enforce_route_contract",
     "account_security_enforce_route_contract",
+    "reviewer_quality_enforce_route_contract",
     "protective_assessment_enforce_route_contract",
     "user_safety_content_moderation_enforce_route_contract",
     "recipient_acceptance_enforce_route_contract",

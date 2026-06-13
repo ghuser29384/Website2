@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforceReviewerQuality } from "@/app/api/moral-trade/reviewer-quality/enforce/route";
 import {
   evaluateMoralTradeReviewerQuality,
   getMoralTradeReviewerQualityContract,
@@ -222,17 +223,59 @@ test("reviewer-quality passes with frozen policy, authorized reviewer, nonblocki
   assert.deepEqual(passed.blockers, []);
 });
 
+test("reviewer-quality enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceReviewerQuality(
+    new Request("http://localhost/api/moral-trade/reviewer-quality/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.ok, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.matchingClearingAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.recipientDestinationVerificationAllowed, false);
+  assert.equal(body.privacyDisclosureAllowed, false);
+  assert.equal(body.evidenceAcceptanceAllowed, false);
+  assert.equal(body.impactClaimPublicationAllowed, false);
+  assert.equal(body.appealResolutionAllowed, false);
+  assert.equal(body.incidentClosureAllowed, false);
+  assert.equal(body.payoutReleaseAllowed, false);
+  assert.equal(body.blockerOverrideAllowed, false);
+  assert.equal(body.publicMetricReleaseAllowed, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_reviewer_quality_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("reviewer-quality route, health, spec, API contract, and schema are wired", () => {
   const reviewerQualitySource = readRepoFile("src/lib/moral-trade/reviewer-quality.ts");
   const reviewerQualityRoute = readRepoFile(
     "src/app/api/moral-trade/reviewer-quality/contract/route.ts",
   );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/reviewer-quality/enforce/route.ts",
+  );
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const technicalSpec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
   const migration = readRepoFile(
     "supabase/migrations/20260607_zzzzzzz_moral_trade_reviewer_quality_records.sql",
+  );
+  const enforcementMigration = readRepoFile(
+    "supabase/migrations/20260613_moral_trade_reviewer_quality_enforcement_records.sql",
   );
   const schema = readRepoFile("supabase/schema.sql");
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
@@ -242,18 +285,44 @@ test("reviewer-quality route, health, spec, API contract, and schema are wired",
   assert.match(reviewerQualitySource, /Reviewer judgment is not an ungoverned primitive/);
   assert.match(reviewerQualityRoute, /public_contract_read/);
   assert.match(reviewerQualityRoute, /reviewerQualitySampleEvaluationStatuses/);
+  assert.match(enforceRoute, /reviewer_quality_enforce/);
+  assert.match(enforceRoute, /moral_trade_reviewer_quality_enforcement_records/);
+  assert.match(enforceRoute, /matchingClearingAllowed: false/);
+  assert.match(enforceRoute, /releaseGatePromotionAllowed: false/);
+  assert.match(enforceRoute, /evidenceAcceptanceAllowed: false/);
+  assert.match(enforceRoute, /payoutReleaseAllowed: false/);
+  assert.match(enforceRoute, /blockerOverrideAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:reviewer_quality_enforce/);
+  assert.match(enforceRoute, /authentication_required:reviewer_quality_enforce/);
   assert.match(healthRoute, /reviewerQualityValidation/);
   assert.match(healthRoute, /reviewerQualityReviewTypes/);
   assert.match(technicalSpec, /Reviewer quality contract/);
   assert.match(technicalSpec, /Open reviewer-quality JSON/);
   assert.match(apiContractSource, /moral_trade_reviewer_quality_contract/);
+  assert.match(apiContractSource, /moral_trade_reviewer_quality_enforce/);
   assert.match(apiContractProfile, /reviewer_quality_contract_response/);
+  assert.match(apiContractProfile, /reviewer_quality_enforce_request/);
+  assert.match(apiContractProfile, /reviewer_quality_enforce_response/);
   assert.match(apiContractProfile, /moral_trade_reviewer_quality_contract/);
+  assert.match(apiContractProfile, /moral_trade_reviewer_quality_enforce/);
+  assert.match(apiContractProfile, /reviewer_quality_enforce_route_contract/);
+  assert.match(apiRateLimit, /reviewer_quality_enforce/);
+  assert.match(operations, /reviewer_quality_enforce/);
+  assert.match(operationsProfile, /reviewer_quality_enforce/);
   assert.match(migration, /moral_trade_reviewer_quality_policies/);
   assert.match(migration, /moral_trade_review_quality_audits/);
   assert.match(migration, /reviewer_quality_policy_ref/);
+  assert.match(enforcementMigration, /moral_trade_reviewer_quality_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /matching_clearing_allowed_bool = false/);
+  assert.match(enforcementMigration, /release_gate_promotion_allowed_bool = false/);
+  assert.match(enforcementMigration, /evidence_acceptance_allowed_bool = false/);
+  assert.match(enforcementMigration, /payout_release_allowed_bool = false/);
+  assert.match(enforcementMigration, /blocker_override_allowed_bool = false/);
+  assert.match(schema, /moral_trade_reviewer_quality_enforcement_records/);
   assert.match(schema, /reviewer_quality_policy_ref/);
   assert.match(schema, /conflict_of_interest_state/);
+  assert.match(databaseTypes, /moral_trade_reviewer_quality_enforcement_records/);
   assert.match(databaseTypes, /moral_trade_reviewer_quality_policies/);
   assert.match(databaseTypes, /moral_trade_review_quality_audits/);
 });
