@@ -819,6 +819,18 @@
       "fallback": "Return user-safety and content-moderation validation blockers and fail-closed sample evaluations; never expose raw reports, private messages, reporter identities, target identities, reviewer notes, contact details, protected-trait facts, raw evidence, exact rare-view clusters, or participant-specific safety/moderation records."
     },
     {
+      "key": "moral_trade_user_safety_content_moderation_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/user-safety-content-moderation/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "user_safety_content_moderation_enforce_request",
+      "responseSchema": "user_safety_content_moderation_enforce_response",
+      "rateLimitSurface": "user_safety_content_moderation_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated user-safety/content-moderation enforcement requests create no public-publication, reviewer-actionable, contact-introduction, invite-link, reliance-bearing-preview, payment-capture, profile-amplification, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_financial_settlement_controls_contract",
       "method": "GET",
       "path": "/api/moral-trade/financial-settlement-controls/contract",
@@ -3076,6 +3088,39 @@
       ]
     },
     {
+      "key": "user_safety_content_moderation_enforce_request",
+      "purpose": "Authenticated private fail-closed user-safety/content-moderation enforcement request.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private", "description": "Normalized user-safety/content-moderation evaluation input containing transition, checked-at timestamp, moderation records, and user-safety records." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private", "description": "Optional caller-stable idempotency key for owner-scoped duplicate replay." }
+      ]
+    },
+    {
+      "key": "user_safety_content_moderation_enforce_response",
+      "purpose": "Authenticated private user-safety/content-moderation enforcement result that records the evaluation while never authorizing downstream publication, contact, reliance, payment, amplification, or release state changes.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the contract validator passes and the request was processed." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "User-safety/content-moderation contract version used by the enforcement route." },
+        { "key": "userSafetyContentModerationGateStatus", "type": "string", "required": true, "privacy": "private", "description": "Blocked unless the normalized user-safety/content-moderation evaluation is non-blocking." },
+        { "key": "publicPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; publication requires a separate publication path." },
+        { "key": "reviewerActionableAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reviewer-actionable state requires a separate reviewer path." },
+        { "key": "contactIntroductionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; contact introduction requires a separate contact path." },
+        { "key": "inviteLinkCreationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; invite-link creation requires a separate contact path." },
+        { "key": "relianceBearingPreviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reliance-bearing state requires a separate transition path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "publicProfileAmplificationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; profile amplification requires a separate publication path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_user_safety_content_moderation_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized user-safety/content-moderation evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "User-safety/content-moderation contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "financial_settlement_controls_contract_response",
       "purpose": "Public validator-backed financial settlement controls contract for platform-fee, FX, notice, time-authority, challenge-window, and payout-milestone governance before previews, locks, authorizations, captures, defaults, payout releases, public metrics, or release-gate promotion.",
       "fields": [
@@ -4071,6 +4116,7 @@
     "review_capacity_enforce_route_contract",
     "participant_term_sheet_enforce_route_contract",
     "protective_assessment_enforce_route_contract",
+    "user_safety_content_moderation_enforce_route_contract",
     "recipient_acceptance_enforce_route_contract",
     "ai_preference_elicitation_enforce_route_contract",
     "post_clear_audit_enforce_route_contract",

@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforceUserSafetyContentModeration } from "@/app/api/moral-trade/user-safety-content-moderation/enforce/route";
+
 import {
   evaluateMoralTradeUserSafetyContentModeration,
   getMoralTradeUserSafetyContentModerationContract,
@@ -289,12 +291,50 @@ test("records fail closed for stale, mutable, superseded, private, and prohibite
   );
 });
 
+test("user-safety/content-moderation enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceUserSafetyContentModeration(
+    new Request(
+      "http://localhost/api/moral-trade/user-safety-content-moderation/enforce",
+      {
+        method: "POST",
+        body: "{",
+      },
+    ),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.userSafetyContentModerationGateStatus, "blocked");
+  assert.equal(body.publicPublicationAllowed, false);
+  assert.equal(body.reviewerActionableAllowed, false);
+  assert.equal(body.contactIntroductionAllowed, false);
+  assert.equal(body.inviteLinkCreationAllowed, false);
+  assert.equal(body.relianceBearingPreviewAllowed, false);
+  assert.equal(body.paymentCaptureAllowed, false);
+  assert.equal(body.publicProfileAmplificationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_user_safety_content_moderation_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("user-safety/content-moderation contract is wired through route, health, spec, schema, and API profile", () => {
   const source = readRepoFile(
     "src/lib/moral-trade/user-safety-content-moderation.ts",
   );
   const route = readRepoFile(
     "src/app/api/moral-trade/user-safety-content-moderation/contract/route.ts",
+  );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/user-safety-content-moderation/enforce/route.ts",
   );
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const technicalSpecPage = readRepoFile(
@@ -303,9 +343,15 @@ test("user-safety/content-moderation contract is wired through route, health, sp
   const migration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_user_safety_content_moderation.sql",
   );
+  const enforcementMigration = readRepoFile(
+    "supabase/migrations/20260613_moral_trade_user_safety_content_moderation_enforcement_records.sql",
+  );
   const schema = readRepoFile("supabase/schema.sql");
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
   const apiContract = readRepoFile("src/lib/moral-trade/api-contract.ts");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
   const apiContractProfile = readRepoFile(
     "config/moral-trade/api-contract-profile.json",
   );
@@ -315,6 +361,12 @@ test("user-safety/content-moderation contract is wired through route, health, sp
   assert.match(source, /viewpoint_neutrality/);
   assert.match(source, /unpopular_moral_view/);
   assert.match(route, /validateMoralTradeUserSafetyContentModerationContract/);
+  assert.match(enforceRoute, /user_safety_content_moderation_enforce/);
+  assert.match(enforceRoute, /moral_trade_user_safety_content_moderation_enforcement_records/);
+  assert.match(enforceRoute, /publicPublicationAllowed: false/);
+  assert.match(enforceRoute, /contactIntroductionAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:user_safety_content_moderation_enforce/);
+  assert.match(enforceRoute, /authentication_required:user_safety_content_moderation_enforce/);
   assert.match(healthRoute, /userSafetyContentModerationValidation/);
   assert.match(healthRoute, /userSafetyContentModerationModerationDimensions/);
   assert.match(technicalSpecPage, /User safety and content moderation/);
@@ -329,10 +381,24 @@ test("user-safety/content-moderation contract is wired through route, health, sp
   assert.match(migration, /moral_trade_content_moderation_records/);
   assert.match(migration, /user_safety/);
   assert.match(migration, /content_moderation/);
+  assert.match(enforcementMigration, /moral_trade_user_safety_content_moderation_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /public_publication_allowed_bool = false/);
+  assert.match(enforcementMigration, /contact_introduction_allowed_bool = false/);
+  assert.match(enforcementMigration, /release_gate_promotion_allowed_bool = false/);
   assert.match(schema, /moral_trade_contact_interaction_records/);
   assert.match(schema, /moral_trade_content_moderation_records/);
+  assert.match(schema, /moral_trade_user_safety_content_moderation_enforcement_records/);
   assert.match(databaseTypes, /moral_trade_abuse_report_records/);
+  assert.match(databaseTypes, /moral_trade_user_safety_content_moderation_enforcement_records/);
   assert.match(apiContract, /moral_trade_user_safety_content_moderation_contract/);
+  assert.match(apiContract, /moral_trade_user_safety_content_moderation_enforce/);
+  assert.match(apiRateLimit, /user_safety_content_moderation_enforce/);
+  assert.match(operations, /user_safety_content_moderation_enforce/);
+  assert.match(operationsProfile, /user_safety_content_moderation_enforce/);
   assert.match(apiContractProfile, /user_safety_content_moderation_contract_response/);
+  assert.match(apiContractProfile, /user_safety_content_moderation_enforce_request/);
+  assert.match(apiContractProfile, /user_safety_content_moderation_enforce_response/);
+  assert.match(apiContractProfile, /moral_trade_user_safety_content_moderation_enforce/);
   assert.match(apiContractProfile, /private messages, reporter identities/);
 });
