@@ -519,6 +519,30 @@
       "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated non-public-goods tier enforcement requests create no draft preview, match-candidate preview, matched-trade lock, payment, reliance-bearing transition, public-metric publication, or release-gate promotion state change."
     },
     {
+      "key": "moral_trade_risk_control_matrix_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/risk-control-matrix/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "risk_control_matrix_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return risk-control-pack and control-applicability-matrix blockers, first-class record metadata, privacy boundary, and sample evaluations; never expose private term sheets, raw evidence, reviewer notes, private baselines, exact caps, payment credentials, identities, or participant-specific control records."
+    },
+    {
+      "key": "moral_trade_risk_control_matrix_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/risk-control-matrix/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "risk_control_matrix_enforce_request",
+      "responseSchema": "risk_control_matrix_enforce_response",
+      "rateLimitSurface": "risk_control_matrix_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated risk-control matrix enforcement requests create no runtime transition, matched-trade lock, payment authorization, payment capture, public-metric publication, or release-gate promotion state change."
+    },
+    {
       "key": "moral_trade_direct_pair_clearing_contract",
       "method": "GET",
       "path": "/api/moral-trade/direct-pair-clearing/contract",
@@ -2705,6 +2729,50 @@
       ]
     },
     {
+      "key": "risk_control_matrix_contract_response",
+      "purpose": "Public validator-backed risk-control-pack and control-applicability-matrix contract for non-public-goods runtime transitions before preview, lock, payment, reliance, public metrics, release-gate promotion, dispute handling, or appeal handling.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the risk-control matrix contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the control-matrix validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Risk-control matrix contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class control packs, applicability matrices, requirement results, known control codes, non-blocking statuses, fail-closed statuses, sample evaluations, and test hooks." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, privacy boundary, first-class table names, policy subjects, transitions, subject types, trade types, release stages, known control codes, statuses, sample outcomes, and test hooks without private term sheets, raw evidence, reviewer notes, private baselines, exact caps, payment credentials, identities, or participant-specific control records." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Risk-control matrix blockers that prevent runtime transition, lock, payment, public metric publication, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "risk_control_matrix_enforce_request",
+      "purpose": "Authenticated private request for live risk-control matrix enforcement before runtime transition, lock, payment, public-metric, release-gate, dispute, or appeal transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Risk-control transition, checked-at time, control packs, applicability matrices, and requirement results to normalize and evaluate; unsupported wrapper, evaluation, pack, matrix, or result keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "risk_control_matrix_enforce_response",
+      "purpose": "Authenticated private fail-closed risk-control matrix enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the risk-control matrix contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Risk-control matrix contract version used by the enforcement attempt." },
+        { "key": "riskControlMatrixGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when every applicable required control resolves to passed, not-required, or privileged neutral-review waiver; blocked otherwise." },
+        { "key": "runtimeTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; runtime transition requires a separate state-transition path." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock proposal and confirmation path." },
+        { "key": "paymentAuthorizationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment authorization requires a separate payment control path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_risk_control_matrix_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized risk-control matrix evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Risk-control matrix contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "direct_pair_clearing_contract_response",
       "purpose": "Public validator-backed direct-pair clearing governance contract for two-party or invite-linked donation-offset and pledge-swap previews before lock, payment, capture, public metrics, or release-gate promotion.",
       "fields": [
@@ -4513,6 +4581,7 @@
     "post_clear_audit_enforce_route_contract",
     "non_public_goods_subsidy_enforce_route_contract",
     "non_public_goods_tier_enforce_route_contract",
+    "risk_control_matrix_enforce_route_contract",
     "direct_pair_clearing_enforce_route_contract",
     "cause_bucket_taxonomy_enforce_route_contract",
     "resource_compatibility_enforce_route_contract",

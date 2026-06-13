@@ -149,6 +149,7 @@ const REQUIRED_RATE_LIMITS = [
   "post_clear_audit_enforce",
   "non_public_goods_subsidy_enforce",
   "non_public_goods_tier_enforce",
+  "risk_control_matrix_enforce",
   "direct_pair_clearing_enforce",
   "cause_bucket_taxonomy_enforce",
   "resource_compatibility_enforce",
