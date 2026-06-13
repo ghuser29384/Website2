@@ -148,6 +148,7 @@ const REQUIRED_RATE_LIMITS = [
   "noncompensable_blocker_enforce",
   "batch_clearing_objective_enforce",
   "sensitive_evidence_attestation_enforce",
+  "pilot_evidence_enforce",
   "challenge_appeal_evaluate",
   "challenge_appeal_enforce",
   "disclosure_evaluate",

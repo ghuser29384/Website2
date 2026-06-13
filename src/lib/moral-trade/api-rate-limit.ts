@@ -38,6 +38,7 @@ export type MoralTradeApiRateLimitSurface =
   | "noncompensable_blocker_enforce"
   | "batch_clearing_objective_enforce"
   | "sensitive_evidence_attestation_enforce"
+  | "pilot_evidence_enforce"
   | "challenge_appeal_evaluate"
   | "challenge_appeal_enforce"
   | "disclosure_evaluate"
@@ -90,6 +91,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   noncompensable_blocker_enforce: { limit: 20, windowMs: 60_000 },
   batch_clearing_objective_enforce: { limit: 20, windowMs: 60_000 },
   sensitive_evidence_attestation_enforce: { limit: 20, windowMs: 60_000 },
+  pilot_evidence_enforce: { limit: 20, windowMs: 60_000 },
   challenge_appeal_evaluate: { limit: 30, windowMs: 60_000 },
   challenge_appeal_enforce: { limit: 20, windowMs: 60_000 },
   disclosure_evaluate: { limit: 30, windowMs: 60_000 },

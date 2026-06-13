@@ -76,6 +76,7 @@
     { "key": "noncompensable_blocker_enforce", "window": "1 minute", "limit": 20 },
     { "key": "batch_clearing_objective_enforce", "window": "1 minute", "limit": 20 },
     { "key": "sensitive_evidence_attestation_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "pilot_evidence_enforce", "window": "1 minute", "limit": 20 },
     { "key": "challenge_appeal_evaluate", "window": "1 minute", "limit": 30 },
     { "key": "challenge_appeal_enforce", "window": "1 minute", "limit": 20 },
     { "key": "disclosure_evaluate", "window": "1 minute", "limit": 30 },

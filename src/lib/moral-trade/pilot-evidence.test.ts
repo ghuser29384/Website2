@@ -4,6 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { GET as getPilotEvidenceContract } from "@/app/api/moral-trade/pilot-evidence/contract/route";
+import { POST as enforcePilotEvidence } from "@/app/api/moral-trade/pilot-evidence/enforce/route";
 import {
   evaluateMoralTradePilotEvidence,
   getMoralTradePilotEvidenceContract,
@@ -145,17 +146,55 @@ test("pilot-evidence route exposes public contract metadata", async () => {
   assert.ok(!JSON.stringify(body).includes("simulationEvidenceHash"));
 });
 
+test("pilot-evidence enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforcePilotEvidence(
+    new Request("http://localhost/api/moral-trade/pilot-evidence/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.pilotEvidenceGateStatus, "blocked");
+  assert.equal(body.donationOffsetPayablePromotionAllowed, false);
+  assert.equal(body.pledgeSwapReliancePromotionAllowed, false);
+  assert.equal(body.cappedRealMoneyReleaseAllowed, false);
+  assert.equal(body.publicMetricPublicationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_pilot_evidence_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("pilot-evidence contract is wired through API, health, spec, schema, and smoke tests", () => {
   const source = readRepoFile("src/lib/moral-trade/pilot-evidence.ts");
   const route = readRepoFile("src/app/api/moral-trade/pilot-evidence/contract/route.ts");
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/pilot-evidence/enforce/route.ts",
+  );
   const healthRoute = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const technicalSpec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
   const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
   const apiContractProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const releaseGates = readRepoFile("src/lib/moral-trade/release-gates.ts");
   const clearingPreviews = readRepoFile("src/lib/moral-trade/clearing-previews.ts");
   const migration = readRepoFile(
     "supabase/migrations/20260612_zzzz_moral_trade_pilot_evidence_gates.sql",
+  );
+  const enforcementMigration = readRepoFile(
+    "supabase/migrations/20260613_moral_trade_pilot_evidence_enforcement_records.sql",
   );
   const schema = readRepoFile("supabase/schema.sql");
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
@@ -165,19 +204,40 @@ test("pilot-evidence contract is wired through API, health, spec, schema, and sm
   assert.match(source, /pilot_success_cannot_be_matched_volume_alone/);
   assert.match(route, /validateMoralTradePilotEvidenceContract/);
   assert.match(route, /matchedVolumeRule/);
+  assert.match(enforceRoute, /pilot_evidence_enforce/);
+  assert.match(enforceRoute, /moral_trade_pilot_evidence_enforcement_records/);
+  assert.match(enforceRoute, /donationOffsetPayablePromotionAllowed: false/);
+  assert.match(enforceRoute, /pledgeSwapReliancePromotionAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:pilot_evidence_enforce/);
+  assert.match(enforceRoute, /authentication_required:pilot_evidence_enforce/);
   assert.match(healthRoute, /pilotEvidenceValidation/);
   assert.match(healthRoute, /pilotEvidenceFirstClassRecordTables/);
   assert.match(technicalSpec, /Pilot evidence gates/);
   assert.match(technicalSpec, /pilot-evidence\/contract/);
   assert.match(apiContractSource, /moral_trade_pilot_evidence_contract/);
+  assert.match(apiContractSource, /moral_trade_pilot_evidence_enforce/);
+  assert.match(apiRateLimit, /pilot_evidence_enforce/);
+  assert.match(operations, /pilot_evidence_enforce/);
+  assert.match(operationsProfile, /pilot_evidence_enforce/);
   assert.match(apiContractProfile, /pilot_evidence_contract_response/);
+  assert.match(apiContractProfile, /pilot_evidence_enforce_request/);
+  assert.match(apiContractProfile, /pilot_evidence_enforce_response/);
+  assert.match(apiContractProfile, /moral_trade_pilot_evidence_enforce/);
   assert.match(releaseGates, /market_simulation_red_team_test/);
   assert.match(releaseGates, /pilot_exit_criteria_test/);
   assert.match(clearingPreviews, /pilotEvidenceStatus/);
   assert.match(migration, /moral_trade_pilot_evidence_gates/);
   assert.match(migration, /pilot_evidence/);
   assert.match(migration, /matched volume alone/i);
+  assert.match(enforcementMigration, /moral_trade_pilot_evidence_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /donation_offset_payable_promotion_allowed_bool = false/);
+  assert.match(enforcementMigration, /pledge_swap_reliance_promotion_allowed_bool = false/);
+  assert.match(enforcementMigration, /capped_real_money_release_allowed_bool = false/);
+  assert.match(enforcementMigration, /public_metric_publication_allowed_bool = false/);
   assert.match(schema, /moral_trade_pilot_evidence_gates/);
+  assert.match(schema, /moral_trade_pilot_evidence_enforcement_records/);
   assert.match(databaseTypes, /moral_trade_pilot_evidence_gates/);
+  assert.match(databaseTypes, /moral_trade_pilot_evidence_enforcement_records/);
   assert.match(smokeTest, /pilotEvidenceSource/);
 });
