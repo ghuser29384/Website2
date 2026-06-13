@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { POST as enforceParticipantConfirmation } from "@/app/api/moral-trade/participant-confirmations/enforce/route";
 import {
   evaluateMoralTradeParticipantConfirmation,
   getMoralTradeParticipantConfirmationContract,
@@ -142,23 +143,95 @@ test("renewed material changes must supersede a prior confirmation hash", () => 
   assert.equal(passed.canAuthorizeMaterialChange, true);
 });
 
+test("participant-confirmation enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceParticipantConfirmation(
+    new Request("http://localhost/api/moral-trade/participant-confirmations/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.ok, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.routingAllowed, false);
+  assert.equal(body.clearingAllowed, false);
+  assert.equal(body.captureAllowed, false);
+  assert.equal(body.payoutReleaseAllowed, false);
+  assert.equal(body.privacyDisclosureAllowed, false);
+  assert.equal(body.materialChangeAllowed, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_participant_confirmation_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("participant-confirmation route, health, technical spec, and migration are wired", () => {
   const route = readFileSync(
     "src/app/api/moral-trade/participant-confirmations/contract/route.ts",
     "utf8",
   );
+  const enforceRoute = readFileSync(
+    "src/app/api/moral-trade/participant-confirmations/enforce/route.ts",
+    "utf8",
+  );
   const health = readFileSync("src/app/api/moral-trade/health/route.ts", "utf8");
   const technicalSpec = readFileSync("src/app/moral-trade/technical-spec/page.tsx", "utf8");
+  const apiContract = readFileSync("config/moral-trade/api-contract-profile.json", "utf8");
+  const apiContractSource = readFileSync("src/lib/moral-trade/api-contract.ts", "utf8");
+  const apiRateLimit = readFileSync("src/lib/moral-trade/api-rate-limit.ts", "utf8");
+  const operations = readFileSync("src/lib/moral-trade/operations.ts", "utf8");
+  const operationsProfile = readFileSync("config/moral-trade/operations-profile.json", "utf8");
   const migration = readFileSync(
     "supabase/migrations/20260607_zz_moral_trade_participant_confirmation_records.sql",
     "utf8",
   );
+  const enforcementMigration = readFileSync(
+    "supabase/migrations/20260613_moral_trade_participant_confirmation_enforcement_records.sql",
+    "utf8",
+  );
+  const schema = readFileSync("supabase/schema.sql", "utf8");
+  const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
 
   assert.match(route, /validateMoralTradeParticipantConfirmationContract/);
+  assert.match(enforceRoute, /participant_confirmation_enforce/);
+  assert.match(enforceRoute, /moral_trade_participant_confirmation_enforcement_records/);
+  assert.match(enforceRoute, /routingAllowed: false/);
+  assert.match(enforceRoute, /clearingAllowed: false/);
+  assert.match(enforceRoute, /captureAllowed: false/);
+  assert.match(enforceRoute, /payoutReleaseAllowed: false/);
+  assert.match(enforceRoute, /privacyDisclosureAllowed: false/);
+  assert.match(enforceRoute, /materialChangeAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:participant_confirmation_enforce/);
+  assert.match(enforceRoute, /authentication_required:participant_confirmation_enforce/);
   assert.match(health, /participantConfirmationValidation/);
   assert.match(health, /participantConfirmationScopes/);
   assert.match(technicalSpec, /Participant confirmation contract/);
   assert.match(technicalSpec, /participantConfirmationContract\.firstClassRecordTables/);
+  assert.match(apiContract, /moral_trade_participant_confirmation_enforce/);
+  assert.match(apiContract, /participant_confirmation_enforce_request/);
+  assert.match(apiContract, /participant_confirmation_enforce_response/);
+  assert.match(apiContract, /participant_confirmation_enforce_route_contract/);
+  assert.match(apiContractSource, /moral_trade_participant_confirmation_enforce/);
+  assert.match(apiRateLimit, /participant_confirmation_enforce/);
+  assert.match(operations, /participant_confirmation_enforce/);
+  assert.match(operationsProfile, /participant_confirmation_enforce/);
   assert.match(migration, /moral_trade_participant_confirmation_records/);
   assert.match(migration, /moral_trade_consent_quality_records/);
+  assert.match(enforcementMigration, /moral_trade_participant_confirmation_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /routing_allowed_bool = false/);
+  assert.match(enforcementMigration, /clearing_allowed_bool = false/);
+  assert.match(enforcementMigration, /capture_allowed_bool = false/);
+  assert.match(enforcementMigration, /payout_release_allowed_bool = false/);
+  assert.match(enforcementMigration, /privacy_disclosure_allowed_bool = false/);
+  assert.match(enforcementMigration, /material_change_allowed_bool = false/);
+  assert.match(enforcementMigration, /release_gate_promotion_allowed_bool = false/);
+  assert.match(schema, /moral_trade_participant_confirmation_enforcement_records/);
+  assert.match(databaseTypes, /moral_trade_participant_confirmation_enforcement_records/);
 });

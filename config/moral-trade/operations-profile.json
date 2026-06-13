@@ -64,6 +64,7 @@
     { "key": "template_conformance_enforce", "window": "1 minute", "limit": 20 },
     { "key": "review_capacity_enforce", "window": "1 minute", "limit": 20 },
     { "key": "participant_term_sheet_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "participant_confirmation_enforce", "window": "1 minute", "limit": 20 },
     { "key": "participant_eligibility_enforce", "window": "1 minute", "limit": 20 },
     { "key": "protective_assessment_enforce", "window": "1 minute", "limit": 20 },
     { "key": "user_safety_content_moderation_enforce", "window": "1 minute", "limit": 20 },

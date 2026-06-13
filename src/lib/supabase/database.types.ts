@@ -8635,6 +8635,12 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_participant_confirmation_enforcement_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_account_security_policies: {
         Row: {
           id: string;
