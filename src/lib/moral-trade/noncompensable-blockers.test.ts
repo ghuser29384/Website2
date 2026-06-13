@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { GET as getNoncompensableBlockerContract } from "@/app/api/moral-trade/noncompensable-blockers/contract/route";
+import { POST as enforceNoncompensableBlocker } from "@/app/api/moral-trade/noncompensable-blockers/enforce/route";
 import {
   evaluateMoralTradeNoncompensableBlocker,
   getMoralTradeNoncompensableBlockerContract,
@@ -246,34 +247,97 @@ test("noncompensable blocker route exposes public contract metadata", async () =
   assert.match(body.publicContract.compensationAttemptRule, /side payment/i);
 });
 
+test("noncompensable blocker enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceNoncompensableBlocker(
+    new Request("http://localhost/api/moral-trade/noncompensable-blockers/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.noncompensableBlockerGateStatus, "blocked");
+  assert.equal(body.draftPreviewAllowed, false);
+  assert.equal(body.matchCandidateGenerationAllowed, false);
+  assert.equal(body.matchedTradeLockAllowed, false);
+  assert.equal(body.paymentCaptureAllowed, false);
+  assert.equal(body.payoutReleaseAllowed, false);
+  assert.equal(body.relianceAllowed, false);
+  assert.equal(body.publicCompletionCountAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_noncompensable_blocker_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("noncompensable blocker contract is wired through route, health, spec, API profile, preview, gates, and schema", () => {
   const route = readFileSync(
     "src/app/api/moral-trade/noncompensable-blockers/contract/route.ts",
     "utf8",
   );
+  const enforceRoute = readFileSync(
+    "src/app/api/moral-trade/noncompensable-blockers/enforce/route.ts",
+    "utf8",
+  );
   const health = readFileSync("src/app/api/moral-trade/health/route.ts", "utf8");
   const spec = readFileSync("src/app/moral-trade/technical-spec/page.tsx", "utf8");
   const apiProfile = readFileSync("config/moral-trade/api-contract-profile.json", "utf8");
+  const apiContract = readFileSync("src/lib/moral-trade/api-contract.ts", "utf8");
+  const apiRateLimit = readFileSync("src/lib/moral-trade/api-rate-limit.ts", "utf8");
+  const operations = readFileSync("src/lib/moral-trade/operations.ts", "utf8");
+  const operationsProfile = readFileSync("config/moral-trade/operations-profile.json", "utf8");
   const clearingPreview = readFileSync("src/lib/moral-trade/clearing-previews.ts", "utf8");
   const releaseGates = readFileSync("src/lib/moral-trade/release-gates.ts", "utf8");
   const migration = readFileSync(
     "supabase/migrations/20260612_z_moral_trade_noncompensable_blocker_assessments.sql",
     "utf8",
   );
+  const enforcementMigration = readFileSync(
+    "supabase/migrations/20260613_moral_trade_noncompensable_blocker_enforcement_records.sql",
+    "utf8",
+  );
   const schema = readFileSync("supabase/schema.sql", "utf8");
   const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
 
   assert.match(route, /getMoralTradeNoncompensableBlockerContract/);
+  assert.match(enforceRoute, /noncompensable_blocker_enforce/);
+  assert.match(enforceRoute, /moral_trade_noncompensable_blocker_enforcement_records/);
+  assert.match(enforceRoute, /draftPreviewAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:noncompensable_blocker_enforce/);
+  assert.match(enforceRoute, /authentication_required:noncompensable_blocker_enforce/);
   assert.match(health, /noncompensableBlockerValidation/);
   assert.match(spec, /\/api\/moral-trade\/noncompensable-blockers\/contract/);
   assert.match(apiProfile, /noncompensable_blocker_contract_response/);
+  assert.match(apiProfile, /noncompensable_blocker_enforce_request/);
+  assert.match(apiProfile, /noncompensable_blocker_enforce_response/);
   assert.match(apiProfile, /moral_trade_noncompensable_blocker_contract/);
+  assert.match(apiProfile, /moral_trade_noncompensable_blocker_enforce/);
+  assert.match(apiContract, /moral_trade_noncompensable_blocker_enforce/);
+  assert.match(apiRateLimit, /noncompensable_blocker_enforce/);
+  assert.match(operations, /noncompensable_blocker_enforce/);
+  assert.match(operationsProfile, /noncompensable_blocker_enforce/);
   assert.match(clearingPreview, /noncompensableBlockerStatus/);
   assert.match(releaseGates, /noncompensable_safety_blocker_test/);
   assert.match(migration, /moral_trade_noncompensable_blocker_assessments/);
   assert.match(migration, /noncompensable_blocker/);
+  assert.match(enforcementMigration, /moral_trade_noncompensable_blocker_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /payment_capture_allowed_bool = false/);
+  assert.match(enforcementMigration, /payout_release_allowed_bool = false/);
+  assert.match(enforcementMigration, /reliance_allowed_bool = false/);
   assert.match(schema, /moral_trade_noncompensable_blocker_assessments/);
+  assert.match(schema, /moral_trade_noncompensable_blocker_enforcement_records/);
   assert.match(schema, /noncompensable_blocker/);
   assert.match(databaseTypes, /moral_trade_noncompensable_blocker_assessments/);
+  assert.match(databaseTypes, /moral_trade_noncompensable_blocker_enforcement_records/);
   assert.match(databaseTypes, /noncompensable_blocker/);
 });

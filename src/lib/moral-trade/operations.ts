@@ -145,6 +145,7 @@ const REQUIRED_RATE_LIMITS = [
   "net_offset_accounting_enforce",
   "offer_validity_enforce",
   "private_exchange_rate_enforce",
+  "noncompensable_blocker_enforce",
   "challenge_appeal_evaluate",
   "challenge_appeal_enforce",
   "disclosure_evaluate",

@@ -579,6 +579,18 @@
       "fallback": "Return noncompensable blocker rules, first-class assessment metadata, protected-interest categories, compensation-attempt states, waiver states, review states, and sample evaluations; never expose participant identity hashes, private legal or privacy details, exact protected-interest facts, reviewer notes, or participant-specific assessment rows."
     },
     {
+      "key": "moral_trade_noncompensable_blocker_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/noncompensable-blockers/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "noncompensable_blocker_enforce_request",
+      "responseSchema": "noncompensable_blocker_enforce_response",
+      "rateLimitSurface": "noncompensable_blocker_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated noncompensable-blocker enforcement requests create no draft preview, matching, lock, payment-capture, payout-release, reliance, public-completion, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_batch_clearing_objective_contract",
       "method": "GET",
       "path": "/api/moral-trade/batch-clearing-objective/contract",
@@ -2563,6 +2575,39 @@
       ]
     },
     {
+      "key": "noncompensable_blocker_enforce_request",
+      "purpose": "Authenticated private fail-closed noncompensable-blocker enforcement request.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private", "description": "Normalized noncompensable-blocker evaluation input containing transition, assessment requirement, affected-participant count, checked-at timestamp, and first-class assessment records." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private", "description": "Optional caller-stable idempotency key for owner-scoped duplicate replay." }
+      ]
+    },
+    {
+      "key": "noncompensable_blocker_enforce_response",
+      "purpose": "Authenticated private noncompensable-blocker enforcement result that records the evaluation while never authorizing downstream state changes.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the contract validator passes and the request was processed." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Noncompensable-blocker contract version used by the enforcement route." },
+        { "key": "noncompensableBlockerGateStatus", "type": "string", "required": true, "privacy": "private", "description": "Blocked unless the normalized noncompensable-blocker evaluation is non-blocking." },
+        { "key": "draftPreviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; draft preview requires a separate preview path." },
+        { "key": "matchCandidateGenerationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matching requires a separate matching path." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "payoutReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payout release requires a separate payout control path." },
+        { "key": "relianceAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reliance requires a separate reliance-bearing state path." },
+        { "key": "publicCompletionCountAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public completion counts require a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_noncompensable_blocker_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized noncompensable-blocker evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Noncompensable-blocker contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "batch_clearing_objective_contract_response",
       "purpose": "Public validator-backed batch-clearing objective governance contract for frozen objective, deterministic tie-break fairness, and reproducible objective results before scarce donation-offset matches can allocate, lock, capture, rely, publish metrics, or promote release gates.",
       "fields": [
@@ -3858,6 +3903,7 @@
     "net_offset_accounting_enforce_route_contract",
     "offer_validity_enforce_route_contract",
     "private_exchange_rate_enforce_route_contract",
+    "noncompensable_blocker_enforce_route_contract",
     "private_exchange_rate_contract_route",
     "noncompensable_blocker_contract_route",
     "batch_clearing_objective_contract_route",
