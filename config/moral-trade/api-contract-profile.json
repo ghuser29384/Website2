@@ -411,6 +411,18 @@
       "fallback": "Return non-public-goods subsidy governance blockers, first-class record metadata, metric-exclusion rule, and sample evaluations; never expose sponsor identity hashes, private source details, raw eligibility inputs, participant-specific subsidy rows, private sponsor terms, reviewer notes, or participant-specific subsidy records."
     },
     {
+      "key": "moral_trade_non_public_goods_subsidy_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/non-public-goods-subsidies/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "non_public_goods_subsidy_enforce_request",
+      "responseSchema": "non_public_goods_subsidy_enforce_response",
+      "rateLimitSurface": "non_public_goods_subsidy_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated non-public-goods subsidy enforcement requests create no subsidy activation, schedule preview, schedule reservation, matched-trade lock, payment, public-metric, release-promotion, or refund/carry-forward state change."
+    },
+    {
       "key": "moral_trade_direct_pair_clearing_contract",
       "method": "GET",
       "path": "/api/moral-trade/direct-pair-clearing/contract",
@@ -2162,6 +2174,40 @@
       ]
     },
     {
+      "key": "non_public_goods_subsidy_enforce_request",
+      "purpose": "Authenticated private request for live non-public-goods subsidy enforcement before subsidy activation, schedule preview, schedule reservation, lock, payment, public-metric, release-gate, or refund/carry-forward transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Non-public-goods subsidy transition, checked-at time, subsidy-required flag, subsidy pools, and subsidy schedules to normalize and evaluate; unsupported wrapper, evaluation, pool, or schedule keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "non_public_goods_subsidy_enforce_response",
+      "purpose": "Authenticated private fail-closed non-public-goods subsidy enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the non-public-goods subsidy contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Non-public-goods subsidy contract version used by the enforcement attempt." },
+        { "key": "nonPublicGoodsSubsidyGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when normalized non-public-goods subsidy evaluation passes; blocked otherwise." },
+        { "key": "subsidyPoolActivationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; this enforcement endpoint records evidence but never activates subsidy pools." },
+        { "key": "subsidySchedulePreviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; schedule preview requires a separate clearing-preview path." },
+        { "key": "subsidyScheduleReservationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; subsidy reservation requires a separate reservation control path." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock proposal and confirmation path." },
+        { "key": "paymentAuthorizationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment authorization requires a separate payment control path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "subsidyRefundOrCarryForwardAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; refund or carry-forward handling requires a separate settlement policy path." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_non_public_goods_subsidy_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized non-public-goods subsidy evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Non-public-goods subsidy contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "direct_pair_clearing_contract_response",
       "purpose": "Public validator-backed direct-pair clearing governance contract for two-party or invite-linked donation-offset and pledge-swap previews before lock, payment, capture, public metrics, or release-gate promotion.",
       "fields": [
@@ -3541,6 +3587,7 @@
     "recipient_acceptance_enforce_route_contract",
     "ai_preference_elicitation_enforce_route_contract",
     "post_clear_audit_enforce_route_contract",
+    "non_public_goods_subsidy_enforce_route_contract",
     "private_exchange_rate_contract_route",
     "noncompensable_blocker_contract_route",
     "batch_clearing_objective_contract_route",

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { GET as getSubsidyContract } from "@/app/api/moral-trade/non-public-goods-subsidies/contract/route";
+import { POST as enforceSubsidy } from "@/app/api/moral-trade/non-public-goods-subsidies/enforce/route";
 import {
   evaluateMoralTradeNonPublicGoodsSubsidy,
   getMoralTradeNonPublicGoodsSubsidyContract,
@@ -288,13 +289,55 @@ test("non-public-goods subsidy route exposes only public contract metadata", asy
   assert.match(body.publicContract.metricExclusionRule, /impact claims/i);
 });
 
+test("non-public-goods subsidy enforce route is fail-closed before persistence on invalid input", async () => {
+  const response = await enforceSubsidy(
+    new Request("http://localhost/api/moral-trade/non-public-goods-subsidies/enforce", {
+      body: "not-json",
+      method: "POST",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.nonPublicGoodsSubsidyGateStatus, "blocked");
+  assert.equal(body.subsidyPoolActivationAllowed, false);
+  assert.equal(body.subsidySchedulePreviewAllowed, false);
+  assert.equal(body.subsidyScheduleReservationAllowed, false);
+  assert.equal(body.matchedTradeLockAllowed, false);
+  assert.equal(body.paymentAuthorizationAllowed, false);
+  assert.equal(body.paymentCaptureAllowed, false);
+  assert.equal(body.publicMetricPublicationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.subsidyRefundOrCarryForwardAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.equal(body.persistence.status, "not_recorded");
+  assert.equal(
+    body.persistence.table,
+    "moral_trade_non_public_goods_subsidy_enforcement_records",
+  );
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+});
+
 test("non-public-goods subsidy contract is wired through route, health, spec, API profile, and schema", () => {
   const route = readFileSync(
     "src/app/api/moral-trade/non-public-goods-subsidies/contract/route.ts",
     "utf8",
   );
+  const enforceRoute = readFileSync(
+    "src/app/api/moral-trade/non-public-goods-subsidies/enforce/route.ts",
+    "utf8",
+  );
   const health = readFileSync("src/app/api/moral-trade/health/route.ts", "utf8");
   const spec = readFileSync("src/app/moral-trade/technical-spec/page.tsx", "utf8");
+  const apiContract = readFileSync("src/lib/moral-trade/api-contract.ts", "utf8");
+  const apiRateLimit = readFileSync("src/lib/moral-trade/api-rate-limit.ts", "utf8");
+  const operations = readFileSync("src/lib/moral-trade/operations.ts", "utf8");
+  const operationsProfile = readFileSync(
+    "config/moral-trade/operations-profile.json",
+    "utf8",
+  );
   const apiProfile = readFileSync("config/moral-trade/api-contract-profile.json", "utf8");
   const migration = readFileSync(
     "supabase/migrations/20260612_moral_trade_non_public_goods_subsidy_records.sql",
@@ -302,17 +345,73 @@ test("non-public-goods subsidy contract is wired through route, health, spec, AP
   );
   const schema = readFileSync("supabase/schema.sql", "utf8");
   const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
+  const forbiddenAllowColumns = [
+    "subsidy_pool_activation_allowed_bool",
+    "subsidy_schedule_preview_allowed_bool",
+    "subsidy_schedule_reservation_allowed_bool",
+    "matched_trade_lock_allowed_bool",
+    "payment_authorization_allowed_bool",
+    "payment_capture_allowed_bool",
+    "public_metric_publication_allowed_bool",
+    "release_gate_promotion_allowed_bool",
+    "subsidy_refund_or_carry_forward_allowed_bool",
+  ];
 
   assert.match(route, /getMoralTradeNonPublicGoodsSubsidyContract/);
+  assert.match(enforceRoute, /non_public_goods_subsidy_enforce/);
+  assert.match(
+    enforceRoute,
+    /moral_trade_non_public_goods_subsidy_enforcement_records/,
+  );
+  assert.match(
+    enforceRoute,
+    /authentication_required:non_public_goods_subsidy_enforce/,
+  );
+  assert.match(
+    enforceRoute,
+    /database_insert_failed:non_public_goods_subsidy_enforce/,
+  );
+  assert.match(enforceRoute, /subsidyPoolActivationAllowed: false/);
+  assert.match(enforceRoute, /subsidySchedulePreviewAllowed: false/);
+  assert.match(enforceRoute, /subsidyScheduleReservationAllowed: false/);
+  assert.match(enforceRoute, /matchedTradeLockAllowed: false/);
+  assert.match(enforceRoute, /paymentAuthorizationAllowed: false/);
+  assert.match(enforceRoute, /paymentCaptureAllowed: false/);
+  assert.match(enforceRoute, /publicMetricPublicationAllowed: false/);
+  assert.match(enforceRoute, /releaseGatePromotionAllowed: false/);
+  assert.match(enforceRoute, /subsidyRefundOrCarryForwardAllowed: false/);
   assert.match(health, /nonPublicGoodsSubsidyValidation/);
   assert.match(spec, /\/api\/moral-trade\/non-public-goods-subsidies\/contract/);
+  assert.match(apiContract, /moral_trade_non_public_goods_subsidy_enforce/);
+  assert.match(apiRateLimit, /non_public_goods_subsidy_enforce/);
+  assert.match(operations, /non_public_goods_subsidy_enforce/);
+  assert.match(operationsProfile, /non_public_goods_subsidy_enforce/);
   assert.match(apiProfile, /non_public_goods_subsidy_contract_response/);
+  assert.match(apiProfile, /non_public_goods_subsidy_enforce_request/);
+  assert.match(apiProfile, /non_public_goods_subsidy_enforce_response/);
+  assert.match(apiProfile, /non_public_goods_subsidy_enforce_route_contract/);
   assert.match(apiProfile, /moral_trade_non_public_goods_subsidy_contract/);
+  assert.match(apiProfile, /moral_trade_non_public_goods_subsidy_enforce/);
   assert.match(migration, /moral_trade_non_public_goods_subsidy_pools/);
   assert.match(migration, /moral_trade_subsidy_schedule_records/);
+  assert.match(
+    migration,
+    /moral_trade_non_public_goods_subsidy_enforcement_records/,
+  );
+  assert.match(migration, /owner_profile_id = auth\.uid\(\)/);
   assert.match(migration, /non_public_goods_subsidy/);
   assert.match(schema, /moral_trade_non_public_goods_subsidy_pools/);
   assert.match(schema, /moral_trade_subsidy_schedule_records/);
+  assert.match(schema, /moral_trade_non_public_goods_subsidy_enforcement_records/);
   assert.match(databaseTypes, /moral_trade_non_public_goods_subsidy_pools/);
   assert.match(databaseTypes, /moral_trade_subsidy_schedule_records/);
+  assert.match(
+    databaseTypes,
+    /moral_trade_non_public_goods_subsidy_enforcement_records/,
+  );
+
+  for (const column of forbiddenAllowColumns) {
+    assert.match(migration, new RegExp(`check \\(${column} = false\\)`));
+    assert.match(schema, new RegExp(`check \\(${column} = false\\)`));
+  }
 });
