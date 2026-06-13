@@ -732,6 +732,10 @@ export async function POST(request: Request) {
     preview_section_statuses: preview.sections.map((section) => ({
       key: section.key,
       status: section.status,
+      safeReasonCategory: section.safeReasonCategory,
+      nextAction: section.nextAction,
+      correctionPath: section.correctionPath,
+      appealPath: section.appealPath,
       blockerCodes: section.blockerCodes,
     })) as unknown as Json,
     preview_status: preview.status,

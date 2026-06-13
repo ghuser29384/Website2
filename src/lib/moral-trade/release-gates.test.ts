@@ -6,9 +6,17 @@ import {
   evaluateMoralTradeReleaseGate,
   getMoralTradeReleaseGateContract,
   validateMoralTradeReleaseGateContract,
+  type MoralTradeReleaseStage,
   type MoralTradeReleaseGateEvaluationInput,
   type MoralTradeReleaseGateRequirementResult,
 } from "./release-gates";
+
+const PRIVILEGED_REQUIREMENT_KEYS = new Set([
+  "neutral_reviewer_approval",
+  "recipient_acceptance_association_test",
+  "representative_authority_verification_test",
+  "pledge_performance_bond_neutral_forfeiture_test",
+]);
 
 function result(
   key: string,
@@ -20,10 +28,23 @@ function result(
     status,
     evidenceRef: `test://${key}`,
     policySnapshotStatus: "resolved_immutable",
-    privilegedActionStatus: "not_required",
+    privilegedActionStatus: PRIVILEGED_REQUIREMENT_KEYS.has(key)
+      ? "neutral_review_approved"
+      : "not_required",
     recordedAt: new Date().toISOString(),
     ...overrides,
   };
+}
+
+function stageResults(stageKey: MoralTradeReleaseStage) {
+  const stage = getMoralTradeReleaseGateContract().stages.find((entry) => entry.key === stageKey);
+
+  assert.ok(stage, `missing stage ${stageKey}`);
+
+  return [
+    ...stage.requiredRequirementKeys.map((key) => result(key)),
+    ...stage.inactiveRequirementKeys.map((key) => result(key, "not_required_for_stage")),
+  ];
 }
 
 function previewInput(
@@ -36,33 +57,7 @@ function previewInput(
     stateInterpretationPolicyStatus: "resolved_immutable",
     featureFlagEnabled: true,
     emergencyPaused: false,
-    results: [
-      result("route_health_output"),
-      result("privacy_review"),
-      result("anti_threat_review"),
-      result("provider_event_replay_tests", "not_required_for_stage"),
-      result("evidence_challenge_tests", "not_required_for_stage"),
-      result("reviewer_conflict_tests", "not_required_for_stage"),
-      result("emergency_pause_tests", "not_required_for_stage"),
-      result("participant_confirmation_records", "not_required_for_stage"),
-      result("participant_eligibility_records", "not_required_for_stage"),
-      result("recipient_destination_verification", "not_required_for_stage", {
-        privilegedActionStatus: "not_required",
-      }),
-      result("financial_reconciliation", "not_required_for_stage"),
-      result("audit_integrity_checkpoint", "not_required_for_stage"),
-      result("public_metric_suppression", "not_required_for_stage"),
-      result("cause_bucket_taxonomy_review_test", "not_required_for_stage"),
-      result("resource_compatibility_assessment_test", "not_required_for_stage"),
-      result("net_offset_accounting_test", "not_required_for_stage"),
-      result("offer_validity_record_test", "not_required_for_stage"),
-      result("private_exchange_rate_quote_test", "not_required_for_stage"),
-      result("noncompensable_safety_blocker_test", "not_required_for_stage"),
-      result("batch_clearing_objective_result_test", "not_required_for_stage"),
-      result("sensitive_evidence_privacy_preserving_attestation_test", "not_required_for_stage"),
-      result("market_simulation_red_team_test", "not_required_for_stage"),
-      result("pilot_exit_criteria_test", "not_required_for_stage"),
-    ],
+    results: stageResults("public_goods_preview"),
     ...overrides,
   };
 }
@@ -82,6 +77,18 @@ test("release-gate contract validates stage, policy, record, and privileged-acti
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("batch_clearing_objective"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("sensitive_evidence_attestation"));
   assert.ok(contract.immutablePolicySnapshotSubjects.includes("pilot_evidence"));
+  assert.equal(
+    contract.requirementDefinitions.filter((requirement) =>
+      [
+        "dry_run_calculation_bundle",
+        "route_health_baseline",
+        "payment_replay_tests",
+        "emergency_pause_test",
+        "control_applicability_matrix_test",
+      ].includes(requirement.key),
+    ).length,
+    5,
+  );
   assert.ok(
     contract.requirementDefinitions.some(
       (requirement) => requirement.key === "cause_bucket_taxonomy_review_test",
@@ -148,23 +155,28 @@ test("public-goods preview can pass only with explicit not-required inactive con
   assert.equal(evaluation.status, "pass");
   assert.equal(evaluation.payable, false);
   assert.equal(evaluation.relianceBearing, false);
-  assert.equal(evaluation.inactiveRequirementCount, 20);
-  assert.equal(evaluation.notRequiredRequirementCount, 20);
+  assert.equal(evaluation.requiredRequirementCount, 5);
+  assert.equal(evaluation.inactiveRequirementCount, 64);
+  assert.equal(evaluation.notRequiredRequirementCount, 64);
 });
 
 test("missing required and inactive-control results fail closed", () => {
   const evaluation = evaluateMoralTradeReleaseGate(
     previewInput({
       results: [
-        result("route_health_output"),
+        result("dry_run_calculation_bundle"),
+        result("route_health_baseline"),
         result("privacy_review"),
-        result("provider_event_replay_tests", "not_required_for_stage"),
+        result("payment_replay_tests", "not_required_for_stage"),
       ],
     }),
   );
 
   assert.equal(evaluation.status, "blocked");
   assert.ok(evaluation.blockers.includes("missing_required_result:anti_threat_review"));
+  assert.ok(
+    evaluation.blockers.includes("missing_required_result:environment_data_isolation_check"),
+  );
   assert.ok(
     evaluation.blockers.includes(
       "missing_inactive_control_representation:evidence_challenge_tests",
@@ -180,36 +192,25 @@ test("required gates block stale, unknown, mutable, and under-review states", ()
     stateInterpretationPolicyStatus: "stale",
     featureFlagEnabled: true,
     emergencyPaused: false,
-    results: [
-      result("dry_run_calculation"),
-      result("route_health_output"),
-      result("privacy_review"),
-      result("anti_threat_review"),
-      result("provider_event_replay_tests", "unknown"),
-      result("evidence_challenge_tests", "under_review"),
-      result("reviewer_conflict_tests"),
-      result("emergency_pause_tests"),
-      result("participant_confirmation_records"),
-      result("participant_eligibility_records", "passed", {
-        policySnapshotStatus: "stale",
-      }),
-      result("recipient_destination_verification", "passed", {
-        privilegedActionStatus: "missing",
-      }),
-      result("financial_reconciliation"),
-      result("audit_integrity_checkpoint"),
-      result("cause_bucket_taxonomy_review_test"),
-      result("resource_compatibility_assessment_test"),
-      result("net_offset_accounting_test"),
-      result("offer_validity_record_test"),
-      result("private_exchange_rate_quote_test"),
-      result("noncompensable_safety_blocker_test"),
-      result("batch_clearing_objective_result_test"),
-      result("sensitive_evidence_privacy_preserving_attestation_test"),
-      result("market_simulation_red_team_test"),
-      result("pilot_exit_criteria_test"),
-      result("public_metric_suppression", "not_required_for_stage"),
-    ],
+    results: stageResults("donation_offset_payable").map((entry) => {
+      if (entry.key === "payment_replay_tests") {
+        return result(entry.key, "unknown");
+      }
+
+      if (entry.key === "evidence_challenge_tests") {
+        return result(entry.key, "under_review");
+      }
+
+      if (entry.key === "review_capacity_admission_queue_test") {
+        return result(entry.key, "passed", { policySnapshotStatus: "stale" });
+      }
+
+      if (entry.key === "recipient_acceptance_association_test") {
+        return result(entry.key, "passed", { privilegedActionStatus: "missing" });
+      }
+
+      return entry;
+    }),
   });
 
   assert.equal(payable.status, "blocked");
@@ -217,7 +218,7 @@ test("required gates block stale, unknown, mutable, and under-review states", ()
   assert.ok(payable.blockers.includes("state_interpretation_policy_not_immutable:stale"));
   assert.ok(
     payable.blockers.includes(
-      "required_result_not_passed:provider_event_replay_tests:unknown",
+      "required_result_not_passed:payment_replay_tests:unknown",
     ),
   );
   assert.ok(
@@ -227,12 +228,12 @@ test("required gates block stale, unknown, mutable, and under-review states", ()
   );
   assert.ok(
     payable.blockers.includes(
-      "requirement_policy_snapshot_not_immutable:participant_eligibility_records:stale",
+      "requirement_policy_snapshot_not_immutable:review_capacity_admission_queue_test:stale",
     ),
   );
   assert.ok(
     payable.blockers.includes(
-      "privileged_action_not_approved:recipient_destination_verification:missing",
+      "privileged_action_not_approved:recipient_acceptance_association_test:missing",
     ),
   );
 });
@@ -240,33 +241,13 @@ test("required gates block stale, unknown, mutable, and under-review states", ()
 test("neutral waivers require a privileged neutral-review approval", () => {
   const blocked = evaluateMoralTradeReleaseGate(
     previewInput({
-      results: [
-        result("route_health_output"),
-        result("privacy_review", "waived_by_neutral_review", {
-          privilegedActionStatus: "missing",
-        }),
-        result("anti_threat_review"),
-        result("provider_event_replay_tests", "not_required_for_stage"),
-        result("evidence_challenge_tests", "not_required_for_stage"),
-        result("reviewer_conflict_tests", "not_required_for_stage"),
-        result("emergency_pause_tests", "not_required_for_stage"),
-        result("participant_confirmation_records", "not_required_for_stage"),
-        result("participant_eligibility_records", "not_required_for_stage"),
-        result("recipient_destination_verification", "not_required_for_stage"),
-        result("financial_reconciliation", "not_required_for_stage"),
-        result("audit_integrity_checkpoint", "not_required_for_stage"),
-        result("public_metric_suppression", "not_required_for_stage"),
-        result("cause_bucket_taxonomy_review_test", "not_required_for_stage"),
-        result("resource_compatibility_assessment_test", "not_required_for_stage"),
-        result("net_offset_accounting_test", "not_required_for_stage"),
-        result("offer_validity_record_test", "not_required_for_stage"),
-        result("private_exchange_rate_quote_test", "not_required_for_stage"),
-        result("noncompensable_safety_blocker_test", "not_required_for_stage"),
-        result("batch_clearing_objective_result_test", "not_required_for_stage"),
-        result("sensitive_evidence_privacy_preserving_attestation_test", "not_required_for_stage"),
-        result("market_simulation_red_team_test", "not_required_for_stage"),
-        result("pilot_exit_criteria_test", "not_required_for_stage"),
-      ],
+      results: stageResults("public_goods_preview").map((entry) =>
+        entry.key === "privacy_review"
+          ? result("privacy_review", "waived_by_neutral_review", {
+              privilegedActionStatus: "missing",
+            })
+          : entry,
+      ),
     }),
   );
 
@@ -275,33 +256,13 @@ test("neutral waivers require a privileged neutral-review approval", () => {
 
   const approved = evaluateMoralTradeReleaseGate(
     previewInput({
-      results: [
-        result("route_health_output"),
-        result("privacy_review", "waived_by_neutral_review", {
-          privilegedActionStatus: "neutral_review_approved",
-        }),
-        result("anti_threat_review"),
-        result("provider_event_replay_tests", "not_required_for_stage"),
-        result("evidence_challenge_tests", "not_required_for_stage"),
-        result("reviewer_conflict_tests", "not_required_for_stage"),
-        result("emergency_pause_tests", "not_required_for_stage"),
-        result("participant_confirmation_records", "not_required_for_stage"),
-        result("participant_eligibility_records", "not_required_for_stage"),
-        result("recipient_destination_verification", "not_required_for_stage"),
-        result("financial_reconciliation", "not_required_for_stage"),
-        result("audit_integrity_checkpoint", "not_required_for_stage"),
-        result("public_metric_suppression", "not_required_for_stage"),
-        result("cause_bucket_taxonomy_review_test", "not_required_for_stage"),
-        result("resource_compatibility_assessment_test", "not_required_for_stage"),
-        result("net_offset_accounting_test", "not_required_for_stage"),
-        result("offer_validity_record_test", "not_required_for_stage"),
-        result("private_exchange_rate_quote_test", "not_required_for_stage"),
-        result("noncompensable_safety_blocker_test", "not_required_for_stage"),
-        result("batch_clearing_objective_result_test", "not_required_for_stage"),
-        result("sensitive_evidence_privacy_preserving_attestation_test", "not_required_for_stage"),
-        result("market_simulation_red_team_test", "not_required_for_stage"),
-        result("pilot_exit_criteria_test", "not_required_for_stage"),
-      ],
+      results: stageResults("public_goods_preview").map((entry) =>
+        entry.key === "privacy_review"
+          ? result("privacy_review", "waived_by_neutral_review", {
+              privilegedActionStatus: "neutral_review_approved",
+            })
+          : entry,
+      ),
     }),
   );
 

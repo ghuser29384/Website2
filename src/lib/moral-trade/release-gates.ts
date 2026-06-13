@@ -198,7 +198,189 @@ const PRIVILEGED_ACTION_KEYS = [
   "nonroutine_refund_cancellation",
 ] as const;
 
-export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequirementDefinition[] = [
+export const MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS = [
+  "dry_run_calculation_bundle",
+  "route_health_baseline",
+  "privacy_review",
+  "anti_threat_review",
+  "payment_replay_tests",
+  "evidence_challenge_tests",
+  "reviewer_conflict_tests",
+  "emergency_pause_test",
+  "neutral_reviewer_approval",
+  "deployment_config_snapshot",
+  "schema_migration_dry_run",
+  "rollback_plan_test",
+  "environment_data_isolation_check",
+  "donation_offset_lock_confirmation_test",
+  "non_public_goods_term_sheet_test",
+  "counterparty_blinding_staged_disclosure_test",
+  "recipient_acceptance_association_test",
+  "ai_preference_elicitation_boundary_test",
+  "post_clear_audit_sampling_test",
+  "approved_trade_template_parameter_test",
+  "review_capacity_admission_queue_test",
+  "non_public_goods_subsidy_schedule_test",
+  "direct_pair_clearing_test",
+  "cause_bucket_taxonomy_review_test",
+  "resource_compatibility_assessment_test",
+  "net_offset_accounting_test",
+  "pledge_swap_performance_terms_test",
+  "commitment_inventory_double_count_test",
+  "atomic_settlement_group_test",
+  "pledge_swap_synchronized_performance_test",
+  "compensated_moral_action_terms_test",
+  "negative_commitment_substitution_test",
+  "irreversible_action_gate_test",
+  "donor_of_record_tax_receipt_test",
+  "third_party_obligation_assessment_test",
+  "baseline_integrity_manufacturing_test",
+  "compensated_action_classification_test",
+  "agreement_amendment_confirmation_test",
+  "anti_corruption_improper_inducement_test",
+  "representative_authority_verification_test",
+  "protected_reporting_non_suppression_test",
+  "civil_rights_discrimination_test",
+  "participant_autonomy_undue_influence_test",
+  "confidentiality_privacy_rights_test",
+  "evidence_authenticity_synthetic_media_test",
+  "financial_crime_fraud_screening_test",
+  "agreement_non_transferability_test",
+  "regulated_goods_hazardous_activity_test",
+  "cyber_abuse_digital_systems_integrity_test",
+  "noncompensable_safety_blocker_test",
+  "offer_expiry_staleness_test",
+  "batch_clearing_objective_fairness_test",
+  "privacy_preserving_verification_attestation_test",
+  "non_public_goods_tier_scope_test",
+  "counterfactual_trust_class_test",
+  "closed_counterparty_pledge_swap_test",
+  "control_applicability_matrix_test",
+  "private_exchange_rate_quote_test",
+  "market_simulation_red_team_test",
+  "pilot_exit_criteria_test",
+  "option_set_pareto_comparison_test",
+  "preference_incomparability_noncardinal_test",
+  "trade_burden_accounting_test",
+  "moral_difference_attestation_test",
+  "bargaining_protocol_anti_holdup_test",
+  "empirical_assumption_snapshot_test",
+  "moral_side_constraint_agent_relative_test",
+  "intrapersonal_self_offset_classification_test",
+  "pledge_performance_bond_neutral_forfeiture_test",
+] as const;
+
+type Moraltrade68ReleaseGateRequirementKey =
+  (typeof MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS)[number];
+
+const MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEY_SET = new Set<string>(
+  MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS,
+);
+
+function titleCaseRequirementKey(key: string) {
+  return key
+    .split("_")
+    .map((part) => (part ? part[0]!.toUpperCase() + part.slice(1) : part))
+    .join(" ");
+}
+
+function categoryForMoraltrade68Requirement(
+  key: Moraltrade68ReleaseGateRequirementKey,
+): MoralTradeReleaseGateRequirementDefinition["category"] {
+  if (
+    /payment|donor|settlement|fx|reconciliation|capture|payout|atomic|commitment_inventory/.test(
+      key,
+    )
+  ) {
+    return "payment";
+  }
+
+  if (/privacy|confidentiality|blinding|sensitive_evidence/.test(key)) {
+    return "privacy";
+  }
+
+  if (/evidence|challenge|baseline|empirical|post_clear_audit/.test(key)) {
+    return "evidence";
+  }
+
+  if (/participant|consent|term_sheet|autonomy|moral_difference|trade_burden/.test(key)) {
+    return "participant";
+  }
+
+  if (/recipient|representative|direct_pair/.test(key)) {
+    return "recipient";
+  }
+
+  if (/metric|net_offset|cause_bucket|classification|intrapersonal/.test(key)) {
+    return "metrics";
+  }
+
+  if (/schema|deployment|rollback|environment|control_applicability|tier_scope/.test(key)) {
+    return "operations";
+  }
+
+  if (/anti_|civil_rights|regulated|cyber|financial_crime|noncompensable|hazardous/.test(key)) {
+    return "safety";
+  }
+
+  if (/calculation|objective|pareto|preference|bargaining|resource/.test(key)) {
+    return "calculation";
+  }
+
+  if (/policy|template|subsidy|validity/.test(key)) {
+    return "policy";
+  }
+
+  if (/review|approval|capacity/.test(key)) {
+    return "review";
+  }
+
+  return "review";
+}
+
+function descriptionForMoraltrade68Requirement(key: Moraltrade68ReleaseGateRequirementKey) {
+  switch (key) {
+    case "dry_run_calculation_bundle":
+      return "A deterministic dry-run calculation, input bundle hash, excluded-record list, and replay evidence exist before stage promotion.";
+    case "route_health_baseline":
+      return "Route health, public contract metadata, and baseline response shape are current for the requested release stage.";
+    case "payment_replay_tests":
+      return "Payment/provider replay, stale snapshot, wrong-account, idempotency, and server-time tests pass before money can move.";
+    case "emergency_pause_test":
+      return "Emergency pause blocks new authorizations and captures without deleting audit records or blocking required refunds.";
+    case "neutral_reviewer_approval":
+      return "Neutral reviewer or panel approval is first-class where a gate, waiver, rejection, dispute, or counterparty-benefiting decision requires it.";
+    case "market_simulation_red_team_test":
+      return "Donation-offset and pledge-swap pilots have reviewed market simulation, replay, red-team, participant-comprehension, and abuse-case evidence.";
+    case "pilot_exit_criteria_test":
+      return "Pilot promotion requires pre-registered scale-up, pause, rollback, and non-volume success criteria; matched volume alone is insufficient.";
+    default:
+      return `${titleCaseRequirementKey(key)} must resolve to a current first-class release_gate_requirement_result or frozen equivalent before this release gate can pass.`;
+  }
+}
+
+function privilegedActionRequiredForMoraltrade68Requirement(
+  key: Moraltrade68ReleaseGateRequirementKey,
+) {
+  return [
+    "neutral_reviewer_approval",
+    "recipient_acceptance_association_test",
+    "representative_authority_verification_test",
+    "pledge_performance_bond_neutral_forfeiture_test",
+  ].includes(key);
+}
+
+const MORALTRADE68_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequirementDefinition[] =
+  MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS.map((key) => ({
+    key,
+    label: titleCaseRequirementKey(key),
+    category: categoryForMoraltrade68Requirement(key),
+    policySnapshotRequired: key !== "route_health_baseline",
+    privilegedActionRequired: privilegedActionRequiredForMoraltrade68Requirement(key),
+    description: descriptionForMoraltrade68Requirement(key),
+  }));
+
+const LEGACY_COMPAT_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequirementDefinition[] = [
   {
     key: "dry_run_calculation",
     label: "Dry-run calculation",
@@ -415,7 +597,34 @@ export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequire
     description:
       "Donation-offset and pledge-swap pilots pre-register scale-up, pause, and rollback criteria, and matched volume alone cannot satisfy pilot success.",
   },
-] as const satisfies MoralTradeReleaseGateRequirementDefinition[];
+] satisfies MoralTradeReleaseGateRequirementDefinition[];
+
+export const MORAL_TRADE_RELEASE_GATE_REQUIREMENTS: MoralTradeReleaseGateRequirementDefinition[] = [
+  ...MORALTRADE68_RELEASE_GATE_REQUIREMENTS,
+  ...LEGACY_COMPAT_RELEASE_GATE_REQUIREMENTS.filter(
+    (requirement) => !MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEY_SET.has(requirement.key),
+  ),
+];
+
+const PUBLIC_GOODS_PREVIEW_REQUIRED_REQUIREMENTS = [
+  "dry_run_calculation_bundle",
+  "route_health_baseline",
+  "privacy_review",
+  "anti_threat_review",
+  "environment_data_isolation_check",
+] as const satisfies readonly Moraltrade68ReleaseGateRequirementKey[];
+
+const DOCUMENTED_RELEASE_STAGE_REQUIREMENTS = [
+  ...MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS,
+] as const;
+
+function inactiveDocumentRequirements(
+  requiredRequirements: readonly Moraltrade68ReleaseGateRequirementKey[],
+) {
+  const required = new Set<string>(requiredRequirements);
+
+  return MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS.filter((key) => !required.has(key));
+}
 
 const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
   {
@@ -425,31 +634,10 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
     payable: false,
     relianceBearing: false,
     publicMetricsMayPublish: false,
-    requiredRequirementKeys: ["route_health_output", "privacy_review", "anti_threat_review"],
-    inactiveRequirementKeys: [
-      "provider_event_replay_tests",
-      "evidence_challenge_tests",
-      "reviewer_conflict_tests",
-      "emergency_pause_tests",
-      "participant_confirmation_records",
-      "participant_eligibility_records",
-      "recipient_destination_verification",
-      "financial_reconciliation",
-      "audit_integrity_checkpoint",
-      "public_metric_suppression",
-      "cause_bucket_taxonomy_review_test",
-      "resource_compatibility_assessment_test",
-      "net_offset_accounting_test",
-      "offer_validity_record_test",
-      "private_exchange_rate_quote_test",
-      "noncompensable_safety_blocker_test",
-      "batch_clearing_objective_result_test",
-      "sensitive_evidence_privacy_preserving_attestation_test",
-      "market_simulation_red_team_test",
-      "pilot_exit_criteria_test",
-    ],
+    requiredRequirementKeys: [...PUBLIC_GOODS_PREVIEW_REQUIRED_REQUIREMENTS],
+    inactiveRequirementKeys: inactiveDocumentRequirements(PUBLIC_GOODS_PREVIEW_REQUIRED_REQUIREMENTS),
     hardBlockerSummary:
-      "Preview can render only when route, privacy, and anti-threat evidence pass; later controls must be explicit not-required decisions.",
+      "Preview can render only when dry-run, route-health, privacy, anti-threat, and environment-isolation evidence pass; later controls must be explicit not-required decisions.",
   },
   {
     key: "donation_offset_payable",
@@ -458,34 +646,10 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
     payable: true,
     relianceBearing: true,
     publicMetricsMayPublish: false,
-    requiredRequirementKeys: [
-      "dry_run_calculation",
-      "route_health_output",
-      "privacy_review",
-      "anti_threat_review",
-      "provider_event_replay_tests",
-      "evidence_challenge_tests",
-      "reviewer_conflict_tests",
-      "emergency_pause_tests",
-      "participant_confirmation_records",
-      "participant_eligibility_records",
-      "recipient_destination_verification",
-      "financial_reconciliation",
-      "audit_integrity_checkpoint",
-      "cause_bucket_taxonomy_review_test",
-      "resource_compatibility_assessment_test",
-      "net_offset_accounting_test",
-      "offer_validity_record_test",
-      "private_exchange_rate_quote_test",
-      "noncompensable_safety_blocker_test",
-      "batch_clearing_objective_result_test",
-      "sensitive_evidence_privacy_preserving_attestation_test",
-      "market_simulation_red_team_test",
-      "pilot_exit_criteria_test",
-    ],
-    inactiveRequirementKeys: ["public_metric_suppression"],
+    requiredRequirementKeys: [...DOCUMENTED_RELEASE_STAGE_REQUIREMENTS],
+    inactiveRequirementKeys: [],
     hardBlockerSummary:
-      "Payable mode requires every payment, evidence, review, confirmation, eligibility, destination, reconciliation, and audit gate to pass.",
+      "Payable mode requires every moraltrade68 release-gate requirement to pass or be represented by a privileged neutral-review waiver outside this stage matrix.",
   },
   {
     key: "pledge_swap_reliance_manual_pilot",
@@ -494,36 +658,10 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
     payable: false,
     relianceBearing: true,
     publicMetricsMayPublish: false,
-    requiredRequirementKeys: [
-      "dry_run_calculation",
-      "route_health_output",
-      "privacy_review",
-      "anti_threat_review",
-      "evidence_challenge_tests",
-      "reviewer_conflict_tests",
-      "emergency_pause_tests",
-      "participant_confirmation_records",
-      "participant_eligibility_records",
-      "audit_integrity_checkpoint",
-      "cause_bucket_taxonomy_review_test",
-      "resource_compatibility_assessment_test",
-      "private_exchange_rate_quote_test",
-      "noncompensable_safety_blocker_test",
-      "sensitive_evidence_privacy_preserving_attestation_test",
-      "market_simulation_red_team_test",
-      "pilot_exit_criteria_test",
-    ],
-    inactiveRequirementKeys: [
-      "provider_event_replay_tests",
-      "recipient_destination_verification",
-      "financial_reconciliation",
-      "public_metric_suppression",
-      "net_offset_accounting_test",
-      "offer_validity_record_test",
-      "batch_clearing_objective_result_test",
-    ],
+    requiredRequirementKeys: [...DOCUMENTED_RELEASE_STAGE_REQUIREMENTS],
+    inactiveRequirementKeys: [],
     hardBlockerSummary:
-      "Reliance-bearing swaps require deterministic lock evidence, participant eligibility, challenge evidence, neutral review, and audit gates.",
+      "Reliance-bearing swaps require every moraltrade68 release-gate requirement before lock, reliance, private disclosure, public completion, or release promotion.",
   },
   {
     key: "capped_real_money_release",
@@ -532,34 +670,10 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
     payable: true,
     relianceBearing: true,
     publicMetricsMayPublish: false,
-    requiredRequirementKeys: [
-      "dry_run_calculation",
-      "route_health_output",
-      "privacy_review",
-      "anti_threat_review",
-      "provider_event_replay_tests",
-      "evidence_challenge_tests",
-      "reviewer_conflict_tests",
-      "emergency_pause_tests",
-      "participant_confirmation_records",
-      "participant_eligibility_records",
-      "recipient_destination_verification",
-      "financial_reconciliation",
-      "audit_integrity_checkpoint",
-      "cause_bucket_taxonomy_review_test",
-      "resource_compatibility_assessment_test",
-      "net_offset_accounting_test",
-      "offer_validity_record_test",
-      "private_exchange_rate_quote_test",
-      "noncompensable_safety_blocker_test",
-      "batch_clearing_objective_result_test",
-      "sensitive_evidence_privacy_preserving_attestation_test",
-      "market_simulation_red_team_test",
-      "pilot_exit_criteria_test",
-    ],
-    inactiveRequirementKeys: ["public_metric_suppression"],
+    requiredRequirementKeys: [...DOCUMENTED_RELEASE_STAGE_REQUIREMENTS],
+    inactiveRequirementKeys: [],
     hardBlockerSummary:
-      "Capped real-money release requires all operational, policy, payment, eligibility, destination, and audit gates before capture or payout release.",
+      "Capped real-money release requires the complete moraltrade68 release-gate bundle before capture, payout, public money claims, or release promotion.",
   },
   {
     key: "public_metric_release",
@@ -569,34 +683,43 @@ const RELEASE_STAGES: MoralTradeReleaseStageContract[] = [
     relianceBearing: false,
     publicMetricsMayPublish: true,
     requiredRequirementKeys: [
-      "route_health_output",
+      "route_health_baseline",
       "privacy_review",
-      "audit_integrity_checkpoint",
-      "public_metric_suppression",
+      "anti_threat_review",
+      "deployment_config_snapshot",
+      "environment_data_isolation_check",
+      "control_applicability_matrix_test",
       "cause_bucket_taxonomy_review_test",
       "resource_compatibility_assessment_test",
       "net_offset_accounting_test",
-      "offer_validity_record_test",
       "private_exchange_rate_quote_test",
-      "noncompensable_safety_blocker_test",
-      "batch_clearing_objective_result_test",
-      "sensitive_evidence_privacy_preserving_attestation_test",
+      "batch_clearing_objective_fairness_test",
+      "privacy_preserving_verification_attestation_test",
       "market_simulation_red_team_test",
       "pilot_exit_criteria_test",
+      "moral_difference_attestation_test",
+      "intrapersonal_self_offset_classification_test",
     ],
-    inactiveRequirementKeys: [
-      "dry_run_calculation",
-      "provider_event_replay_tests",
-      "evidence_challenge_tests",
-      "reviewer_conflict_tests",
-      "emergency_pause_tests",
-      "participant_confirmation_records",
-      "participant_eligibility_records",
-      "recipient_destination_verification",
-      "financial_reconciliation",
-    ],
+    inactiveRequirementKeys: inactiveDocumentRequirements([
+      "route_health_baseline",
+      "privacy_review",
+      "anti_threat_review",
+      "deployment_config_snapshot",
+      "environment_data_isolation_check",
+      "control_applicability_matrix_test",
+      "cause_bucket_taxonomy_review_test",
+      "resource_compatibility_assessment_test",
+      "net_offset_accounting_test",
+      "private_exchange_rate_quote_test",
+      "batch_clearing_objective_fairness_test",
+      "privacy_preserving_verification_attestation_test",
+      "market_simulation_red_team_test",
+      "pilot_exit_criteria_test",
+      "moral_difference_attestation_test",
+      "intrapersonal_self_offset_classification_test",
+    ]),
     hardBlockerSummary:
-      "Public metric release is allowed only for aggregate, suppressed, live/demo-separated metrics backed by audit checkpoints.",
+      "Public metric release is allowed only for aggregate, suppressed, live/demo-separated metrics backed by the document-key release-gate bundle.",
   },
 ];
 
@@ -646,12 +769,16 @@ function makeResult(
   status: MoralTradeReleaseGateRequirementStatus,
   overrides: Partial<MoralTradeReleaseGateRequirementResult> = {},
 ): MoralTradeReleaseGateRequirementResult {
+  const definition = requirementByKey.get(key);
+
   return {
     key,
     status,
     evidenceRef: `synthetic://${key}`,
     policySnapshotStatus: "resolved_immutable",
-    privilegedActionStatus: "not_required",
+    privilegedActionStatus: definition?.privilegedActionRequired
+      ? "neutral_review_approved"
+      : "not_required",
     recordedAt: new Date().toISOString(),
     ...overrides,
   };
@@ -666,11 +793,9 @@ function samplePreviewEvaluation() {
     featureFlagEnabled: true,
     emergencyPaused: false,
     results: [
-      makeResult("route_health_output", "passed", {
-        policySnapshotStatus: "resolved_immutable",
-      }),
-      makeResult("privacy_review", "passed"),
-      makeResult("anti_threat_review", "passed"),
+      ...RELEASE_STAGES.find((stage) => stage.key === "public_goods_preview")!.requiredRequirementKeys.map(
+        (key) => makeResult(key, "passed"),
+      ),
       ...RELEASE_STAGES.find((stage) => stage.key === "public_goods_preview")!.inactiveRequirementKeys.map(
         (key) => makeResult(key, "not_required_for_stage"),
       ),
@@ -687,34 +812,23 @@ function samplePayableEvaluation() {
     featureFlagEnabled: true,
     emergencyPaused: false,
     results: [
-      makeResult("dry_run_calculation", "passed"),
-      makeResult("route_health_output", "passed"),
-      makeResult("privacy_review", "passed"),
-      makeResult("anti_threat_review", "passed"),
-      makeResult("provider_event_replay_tests", "missing", {
-        evidenceRef: "",
-      }),
-      makeResult("evidence_challenge_tests", "under_review"),
-      makeResult("reviewer_conflict_tests", "passed"),
-      makeResult("emergency_pause_tests", "passed"),
-      makeResult("participant_confirmation_records", "passed"),
-      makeResult("participant_eligibility_records", "stale"),
-      makeResult("recipient_destination_verification", "passed", {
-        privilegedActionStatus: "missing",
-      }),
-      makeResult("financial_reconciliation", "passed"),
-      makeResult("audit_integrity_checkpoint", "passed"),
-      makeResult("cause_bucket_taxonomy_review_test", "passed"),
-      makeResult("resource_compatibility_assessment_test", "passed"),
-      makeResult("net_offset_accounting_test", "passed"),
-      makeResult("offer_validity_record_test", "passed"),
-      makeResult("private_exchange_rate_quote_test", "passed"),
-      makeResult("noncompensable_safety_blocker_test", "passed"),
-      makeResult("batch_clearing_objective_result_test", "passed"),
-      makeResult("sensitive_evidence_privacy_preserving_attestation_test", "passed"),
-      makeResult("market_simulation_red_team_test", "passed"),
-      makeResult("pilot_exit_criteria_test", "passed"),
-      makeResult("public_metric_suppression", "not_required_for_stage"),
+      ...RELEASE_STAGES.find((stage) => stage.key === "donation_offset_payable")!.requiredRequirementKeys.map(
+        (key) => {
+          if (key === "payment_replay_tests") {
+            return makeResult(key, "missing", { evidenceRef: "" });
+          }
+
+          if (key === "review_capacity_admission_queue_test") {
+            return makeResult(key, "stale");
+          }
+
+          if (key === "recipient_acceptance_association_test") {
+            return makeResult(key, "passed", { privilegedActionStatus: "missing" });
+          }
+
+          return makeResult(key, "passed");
+        },
+      ),
     ],
   });
 }
@@ -894,17 +1008,16 @@ export function validateMoralTradeReleaseGateContract(
     ),
     check(
       "requirement-definition-coverage",
-      "Every stage requirement resolves to a typed definition",
+      "Every stage requirement and moraltrade68 release-gate key resolves to a typed definition",
       allStageRequirementKeys.every((key) => requirementKeys.includes(key)) &&
+        MORALTRADE68_RELEASE_GATE_REQUIREMENT_KEYS.every((key) =>
+          requirementKeys.includes(key),
+        ) &&
         requirementKeys.includes("provider_event_replay_tests") &&
         requirementKeys.includes("emergency_pause_tests") &&
-        requirementKeys.includes("participant_confirmation_records") &&
-        requirementKeys.includes("recipient_destination_verification") &&
-        requirementKeys.includes("audit_integrity_checkpoint") &&
         requirementKeys.includes("cause_bucket_taxonomy_review_test") &&
         requirementKeys.includes("resource_compatibility_assessment_test") &&
         requirementKeys.includes("net_offset_accounting_test") &&
-        requirementKeys.includes("offer_validity_record_test") &&
         requirementKeys.includes("private_exchange_rate_quote_test") &&
         requirementKeys.includes("noncompensable_safety_blocker_test") &&
         requirementKeys.includes("batch_clearing_objective_result_test") &&
@@ -972,16 +1085,16 @@ export function validateMoralTradeReleaseGateContract(
     ),
     check(
       "sample-payable-fails-closed",
-      "Payable sample fails closed when provider, eligibility, or privileged destination evidence is missing",
+      "Payable sample fails closed when payment replay, review-capacity, or privileged recipient evidence is missing",
       samplePayable?.status === "blocked" &&
         samplePayable.blockers.some((blocker) =>
-          blocker.includes("provider_event_replay_tests"),
+          blocker.includes("payment_replay_tests"),
         ) &&
         samplePayable.blockers.some((blocker) =>
-          blocker.includes("participant_eligibility_records"),
+          blocker.includes("review_capacity_admission_queue_test"),
         ) &&
         samplePayable.blockers.some((blocker) =>
-          blocker.includes("recipient_destination_verification"),
+          blocker.includes("recipient_acceptance_association_test"),
         ),
       samplePayable ? samplePayable.blockers.join(", ") : "missing",
     ),

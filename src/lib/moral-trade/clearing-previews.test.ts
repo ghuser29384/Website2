@@ -108,6 +108,10 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.ok(contract.requiredSections.includes("pilot-evidence"));
   assert.ok(contract.requiredSections.includes("recipient-ai-boundaries"));
   assert.ok(contract.requiredSections.includes("pledge-performance-terms"));
+  assert.ok(contract.requiredUserFacingSectionFields.includes("safeReasonCategory"));
+  assert.ok(contract.requiredUserFacingSectionFields.includes("nextAction"));
+  assert.ok(contract.requiredUserFacingSectionFields.includes("correctionPath"));
+  assert.ok(contract.requiredUserFacingSectionFields.includes("appealPath"));
   assert.ok(contract.requiredControlStatuses.includes("matching_clearing_run"));
   assert.ok(contract.requiredControlStatuses.includes("batch_clearing_objective"));
   assert.ok(contract.requiredControlStatuses.includes("destination_verification"));
@@ -137,6 +141,17 @@ test("clearing-preview contract validates preview sections and non-capture sampl
   assert.match(contract.failClosedRule, /match candidate is not a deal/i);
   assert.ok(contract.samplePreviews.every((preview) => !preview.captureAllowed));
   assert.ok(contract.samplePreviews.every((preview) => !preview.relianceBearing));
+  assert.ok(
+    contract.samplePreviews.every((preview) =>
+      preview.sections.every(
+        (section) =>
+          section.safeReasonCategory.length > 0 &&
+          section.nextAction.length > 0 &&
+          section.correctionPath.length > 0 &&
+          section.appealPath.length > 0,
+      ),
+    ),
+  );
 });
 
 test("donation-offset clearing preview can pass as non-capture final-lock preview", () => {
@@ -196,6 +211,21 @@ test("clearing preview fails closed when batch-clearing objective is missing", (
   assert.equal(
     preview.sections.find((section) => section.key === "batch-clearing-objective")?.status,
     "blocked",
+  );
+  assert.equal(
+    preview.sections.find((section) => section.key === "batch-clearing-objective")
+      ?.safeReasonCategory,
+    "Calculation review is incomplete",
+  );
+  assert.match(
+    preview.sections.find((section) => section.key === "batch-clearing-objective")
+      ?.correctionPath ?? "",
+    /calculation replay|frozen input bundle/i,
+  );
+  assert.match(
+    preview.sections.find((section) => section.key === "batch-clearing-objective")
+      ?.appealPath ?? "",
+    /neutral review/i,
   );
   assert.ok(
     preview.userFacingBlockers.some((blocker) =>
@@ -551,6 +581,9 @@ test("clearing preview execution persistence is wired through contract, route, s
   assert.match(routeSource, /relianceBearing:\s*false/);
   assert.match(routeSource, /idempotency_key/);
   assert.match(routeSource, /preview_hash/);
+  assert.match(routeSource, /safeReasonCategory/);
+  assert.match(routeSource, /correctionPath/);
+  assert.match(routeSource, /appealPath/);
 
   for (const source of [migrationSource, schemaSource]) {
     assert.match(source, /create table if not exists public\.moral_trade_clearing_preview_records/);
@@ -587,6 +620,10 @@ test("offer creation UI and technical spec are wired to clearing previews", () =
   assert.match(formSource, /sensitiveEvidenceAttestationStatus/);
   assert.match(formSource, /pilotEvidenceStatus/);
   assert.match(formSource, /Match candidate is not a locked deal/);
+  assert.match(formSource, /safeReasonCategory/);
+  assert.match(formSource, /correctionPath/);
+  assert.match(formSource, /appealPath/);
+  assert.match(formSource, /Preview only\. Review is still needed before lock/);
   assert.match(specSource, /getMoralTradeClearingPreviewContract/);
   assert.match(specSource, /Clearing preview contract/);
   assert.match(specSource, /clearingPreviewContract\.executionRoute/);

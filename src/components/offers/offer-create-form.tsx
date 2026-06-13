@@ -457,8 +457,22 @@ function formatUsd(amount: number) {
   }).format(amount);
 }
 
-function formatClearingPreviewStatus(status: MoralTradeClearingPreviewGateStatus) {
-  return status.replaceAll("_", " ");
+function formatClearingPreviewSummaryStatus(preview: MoralTradeClearingPreview) {
+  if (preview.status === "preview_ready") {
+    return "Preview is ready for review. Capture and reliance remain disabled.";
+  }
+
+  return "Preview only. Review is still needed before lock, capture, reliance, or public completion.";
+}
+
+function formatClearingPreviewSectionBadge(
+  section: MoralTradeClearingPreview["sections"][number],
+) {
+  if (section.status === "passed" || section.status === "not_required_for_stage") {
+    return "Ready";
+  }
+
+  return "Needs review";
 }
 
 function clearingPreviewStatusClass(status: MoralTradeClearingPreviewGateStatus) {
@@ -551,11 +565,7 @@ function ClearingPreviewSummary({
       <div className="protocol-provenance-head">
         <div>
           <strong>Match candidate is not a locked deal</strong>
-          <p>
-            Status: {clearingPreview.status.replaceAll("_", " ")}. Capture allowed:{" "}
-            {clearingPreview.captureAllowed ? "yes" : "no"}. Reliance-bearing:{" "}
-            {clearingPreview.relianceBearing ? "yes" : "no"}.
-          </p>
+          <p>{formatClearingPreviewSummaryStatus(clearingPreview)}</p>
         </div>
         <span className="protocol-review-status">
           {clearingPreview.freshConfirmationCount}/
@@ -584,12 +594,15 @@ function ClearingPreviewSummary({
             key={section.key}
           >
             <span className="protocol-step-status">
-              {formatClearingPreviewStatus(section.status)}
+              {formatClearingPreviewSectionBadge(section)}
             </span>
             <div>
               <strong>{section.label}</strong>
+              <small>{section.safeReasonCategory}</small>
               <p>{section.userMessage}</p>
               <small>{section.nextAction}</small>
+              <small>{section.correctionPath}</small>
+              <small>{section.appealPath}</small>
             </div>
           </li>
         ))}

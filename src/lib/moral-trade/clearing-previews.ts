@@ -1,5 +1,5 @@
 export const MORAL_TRADE_CLEARING_PREVIEW_CONTRACT_VERSION =
-  "moral-trade-clearing-preview-v0.14-2026-06";
+  "moral-trade-clearing-preview-v0.15-2026-06";
 export const MORAL_TRADE_CLEARING_PREVIEW_VALIDATOR_VERSION =
   "moral-trade-clearing-preview-validator-v0.1";
 
@@ -118,8 +118,11 @@ export interface MoralTradeClearingPreviewSection {
   key: string;
   label: string;
   status: MoralTradeClearingPreviewGateStatus;
+  safeReasonCategory: string;
   userMessage: string;
   nextAction: string;
+  correctionPath: string;
+  appealPath: string;
   blockerCodes: string[];
 }
 
@@ -193,6 +196,7 @@ export interface MoralTradeClearingPreviewContract {
   modes: MoralTradeClearingPreviewMode[];
   releaseStages: MoralTradeClearingPreviewReleaseStage[];
   requiredSections: string[];
+  requiredUserFacingSectionFields: string[];
   requiredControlStatuses: string[];
   samplePreviews: MoralTradeClearingPreview[];
   contractTests: string[];
@@ -244,6 +248,14 @@ const REQUIRED_SECTIONS = [
   "subsidy-governance",
   "privacy-and-policy",
   "pledge-performance-terms",
+] as const;
+
+const REQUIRED_USER_FACING_SECTION_FIELDS = [
+  "safeReasonCategory",
+  "userMessage",
+  "nextAction",
+  "correctionPath",
+  "appealPath",
 ] as const;
 
 const REQUIRED_CONTROL_STATUSES = [
@@ -331,6 +343,96 @@ function statusBlocker(
   return NON_BLOCKING_STATUSES.has(status) ? [] : [code];
 }
 
+function sectionGuidance(key: string) {
+  switch (key) {
+    case "matching-run":
+    case "batch-clearing-objective":
+    case "atomic-settlement":
+      return {
+        safeReasonCategory: "Calculation review is incomplete",
+        correctionPath:
+          "Ask for a calculation replay or reviewer correction with the frozen input bundle.",
+        appealPath:
+          "Appeal through neutral review if the replay or calculation blocker looks wrong.",
+      };
+    case "baseline-comparison":
+    case "ratio-and-residual":
+    case "offer-validity":
+    case "final-lock":
+    case "pledge-performance-terms":
+      return {
+        safeReasonCategory: "Participant confirmation is incomplete",
+        correctionPath:
+          "Update the preview terms and confirm the exact current version before lock.",
+        appealPath:
+          "Request reviewer review if the confirmation, staleness, or ratio status is incorrect.",
+      };
+    case "commitment-reservation":
+    case "net-offset-accounting":
+      return {
+        safeReasonCategory: "Commitment accounting is incomplete",
+        correctionPath:
+          "Correct the reserved commitment, residual amount, or net-offset accounting record.",
+        appealPath:
+          "Appeal to neutral review if a double-counting or accounting blocker is disputed.",
+      };
+    case "direct-pair-or-batch-mode":
+    case "cause-bucket-taxonomy":
+    case "resource-compatibility":
+    case "private-exchange-rate":
+      return {
+        safeReasonCategory: "Matching boundary review is incomplete",
+        correctionPath:
+          "Provide the missing privacy-safe matching, taxonomy, quote, or feasibility record.",
+        appealPath:
+          "Request neutral review if the matching-boundary classification is disputed.",
+      };
+    case "destination-and-tax":
+    case "subsidy-governance":
+      return {
+        safeReasonCategory: "Money movement review is incomplete",
+        correctionPath:
+          "Use verified destination, receipt, source-of-funds, cap, and disclosure records.",
+        appealPath:
+          "Appeal through payment or recipient-destination review if the block appears mistaken.",
+      };
+    case "externality-and-safety":
+    case "classification-and-assessments":
+    case "noncompensable-blockers":
+      return {
+        safeReasonCategory: "Safety review is incomplete",
+        correctionPath:
+          "Resolve the relevant safety, legal, rights, externality, or classification review.",
+        appealPath:
+          "Use the bounded appeal path for denied safety, eligibility, externality, or blocker reviews.",
+      };
+    case "sensitive-evidence-attestations":
+    case "privacy-and-policy":
+    case "recipient-ai-boundaries":
+      return {
+        safeReasonCategory: "Privacy or consent review is incomplete",
+        correctionPath:
+          "Provide the missing privacy grant, attestation, recipient consent, or confirmed AI-shaped input.",
+        appealPath:
+          "Request privacy, recipient, or AI-boundary review if a disclosure or consent block is disputed.",
+      };
+    case "pilot-evidence":
+      return {
+        safeReasonCategory: "Pilot evidence is incomplete",
+        correctionPath:
+          "Add simulation, red-team, scale-up, pause, rollback, and non-volume success evidence.",
+        appealPath:
+          "Appeal to release governance if the pilot evidence classification is disputed.",
+      };
+    default:
+      return {
+        safeReasonCategory: "Review is incomplete",
+        correctionPath: "Correct the missing record or keep the offer in preview.",
+        appealPath: "Request reviewer correction if the block appears mistaken.",
+      };
+  }
+}
+
 function makeSection({
   blockerCodes,
   key,
@@ -348,12 +450,17 @@ function makeSection({
   status: MoralTradeClearingPreviewGateStatus;
   blockedMessage: string;
 }): MoralTradeClearingPreviewSection {
+  const guidance = sectionGuidance(key);
+
   return {
     key,
     label,
     status,
+    safeReasonCategory: guidance.safeReasonCategory,
     userMessage: blockerCodes.length ? blockedMessage : passedMessage,
     nextAction,
+    correctionPath: guidance.correctionPath,
+    appealPath: guidance.appealPath,
     blockerCodes,
   };
 }
@@ -1005,7 +1112,7 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
     persistenceRule:
       "Authenticated clearing-preview execution writes an append-only moral_trade_clearing_preview_records row with normalized input, preview result, blocker codes, user-facing blockers, and a preview hash; unauthenticated, unconfigured, duplicate, or invalid requests create no state change.",
     privacyRule:
-      "Preview sections expose only coarse statuses, user actions, and safe reason categories; exact wishes, private notes, payment credentials, raw evidence, hidden counterparty terms, raw AI outputs, hidden willingness-to-pay estimates, and reviewer notes stay out of the preview.",
+      "Preview sections expose only coarse statuses, safe reason categories, next actions, and correction or appeal paths; exact wishes, private notes, payment credentials, raw evidence, hidden counterparty terms, raw AI outputs, hidden willingness-to-pay estimates, and reviewer notes stay out of the preview.",
     firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
     executionRoute: {
       method: "POST",
@@ -1020,6 +1127,7 @@ export function getMoralTradeClearingPreviewContract(): MoralTradeClearingPrevie
       "pledge_swap_preview_manual_review_only",
     ],
     requiredSections: [...REQUIRED_SECTIONS],
+    requiredUserFacingSectionFields: [...REQUIRED_USER_FACING_SECTION_FIELDS],
     requiredControlStatuses: [...REQUIRED_CONTROL_STATUSES],
     samplePreviews: [
       buildDemoDonationOffsetClearingPreview(),
@@ -1058,9 +1166,27 @@ export function validateMoralTradeClearingPreviewContract(
     ),
     check(
       "required_sections",
-      "Contract exposes all moraltrade60 preview sections",
+      "Contract exposes all moraltrade68 preview sections",
       REQUIRED_SECTIONS.every((section) => contract.requiredSections.includes(section)),
       `${contract.requiredSections.length} section(s)`,
+    ),
+    check(
+      "user_facing_section_fields",
+      "Preview sections expose safe reason categories, next actions, and correction or appeal paths",
+      REQUIRED_USER_FACING_SECTION_FIELDS.every((field) =>
+        contract.requiredUserFacingSectionFields.includes(field),
+      ) &&
+        contract.samplePreviews.every((preview) =>
+          preview.sections.every(
+            (section) =>
+              hasMeaningfulText(section.safeReasonCategory) &&
+              hasMeaningfulText(section.userMessage) &&
+              hasMeaningfulText(section.nextAction) &&
+              hasMeaningfulText(section.correctionPath) &&
+              hasMeaningfulText(section.appealPath),
+          ),
+        ),
+      `${contract.requiredUserFacingSectionFields.join(", ")} across ${contract.samplePreviews.length} sample preview(s)`,
     ),
     check(
       "required_control_statuses",

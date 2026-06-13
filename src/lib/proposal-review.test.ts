@@ -98,13 +98,13 @@ test("protocol draft review blocks threat-like proposal framing", () => {
   assert.ok(
     review.citedEvidenceTable.some(
       (row) =>
-        row.citation === "review_blocker.safety_review" &&
+        row.citation === "policy_registry.anti_threat_baseline" &&
         row.status === "policy_flag",
     ),
   );
   assert.match(
     review.reviewerSummary,
-    /Main review blockers: Safety or legality review is needed/,
+    /Main policy flags: Safety or legality review is needed/,
   );
   assert.doesNotMatch(review.reviewerSummary, /anti_threat_baseline|policy_conflict/);
 });

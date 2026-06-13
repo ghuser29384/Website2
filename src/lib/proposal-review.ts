@@ -1465,7 +1465,7 @@ function buildReviewerSummary({
     `What is being requested: ${requested}.`,
     `Baseline claim: ${baseline}.`,
     `What evidence would count: ${evidence}.`,
-    `Main review blockers: ${reviewBlockers}.`,
+    `Main policy flags: ${reviewBlockers}.`,
     `What remains unverified: ${unverified}.`,
     "This is not escrow, legal advice, tax advice, custody, or objective moral endorsement.",
   ].join(" ");
@@ -1581,9 +1581,9 @@ function buildCitedEvidenceTable({
       evidenceRow({
         claim: explanation.reasonCategory,
         evidenceType: "policy_registry",
-        citation: `review_blocker.${explanation.key}`,
+        citation: `policy_registry.${conflict}`,
         status: "policy_flag",
-        reviewerNote: `${explanation.plainLanguageStatus} ${explanation.nextAction}`,
+        reviewerNote: `${conflict}: ${explanation.plainLanguageStatus} ${explanation.nextAction}`,
       }),
     );
   }

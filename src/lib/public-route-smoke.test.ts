@@ -2580,7 +2580,7 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(proposalReviewSource, /obligationEffect/);
   assert.match(proposalReviewSource, /appealOrCorrectionPath/);
   assert.match(proposalReviewSource, /forbiddenUserFacingExplanationTerms/);
-  assert.match(proposalReviewSource, /review_blocker/);
+  assert.match(proposalReviewSource, /policy_registry/);
   assert.match(proposalReviewSource, /MARKETPLACE_REVIEW_FACTOR_PRIORITY/);
   assert.match(proposalReviewSource, /REVIEW_WORKFLOW_PARTICIPANT_COPY/);
   assert.match(proposalReviewSource, /What would you do if this trade did not happen/);
