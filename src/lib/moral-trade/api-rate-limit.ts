@@ -36,6 +36,7 @@ export type MoralTradeApiRateLimitSurface =
   | "offer_validity_enforce"
   | "private_exchange_rate_enforce"
   | "noncompensable_blocker_enforce"
+  | "batch_clearing_objective_enforce"
   | "challenge_appeal_evaluate"
   | "challenge_appeal_enforce"
   | "disclosure_evaluate"
@@ -86,6 +87,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   offer_validity_enforce: { limit: 20, windowMs: 60_000 },
   private_exchange_rate_enforce: { limit: 20, windowMs: 60_000 },
   noncompensable_blocker_enforce: { limit: 20, windowMs: 60_000 },
+  batch_clearing_objective_enforce: { limit: 20, windowMs: 60_000 },
   challenge_appeal_evaluate: { limit: 30, windowMs: 60_000 },
   challenge_appeal_enforce: { limit: 20, windowMs: 60_000 },
   disclosure_evaluate: { limit: 30, windowMs: 60_000 },

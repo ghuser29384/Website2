@@ -74,6 +74,7 @@
     { "key": "offer_validity_enforce", "window": "1 minute", "limit": 20 },
     { "key": "private_exchange_rate_enforce", "window": "1 minute", "limit": 20 },
     { "key": "noncompensable_blocker_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "batch_clearing_objective_enforce", "window": "1 minute", "limit": 20 },
     { "key": "challenge_appeal_evaluate", "window": "1 minute", "limit": 30 },
     { "key": "challenge_appeal_enforce", "window": "1 minute", "limit": 20 },
     { "key": "disclosure_evaluate", "window": "1 minute", "limit": 30 },

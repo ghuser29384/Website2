@@ -144,6 +144,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_noncompensable_blocker_contract",
   "moral_trade_noncompensable_blocker_enforce",
   "moral_trade_batch_clearing_objective_contract",
+  "moral_trade_batch_clearing_objective_enforce",
   "moral_trade_sensitive_evidence_attestation_contract",
   "moral_trade_pilot_evidence_contract",
   "moral_trade_side_agreement_contract",

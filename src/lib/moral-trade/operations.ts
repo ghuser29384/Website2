@@ -146,6 +146,7 @@ const REQUIRED_RATE_LIMITS = [
   "offer_validity_enforce",
   "private_exchange_rate_enforce",
   "noncompensable_blocker_enforce",
+  "batch_clearing_objective_enforce",
   "challenge_appeal_evaluate",
   "challenge_appeal_enforce",
   "disclosure_evaluate",
