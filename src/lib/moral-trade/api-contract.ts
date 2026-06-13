@@ -166,6 +166,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_user_safety_content_moderation_contract",
   "moral_trade_user_safety_content_moderation_enforce",
   "moral_trade_financial_settlement_controls_contract",
+  "moral_trade_financial_settlement_controls_enforce",
   "moral_trade_provenance_schema",
   "moral_trade_schema_registry",
   "moral_trade_copilot_contract",

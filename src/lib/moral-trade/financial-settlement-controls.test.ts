@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforceFinancialSettlementControls } from "@/app/api/moral-trade/financial-settlement-controls/enforce/route";
+
 import {
   evaluateMoralTradeFinancialSettlementControls,
   getMoralTradeFinancialSettlementControlsContract,
@@ -263,18 +265,59 @@ test("payout milestone release blocks missing evidence, unverified destination, 
   );
 });
 
+test("financial settlement controls enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceFinancialSettlementControls(
+    new Request("http://localhost/api/moral-trade/financial-settlement-controls/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.financialSettlementControlsGateStatus, "blocked");
+  assert.equal(body.publicPreviewAllowed, false);
+  assert.equal(body.matchedTradeLockAllowed, false);
+  assert.equal(body.paymentAuthorizationAllowed, false);
+  assert.equal(body.paymentCaptureAllowed, false);
+  assert.equal(body.challengeWindowDefaultAllowed, false);
+  assert.equal(body.payoutMilestoneReleaseAllowed, false);
+  assert.equal(body.publicMetricPublicationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_financial_settlement_control_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("financial settlement controls are wired through API, health, spec, migration, schema, and types", () => {
   const source = readRepoFile("src/lib/moral-trade/financial-settlement-controls.ts");
   const testSource = readRepoFile("src/lib/moral-trade/financial-settlement-controls.test.ts");
   const route = readRepoFile(
     "src/app/api/moral-trade/financial-settlement-controls/contract/route.ts",
   );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/financial-settlement-controls/enforce/route.ts",
+  );
   const health = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const technicalSpec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
   const apiContract = readRepoFile("src/lib/moral-trade/api-contract.ts");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
   const apiProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const migration = readRepoFile(
     "supabase/migrations/20260608_moral_trade_financial_settlement_controls.sql",
+  );
+  const enforcementMigration = readRepoFile(
+    "supabase/migrations/20260613_moral_trade_financial_settlement_control_enforcement_records.sql",
   );
   const schema = readRepoFile("supabase/schema.sql");
   const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
@@ -286,13 +329,33 @@ test("financial settlement controls are wired through API, health, spec, migrati
   assert.match(route, /validateMoralTradeFinancialSettlementControlsContract/);
   assert.match(route, /sampleEvaluationStatuses/);
   assert.match(route, /privacyBoundary/);
+  assert.match(enforceRoute, /financial_settlement_controls_enforce/);
+  assert.match(enforceRoute, /moral_trade_financial_settlement_control_enforcement_records/);
+  assert.match(enforceRoute, /paymentCaptureAllowed: false/);
+  assert.match(enforceRoute, /payoutMilestoneReleaseAllowed: false/);
+  assert.match(
+    enforceRoute,
+    /supabase_unconfigured:financial_settlement_controls_enforce/,
+  );
+  assert.match(
+    enforceRoute,
+    /authentication_required:financial_settlement_controls_enforce/,
+  );
   assert.match(health, /financialSettlementControlsValidation/);
   assert.match(health, /financialSettlementControlsFirstClassRecordTables/);
   assert.match(technicalSpec, /financialSettlementControlsContract\.controlKeys/);
   assert.match(technicalSpec, /financial-settlement-controls\/contract/);
   assert.match(apiContract, /moral_trade_financial_settlement_controls_contract/);
+  assert.match(apiContract, /moral_trade_financial_settlement_controls_enforce/);
+  assert.match(apiRateLimit, /financial_settlement_controls_enforce/);
+  assert.match(operations, /financial_settlement_controls_enforce/);
+  assert.match(operationsProfile, /financial_settlement_controls_enforce/);
   assert.match(apiProfile, /moral-trade-api-contract-v0\.69-2026-06/);
   assert.match(apiProfile, /financial_settlement_controls_contract_response/);
+  assert.match(apiProfile, /financial_settlement_controls_enforce_request/);
+  assert.match(apiProfile, /financial_settlement_controls_enforce_response/);
+  assert.match(apiProfile, /moral_trade_financial_settlement_controls_enforce/);
+  assert.match(apiProfile, /financial_settlement_controls_enforce_route_contract/);
   assert.match(apiProfile, /raw FX provider payloads/);
 
   for (const table of [
@@ -311,6 +374,25 @@ test("financial settlement controls are wired through API, health, spec, migrati
     assert.match(schema, new RegExp(table));
     assert.match(databaseTypes, new RegExp(table));
   }
+
+  assert.match(
+    enforcementMigration,
+    /moral_trade_financial_settlement_control_enforcement_records/,
+  );
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /payment_capture_allowed_bool = false/);
+  assert.match(enforcementMigration, /payout_milestone_release_allowed_bool = false/);
+  assert.match(enforcementMigration, /release_gate_promotion_allowed_bool = false/);
+  assert.match(
+    schema,
+    /moral_trade_financial_settlement_control_enforcement_records/,
+  );
+  assert.match(schema, /payment_capture_allowed_bool = false/);
+  assert.match(schema, /payout_milestone_release_allowed_bool = false/);
+  assert.match(
+    databaseTypes,
+    /moral_trade_financial_settlement_control_enforcement_records/,
+  );
 
   for (const subject of [
     "platform_fee",

@@ -843,6 +843,18 @@
       "fallback": "Return financial-settlement-controls validation blockers and fail-closed sample evaluations; never expose payment credentials, raw notice payloads, provider settlement reports, raw FX provider payloads, participant-specific fee/FX/payment records, reviewer notes, exact bank or wallet details, or private payout evidence."
     },
     {
+      "key": "moral_trade_financial_settlement_controls_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/financial-settlement-controls/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "financial_settlement_controls_enforce_request",
+      "responseSchema": "financial_settlement_controls_enforce_response",
+      "rateLimitSurface": "financial_settlement_controls_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated financial-settlement enforcement requests create no public-preview, matched-trade-lock, payment-authorization, payment-capture, challenge-default, payout-release, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_provenance_schema",
       "method": "GET",
       "path": "/api/moral-trade/provenance/schema",
@@ -3134,6 +3146,39 @@
       ]
     },
     {
+      "key": "financial_settlement_controls_enforce_request",
+      "purpose": "Authenticated private fail-closed financial-settlement controls enforcement request.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private", "description": "Normalized financial-settlement evaluation input containing transition, checked-at timestamp, and first-class settlement control records." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private", "description": "Optional caller-stable idempotency key for owner-scoped duplicate replay." }
+      ]
+    },
+    {
+      "key": "financial_settlement_controls_enforce_response",
+      "purpose": "Authenticated private financial-settlement controls enforcement result that records the evaluation while never authorizing downstream preview, lock, payment, challenge-default, payout, public-metric, or release state changes.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the contract validator passes and the request was processed." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Financial-settlement contract version used by the enforcement route." },
+        { "key": "financialSettlementControlsGateStatus", "type": "string", "required": true, "privacy": "private", "description": "Blocked unless the normalized financial-settlement controls evaluation is non-blocking." },
+        { "key": "publicPreviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; real-money preview requires a separate preview path." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock path." },
+        { "key": "paymentAuthorizationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment authorization requires a separate payment path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment path." },
+        { "key": "challengeWindowDefaultAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; challenge-window default requires a separate dispute/default path." },
+        { "key": "payoutMilestoneReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payout release requires a separate payout path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_financial_settlement_control_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized financial-settlement evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Financial-settlement contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "provenance_schema_response",
       "purpose": "Public validator-backed evidence object schema names, persistence tables, invariants, sample-bundle summary, and profile version.",
       "fields": [
@@ -4138,6 +4183,7 @@
     "pilot_evidence_contract_route",
     "disclosure_grant_route_contract",
     "financial_settlement_controls_route_contract",
+    "financial_settlement_controls_enforce_route_contract",
     "matching_clearing_execute_route_contract",
     "clearing_preview_execute_route_contract",
     "baseline_integrity_enforce_route_contract",
