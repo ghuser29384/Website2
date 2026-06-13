@@ -141,6 +141,7 @@ const REQUIRED_RATE_LIMITS = [
   "non_public_goods_subsidy_enforce",
   "direct_pair_clearing_enforce",
   "cause_bucket_taxonomy_enforce",
+  "resource_compatibility_enforce",
   "challenge_appeal_evaluate",
   "challenge_appeal_enforce",
   "disclosure_evaluate",

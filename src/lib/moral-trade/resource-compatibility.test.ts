@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { GET as getResourceCompatibilityContract } from "@/app/api/moral-trade/resource-compatibility/contract/route";
+import { POST as enforceResourceCompatibility } from "@/app/api/moral-trade/resource-compatibility/enforce/route";
 import {
   evaluateMoralTradeResourceCompatibility,
   getMoralTradeResourceCompatibilityContract,
@@ -186,32 +187,94 @@ test("resource-compatibility route exposes only public contract metadata", async
   assert.match(body.publicContract.privacyBoundary, /reviewer notes/i);
 });
 
+test("resource-compatibility enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceResourceCompatibility(
+    new Request("http://localhost/api/moral-trade/resource-compatibility/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.resourceCompatibilityGateStatus, "blocked");
+  assert.equal(body.draftPreviewAllowed, false);
+  assert.equal(body.matchCandidateGenerationAllowed, false);
+  assert.equal(body.matchedTradeLockAllowed, false);
+  assert.equal(body.clearingRunAllowed, false);
+  assert.equal(body.paymentCaptureAllowed, false);
+  assert.equal(body.publicMetricPublicationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_resource_compatibility_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("resource-compatibility contract is wired through route, health, spec, API profile, preview, and schema", () => {
   const route = readFileSync(
     "src/app/api/moral-trade/resource-compatibility/contract/route.ts",
     "utf8",
   );
+  const enforceRoute = readFileSync(
+    "src/app/api/moral-trade/resource-compatibility/enforce/route.ts",
+    "utf8",
+  );
   const health = readFileSync("src/app/api/moral-trade/health/route.ts", "utf8");
   const spec = readFileSync("src/app/moral-trade/technical-spec/page.tsx", "utf8");
   const apiProfile = readFileSync("config/moral-trade/api-contract-profile.json", "utf8");
+  const apiContract = readFileSync("src/lib/moral-trade/api-contract.ts", "utf8");
+  const apiRateLimit = readFileSync("src/lib/moral-trade/api-rate-limit.ts", "utf8");
+  const operations = readFileSync("src/lib/moral-trade/operations.ts", "utf8");
+  const operationsProfile = readFileSync("config/moral-trade/operations-profile.json", "utf8");
   const clearingPreview = readFileSync("src/lib/moral-trade/clearing-previews.ts", "utf8");
   const migration = readFileSync(
     "supabase/migrations/20260612_moral_trade_resource_compatibility_records.sql",
+    "utf8",
+  );
+  const enforcementMigration = readFileSync(
+    "supabase/migrations/20260613_moral_trade_resource_compatibility_enforcement_records.sql",
     "utf8",
   );
   const schema = readFileSync("supabase/schema.sql", "utf8");
   const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
 
   assert.match(route, /getMoralTradeResourceCompatibilityContract/);
+  assert.match(enforceRoute, /resource_compatibility_enforce/);
+  assert.match(enforceRoute, /moral_trade_resource_compatibility_enforcement_records/);
+  assert.match(enforceRoute, /draftPreviewAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:resource_compatibility_enforce/);
+  assert.match(enforceRoute, /authentication_required:resource_compatibility_enforce/);
   assert.match(health, /resourceCompatibilityValidation/);
   assert.match(spec, /\/api\/moral-trade\/resource-compatibility\/contract/);
   assert.match(apiProfile, /resource_compatibility_contract_response/);
+  assert.match(apiProfile, /resource_compatibility_enforce_request/);
+  assert.match(apiProfile, /resource_compatibility_enforce_response/);
   assert.match(apiProfile, /moral_trade_resource_compatibility_contract/);
+  assert.match(apiProfile, /moral_trade_resource_compatibility_enforce/);
+  assert.match(apiContract, /moral_trade_resource_compatibility_enforce/);
+  assert.match(apiRateLimit, /resource_compatibility_enforce/);
+  assert.match(operations, /resource_compatibility_enforce/);
+  assert.match(operationsProfile, /resource_compatibility_enforce/);
   assert.match(clearingPreview, /resourceCompatibilityStatus/);
   assert.match(migration, /moral_trade_resource_compatibility_assessments/);
   assert.match(migration, /resource_compatibility/);
+  assert.match(enforcementMigration, /moral_trade_resource_compatibility_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /draft_preview_allowed_bool = false/);
+  assert.match(enforcementMigration, /match_candidate_generation_allowed_bool = false/);
+  assert.match(enforcementMigration, /payment_capture_allowed_bool = false/);
   assert.match(schema, /moral_trade_resource_compatibility_assessments/);
+  assert.match(schema, /moral_trade_resource_compatibility_enforcement_records/);
   assert.match(schema, /resource_compatibility/);
   assert.match(databaseTypes, /moral_trade_resource_compatibility_assessments/);
+  assert.match(databaseTypes, /moral_trade_resource_compatibility_enforcement_records/);
   assert.match(databaseTypes, /resource_compatibility/);
 });
