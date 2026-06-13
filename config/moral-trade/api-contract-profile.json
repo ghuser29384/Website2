@@ -507,6 +507,18 @@
       "fallback": "Return side-agreement disclosure validation blockers and fail-closed sample evaluations; never expose private side-arrangement narratives, reviewer notes, raw evidence, source hashes, provider payloads, contact details, or payment credentials."
     },
     {
+      "key": "moral_trade_side_agreement_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/side-agreements/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "side_agreement_enforce_request",
+      "responseSchema": "side_agreement_enforce_response",
+      "rateLimitSurface": "side_agreement_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated side-agreement enforcement requests create no lock, payment, payout, reliance, challenge-decision, public-completion, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_trade_classification_contract",
       "method": "GET",
       "path": "/api/moral-trade/trade-classification/contract",
@@ -2108,6 +2120,38 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class disclosure records, review records, subject-type coverage, review dimensions, fail-closed statuses, privacy-safe summary boundaries, gated transitions, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, first-class table names, policy subjects, subject types, review dimensions, transition requirements, forbidden public-summary terms, sample statuses, and test hooks without private side-arrangement narratives, reviewer notes, raw evidence, source hashes, provider payloads, contact details, or payment credentials." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Side-agreement blockers that prevent relying on lock, payment capture, payout release, public completion, challenge decisions, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "side_agreement_enforce_request",
+      "purpose": "Authenticated private request for live side-agreement disclosure enforcement before reliance-bearing transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Side-agreement transition, checked-at time, and disclosure records to normalize and evaluate." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "side_agreement_enforce_response",
+      "purpose": "Authenticated private fail-closed side-agreement enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the side-agreement contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Side-agreement contract version used by the enforcement attempt." },
+        { "key": "sideAgreementGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when normalized disclosure evaluation passes; blocked otherwise." },
+        { "key": "lockTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes lock." },
+        { "key": "paymentTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes payment." },
+        { "key": "payoutReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes payout release." },
+        { "key": "relianceBearingTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; no response can make a transition reliance-bearing." },
+        { "key": "challengeDecisionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; challenge decisions require their own explicit workflow." },
+        { "key": "publicCompletionClaimAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public completion claims require separate confirmation and review." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped enforcement record was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized side-agreement evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Side-agreement contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
       ]
     },
     {

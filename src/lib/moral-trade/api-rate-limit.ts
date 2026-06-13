@@ -20,6 +20,7 @@ export type MoralTradeApiRateLimitSurface =
   | "clearing_preview_execute"
   | "baseline_integrity_enforce"
   | "agreement_amendment_enforce"
+  | "side_agreement_enforce"
   | "challenge_appeal_evaluate"
   | "challenge_appeal_enforce"
   | "disclosure_evaluate"
@@ -54,6 +55,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   clearing_preview_execute: { limit: 30, windowMs: 60_000 },
   baseline_integrity_enforce: { limit: 20, windowMs: 60_000 },
   agreement_amendment_enforce: { limit: 20, windowMs: 60_000 },
+  side_agreement_enforce: { limit: 20, windowMs: 60_000 },
   challenge_appeal_evaluate: { limit: 30, windowMs: 60_000 },
   challenge_appeal_enforce: { limit: 20, windowMs: 60_000 },
   disclosure_evaluate: { limit: 30, windowMs: 60_000 },

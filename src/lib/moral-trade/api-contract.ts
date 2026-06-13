@@ -138,6 +138,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_sensitive_evidence_attestation_contract",
   "moral_trade_pilot_evidence_contract",
   "moral_trade_side_agreement_contract",
+  "moral_trade_side_agreement_enforce",
   "moral_trade_trade_classification_contract",
   "moral_trade_template_conformance_contract",
   "moral_trade_review_capacity_contract",

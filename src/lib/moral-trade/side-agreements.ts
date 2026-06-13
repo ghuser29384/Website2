@@ -1,5 +1,5 @@
 export const MORAL_TRADE_SIDE_AGREEMENTS_CONTRACT_VERSION =
-  "moral-trade-side-agreements-v0.1-2026-06";
+  "moral-trade-side-agreements-v0.2-2026-06";
 export const MORAL_TRADE_SIDE_AGREEMENTS_VALIDATOR_VERSION =
   "moral-trade-side-agreements-validator-v0.1";
 
@@ -153,6 +153,7 @@ const MAX_REVIEW_AGE_DAYS = 180;
 const FIRST_CLASS_RECORD_TABLES = [
   "moral_trade_side_agreement_disclosures",
   "moral_trade_side_agreement_reviews",
+  "moral_trade_side_agreement_enforcement_records",
 ] as const;
 
 const POLICY_SNAPSHOT_SUBJECTS = [
@@ -270,6 +271,7 @@ const CONTRACT_TESTS = [
   "side_agreement_missing_disclosure_fails_closed",
   "side_agreement_review_dimensions_block_lock_and_payout",
   "side_agreement_public_summary_privacy_smoke",
+  "side_agreement_enforce_route_contract",
   "side_agreement_route_health_spec_and_migration_wiring",
 ] as const;
 
@@ -533,9 +535,9 @@ export function getMoralTradeSideAgreementContract():
   return {
     version: MORAL_TRADE_SIDE_AGREEMENTS_CONTRACT_VERSION,
     purpose:
-      "Fail-closed side-agreement disclosure governance before lock, payment, payout, public completion, challenge decisions, or release promotion.",
+      "Fail-closed side-agreement disclosure governance and endpoint enforcement before lock, payment, payout, public completion, challenge decisions, or release promotion.",
     failClosedRule:
-      "Undisclosed off-platform compensation, reciprocal favors, threats, reporting suppression, collusion, authority claims, or private side arrangements are blockers until represented by first-class disclosure and review records. Public surfaces expose only safe summaries, categories, and next steps.",
+      "Undisclosed off-platform compensation, reciprocal favors, threats, reporting suppression, collusion, authority claims, or private side arrangements are blockers until represented by first-class disclosure and review records. Enforcement records are append-only, owner-scoped, and never authorize lock, payment, payout, reliance, challenge decisions, public completion, or release promotion by themselves. Public surfaces expose only safe summaries, categories, and next steps.",
     firstClassRecordTables: [...FIRST_CLASS_RECORD_TABLES],
     policySnapshotSubjects: [...POLICY_SNAPSHOT_SUBJECTS],
     subjectTypes: SUBJECT_TYPES,
@@ -554,7 +556,7 @@ export function validateMoralTradeSideAgreementContract(
   const checks = [
     check(
       "first-class-side-agreement-tables",
-      "Side-agreement disclosures and review records are first-class tables.",
+      "Side-agreement disclosures, review records, and enforcement records are first-class tables.",
       FIRST_CLASS_RECORD_TABLES.every((table) =>
         contract.firstClassRecordTables.includes(table),
       ),
