@@ -309,27 +309,85 @@ test("participant-term-sheet contract is wired through route, health, spec, API 
   const route = readRepoFile(
     "src/app/api/moral-trade/participant-term-sheet/contract/route.ts",
   );
+  const enforceRoute = readRepoFile(
+    "src/app/api/moral-trade/participant-term-sheet/enforce/route.ts",
+  );
   const health = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const spec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
   const apiContract = readRepoFile("src/lib/moral-trade/api-contract.ts");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile(
+    "config/moral-trade/operations-profile.json",
+  );
   const apiProfile = readRepoFile("config/moral-trade/api-contract-profile.json");
   const migration = readRepoFile(
     "supabase/migrations/20260611_moral_trade_participant_term_sheet_records.sql",
   );
   const schema = readRepoFile("supabase/schema.sql");
+  const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
+  const forbiddenAllowColumns = [
+    "counterparty_disclosure_allowed_bool",
+    "live_publication_allowed_bool",
+    "matchable_publication_allowed_bool",
+    "lock_transition_allowed_bool",
+    "payment_authorization_allowed_bool",
+    "payment_capture_allowed_bool",
+    "reliance_bearing_transition_allowed_bool",
+    "public_metric_publication_allowed_bool",
+    "release_gate_promotion_allowed_bool",
+  ];
 
   assert.match(route, /getMoralTradeParticipantTermSheetContract/);
   assert.match(route, /participantTermSheetSampleEvaluationStatuses/);
+  assert.match(enforceRoute, /participant_term_sheet_enforce/);
+  assert.match(
+    enforceRoute,
+    /moral_trade_participant_term_sheet_enforcement_records/,
+  );
+  assert.match(enforceRoute, /authentication_required:participant_term_sheet_enforce/);
+  assert.match(enforceRoute, /database_insert_failed:participant_term_sheet_enforce/);
+  assert.match(enforceRoute, /counterpartyDisclosureAllowed: false/);
+  assert.match(enforceRoute, /livePublicationAllowed: false/);
+  assert.match(enforceRoute, /matchablePublicationAllowed: false/);
+  assert.match(enforceRoute, /lockTransitionAllowed: false/);
+  assert.match(enforceRoute, /paymentAuthorizationAllowed: false/);
+  assert.match(enforceRoute, /paymentCaptureAllowed: false/);
+  assert.match(enforceRoute, /relianceBearingTransitionAllowed: false/);
+  assert.match(enforceRoute, /publicMetricPublicationAllowed: false/);
+  assert.match(enforceRoute, /releaseGatePromotionAllowed: false/);
   assert.match(health, /participantTermSheetValidation/);
   assert.match(health, /participantTermSheetFirstClassRecordTables/);
   assert.match(spec, /participantTermSheetContract\.firstClassRecordTables/);
   assert.match(spec, /\/api\/moral-trade\/participant-term-sheet\/contract/);
   assert.match(apiContract, /moral_trade_participant_term_sheet_contract/);
+  assert.match(apiContract, /moral_trade_participant_term_sheet_enforce/);
+  assert.match(apiRateLimit, /participant_term_sheet_enforce/);
+  assert.match(operations, /participant_term_sheet_enforce/);
+  assert.match(operationsProfile, /participant_term_sheet_enforce/);
   assert.match(apiProfile, /participant_term_sheet_contract_response/);
+  assert.match(apiProfile, /participant_term_sheet_enforce_request/);
+  assert.match(apiProfile, /participant_term_sheet_enforce_response/);
+  assert.match(apiProfile, /participant_term_sheet_enforce_route_contract/);
   assert.match(migration, /moral_trade_participant_term_sheet_records/);
   assert.match(migration, /moral_trade_counterparty_blinding_policies/);
   assert.match(migration, /moral_trade_staged_counterparty_disclosure_records/);
+  assert.match(
+    migration,
+    /moral_trade_participant_term_sheet_enforcement_records/,
+  );
+  assert.match(migration, /owner_profile_id = auth\.uid\(\)/);
   assert.match(migration, /counterparty_blinding/);
   assert.match(schema, /moral_trade_participant_term_sheet_records/);
   assert.match(schema, /staged_counterparty_disclosure/);
+  assert.match(
+    schema,
+    /moral_trade_participant_term_sheet_enforcement_records/,
+  );
+  assert.match(databaseTypes, /moral_trade_participant_term_sheet_enforcement_records/);
+
+  for (const column of forbiddenAllowColumns) {
+    assert.match(migration, new RegExp(`check \\(${column} = false\\)`));
+    assert.match(schema, new RegExp(`check \\(${column} = false\\)`));
+  }
 });

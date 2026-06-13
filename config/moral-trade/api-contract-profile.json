@@ -603,6 +603,18 @@
       "fallback": "Return participant-term-sheet, counterparty-blinding, and staged-disclosure validation blockers, first-class record metadata, and sample evaluations; never expose participant-specific term sheets, raw counterparty identities, contact details, private wishes, exact constraints, hidden match reasoning, source evidence, reviewer notes, or payment details."
     },
     {
+      "key": "moral_trade_participant_term_sheet_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/participant-term-sheet/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "participant_term_sheet_enforce_request",
+      "responseSchema": "participant_term_sheet_enforce_response",
+      "rateLimitSurface": "participant_term_sheet_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated participant-term-sheet enforcement requests create no counterparty-disclosure, live-publication, matching, lock, payment, reliance, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_protective_assessment_contract",
       "method": "GET",
       "path": "/api/moral-trade/protective-assessments/contract",
@@ -2338,6 +2350,40 @@
       ]
     },
     {
+      "key": "participant_term_sheet_enforce_request",
+      "purpose": "Authenticated private request for live participant-term-sheet and staged-counterparty-disclosure enforcement before live publication, matching, lock, payment, reliance, public-metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Participant-term-sheet transition, checked-at time, counterparty-blinding policies, participant term sheets, and staged counterparty disclosures to normalize and evaluate; unsupported wrapper, evaluation, policy, term-sheet, or disclosure keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "participant_term_sheet_enforce_response",
+      "purpose": "Authenticated private fail-closed participant-term-sheet enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the participant-term-sheet contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Participant-term-sheet contract version used by the enforcement attempt." },
+        { "key": "participantTermSheetGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when normalized participant-term-sheet evaluation passes; blocked otherwise." },
+        { "key": "counterpartyDisclosureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes counterparty disclosure." },
+        { "key": "livePublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes live offer publication." },
+        { "key": "matchablePublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never makes an offer matchable." },
+        { "key": "lockTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; the enforcement endpoint records evidence but never authorizes lock." },
+        { "key": "paymentAuthorizationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment authorization requires a separate payment control path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "relianceBearingTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; no response can make a transition reliance-bearing." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_participant_term_sheet_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized participant-term-sheet evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Participant-term-sheet contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "protective_assessment_contract_response",
       "purpose": "Public validator-backed protective-assessment contract for negative commitments, action reversibility, donor/tax handling, third-party obligations, representative authority, reporting integrity, civil rights, autonomy, confidentiality, evidence authenticity, financial crime, non-transferability, regulated goods, cyber abuse, anti-corruption, least-intrusive evidence, and neutral-review performance-bond controls.",
       "fields": [
@@ -3357,6 +3403,7 @@
     "template_conformance_enforce_route_contract",
     "review_capacity_contract_route",
     "review_capacity_enforce_route_contract",
+    "participant_term_sheet_enforce_route_contract",
     "private_exchange_rate_contract_route",
     "noncompensable_blocker_contract_route",
     "batch_clearing_objective_contract_route",

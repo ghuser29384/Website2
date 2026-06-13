@@ -134,6 +134,7 @@ const REQUIRED_RATE_LIMITS = [
   "trade_classification_enforce",
   "template_conformance_enforce",
   "review_capacity_enforce",
+  "participant_term_sheet_enforce",
   "challenge_appeal_evaluate",
   "challenge_appeal_enforce",
   "disclosure_evaluate",

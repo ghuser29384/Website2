@@ -62,6 +62,7 @@
     { "key": "trade_classification_enforce", "window": "1 minute", "limit": 20 },
     { "key": "template_conformance_enforce", "window": "1 minute", "limit": 20 },
     { "key": "review_capacity_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "participant_term_sheet_enforce", "window": "1 minute", "limit": 20 },
     { "key": "challenge_appeal_evaluate", "window": "1 minute", "limit": 30 },
     { "key": "challenge_appeal_enforce", "window": "1 minute", "limit": 20 },
     { "key": "disclosure_evaluate", "window": "1 minute", "limit": 30 },
