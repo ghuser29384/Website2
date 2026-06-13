@@ -8887,6 +8887,12 @@ export interface Database {
         };
         Relationships: [];
       };
+      moral_trade_account_security_enforcement_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_reviewer_quality_policies: {
         Row: {
           id: string;

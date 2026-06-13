@@ -207,6 +207,18 @@
       "fallback": "Return account-security validation blockers and fail-closed sample evaluations; never expose device fingerprints, session anomalies, account-recovery details, provider security payloads, raw risk signals, or contact-introduction security evidence."
     },
     {
+      "key": "moral_trade_account_security_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/account-security/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "account_security_enforce_request",
+      "responseSchema": "account_security_enforce_response",
+      "rateLimitSurface": "account_security_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated account-security enforcement requests create no participant-confirmation, payment, payout, privacy-grant, contact-introduction, exposure-increase, reliance-bearing, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_reviewer_quality_contract",
       "method": "GET",
       "path": "/api/moral-trade/reviewer-quality/contract",
@@ -2074,6 +2086,40 @@
         { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for high-risk actions, event taxonomy, first-class record tables, policy subjects, fail-closed statuses, and sample evaluations." },
         { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Privacy rule, fail-closed rule, first-class table names, policy subjects, high-risk actions, event types, fail-closed statuses, sample statuses, and test hooks without private security evidence." },
         { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Account-security blockers that prevent relying on real-money, reliance-bearing, privacy-disclosing, exposure-increasing, contact-introduction, identity-change, or confirmation behavior." }
+      ]
+    },
+    {
+      "key": "account_security_enforce_request",
+      "purpose": "Authenticated private fail-closed account-security enforcement request.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private", "description": "Normalized account-security evaluation input containing action, checked-at timestamp, frozen policy summaries, and private account-security event summaries." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private", "description": "Optional caller-stable idempotency key for owner-scoped duplicate replay." }
+      ]
+    },
+    {
+      "key": "account_security_enforce_response",
+      "purpose": "Authenticated private account-security enforcement result that records the evaluated policy/event bundle while never authorizing downstream confirmations, payment, payout, privacy grants, contact introductions, exposure increases, reliance-bearing agreements, or release state changes.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the contract validator passes and the request was processed." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Account-security contract version used by the enforcement route." },
+        { "key": "accountSecurityGateStatus", "type": "string", "required": true, "privacy": "private", "description": "Blocked unless the normalized account-security evaluation is non-blocking." },
+        { "key": "participantConfirmationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; participant confirmation requires a separate confirmation path." },
+        { "key": "paymentAuthorizationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment authorization requires a separate payment path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment path." },
+        { "key": "payoutReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payout release requires a separate payout path." },
+        { "key": "privacyGrantAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; privacy grants require a separate privacy path." },
+        { "key": "contactIntroductionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; contact introduction requires a separate disclosure/contact path." },
+        { "key": "exposureIncreaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; exposure increase requires a separate confirmation/review path." },
+        { "key": "relianceBearingAgreementAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reliance-bearing agreement activation requires a separate agreement path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_account_security_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized account-security evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Account-security contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
       ]
     },
     {
@@ -4295,6 +4341,7 @@
     "participant_term_sheet_enforce_route_contract",
     "participant_confirmation_enforce_route_contract",
     "participant_eligibility_enforce_route_contract",
+    "account_security_enforce_route_contract",
     "protective_assessment_enforce_route_contract",
     "user_safety_content_moderation_enforce_route_contract",
     "recipient_acceptance_enforce_route_contract",
