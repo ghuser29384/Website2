@@ -139,6 +139,7 @@ const REQUIRED_RATE_LIMITS = [
   "ai_preference_elicitation_enforce",
   "post_clear_audit_enforce",
   "non_public_goods_subsidy_enforce",
+  "direct_pair_clearing_enforce",
   "challenge_appeal_evaluate",
   "challenge_appeal_enforce",
   "disclosure_evaluate",

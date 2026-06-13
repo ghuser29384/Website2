@@ -29,6 +29,7 @@ export type MoralTradeApiRateLimitSurface =
   | "ai_preference_elicitation_enforce"
   | "post_clear_audit_enforce"
   | "non_public_goods_subsidy_enforce"
+  | "direct_pair_clearing_enforce"
   | "challenge_appeal_evaluate"
   | "challenge_appeal_enforce"
   | "disclosure_evaluate"
@@ -72,6 +73,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   ai_preference_elicitation_enforce: { limit: 20, windowMs: 60_000 },
   post_clear_audit_enforce: { limit: 20, windowMs: 60_000 },
   non_public_goods_subsidy_enforce: { limit: 20, windowMs: 60_000 },
+  direct_pair_clearing_enforce: { limit: 20, windowMs: 60_000 },
   challenge_appeal_evaluate: { limit: 30, windowMs: 60_000 },
   challenge_appeal_enforce: { limit: 20, windowMs: 60_000 },
   disclosure_evaluate: { limit: 30, windowMs: 60_000 },

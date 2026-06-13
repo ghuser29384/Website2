@@ -435,6 +435,18 @@
       "fallback": "Return direct-pair clearing blockers, first-class record metadata, no-autonomous-outreach rule, privacy boundary, and sample evaluations; never expose counterparty identity hashes, direct contact details, exact caps, private notes, private surplus estimates, source hashes, reviewer notes, or participant-specific direct-pair records."
     },
     {
+      "key": "moral_trade_direct_pair_clearing_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/direct-pair-clearing/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "direct_pair_clearing_enforce_request",
+      "responseSchema": "direct_pair_clearing_enforce_response",
+      "rateLimitSurface": "direct_pair_clearing_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated direct-pair clearing enforcement requests create no direct-pair preview, matched-trade lock, payment, capture, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_cause_bucket_taxonomy_contract",
       "method": "GET",
       "path": "/api/moral-trade/cause-bucket-taxonomy/contract",
@@ -2221,6 +2233,37 @@
       ]
     },
     {
+      "key": "direct_pair_clearing_enforce_request",
+      "purpose": "Authenticated private request for live direct-pair clearing enforcement before direct-pair preview, matched-trade lock, payment authorization, payment capture, public-metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Direct-pair transition, checked-at time, direct-pair-required flag, and direct-pair clearing records to normalize and evaluate; unsupported wrapper, evaluation, or record keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "direct_pair_clearing_enforce_response",
+      "purpose": "Authenticated private fail-closed direct-pair clearing enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the direct-pair clearing contract validator passes and the response shape is otherwise usable." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Direct-pair clearing contract version used by the enforcement attempt." },
+        { "key": "directPairClearingGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Non-blocking only when normalized direct-pair clearing evaluation passes; blocked otherwise." },
+        { "key": "directPairPreviewAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; direct-pair preview requires a separate clearing-preview path." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock proposal and confirmation path." },
+        { "key": "paymentAuthorizationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment authorization requires a separate payment control path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment control path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_direct_pair_clearing_enforcement_records row was appended." },
+        { "key": "evaluation", "type": "object", "required": false, "privacy": "private", "description": "Normalized direct-pair clearing evaluation result when input could be evaluated." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, and contract version when input could be evaluated." },
+        { "key": "persistence", "type": "object", "required": true, "privacy": "private", "description": "Persistence status, record id when available, table name, and duplicate-record metadata." },
+        { "key": "contractValidation", "type": "validator_result", "required": true, "privacy": "private", "description": "Direct-pair clearing contract validation result used by the enforcement route." },
+        { "key": "fallback", "type": "string", "required": false, "privacy": "private", "description": "Fail-closed explanation for invalid, rate-limited, unconfigured, unauthenticated, or persistence-failed attempts." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "cause_bucket_taxonomy_contract_response",
       "purpose": "Public validator-backed cause-bucket taxonomy governance contract for versioned plural-reviewed taxonomy and assignment records before bucket labels can affect distinctness, classification, clearing, public metrics, or release-gate promotion.",
       "fields": [
@@ -3588,6 +3631,7 @@
     "ai_preference_elicitation_enforce_route_contract",
     "post_clear_audit_enforce_route_contract",
     "non_public_goods_subsidy_enforce_route_contract",
+    "direct_pair_clearing_enforce_route_contract",
     "private_exchange_rate_contract_route",
     "noncompensable_blocker_contract_route",
     "batch_clearing_objective_contract_route",

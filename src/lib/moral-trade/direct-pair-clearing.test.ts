@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { GET as getDirectPairContract } from "@/app/api/moral-trade/direct-pair-clearing/contract/route";
+import { POST as enforceDirectPairClearing } from "@/app/api/moral-trade/direct-pair-clearing/enforce/route";
 import {
   evaluateMoralTradeDirectPairClearing,
   getMoralTradeDirectPairClearingContract,
@@ -193,30 +194,91 @@ test("direct-pair clearing route exposes only public contract metadata", async (
   assert.match(body.publicContract.privacyBoundary, /exact caps/i);
 });
 
+test("direct-pair clearing enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceDirectPairClearing(
+    new Request("http://localhost/api/moral-trade/direct-pair-clearing/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.directPairClearingGateStatus, "blocked");
+  assert.equal(body.directPairPreviewAllowed, false);
+  assert.equal(body.matchedTradeLockAllowed, false);
+  assert.equal(body.paymentAuthorizationAllowed, false);
+  assert.equal(body.paymentCaptureAllowed, false);
+  assert.equal(body.publicMetricPublicationAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_direct_pair_clearing_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("direct-pair clearing contract is wired through route, health, spec, API profile, and schema", () => {
   const route = readFileSync(
     "src/app/api/moral-trade/direct-pair-clearing/contract/route.ts",
     "utf8",
   );
+  const enforceRoute = readFileSync(
+    "src/app/api/moral-trade/direct-pair-clearing/enforce/route.ts",
+    "utf8",
+  );
   const health = readFileSync("src/app/api/moral-trade/health/route.ts", "utf8");
   const spec = readFileSync("src/app/moral-trade/technical-spec/page.tsx", "utf8");
   const apiProfile = readFileSync("config/moral-trade/api-contract-profile.json", "utf8");
+  const apiContract = readFileSync("src/lib/moral-trade/api-contract.ts", "utf8");
+  const apiRateLimit = readFileSync("src/lib/moral-trade/api-rate-limit.ts", "utf8");
+  const operations = readFileSync("src/lib/moral-trade/operations.ts", "utf8");
+  const operationsProfile = readFileSync("config/moral-trade/operations-profile.json", "utf8");
   const migration = readFileSync(
     "supabase/migrations/20260612_moral_trade_direct_pair_clearing_records.sql",
+    "utf8",
+  );
+  const enforcementMigration = readFileSync(
+    "supabase/migrations/20260613_moral_trade_direct_pair_clearing_enforcement_records.sql",
     "utf8",
   );
   const schema = readFileSync("supabase/schema.sql", "utf8");
   const databaseTypes = readFileSync("src/lib/supabase/database.types.ts", "utf8");
 
   assert.match(route, /getMoralTradeDirectPairClearingContract/);
+  assert.match(enforceRoute, /direct_pair_clearing_enforce/);
+  assert.match(enforceRoute, /moral_trade_direct_pair_clearing_enforcement_records/);
+  assert.match(enforceRoute, /directPairPreviewAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:direct_pair_clearing_enforce/);
+  assert.match(enforceRoute, /authentication_required:direct_pair_clearing_enforce/);
   assert.match(health, /directPairClearingValidation/);
   assert.match(spec, /\/api\/moral-trade\/direct-pair-clearing\/contract/);
   assert.match(apiProfile, /direct_pair_clearing_contract_response/);
+  assert.match(apiProfile, /direct_pair_clearing_enforce_request/);
+  assert.match(apiProfile, /direct_pair_clearing_enforce_response/);
   assert.match(apiProfile, /moral_trade_direct_pair_clearing_contract/);
+  assert.match(apiProfile, /moral_trade_direct_pair_clearing_enforce/);
+  assert.match(apiContract, /moral_trade_direct_pair_clearing_enforce/);
+  assert.match(apiRateLimit, /direct_pair_clearing_enforce/);
+  assert.match(operations, /direct_pair_clearing_enforce/);
+  assert.match(operationsProfile, /direct_pair_clearing_enforce/);
   assert.match(migration, /moral_trade_direct_pair_clearing_records/);
   assert.match(migration, /direct_pair_clearing/);
+  assert.match(enforcementMigration, /moral_trade_direct_pair_clearing_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /direct_pair_preview_allowed_bool = false/);
+  assert.match(enforcementMigration, /matched_trade_lock_allowed_bool = false/);
+  assert.match(enforcementMigration, /payment_capture_allowed_bool = false/);
   assert.match(schema, /moral_trade_direct_pair_clearing_records/);
+  assert.match(schema, /moral_trade_direct_pair_clearing_enforcement_records/);
   assert.match(schema, /direct_pair_clearing/);
   assert.match(databaseTypes, /moral_trade_direct_pair_clearing_records/);
+  assert.match(databaseTypes, /moral_trade_direct_pair_clearing_enforcement_records/);
   assert.match(databaseTypes, /direct_pair_clearing/);
 });

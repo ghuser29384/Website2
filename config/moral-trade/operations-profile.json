@@ -67,6 +67,7 @@
     { "key": "ai_preference_elicitation_enforce", "window": "1 minute", "limit": 20 },
     { "key": "post_clear_audit_enforce", "window": "1 minute", "limit": 20 },
     { "key": "non_public_goods_subsidy_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "direct_pair_clearing_enforce", "window": "1 minute", "limit": 20 },
     { "key": "challenge_appeal_evaluate", "window": "1 minute", "limit": 30 },
     { "key": "challenge_appeal_enforce", "window": "1 minute", "limit": 20 },
     { "key": "disclosure_evaluate", "window": "1 minute", "limit": 30 },

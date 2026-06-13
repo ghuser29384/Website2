@@ -130,6 +130,7 @@ const REQUIRED_ROUTES = [
   "moral_trade_non_public_goods_subsidy_contract",
   "moral_trade_non_public_goods_subsidy_enforce",
   "moral_trade_direct_pair_clearing_contract",
+  "moral_trade_direct_pair_clearing_enforce",
   "moral_trade_cause_bucket_taxonomy_contract",
   "moral_trade_resource_compatibility_contract",
   "moral_trade_net_offset_accounting_contract",
