@@ -9652,6 +9652,12 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      moral_trade_participant_eligibility_enforcement_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
       moral_trade_participant_eligibility_reviews: {
         Row: SupabaseMoralTradeOperationalRow;
         Insert: SupabaseMoralTradeOperationalInsert;

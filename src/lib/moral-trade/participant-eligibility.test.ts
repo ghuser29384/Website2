@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
+import { POST as enforceParticipantEligibility } from "@/app/api/moral-trade/participant-eligibility/enforce/route";
+
 import {
   evaluateMoralTradeParticipantEligibility,
   getMoralTradeParticipantEligibilityContract,
@@ -183,32 +185,94 @@ test("stale, expired, mutable, source-unauthenticated, and public-artifact recor
   assert.ok(brokenHash.blockers.includes("invalid_identity_artifact_ref_hash:profile:test"));
 });
 
+test("participant-eligibility enforcement rejects invalid JSON without state mutation", async () => {
+  const response = await enforceParticipantEligibility(
+    new Request("http://localhost/api/moral-trade/participant-eligibility/enforce", {
+      method: "POST",
+      body: "{",
+    }),
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  assert.equal(body.ok, false);
+  assert.equal(body.participantEligibilityGateStatus, "blocked");
+  assert.equal(body.countedSupportAllowed, false);
+  assert.equal(body.matchingClearingAllowed, false);
+  assert.equal(body.matchedTradeLockAllowed, false);
+  assert.equal(body.paymentAuthorizationAllowed, false);
+  assert.equal(body.paymentCaptureAllowed, false);
+  assert.equal(body.payoutReleaseAllowed, false);
+  assert.equal(body.relianceBearingAgreementAllowed, false);
+  assert.equal(body.publicSupportMetricReleaseAllowed, false);
+  assert.equal(body.releaseGatePromotionAllowed, false);
+  assert.equal(body.stateMutation, false);
+  assert.deepEqual(body.blockers, ["invalid_json_body"]);
+  assert.deepEqual(body.persistence, {
+    requested: true,
+    status: "not_recorded",
+    recordId: null,
+    table: "moral_trade_participant_eligibility_enforcement_records",
+  });
+  assert.equal(body.contractValidation.status, "pass");
+});
+
 test("participant-eligibility route, health, technical spec, API contract, and migration are wired", () => {
   const source = readRepoFile("src/lib/moral-trade/participant-eligibility.ts");
   const route = readRepoFile("src/app/api/moral-trade/participant-eligibility/contract/route.ts");
+  const enforceRoute = readRepoFile("src/app/api/moral-trade/participant-eligibility/enforce/route.ts");
   const health = readRepoFile("src/app/api/moral-trade/health/route.ts");
   const spec = readRepoFile("src/app/moral-trade/technical-spec/page.tsx");
   const apiContract = readRepoFile("config/moral-trade/api-contract-profile.json");
+  const apiContractSource = readRepoFile("src/lib/moral-trade/api-contract.ts");
+  const apiRateLimit = readRepoFile("src/lib/moral-trade/api-rate-limit.ts");
+  const operations = readRepoFile("src/lib/moral-trade/operations.ts");
+  const operationsProfile = readRepoFile("config/moral-trade/operations-profile.json");
   const migration = readRepoFile(
     "supabase/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql",
   );
+  const enforcementMigration = readRepoFile(
+    "supabase/migrations/20260613_moral_trade_participant_eligibility_enforcement_records.sql",
+  );
   const schema = readRepoFile("supabase/schema.sql");
+  const databaseTypes = readRepoFile("src/lib/supabase/database.types.ts");
 
   assert.match(source, /moral_trade_participant_eligibility_records/);
   assert.match(source, /moral_trade_identity_artifact_references/);
   assert.match(source, /moral-worth score/);
   assert.match(route, /getMoralTradeParticipantEligibilityContract/);
   assert.match(route, /participantEligibilitySampleEvaluationStatuses/);
+  assert.match(enforceRoute, /participant_eligibility_enforce/);
+  assert.match(enforceRoute, /moral_trade_participant_eligibility_enforcement_records/);
+  assert.match(enforceRoute, /paymentCaptureAllowed: false/);
+  assert.match(enforceRoute, /releaseGatePromotionAllowed: false/);
+  assert.match(enforceRoute, /supabase_unconfigured:participant_eligibility_enforce/);
+  assert.match(enforceRoute, /authentication_required:participant_eligibility_enforce/);
   assert.match(health, /participantEligibilityValidation/);
   assert.match(health, /participantEligibilityFirstClassRecordTables/);
   assert.match(spec, /Participant eligibility contract/);
   assert.match(spec, /participant-eligibility\/contract/);
   assert.match(apiContract, /moral_trade_participant_eligibility_contract/);
   assert.match(apiContract, /participant_eligibility_contract_response/);
+  assert.match(apiContract, /moral_trade_participant_eligibility_enforce/);
+  assert.match(apiContract, /participant_eligibility_enforce_request/);
+  assert.match(apiContract, /participant_eligibility_enforce_response/);
+  assert.match(apiContract, /participant_eligibility_enforce_route_contract/);
+  assert.match(apiContractSource, /moral_trade_participant_eligibility_enforce/);
+  assert.match(apiRateLimit, /participant_eligibility_enforce/);
+  assert.match(operations, /participant_eligibility_enforce/);
+  assert.match(operationsProfile, /participant_eligibility_enforce/);
   assert.match(migration, /moral_trade_participant_eligibility_records/);
   assert.match(migration, /moral_trade_participant_eligibility_reviews/);
   assert.match(migration, /moral_trade_identity_artifact_references/);
+  assert.match(enforcementMigration, /moral_trade_participant_eligibility_enforcement_records/);
+  assert.match(enforcementMigration, /owner_profile_id = auth\.uid\(\)/);
+  assert.match(enforcementMigration, /payment_capture_allowed_bool = false/);
+  assert.match(enforcementMigration, /release_gate_promotion_allowed_bool = false/);
   assert.match(schema, /moral_trade_participant_eligibility_records/);
   assert.match(schema, /moral_trade_participant_eligibility_reviews/);
   assert.match(schema, /moral_trade_identity_artifact_references/);
+  assert.match(schema, /moral_trade_participant_eligibility_enforcement_records/);
+  assert.match(databaseTypes, /moral_trade_participant_eligibility_enforcement_records/);
 });
