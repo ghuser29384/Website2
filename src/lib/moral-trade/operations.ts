@@ -157,6 +157,7 @@ const REQUIRED_RATE_LIMITS = [
   "negative_commitment_scope_enforce",
   "donor_of_record_tax_enforce",
   "action_reversibility_enforce",
+  "authority_obligation_enforce",
   "direct_pair_clearing_enforce",
   "cause_bucket_taxonomy_enforce",
   "resource_compatibility_enforce",

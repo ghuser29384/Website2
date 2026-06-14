@@ -47,6 +47,7 @@ export type MoralTradeApiRateLimitSurface =
   | "negative_commitment_scope_enforce"
   | "donor_of_record_tax_enforce"
   | "action_reversibility_enforce"
+  | "authority_obligation_enforce"
   | "direct_pair_clearing_enforce"
   | "cause_bucket_taxonomy_enforce"
   | "resource_compatibility_enforce"
@@ -118,6 +119,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   negative_commitment_scope_enforce: { limit: 20, windowMs: 60_000 },
   donor_of_record_tax_enforce: { limit: 20, windowMs: 60_000 },
   action_reversibility_enforce: { limit: 20, windowMs: 60_000 },
+  authority_obligation_enforce: { limit: 20, windowMs: 60_000 },
   direct_pair_clearing_enforce: { limit: 20, windowMs: 60_000 },
   cause_bucket_taxonomy_enforce: { limit: 20, windowMs: 60_000 },
   resource_compatibility_enforce: { limit: 20, windowMs: 60_000 },

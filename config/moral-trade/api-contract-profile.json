@@ -711,6 +711,30 @@
       "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated action-reversibility enforcement requests create no matched-trade lock, payment capture, performance start, reliance transition, public-metric, release-promotion, or other state change."
     },
     {
+      "key": "moral_trade_authority_obligation_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/authority-obligations/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "authority_obligation_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return authority/obligation blockers, first-class assessment metadata, third-party-obligation rule, representative-authority rule, safe-disclosure rule, release-gate hooks, and sample evaluations; never expose protected-party facts, private authority documents, raw evidence, reviewer notes, or participant-specific authority rows."
+    },
+    {
+      "key": "moral_trade_authority_obligation_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/authority-obligations/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "authority_obligation_enforce_request",
+      "responseSchema": "authority_obligation_enforce_response",
+      "rateLimitSurface": "authority_obligation_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated authority/obligation enforcement requests create no matched-trade lock, payment capture, performance start, reliance transition, public-metric, release-promotion, authority delegation, third-party-obligation transfer, or other state change."
+    },
+    {
       "key": "moral_trade_direct_pair_clearing_contract",
       "method": "GET",
       "path": "/api/moral-trade/direct-pair-clearing/contract",
@@ -3248,6 +3272,50 @@
       ]
     },
     {
+      "key": "authority_obligation_contract_response",
+      "purpose": "Public validator-backed third-party-obligation and representative-authority governance contract for non-public-goods lock, payment, performance, reliance, public-metric, and release-gate transitions.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the authority/obligation contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the authority/obligation validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Authority/obligation contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class authority/obligation tables, policy subjects, release-gate hooks, transition coverage, third-party-obligation rule, representative-authority rule, safe-disclosure rule, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, third-party-obligation rule, representative-authority rule, safe-disclosure rule, first-class table names, policy subjects, release-gate hooks, transition requirements, sample statuses, and test hooks without protected-party facts, private authority documents, raw evidence, reviewer notes, or participant-specific authority rows." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Authority/obligation blockers that prevent lock, payment capture, performance start, reliance, public metric, release-gate promotion, delegation, or third-party-obligation transfer." }
+      ]
+    },
+    {
+      "key": "authority_obligation_enforce_request",
+      "purpose": "Authenticated private request for authority/obligation enforcement before matched-trade lock, payment capture, performance start, reliance-bearing transition, public metric, release-gate, delegation, or third-party-obligation transfer transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Authority/obligation transition, checked-at time, required flag, and assessment records to normalize and evaluate; unsupported wrapper or evaluation keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "authority_obligation_enforce_response",
+      "purpose": "Authenticated private fail-closed authority/obligation enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the authority/obligation contract validator and normalized evaluation pass; all state-changing permission booleans remain false." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Authority/obligation contract version used by the enforcement attempt." },
+        { "key": "authorityObligationGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Pass only when normalized authority/obligation evaluation and contract validation pass; blocked otherwise." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock proposal and confirmation path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment path." },
+        { "key": "performanceStartAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; performance start requires a separate state-transition path." },
+        { "key": "relianceBearingTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reliance-bearing transition requires a separate state-transition path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path and non-blocking authority/obligation review." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "authorityDelegationAccepted", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; accepting delegated authority requires a separate confirmation and review path." },
+        { "key": "thirdPartyObligationTransferAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; duties owed to nonparticipants cannot be transferred by this enforcement receipt." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_authority_obligation_enforcement_records row was appended." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, validation, and contract version when input could be evaluated." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "private", "description": "Authority/obligation contract validation result used by the enforcement route." },
+        { "key": "persistenceStatus", "type": "string", "required": false, "privacy": "private", "description": "Persistence status for the append-only enforcement record." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, evaluation, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "direct_pair_clearing_contract_response",
       "purpose": "Public validator-backed direct-pair clearing governance contract for two-party or invite-linked donation-offset and pledge-swap previews before lock, payment, capture, public metrics, or release-gate promotion.",
       "fields": [
@@ -5064,6 +5132,7 @@
     "negative_commitment_scope_enforce_route_contract",
     "donor_of_record_tax_enforce_route_contract",
     "action_reversibility_enforce_route_contract",
+    "authority_obligation_enforce_route_contract",
     "direct_pair_clearing_enforce_route_contract",
     "cause_bucket_taxonomy_enforce_route_contract",
     "resource_compatibility_enforce_route_contract",

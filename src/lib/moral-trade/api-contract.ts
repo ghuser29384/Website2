@@ -153,6 +153,8 @@ const REQUIRED_ROUTES = [
   "moral_trade_donor_of_record_tax_enforce",
   "moral_trade_action_reversibility_contract",
   "moral_trade_action_reversibility_enforce",
+  "moral_trade_authority_obligation_contract",
+  "moral_trade_authority_obligation_enforce",
   "moral_trade_direct_pair_clearing_contract",
   "moral_trade_direct_pair_clearing_enforce",
   "moral_trade_cause_bucket_taxonomy_contract",
