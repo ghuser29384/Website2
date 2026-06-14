@@ -23,7 +23,24 @@ const privateNoStoreHeaders = [
   },
 ];
 
+// Vercel preview builders have 8 GB of memory; this route-heavy app needs
+// constrained build workers to avoid OOM SIGKILL failures.
+const vercelLowMemoryBuildConfig =
+  process.env.VERCEL === "1"
+    ? {
+        cpus: 1,
+        memoryBasedWorkersCount: false,
+      }
+    : {};
+
 const nextConfig: NextConfig = {
+  experimental: {
+    ...vercelLowMemoryBuildConfig,
+    parallelServerBuildTraces: false,
+    parallelServerCompiles: false,
+    webpackBuildWorker: true,
+    webpackMemoryOptimizations: true,
+  },
   outputFileTracingIncludes: {
     "/mpgf": mpgfRuntimeArtifacts,
     "/mpgf/**/*": mpgfRuntimeArtifacts,
