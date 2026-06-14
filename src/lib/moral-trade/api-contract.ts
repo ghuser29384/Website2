@@ -145,6 +145,8 @@ const REQUIRED_ROUTES = [
   "moral_trade_commitment_settlement_enforce",
   "moral_trade_pledge_performance_bond_contract",
   "moral_trade_pledge_performance_bond_enforce",
+  "moral_trade_pledge_swap_performance_schedule_contract",
+  "moral_trade_pledge_swap_performance_schedule_enforce",
   "moral_trade_direct_pair_clearing_contract",
   "moral_trade_direct_pair_clearing_enforce",
   "moral_trade_cause_bucket_taxonomy_contract",

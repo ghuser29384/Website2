@@ -19559,3 +19559,107 @@ create policy "moral_trade_pledge_performance_bond_enforcement_records_insert_ow
     and public_metric_publication_allowed_bool = false
     and release_gate_promotion_allowed_bool = false
   );
+
+create table if not exists public.moral_trade_pledge_swap_performance_schedules (
+  id uuid primary key default gen_random_uuid(),
+  policy_snapshot_id uuid not null references public.moral_trade_policy_snapshots (id) on delete restrict,
+  pledge_swap_offer_id text,
+  matched_trade_lock_proposal_ref text,
+  cleared_trade_agreement_ref text,
+  performance_schedule_policy_ref text not null,
+  performance_start_at timestamptz not null,
+  performance_end_at timestamptz not null,
+  checkpoint_schedule_json jsonb not null,
+  synchronized_start_required_bool boolean not null default true,
+  counterpart_nonperformance_suspension_rule text not null,
+  reciprocal_release_trigger text not null,
+  grace_or_cure_period_days integer not null default 0 check (grace_or_cure_period_days >= 0),
+  evidence_due_schedule jsonb not null,
+  public_breach_disclosure_allowed_bool boolean not null default false,
+  breach_remedy_policy_ref text not null,
+  schedule_state text not null,
+  reviewer_decision_ref text not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  check (
+    pledge_swap_offer_id is not null
+    or matched_trade_lock_proposal_ref is not null
+    or cleared_trade_agreement_ref is not null
+  ),
+  check (performance_start_at < performance_end_at),
+  check (checkpoint_schedule_json <> '{}'::jsonb),
+  check (evidence_due_schedule <> '{}'::jsonb),
+  check (synchronized_start_required_bool = true),
+  check (public_breach_disclosure_allowed_bool = false)
+);
+
+create table if not exists public.moral_trade_pledge_swap_performance_schedule_enforcement_records (
+  id uuid primary key default gen_random_uuid(),
+  owner_profile_id uuid not null references public.profiles (id) on delete cascade,
+  transition text not null,
+  enforcement_status text not null check (enforcement_status in ('pass', 'blocked')),
+  performance_schedule_required_bool boolean not null default false,
+  schedule_count integer not null default 0 check (schedule_count >= 0),
+  non_blocking_schedule_count integer not null default 0 check (non_blocking_schedule_count >= 0),
+  synchronized_schedule_count integer not null default 0 check (synchronized_schedule_count >= 0),
+  reciprocal_release_schedule_count integer not null default 0 check (reciprocal_release_schedule_count >= 0),
+  enforcement_input_json jsonb not null,
+  evaluation_result_json jsonb not null,
+  blocker_codes text[] not null default '{}',
+  user_facing_blocker_categories text[] not null default '{}',
+  contract_version text not null,
+  validator_version text not null,
+  evaluation_hash text not null check (evaluation_hash ~ '^sha256:[a-f0-9]{64}$'),
+  idempotency_key text not null,
+  runtime_transition_allowed_bool boolean not null default false,
+  matched_trade_lock_allowed_bool boolean not null default false,
+  performance_start_allowed_bool boolean not null default false,
+  checkpoint_evidence_allowed_bool boolean not null default false,
+  performance_release_allowed_bool boolean not null default false,
+  breach_remedy_allowed_bool boolean not null default false,
+  reciprocal_release_allowed_bool boolean not null default false,
+  public_metric_publication_allowed_bool boolean not null default false,
+  release_gate_promotion_allowed_bool boolean not null default false,
+  superseded_by uuid references public.moral_trade_pledge_swap_performance_schedule_enforcement_records (id) on delete set null,
+  created_at timestamptz not null default timezone('utc', now()),
+  check (non_blocking_schedule_count <= schedule_count),
+  check (runtime_transition_allowed_bool = false),
+  check (matched_trade_lock_allowed_bool = false),
+  check (performance_start_allowed_bool = false),
+  check (checkpoint_evidence_allowed_bool = false),
+  check (performance_release_allowed_bool = false),
+  check (breach_remedy_allowed_bool = false),
+  check (reciprocal_release_allowed_bool = false),
+  check (public_metric_publication_allowed_bool = false),
+  check (release_gate_promotion_allowed_bool = false),
+  unique (owner_profile_id, idempotency_key)
+);
+
+alter table public.moral_trade_pledge_swap_performance_schedule_enforcement_records enable row level security;
+
+drop policy if exists "moral_trade_pledge_swap_performance_schedule_enforcement_records_select_owner"
+  on public.moral_trade_pledge_swap_performance_schedule_enforcement_records;
+create policy "moral_trade_pledge_swap_performance_schedule_enforcement_records_select_owner"
+  on public.moral_trade_pledge_swap_performance_schedule_enforcement_records
+  for select
+  to authenticated
+  using (owner_profile_id = auth.uid());
+
+drop policy if exists "moral_trade_pledge_swap_performance_schedule_enforcement_records_insert_owner"
+  on public.moral_trade_pledge_swap_performance_schedule_enforcement_records;
+create policy "moral_trade_pledge_swap_performance_schedule_enforcement_records_insert_owner"
+  on public.moral_trade_pledge_swap_performance_schedule_enforcement_records
+  for insert
+  to authenticated
+  with check (
+    owner_profile_id = auth.uid()
+    and runtime_transition_allowed_bool = false
+    and matched_trade_lock_allowed_bool = false
+    and performance_start_allowed_bool = false
+    and checkpoint_evidence_allowed_bool = false
+    and performance_release_allowed_bool = false
+    and breach_remedy_allowed_bool = false
+    and reciprocal_release_allowed_bool = false
+    and public_metric_publication_allowed_bool = false
+    and release_gate_promotion_allowed_bool = false
+  );

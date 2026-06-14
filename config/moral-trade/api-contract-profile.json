@@ -615,6 +615,30 @@
       "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated pledge-performance-bond enforcement requests create no runtime transition, matched-trade lock, payment authorization, payment-capture, performance-release, forfeiture, public-metric, or release-promotion state change."
     },
     {
+      "key": "moral_trade_pledge_swap_performance_schedule_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/pledge-swap-performance-schedules/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "pledge_swap_performance_schedule_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return pledge-swap performance-schedule blockers, first-class schedule table metadata, synchronization rule, non-punitive breach rule, reciprocal-release rule, release-gate hook, and sample evaluations; never expose participant identity hashes, private evidence, reviewer notes, or participant-specific schedule rows."
+    },
+    {
+      "key": "moral_trade_pledge_swap_performance_schedule_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/pledge-swap-performance-schedules/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "pledge_swap_performance_schedule_enforce_request",
+      "responseSchema": "pledge_swap_performance_schedule_enforce_response",
+      "rateLimitSurface": "pledge_swap_performance_schedule_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated pledge-swap performance-schedule enforcement requests create no runtime transition, matched-trade lock, performance start, checkpoint, performance-release, breach-remedy, reciprocal-release, public-metric, or release-promotion state change."
+    },
+    {
       "key": "moral_trade_direct_pair_clearing_contract",
       "method": "GET",
       "path": "/api/moral-trade/direct-pair-clearing/contract",
@@ -2980,6 +3004,51 @@
       ]
     },
     {
+      "key": "pledge_swap_performance_schedule_contract_response",
+      "purpose": "Public validator-backed pledge-swap performance-schedule governance contract for synchronized continuing duties, checkpoint evidence, cure/suspension terms, non-punitive breach handling, and reciprocal release.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the pledge-swap performance-schedule contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the pledge-swap performance-schedule validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Pledge-swap performance-schedule contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class schedule tables, policy subjects, release-gate hook, transition coverage, synchronization rule, non-punitive breach rule, reciprocal-release rule, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, synchronization rule, non-punitive breach rule, reciprocal-release rule, first-class table names, policy subjects, release-gate hooks, transition requirements, sample statuses, and test hooks without participant hashes, private evidence, reviewer notes, or participant-specific schedule rows." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Pledge-swap performance-schedule blockers that prevent lock, performance start, checkpoint evidence, performance release, breach remedy, reciprocal release, public metric, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "pledge_swap_performance_schedule_enforce_request",
+      "purpose": "Authenticated private request for pledge-swap performance-schedule enforcement before matched-trade lock, performance start, checkpoint evidence, performance release, breach remedy, reciprocal release, public-metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Pledge-swap performance-schedule transition, checked-at time, required flag, and schedule records to normalize and evaluate; unsupported wrapper or evaluation keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "pledge_swap_performance_schedule_enforce_response",
+      "purpose": "Authenticated private fail-closed pledge-swap performance-schedule enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the pledge-swap performance-schedule contract validator and normalized evaluation pass; all state-changing permission booleans remain false." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Pledge-swap performance-schedule contract version used by the enforcement attempt." },
+        { "key": "performanceScheduleGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Pass only when normalized pledge-swap performance-schedule evaluation and contract validation pass; blocked otherwise." },
+        { "key": "runtimeTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; runtime transition requires a separate state-transition path." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock proposal and confirmation path." },
+        { "key": "performanceStartAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; performance start requires a separate state-transition path." },
+        { "key": "checkpointEvidenceAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; checkpoint evidence acceptance requires a separate evidence-review path." },
+        { "key": "performanceReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; performance release requires a separate performance path." },
+        { "key": "breachRemedyAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; breach remedies require separate review and state-transition handling." },
+        { "key": "reciprocalReleaseAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reciprocal release requires a separate release path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path and cannot expose punitive breach labels." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_pledge_swap_performance_schedule_enforcement_records row was appended." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, validation, and contract version when input could be evaluated." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "private", "description": "Pledge-swap performance-schedule contract validation result used by the enforcement route." },
+        { "key": "persistenceStatus", "type": "string", "required": false, "privacy": "private", "description": "Persistence status for the append-only enforcement record." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, evaluation, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "direct_pair_clearing_contract_response",
       "purpose": "Public validator-backed direct-pair clearing governance contract for two-party or invite-linked donation-offset and pledge-swap previews before lock, payment, capture, public metrics, or release-gate promotion.",
       "fields": [
@@ -4792,6 +4861,7 @@
     "preference_integrity_enforce_route_contract",
     "commitment_settlement_enforce_route_contract",
     "pledge_performance_bond_enforce_route_contract",
+    "pledge_swap_performance_schedule_enforce_route_contract",
     "direct_pair_clearing_enforce_route_contract",
     "cause_bucket_taxonomy_enforce_route_contract",
     "resource_compatibility_enforce_route_contract",
