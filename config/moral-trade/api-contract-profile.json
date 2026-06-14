@@ -639,6 +639,30 @@
       "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated pledge-swap performance-schedule enforcement requests create no runtime transition, matched-trade lock, performance start, checkpoint, performance-release, breach-remedy, reciprocal-release, public-metric, or release-promotion state change."
     },
     {
+      "key": "moral_trade_negative_commitment_scope_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/negative-commitment-scopes/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "negative_commitment_scope_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return negative-commitment scope blockers, first-class scope table metadata, substitution rule, evidence-separation rule, privacy rule, release-gate hook, and sample evaluations; never expose participant identity hashes, raw private evidence, substitute-channel details, reviewer notes, or participant-specific scope rows."
+    },
+    {
+      "key": "moral_trade_negative_commitment_scope_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/negative-commitment-scopes/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "negative_commitment_scope_enforce_request",
+      "responseSchema": "negative_commitment_scope_enforce_response",
+      "rateLimitSurface": "negative_commitment_scope_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated negative-commitment scope enforcement requests create no matched-trade lock, payment-capture, reliance, abstention-evidence, completion-count, public-metric, release-promotion, or other state change."
+    },
+    {
       "key": "moral_trade_direct_pair_clearing_contract",
       "method": "GET",
       "path": "/api/moral-trade/direct-pair-clearing/contract",
@@ -3049,6 +3073,49 @@
       ]
     },
     {
+      "key": "negative_commitment_scope_contract_response",
+      "purpose": "Public validator-backed negative-commitment scope governance contract for abstention, opposed-action cancellation, substitute-channel review, evidence separation, and privacy-preserving verification.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the negative-commitment scope contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the negative-commitment scope validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Negative-commitment scope contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class negative-commitment scope tables, policy subjects, release-gate hook, transition coverage, substitution rule, evidence-separation rule, privacy rule, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, substitution rule, evidence-separation rule, privacy rule, first-class table names, policy subjects, release-gate hooks, transition requirements, sample statuses, and test hooks without participant identity hashes, raw private evidence, substitute-channel details, reviewer notes, or participant-specific scope rows." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Negative-commitment scope blockers that prevent lock, payment, reliance, abstention evidence acceptance, completion count, public metric, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "negative_commitment_scope_enforce_request",
+      "purpose": "Authenticated private request for negative-commitment scope enforcement before matched-trade lock, payment capture, reliance, abstention evidence acceptance, completion count, public metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Negative-commitment scope transition, checked-at time, required flag, and scope records to normalize and evaluate; unsupported wrapper or evaluation keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "negative_commitment_scope_enforce_response",
+      "purpose": "Authenticated private fail-closed negative-commitment scope enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the negative-commitment scope contract validator and normalized evaluation pass; all state-changing permission booleans remain false." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Negative-commitment scope contract version used by the enforcement attempt." },
+        { "key": "negativeCommitmentScopeGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Pass only when normalized negative-commitment scope evaluation and contract validation pass; blocked otherwise." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock proposal and confirmation path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment path." },
+        { "key": "relianceBearingTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reliance-bearing transition requires a separate state-transition path." },
+        { "key": "abstentionEvidenceAccepted", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; abstention evidence acceptance requires a separate evidence-review path." },
+        { "key": "completionCountAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; completion count requires a separate completion-review path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path and high-confidence scope review." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_negative_commitment_scope_enforcement_records row was appended." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, validation, and contract version when input could be evaluated." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "private", "description": "Negative-commitment scope contract validation result used by the enforcement route." },
+        { "key": "persistenceStatus", "type": "string", "required": false, "privacy": "private", "description": "Persistence status for the append-only enforcement record." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, evaluation, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "direct_pair_clearing_contract_response",
       "purpose": "Public validator-backed direct-pair clearing governance contract for two-party or invite-linked donation-offset and pledge-swap previews before lock, payment, capture, public metrics, or release-gate promotion.",
       "fields": [
@@ -4862,6 +4929,7 @@
     "commitment_settlement_enforce_route_contract",
     "pledge_performance_bond_enforce_route_contract",
     "pledge_swap_performance_schedule_enforce_route_contract",
+    "negative_commitment_scope_enforce_route_contract",
     "direct_pair_clearing_enforce_route_contract",
     "cause_bucket_taxonomy_enforce_route_contract",
     "resource_compatibility_enforce_route_contract",

@@ -154,6 +154,7 @@ const REQUIRED_RATE_LIMITS = [
   "commitment_settlement_enforce",
   "pledge_performance_bond_enforce",
   "pledge_swap_performance_schedule_enforce",
+  "negative_commitment_scope_enforce",
   "direct_pair_clearing_enforce",
   "cause_bucket_taxonomy_enforce",
   "resource_compatibility_enforce",
