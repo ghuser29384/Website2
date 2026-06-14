@@ -83,6 +83,7 @@
     { "key": "pledge_performance_bond_enforce", "window": "1 minute", "limit": 20 },
     { "key": "pledge_swap_performance_schedule_enforce", "window": "1 minute", "limit": 20 },
     { "key": "negative_commitment_scope_enforce", "window": "1 minute", "limit": 20 },
+    { "key": "donor_of_record_tax_enforce", "window": "1 minute", "limit": 20 },
     { "key": "direct_pair_clearing_enforce", "window": "1 minute", "limit": 20 },
     { "key": "cause_bucket_taxonomy_enforce", "window": "1 minute", "limit": 20 },
     { "key": "resource_compatibility_enforce", "window": "1 minute", "limit": 20 },
