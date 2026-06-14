@@ -687,6 +687,30 @@
       "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated donor-of-record tax enforcement requests create no matched-trade lock, payment authorization, payment capture, receipt issuance, public-metric, release-promotion, or other state change."
     },
     {
+      "key": "moral_trade_action_reversibility_contract",
+      "method": "GET",
+      "path": "/api/moral-trade/action-reversibility/contract",
+      "auth": "public",
+      "privacyClass": "public_contract",
+      "requestSchema": "empty_request",
+      "responseSchema": "action_reversibility_contract_response",
+      "rateLimitSurface": "public_contract_read",
+      "cacheControl": "no_store_dynamic",
+      "fallback": "Return action-reversibility blockers, first-class assessment metadata, high-stakes review rule, irreversible-before-lock rule, release-gate hook, and sample evaluations; never expose participant identity hashes, action details, private evidence, reviewer notes, or participant-specific reversibility rows."
+    },
+    {
+      "key": "moral_trade_action_reversibility_enforce",
+      "method": "POST",
+      "path": "/api/moral-trade/action-reversibility/enforce",
+      "auth": "authenticated",
+      "privacyClass": "authenticated_private",
+      "requestSchema": "action_reversibility_enforce_request",
+      "responseSchema": "action_reversibility_enforce_response",
+      "rateLimitSurface": "action_reversibility_enforce",
+      "cacheControl": "private_no_store",
+      "fallback": "Invalid, duplicate, rate-limited, unconfigured, or unauthenticated action-reversibility enforcement requests create no matched-trade lock, payment capture, performance start, reliance transition, public-metric, release-promotion, or other state change."
+    },
+    {
       "key": "moral_trade_direct_pair_clearing_contract",
       "method": "GET",
       "path": "/api/moral-trade/direct-pair-clearing/contract",
@@ -3182,6 +3206,48 @@
       ]
     },
     {
+      "key": "action_reversibility_contract_response",
+      "purpose": "Public validator-backed action-reversibility governance contract for high-stakes, effectively irreversible, and reliance-bearing pledge-swap, compensated-action, performance-bond, and side-agreement flows.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "public", "description": "True when the action-reversibility contract validator passes." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "public", "description": "Server time for the action-reversibility validation run." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "public", "description": "Action-reversibility contract version." },
+        { "key": "purpose", "type": "string", "required": true, "privacy": "public", "description": "Human-readable contract purpose." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "public", "description": "Validation result for first-class action-reversibility tables, policy subjects, release-gate hook, transition coverage, high-stakes review rule, irreversible-before-lock rule, and sample evaluations." },
+        { "key": "publicContract", "type": "object", "required": true, "privacy": "public_contract", "description": "Fail-closed rule, high-stakes rule, irreversible-before-lock rule, first-class table names, policy subjects, release-gate hooks, transition requirements, sample statuses, and test hooks without participant identity hashes, action details, private evidence, reviewer notes, or participant-specific reversibility rows." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "public", "description": "Action-reversibility blockers that prevent lock, payment capture, performance start, reliance, public metric, or release-gate promotion." }
+      ]
+    },
+    {
+      "key": "action_reversibility_enforce_request",
+      "purpose": "Authenticated private request for action-reversibility enforcement before matched-trade lock, payment capture, performance start, reliance-bearing transition, public metric, or release-gate transitions.",
+      "fields": [
+        { "key": "evaluationInput", "type": "object", "required": true, "privacy": "private_request", "description": "Action-reversibility transition, checked-at time, required flag, and assessment records to normalize and evaluate; unsupported wrapper or evaluation keys fail closed." },
+        { "key": "idempotencyKey", "type": "string", "required": false, "privacy": "private_request", "description": "Caller-supplied owner-scoped idempotency key used to prevent duplicate enforcement records for the authenticated owner." }
+      ]
+    },
+    {
+      "key": "action_reversibility_enforce_response",
+      "purpose": "Authenticated private fail-closed action-reversibility enforcement response and append-only persistence receipt.",
+      "fields": [
+        { "key": "ok", "type": "boolean", "required": true, "privacy": "private", "description": "True only when the action-reversibility contract validator and normalized evaluation pass; all state-changing permission booleans remain false." },
+        { "key": "checkedAt", "type": "iso_datetime", "required": true, "privacy": "private", "description": "Server time for the enforcement attempt." },
+        { "key": "contractVersion", "type": "string", "required": true, "privacy": "private", "description": "Action-reversibility contract version used by the enforcement attempt." },
+        { "key": "actionReversibilityGateStatus", "type": "enum", "required": true, "privacy": "private", "description": "Pass only when normalized action-reversibility evaluation and contract validation pass; blocked otherwise." },
+        { "key": "matchedTradeLockAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; matched-trade lock requires a separate lock proposal and confirmation path." },
+        { "key": "paymentCaptureAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; payment capture requires a separate payment path." },
+        { "key": "performanceStartAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; performance start requires a separate state-transition path." },
+        { "key": "relianceBearingTransitionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; reliance-bearing transition requires a separate state-transition path." },
+        { "key": "publicMetricPublicationAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; public metric publication requires a separate release path and high-stakes or irreversible-action review." },
+        { "key": "releaseGatePromotionAllowed", "type": "boolean", "required": true, "privacy": "private", "description": "Always false; release-gate promotion requires a separate gate decision." },
+        { "key": "stateMutation", "type": "boolean", "required": true, "privacy": "private", "description": "True only when a new owner-scoped moral_trade_action_reversibility_enforcement_records row was appended." },
+        { "key": "evaluationHash", "type": "string", "required": false, "privacy": "private", "description": "Deterministic hash of the normalized input, evaluation, validation, and contract version when input could be evaluated." },
+        { "key": "validation", "type": "validator_result", "required": true, "privacy": "private", "description": "Action-reversibility contract validation result used by the enforcement route." },
+        { "key": "persistenceStatus", "type": "string", "required": false, "privacy": "private", "description": "Persistence status for the append-only enforcement record." },
+        { "key": "blockers", "type": "string_array", "required": true, "privacy": "private", "description": "Contract, validation, input, evaluation, configuration, authentication, rate-limit, or persistence blockers." }
+      ]
+    },
+    {
       "key": "direct_pair_clearing_contract_response",
       "purpose": "Public validator-backed direct-pair clearing governance contract for two-party or invite-linked donation-offset and pledge-swap previews before lock, payment, capture, public metrics, or release-gate promotion.",
       "fields": [
@@ -4997,6 +5063,7 @@
     "pledge_swap_performance_schedule_enforce_route_contract",
     "negative_commitment_scope_enforce_route_contract",
     "donor_of_record_tax_enforce_route_contract",
+    "action_reversibility_enforce_route_contract",
     "direct_pair_clearing_enforce_route_contract",
     "cause_bucket_taxonomy_enforce_route_contract",
     "resource_compatibility_enforce_route_contract",
