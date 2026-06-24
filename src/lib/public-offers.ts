@@ -11,6 +11,7 @@ import {
   REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT,
   type PublicReviewedSeedTemplateSummary,
 } from "@/lib/marketplace-seed-templates";
+import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "@/lib/moral-trade/marketplace-boundary";
 import { demoMpgfAssuranceRound, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
 import { formatMode, type OfferMode } from "@/lib/offers";
 import {
@@ -239,7 +240,7 @@ const PUBLIC_OFFER_NON_CLAIMS = [
   "The public offers API is not escrow, custody, legal advice, tax advice, or contract formation.",
   "Participant scores are participant-stated context, not platform moral rankings.",
   "Worked examples are not live liquidity and require manual review before reliance.",
-  "Moral public-goods and Common Ground Budget mechanism work belongs in the Public Goods Fund module, not the non-public-goods marketplace offer contract.",
+  MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
   "The collection response must not expose private wishes, contact details, raw source notes, raw evidence artifacts, or personalized saved-offer state.",
 ] as const;
 const PUBLIC_MARKETPLACE_TAB_ORDER = [
@@ -426,6 +427,9 @@ function isPublicGoodsCollectionIntent(params: {
     "public goods fund",
     "crecm",
     "mpgf",
+    "assurance matching",
+    "conditional public-good pledge",
+    "cross-view funding",
   ].some((token) => normalizedQuery.includes(token));
 }
 
@@ -544,8 +548,7 @@ function buildPublicOffersTabSummaries({
       href: "/offers?tab=external_crecm",
       source: "external_crecm_module",
       noLiveAgreementCount: true,
-      description:
-        "Moral public-goods and Common Ground Budget mechanism work belongs to the Public Goods Fund module, not live marketplace offers.",
+      description: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
     },
   ];
 }

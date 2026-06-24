@@ -20,6 +20,10 @@ import {
   summarizeMpgfAssuranceRound,
 } from "@/lib/mpgf/mechanism";
 import { buildMpgfRoundBoardCards } from "@/lib/mpgf/public-goods-round-board";
+import {
+  MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE,
+  evaluateMpgfPivotalityCalculator,
+} from "@/lib/mpgf/public-goods-pivotality";
 import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
 
@@ -59,33 +63,38 @@ export default async function MpgfPage() {
     campaigns: demoMpgfPublicGoodsCampaigns,
     viewerPresent: Boolean(viewer),
   });
+  const pivotalityExample = evaluateMpgfPivotalityCalculator({
+    contributionCents: 5_000,
+    thresholdCents: 50_000,
+    valueRatio: "0.20",
+    pSuccessWithoutMe: "0.30",
+    userEstimatedPDecisive: "0.25",
+    signerOnlyRewardValue: "0",
+    nonDecisiveExtraFundingValueFraction: "0",
+  });
   const manualEvidenceReadiness = await loadMpgfManualEvidenceReadiness();
   const realMoneyReadiness = await loadMpgfRealMoneyReadiness();
+  const roundHref = `/mpgf/rounds/${demoMpgfAssuranceRound.id}`;
+  const previewBudgetHref = `${roundHref}#common-ground-budget-preview`;
 
   return (
     <MpgfPageFrame
       actions={
         <>
-          <Link className="button button-secondary" href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>
-            View public round
+          <Link className="button button-primary" href={previewBudgetHref}>
+            Preview a budget
           </Link>
-          <Link className="button button-primary" href="/mpgf/contribute">
-            Start conditional contribution
+          <Link className="button button-secondary" href={roundHref}>
+            View current round
           </Link>
-          <Link className="button button-secondary" href="/mpgf/pools">
-            Review candidate pools
-          </Link>
-          <Link className="button button-secondary" href="/mpgf/governance">
-            Governance and rules
-          </Link>
-          <Link className="button button-secondary" href="/mpgf/metrics">
-            Funding metrics
+          <Link className="button button-secondary" href="#trust-and-review">
+            Trust and review
           </Link>
         </>
       }
-      description="The Public Goods Fund is the pilot's main test of moral-public-goods coordination: verified contribution intents, conditional payment authorization, sponsor matching, dissent notes, and reviewer verification for goods many moral views can value."
+      description="One budget. Pick projects. Funding happens only if enough different-view support joins and review gates pass. Coordinate around moral public goods without treating preview, match, reward, credit, or certificate estimates as live capture."
       eyebrow="Public Goods Fund"
-      title="Coordinate around moral public goods."
+      title="Common Ground Budget"
       realMoneyReadiness={realMoneyReadiness}
       viewerPresent={Boolean(viewer)}
     >
@@ -94,24 +103,52 @@ export default async function MpgfPage() {
         <a href="#why-this-matters">Why this matters</a>
         <a href="#why-this-is-hard">Why this is hard</a>
         <a href="#what-this-pilot-tests">What this pilot tests</a>
+        <a href="#how-it-works">How it works</a>
         <a href="#round-board">Round board</a>
         <a href="#assurance-matching">CRECM matching</a>
-        <Link href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>Public round</Link>
+        <a href="#advanced-pivotality-calculator">Pivotality calculator</a>
+        <Link href={roundHref}>Public round</Link>
         <Link href="/mpgf/governance">Governance</Link>
         <Link href="/mpgf/metrics">Funding metrics</Link>
+        <a href="#trust-and-review">Trust and review</a>
         <a href="#evidence-review">Evidence review</a>
         <a href="#candidate-pools">Candidate pools</a>
         <a href="#allocation-process">Allocation process</a>
         <a href="#technical-notes">Technical notes</a>
       </nav>
 
+      <section className="mpgf-kpi-grid" aria-label="Common Ground Budget status strip">
+        <div className="mpgf-kpi">
+          <span>No charge now</span>
+          <strong>Preview only</strong>
+        </div>
+        <div className="mpgf-kpi">
+          <span>Authorization path</span>
+          <strong>JIT after gates</strong>
+        </div>
+        <div className="mpgf-kpi">
+          <span>Progress visibility</span>
+          <strong>Sealed before close</strong>
+        </div>
+        <div className="mpgf-kpi">
+          <span>Sponsor pools</span>
+          <strong>{assuranceSummary.sponsorPoolCents > 0 ? "Backed" : "Not backed"}</strong>
+        </div>
+        <div className="mpgf-kpi">
+          <span>Review state</span>
+          <strong>{manualEvidenceReadiness.ready ? "Open" : "Persistence check"}</strong>
+        </div>
+      </section>
+
       <section className="section section-white" id="overview">
         <div className="section-head section-head-compact">
           <p className="eyebrow">Overview</p>
-          <h2>A public fund for overlapping moral reasons</h2>
+          <h2>One budget for overlapping moral reasons</h2>
           <p>
             The Moral Public Goods Fund, or MPGF, is the mechanism name. Public pages use Public
-            Goods Fund so newcomers can understand the purpose before the acronym.
+            Goods Fund so newcomers can understand the purpose before the acronym. Coordinate
+            around moral public goods with a Common Ground Budget first, then inspect technical
+            details below.
           </p>
         </div>
         <div className="concept-grid">
@@ -133,6 +170,47 @@ export default async function MpgfPage() {
               {MPGF_COPY.not_escrow} {MPGF_COPY.not_tax_advice}
             </p>
           </article>
+        </div>
+      </section>
+
+      <section className="section section-subtle" id="how-it-works">
+        <div className="section-head section-head-compact">
+          <p className="eyebrow">How it works</p>
+          <h2>Choose, pick, review, then wait for gate-cleared clearing</h2>
+          <p>
+            The default path is simple mode. Advanced details remain visible, but they are not the
+            first decision surface and cannot become binding until the review screen shows them.
+          </p>
+        </div>
+        <div className="step-card-grid">
+          <article className="panel step-card">
+            <span className="step-index">01</span>
+            <h3>Choose your maximum</h3>
+            <p>Set a Common Ground Budget and fallback rule without any charge, hold, or custody claim.</p>
+          </article>
+          <article className="panel step-card">
+            <span className="step-index">02</span>
+            <h3>Pick projects</h3>
+            <p>Use plain stance labels: Fund this, Fund if different-view support joins, Needs review, or Skip.</p>
+          </article>
+          <article className="panel step-card">
+            <span className="step-index">03</span>
+            <h3>Review and save</h3>
+            <p>Caps, buckets, fallback, fees, benefits, payment language, and sealed-progress rules are shown before consent.</p>
+          </article>
+          <article className="panel step-card">
+            <span className="step-index">04</span>
+            <h3>Round clears after gates</h3>
+            <p>Threshold, review, challenge, payment, authorization, and sponsor-backing checks must pass before settlement.</p>
+          </article>
+        </div>
+        <div className="hero-actions">
+          <Link className="button button-primary" href={previewBudgetHref}>
+            Preview a budget
+          </Link>
+          <Link className="button button-secondary" href={roundHref}>
+            View current round
+          </Link>
         </div>
       </section>
 
@@ -303,12 +381,132 @@ export default async function MpgfPage() {
         </div>
         <p className="mpgf-small">
           Round:{" "}
-          <Link className="inline-link" href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>
+          <Link className="inline-link" href={roundHref}>
             {demoMpgfAssuranceRound.name}
           </Link>
           . Demo budget for the older ballot allocation remains{" "}
           {formatUsd(publicSummary.budgetCents)} and external payouts remain {formatUsd(publicSummary.externallyPaidCents)}.
         </p>
+      </section>
+
+      <section className="section section-subtle" id="advanced-pivotality-calculator">
+        <div className="section-head section-head-compact">
+          <p className="eyebrow">Advanced explainer</p>
+          <h2>Advanced: Pivotality Calculator</h2>
+          <p>{MPGF_PUBLIC_GOODS_PIVOTALITY_ISOLATION_NOTICE}</p>
+        </div>
+        <div className="concept-grid">
+          <article className="panel concept-card">
+            <h3>Example output</h3>
+            <dl className="mpgf-summary-grid" aria-label="Advanced pivotality calculator example">
+              <div>
+                <dt>Your possible contribution</dt>
+                <dd>{formatUsd(5_000)}</dd>
+              </div>
+              <div>
+                <dt>Funding threshold</dt>
+                <dd>{formatUsd(50_000)}</dd>
+              </div>
+              <div>
+                <dt>Required decisive probability</dt>
+                <dd>{pivotalityExample.requiredPDecisivePercent ?? "impossible"}</dd>
+              </div>
+              <div>
+                <dt>Your estimate</dt>
+                <dd>{pivotalityExample.userEstimatedPDecisivePercent}</dd>
+              </div>
+            </dl>
+            <p>{pivotalityExample.interpretation}</p>
+          </article>
+          <form
+            action="/api/mpgf/pivotality"
+            aria-label="Advanced pivotality calculator"
+            className="panel stacked-form"
+            method="post"
+          >
+            <label className="field">
+              <span>Your possible contribution, x</span>
+              <input min="1" name="contributionCents" type="number" defaultValue={5000} />
+            </label>
+            <label className="field">
+              <span>Funding threshold, T</span>
+              <input min="1" name="thresholdCents" type="number" defaultValue={50000} />
+            </label>
+            <label className="field">
+              <span>Value ratio, r</span>
+              <input inputMode="decimal" name="valueRatio" type="text" defaultValue="0.20" />
+            </label>
+            <label className="field">
+              <span>Probability the project succeeds without you, p0</span>
+              <input inputMode="decimal" name="pSuccessWithoutMe" type="text" defaultValue="0.30" />
+            </label>
+            <label className="field">
+              <span>Your estimated probability your pledge is decisive, pD</span>
+              <input inputMode="decimal" name="userEstimatedPDecisive" type="text" defaultValue="0.25" />
+            </label>
+            <label className="field">
+              <span>Signer-only reward value, s</span>
+              <input inputMode="decimal" name="signerOnlyRewardValue" type="text" defaultValue="0" />
+            </label>
+            <label className="field">
+              <span>Non-decisive extra-funding value fraction, h</span>
+              <input
+                inputMode="decimal"
+                name="nonDecisiveExtraFundingValueFraction"
+                type="text"
+                defaultValue="0"
+              />
+            </label>
+            <button className="button button-secondary" type="submit">
+              Calculate from subjective inputs
+            </button>
+          </form>
+          <article className="panel concept-card">
+            <h3>Boundary</h3>
+            <p>
+              Results use only the values entered here. Success rewards can be modeled only as an
+              entered subjective value and are treated as up to unless the maximum liability is
+              fully backed.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section className="section section-subtle" id="trust-and-review">
+        <div className="section-head">
+          <p className="eyebrow">Trust and review</p>
+          <h2>Review gates and no-escrow-unless-true language stay visible</h2>
+          <p>
+            The hub keeps anti-threat review, externality review, challenges, appeals, and payment
+            honesty close to the default flow. It does not imply escrow, custody, guaranteed match,
+            or payment protection unless the recorded legal and provider state supports that claim.
+          </p>
+        </div>
+        <div className="concept-grid">
+          <article className="panel concept-card">
+            <h3>Review gates</h3>
+            <p>Projects need threshold, evidence, destination, challenge, anti-threat, and externality checks before clearing.</p>
+          </article>
+          <article className="panel concept-card">
+            <h3>Challenge and appeal</h3>
+            <p>Open challenges block or qualify clearing until reviewers mark them clear or non-blocking.</p>
+          </article>
+          <article className="panel concept-card">
+            <h3>No escrow unless true</h3>
+            <p>Preview copy says no charge now, and authorization or custody language depends on actual provider/legal state.</p>
+          </article>
+        </div>
+        <div className="hero-actions">
+          <Link className="button button-secondary" href="/mpgf/governance">
+            Governance and rules
+          </Link>
+          <Link className="button button-secondary" href="/mpgf/real-money-terms">
+            Real-money terms
+          </Link>
+          <Link className="button button-secondary" href="/mpgf/technical-spec">
+            Audit details
+          </Link>
+        </div>
       </section>
 
       <section className="section section-subtle" id="evidence-review">

@@ -22,7 +22,8 @@ import {
   REVIEWED_MARKETPLACE_SEED_TEMPLATES,
   REVIEWED_PLEDGE_SWAP_SEED_TEMPLATE_COUNT,
 } from "@/lib/marketplace-seed-templates";
-import { demoMpgfAssuranceRound, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
+import { MARKETPLACE_PUBLIC_GOODS_BOUNDARY } from "@/lib/moral-trade/marketplace-boundary";
+import { demoMpgfAssuranceRound, demoMpgfMatchPool, demoMpgfPublicGoodsCampaigns } from "@/lib/mpgf/data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
 import { formatMode } from "@/lib/offers";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
@@ -185,10 +186,9 @@ const DIRECTORY_VIEW_LABELS: Record<DirectoryView, string> = {
 };
 
 const EXTERNAL_CRECM_MODULE = {
-  href: "/mpgf",
-  label: "Common Ground Budget",
-  sourceNote:
-    "Moral public-goods work routes to the Public Goods Fund's Common Ground Budget under CRECM v1.125.",
+  href: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.href,
+  label: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.userFacingLabel,
+  sourceNote: MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote,
   summary:
     "Public-goods rounds are linked from this marketplace but are not specified, counted, or promoted as live non-public-goods offers.",
 } as const;
@@ -264,6 +264,9 @@ function isPublicGoodsDirectoryIntent(params: {
     "public goods fund",
     "crecm",
     "mpgf",
+    "assurance matching",
+    "conditional public-good pledge",
+    "cross-view funding",
   ].some((token) => normalizedSearch.includes(token));
 }
 
@@ -741,6 +744,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
       ? "live"
       : "worked_examples";
   const view = parseDirectoryView(explicitViewParam, defaultView);
+  const showPublicGoodsEntryCard = publicGoodsSearchIntent || view === "external_crecm";
   const tabCounts: Record<PublicDirectoryView, number> = {
     demo: seedRoundProjects.length,
     external_crecm: seedRoundCount,
@@ -1071,20 +1075,41 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
           <aside className="collection-action-panel panel" aria-label="Collection actions">
             <div className="collection-action-copy">
-              <strong>{defaultView === "worked_examples" ? "Examples are first today." : "Live offers are ready."}</strong>
+              <strong>
+                {publicGoodsSearchIntent
+                  ? "Common Ground Budget result available."
+                  : defaultView === "worked_examples"
+                    ? "Examples are first today."
+                    : "Live offers are ready."}
+              </strong>
               <p>
-                {defaultView === "worked_examples"
-                  ? "The live directory has no public offers yet, so this page opens on reviewed examples that show the expected structure."
-                  : "Start with live offers, then inspect examples when you want to understand the evidence model."}
+                {publicGoodsSearchIntent
+                  ? "Public-goods searches open the Common Ground Budget entry before ordinary offer listings."
+                  : defaultView === "worked_examples"
+                    ? "The live directory has no public offers yet, so this page opens on reviewed examples that show the expected structure."
+                    : "Start with live offers, then inspect examples when you want to understand the evidence model."}
               </p>
             </div>
             <div className="hero-actions">
-              <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
-                Create an offer
-              </Link>
-              <Link className="button button-secondary" href={viewer ? "/dashboard#saved-searches" : "/login?returnTo=/dashboard"}>
-                Save search
-              </Link>
+              {publicGoodsSearchIntent ? (
+                <>
+                  <Link className="button button-primary" href={seedRoundHref}>
+                    Preview a Common Ground Budget
+                  </Link>
+                  <Link className="button button-secondary" href="/mpgf">
+                    Learn how it works
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link className="button button-primary" href={viewer ? "/offers/new" : "/signup?returnTo=/offers/new"}>
+                    Create an offer
+                  </Link>
+                  <Link className="button button-secondary" href={viewer ? "/dashboard#saved-searches" : "/login?returnTo=/dashboard"}>
+                    Save search
+                  </Link>
+                </>
+              )}
             </div>
           </aside>
         </div>
@@ -1094,8 +1119,8 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <p>
             Moral Trade currently prioritizes donation offsets and bounded non-public-goods pledge
             swaps on this page because they have clearer baselines, evidence, and review states.
-            Moral public-goods and Common Ground Budget mechanism work routes through the Public
-            Goods Fund and remains governed by CRECM v1.125.
+            {" "}
+            {MARKETPLACE_PUBLIC_GOODS_BOUNDARY.sourceOfTruthNote}
           </p>
           <div className="pilot-note-links">
             <Link className="text-button" href="/donation-offsets">
@@ -1117,6 +1142,94 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           >
             {formMessage.text}
           </div>
+        ) : null}
+
+        {showPublicGoodsEntryCard ? (
+          <section
+            className="marketplace-bootstrap panel"
+            aria-labelledby="public-goods-intent-heading"
+            aria-live="polite"
+          >
+            <div className="marketplace-bootstrap-head">
+              <div>
+                <p className="eyebrow">Public Goods Fund</p>
+                <h2 id="public-goods-intent-heading">Common Ground Budget</h2>
+                <p>
+                  Fund moral public goods only if enough different-view support joins. No charge
+                  now. Exact live progress may be hidden until the round closes.
+                </p>
+                <p>
+                  Projects must pass threshold, review, challenge, payment, and authorization
+                  gates. This search card only chooses presentation and CTA order; it does not
+                  create, edit, clear, authorize, capture, release, reward, credit, certify, or
+                  audit any CRECM record.
+                </p>
+              </div>
+              <Link className="button button-primary" href={seedRoundHref}>
+                Preview a Common Ground Budget
+              </Link>
+            </div>
+            <div className="tag-row" aria-label="Common Ground Budget status">
+              <span className="badge badge-secondary">
+                {MARKETPLACE_PUBLIC_GOODS_BOUNDARY.mechanismVersion}
+              </span>
+              <span className="badge badge-secondary">Capped pilot preview</span>
+              <span className="badge badge-secondary">No charge now</span>
+              <span className="badge badge-secondary">Sealed progress before close</span>
+              <span className="badge badge-secondary">Review gates required</span>
+            </div>
+            <dl className="mpgf-summary-grid" aria-label="Common Ground Budget search-result summary">
+              <div>
+                <dt>Current round state</dt>
+                <dd>open preview</dd>
+              </div>
+              <div>
+                <dt>Candidate projects</dt>
+                <dd>{seedRoundProjects.length}</dd>
+              </div>
+              <div>
+                <dt>Sponsor pools</dt>
+                <dd>{demoMpgfMatchPool.budgetCents > 0 ? "backed" : "not backed"}</dd>
+              </div>
+              <div>
+                <dt>Capture</dt>
+                <dd>disabled in preview</dd>
+              </div>
+            </dl>
+            <div className="marketplace-bootstrap-actions">
+              <Link className="button button-secondary" href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>
+                View current round
+              </Link>
+              <Link className="button button-secondary" href="/mpgf#advanced-pivotality-calculator">
+                Learn how this differs from ordinary offers
+              </Link>
+            </div>
+            <details className="pilot-note" aria-label="Other ways to browse marketplace lanes">
+              <summary>Other ways to browse</summary>
+              <dl className="mpgf-summary-grid">
+                <div>
+                  <dt>Live offers</dt>
+                  <dd>{liveOfferCount}</dd>
+                </div>
+                <div>
+                  <dt>Reviewed templates</dt>
+                  <dd>{seedTemplateCount}</dd>
+                </div>
+                <div>
+                  <dt>Worked examples</dt>
+                  <dd>{workedExampleCount}</dd>
+                </div>
+                <div>
+                  <dt>Demo records</dt>
+                  <dd>{seedRoundProjects.length}</dd>
+                </div>
+                <div>
+                  <dt>Public-goods module</dt>
+                  <dd>{seedRoundCount}</dd>
+                </div>
+              </dl>
+            </details>
+          </section>
         ) : null}
 
         <section className="marketplace-bootstrap panel" aria-labelledby="marketplace-bootstrap-heading">
@@ -1409,9 +1522,65 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
 
                 <form action="/offers" className="filter-form" id="offer-filter-form">
                   <input name="tab" type="hidden" value={view} />
-                  {searchQuery ? <input name="search" type="hidden" value={searchQuery} /> : null}
+                  {searchQuery && !showPublicGoodsEntryCard ? (
+                    <input name="search" type="hidden" value={searchQuery} />
+                  ) : null}
                   {layout !== "grid" ? <input name="layout" type="hidden" value={layout} /> : null}
 
+                  {showPublicGoodsEntryCard ? (
+                    <div className="filter-group" aria-label="Search public-goods funding">
+                      <label className="field">
+                        <span>Search public-goods funding</span>
+                        <input
+                          name="search"
+                          type="search"
+                          defaultValue={searchQuery || "moral public goods"}
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Deployment mode</span>
+                        <select name="publicGoodsDeploymentMode" defaultValue="any">
+                          <option value="any">Any</option>
+                          <option value="shadow">Shadow</option>
+                          <option value="capped_pilot">Capped pilot</option>
+                          <option value="full">Full</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Round state</span>
+                        <select name="publicGoodsRoundState" defaultValue="open">
+                          <option value="open">Open</option>
+                          <option value="reviewing">Reviewing</option>
+                          <option value="cleared">Cleared</option>
+                          <option value="payable">Payable</option>
+                          <option value="closed">Closed</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Project bucket</span>
+                        <select name="publicGoodsProjectBucket" defaultValue="any">
+                          <option value="any">Any</option>
+                          <option value="global_health">Global health</option>
+                          <option value="animal_welfare">Animal welfare</option>
+                          <option value="long_run_future">Long-run future</option>
+                          <option value="public_interest_knowledge">Public-interest knowledge</option>
+                          <option value="institutional_resilience">Institutional resilience</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Review state</span>
+                        <select name="publicGoodsReviewState" defaultValue="any">
+                          <option value="any">Any</option>
+                          <option value="clear">Clear</option>
+                          <option value="needs_review">Needs review</option>
+                          <option value="blocked">Blocked</option>
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
+
+                  <details className="filter-group" open={!showPublicGoodsEntryCard}>
+                    <summary>{showPublicGoodsEntryCard ? "Ordinary offer filters" : "Directory filters"}</summary>
                   <details className="filter-group" open>
                     <summary>Cause area</summary>
                     <div className="filter-option-list">
@@ -1522,6 +1691,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                       <input defaultChecked={reciprocal} name="reciprocal" type="checkbox" value="1" />
                       <span>{withCount("Has reciprocal match", reciprocalCount)}</span>
                     </label>
+                  </details>
                   </details>
 
                   <button className="button button-secondary sticky-filter-action" type="submit">

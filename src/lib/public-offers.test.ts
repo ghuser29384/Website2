@@ -184,18 +184,32 @@ test("public offers collection separates template, Common Ground Budget, and dem
     liveOffers: [],
     searchParams: new URLSearchParams("search=moral%20public%20goods"),
   });
+  const assuranceSearchPayload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("search=assurance%20matching"),
+  });
+  const crossViewSearchPayload = buildPublicOffersCollectionPayload({
+    liveOffers: [],
+    searchParams: new URLSearchParams("search=cross-view%20funding"),
+  });
 
   assert.equal(validatePublicOffersCollectionPayload(externalCrecPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(publicGoodFormatPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(publicGoodSearchPayload).status, "pass");
+  assert.equal(validatePublicOffersCollectionPayload(assuranceSearchPayload).status, "pass");
+  assert.equal(validatePublicOffersCollectionPayload(crossViewSearchPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(templatesPayload).status, "pass");
   assert.equal(validatePublicOffersCollectionPayload(demoPayload).status, "pass");
   assert.equal(externalCrecPayload.meta.tab, "external_crecm");
   assert.equal(legacyRoundsPayload.meta.tab, "external_crecm");
   assert.equal(publicGoodFormatPayload.meta.tab, "external_crecm");
   assert.equal(publicGoodSearchPayload.meta.tab, "external_crecm");
+  assert.equal(assuranceSearchPayload.meta.tab, "external_crecm");
+  assert.equal(crossViewSearchPayload.meta.tab, "external_crecm");
   assert.equal(publicGoodFormatPayload.meta.defaultedToPublicGoods, true);
   assert.equal(publicGoodSearchPayload.meta.defaultedToPublicGoods, true);
+  assert.equal(assuranceSearchPayload.meta.defaultedToPublicGoods, true);
+  assert.equal(crossViewSearchPayload.meta.defaultedToPublicGoods, true);
   assert.equal(templatesPayload.meta.defaultedToPublicGoods, false);
   assert.equal(templatesPayload.meta.tab, "templates");
   assert.equal(demoPayload.meta.tab, "demo");
@@ -209,6 +223,16 @@ test("public offers collection separates template, Common Ground Budget, and dem
   assert.equal(
     externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")?.label,
     "Common Ground Budget",
+  );
+  assert.match(
+    externalCrecPayload.meta.availableTabs.find((tab) => tab.value === "external_crecm")
+      ?.description ?? "",
+    /moralpublicgoods102\.md \/ CRECM v1\.96/,
+  );
+  assert.ok(
+    externalCrecPayload.publicContract.nonClaims.some((claim) =>
+      /moralpublicgoods102\.md \/ CRECM v1\.96/.test(claim),
+    ),
   );
   assert.equal(templatesPayload.meta.availableTabs.find((tab) => tab.value === "templates")?.count, 4);
   assert.ok(

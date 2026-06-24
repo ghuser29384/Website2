@@ -2125,6 +2125,19 @@ test("public guidance describes verification pipelines without custody overclaim
   assert.match(donationOffsetsPage, /No custody \/ no escrow \/ no tax advice/);
   assert.match(mpfgPage, /Contribution intents start with identity and conditional authorization/);
   assert.match(mpfgPage, /Coordinate around moral public goods/);
+  assert.match(mpfgPage, /title="Common Ground Budget"/);
+  assert.match(mpfgPage, /Preview a budget/);
+  assert.match(mpfgPage, /View current round/);
+  assert.match(mpfgPage, /Common Ground Budget status strip/);
+  assert.match(mpfgPage, /No charge now/);
+  assert.match(mpfgPage, /JIT after gates/);
+  assert.match(mpfgPage, /Sealed before close/);
+  assert.match(mpfgPage, /Choose your maximum/);
+  assert.match(mpfgPage, /Pick projects/);
+  assert.match(mpfgPage, /Review and save/);
+  assert.match(mpfgPage, /Round clears after gates/);
+  assert.match(mpfgPage, /Trust and review/);
+  assert.match(mpfgPage, /no-escrow-unless-true/);
   assert.equal(
     mpfgPage.includes(
       "It might not be necessary for everyone to have the same values, or agree on philosophical questions, to get a future which most views think is pretty great.",
@@ -3595,8 +3608,9 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(backgroundExplanationsSource, /trustBadge/);
   assert.match(backgroundExplanationsSource, /riskBadge/);
   assert.match(backgroundExplanationsSource, /participantActions/);
-  assert.match(backgroundNetworkingPage, /Compatibility bands are prompts/);
-  assert.match(backgroundNetworkingPage, /trust and risk badges/);
+  assert.match(backgroundNetworkingPage, /BACKGROUND_PUBLIC_SAFETY_CARDS/);
+  assert.match(backgroundNetworkingPage, /BACKGROUND_PUBLIC_MENTAL_MODEL_STEPS/);
+  assert.match(backgroundNetworkingPage, /background-technical-details/);
   assert.match(dashboardPage, /Trust and risk badges/);
   assert.match(dashboardPage, /Next safe actions/);
   assert.match(dashboardPage, /Reason codes/);
@@ -4996,6 +5010,8 @@ test("validation rulebook exposes reviewer roles, SLAs, conflicts, and quality m
   assert.match(publicOffersSource, /reviewed-seed-templates/);
   assert.match(publicOffersSource, /marketplace-tab-separation/);
   assert.match(publicOffersSource, /Common Ground Budget/);
+  assert.match(publicOffersSource, /MARKETPLACE_PUBLIC_GOODS_BOUNDARY/);
+  assert.match(publicOffersSource, /sourceOfTruthNote/);
   assert.equal(publicOffersSource.includes("external CRECM module"), false);
   assert.match(publicOffersSource, /public-offer-listing/);
   assert.match(publicOffersSource, /validateMoralTradeJsonSchemaSubset/);
@@ -5340,6 +5356,8 @@ test("offers page keeps content before the footer in source order", () => {
 test("create trade route family has stable signed-out entry points", () => {
   const createRoute = readRepoFile("src/app/create/page.tsx");
   const newOfferPage = readRepoFile("src/app/offers/new/page.tsx");
+  const marketplaceBoundary = readRepoFile("src/lib/moral-trade/marketplace-boundary.ts");
+  const seedTemplatesSource = readRepoFile("src/lib/marketplace-seed-templates.ts");
 
   assert.match(createRoute, /Create trade/);
   assert.match(createRoute, /NewOfferPage/);
@@ -5348,8 +5366,16 @@ test("create trade route family has stable signed-out entry points", () => {
   assert.match(newOfferPage, /Marketplace intake triage/);
   assert.match(newOfferPage, /MARKETPLACE_INTAKE_TRIAGE_ROUTES/);
   assert.match(newOfferPage, /data-intake-route/);
-  assert.match(newOfferPage, /CRECM v1\.125/);
-  assert.equal(newOfferPage.includes("CRECM v1.96"), false);
+  assert.match(newOfferPage, /MARKETPLACE_PUBLIC_GOODS_BOUNDARY/);
+  assert.match(newOfferPage, /sourceOfTruthNote/);
+  assert.match(marketplaceBoundary, /moralpublicgoods102\.md/);
+  assert.match(marketplaceBoundary, /CRECM v1\.96/);
+  assert.match(newOfferPage, /data-signed-out-offset-preview="true"/);
+  assert.match(newOfferPage, /Preview the donation-offset shape before sign-in/);
+  assert.match(newOfferPage, /Sign-in is required before\s+saving, publishing, requesting review, disclosing counterparties, authorizing\s+money, or creating a live offer/);
+  assert.match(newOfferPage, /DONATION_OFFSET_PLAIN_LABELS/);
+  assert.match(seedTemplatesSource, /what would each side donate without this trade/);
+  assert.match(seedTemplatesSource, /what would make this unsafe or invalid/);
   assert.match(newOfferPage, /Public receipt preview/);
   assert.match(newOfferPage, /Receipts are private by default and opt-in only/);
   assert.match(newOfferPage, /Correction and revocation/);
@@ -5378,8 +5404,21 @@ test("marketplace pilot copy separates live offers from worked examples", () => 
   assert.match(offersPage, /Demo records/);
   assert.match(offersPage, /Common Ground Marketplace/);
   assert.match(offersPage, /Open Common Ground Budget/);
-  assert.match(offersPage, /CRECM v1\.125/);
-  assert.equal(offersPage.includes("CRECM v1.96"), false);
+  assert.match(offersPage, /Common Ground Budget result available/);
+  assert.match(offersPage, /Preview a Common Ground Budget/);
+  assert.match(offersPage, /Fund moral public goods only if enough different-view support joins/);
+  assert.match(offersPage, /No charge\s+now/);
+  assert.match(offersPage, /Exact live progress may be hidden until the round closes/);
+  assert.match(offersPage, /does not\s+create, edit, clear, authorize, capture, release, reward, credit, certify, or\s+audit any CRECM record/);
+  assert.match(offersPage, /Search public-goods funding/);
+  assert.match(offersPage, /Ordinary offer filters/);
+  assert.match(offersPage, /Other ways to browse/);
+  assert.match(offersPage, /assurance matching/);
+  assert.match(offersPage, /conditional public-good pledge/);
+  assert.match(offersPage, /cross-view funding/);
+  assert.match(offersPage, /MARKETPLACE_PUBLIC_GOODS_BOUNDARY/);
+  assert.match(offersPage, /sourceOfTruthNote/);
+  assert.match(offersPage, /mechanismVersion/);
   assert.equal(offersPage.includes("Open external CRECM module"), false);
   assert.match(offersPage, /demoMpgfAssuranceRound/);
   assert.match(offersPage, /seedRoundProjects/);
