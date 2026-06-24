@@ -42,6 +42,7 @@ export type MoralTradeApiRateLimitSurface =
   | "risk_control_matrix_enforce"
   | "preference_integrity_enforce"
   | "commitment_settlement_enforce"
+  | "group_buying_enforce"
   | "pledge_performance_bond_enforce"
   | "pledge_swap_performance_schedule_enforce"
   | "negative_commitment_scope_enforce"
@@ -114,6 +115,7 @@ export const MORAL_TRADE_API_RATE_LIMITS = {
   risk_control_matrix_enforce: { limit: 20, windowMs: 60_000 },
   preference_integrity_enforce: { limit: 20, windowMs: 60_000 },
   commitment_settlement_enforce: { limit: 20, windowMs: 60_000 },
+  group_buying_enforce: { limit: 20, windowMs: 60_000 },
   pledge_performance_bond_enforce: { limit: 20, windowMs: 60_000 },
   pledge_swap_performance_schedule_enforce: { limit: 20, windowMs: 60_000 },
   negative_commitment_scope_enforce: { limit: 20, windowMs: 60_000 },
