@@ -1,27 +1,10 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import localFont from "next/font/local";
 
 import { FunnelTracker } from "@/components/analytics/funnel-tracker";
 import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_IMAGE_PATH, SITE_NAME, SITE_URL } from "@/lib/seo";
 
 import "./globals.css";
-
-const larken = localFont({
-  src: "../../Larken Serif/Larken-Medium.otf",
-  variable: "--font-heading-loaded",
-  weight: "500",
-  style: "normal",
-  display: "swap",
-});
-
-const metropolis = localFont({
-  src: "../../metropolis.regular.otf",
-  variable: "--font-body-loaded",
-  weight: "400",
-  style: "normal",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -117,7 +100,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${larken.variable} ${metropolis.variable}`}>
+      <body>
         <script
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(websiteStructuredData),
