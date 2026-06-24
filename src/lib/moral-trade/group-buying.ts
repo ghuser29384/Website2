@@ -1753,10 +1753,10 @@ export function evaluateEnvelopeReadiness(input: {
     blockers.push(`policy_bundle_not_compatible:${input.envelope.policyBundle.compatibilityStatus}`);
   }
 
-  for (const module of input.envelope.enabledFeatureModules) {
-    const capability = enabledModules.get(module);
+  for (const featureModule of input.envelope.enabledFeatureModules) {
+    const capability = enabledModules.get(featureModule);
     if (!capability || capability.status === "disabled" || capability.status === "paused") {
-      blockers.push(`feature_module_not_enabled:${module}`);
+      blockers.push(`feature_module_not_enabled:${featureModule}`);
     }
   }
 
